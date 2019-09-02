@@ -26,7 +26,7 @@ where
             _ => continue     // One of the `send_back` futures has finished.
         };
 
-        let future = handler("test", &JsonValue::Null);
+        let future = handler(request.method(), request.params());
         send_back.push(async move {
             let response = future.await;
             let _ = request.respond(response).await;

@@ -34,6 +34,14 @@ pub struct ServerJsonRequest<'a> {
 }
 
 impl<'a> ServerJsonRequest<'a> {
+    pub fn method(&self) -> &str {
+        self.response_send.method()
+    }
+
+    pub fn params(&self) -> &JsonValue {
+        self.response_send.params()
+    }
+
     /// Respond to the request.
     pub async fn respond(self, response: JsonValue) -> Result<(), io::Error> {
         // FIXME: self.response_send.respond(response).await?;
