@@ -1,0 +1,15 @@
+[package]
+name = "jsonrpsee"
+description = "JSON-RPC crate"
+version = "0.1.0"
+authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+async-std = "0.99"
+futures-preview = "0.3.0-alpha.18"
+futures-timer = "0.3.0"
+hyper = { version = "0.13.0-a.0", git = "https://github.com/hyperium/hyper" }
+serde_json = "1.0.40"
+tokio = "0.2.0-alpha.4"
