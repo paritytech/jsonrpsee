@@ -1,3 +1,4 @@
+use crate::JsonValue;
 use super::{ServerRef, ServerRefRq};
 use futures::prelude::*;
 use std::{io, pin::Pin};
@@ -27,12 +28,12 @@ where
 
     fn next_request(self) -> Pin<Box<dyn Future<Output = Result<Self::ServerRefRq, ()>> + 'a>> {
         Box::pin(async move {
-            match future::select(
-                ServerRef::next_request(&self.a),
-                ServerRef::next_request(&self.b),
-            )
-            .await
-            {
+            let outcome = {
+                let a = ServerRef::next_request(&self.a);
+                let b = ServerRef::next_request(&self.b);
+                future::select(a, b).await
+            };
+            match outcome {
                 future::Either::Left((a, _)) => Ok(JoinRq::Left(a?)),
                 future::Either::Right((b, _)) => Ok(JoinRq::Right(b?)),
             }
@@ -59,10 +60,17 @@ where
         }
     }
 
-    fn respond(self) -> Pin<Box<dyn Future<Output = Result<(), io::Error>>>> {
+    fn params(&self) -> &JsonValue {
         match self {
-            JoinRq::Left(a) => a.respond(),
-            JoinRq::Right(b) => b.respond(),
+            JoinRq::Left(a) => a.params(),
+            JoinRq::Right(b) => b.params(),
+        }
+    }
+
+    fn respond(self, response: JsonValue) -> Pin<Box<dyn Future<Output = Result<(), io::Error>>>> {
+        match self {
+            JoinRq::Left(a) => a.respond(response),
+            JoinRq::Right(b) => b.respond(response),
         }
     }
 }

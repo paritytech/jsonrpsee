@@ -1,3 +1,4 @@
+use crate::JsonValue;
 use futures::prelude::*;
 use std::{io, pin::Pin};
 
@@ -16,17 +17,28 @@ pub trait ServerRefRq {
     /// Returns the method of this request.
     fn method(&self) -> &str;
 
+    /// Returns the parameters of the request.
+    fn params(&self) -> &JsonValue;
+
     /// Send back a response.
-    fn respond(self) -> Pin<Box<dyn Future<Output = Result<(), io::Error>>>>;
+    fn respond(self, response: JsonValue) -> Pin<Box<dyn Future<Output = Result<(), io::Error>>>>;
 }
 
-/*/// Extension trait for [`Server`] that allows pushing pub-sub messages.
+/// Extension trait for [`Server`] that allows pushing pub-sub messages.
 pub trait ServerPubSubRef<'a>: ServerRef<'a> {
-    fn push_message(&self, msg: Vec<u8>);
-}*/
+    fn push_message(&self, msg: JsonValue);
+}
 
 pub struct ServerJsonRequest<'a> {
     response_send: Box<dyn ServerRefRq + 'a>,
+}
+
+impl<'a> ServerJsonRequest<'a> {
+    /// Respond to the request.
+    pub async fn respond(self, response: JsonValue) -> Result<(), io::Error> {
+        // FIXME: self.response_send.respond(response).await?;
+        Ok(())
+    }
 }
 
 /// Abstraction over a server that can produce JSON-RPC requests for us to answer.

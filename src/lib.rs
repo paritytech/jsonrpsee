@@ -1,12 +1,13 @@
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
-use crate::server::Server;
+pub use crate::server::run;
+pub use serde_json::{Value as JsonValue, Map as JsonMap, Number as JsonNumber};
 
 pub mod server;
 
-pub async fn run_server(server: &impl server::Server) {
-    while let Ok(req) = server.next_request().await {
-        println!("request!");
-    }
+pub struct Error {
+    pub code: JsonNumber,
+    pub message: String,
+    pub data: JsonValue,
 }

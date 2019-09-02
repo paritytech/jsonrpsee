@@ -1,3 +1,4 @@
+use crate::JsonValue;
 use crate::server::http::response;
 use crate::server::{Server, ServerJsonRequest, ServerRef, ServerRefRq};
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
@@ -71,7 +72,11 @@ impl ServerRefRq for HttpServerRefRq {
         "test" // TODO: no
     }
 
-    fn respond(self) -> Pin<Box<dyn Future<Output = Result<(), io::Error>>>> {
+    fn params(&self) -> &JsonValue {
+        unimplemented!()
+    }
+
+    fn respond(self, response: JsonValue) -> Pin<Box<dyn Future<Output = Result<(), io::Error>>>> {
         Box::pin(future::pending())
     }
 }
