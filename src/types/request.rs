@@ -1,5 +1,3 @@
-//! jsonrpc request
-
 use serde_derive::{Serialize, Deserialize};
 use super::{Id, Params, Version};
 

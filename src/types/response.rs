@@ -47,15 +47,6 @@ impl Output {
 		}
 	}
 
-	/// Creates new failure output indicating malformed request.
-	pub fn invalid_request(id: Id, jsonrpc: Option<Version>) -> Self {
-		Output::Failure(Failure {
-			id,
-			jsonrpc,
-			error: Error::new(ErrorCode::InvalidRequest),
-		})
-	}
-
 	/// Get the jsonrpc protocol version.
 	pub fn version(&self) -> Option<Version> {
 		match *self {

@@ -1,4 +1,4 @@
-use crate::{server::Server, JsonValue};
+use crate::{server::Server, types::Error, types::JsonValue};
 use futures::prelude::*;
 
 /// Runs the given server using the given handler.
@@ -9,7 +9,7 @@ pub async fn run<S, H, F>(server: &S, mut handler: H)
 where
     S: Server,
     H: FnMut(&str, &JsonValue) -> F,
-    F: Future<Output = JsonValue>
+    F: Future<Output = Result<JsonValue, Error>>
 {
     let mut send_back = stream::FuturesUnordered::new();
 

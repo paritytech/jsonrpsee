@@ -1,5 +1,6 @@
-use crate::raw_server::{RawServerRef, RawServerRefRq as _};
+use crate::raw_server::{RawServerRef, RawServerRq as _};
 use crate::types::{self, from_value, to_value, JsonValue};
+use fnv::FnvHashMap;
 use futures::prelude::*;
 use std::{io, pin::Pin};
 
@@ -9,29 +10,37 @@ mod traits;*/
 
 /// Wraps around a "raw server".
 pub struct Server<R> {
+    /// Internal "raw" server.
     raw: R,
+    /// Keys of this hashmap are internal identifier shared between `Server` and its derivates
+    /// such as `ServerRq`.
+    batches: FnvHashMap<u64, Batch>,
+    /// Next key to insert in `batches`. `batches` must never contain a key whose value is
+    /// `next_batch_id`.
+    next_batch_id: u64,
+}
+
+struct Batch {
+
 }
 
 impl<R> Server<R>
 where
-    for<'r> &'r R: RawServerRef<'r>
+    for<'r> &'r mut R: RawServerRef<'r>
 {
     /// Returns a `Future` resolving to the next request that this server generates.
-    pub async fn next_request<'a>(&'a self) -> Result<ServerRq<'a, R>, ()> {
+    pub async fn next_request<'a>(&'a mut self) -> Result<ServerRq<'a, R>, ()> {
         // This piece of code is where we analyze requests.
         loop {
-            let payload = self.raw.next_payload().await?;
-            let request = match from_value(payload.json().clone()) {  // TODO: why the fuck is this not by ref?
-                Ok(v) => v,
-                Err(err) => {
-                    let value = types::to_value(types::Output::invalid_request(types::Id::Null, None)).unwrap();        // TODO: no unwrap
-                    payload.respond(&value).await;
-                    continue;
-                }
-            };
+            let request = self.raw.next_request().await?;
+            match request.request() {
+                types::Request::Single(rq) => {}       // TODO:
+                types::Request::Batch(requests) => {}       // TODO:
+            }
+            unimplemented!();       // TODO:
         }
 
-        panic!()
+        panic!()        // TODO: 
     }
 }
 
@@ -40,7 +49,7 @@ where
 /// > **Note**: Holds a borrow of the `Server`. Therefore, must be dropped before the `Server` can
 /// >           be dropped.
 pub struct ServerRq<'a, R> {
-    server: &'a Server<R>,
+    server: &'a mut Server<R>,
     method: String,
     params: JsonValue,
 }
@@ -60,6 +69,13 @@ where
     }
 
     /// Send back a response.
+    ///
+    /// If this request is part of a batch:
+    ///
+    /// - If all requests of the batch have been responded to, then the response is actively
+    ///   sent out.
+    /// - Otherwise, this response is buffered.
+    ///
     pub async fn respond(self, response: JsonValue) -> Result<(), io::Error> {
         unimplemented!()
     }

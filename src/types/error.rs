@@ -1,4 +1,3 @@
-//! jsonrpc errors
 use super::JsonValue;
 use serde::de::Deserializer;
 use serde::ser::Serializer;

@@ -1,5 +1,3 @@
-//! jsonrpc id field
-
 use serde_derive::{Serialize, Deserialize};
 
 /// Request Id

@@ -1,6 +1,7 @@
 use crate::raw_server::http::response;
-use crate::raw_server::{RawServerRef, RawServerRefRq};
-use crate::types::JsonValue;
+use crate::raw_server::{RawServerRef, RawServerRq};
+use crate::types;
+use fnv::FnvHashMap;
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Error, Response};
@@ -10,7 +11,9 @@ use std::{io, net::ToSocketAddrs, pin::Pin, thread};
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
 
 pub struct HttpServer {
-    rx: Mutex<mpsc::Receiver<HttpServerRefRq>>,
+    rx: mpsc::Receiver<Request>,
+    next_request_id: u64,
+    requests: FnvHashMap<u64, Request>,
 }
 
 impl HttpServer {
@@ -45,37 +48,77 @@ impl HttpServer {
             });
         });
 
-        HttpServer { rx: Mutex::new(rx) }
+        HttpServer {
+            rx,
+            requests: Default::default(),
+            next_request_id: 0,
+        }
     }
 }
 
-impl<'a> RawServerRef<'a> for &'a HttpServer {
-    type RawServerRefRq = HttpServerRefRq;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::RawServerRefRq, ()>> + Send + 'a>>;
+impl<'a> RawServerRef<'a> for &'a mut HttpServer {
+    type RawServerRq = HttpServerRefRq<'a>;
+    type RequestId = u64;
+    type NextRequest = Pin<Box<dyn Future<Output = Result<Self::RawServerRq, ()>> + Send + 'a>>;
 
-    fn next_payload(self) -> Self::Future {
+    fn next_request(self) -> Self::NextRequest {
         Box::pin(async move {
-            let mut rx = self.rx.lock().await;
-            rx.next().await.ok_or_else(|| ())
+            let request = self.rx.next().await.ok_or_else(|| ())?;
+            let request_id = {
+                let id = self.next_request_id;
+                self.next_request_id += 1;
+                id
+            };
+            // TODO: we actually don't need to insert the request
+            // most requests are answered without being dropped, so as an optimization we can
+            // return the request itself, and insert it later if we drop it
+            self.requests.insert(request_id, request);
+            Ok(HttpServerRefRq {
+                server: self,
+                id: request_id,
+            })
         })
     }
+
+    fn request_by_id(self, id: Self::RequestId) -> Option<Self::RawServerRq> {
+        if self.requests.contains_key(&id) {
+            Some(HttpServerRefRq {
+                server: self,
+                id,
+            })
+        } else {
+            None
+        }
+    }
 }
 
-/// HTTP request that must be answered.
-pub struct HttpServerRefRq {
+pub struct HttpServerRefRq<'a> {
+    server: &'a mut HttpServer,
+    id: u64,
+}
+
+/// Request generated from the background task and sent to the foreground one.
+struct Request {
+    /// Body of the response to send on the network.
     send_back: oneshot::Sender<hyper::Response<hyper::Body>>,
-    /// The JSON body that was sent by the user.
-    json: JsonValue,
+    /// The JSON body that was sent by the client.
+    request: types::Request,
 }
 
-impl RawServerRefRq for HttpServerRefRq {
-    type SendBackFut = Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send>>;
+impl<'a> RawServerRq for HttpServerRefRq<'a> {
+    type CloseFut = Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send + 'a>>;
+    type SendBackFut = Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send + 'a>>;
+    type RequestId = u64;
 
-    fn json(&self) -> &JsonValue {
-        &self.json
+    fn id(&self) -> &Self::RequestId {
+        &self.id
     }
 
-    fn respond(self, response: &JsonValue) -> Self::SendBackFut {
+    fn request(&self) -> &types::Request {
+        &self.server.requests.get(&self.id).unwrap().request
+    }
+
+    fn respond(self, response: &types::Response) -> Self::SendBackFut {
         let serialization_result = serde_json::to_vec(response);
 
         Box::pin(async move {
@@ -93,8 +136,15 @@ impl RawServerRefRq for HttpServerRefRq {
                 .body(hyper::Body::from(bytes))
                 .expect("Unable to parse response body for type conversion");
 
-            self.send_back.send(response).map_err(|_| io::Error::from(io::ErrorKind::Other));      // TODO:
+            let rq = self.server.requests.remove(&self.id).unwrap();
+            rq.send_back.send(response).map_err(|_| io::Error::from(io::ErrorKind::Other));      // TODO:
             Ok(())
+        })
+    }
+
+    fn force_kill(self) -> Self::CloseFut {
+        Box::pin(async move {
+            unimplemented!()
         })
     }
 }
@@ -107,7 +157,7 @@ impl RawServerRefRq for HttpServerRefRq {
 /// channel will be dispatched to the user.
 async fn process_request(
     request: hyper::Request<hyper::Body>,
-    fg_process_tx: &mut mpsc::Sender<HttpServerRefRq>,
+    fg_process_tx: &mut mpsc::Sender<Request>,
 ) -> hyper::Response<hyper::Body> {
     /*if self.cors_allow_origin == cors::AllowCors::Invalid && !continue_on_invalid_cors {
         return response::invalid_allow_origin();
@@ -131,12 +181,17 @@ async fn process_request(
                 None
             }*/;
 
-            let json_body = body_to_json(request.into_body()).await;
+            let json_body = match body_to_request(request.into_body()).await {
+                Ok(b) => b,
+                Err(_) => {
+                    unimplemented!()        // TODO:
+                }
+            };
 
             let (tx, rx) = oneshot::channel();
-            let user_facing_rq = HttpServerRefRq {
+            let user_facing_rq = Request {
                 send_back: tx,
-                json: JsonValue::Null,      // FIXME:
+                request: json_body,
             };
             if let Err(_) = fg_process_tx.send(user_facing_rq).await {
                 return response::internal_error("JSON requests processing channel has shut down");
@@ -189,7 +244,7 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 /// Converts a `hyper` body into a structured JSON object.
 ///
 /// Enforces a size limit on the body.
-async fn body_to_json(mut body: hyper::Body) -> Result<JsonValue, io::Error> {
+async fn body_to_request(mut body: hyper::Body) -> Result<types::Request, io::Error> {
     let mut json_body = Vec::new();
     while let Some(chunk) = body.next().await {
         let chunk = match chunk {
@@ -207,13 +262,13 @@ async fn body_to_json(mut body: hyper::Body) -> Result<JsonValue, io::Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::body_to_json;
+    use super::body_to_request;
 
     #[test]
-    fn body_to_json_works() {
+    fn body_to_request_works() {
         futures::executor::block_on(async move {
             let mut body = hyper::Body::from("[{\"a\":\"hello\"}]");
-            let json = body_to_json(body).await.unwrap();
+            let json = body_to_request(body).await.unwrap();
             assert_eq!(json, serde_json::Value::from(vec![
                 std::iter::once((
                     "a".to_string(),
@@ -224,23 +279,23 @@ mod tests {
     }
 
     #[test]
-    fn body_to_json_size_limit_json() {
+    fn body_to_request_size_limit_json() {
         let huge_body = serde_json::to_vec(
             &(0..32768).map(|_| serde_json::Value::from("test")).collect::<Vec<_>>()
         ).unwrap();
 
         futures::executor::block_on(async move {
             let mut body = hyper::Body::from(huge_body);
-            assert!(body_to_json(body).await.is_err());
+            assert!(body_to_request(body).await.is_err());
         });
     }
 
     #[test]
-    fn body_to_json_size_limit_garbage() {
+    fn body_to_request_size_limit_garbage() {
         let huge_body = (0..100_000).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
         futures::executor::block_on(async move {
             let mut body = hyper::Body::from(huge_body);
-            assert!(body_to_json(body).await.is_err());
+            assert!(body_to_request(body).await.is_err());
         });
     }
 }
