@@ -1,5 +1,5 @@
 use super::{Error, ErrorCode, Id, JsonValue, Version};
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 
 /// Successful response
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

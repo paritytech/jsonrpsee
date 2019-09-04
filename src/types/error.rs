@@ -1,7 +1,7 @@
 use super::JsonValue;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use std::fmt;
 
 /// JSONRPC error code

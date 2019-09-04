@@ -1,4 +1,4 @@
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 use super::{Id, Params, Version};
 
 /// Represents jsonrpc request which is a method call.

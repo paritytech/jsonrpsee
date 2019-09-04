@@ -35,7 +35,9 @@ where
             let request = self.raw.next_request().await?;
             match request.request() {
                 types::Request::Single(rq) => {}       // TODO:
-                types::Request::Batch(requests) => {}       // TODO:
+                types::Request::Batch(requests) => {
+
+                }       // TODO:
             }
             unimplemented!();       // TODO:
         }

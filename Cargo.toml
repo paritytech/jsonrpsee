@@ -12,9 +12,8 @@ fnv = "1.0"
 futures-preview = "0.3.0-alpha.18"
 futures-timer = "0.3.0"
 hyper = { version = "0.13.0-a.0", git = "https://github.com/hyperium/hyper" }
-serde = "1.0.40"
+serde = { version = "1.0.40", features = ["derive"] }
 serde_json = "1.0.40"
-serde_derive = "1.0.40"
 tokio = "0.2.0-alpha.4"
 
 [dev-dependencies]

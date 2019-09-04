@@ -1,6 +1,6 @@
 //! Type definitions for JSON-RPC.
 //!
-//! All these types implement .
+//! All these types implement the `Serialize` and `Deserialize` traits of the `serde` library.
 
 pub mod error;
 pub mod id;

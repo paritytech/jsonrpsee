@@ -1,7 +1,7 @@
 use serde::de::DeserializeOwned;
 use serde_json;
 use serde_json::value::from_value;
-use serde_derive::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize};
 
 use super::{Error, JsonValue};
 
