@@ -1,4 +1,5 @@
-use crate::{raw_server::RawServerRef, JsonValue};
+use crate::raw_server::{RawServerRef, RawServerRefRq as _};
+use crate::types::{self, from_value, to_value, JsonValue};
 use futures::prelude::*;
 use std::{io, pin::Pin};
 
@@ -18,7 +19,18 @@ where
     /// Returns a `Future` resolving to the next request that this server generates.
     pub async fn next_request<'a>(&'a self) -> Result<ServerRq<'a, R>, ()> {
         // This piece of code is where we analyze requests.
-        let payload = self.raw.next_payload().await?;
+        loop {
+            let payload = self.raw.next_payload().await?;
+            let request = match from_value(payload.json().clone()) {  // TODO: why the fuck is this not by ref?
+                Ok(v) => v,
+                Err(err) => {
+                    let value = types::to_value(types::Output::invalid_request(types::Id::Null, None)).unwrap();        // TODO: no unwrap
+                    payload.respond(&value).await;
+                    continue;
+                }
+            };
+        }
+
         panic!()
     }
 }

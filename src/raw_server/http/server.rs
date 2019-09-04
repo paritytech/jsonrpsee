@@ -1,6 +1,6 @@
-use crate::JsonValue;
 use crate::raw_server::http::response;
 use crate::raw_server::{RawServerRef, RawServerRefRq};
+use crate::types::JsonValue;
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Error, Response};

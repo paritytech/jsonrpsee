@@ -1,4 +1,4 @@
-use crate::JsonValue;
+use crate::types::JsonValue;
 use futures::prelude::*;
 use std::{io, pin::Pin};
 
