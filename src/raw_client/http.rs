@@ -1,5 +1,5 @@
 use crate::types;
-use super::RawClient;
+use super::RawClientRef;
 use futures::{prelude::*, channel::mpsc, channel::oneshot};
 use std::{fmt, io, net::SocketAddr, pin::Pin, thread};
 
@@ -46,10 +46,10 @@ impl fmt::Debug for HttpClientPool {
     }
 }
 
-impl RawClient for HttpClientPool {
-    type Future = Pin<Box<dyn Future<Output = Result<types::Response, io::Error>> + Send>>;
+impl<'a> RawClientRef<'a> for &'a HttpClientPool {
+    type Future = Pin<Box<dyn Future<Output = Result<types::Response, io::Error>> + Send + 'a>>;
 
-    fn request(&self, target: &str, request: types::Request) -> Self::Future {
+    fn request(self, target: &str, request: types::Request) -> Self::Future {
         let mut tx = self.tx.clone();
 
         let request = types::to_vec(&request).map(|body| {

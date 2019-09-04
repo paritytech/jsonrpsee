@@ -1,15 +1,16 @@
-//! Type definitions for JSON-RPC.
+//! Type definitions from the JSON-RPC specifications.
 //!
-//! All these types implement the `Serialize` and `Deserialize` traits of the `serde` library.
+//! All these types implement the `Serialize` and `Deserialize` traits of the `serde` library
+//! and can be serialize/deserialized using the `to_string`/`to_vec`/`from_slice` methods.
 
-pub mod error;
-pub mod id;
-pub mod params;
-pub mod request;
-pub mod response;
-pub mod version;
+mod error;
+mod id;
+mod params;
+mod request;
+mod response;
+mod version;
 
-pub use serde_json::{from_value, to_string, to_vec, value::to_value};
+pub use serde_json::{from_value, to_value, to_string, to_vec, from_slice};
 pub use serde_json::Map as JsonMap;
 pub use serde_json::Number as JsonNumber;
 pub use serde_json::Value as JsonValue;
