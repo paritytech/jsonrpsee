@@ -6,6 +6,7 @@ use serde::{Serialize, Deserialize};
 #[serde(deny_unknown_fields)]
 pub struct Success {
 	/// Protocol version
+	// TODO: why the fuck is that an option?
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub jsonrpc: Option<Version>,
 	/// Result
@@ -19,6 +20,7 @@ pub struct Success {
 #[serde(deny_unknown_fields)]
 pub struct Failure {
 	/// Protocol Version
+	// TODO: why the fuck is that an option?
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub jsonrpc: Option<Version>,
 	/// Error

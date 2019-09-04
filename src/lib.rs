@@ -3,6 +3,9 @@
 
 //pub use crate::server::run;
 
+#[macro_use]
+mod rpc_api;
+
 pub mod client;
 pub mod raw_client;
 pub mod raw_server;

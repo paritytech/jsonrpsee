@@ -72,7 +72,11 @@ impl<'a> RawClientRef<'a> for &'a HttpClientPool {
             }
 
             let hyper_response = send_back_rx.await;
-            unimplemented!()        // TODO: finish
+            // TODO: check status code, json, and all
+            let body = hyper_response.unwrap().unwrap().into_body().try_concat().await.unwrap();
+            let as_json: types::Response = types::from_slice(&body).unwrap();
+            println!("{:?}", as_json);
+            Ok(as_json)
         })
     }
 }
