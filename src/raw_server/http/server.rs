@@ -51,8 +51,9 @@ impl HttpServer {
 
 impl<'a> RawServerRef<'a> for &'a HttpServer {
     type RawServerRefRq = HttpServerRefRq;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::RawServerRefRq, ()>> + Send + 'a>>;
 
-    fn next_payload(self) -> Pin<Box<dyn Future<Output = Result<Self::RawServerRefRq, ()>> + 'a>> {
+    fn next_payload(self) -> Self::Future {
         Box::pin(async move {
             let mut rx = self.rx.lock().await;
             rx.next().await.ok_or_else(|| ())
@@ -68,13 +69,17 @@ pub struct HttpServerRefRq {
 }
 
 impl RawServerRefRq for HttpServerRefRq {
+    type SendBackFut = Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send>>;
+
     fn json(&self) -> &JsonValue {
         &self.json
     }
 
-    fn respond<'a>(self, response: &'a JsonValue) -> Pin<Box<dyn Future<Output = Result<(), io::Error>> + 'a>> {
+    fn respond(self, response: &JsonValue) -> Self::SendBackFut {
+        let serialization_result = serde_json::to_vec(response);
+
         Box::pin(async move {
-            let bytes = match serde_json::to_vec(response) {
+            let bytes = match serialization_result {
                 Ok(b) => b,
                 Err(_) => panic!()      // TODO: no
             };
@@ -126,6 +131,8 @@ async fn process_request(
                 None
             }*/;
 
+            let json_body = body_to_json(request.into_body()).await;
+
             let (tx, rx) = oneshot::channel();
             let user_facing_rq = HttpServerRefRq {
                 send_back: tx,
@@ -176,5 +183,64 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
             true
         }
         _ => false,
+    }
+}
+
+/// Converts a `hyper` body into a structured JSON object.
+///
+/// Enforces a size limit on the body.
+async fn body_to_json(mut body: hyper::Body) -> Result<JsonValue, io::Error> {
+    let mut json_body = Vec::new();
+    while let Some(chunk) = body.next().await {
+        let chunk = match chunk {
+            Ok(c) => c,
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())),      // TODO:
+        };
+        json_body.extend_from_slice(&chunk.into_bytes());
+        if json_body.len() >= 16384 {       // TODO: some limit
+            return Err(io::Error::new(io::ErrorKind::Other, "request too large"));
+        }
+    }
+
+    Ok(serde_json::from_slice(&json_body)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::body_to_json;
+
+    #[test]
+    fn body_to_json_works() {
+        futures::executor::block_on(async move {
+            let mut body = hyper::Body::from("[{\"a\":\"hello\"}]");
+            let json = body_to_json(body).await.unwrap();
+            assert_eq!(json, serde_json::Value::from(vec![
+                std::iter::once((
+                    "a".to_string(),
+                    serde_json::Value::from("hello")
+                )).collect::<serde_json::Map<_, _>>()
+            ]));
+        });
+    }
+
+    #[test]
+    fn body_to_json_size_limit_json() {
+        let huge_body = serde_json::to_vec(
+            &(0..32768).map(|_| serde_json::Value::from("test")).collect::<Vec<_>>()
+        ).unwrap();
+
+        futures::executor::block_on(async move {
+            let mut body = hyper::Body::from(huge_body);
+            assert!(body_to_json(body).await.is_err());
+        });
+    }
+
+    #[test]
+    fn body_to_json_size_limit_garbage() {
+        let huge_body = (0..100_000).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        futures::executor::block_on(async move {
+            let mut body = hyper::Body::from(huge_body);
+            assert!(body_to_json(body).await.is_err());
+        });
     }
 }
