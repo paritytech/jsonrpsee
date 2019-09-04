@@ -21,7 +21,7 @@ pub struct Server<R> {
 }
 
 struct Batch {
-
+    
 }
 
 impl<R> Server<R>

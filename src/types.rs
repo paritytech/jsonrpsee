@@ -9,7 +9,7 @@ pub mod request;
 pub mod response;
 pub mod version;
 
-pub use serde_json::{from_value, to_string, value::to_value};
+pub use serde_json::{from_value, to_string, to_vec, value::to_value};
 pub use serde_json::Map as JsonMap;
 pub use serde_json::Number as JsonNumber;
 pub use serde_json::Value as JsonValue;
