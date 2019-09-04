@@ -60,7 +60,7 @@ mod tests {
 		let deserialized: Params = serde_json::from_str(s).unwrap();
 
 		let mut map = serde_json::Map::new();
-		map.insert("key".to_string(), Value::String("value".to_string()));
+		map.insert("key".to_string(), JsonValue::String("value".to_string()));
 
 		assert_eq!(
 			Params::Array(vec![
@@ -70,7 +70,7 @@ mod tests {
 				JsonValue::from(4),
 				JsonValue::from(2.3),
 				JsonValue::String("hello".to_string()),
-				JsonValue::Array(vec![Value::from(0)]),
+				JsonValue::Array(vec![JsonValue::from(0)]),
 				JsonValue::Object(map),
 				JsonValue::Array(vec![]),
 			]),

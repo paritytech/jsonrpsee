@@ -42,6 +42,12 @@ macro_rules! rpc_api {
                     $crate::types::from_value(val.result).unwrap()     // TODO: don't unwrap
                 }
             )*
+
+            enum $api_name {
+                $(
+                    $name { $($pn: $pty),* },
+                )*
+            }
         )*
     };
 }
