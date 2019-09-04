@@ -54,5 +54,37 @@ where
         unimplemented!()
     }
 
-    // TODO: pub async fn respond_subscribe() {}
+    /// Sends back a response similar to `respond`, then returns a `ServerSubscription` object
+    /// that allows you to push more data on the corresponding connection.
+    // TODO: better docs
+    pub async fn into_subscription(self, response: JsonValue)
+        -> Result<ServerSubscription<'a, R>, io::Error>
+    {
+        unimplemented!();
+        Ok(ServerSubscription {
+            server: self.server,
+        })
+    }
+}
+
+/// Active subscription of a client towards a server.
+///
+/// > **Note**: Holds a borrow of the `Server`. Therefore, must be dropped before the `Server` can
+/// >           be dropped.
+pub struct ServerSubscription<'a, R> {
+    server: &'a Server<R>,
+}
+
+impl<'a, R> ServerSubscription<'a, R>
+where
+    for<'r> &'r R: RawServerRef<'r>
+{
+    pub fn is_valid(&self) -> bool {
+        true        // TODO:
+    }
+
+    /// Pushes a notification.
+    pub async fn push(self, message: JsonValue) -> Result<(), io::Error> {
+        unimplemented!()
+    }
 }
