@@ -1,7 +1,3 @@
-/*pub use self::join::join;
-pub use self::run::run;
-pub use self::traits::{Server, ServerJsonRequest, ServerRef, ServerRefRq};*/
-
 use crate::{raw_server::RawServerRef, JsonValue};
 use futures::prelude::*;
 use std::{io, pin::Pin};
@@ -33,6 +29,8 @@ where
 /// >           be dropped.
 pub struct ServerRq<'a, R> {
     server: &'a Server<R>,
+    method: String,
+    params: JsonValue,
 }
 
 impl<'a, R> ServerRq<'a, R>
@@ -41,12 +39,12 @@ where
 {
     /// Returns the method of this request.
     pub fn method(&self) -> &str {
-        "test"
+        &self.method
     }
 
     /// Returns the parameters of the request.
     pub fn params(&self) -> &JsonValue {
-        &JsonValue::Null
+        &self.params
     }
 
     /// Send back a response.
