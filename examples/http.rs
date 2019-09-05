@@ -11,7 +11,7 @@ fn main() {
     // Spawning a server in a background task.
     async_std::task::spawn(async move {
         let server1 = jsonrpsee::server::http();
-        jsonrpsee::server::run(server1, |method, _| async move {
+        jsonrpsee::server::run(&mut server1, |method, _| async move {
             panic!()
         }).await;
     });
