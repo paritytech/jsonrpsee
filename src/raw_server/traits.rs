@@ -22,7 +22,7 @@ use std::{io, pin::Pin};
 ///
 pub trait RawServerRef<'a> {
     /// Object that can be used to send a response.
-    type RawServerRq: RawServerRq<RequestId = Self::RequestId>;
+    type RawServerRq: RawServerRq<'a, RequestId = Self::RequestId>;
     /// Identifier for a request in the context of this server.
     type RequestId: PartialEq + Eq + Clone;
     /// The future that `next_request` produces.
@@ -41,11 +41,9 @@ pub trait RawServerRef<'a> {
 ///
 /// You can drop this object and retreive it later by grabbing its id (using the `id` method) then
 /// later calling `request_by_id`.
-pub trait RawServerRq {
-    /// The future that `respond` produces.
-    type SendBackFut: Future<Output = Result<(), io::Error>> + Unpin;
-    /// The future that `force_kill` produces.
-    type CloseFut: Future<Output = Result<(), io::Error>> + Unpin;
+pub trait RawServerRq<'a> {
+    /// The future that `finish` produces.
+    type Finish: Future<Output = Result<(), io::Error>> + Unpin + 'a;
     /// Identifier for a request in the context of this server.
     type RequestId: PartialEq + Eq + Clone;
 
@@ -55,14 +53,25 @@ pub trait RawServerRq {
     /// Returns the body of the request.
     fn request(&self) -> &types::Request;
 
-    /// Send back a response.
+    /// Send back a response and destroys the response object.
     ///
     /// The implementation blindly sends back the response and doesn't check whether there is any
     /// correspondance with the request in terms of logic. For example, you could call `respond`
     /// in order to send back a batch of six responses despite the fact that the original request
     /// was a single notification.
-    fn respond(self, response: &types::Response) -> Self::SendBackFut;
+    fn finish(self, response: &types::Response) -> Self::Finish;
+}
 
-    /// Force-kills a request, not responding to it.
-    fn force_kill(self) -> Self::CloseFut;
+/// Extension trait for `RawServerRq`.
+///
+/// If the request implements this trait, then it can be kept alive and you can send multiple
+/// responses to it.
+pub trait RawServerRqKeepAlive<'a>: RawServerRq<'a> {
+    /// The future that `close` produces.
+    type Close: Future<Output = Result<(), io::Error>> + Unpin + 'a;
+
+    fn send<'s>(&'s mut self, response: &types::Response) -> Pin<Box<dyn Future<Output = Result<(), io::Error>> + 's>>;
+
+    /// Close the request after we're done sending everything.
+    fn close(self) -> Self::Close;
 }

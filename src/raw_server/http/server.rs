@@ -109,9 +109,8 @@ struct Request {
     request: types::Request,
 }
 
-impl<'a> RawServerRq for HttpServerRefRq<'a> {
-    type CloseFut = Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send + 'a>>;
-    type SendBackFut = Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send + 'a>>;
+impl<'a> RawServerRq<'a> for HttpServerRefRq<'a> {
+    type Finish = Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send + 'a>>;
     type RequestId = u64;
 
     fn id(&self) -> &Self::RequestId {
@@ -122,7 +121,7 @@ impl<'a> RawServerRq for HttpServerRefRq<'a> {
         &self.server.requests.get(&self.id).unwrap().request
     }
 
-    fn respond(self, response: &types::Response) -> Self::SendBackFut {
+    fn finish(self, response: &types::Response) -> Self::Finish {
         let serialization_result = serde_json::to_vec(response);
 
         Box::pin(async move {
@@ -143,12 +142,6 @@ impl<'a> RawServerRq for HttpServerRefRq<'a> {
             let rq = self.server.requests.remove(&self.id).unwrap();
             rq.send_back.send(response).map_err(|_| io::Error::from(io::ErrorKind::Other));      // TODO:
             Ok(())
-        })
-    }
-
-    fn force_kill(self) -> Self::CloseFut {
-        Box::pin(async move {
-            unimplemented!()
         })
     }
 }
