@@ -1,4 +1,4 @@
-use crate::{raw_server::RawServerRef, server::Server, types::Error, types::JsonValue};
+use crate::{raw_server::RawServerRef, server::Server, server::ServerRequestParams, types::Error, types::JsonValue};
 use futures::{prelude::*, pin_mut};
 
 /// Runs the given server using the given handler.
@@ -8,7 +8,7 @@ use futures::{prelude::*, pin_mut};
 pub async fn run<'a, S, H, F>(mut server: &'a mut Server<S>, mut handler: H)
 where
     for<'r> &'r mut S: RawServerRef<'r>,
-    H: FnMut(&str, &JsonValue) -> F,
+    H: FnMut(&str, ServerRequestParams) -> F,
     F: Future<Output = Result<JsonValue, Error>>,
 {
     //let mut send_back = stream::FuturesUnordered::new();
@@ -28,7 +28,7 @@ where
             future::Either::Right(_) => continue,
         };
 
-        let future = handler(request.method(), &crate::types::JsonValue::Null);// TODO: request.params());
+        let future = handler(request.method(), request.params());
         //send_back.push(async move {
             let response = future.await;
             let _ = request.respond(response).await;

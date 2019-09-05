@@ -1,11 +1,12 @@
 use crate::raw_server::http::response;
 use crate::raw_server::{RawServerRef, RawServerRq};
 use crate::types;
+use async_std::net::ToSocketAddrs;
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Error, Response};
-use std::{io, net::ToSocketAddrs, pin::Pin, thread};
+use std::{io, pin::Pin, thread};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
@@ -21,10 +22,10 @@ pub struct HttpServer {
 
 impl HttpServer {
     // TODO: `ToSocketAddrs` can be blocking
-    pub fn bind(addr: impl ToSocketAddrs) -> HttpServer {
+    pub async fn bind(addr: impl ToSocketAddrs) -> HttpServer {
         let (mut tx, rx) = mpsc::channel(4);
 
-        let addr = addr.to_socket_addrs().unwrap().next().unwrap(); // TODO: no
+        let addr = addr.to_socket_addrs().await.unwrap().next().unwrap(); // TODO: no
 
         let make_service = make_service_fn(move |_| {
             let mut tx = tx.clone();
