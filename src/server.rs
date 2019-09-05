@@ -26,13 +26,12 @@ use crate::raw_server::{RawServerRef, RawServerRq};
 use crate::types::{self, from_value, to_value, JsonValue};
 use fnv::FnvHashMap;
 use futures::prelude::*;
-use std::{collections::HashMap, io, pin::Pin};
+use std::{collections::HashMap, io, marker::PhantomData, pin::Pin};
 
+pub use self::run::run;
 pub use self::wrappers::http;
 
-/*mod join;
 mod run;
-mod traits;*/
 mod wrappers;
 
 /// Wraps around a "raw server".
@@ -52,12 +51,12 @@ impl<R> Server<R> {
     }
 }
 
-impl<R> Server<R>
-where
-    for<'r> &'r mut R: RawServerRef<'r>
-{
+impl<R> Server<R> {
     /// Returns a `Future` resolving to the next request that this server generates.
-    pub async fn next_request<'a>(&'a mut self) -> Result<ServerRq<<&'a mut R as RawServerRef<'a>>::Request>, ()> {
+    pub async fn next_request<'a>(&'a mut self) -> Result<ServerRq<'a, <&'a mut R as RawServerRef<'a>>::Request>, ()>
+    where
+        &'a mut R: RawServerRef<'a>,
+    {
         // This piece of code is where we analyze requests.
         loop {
             let request = self.raw.next_request().await?;
@@ -68,13 +67,14 @@ where
 
             return Ok(ServerRq {
                 inner: request,
+                marker: PhantomData,
             })
         }
 
         panic!()        // TODO: 
     }
 
-    /// Returns a request previously returned by `next_request` by its id.
+    /*/// Returns a request previously returned by `next_request` by its id.
     ///
     /// Note that previous notifications don't have an ID and can't be accessed with this method.
     ///
@@ -82,7 +82,7 @@ where
     /// the past.
     pub fn request_by_id<'a>(&'a mut self, id: &types::Id) -> Option<ServerRq<<&'a mut R as RawServerRef<'a>>::Request>> {
         unimplemented!()
-    }
+    }*/
 
     /*pub fn subscriptions_by_id(&mut self, id: &String) -> Option<ServerSubscription<R>> {
         unimplemented!()
@@ -99,11 +99,12 @@ impl<R> From<R> for Server<R> {
 ///
 /// > **Note**: Holds a borrow of the `Server`. Therefore, must be dropped before the `Server` can
 /// >           be dropped.
-pub struct ServerRq<R> {
+pub struct ServerRq<'a, R> {
     inner: R,
+    marker: PhantomData<&'a mut ()>,
 }
 
-impl<'a, R> ServerRq<R>
+impl<'a, R> ServerRq<'a, R>
     where R: RawServerRq<'a>
 {
     fn call(&self) -> &types::Call {
