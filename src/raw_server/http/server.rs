@@ -16,7 +16,6 @@ pub struct HttpServer {
 
     /// The identifier is lineraly increasing and is never leaked on the wire or outside of this
     /// module. Therefore there is no risk of hash collision.
-    // TODO: call shrink_to_fit regularly?
     requests: FnvHashMap<u64, Request>,
 }
 
@@ -61,9 +60,9 @@ impl HttpServer {
 }
 
 impl<'a> RawServerRef<'a> for &'a mut HttpServer {
-    type RawServerRq = HttpServerRefRq<'a>;
+    type Request = HttpServerRefRq<'a>;
     type RequestId = u64;
-    type NextRequest = Pin<Box<dyn Future<Output = Result<Self::RawServerRq, ()>> + Send + 'a>>;
+    type NextRequest = Pin<Box<dyn Future<Output = Result<Self::Request, ()>> + Send + 'a>>;
 
     fn next_request(self) -> Self::NextRequest {
         Box::pin(async move {
@@ -73,10 +72,17 @@ impl<'a> RawServerRef<'a> for &'a mut HttpServer {
                 self.next_request_id += 1;
                 id
             };
+
             // TODO: we actually don't need to insert the request
             // most requests are answered without being dropped, so as an optimization we can
             // return the request itself, and insert it later if we drop it
             self.requests.insert(request_id, request);
+
+            // Every 128 requests, we call `shrink_to_fit` on the list.
+            if request_id % 128 == 0 {
+                self.requests.shrink_to_fit();
+            }
+
             Ok(HttpServerRefRq {
                 server: self,
                 id: request_id,
@@ -84,7 +90,7 @@ impl<'a> RawServerRef<'a> for &'a mut HttpServer {
         })
     }
 
-    fn request_by_id(self, id: Self::RequestId) -> Option<Self::RawServerRq> {
+    fn request_by_id(self, id: Self::RequestId) -> Option<Self::Request> {
         if self.requests.contains_key(&id) {
             Some(HttpServerRefRq {
                 server: self,

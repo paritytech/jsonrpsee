@@ -22,7 +22,7 @@
 //! TODO: write example
 //!
 
-use crate::raw_server::{RawServerRef, RawServerRq as _};
+use crate::raw_server::{RawServerRef, RawServerRq};
 use crate::types::{self, from_value, to_value, JsonValue};
 use fnv::FnvHashMap;
 use futures::prelude::*;
@@ -41,24 +41,6 @@ mod wrappers;
 pub struct Server<R> {
     /// Internal "raw" server.
     raw: R,
-
-    /// Note: considering that the keys are decided by an untrusted client, it is important to use
-    /// the `SipHasher` or equivalent.
-    requests: HashMap<types::Id, types::MethodCall>,
-
-    /// Keys of this hashmap are internal identifier shared between `Server` and its derivates
-    /// such as `ServerRq`.
-    /// The identifiers are lineraly increasing and never exposed on the wire or even outside of
-    /// this API. There is therefore no risk of hash collision.
-    batches: FnvHashMap<u64, Vec<RequestOrResponse>>,
-
-    /// Next key to insert in `batches`. `batches` must never contain a key whose value is
-    /// `next_batch_id`.
-    next_batch_id: u64,
-}
-
-enum RequestOrResponse {
-
 }
 
 impl<R> Server<R> {
@@ -66,11 +48,6 @@ impl<R> Server<R> {
     pub fn new(inner: R) -> Self {
         Server {
             raw: inner,
-            // We assume that we're not going to handle more than 32 requests simultaneously,
-            // which is a pretty reasonable estimate.
-            requests: HashMap::with_capacity(32),
-            batches: Default::default(),
-            next_batch_id: 0,
         }
     }
 }
@@ -80,19 +57,18 @@ where
     for<'r> &'r mut R: RawServerRef<'r>
 {
     /// Returns a `Future` resolving to the next request that this server generates.
-    pub async fn next_request<'a>(&'a mut self) -> Result<ServerRq<'a, R>, ()> {
-        // TODO: regularly call shrink_to_fit
-
+    pub async fn next_request<'a>(&'a mut self) -> Result<ServerRq<<&'a mut R as RawServerRef<'a>>::Request>, ()> {
         // This piece of code is where we analyze requests.
         loop {
             let request = self.raw.next_request().await?;
-            match request.request() {
-                types::Request::Single(rq) => {}       // TODO:
-                types::Request::Batch(requests) => {
+            let _ = match request.request() {
+                types::Request::Single(rq) => rq,
+                types::Request::Batch(requests) => unimplemented!(),
+            };
 
-                }       // TODO:
-            }
-            unimplemented!();       // TODO:
+            return Ok(ServerRq {
+                inner: request,
+            })
         }
 
         panic!()        // TODO: 
@@ -104,13 +80,13 @@ where
     ///
     /// Returns `None` if the request ID is invalid or if the request has already been answered in
     /// the past.
-    pub fn request_by_id(&mut self, id: &types::Id) -> Option<ServerRq<R>> {
+    pub fn request_by_id<'a>(&'a mut self, id: &types::Id) -> Option<ServerRq<<&'a mut R as RawServerRef<'a>>::Request>> {
         unimplemented!()
     }
 
-    pub fn subscriptions_by_id(&mut self, id: &String) -> Option<ServerSubscription<R>> {
+    /*pub fn subscriptions_by_id(&mut self, id: &String) -> Option<ServerSubscription<R>> {
         unimplemented!()
-    }
+    }*/
 }
 
 impl<R> From<R> for Server<R> {
@@ -123,23 +99,20 @@ impl<R> From<R> for Server<R> {
 ///
 /// > **Note**: Holds a borrow of the `Server`. Therefore, must be dropped before the `Server` can
 /// >           be dropped.
-pub struct ServerRq<'a, R> {
-    server: &'a mut Server<R>,
-
-    /// Method that is called by the request.
-    method: String,
-
-    /// Parameters of the request.
-    params: types::Params,
-
-    /// Identifier of the request if it is a method call, or `None` if it is a notification.
-    id: Option<types::Id>,
+pub struct ServerRq<R> {
+    inner: R,
 }
 
-impl<'a, R> ServerRq<'a, R>
-where
-    for<'r> &'r R: RawServerRef<'r>
+impl<'a, R> ServerRq<R>
+    where R: RawServerRq<'a>
 {
+    fn call(&self) -> &types::Call {
+        match self.inner.request() {
+            types::Request::Single(s) => s,
+            types::Request::Batch(_) => unreachable!(),     // TODO: justification
+        }
+    }
+
     /// Returns the id of the request.
     ///
     /// If this request object is dropped, you can retreive it again later by calling
@@ -150,7 +123,11 @@ where
 
     /// Returns the method of this request.
     pub fn method(&self) -> &str {
-        &self.method
+        match self.call() {
+            types::Call::MethodCall(types::MethodCall { method, .. }) => method,
+            types::Call::Notification(types::Notification { method, .. }) => method,
+            types::Call::Invalid { .. } => unimplemented!()     // TODO:
+        }
     }
 
     // TODO: restore
@@ -167,11 +144,13 @@ where
     ///   sent out.
     /// - Otherwise, this response is buffered.
     ///
-    pub async fn respond(self, response: JsonValue) -> Result<(), io::Error> {
-        unimplemented!()
+    pub async fn respond(self, response: Result<types::JsonValue, types::Error>) -> Result<(), io::Error> {
+        let output = types::Output::from(response, types::Id::Null, types::Version::V2);      // TODO: id
+        self.inner.finish(&types::Response::Single(output)).await?;
+        Ok(())
     }
 
-    /// Sends back a response similar to `respond`, then returns a `ServerSubscription` object
+    /*/// Sends back a response similar to `respond`, then returns a `ServerSubscription` object
     /// that allows you to push more data on the corresponding connection.
     // TODO: better docs
     pub async fn into_subscription(self, response: JsonValue)
@@ -181,10 +160,10 @@ where
         Ok(ServerSubscription {
             server: self.server,
         })
-    }
+    }*/
 }
 
-/// Active subscription of a client towards a server.
+/*/// Active subscription of a client towards a server.
 ///
 /// > **Note**: Holds a borrow of the `Server`. Therefore, must be dropped before the `Server` can
 /// >           be dropped.
@@ -208,4 +187,4 @@ where
     pub async fn push(self, message: JsonValue) -> Result<(), io::Error> {
         unimplemented!()
     }
-}
+}*/
