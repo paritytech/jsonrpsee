@@ -70,7 +70,7 @@ impl<'a> RawClientRef<'a> for &'a HttpClientPool {
         Box::pin(async move {
             let (send_back_tx, send_back_rx) = oneshot::channel();
             let message = FrontToBack {
-                request: request?,
+                request: request.map_err(RequestError::Serialization)?,
                 send_back: send_back_tx,
             };
 
@@ -98,9 +98,15 @@ impl<'a> RawClientRef<'a> for &'a HttpClientPool {
                 })
             }
 
-            // TODO: check status code, json, and all
-            let body = hyper_response.into_body().try_concat().await.unwrap();
-            let as_json: types::Response = types::from_slice(&body).unwrap();
+            // Note that we don't check the Content-Type of the request. This is deemed
+            // unnecessary, as a parsing error while happen anyway.
+
+            // TODO: enforce a maximum size here
+            let body = hyper_response.into_body().try_concat().await
+                .map_err(|err| RequestError::Http(Box::new(err)))?;
+
+            let as_json: types::Response = types::from_slice(&body)
+                .map_err(|err| RequestError::ParseError(err))?;
             Ok(as_json)
         })
     }
@@ -118,6 +124,9 @@ pub enum RequestError {
 
     #[error(display = "error while performing the HTTP request")]
     Http(Box<std::error::Error + Send + Sync>),
+
+    #[error(display = "error while parsing the response body")]
+    ParseError(#[error(cause)] serde_json::error::Error),
 
     #[error(display = "server returned an error status code: {:?}", status_code)]
     RequestFailure {
