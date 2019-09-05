@@ -8,6 +8,11 @@ jsonrpsee::rpc_api! {
 }
 
 fn main() {
+    // Spawning a server in a background task.
+    async_std::task::spawn(async move {
+        let server1 = jsonrpsee::server::http();
+    });
+
     /*let server1 = jsonrpsee::server::HttpServer::bind("0.0.0.0:8000");
     let server2 = jsonrpsee::server::HttpServer::bind("0.0.0.0:8080");
     let server = jsonrpsee::server::join(server1, server2);

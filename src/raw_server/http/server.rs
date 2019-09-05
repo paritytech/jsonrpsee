@@ -13,6 +13,10 @@ use std::{io, net::ToSocketAddrs, pin::Pin, thread};
 pub struct HttpServer {
     rx: mpsc::Receiver<Request>,
     next_request_id: u64,
+
+    /// The identifier is lineraly increasing and is never leaked on the wire or outside of this
+    /// module. Therefore there is no risk of hash collision.
+    // TODO: call shrink_to_fit regularly?
     requests: FnvHashMap<u64, Request>,
 }
 

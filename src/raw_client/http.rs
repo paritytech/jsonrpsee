@@ -102,9 +102,10 @@ impl<'a> RawClientRef<'a> for &'a HttpClientPool {
             // unnecessary, as a parsing error while happen anyway.
 
             // TODO: enforce a maximum size here
-            let body = hyper_response.into_body().try_concat().await
+            let body: hyper::Chunk = hyper_response.into_body().try_concat().await
                 .map_err(|err| RequestError::Http(Box::new(err)))?;
 
+            // TODO: use Response::from_json
             let as_json: types::Response = types::from_slice(&body)
                 .map_err(|err| RequestError::ParseError(err))?;
             Ok(as_json)
@@ -121,6 +122,9 @@ pub enum RequestError {
 
     #[error(display = "error while serializing the request")]
     Serialization(#[error(cause)] serde_json::error::Error),
+
+    #[error(display = "response body is not UTF-8")]
+    Utf8(std::string::FromUtf8Error),
 
     #[error(display = "error while performing the HTTP request")]
     Http(Box<std::error::Error + Send + Sync>),

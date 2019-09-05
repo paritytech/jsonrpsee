@@ -14,6 +14,7 @@ where
     let mut send_back = stream::FuturesUnordered::new();
 
     loop {
+        // TODO: don't use maybe_done
         let mut next_request = future::maybe_done(server.next_request());
 
         // Wait for either the next request to arrive, or for one of the
