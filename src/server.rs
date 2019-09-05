@@ -26,7 +26,7 @@ use crate::raw_server::{RawServerRef, RawServerRq};
 use crate::types::{self, from_value, to_value, JsonValue};
 use fnv::FnvHashMap;
 use futures::prelude::*;
-use std::{collections::HashMap, io, marker::PhantomData, pin::Pin};
+use std::{collections::HashMap, fmt, io, marker::PhantomData, pin::Pin};
 
 pub use self::run::run;
 pub use self::wrappers::http;
@@ -234,6 +234,12 @@ impl<'a> ServerRequestParams<'a> {
                 }
             }
         }
+    }
+}
+
+impl<'a> fmt::Debug for ServerRequestParams<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
     }
 }
 
