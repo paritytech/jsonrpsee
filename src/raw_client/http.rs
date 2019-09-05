@@ -1,5 +1,7 @@
 use crate::types;
 use super::RawClientRef;
+use derive_more::*;
+use err_derive::*;
 use futures::{prelude::*, channel::mpsc, channel::oneshot};
 use std::{fmt, io, net::SocketAddr, pin::Pin, thread};
 
@@ -9,34 +11,36 @@ use std::{fmt, io, net::SocketAddr, pin::Pin, thread};
 // In particular, hyper can only be polled by tokio, but we don't want users to have to suffer
 // from this restriction. We therefore spawn a background thread dedicated to running the tokio
 // runtime.
+//
+// In order to perform a request, we send this request to the background thread through a channel
+// and wait for an answer to come back.
 
+/// Implementation of a raw client for HTTP requests.
 pub struct HttpClientPool {
     /// Sender that sends requests to the background task.
-    tx: mpsc::Sender<(hyper::Request<hyper::Body>, oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>)>,
+    requests_tx: mpsc::Sender<FrontToBack>,
+}
+
+/// Message transmitted from the foreground task to the background.
+struct FrontToBack {
+    /// Request that the background task should perform.
+    request: hyper::Request<hyper::Body>,
+    /// Channel to send back to the response.
+    send_back: oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
 impl HttpClientPool {
+    /// Initializes a new pool for HTTP client reuests.
     pub fn new() -> Result<Self, io::Error> {
-        let (mut tx, mut rx) = mpsc::channel::<(hyper::Request<hyper::Body>, oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>)>(4);
-
-        let client = hyper::Client::new();
+        let (mut requests_tx, mut requests_rx) = mpsc::channel::<FrontToBack>(4);
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::Builder::new()
             .name("jsonrpc-hyper-client".to_string())
-            .spawn(move || {
-                // TODO: don't unwrap
-                let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
-                runtime.block_on(async move {
-                    while let Some((rq, send_back)) = rx.next().await {
-                        // TODO: no, as that makes queries serially one by one
-                        let _ = send_back.send(client.request(rq).await);
-                    }
-                });
-            })
+            .spawn(move || background_thread(requests_rx))
             .unwrap();
 
-        Ok(HttpClientPool { tx })
+        Ok(HttpClientPool { requests_tx })
     }
 }
 
@@ -47,10 +51,11 @@ impl fmt::Debug for HttpClientPool {
 }
 
 impl<'a> RawClientRef<'a> for &'a HttpClientPool {
-    type Future = Pin<Box<dyn Future<Output = Result<types::Response, io::Error>> + Send + 'a>>;
+    type Request = Pin<Box<dyn Future<Output = Result<types::Response, RequestError>> + Send + 'a>>;
+    type Error = RequestError;
 
-    fn request(self, target: &str, request: types::Request) -> Self::Future {
-        let mut tx = self.tx.clone();
+    fn request(self, target: &str, request: types::Request) -> Self::Request {
+        let mut requests_tx = self.requests_tx.clone();
 
         let request = types::to_vec(&request).map(|body| {
             hyper::Request::post(target)
@@ -63,20 +68,101 @@ impl<'a> RawClientRef<'a> for &'a HttpClientPool {
         });
 
         Box::pin(async move {
-            let request = request?;
-
             let (send_back_tx, send_back_rx) = oneshot::channel();
-            if tx.send((request, send_back_tx)).await.is_err() {
-                log::error!("JSONRPC http client cackground thread has shut down");
-                return Err(io::Error::new(io::ErrorKind::Other, "background thread is down"))
+            let message = FrontToBack {
+                request: request?,
+                send_back: send_back_tx,
+            };
+
+            if requests_tx.send(message).await.is_err() {
+                log::error!("JSONRPC http client background thread has shut down");
+                return Err(RequestError::Io(
+                    io::Error::new(io::ErrorKind::Other, "background thread is down")
+                ))
             }
 
-            let hyper_response = send_back_rx.await;
+            let hyper_response = match send_back_rx.await {
+                Ok(Ok(r)) => r,
+                Ok(Err(err)) => return Err(RequestError::Http(Box::new(err))),
+                Err(_) => {
+                    log::error!("JSONRPC http client background thread has shut down");
+                    return Err(RequestError::Io(
+                        io::Error::new(io::ErrorKind::Other, "background thread is down")
+                    ))
+                }
+            };
+
+            if !hyper_response.status().is_success() {
+                return Err(RequestError::RequestFailure {
+                    status_code: hyper_response.status().into(),
+                })
+            }
+
             // TODO: check status code, json, and all
-            let body = hyper_response.unwrap().unwrap().into_body().try_concat().await.unwrap();
+            let body = hyper_response.into_body().try_concat().await.unwrap();
             let as_json: types::Response = types::from_slice(&body).unwrap();
-            println!("{:?}", as_json);
             Ok(as_json)
         })
     }
+}
+
+/// Error that can happen during a request.
+#[derive(Debug, From, Error)]
+pub enum RequestError {
+    // TODO: remove
+    #[error(display = "network error while performing the request")]
+    Io(#[error(cause)] io::Error),
+
+    #[error(display = "error while serializing the request")]
+    Serialization(#[error(cause)] serde_json::error::Error),
+
+    #[error(display = "error while performing the HTTP request")]
+    Http(Box<std::error::Error + Send + Sync>),
+
+    #[error(display = "server returned an error status code: {:?}", status_code)]
+    RequestFailure {
+        status_code: u16,
+    },
+}
+
+/// Function that runs in a background thread.
+fn background_thread(mut requests_rx: mpsc::Receiver<FrontToBack>) {
+    let client = hyper::Client::new();
+
+    let mut runtime = match tokio::runtime::current_thread::Runtime::new() {
+        Ok(r) => r,
+        Err(err) => {
+            // Ideally, we would try to initialize the tokio runtime in the main thread then move
+            // it here. That however isn't possible. If we fail to initialize the runtime, the only
+            // thing we can do is print an error and shut down the background thread.
+            // Initialization failures should be almost non-existant anyway, so this isn't a big
+            // deal.
+            log::error!("Failed to initialize tokio runtime: {:?}", err);
+            return
+        },
+    };
+
+    // Running until the channel has been closed, and all requests have been completed.
+    runtime.block_on(async move {
+        // Collection of futures that process ongoing requests.
+        let mut pending_requests = stream::FuturesUnordered::new();
+
+        loop {
+            let rq = match future::select(requests_rx.next(), pending_requests.next()).await {
+                // We received a request from the foreground.
+                future::Either::Left((Some(rq), _)) => rq,
+                // The channel with the foreground has closed.
+                future::Either::Left((None, _)) => break,
+                // One of the elements of `pending_requests` is finished.
+                future::Either::Right(_) => continue,
+            };
+
+            pending_requests.push(async {
+                let _ = rq.send_back.send(client.request(rq.request).await);
+            });
+        }
+
+        // Before returning, complete all pending requests.
+        while let Some(_) = pending_requests.next().await {}
+    });
 }
