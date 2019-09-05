@@ -91,7 +91,7 @@ mod tests {
 		use serde_json::Value;
 
 		let m = MethodCall {
-			jsonrpc: Some(Version::V2),
+			jsonrpc: Version::V2,
 			method: "update".to_owned(),
 			params: Params::Array(vec![Value::from(1), Value::from(2)]),
 			id: Id::Num(1),
@@ -110,7 +110,7 @@ mod tests {
 		use serde_json::Value;
 
 		let n = Notification {
-			jsonrpc: Some(Version::V2),
+			jsonrpc: Version::V2,
 			method: "update".to_owned(),
 			params: Params::Array(vec![Value::from(1), Value::from(2)]),
 		};
@@ -125,7 +125,7 @@ mod tests {
 		use serde_json::Value;
 
 		let n = Call::Notification(Notification {
-			jsonrpc: Some(Version::V2),
+			jsonrpc: Version::V2,
 			method: "update".to_owned(),
 			params: Params::Array(vec![Value::from(1)]),
 		});
@@ -140,13 +140,13 @@ mod tests {
 
 		let batch = Request::Batch(vec![
 			Call::MethodCall(MethodCall {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "update".to_owned(),
 				params: Params::Array(vec![Value::from(1), Value::from(2)]),
 				id: Id::Num(1),
 			}),
 			Call::Notification(Notification {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "update".to_owned(),
 				params: Params::Array(vec![Value::from(1)]),
 			}),
@@ -167,7 +167,7 @@ mod tests {
 		assert_eq!(
 			deserialized,
 			Notification {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "update".to_owned(),
 				params: Params::Array(vec![Value::from(1), Value::from(2)])
 			}
@@ -179,7 +179,7 @@ mod tests {
 		assert_eq!(
 			deserialized,
 			Notification {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "foobar".to_owned(),
 				params: Params::None,
 			}
@@ -199,7 +199,7 @@ mod tests {
 		assert_eq!(
 			deserialized,
 			Call::Notification(Notification {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "update".to_owned(),
 				params: Params::Array(vec![Value::from(1)])
 			})
@@ -210,7 +210,7 @@ mod tests {
 		assert_eq!(
 			deserialized,
 			Call::MethodCall(MethodCall {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "update".to_owned(),
 				params: Params::Array(vec![Value::from(1)]),
 				id: Id::Num(1)
@@ -222,7 +222,7 @@ mod tests {
 		assert_eq!(
 			deserialized,
 			Call::MethodCall(MethodCall {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "update".to_owned(),
 				params: Params::Array(vec![]),
 				id: Id::Num(1)
@@ -234,7 +234,7 @@ mod tests {
 		assert_eq!(
 			deserialized,
 			Call::MethodCall(MethodCall {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "update".to_owned(),
 				params: Params::None,
 				id: Id::Num(1)
@@ -246,7 +246,7 @@ mod tests {
 		assert_eq!(
 			deserialized,
 			Call::MethodCall(MethodCall {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				method: "update".to_owned(),
 				params: Params::None,
 				id: Id::Num(1)
@@ -265,13 +265,13 @@ mod tests {
 			Request::Batch(vec![
 				Call::Invalid { id: Id::Null },
 				Call::MethodCall(MethodCall {
-					jsonrpc: Some(Version::V2),
+					jsonrpc: Version::V2,
 					method: "update".to_owned(),
 					params: Params::Array(vec![Value::from(1), Value::from(2)]),
 					id: Id::Num(1)
 				}),
 				Call::Notification(Notification {
-					jsonrpc: Some(Version::V2),
+					jsonrpc: Version::V2,
 					method: "update".to_owned(),
 					params: Params::Array(vec![Value::from(1)])
 				})

@@ -124,7 +124,7 @@ fn success_output_serialize() {
 	use serde_json::Value;
 
 	let so = Output::Success(Success {
-		jsonrpc: Some(Version::V2),
+		jsonrpc: Version::V2,
 		result: Value::from(1),
 		id: Id::Num(1),
 	});
@@ -144,7 +144,7 @@ fn success_output_deserialize() {
 	assert_eq!(
 		deserialized,
 		Output::Success(Success {
-			jsonrpc: Some(Version::V2),
+			jsonrpc: Version::V2,
 			result: Value::from(1),
 			id: Id::Num(1)
 		})
@@ -156,7 +156,7 @@ fn failure_output_serialize() {
 	use serde_json;
 
 	let fo = Output::Failure(Failure {
-		jsonrpc: Some(Version::V2),
+		jsonrpc: Version::V2,
 		error: Error::parse_error(),
 		id: Id::Num(1),
 	});
@@ -165,23 +165,6 @@ fn failure_output_serialize() {
 	assert_eq!(
 		serialized,
 		r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":1}"#
-	);
-}
-
-#[test]
-fn failure_output_serialize_jsonrpc_1() {
-	use serde_json;
-
-	let fo = Output::Failure(Failure {
-		jsonrpc: None,
-		error: Error::parse_error(),
-		id: Id::Num(1),
-	});
-
-	let serialized = serde_json::to_string(&fo).unwrap();
-	assert_eq!(
-		serialized,
-		r#"{"error":{"code":-32700,"message":"Parse error"},"id":1}"#
 	);
 }
 
@@ -195,7 +178,7 @@ fn failure_output_deserialize() {
 	assert_eq!(
 		deserialized,
 		Output::Failure(Failure {
-			jsonrpc: Some(Version::V2),
+			jsonrpc: Version::V2,
 			error: Error::parse_error(),
 			id: Id::Num(1)
 		})
@@ -213,7 +196,7 @@ fn single_response_deserialize() {
 	assert_eq!(
 		deserialized,
 		Response::Single(Output::Success(Success {
-			jsonrpc: Some(Version::V2),
+			jsonrpc: Version::V2,
 			result: Value::from(1),
 			id: Id::Num(1)
 		}))
@@ -232,12 +215,12 @@ fn batch_response_deserialize() {
 		deserialized,
 		Response::Batch(vec![
 			Output::Success(Success {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				result: Value::from(1),
 				id: Id::Num(1)
 			}),
 			Output::Failure(Failure {
-				jsonrpc: Some(Version::V2),
+				jsonrpc: Version::V2,
 				error: Error::parse_error(),
 				id: Id::Num(1)
 			})

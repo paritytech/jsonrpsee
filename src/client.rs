@@ -11,13 +11,25 @@ pub struct Client<R> {
     next_request_id: AtomicU64,
 }
 
+impl<R> Client<R> {
+    /// Initializes a new `Client` using the given raw client as backend.
+    pub fn new(inner: R) -> Self {
+        Client {
+            inner,
+            next_request_id: AtomicU64::new(0),
+        }
+    }
+}
+
 impl<R> Client<R>
 where
     for<'r> &'r R: RawClientRef<'r>,
 {
     /// Starts a request.
-    pub async fn request<'a>(&'a self, method: impl Into<String>)
-        -> Result<impl DeserializeOwned, ClientError<<&'a R as RawClientRef<'a>>::Error>> {
+    pub async fn request<'a, Ret>(&'a self, method: impl Into<String>)
+        -> Result<Ret, ClientError<<&'a R as RawClientRef<'a>>::Error>>
+    where Ret: DeserializeOwned,
+    {
         let id = {
             let i = self.next_request_id.fetch_add(1, Ordering::Relaxed);
             if i == u64::max_value() {
