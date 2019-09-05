@@ -22,7 +22,7 @@ macro_rules! rpc_api {
                     )*
 
                     let method_call = $crate::types::MethodCall {
-                        jsonrpc: Some($crate::types::Version::V2),
+                        jsonrpc: $crate::types::Version::V2,
                         method: stringify!($name).to_owned(),
                         params: $crate::types::Params::None/*::Map(
                             Default::default()      // TODO:

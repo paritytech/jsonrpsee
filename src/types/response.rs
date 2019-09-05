@@ -6,9 +6,7 @@ use serde::{Serialize, Deserialize};
 #[serde(deny_unknown_fields)]
 pub struct Success {
 	/// Protocol version
-	// TODO: why the fuck is that an option?
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub jsonrpc: Option<Version>,
+	pub jsonrpc: Version,
 	/// Result
 	pub result: JsonValue,
 	/// Correlation id
@@ -19,10 +17,8 @@ pub struct Success {
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Failure {
-	/// Protocol Version
-	// TODO: why the fuck is that an option?
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub jsonrpc: Option<Version>,
+	/// Protocol version
+	pub jsonrpc: Version,
 	/// Error
 	pub error: Error,
 	/// Correlation id
@@ -42,7 +38,7 @@ pub enum Output {
 
 impl Output {
 	/// Creates new output given `Result`, `Id` and `Version`.
-	pub fn from(result: Result<JsonValue, Error>, id: Id, jsonrpc: Option<Version>) -> Self {
+	pub fn from(result: Result<JsonValue, Error>, id: Id, jsonrpc: Version) -> Self {
 		match result {
 			Ok(result) => Output::Success(Success { id, jsonrpc, result }),
 			Err(error) => Output::Failure(Failure { id, jsonrpc, error }),
@@ -50,7 +46,7 @@ impl Output {
 	}
 
 	/// Get the jsonrpc protocol version.
-	pub fn version(&self) -> Option<Version> {
+	pub fn version(&self) -> Version {
 		match *self {
 			Output::Success(ref s) => s.jsonrpc,
 			Output::Failure(ref f) => f.jsonrpc,
@@ -89,7 +85,7 @@ pub enum Response {
 
 impl Response {
 	/// Creates new `Response` with given error and `Version`
-	pub fn from(error: Error, jsonrpc: Option<Version>) -> Self {
+	pub fn from(error: Error, jsonrpc: Version) -> Self {
 		Failure {
 			id: Id::Null,
 			jsonrpc,
