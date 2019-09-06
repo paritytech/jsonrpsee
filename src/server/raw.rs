@@ -1,4 +1,4 @@
-//! Servers that receive JSON payloads.
+//! Lower-level API for servers that receive JSON payloads.
 //!
 //! A "raw server" is a server that produces JSON payloads and can send back JSON payloads in
 //! return. This module isn't concerned with concepts such as a "batch", "successes" and "failures".

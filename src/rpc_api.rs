@@ -19,7 +19,7 @@ macro_rules! rpc_api {
                         let $pn = $crate::types::to_value($pn).unwrap();        // TODO: don't unwrap
                     )**/
 
-                    let http = $crate::client::Client::new($crate::raw_client::HttpClientPool::new().unwrap());      // TODO: don't unwrap
+                    let http = $crate::client::Client::new($crate::client::raw::HttpClientPool::new().unwrap());      // TODO: don't unwrap
                     http.request(stringify!($name)).await.unwrap()
                 }
             )*

@@ -1,5 +1,4 @@
-use crate::raw_server::HttpServer;
-use crate::server::Server;
+use crate::server::{Server, raw::HttpServer};
 use async_std::net::ToSocketAddrs;
 
 /// Starts a [`Server`](../Server) object that serves HTTP.

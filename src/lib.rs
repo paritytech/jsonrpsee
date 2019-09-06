@@ -8,7 +8,5 @@
 mod rpc_api;
 
 pub mod client;
-pub mod raw_client;
-pub mod raw_server;
 pub mod server;
 pub mod types;

@@ -1,5 +1,5 @@
 
-use crate::raw_server::{RawServerRef, RawServerRq};
+use crate::server::raw::{RawServerRef, RawServerRq};
 use crate::server::ServerRequestParams;
 use crate::types::{self, from_value, to_value, JsonValue};
 use fnv::FnvHashMap;

@@ -27,6 +27,8 @@ pub use self::run::run;
 pub use self::server::{Server, ServerRq};
 pub use self::wrappers::http;
 
+pub mod raw;
+
 mod params;
 mod run;
 mod server;

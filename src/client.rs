@@ -1,8 +1,10 @@
-pub use crate::{raw_client::RawClientRef, types};
+pub use crate::{client::raw::RawClientRef, types};
 use derive_more::*;
 use err_derive::*;
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+pub mod raw;
 
 // TODO: add a static version of Client<HttpClient> for easier small queries
 
