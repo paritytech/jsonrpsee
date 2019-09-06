@@ -197,7 +197,7 @@ async fn process_request(
                 send_back: tx,
                 request: json_body,
             };
-            if let Err(_) = fg_process_tx.send(user_facing_rq).await {
+            if fg_process_tx.send(user_facing_rq).await.is_err() {
                 return response::internal_error("JSON requests processing channel has shut down");
             }
             match rx.await {
@@ -290,7 +290,7 @@ mod tests {
         ).unwrap();
 
         futures::executor::block_on(async move {
-            let mut body = hyper::Body::from(huge_body);
+            let body = hyper::Body::from(huge_body);
             assert!(body_to_request(body).await.is_err());
         });
     }
@@ -299,7 +299,7 @@ mod tests {
     fn body_to_request_size_limit_garbage() {
         let huge_body = (0..100_000).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
         futures::executor::block_on(async move {
-            let mut body = hyper::Body::from(huge_body);
+            let body = hyper::Body::from(huge_body);
             assert!(body_to_request(body).await.is_err());
         });
     }

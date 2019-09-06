@@ -5,7 +5,7 @@ use futures::{prelude::*, pin_mut};
 ///
 /// Whenever the server receives an RPC request, the handler is invoked in order to determine how
 /// to respond to it.
-pub async fn run<'a, S, H, F>(mut server: &'a mut Server<S>, mut handler: H)
+pub async fn run<'a, S, H, F>(server: &'a mut Server<S>, mut handler: H)
 where
     for<'r> &'r mut S: RawServerRef<'r>,
     H: FnMut(&str, ServerRequestParams) -> F,

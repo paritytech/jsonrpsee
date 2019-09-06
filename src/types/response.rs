@@ -85,11 +85,11 @@ pub enum Response {
 
 impl Response {
 	/// Creates new `Response` with given error and `Version`
-	pub fn from(error: Error, jsonrpc: Version) -> Self {
+	pub fn from(error: impl Into<Error>, jsonrpc: Version) -> Self {
 		Failure {
 			id: Id::Null,
 			jsonrpc,
-			error,
+			error: error.into(),
 		}
 		.into()
 	}
