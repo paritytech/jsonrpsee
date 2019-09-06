@@ -125,10 +125,9 @@ impl<'a, R> ServerRq<'a, R>
     ///   sent out.
     /// - Otherwise, this response is buffered.
     ///
-    pub async fn respond(self, response: Result<common::JsonValue, common::Error>) -> Result<(), io::Error> {
+    pub async fn respond(self, response: Result<common::JsonValue, common::Error>) {
         let output = common::Output::from(response, common::Id::Null, common::Version::V2);      // TODO: id
-        self.inner.finish(Some(&common::Response::Single(output))).await?;
-        Ok(())
+        self.inner.finish(Some(&common::Response::Single(output))).await;
     }
 
     /*/// Sends back a response similar to `respond`, then returns a `ServerSubscription` object

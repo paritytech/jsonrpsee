@@ -1,6 +1,6 @@
 use crate::common;
 use futures::prelude::*;
-use std::{io, pin::Pin};
+use std::{error, io, pin::Pin};
 
 /// Reference to a server that can produce JSON payloads for us to answer.
 ///
@@ -43,7 +43,7 @@ pub trait RawServerRef<'a> {
 /// later calling `request_by_id`.
 pub trait RawServerRq<'a> {
     /// The future that `finish` produces.
-    type Finish: Future<Output = Result<(), io::Error>> + Unpin + 'a;
+    type Finish: Future<Output = ()> + Unpin + 'a;
     /// Identifier for a request in the context of this server.
     type RequestId: PartialEq + Eq + Clone;
 
@@ -80,5 +80,5 @@ pub trait RawServerRq<'a> {
     /// > **Note**: Just like for [`finish`], the returned `Future` shouldn't take too long to
     /// >           complete.
     fn send<'s>(&'s mut self, response: &common::Response)
-        -> Result<Pin<Box<dyn Future<Output = Result<(), io::Error>> + 's>>, ()>;
+        -> Result<Pin<Box<dyn Future<Output = ()> + 's>>, ()>;
 }

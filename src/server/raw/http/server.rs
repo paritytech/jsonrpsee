@@ -117,7 +117,7 @@ struct Request {
 }
 
 impl<'a> RawServerRq<'a> for HttpServerRefRq<'a> {
-    type Finish = Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send + 'a>>;
+    type Finish = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
     type RequestId = u64;
 
     fn id(&self) -> &Self::RequestId {
@@ -154,13 +154,14 @@ impl<'a> RawServerRq<'a> for HttpServerRefRq<'a> {
             };
 
             let rq = self.server.requests.remove(&self.id).unwrap();
-            rq.send_back.send(response).map_err(|_| io::Error::from(io::ErrorKind::Other))?;      // TODO:
-            Ok(())
+            if rq.send_back.send(response).is_err() {
+                log::error!("Couldn't send back JSON-RPC response, as background task has crashed");
+            }
         })
     }
 
     fn send<'s>(&'s mut self, response: &common::Response)
-        -> Result<Pin<Box<dyn Future<Output = Result<(), io::Error>> + 's>>, ()>
+        -> Result<Pin<Box<dyn Future<Output = ()> + 's>>, ()>
     {
         Err(())
     }
