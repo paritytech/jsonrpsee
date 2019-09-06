@@ -128,28 +128,41 @@ impl<'a> RawServerRq<'a> for HttpServerRefRq<'a> {
         &self.server.requests.get(&self.id).unwrap().request
     }
 
-    fn finish(self, response: &common::Response) -> Self::Finish {
-        let serialization_result = serde_json::to_vec(response);
+    fn finish(self, response: Option<&common::Response>) -> Self::Finish {
+        let serialization_result = response.map(|r| serde_json::to_vec(r));
 
         Box::pin(async move {
-            let bytes = match serialization_result {
-                Ok(b) => b,
-                Err(_) => panic!()      // TODO: no
+            let response = match serialization_result {
+                Some(Ok(bytes)) => {
+                    hyper::Response::builder()
+                        .status(hyper::StatusCode::OK)
+                        .header(
+                            "Content-Type",
+                            hyper::header::HeaderValue::from_static("application/json; charset=utf-8"),
+                        )
+                        .body(hyper::Body::from(bytes))
+                        .expect("Unable to parse response body for type conversion")
+                },
+                Some(Err(_)) => panic!(),     // TODO: no
+                None => {
+                    // TODO: is that a good idea? should the param really be an Option?
+                    hyper::Response::builder()
+                        .status(hyper::StatusCode::NO_CONTENT)
+                        .body(hyper::Body::empty())
+                        .expect("Unable to parse response body for type conversion")
+                },
             };
 
-            let response = hyper::Response::builder()
-                .status(hyper::StatusCode::OK)
-                .header(
-                    "Content-Type",
-                    hyper::header::HeaderValue::from_static("application/json; charset=utf-8"),
-                )
-                .body(hyper::Body::from(bytes))
-                .expect("Unable to parse response body for type conversion");
-
             let rq = self.server.requests.remove(&self.id).unwrap();
-            rq.send_back.send(response).map_err(|_| io::Error::from(io::ErrorKind::Other));      // TODO:
+            rq.send_back.send(response).map_err(|_| io::Error::from(io::ErrorKind::Other))?;      // TODO:
             Ok(())
         })
+    }
+
+    fn send<'s>(&'s mut self, response: &common::Response)
+        -> Result<Pin<Box<dyn Future<Output = Result<(), io::Error>> + 's>>, ()>
+    {
+        Err(())
     }
 }
 

@@ -1,3 +1,5 @@
+//! Traits for implementing request-making capabilities.
+
 use crate::common;
 use futures::prelude::*;
 use std::{error, io};

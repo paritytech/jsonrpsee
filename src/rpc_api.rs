@@ -26,7 +26,7 @@ macro_rules! rpc_api {
 
             enum $api_name {
                 $(
-                    $name { $($pn: $pty),* },
+                    $name { respond: (), $($pn: $pty),* },
                 )*
             }
 
@@ -34,7 +34,38 @@ macro_rules! rpc_api {
                 async fn next_request<S>(server: &mut $crate::server::Server<S>) -> Result<Self, std::io::Error>
                     where for<'r> &'r mut S: $crate::server::raw::RawServerRef<'r>
                 {
-                    panic!()
+                    loop {
+                        let request = server.next_request().await.unwrap();     // TODO: don't unwrap
+
+                        $(
+                            if request.method() == stringify!($name) {
+                                $(
+                                    let $pn: $pty = {
+                                        let raw_val = match request.params().get(stringify!($pn)) {
+                                            Some(v) => v,
+                                            None => {
+                                                request.respond(Err($crate::common::Error::invalid_params("foo"))).await;       // TODO: message
+                                                continue;
+                                            }
+                                        };
+
+                                        match $crate::common::from_value(raw_val.clone()) {
+                                            Ok(v) => v,
+                                            Err(_) => {
+                                                request.respond(Err($crate::common::Error::invalid_params("foo"))).await;       // TODO: message
+                                                continue;
+                                            }
+                                        }
+                                    };
+                                )*
+
+                                // TODO: give a way to respond
+                                return Ok($api_name::$name { respond: (), $($pn),* });
+                            }
+                        )*
+
+                        request.respond(Err($crate::common::Error::method_not_found())).await;
+                    }
                 }
             }
         )*

@@ -32,7 +32,7 @@ struct FrontToBack {
 impl HttpClientPool {
     /// Initializes a new pool for HTTP client reuests.
     pub fn new() -> Result<Self, io::Error> {
-        let (mut requests_tx, mut requests_rx) = mpsc::channel::<FrontToBack>(4);
+        let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(4);
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::Builder::new()

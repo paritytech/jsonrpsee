@@ -53,25 +53,32 @@ pub trait RawServerRq<'a> {
     /// Returns the body of the request.
     fn request(&self) -> &common::Request;
 
-    /// Send back a response and destroys the response object.
+    /// Sends back a response and destroys the request object.
+    ///
+    /// You can pass `None` in order to destroy the request object without sending back anything.
     ///
     /// The implementation blindly sends back the response and doesn't check whether there is any
-    /// correspondance with the request in terms of logic. For example, you could call `respond`
-    /// in order to send back a batch of six responses despite the fact that the original request
-    /// was a single notification.
-    fn finish(self, response: &common::Response) -> Self::Finish;
-}
+    /// correspondance with the request in terms of logic. For example, `respond` will accept
+    /// sending back a batch of six responses even if the original request was a single
+    /// notification.
+    ///
+    /// > **Note**: While this method returns a `Future` that must be driven to completion,
+    /// >           implementations must be aware that the entire requests processing logic is
+    /// >           blocked for as long as this `Future` is pending. As an example, you shouldn't
+    /// >           use this `Future` to send back a TCP message, because if the remote is
+    /// >           unresponsive and the buffers full, the `Future` would then wait for a long time.
+    ///
+    fn finish(self, response: Option<&common::Response>) -> Self::Finish;
 
-/// Extension trait for `RawServerRq`.
-///
-/// If the request implements this trait, then it can be kept alive and you can send multiple
-/// responses to it.
-pub trait RawServerRqKeepAlive<'a>: RawServerRq<'a> {
-    /// The future that `close` produces.
-    type Close: Future<Output = Result<(), io::Error>> + Unpin + 'a;
-
-    fn send<'s>(&'s mut self, response: &common::Response) -> Pin<Box<dyn Future<Output = Result<(), io::Error>> + 's>>;
-
-    /// Close the request after we're done sending everything.
-    fn close(self) -> Self::Close;
+    /// Sends back some data on the request and keeps the request alive.
+    ///
+    /// You can continue sending data on that same request later.
+    ///
+    /// > **Note**: This might not be supported by the underlying implementation. For example, a
+    /// >           WebSockets server can support that, but not an HTTP server.
+    ///
+    /// > **Note**: Just like for [`finish`], the returned `Future` shouldn't take too long to
+    /// >           complete.
+    fn send<'s>(&'s mut self, response: &common::Response)
+        -> Result<Pin<Box<dyn Future<Output = Result<(), io::Error>> + 's>>, ()>;
 }

@@ -1,4 +1,3 @@
-
 use crate::server::raw::{RawServerRef, RawServerRq};
 use crate::server::ServerRequestParams;
 use crate::common::{self, from_value, to_value, JsonValue};
@@ -128,7 +127,7 @@ impl<'a, R> ServerRq<'a, R>
     ///
     pub async fn respond(self, response: Result<common::JsonValue, common::Error>) -> Result<(), io::Error> {
         let output = common::Output::from(response, common::Id::Null, common::Version::V2);      // TODO: id
-        self.inner.finish(&common::Response::Single(output)).await?;
+        self.inner.finish(Some(&common::Response::Single(output))).await?;
         Ok(())
     }
 

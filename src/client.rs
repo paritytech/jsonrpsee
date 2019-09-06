@@ -1,3 +1,6 @@
+//! Performing JSON-RPC requests.
+// TODO: expand
+
 pub use crate::{client::raw::RawClientRef, common};
 use derive_more::*;
 use err_derive::*;
