@@ -1,7 +1,7 @@
 
 use crate::server::raw::{RawServerRef, RawServerRq};
 use crate::server::ServerRequestParams;
-use crate::types::{self, from_value, to_value, JsonValue};
+use crate::common::{self, from_value, to_value, JsonValue};
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use std::{collections::HashMap, fmt, io, marker::PhantomData, pin::Pin};
@@ -33,8 +33,8 @@ impl<R> Server<R> {
         loop {
             let request = self.raw.next_request().await?;
             let _ = match request.request() {
-                types::Request::Single(rq) => rq,
-                types::Request::Batch(requests) => unimplemented!(),
+                common::Request::Single(rq) => rq,
+                common::Request::Batch(requests) => unimplemented!(),
             };
 
             return Ok(ServerRq {
@@ -52,7 +52,7 @@ impl<R> Server<R> {
     ///
     /// Returns `None` if the request ID is invalid or if the request has already been answered in
     /// the past.
-    pub fn request_by_id<'a>(&'a mut self, id: &types::Id) -> Option<ServerRq<<&'a mut R as RawServerRef<'a>>::Request>> {
+    pub fn request_by_id<'a>(&'a mut self, id: &common::Id) -> Option<ServerRq<<&'a mut R as RawServerRef<'a>>::Request>> {
         unimplemented!()
     }*/
 
@@ -79,10 +79,10 @@ pub struct ServerRq<'a, R> {
 impl<'a, R> ServerRq<'a, R>
     where R: RawServerRq<'a>
 {
-    fn call(&self) -> &types::Call {
+    fn call(&self) -> &common::Call {
         match self.inner.request() {
-            types::Request::Single(s) => s,
-            types::Request::Batch(_) => unreachable!(),     // TODO: justification
+            common::Request::Single(s) => s,
+            common::Request::Batch(_) => unreachable!(),     // TODO: justification
         }
     }
 
@@ -90,29 +90,29 @@ impl<'a, R> ServerRq<'a, R>
     ///
     /// If this request object is dropped, you can retreive it again later by calling
     /// `request_by_id`. This isn't possible for notifications.
-    pub fn id(&self) -> Option<&types::Id> {
+    pub fn id(&self) -> Option<&common::Id> {
         match self.call() {
-            types::Call::MethodCall(types::MethodCall { id, .. }) => Some(id),
-            types::Call::Notification(types::Notification { .. }) => None,
-            types::Call::Invalid { id } => Some(id),        // TODO: shouldn't we panic here or something?
+            common::Call::MethodCall(common::MethodCall { id, .. }) => Some(id),
+            common::Call::Notification(common::Notification { .. }) => None,
+            common::Call::Invalid { id } => Some(id),        // TODO: shouldn't we panic here or something?
         }
     }
 
     /// Returns the method of this request.
     pub fn method(&self) -> &str {
         match self.call() {
-            types::Call::MethodCall(types::MethodCall { method, .. }) => method,
-            types::Call::Notification(types::Notification { method, .. }) => method,
-            types::Call::Invalid { .. } => unimplemented!()     // TODO:
+            common::Call::MethodCall(common::MethodCall { method, .. }) => method,
+            common::Call::Notification(common::Notification { method, .. }) => method,
+            common::Call::Invalid { .. } => unimplemented!()     // TODO:
         }
     }
 
-    /// Returns the parameters of the request, as a `types::Params`.
+    /// Returns the parameters of the request, as a `common::Params`.
     pub fn params(&self) -> ServerRequestParams {
         let p = match self.call() {
-            types::Call::MethodCall(types::MethodCall { params, .. }) => params,
-            types::Call::Notification(types::Notification { params, .. }) => params,
-            types::Call::Invalid { .. } => unimplemented!()     // TODO:
+            common::Call::MethodCall(common::MethodCall { params, .. }) => params,
+            common::Call::Notification(common::Notification { params, .. }) => params,
+            common::Call::Invalid { .. } => unimplemented!()     // TODO:
         };
 
         ServerRequestParams::from(p)
@@ -126,9 +126,9 @@ impl<'a, R> ServerRq<'a, R>
     ///   sent out.
     /// - Otherwise, this response is buffered.
     ///
-    pub async fn respond(self, response: Result<types::JsonValue, types::Error>) -> Result<(), io::Error> {
-        let output = types::Output::from(response, types::Id::Null, types::Version::V2);      // TODO: id
-        self.inner.finish(&types::Response::Single(output)).await?;
+    pub async fn respond(self, response: Result<common::JsonValue, common::Error>) -> Result<(), io::Error> {
+        let output = common::Output::from(response, common::Id::Null, common::Version::V2);      // TODO: id
+        self.inner.finish(&common::Response::Single(output)).await?;
         Ok(())
     }
 

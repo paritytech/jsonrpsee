@@ -16,7 +16,7 @@ macro_rules! rpc_api {
             $(
                 async fn $name($($pn: $pty)*) -> $ret {
                     /*$(
-                        let $pn = $crate::types::to_value($pn).unwrap();        // TODO: don't unwrap
+                        let $pn = $crate::common::to_value($pn).unwrap();        // TODO: don't unwrap
                     )**/
 
                     let http = $crate::client::Client::new($crate::client::raw::HttpClientPool::new().unwrap());      // TODO: don't unwrap

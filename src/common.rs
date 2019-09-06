@@ -1,6 +1,6 @@
 //! Type definitions from the JSON-RPC specifications.
 //!
-//! All these types implement the `Serialize` and `Deserialize` traits of the `serde` library
+//! All these common implement the `Serialize` and `Deserialize` traits of the `serde` library
 //! and can be serialize/deserialized using the `to_string`/`to_vec`/`from_slice` methods.
 
 mod error;

@@ -1,6 +1,6 @@
 use crate::server::raw::http::response;
 use crate::server::raw::{RawServerRef, RawServerRq};
-use crate::types;
+use crate::common;
 use async_std::net::ToSocketAddrs;
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
@@ -113,7 +113,7 @@ struct Request {
     /// Body of the response to send on the network.
     send_back: oneshot::Sender<hyper::Response<hyper::Body>>,
     /// The JSON body that was sent by the client.
-    request: types::Request,
+    request: common::Request,
 }
 
 impl<'a> RawServerRq<'a> for HttpServerRefRq<'a> {
@@ -124,11 +124,11 @@ impl<'a> RawServerRq<'a> for HttpServerRefRq<'a> {
         &self.id
     }
 
-    fn request(&self) -> &types::Request {
+    fn request(&self) -> &common::Request {
         &self.server.requests.get(&self.id).unwrap().request
     }
 
-    fn finish(self, response: &types::Response) -> Self::Finish {
+    fn finish(self, response: &common::Response) -> Self::Finish {
         let serialization_result = serde_json::to_vec(response);
 
         Box::pin(async move {
@@ -248,7 +248,7 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 /// Converts a `hyper` body into a structured JSON object.
 ///
 /// Enforces a size limit on the body.
-async fn body_to_request(mut body: hyper::Body) -> Result<types::Request, io::Error> {
+async fn body_to_request(mut body: hyper::Body) -> Result<common::Request, io::Error> {
     let mut json_body = Vec::new();
     while let Some(chunk) = body.next().await {
         let chunk = match chunk {

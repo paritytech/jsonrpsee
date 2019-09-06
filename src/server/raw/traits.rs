@@ -1,4 +1,4 @@
-use crate::types;
+use crate::common;
 use futures::prelude::*;
 use std::{io, pin::Pin};
 
@@ -51,7 +51,7 @@ pub trait RawServerRq<'a> {
     fn id(&self) -> &Self::RequestId;
 
     /// Returns the body of the request.
-    fn request(&self) -> &types::Request;
+    fn request(&self) -> &common::Request;
 
     /// Send back a response and destroys the response object.
     ///
@@ -59,7 +59,7 @@ pub trait RawServerRq<'a> {
     /// correspondance with the request in terms of logic. For example, you could call `respond`
     /// in order to send back a batch of six responses despite the fact that the original request
     /// was a single notification.
-    fn finish(self, response: &types::Response) -> Self::Finish;
+    fn finish(self, response: &common::Response) -> Self::Finish;
 }
 
 /// Extension trait for `RawServerRq`.
@@ -70,7 +70,7 @@ pub trait RawServerRqKeepAlive<'a>: RawServerRq<'a> {
     /// The future that `close` produces.
     type Close: Future<Output = Result<(), io::Error>> + Unpin + 'a;
 
-    fn send<'s>(&'s mut self, response: &types::Response) -> Pin<Box<dyn Future<Output = Result<(), io::Error>> + 's>>;
+    fn send<'s>(&'s mut self, response: &common::Response) -> Pin<Box<dyn Future<Output = Result<(), io::Error>> + 's>>;
 
     /// Close the request after we're done sending everything.
     fn close(self) -> Self::Close;

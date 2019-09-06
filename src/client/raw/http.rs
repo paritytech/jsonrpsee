@@ -1,4 +1,4 @@
-use crate::types;
+use crate::common;
 use super::RawClientRef;
 use derive_more::*;
 use err_derive::*;
@@ -51,13 +51,13 @@ impl fmt::Debug for HttpClientPool {
 }
 
 impl<'a> RawClientRef<'a> for &'a HttpClientPool {
-    type Request = Pin<Box<dyn Future<Output = Result<types::Response, RequestError>> + Send + 'a>>;
+    type Request = Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'a>>;
     type Error = RequestError;
 
-    fn request(self, target: &str, request: types::Request) -> Self::Request {
+    fn request(self, target: &str, request: common::Request) -> Self::Request {
         let mut requests_tx = self.requests_tx.clone();
 
-        let request = types::to_vec(&request).map(|body| {
+        let request = common::to_vec(&request).map(|body| {
             hyper::Request::post(target)
                 .header(
                     hyper::header::CONTENT_TYPE,
@@ -106,7 +106,7 @@ impl<'a> RawClientRef<'a> for &'a HttpClientPool {
                 .map_err(|err| RequestError::Http(Box::new(err)))?;
 
             // TODO: use Response::from_json
-            let as_json: types::Response = types::from_slice(&body)
+            let as_json: common::Response = common::from_slice(&body)
                 .map_err(|err| RequestError::ParseError(err))?;
             Ok(as_json)
         })

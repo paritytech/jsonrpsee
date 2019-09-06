@@ -19,7 +19,7 @@ pub enum Params {
 }
 
 impl Params {
-	/// Parse incoming `Params` into expected types.
+	/// Parse incoming `Params` into expected common.
 	pub fn parse<D>(self) -> Result<D, Error>
 	where
 		D: DeserializeOwned,
@@ -51,7 +51,7 @@ impl From<Params> for JsonValue {
 #[cfg(test)]
 mod tests {
 	use super::Params;
-	use crate::types::{Error, ErrorCode, JsonValue};
+	use crate::common::{Error, ErrorCode, JsonValue};
 	use serde_json;
 
 	#[test]

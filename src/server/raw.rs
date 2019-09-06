@@ -8,7 +8,7 @@
 //!
 //! ```
 //! use jsonrpsee::raw_server::{RawServerRef, RawServerRq as _};
-//! use jsonrpsee::types::{Error, Request, Response, Version};
+//! use jsonrpsee::common::{Error, Request, Response, Version};
 //! 
 //! async fn run_server<R>(mut server: R)
 //!     where for<'r> &'r mut R: RawServerRef<'r>

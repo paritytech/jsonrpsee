@@ -9,4 +9,4 @@ mod rpc_api;
 
 pub mod client;
 pub mod server;
-pub mod types;
+pub mod common;

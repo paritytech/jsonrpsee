@@ -1,4 +1,4 @@
-pub use crate::{client::raw::RawClientRef, types};
+pub use crate::{client::raw::RawClientRef, common};
 use derive_more::*;
 use err_derive::*;
 use serde::de::DeserializeOwned;
@@ -39,13 +39,13 @@ where
             if i == u64::max_value() {
                 log::error!("Overflow in client request ID assignment");
             }
-            types::Id::Num(i)
+            common::Id::Num(i)
         };
 
-        let request = types::Request::Single(types::Call::MethodCall(types::MethodCall {
-            jsonrpc: types::Version::V2,
+        let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
+            jsonrpc: common::Version::V2,
             method: method.into(),
-            params: types::Params::None/*::Map(
+            params: common::Params::None/*::Map(
                 Default::default()      // TODO:
             )*/,
             id,
@@ -55,11 +55,11 @@ where
             .map_err(ClientError::Inner)?;
 
         let val = match result {
-            types::Response::Single(types::Output::Success(s)) => s,
+            common::Response::Single(common::Output::Success(s)) => s,
             _ => panic!("error in request")       // TODO: no
         };
 
-        Ok(types::from_value(val.result).map_err(ClientError::Deserialize)?)
+        Ok(common::from_value(val.result).map_err(ClientError::Deserialize)?)
     }
 }
 

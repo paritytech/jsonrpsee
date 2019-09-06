@@ -1,27 +1,27 @@
-use crate::types;
+use crate::common;
 use std::fmt;
 
 /// Access to the parameters of a request.
 #[derive(Copy, Clone)]
 pub struct ServerRequestParams<'a> {
     /// Raw parameters of the request.
-    params: &'a types::Params,
+    params: &'a common::Params,
 }
 
 impl<'a> ServerRequestParams<'a> {
-    /// Wraps around a `&types::Params` and provides utility functions for the user.
-    pub(crate) fn from(params: &'a types::Params) -> Self {
+    /// Wraps around a `&common::Params` and provides utility functions for the user.
+    pub(crate) fn from(params: &'a common::Params) -> Self {
         ServerRequestParams { params }
     }
 
     /// Returns a parameter of the request by name.
-    pub fn get<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a types::JsonValue> {
+    pub fn get<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a common::JsonValue> {
         match (self.params, param.into()) {
-            (types::Params::None, _) => None,
-            (types::Params::Map(map), ParamKey::String(key)) => map.get(key),
-            (types::Params::Map(_), ParamKey::Index(_)) => None,
-            (types::Params::Array(_), ParamKey::String(_)) => None,
-            (types::Params::Array(array), ParamKey::Index(index)) => {
+            (common::Params::None, _) => None,
+            (common::Params::Map(map), ParamKey::String(key)) => map.get(key),
+            (common::Params::Map(_), ParamKey::Index(_)) => None,
+            (common::Params::Array(_), ParamKey::String(_)) => None,
+            (common::Params::Array(array), ParamKey::Index(index)) => {
                 if index < array.len() {
                     Some(&array[index])
                 } else {
@@ -33,14 +33,14 @@ impl<'a> ServerRequestParams<'a> {
 }
 
 impl<'a> IntoIterator for ServerRequestParams<'a> {
-    type Item = (ParamKey<'a>, &'a types::JsonValue);
+    type Item = (ParamKey<'a>, &'a common::JsonValue);
     type IntoIter = Iter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         Iter(match self.params {
-            types::Params::None => IterInner::Empty,
-            types::Params::Array(_) => unimplemented!(),
-            types::Params::Map(map) => IterInner::Map(map.iter()),
+            common::Params::None => IterInner::Empty,
+            common::Params::Array(_) => unimplemented!(),
+            common::Params::Map(map) => IterInner::Map(map.iter()),
         })
     }
 }
@@ -51,14 +51,14 @@ impl<'a> fmt::Debug for ServerRequestParams<'a> {
     }
 }
 
-impl<'a> AsRef<types::Params> for ServerRequestParams<'a> {
-    fn as_ref(&self) -> &types::Params {
+impl<'a> AsRef<common::Params> for ServerRequestParams<'a> {
+    fn as_ref(&self) -> &common::Params {
         self.params
     }
 }
 
-impl<'a> Into<&'a types::Params> for ServerRequestParams<'a> {
-    fn into(self) -> &'a types::Params {
+impl<'a> Into<&'a common::Params> for ServerRequestParams<'a> {
+    fn into(self) -> &'a common::Params {
         self.params
     }
 }
@@ -113,7 +113,7 @@ enum IterInner<'a> {
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = (ParamKey<'a>, &'a types::JsonValue);
+    type Item = (ParamKey<'a>, &'a common::JsonValue);
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.0 {
