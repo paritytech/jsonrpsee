@@ -24,15 +24,16 @@ macro_rules! rpc_api {
                 }
             )*
 
-            enum $api_name {
+            enum $api_name<'a,  R> {
                 $(
-                    $name { respond: (), $($pn: $pty),* },
+                    $name { respond: $crate::rpc_api::RpcApiResponder<'a, R, $ret>, $($pn: $pty),* },
                 )*
             }
 
-            impl $api_name {
-                async fn next_request<S>(server: &mut $crate::server::Server<S>) -> Result<Self, std::io::Error>
-                    where for<'r> &'r mut S: $crate::server::raw::RawServerRef<'r>
+            impl<'a, R> $api_name<'a, R> {
+                async fn next_request<S>(server: &'a mut $crate::server::Server<S>) -> Result<Self, std::io::Error>
+                    where &'a mut S: $crate::server::raw::RawServerRef<'a, Request = R>,
+                        R: $crate::server::raw::RawServerRq<'a>,
                 {
                     loop {
                         let request = server.next_request().await.unwrap();     // TODO: don't unwrap
@@ -59,8 +60,11 @@ macro_rules! rpc_api {
                                     };
                                 )*
 
-                                // TODO: give a way to respond
-                                return Ok($api_name::$name { respond: (), $($pn),* });
+                                let respond = $crate::rpc_api::RpcApiResponder {
+                                    rq: request,
+                                    response_ty: std::marker::PhantomData,
+                                };
+                                return Ok($api_name::$name { respond, $($pn),* });
                             }
                         )*
 
@@ -70,4 +74,14 @@ macro_rules! rpc_api {
             }
         )*
     };
+}
+
+// TODO: too much pub
+pub struct RpcApiResponder<'a, R, T> {
+    pub rq: crate::server::ServerRq<'a, R>,
+    pub response_ty: std::marker::PhantomData<T>,
+}
+
+impl<'a, R, T> RpcApiResponder<'a, R, T> {
+
 }
