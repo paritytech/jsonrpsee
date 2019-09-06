@@ -28,9 +28,11 @@ use fnv::FnvHashMap;
 use futures::prelude::*;
 use std::{collections::HashMap, fmt, io, marker::PhantomData, pin::Pin};
 
+pub use self::params::{ServerRequestParams, Iter as ServerRequestParamsIter, ParamKey as ServerRequestParamsKey};
 pub use self::run::run;
 pub use self::wrappers::http;
 
+mod params;
 mod run;
 mod wrappers;
 
@@ -143,7 +145,7 @@ impl<'a, R> ServerRq<'a, R>
             types::Call::Invalid { .. } => unimplemented!()     // TODO:
         };
 
-        ServerRequestParams { params: p }
+        ServerRequestParams::from(p)
     }
 
     /// Send back a response.
@@ -171,76 +173,6 @@ impl<'a, R> ServerRq<'a, R>
             server: self.server,
         })
     }*/
-}
-
-/// Access to the parameters of a request.
-pub struct ServerRequestParams<'a> {
-    /// Raw parameters of the request.
-    params: &'a types::Params,
-}
-
-impl<'a> ServerRequestParams<'a> {
-    /// Returns the parameters of the request, as a `types::Params`.
-    pub fn as_raw(&self) -> &'a types::Params {
-        self.params
-    }
-
-    /// Returns all the parameters of the request.
-    // TODO: implement IntoIterator
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &types::JsonValue)> {
-        enum LocalIter<'a> {
-            Empty,
-            Map(serde_json::map::Iter<'a>),
-        }
-
-        impl<'a> Iterator for LocalIter<'a> {
-            type Item = (&'a str, &'a types::JsonValue);
-
-            fn next(&mut self) -> Option<Self::Item> {
-                match self {
-                    LocalIter::Empty => None,
-                    LocalIter::Map(iter) => iter.next().map(|(k, v)| (&k[..], v)),
-                }
-            }
-
-            // TODO: size_hint
-        }
-
-        // TODO: exactsizeiterator
-
-        match self.params {
-            types::Params::None => LocalIter::Empty,
-            types::Params::Array(_) => unimplemented!(),
-            types::Params::Map(map) => LocalIter::Map(map.iter()),
-        }
-    }
-
-    /// Returns a parameter of the request by name.
-    pub fn get(&self, param: &str) -> Option<&types::JsonValue> {
-        match self.params {
-            types::Params::None => None,
-            types::Params::Map(map) => map.get(param),
-            types::Params::Array(array) => {
-                // For arrays, we support calls like `param("0")` returning the 0th element of the
-                // array for example.
-                if let Ok(n) = param.parse::<usize>() {
-                    if n < array.len() {
-                        Some(&array[n])
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            }
-        }
-    }
-}
-
-impl<'a> fmt::Debug for ServerRequestParams<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_map().entries(self.iter()).finish()
-    }
 }
 
 /*/// Active subscription of a client towards a server.

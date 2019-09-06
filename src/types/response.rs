@@ -1,4 +1,4 @@
-use super::{Error, ErrorCode, Id, JsonValue, Version};
+use super::{Error, Id, JsonValue, Version};
 use serde::{Serialize, Deserialize};
 
 /// Successful response
