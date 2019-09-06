@@ -25,12 +25,10 @@
 pub use self::params::{ServerRequestParams, Iter as ServerRequestParamsIter, ParamKey as ServerRequestParamsKey};
 pub use self::run::run;
 pub use self::server::{Server, ServerRq};
-pub use self::wrappers::http;
 
 pub mod raw;
 
 mod params;
 mod run;
 mod server;
-mod wrappers;
 

@@ -10,21 +10,19 @@ jsonrpsee::rpc_api! {
 fn main() {
     // Spawning a server in a background task.
     async_std::task::spawn(async move {
-        let server1 = jsonrpsee::server::http("127.0.0.1:8000").await;
-        jsonrpsee::server::run(&mut server1, |method, _| async move {
-            panic!()
-        }).await;
+        let mut server1 = jsonrpsee::http_server("127.0.0.1:8000").await;
+
+        while let Ok(request) = Health::next_request(&mut server1).await {
+            match request {
+                Health::system_name { .. } => ()
+                // TODO:
+                // Health::system_name { send_back } => send_back.respond("hello");
+            }
+        }
     });
 
-    /*let server1 = jsonrpsee::server::HttpServer::bind("0.0.0.0:8000");
-    let server2 = jsonrpsee::server::HttpServer::bind("0.0.0.0:8080");
-    let server = jsonrpsee::server::join(server1, server2);
-
-    futures::executor::block_on(jsonrpsee::run(&server, |_, _| {
-        panic!();       // TODO: remove
-        future::ready(jsonrpsee::JsonValue::Null)
-    }));*/
-
+    // Client demo.
+    // TODO: URL is hardcoded in the library at the moment
     let v = futures::executor::block_on(system_name());
     println!("{:?}", v);
 }

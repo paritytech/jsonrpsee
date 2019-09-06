@@ -45,7 +45,7 @@ mod tests {
 
     #[test]
     fn is_send_static() {
-        fn req<T: 'static>(_: T) {}     // TODO: + Send
+        fn req<T: 'static>(_: T) {}     // TODO: + Send; see https://github.com/rust-lang/rust/issues/64176
         fn test() {
             let fut = super::run(unimplemented!(), |_, _| future::ready(panic!()));
             req(fut);

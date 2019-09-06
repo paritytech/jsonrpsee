@@ -3,9 +3,11 @@
 #![warn(missing_docs)]
 
 //pub use crate::server::run;
+pub use self::wrappers::*;
 
 #[macro_use]
 mod rpc_api;
+mod wrappers;
 
 pub mod client;
 pub mod server;

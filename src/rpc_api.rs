@@ -29,6 +29,14 @@ macro_rules! rpc_api {
                     $name { $($pn: $pty),* },
                 )*
             }
+
+            impl $api_name {
+                async fn next_request<S>(server: &mut $crate::server::Server<S>) -> Result<Self, std::io::Error>
+                    where for<'r> &'r mut S: $crate::server::raw::RawServerRef<'r>
+                {
+                    panic!()
+                }
+            }
         )*
     };
 }
