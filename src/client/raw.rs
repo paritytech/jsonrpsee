@@ -15,8 +15,7 @@ pub trait RawClientRef<'a> {
     /// Error that can happen during a request.
     type Error: error::Error;
 
-    // TODO: decide proper type for `target`
-    fn request(self, target: &str, request: common::Request) -> Self::Request;
+    fn request(self, request: common::Request) -> Self::Request;
 }
 
 pub trait RawClientRefPubSub<'a> {
@@ -24,5 +23,5 @@ pub trait RawClientRefPubSub<'a> {
     type Request: Future<Output = Result<(common::Response, Self::Subscription), io::Error>> + 'a;
 
     // TODO: decide proper type for `target`
-    fn request_subscribe(self, target: &str, request: common::Request) -> Self::Request;
+    fn request_subscribe(self, request: common::Request) -> Self::Request;
 }

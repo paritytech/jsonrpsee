@@ -54,7 +54,7 @@ where
             id,
         }));
 
-        let result = self.inner.request("http://localhost:8000", request).await
+        let result = self.inner.request(request).await
             .map_err(ClientError::Inner)?;
 
         let val = match result {

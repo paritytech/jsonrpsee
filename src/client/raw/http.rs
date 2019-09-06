@@ -42,6 +42,15 @@ impl HttpClientPool {
 
         Ok(HttpClientPool { requests_tx })
     }
+
+    /// Borrows the `HttpClientPool` and builds an object that can perform request towards the
+    /// given URL.
+    pub fn with_server<'a, 'b>(&'a self, url: &'b str) -> WithServer<'a, 'b> {
+        WithServer {
+            pool: self,
+            url,
+        }
+    }
 }
 
 impl fmt::Debug for HttpClientPool {
@@ -50,15 +59,21 @@ impl fmt::Debug for HttpClientPool {
     }
 }
 
-impl<'a> RawClientRef<'a> for &'a HttpClientPool {
+/// Borrows an [`HttpClientPool`] and a target URL.
+pub struct WithServer<'a, 'b> {
+    pool: &'a HttpClientPool,
+    url: &'b str,
+}
+
+impl<'a, 'b> RawClientRef<'a> for WithServer<'a, 'b> {
     type Request = Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'a>>;
     type Error = RequestError;
 
-    fn request(self, target: &str, request: common::Request) -> Self::Request {
-        let mut requests_tx = self.requests_tx.clone();
+    fn request(self, request: common::Request) -> Self::Request {
+        let mut requests_tx = self.pool.requests_tx.clone();
 
         let request = common::to_vec(&request).map(|body| {
-            hyper::Request::post(target)
+            hyper::Request::post(self.url)
                 .header(
                     hyper::header::CONTENT_TYPE,
                     hyper::header::HeaderValue::from_static("application/json"),
