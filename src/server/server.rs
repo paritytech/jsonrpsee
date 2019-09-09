@@ -32,10 +32,20 @@ pub struct Server<R, I> {
     /// The first thing that `next_event` does is pop the first element of this array.
     // TODO: call shrink_to_fit from time to time
     to_yield: SmallVec<[ToYield; 6]>,
+
+    /// Identifier of the next subscription to add to `subscriptions`.
+    next_subscription_id: u64,
+
+    /// List of active subscriptions.
+    subscriptions: FnvHashMap<u64, I>,
 }
 
+/// Internal structure indicating which event to yield from `next_event`.
 enum ToYield {
+    /// Yield a request from the internals of `Server`.
     Id(ServerRequestId),
+
+    /// Yield a one-time notification.
     Notification(common::Notification),
 }
 
@@ -54,6 +64,8 @@ impl<R, I> Server<R, I> {
             next_batch_id: 0,
             batches: HashMap::with_capacity_and_hasher(16, Default::default()),
             to_yield: SmallVec::new(),
+            next_subscription_id: 0,
+            subscriptions: HashMap::with_capacity_and_hasher(8, Default::default()),
         }
     }
 }
@@ -92,6 +104,12 @@ where
                 self.next_batch_id += 1;        // TODO: overflows
                 id
             };
+
+            // Every 128 batches, we shrink the containers.
+            if new_batch_id % 128 == 0 {
+                self.batches.shrink_to_fit();
+                self.to_yield.shrink_to_fit();
+            }
 
             let mut batch = Batch {
                 raw_request_id,
@@ -144,9 +162,17 @@ where
         })
     }
 
-    /*pub fn subscriptions_by_id(&mut self, id: &String) -> Option<ServerSubscription<R>> {
-        unimplemented!()
-    }*/
+    /// Returns a subscription previously retuend by `into_subscription`.
+    pub fn subscriptions_by_id(&mut self, id: &ServerSubscriptionId) -> Option<ServerSubscription<R, I>> {
+        if self.subscriptions.contains_key(&id.0) {
+            Some(ServerSubscription {
+                server: self,
+                id: id.0,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 impl<R> From<R> for Server<R, R::RequestId>
@@ -181,7 +207,7 @@ pub enum ServerEvent<'a, R, I> {
     /// Request is a method call.
     Request(ServerRequest<'a, R, I>),
 }
-    
+
 pub struct ServerRequest<'a, R, I> {
     /// Server that holds the request.
     server: &'a mut Server<R, I>,
@@ -226,6 +252,41 @@ where
     /// - Otherwise, this response is buffered.
     ///
     pub async fn respond(self, response: Result<common::JsonValue, common::Error>) {
+        let _ = self.respond_inner(response, true).await;
+    }
+
+    /// Sends back a response similar to `respond`, then returns a `ServerSubscription` object
+    /// that allows you to push more data on the corresponding connection.
+    ///
+    /// Returns an error and doesn't do anything if the underlying server doesn't support
+    /// subscriptions.
+    pub async fn into_subscription(self, response: JsonValue)
+        -> Result<ServerSubscription<'a, R, I>, ()>
+    {
+        let raw_request_id = self.server.batches.get_mut(&self.batch_id).unwrap().raw_request_id.clone();
+        if !self.server.raw.supports_resuming(&raw_request_id) {
+            return Err(())
+        }
+
+        let new_id = {
+            let id = self.server.next_subscription_id;
+            self.server.next_subscription_id += 1;
+            id
+        };
+
+        let server = self.respond_inner(Ok(response), false).await;
+        server.subscriptions.insert(new_id, raw_request_id);
+
+        Ok(ServerSubscription {
+            server,
+            id: new_id,
+        })
+    }
+
+    /// Inner implementation of both `respond` and `into_subscription`.
+    ///
+    /// Removes the batch from the server if necessary. Returns the reference to the server.
+    async fn respond_inner(self, response: Result<common::JsonValue, common::Error>, finish: bool) -> &'a mut Server<R, I> {
         let is_full = {
             let batch = &mut self.server.batches.get_mut(&self.batch_id).unwrap();
             let request_id = batch.requests[self.index_in_batch].1.as_ref().unwrap().id.clone();
@@ -241,36 +302,32 @@ where
             common::Response::Batch(batch.requests.drain().map(|r| r.2.unwrap()).collect())
         };
 
-        self.server.raw.finish(&batch.raw_request_id, Some(&raw_response)).await;
-    }
+        if finish {
+            self.server.raw.finish(&batch.raw_request_id, Some(&raw_response)).await;
+        } else {
+            self.server.raw.send(&batch.raw_request_id, &raw_response).await;
+        }
 
-    /*/// Sends back a response similar to `respond`, then returns a `ServerSubscription` object
-    /// that allows you to push more data on the corresponding connection.
-    // TODO: better docs
-    pub async fn into_subscription(self, response: JsonValue)
-        -> Result<ServerSubscription<'a, R>, io::Error>
-    {
-        unimplemented!();
-        Ok(ServerSubscription {
-            server: self.server,
-        })
-    }*/
+        self.server
+    }
 }
 
-/*/// Active subscription of a client towards a server.
+/// Active subscription of a client towards a server.
 ///
 /// > **Note**: Holds a borrow of the `Server`. Therefore, must be dropped before the `Server` can
 /// >           be dropped.
-pub struct ServerSubscription<'a, R> {
-    server: &'a Server<R>,
+pub struct ServerSubscription<'a, R, I> {
+    server: &'a mut Server<R, I>,
+    id: u64,
 }
 
-impl<'a, R> ServerSubscription<'a, R>
+impl<'a, R, I> ServerSubscription<'a, R, I>
 where
-    for<'r> &'r R: RawServerRef<'r>
+    R: RawServer<RequestId = I>,
+    I: Clone + PartialEq + Eq + Send + Sync,
 {
-    pub fn id(&self) -> String {
-        unimplemented!()
+    pub fn id(&self) -> ServerSubscriptionId {
+        ServerSubscriptionId(self.id)
     }
 
     pub fn is_valid(&self) -> bool {
@@ -278,7 +335,7 @@ where
     }
 
     /// Pushes a notification.
-    pub async fn push(self, message: JsonValue) -> Result<(), io::Error> {
+    pub async fn push(self, message: impl Into<JsonValue>) -> Result<(), io::Error> {
         unimplemented!()
     }
-}*/
+}

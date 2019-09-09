@@ -126,7 +126,7 @@ impl RawServer for HttpServer {
         })
     }
 
-    fn supports_resuming(&self) -> bool {
+    fn supports_resuming(&self, _: &u64) -> bool {
         false
     }
 

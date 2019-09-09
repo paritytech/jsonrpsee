@@ -50,9 +50,9 @@ pub trait RawServer {
         response: Option<&'a common::Response>,
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>>;
 
-    /// Returns true if this implementation supports sending back data on requests without closing
-    /// them.
-    fn supports_resuming(&self) -> bool;
+    /// Returns true if this implementation supports sending back data on this request without
+    /// closing it.
+    fn supports_resuming(&self, request_id: &Self::RequestId) -> bool;
 
     /// Sends back some data on the request and keeps the request alive.
     ///
