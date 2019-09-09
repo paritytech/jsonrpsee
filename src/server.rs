@@ -25,11 +25,11 @@
 pub use self::params::{
     Iter as ServerRequestParamsIter, ParamKey as ServerRequestParamsKey, ServerRequestParams,
 };
-pub use self::run::run;
+// TODO: restore: pub use self::run::run;
 pub use self::server::{Server, ServerRq};
 
 pub mod raw;
 
 mod params;
-mod run;
+// TODO: restore: mod run;
 mod server;

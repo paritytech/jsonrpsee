@@ -1,9 +1,9 @@
 use crate::client::{raw::http::WithServer, raw::HttpClientPool, Client};
-use crate::server::{raw::HttpServer, Server};
+use crate::server::{raw::HttpServer, raw::RawServer, Server};
 use async_std::net::ToSocketAddrs;
 
 /// Starts a [`Server`](../Server) object that serves HTTP.
-pub async fn http_server(addr: impl ToSocketAddrs) -> Server<HttpServer> {
+pub async fn http_server(addr: impl ToSocketAddrs) -> Server<HttpServer, <HttpServer as RawServer>::RequestId> {
     Server::new(HttpServer::bind(addr).await)
 }
 
