@@ -33,9 +33,12 @@ where
     for<'r> &'r R: RawClientRef<'r>,
 {
     /// Starts a request.
-    pub async fn request<'a, Ret>(&'a self, method: impl Into<String>)
-        -> Result<Ret, ClientError<<&'a R as RawClientRef<'a>>::Error>>
-    where Ret: DeserializeOwned,
+    pub async fn request<'a, Ret>(
+        &'a self,
+        method: impl Into<String>,
+    ) -> Result<Ret, ClientError<<&'a R as RawClientRef<'a>>::Error>>
+    where
+        Ret: DeserializeOwned,
     {
         let id = {
             let i = self.next_request_id.fetch_add(1, Ordering::Relaxed);
@@ -48,18 +51,21 @@ where
         let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
             jsonrpc: common::Version::V2,
             method: method.into(),
-            params: common::Params::None/*::Map(
-                Default::default()      // TODO:
-            )*/,
+            params: common::Params::None, /*::Map(
+                                              Default::default()      // TODO:
+                                          )*/
             id,
         }));
 
-        let result = self.inner.request(request).await
+        let result = self
+            .inner
+            .request(request)
+            .await
             .map_err(ClientError::Inner)?;
 
         let val = match result {
             common::Response::Single(common::Output::Success(s)) => s,
-            _ => panic!("error in request")       // TODO: no
+            _ => panic!("error in request"), // TODO: no
         };
 
         Ok(common::from_value(val.result).map_err(ClientError::Deserialize)?)
@@ -67,7 +73,7 @@ where
 }
 
 /// Error that can happen during a request.
-#[derive(Debug)]        // TODO: derive Error
+#[derive(Debug)] // TODO: derive Error
 pub enum ClientError<E> {
     //#[error(display = "error in the raw client")]
     Inner(/*#[error(cause)]*/ E),

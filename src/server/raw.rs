@@ -7,12 +7,10 @@
 //! ## Example usage
 //!
 //! ```
-//! use jsonrpsee::raw_server::{RawServerRef, RawServerRq as _};
+//! use jsonrpsee::raw_server::RawServer;
 //! use jsonrpsee::common::{Error, Request, Response, Version};
-//! 
-//! async fn run_server<R>(mut server: R)
-//!     where for<'r> &'r mut R: RawServerRef<'r>
-//! {
+//!
+//! async fn run_server(server: &mut impl RawServer) {
 //!     // Note that this implementation is a bit naive, as no request will be accepted by the
 //!     // server while `request_to_response` is running. This is fine as long as building the
 //!     // response is instantaneous (which is the case in this exampe), but probably isn't for
@@ -31,7 +29,7 @@
 //!
 
 pub use self::http::HttpServer;
-pub use self::traits::{RawServerRef, RawServerRq};
+pub use self::traits::RawServer;
 
 mod http;
 // TODO: mod join;

@@ -6,9 +6,9 @@
 pub use self::wrappers::*;
 
 #[macro_use]
-pub mod rpc_api;        // TODO: not pub
+pub mod rpc_api; // TODO: not pub
 mod wrappers;
 
 pub mod client;
-pub mod server;
 pub mod common;
+pub mod server;

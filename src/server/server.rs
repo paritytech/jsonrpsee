@@ -1,6 +1,5 @@
-use crate::server::raw::{RawServerRef, RawServerRq};
-use crate::server::ServerRequestParams;
 use crate::common::{self, from_value, to_value, JsonValue};
+use crate::server::{raw::RawServer, ServerRequestParams};
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use std::{collections::HashMap, fmt, io, marker::PhantomData, pin::Pin};
@@ -16,33 +15,32 @@ pub struct Server<R> {
 impl<R> Server<R> {
     /// Starts a `Server` using the given raw server internally.
     pub fn new(inner: R) -> Server<R> {
-        Server {
-            raw: inner,
-        }
+        Server { raw: inner }
     }
 }
 
-impl<R> Server<R> {
+impl<R> Server<R>
+where
+    R: RawServer,
+{
     /// Returns a `Future` resolving to the next request that this server generates.
-    pub async fn next_request<'a>(&'a mut self) -> Result<ServerRq<'a, <&'a mut R as RawServerRef<'a>>::Request>, ()>
-    where
-        &'a mut R: RawServerRef<'a>,
-    {
+    pub async fn next_request<'a>(&'a mut self) -> Result<ServerRq<'a, R, R::RequestId>, ()> {
         // This piece of code is where we analyze requests.
         loop {
-            let request = self.raw.next_request().await?;
-            let _ = match request.request() {
+            let (request_id, request_body) = self.raw.next_request().await?;
+            let request_body = match request_body {
                 common::Request::Single(rq) => rq,
                 common::Request::Batch(requests) => unimplemented!(),
             };
 
             return Ok(ServerRq {
-                inner: request,
-                marker: PhantomData,
-            })
+                me: self,
+                request_id,
+                request_body,
+            });
         }
 
-        panic!()        // TODO: 
+        panic!() // TODO:
     }
 
     /*/// Returns a request previously returned by `next_request` by its id.
@@ -70,22 +68,23 @@ impl<R> From<R> for Server<R> {
 ///
 /// > **Note**: Holds a borrow of the `Server`. Therefore, must be dropped before the `Server` can
 /// >           be dropped.
-pub struct ServerRq<'a, R> {
-    inner: R,
-    marker: PhantomData<&'a mut ()>,
+pub struct ServerRq<'a, R, I> {
+    me: &'a mut Server<R>,
+    request_id: I,
+    // TODO: no
+    request_body: common::Call,
 }
 
-impl<'a, R> ServerRq<'a, R>
-    where R: RawServerRq<'a>
+impl<'a, R, I> ServerRq<'a, R, I>
+where
+    R: RawServer<RequestId = I>,
+    I: Clone + PartialEq + Eq + Send + Sync,
 {
     fn call(&self) -> &common::Call {
-        match self.inner.request() {
-            common::Request::Single(s) => s,
-            common::Request::Batch(_) => unreachable!(),     // TODO: justification
-        }
+        &self.request_body
     }
 
-    /// Returns the id of the request.
+    /*/// Returns the id of the request.
     ///
     /// If this request object is dropped, you can retreive it again later by calling
     /// `request_by_id`. This isn't possible for notifications.
@@ -95,14 +94,14 @@ impl<'a, R> ServerRq<'a, R>
             common::Call::Notification(common::Notification { .. }) => None,
             common::Call::Invalid { id } => Some(id),        // TODO: shouldn't we panic here or something?
         }
-    }
+    }*/
 
     /// Returns the method of this request.
     pub fn method(&self) -> &str {
         match self.call() {
             common::Call::MethodCall(common::MethodCall { method, .. }) => method,
             common::Call::Notification(common::Notification { method, .. }) => method,
-            common::Call::Invalid { .. } => unimplemented!()     // TODO:
+            common::Call::Invalid { .. } => unimplemented!(), // TODO:
         }
     }
 
@@ -111,7 +110,7 @@ impl<'a, R> ServerRq<'a, R>
         let p = match self.call() {
             common::Call::MethodCall(common::MethodCall { params, .. }) => params,
             common::Call::Notification(common::Notification { params, .. }) => params,
-            common::Call::Invalid { .. } => unimplemented!()     // TODO:
+            common::Call::Invalid { .. } => unimplemented!(), // TODO:
         };
 
         ServerRequestParams::from(p)
@@ -126,8 +125,9 @@ impl<'a, R> ServerRq<'a, R>
     /// - Otherwise, this response is buffered.
     ///
     pub async fn respond(self, response: Result<common::JsonValue, common::Error>) {
-        let output = common::Output::from(response, common::Id::Null, common::Version::V2);      // TODO: id
-        self.inner.finish(Some(&common::Response::Single(output))).await;
+        let output = common::Output::from(response, common::Id::Null, common::Version::V2); // TODO: id
+        let response = common::Response::Single(output);
+        self.me.raw.finish(&self.request_id, Some(&response)).await;
     }
 
     /*/// Sends back a response similar to `respond`, then returns a `ServerSubscription` object

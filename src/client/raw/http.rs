@@ -1,8 +1,8 @@
-use crate::common;
 use super::RawClientRef;
+use crate::common;
 use derive_more::*;
 use err_derive::*;
-use futures::{prelude::*, channel::mpsc, channel::oneshot};
+use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, thread};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
@@ -66,7 +66,8 @@ pub struct WithServer<'a, 'b> {
 }
 
 impl<'r, 'a: 'r, 'b> RawClientRef<'r> for WithServer<'a, 'b> {
-    type Request = Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'r>>;
+    type Request =
+        Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'r>>;
     type Error = RequestError;
 
     fn request(self, request: common::Request) -> Self::Request {
@@ -79,7 +80,7 @@ impl<'r, 'a: 'r, 'b> RawClientRef<'r> for WithServer<'a, 'b> {
                     hyper::header::HeaderValue::from_static("application/json"),
                 )
                 .body(From::from(body))
-                .expect("Uri and request headers are valid; qed")      // TODO: not necessarily true for URL here
+                .expect("Uri and request headers are valid; qed") // TODO: not necessarily true for URL here
         });
 
         Box::pin(async move {
@@ -91,9 +92,10 @@ impl<'r, 'a: 'r, 'b> RawClientRef<'r> for WithServer<'a, 'b> {
 
             if requests_tx.send(message).await.is_err() {
                 log::error!("JSONRPC http client background thread has shut down");
-                return Err(RequestError::Io(
-                    io::Error::new(io::ErrorKind::Other, "background thread is down")
-                ))
+                return Err(RequestError::Io(io::Error::new(
+                    io::ErrorKind::Other,
+                    "background thread is down",
+                )));
             }
 
             let hyper_response = match send_back_rx.await {
@@ -101,28 +103,32 @@ impl<'r, 'a: 'r, 'b> RawClientRef<'r> for WithServer<'a, 'b> {
                 Ok(Err(err)) => return Err(RequestError::Http(Box::new(err))),
                 Err(_) => {
                     log::error!("JSONRPC http client background thread has shut down");
-                    return Err(RequestError::Io(
-                        io::Error::new(io::ErrorKind::Other, "background thread is down")
-                    ))
+                    return Err(RequestError::Io(io::Error::new(
+                        io::ErrorKind::Other,
+                        "background thread is down",
+                    )));
                 }
             };
 
             if !hyper_response.status().is_success() {
                 return Err(RequestError::RequestFailure {
                     status_code: hyper_response.status().into(),
-                })
+                });
             }
 
             // Note that we don't check the Content-Type of the request. This is deemed
             // unnecessary, as a parsing error while happen anyway.
 
             // TODO: enforce a maximum size here
-            let body: hyper::Chunk = hyper_response.into_body().try_concat().await
+            let body: hyper::Chunk = hyper_response
+                .into_body()
+                .try_concat()
+                .await
                 .map_err(|err| RequestError::Http(Box::new(err)))?;
 
             // TODO: use Response::from_json
-            let as_json: common::Response = common::from_slice(&body)
-                .map_err(|err| RequestError::ParseError(err))?;
+            let as_json: common::Response =
+                common::from_slice(&body).map_err(|err| RequestError::ParseError(err))?;
             Ok(as_json)
         })
     }
@@ -130,7 +136,8 @@ impl<'r, 'a: 'r, 'b> RawClientRef<'r> for WithServer<'a, 'b> {
 
 // TODO: that's a hack to plug APIs together ; remove because of duplicated code
 impl<'r, 'a: 'r, 'b> RawClientRef<'r> for &'r WithServer<'a, 'b> {
-    type Request = Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'r>>;
+    type Request =
+        Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'r>>;
     type Error = RequestError;
 
     fn request(self, request: common::Request) -> Self::Request {
@@ -143,7 +150,7 @@ impl<'r, 'a: 'r, 'b> RawClientRef<'r> for &'r WithServer<'a, 'b> {
                     hyper::header::HeaderValue::from_static("application/json"),
                 )
                 .body(From::from(body))
-                .expect("Uri and request headers are valid; qed")      // TODO: not necessarily true for URL here
+                .expect("Uri and request headers are valid; qed") // TODO: not necessarily true for URL here
         });
 
         Box::pin(async move {
@@ -155,9 +162,10 @@ impl<'r, 'a: 'r, 'b> RawClientRef<'r> for &'r WithServer<'a, 'b> {
 
             if requests_tx.send(message).await.is_err() {
                 log::error!("JSONRPC http client background thread has shut down");
-                return Err(RequestError::Io(
-                    io::Error::new(io::ErrorKind::Other, "background thread is down")
-                ))
+                return Err(RequestError::Io(io::Error::new(
+                    io::ErrorKind::Other,
+                    "background thread is down",
+                )));
             }
 
             let hyper_response = match send_back_rx.await {
@@ -165,28 +173,32 @@ impl<'r, 'a: 'r, 'b> RawClientRef<'r> for &'r WithServer<'a, 'b> {
                 Ok(Err(err)) => return Err(RequestError::Http(Box::new(err))),
                 Err(_) => {
                     log::error!("JSONRPC http client background thread has shut down");
-                    return Err(RequestError::Io(
-                        io::Error::new(io::ErrorKind::Other, "background thread is down")
-                    ))
+                    return Err(RequestError::Io(io::Error::new(
+                        io::ErrorKind::Other,
+                        "background thread is down",
+                    )));
                 }
             };
 
             if !hyper_response.status().is_success() {
                 return Err(RequestError::RequestFailure {
                     status_code: hyper_response.status().into(),
-                })
+                });
             }
 
             // Note that we don't check the Content-Type of the request. This is deemed
             // unnecessary, as a parsing error while happen anyway.
 
             // TODO: enforce a maximum size here
-            let body: hyper::Chunk = hyper_response.into_body().try_concat().await
+            let body: hyper::Chunk = hyper_response
+                .into_body()
+                .try_concat()
+                .await
                 .map_err(|err| RequestError::Http(Box::new(err)))?;
 
             // TODO: use Response::from_json
-            let as_json: common::Response = common::from_slice(&body)
-                .map_err(|err| RequestError::ParseError(err))?;
+            let as_json: common::Response =
+                common::from_slice(&body).map_err(|err| RequestError::ParseError(err))?;
             Ok(as_json)
         })
     }
@@ -212,9 +224,7 @@ pub enum RequestError {
     ParseError(#[error(cause)] serde_json::error::Error),
 
     #[error(display = "server returned an error status code: {:?}", status_code)]
-    RequestFailure {
-        status_code: u16,
-    },
+    RequestFailure { status_code: u16 },
 }
 
 /// Function that runs in a background thread.
@@ -230,8 +240,8 @@ fn background_thread(mut requests_rx: mpsc::Receiver<FrontToBack>) {
             // Initialization failures should be almost non-existant anyway, so this isn't a big
             // deal.
             log::error!("Failed to initialize tokio runtime: {:?}", err);
-            return
-        },
+            return;
+        }
     };
 
     // Running until the channel has been closed, and all requests have been completed.

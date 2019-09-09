@@ -1,5 +1,8 @@
-use crate::{server::raw::RawServerRef, server::Server, server::ServerRequestParams, common::Error, common::JsonValue};
-use futures::{prelude::*, pin_mut};
+use crate::{
+    common::Error, common::JsonValue, server::raw::RawServer, server::Server,
+    server::ServerRequestParams,
+};
+use futures::{pin_mut, prelude::*};
 
 /// Runs the given server using the given handler.
 ///
@@ -7,7 +10,7 @@ use futures::{prelude::*, pin_mut};
 /// to respond to it.
 pub async fn run<'a, S, H, F>(server: &'a mut Server<S>, mut handler: H)
 where
-    for<'r> &'r mut S: RawServerRef<'r>,
+    S: RawServer,
     H: FnMut(&str, ServerRequestParams) -> F,
     F: Future<Output = Result<JsonValue, Error>>,
 {
@@ -30,8 +33,8 @@ where
 
         let future = handler(request.method(), request.params());
         //send_back.push(async move {
-            let response = future.await;
-            let _ = request.respond(response).await;
+        let response = future.await;
+        let _ = request.respond(response).await;
         //});
     }
 
@@ -45,7 +48,7 @@ mod tests {
 
     #[test]
     fn is_send_static() {
-        fn req<T: 'static>(_: T) {}     // TODO: + Send; see https://github.com/rust-lang/rust/issues/64176
+        fn req<T: 'static>(_: T) {} // TODO: + Send; see https://github.com/rust-lang/rust/issues/64176
         #[allow(unused)]
         fn test() {
             let fut = super::run(unimplemented!(), |_, _| future::ready(panic!()));

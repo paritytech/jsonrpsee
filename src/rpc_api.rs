@@ -1,4 +1,3 @@
-
 /// Applies a macro.
 #[macro_export]
 macro_rules! rpc_api {
@@ -24,16 +23,16 @@ macro_rules! rpc_api {
                 }
             )*
 
-            enum $api_name<'a,  R> {
+            enum $api_name<'a, R, I> {
                 $(
-                    $name { respond: $crate::rpc_api::RpcApiResponder<'a, R, $ret>, $($pn: $pty),* },
+                    $name { respond: $crate::rpc_api::RpcApiResponder<'a, R, I, $ret>, $($pn: $pty),* },
                 )*
             }
 
-            impl<'a, R> $api_name<'a, R> {
-                async fn next_request<S>(server: &'a mut $crate::server::Server<S>) -> Result<$api_name<'a, R>, std::io::Error>
-                    where &'a mut S: $crate::server::raw::RawServerRef<'a, Request = R>,
-                        R: $crate::server::raw::RawServerRq<'a> + Send,
+            impl<'a, R, I> $api_name<'a, R, I> {
+                async fn next_request(server: &'a mut $crate::server::Server<R>) -> Result<$api_name<'a, R, I>, std::io::Error>
+                    where R: $crate::server::raw::RawServer<RequestId = I>,
+                          I: Clone + PartialEq + Eq + Send + Sync,
                 {
                     loop {
                         let request = server.next_request().await.unwrap();     // TODO: don't unwrap
@@ -77,11 +76,9 @@ macro_rules! rpc_api {
 }
 
 // TODO: too much pub
-pub struct RpcApiResponder<'a, R, T> {
-    pub rq: crate::server::ServerRq<'a, R>,
+pub struct RpcApiResponder<'a, R, I, T> {
+    pub rq: crate::server::ServerRq<'a, R, I>,
     pub response_ty: std::marker::PhantomData<T>,
 }
 
-impl<'a, R, T> RpcApiResponder<'a, R, T> {
-
-}
+impl<'a, R, I, T> RpcApiResponder<'a, R, I, T> {}

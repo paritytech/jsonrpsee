@@ -1,6 +1,5 @@
-use crate::server::raw::http::response;
-use crate::server::raw::{RawServerRef, RawServerRq};
 use crate::common;
+use crate::server::raw::{http::response, RawServer};
 use async_std::net::ToSocketAddrs;
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
@@ -17,7 +16,7 @@ pub struct HttpServer {
 
     /// The identifier is lineraly increasing and is never leaked on the wire or outside of this
     /// module. Therefore there is no risk of hash collision.
-    requests: FnvHashMap<u64, Request>,
+    requests: FnvHashMap<u64, oneshot::Sender<hyper::Response<hyper::Body>>>,
 }
 
 impl HttpServer {
@@ -60,12 +59,13 @@ impl HttpServer {
     }
 }
 
-impl<'a, 'b: 'a> RawServerRef<'a> for &'b mut HttpServer {
-    type Request = HttpServerRefRq<'b>;
+impl RawServer for HttpServer {
     type RequestId = u64;
-    type NextRequest = Pin<Box<dyn Future<Output = Result<Self::Request, ()>> + Send + 'b>>;
 
-    fn next_request(self) -> Self::NextRequest {
+    fn next_request<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>>
+    {
         Box::pin(async move {
             let request = self.rx.next().await.ok_or_else(|| ())?;
             let request_id = {
@@ -77,94 +77,74 @@ impl<'a, 'b: 'a> RawServerRef<'a> for &'b mut HttpServer {
             // TODO: we actually don't need to insert the request
             // most requests are answered without being dropped, so as an optimization we can
             // return the request itself, and insert it later if we drop it
-            self.requests.insert(request_id, request);
+            self.requests.insert(request_id, request.send_back);
 
             // Every 128 requests, we call `shrink_to_fit` on the list.
             if request_id % 128 == 0 {
                 self.requests.shrink_to_fit();
             }
 
-            Ok(HttpServerRefRq {
-                server: self,
-                id: request_id,
-            })
+            Ok((request_id, request.request))
         })
     }
 
-    fn request_by_id(self, id: Self::RequestId) -> Option<Self::Request> {
-        if self.requests.contains_key(&id) {
-            Some(HttpServerRefRq {
-                server: self,
-                id,
-            })
-        } else {
-            None
-        }
-    }
-}
-
-pub struct HttpServerRefRq<'a> {
-    server: &'a mut HttpServer,
-    id: u64,
-}
-
-/// Request generated from the background task and sent to the foreground one.
-struct Request {
-    /// Body of the response to send on the network.
-    send_back: oneshot::Sender<hyper::Response<hyper::Body>>,
-    /// The JSON body that was sent by the client.
-    request: common::Request,
-}
-
-impl<'a, 'b: 'a> RawServerRq<'a> for HttpServerRefRq<'b> {
-    type Finish = Pin<Box<dyn Future<Output = ()> + Send + 'b>>;
-    type RequestId = u64;
-
-    fn id(&self) -> &Self::RequestId {
-        &self.id
-    }
-
-    fn request(&self) -> &common::Request {
-        &self.server.requests.get(&self.id).unwrap().request
-    }
-
-    fn finish(self, response: Option<&common::Response>) -> Self::Finish {
-        let serialization_result = response.map(|r| serde_json::to_vec(r));
-
+    fn finish<'a>(
+        &'a mut self,
+        request_id: &'a Self::RequestId,
+        response: Option<&'a common::Response>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
         Box::pin(async move {
-            let response = match serialization_result {
-                Some(Ok(bytes)) => {
-                    hyper::Response::builder()
-                        .status(hyper::StatusCode::OK)
-                        .header(
-                            "Content-Type",
-                            hyper::header::HeaderValue::from_static("application/json; charset=utf-8"),
-                        )
-                        .body(hyper::Body::from(bytes))
-                        .expect("Unable to parse response body for type conversion")
-                },
-                Some(Err(_)) => panic!(),     // TODO: no
+            let send_back = match self.requests.remove(request_id) {
+                Some(rq) => rq,
+                None => return Err(()),
+            };
+
+            let response = match response.map(|r| serde_json::to_vec(r)) {
+                Some(Ok(bytes)) => hyper::Response::builder()
+                    .status(hyper::StatusCode::OK)
+                    .header(
+                        "Content-Type",
+                        hyper::header::HeaderValue::from_static("application/json; charset=utf-8"),
+                    )
+                    .body(hyper::Body::from(bytes))
+                    .expect("Unable to parse response body for type conversion"),
+                Some(Err(_)) => panic!(), // TODO: no
                 None => {
                     // TODO: is that a good idea? should the param really be an Option?
                     hyper::Response::builder()
                         .status(hyper::StatusCode::NO_CONTENT)
                         .body(hyper::Body::empty())
                         .expect("Unable to parse response body for type conversion")
-                },
+                }
             };
 
-            let rq = self.server.requests.remove(&self.id).unwrap();
-            if rq.send_back.send(response).is_err() {
+            if send_back.send(response).is_err() {
                 log::error!("Couldn't send back JSON-RPC response, as background task has crashed");
             }
+
+            Ok(())
         })
     }
 
-    fn send<'s>(&'s mut self, response: &common::Response)
-        -> Result<Pin<Box<dyn Future<Output = ()> + Send + 's>>, ()>
-    {
-        Err(())
+    fn supports_resuming(&self) -> bool {
+        false
     }
+
+    fn send<'a>(
+        &'a mut self,
+        _: &'a Self::RequestId,
+        _: &'a common::Response,
+    ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
+        Box::pin(async move { Err(()) })
+    }
+}
+
+/// Request generated from the background task and sent to the foreground task.
+struct Request {
+    /// Body of the response to send on the network.
+    send_back: oneshot::Sender<hyper::Response<hyper::Body>>,
+    /// The JSON body that was sent by the client.
+    request: common::Request,
 }
 
 /// Process an HTTP request and sends back a response.
@@ -267,10 +247,11 @@ async fn body_to_request(mut body: hyper::Body) -> Result<common::Request, io::E
     while let Some(chunk) = body.next().await {
         let chunk = match chunk {
             Ok(c) => c,
-            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())),      // TODO:
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())), // TODO:
         };
         json_body.extend_from_slice(&chunk.into_bytes());
-        if json_body.len() >= 16384 {       // TODO: some limit
+        if json_body.len() >= 16384 {
+            // TODO: some limit
             return Err(io::Error::new(io::ErrorKind::Other, "request too large"));
         }
     }
@@ -300,8 +281,11 @@ mod tests {
     #[test]
     fn body_to_request_size_limit_json() {
         let huge_body = serde_json::to_vec(
-            &(0..32768).map(|_| serde_json::Value::from("test")).collect::<Vec<_>>()
-        ).unwrap();
+            &(0..32768)
+                .map(|_| serde_json::Value::from("test"))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
 
         futures::executor::block_on(async move {
             let body = hyper::Body::from(huge_body);
@@ -311,7 +295,9 @@ mod tests {
 
     #[test]
     fn body_to_request_size_limit_garbage() {
-        let huge_body = (0..100_000).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        let huge_body = (0..100_000)
+            .map(|_| rand::random::<u8>())
+            .collect::<Vec<_>>();
         futures::executor::block_on(async move {
             let body = hyper::Body::from(huge_body);
             assert!(body_to_request(body).await.is_err());

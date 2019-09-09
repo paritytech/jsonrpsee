@@ -85,7 +85,7 @@ impl<'a> From<&'a String> for ParamKey<'a> {
 
 impl<'a> From<u32> for ParamKey<'a> {
     fn from(i: u32) -> Self {
-        ParamKey::Index(i as usize)     // TODO: stronger check
+        ParamKey::Index(i as usize) // TODO: stronger check
     }
 }
 
@@ -130,8 +130,7 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for Iter<'a> {
-}
+impl<'a> ExactSizeIterator for Iter<'a> {}
 
 impl<'a> fmt::Debug for Iter<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
