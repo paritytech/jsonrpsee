@@ -60,10 +60,10 @@ impl HttpServer {
     }
 }
 
-impl<'a> RawServerRef<'a> for &'a mut HttpServer {
-    type Request = HttpServerRefRq<'a>;
+impl<'a, 'b: 'a> RawServerRef<'a> for &'b mut HttpServer {
+    type Request = HttpServerRefRq<'b>;
     type RequestId = u64;
-    type NextRequest = Pin<Box<dyn Future<Output = Result<Self::Request, ()>> + Send + 'a>>;
+    type NextRequest = Pin<Box<dyn Future<Output = Result<Self::Request, ()>> + Send + 'b>>;
 
     fn next_request(self) -> Self::NextRequest {
         Box::pin(async move {
@@ -116,8 +116,8 @@ struct Request {
     request: common::Request,
 }
 
-impl<'a> RawServerRq<'a> for HttpServerRefRq<'a> {
-    type Finish = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+impl<'a, 'b: 'a> RawServerRq<'a> for HttpServerRefRq<'b> {
+    type Finish = Pin<Box<dyn Future<Output = ()> + Send + 'b>>;
     type RequestId = u64;
 
     fn id(&self) -> &Self::RequestId {
@@ -161,7 +161,7 @@ impl<'a> RawServerRq<'a> for HttpServerRefRq<'a> {
     }
 
     fn send<'s>(&'s mut self, response: &common::Response)
-        -> Result<Pin<Box<dyn Future<Output = ()> + 's>>, ()>
+        -> Result<Pin<Box<dyn Future<Output = ()> + Send + 's>>, ()>
     {
         Err(())
     }

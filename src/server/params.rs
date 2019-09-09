@@ -10,7 +10,7 @@ pub struct ServerRequestParams<'a> {
 
 impl<'a> ServerRequestParams<'a> {
     /// Wraps around a `&common::Params` and provides utility functions for the user.
-    pub(crate) fn from(params: &'a common::Params) -> Self {
+    pub(crate) fn from(params: &'a common::Params) -> ServerRequestParams<'a> {
         ServerRequestParams { params }
     }
 

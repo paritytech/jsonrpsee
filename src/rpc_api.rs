@@ -31,9 +31,9 @@ macro_rules! rpc_api {
             }
 
             impl<'a, R> $api_name<'a, R> {
-                async fn next_request<S>(server: &'a mut $crate::server::Server<S>) -> Result<Self, std::io::Error>
+                async fn next_request<S>(server: &'a mut $crate::server::Server<S>) -> Result<$api_name<'a, R>, std::io::Error>
                     where &'a mut S: $crate::server::raw::RawServerRef<'a, Request = R>,
-                        R: $crate::server::raw::RawServerRq<'a>,
+                        R: $crate::server::raw::RawServerRq<'a> + Send,
                 {
                     loop {
                         let request = server.next_request().await.unwrap();     // TODO: don't unwrap

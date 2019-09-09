@@ -3,7 +3,7 @@ use super::RawClientRef;
 use derive_more::*;
 use err_derive::*;
 use futures::{prelude::*, channel::mpsc, channel::oneshot};
-use std::{fmt, io, net::SocketAddr, pin::Pin, thread};
+use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, thread};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
@@ -45,10 +45,10 @@ impl HttpClientPool {
 
     /// Borrows the `HttpClientPool` and builds an object that can perform request towards the
     /// given URL.
-    pub fn with_server<'a, 'b>(&'a self, url: &'b str) -> WithServer<'a, 'b> {
+    pub fn with_server<'a, 'b>(&'a self, url: impl Into<Cow<'b, str>>) -> WithServer<'a, 'b> {
         WithServer {
             pool: self,
-            url,
+            url: url.into(),
         }
     }
 }
@@ -62,18 +62,82 @@ impl fmt::Debug for HttpClientPool {
 /// Borrows an [`HttpClientPool`] and a target URL.
 pub struct WithServer<'a, 'b> {
     pool: &'a HttpClientPool,
-    url: &'b str,
+    url: Cow<'b, str>,
 }
 
-impl<'a, 'b> RawClientRef<'a> for WithServer<'a, 'b> {
-    type Request = Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'a>>;
+impl<'r, 'a: 'r, 'b> RawClientRef<'r> for WithServer<'a, 'b> {
+    type Request = Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'r>>;
     type Error = RequestError;
 
     fn request(self, request: common::Request) -> Self::Request {
         let mut requests_tx = self.pool.requests_tx.clone();
 
         let request = common::to_vec(&request).map(|body| {
-            hyper::Request::post(self.url)
+            hyper::Request::post(self.url.as_ref())
+                .header(
+                    hyper::header::CONTENT_TYPE,
+                    hyper::header::HeaderValue::from_static("application/json"),
+                )
+                .body(From::from(body))
+                .expect("Uri and request headers are valid; qed")      // TODO: not necessarily true for URL here
+        });
+
+        Box::pin(async move {
+            let (send_back_tx, send_back_rx) = oneshot::channel();
+            let message = FrontToBack {
+                request: request.map_err(RequestError::Serialization)?,
+                send_back: send_back_tx,
+            };
+
+            if requests_tx.send(message).await.is_err() {
+                log::error!("JSONRPC http client background thread has shut down");
+                return Err(RequestError::Io(
+                    io::Error::new(io::ErrorKind::Other, "background thread is down")
+                ))
+            }
+
+            let hyper_response = match send_back_rx.await {
+                Ok(Ok(r)) => r,
+                Ok(Err(err)) => return Err(RequestError::Http(Box::new(err))),
+                Err(_) => {
+                    log::error!("JSONRPC http client background thread has shut down");
+                    return Err(RequestError::Io(
+                        io::Error::new(io::ErrorKind::Other, "background thread is down")
+                    ))
+                }
+            };
+
+            if !hyper_response.status().is_success() {
+                return Err(RequestError::RequestFailure {
+                    status_code: hyper_response.status().into(),
+                })
+            }
+
+            // Note that we don't check the Content-Type of the request. This is deemed
+            // unnecessary, as a parsing error while happen anyway.
+
+            // TODO: enforce a maximum size here
+            let body: hyper::Chunk = hyper_response.into_body().try_concat().await
+                .map_err(|err| RequestError::Http(Box::new(err)))?;
+
+            // TODO: use Response::from_json
+            let as_json: common::Response = common::from_slice(&body)
+                .map_err(|err| RequestError::ParseError(err))?;
+            Ok(as_json)
+        })
+    }
+}
+
+// TODO: that's a hack to plug APIs together ; remove because of duplicated code
+impl<'r, 'a: 'r, 'b> RawClientRef<'r> for &'r WithServer<'a, 'b> {
+    type Request = Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 'r>>;
+    type Error = RequestError;
+
+    fn request(self, request: common::Request) -> Self::Request {
+        let mut requests_tx = self.pool.requests_tx.clone();
+
+        let request = common::to_vec(&request).map(|body| {
+            hyper::Request::post(self.url.as_ref())
                 .header(
                     hyper::header::CONTENT_TYPE,
                     hyper::header::HeaderValue::from_static("application/json"),

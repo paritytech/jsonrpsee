@@ -20,13 +20,13 @@ use std::{error, io, pin::Pin};
 /// request object to grab the id of that request, then later call `request_by_id` to get back
 /// the corresponding request.
 ///
-pub trait RawServerRef<'a> {
+pub trait RawServerRef<'a>: Send {
     /// Object that can be used to send a response.
-    type Request: RawServerRq<'a, RequestId = Self::RequestId>;
+    type Request: RawServerRq<'a, RequestId = Self::RequestId> + Send + Sync;
     /// Identifier for a request in the context of this server.
-    type RequestId: PartialEq + Eq + Clone;
+    type RequestId: PartialEq + Eq + Clone + Send + Sync;
     /// The future that `next_request` produces.
-    type NextRequest: Future<Output = Result<Self::Request, ()>> + Unpin + 'a;
+    type NextRequest: Future<Output = Result<Self::Request, ()>> + Send + Unpin + 'a;
 
     /// Returns the next request, or an error if the server has closed.
     fn next_request(self) -> Self::NextRequest;
@@ -41,11 +41,11 @@ pub trait RawServerRef<'a> {
 ///
 /// You can drop this object and retreive it later by grabbing its id (using the `id` method) then
 /// later calling `request_by_id`.
-pub trait RawServerRq<'a> {
+pub trait RawServerRq<'a>: Send + Sync {
     /// The future that `finish` produces.
-    type Finish: Future<Output = ()> + Unpin + 'a;
+    type Finish: Future<Output = ()> + Unpin + 'a + Send;
     /// Identifier for a request in the context of this server.
-    type RequestId: PartialEq + Eq + Clone;
+    type RequestId: PartialEq + Eq + Clone + Send + Sync;
 
     /// Returns a unique identifier for this request.
     fn id(&self) -> &Self::RequestId;
@@ -80,5 +80,5 @@ pub trait RawServerRq<'a> {
     /// > **Note**: Just like for [`finish`], the returned `Future` shouldn't take too long to
     /// >           complete.
     fn send<'s>(&'s mut self, response: &common::Response)
-        -> Result<Pin<Box<dyn Future<Output = ()> + 's>>, ()>;
+        -> Result<Pin<Box<dyn Future<Output = ()> + Send + 's>>, ()>;
 }

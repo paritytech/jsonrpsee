@@ -15,7 +15,7 @@ pub struct Server<R> {
 
 impl<R> Server<R> {
     /// Starts a `Server` using the given raw server internally.
-    pub fn new(inner: R) -> Self {
+    pub fn new(inner: R) -> Server<R> {
         Server {
             raw: inner,
         }
@@ -61,7 +61,7 @@ impl<R> Server<R> {
 }
 
 impl<R> From<R> for Server<R> {
-    fn from(inner: R) -> Self {
+    fn from(inner: R) -> Server<R> {
         Server::new(inner)
     }
 }
