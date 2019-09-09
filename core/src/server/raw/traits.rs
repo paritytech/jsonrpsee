@@ -8,8 +8,8 @@ use std::{error, io, pin::Pin};
 ///
 /// ## Usage
 ///
-/// A "raw server" can be seen as a collection of requests. Each request has a corresponding
-/// unique identifier.
+/// A "raw server" can be seen as a state machine holding a collection of requests. Each request
+/// has a corresponding unique identifier.
 ///
 /// Calling `next_request` returns a `Future` that resolves when the server receives a new
 /// incoming request from a connection. The `Future` updates the internal state of the server

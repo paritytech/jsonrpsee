@@ -28,9 +28,7 @@
 //! ```
 //!
 
-pub use self::http::HttpServer;
 pub use self::traits::RawServer;
 
-mod http;
 // TODO: mod join;
 mod traits;

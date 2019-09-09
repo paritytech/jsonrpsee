@@ -1,0 +1,17 @@
+[package]
+name = "jsonrpsee-core"
+description = "JSON-RPC crate"
+version = "0.1.0"
+authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+derive_more = "0.13.0"
+err-derive = "0.1.5"
+fnv = "1.0"
+futures-preview = "0.3.0-alpha.18"
+log = "0.4"
+serde = { version = "1.0.40", features = ["derive"] }
+serde_json = "1.0.40"
+smallvec = "0.6.10"

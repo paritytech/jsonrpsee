@@ -1,0 +1,25 @@
+[package]
+name = "jsonrpsee-http"
+description = "JSON-RPC crate"
+version = "0.1.0"
+authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+async-std = { git = "https://github.com/async-rs/async-std" }   # TODO: need some unreleased features
+derive_more = "0.13.0"
+err-derive = "0.1.5"
+fnv = "1.0"
+futures-preview = "0.3.0-alpha.18"
+futures-timer = "0.3.0"
+hyper = "=0.13.0-alpha.1"
+jsonrpsee-core = { path = "../core" }
+lazy_static = "1.4.0"
+log = "0.4"
+serde = { version = "1.0.40", features = ["derive"] }
+serde_json = "1.0.40"
+tokio = "0.2.0-alpha.4"
+
+[dev-dependencies]
+rand = "0.7"

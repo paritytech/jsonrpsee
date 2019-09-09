@@ -4,10 +4,6 @@ use crate::common;
 use futures::prelude::*;
 use std::{error, io};
 
-pub use self::http::HttpClientPool;
-
-pub mod http;
-
 /// References to objects that can act as clients.
 pub trait RawClientRef<'a> {
     /// Future returned by `request`.

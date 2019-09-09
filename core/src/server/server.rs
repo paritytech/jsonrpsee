@@ -138,9 +138,10 @@ where
                 self.batches.insert(new_batch_id, batch);
             } else {
                 self.next_batch_id -= 1;
+                // TODO: respond with `None`
             }
 
-            // TODO: what if batch is full? return it immediately?
+            // TODO: what if batch is full of responses? return it immediately?
         }
     }
 
@@ -335,7 +336,13 @@ where
     }
 
     /// Pushes a notification.
-    pub async fn push(self, message: impl Into<JsonValue>) -> Result<(), io::Error> {
+    pub async fn push(self, message: impl Into<JsonValue>) {
+        let raw_id = self.server.subscriptions.get(&self.id).unwrap();
+        // TODO: self.server.raw.send(&raw_id, message).await.unwrap();
         unimplemented!()
     }
+
+    // TODO: close operation
+    // TODO: closing is hard because we might have multiple subscriptions for
+    //       the same raw request
 }
