@@ -16,5 +16,6 @@ members = [
 jsonrpsee-core = { path = "core" }
 jsonrpsee-http = { path = "http", optional = true }
 
-[dev-dependencies]
-rand = "0.7"
+[features]
+default = ["http"]
+http = ["jsonrpsee-http"]

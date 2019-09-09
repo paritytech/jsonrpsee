@@ -1,7 +1,7 @@
 //! Listening for incoming JSON-RPC requests.
 //!
 //! A [`Server`](crate::server::Server) can be seen as a collection of requests and subscriptions.
-//! Calling [`next_request`](crate::server::Server::next_request) returns a `Future` that returns
+//! Calling [`next_event`](crate::server::Server::next_event) returns a `Future` that returns
 //! the next incoming request from a client.
 //!
 //! When a request arrives, can choose to:

@@ -59,13 +59,13 @@ pub trait RawServer {
     /// You can continue sending data on that same request later.
     ///
     /// Returns an error if the request identifier is incorrect, or if the implementation doesn't
-    /// support that operation (see [`supports_resuming`]).
+    /// support that operation (see [`supports_resuming`](RawServer::supports_resuming)).
     ///
     /// > **Note**: This might not be supported by the underlying implementation. For example, a
     /// >           WebSockets server can support that, but not an HTTP server.
     ///
-    /// > **Note**: Just like for [`finish`], the returned `Future` shouldn't take too long to
-    /// >           complete.
+    /// > **Note**: Just like for [`finish`](RawServer::finish), the returned `Future` shouldn't
+    /// >           take too long to complete.
     fn send<'a>(
         &'a mut self,
         request_id: &'a Self::RequestId,
