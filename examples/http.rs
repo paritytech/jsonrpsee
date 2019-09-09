@@ -15,7 +15,7 @@ fn main() {
         while let Ok(request) = Health::next_request(&mut server1).await {
             match request {
                 Health::system_name { respond } => {
-                    respond.respond(Ok("hello".into())).await;
+                    respond.ok("hello").await;
                 }
             }
         }
