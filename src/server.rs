@@ -26,7 +26,7 @@ pub use self::params::{
     Iter as ServerRequestParamsIter, ParamKey as ServerRequestParamsKey, ServerRequestParams,
 };
 // TODO: restore: pub use self::run::run;
-pub use self::server::{Server, ServerRq};
+pub use self::server::{Server, ServerEvent, ServerRequest, ServerRequestId};
 
 pub mod raw;
 

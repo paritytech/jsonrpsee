@@ -30,15 +30,19 @@ macro_rules! rpc_api {
             }
 
             impl<'a, R, I> $api_name<'a, R, I> {
-                async fn next_request(server: &'a mut $crate::server::Server<R>) -> Result<$api_name<'a, R, I>, std::io::Error>
+                async fn next_request(server: &'a mut $crate::server::Server<R, I>) -> Result<$api_name<'a, R, I>, std::io::Error>
                     where R: $crate::server::raw::RawServer<RequestId = I>,
                           I: Clone + PartialEq + Eq + Send + Sync,
                 {
                     loop {
-                        let request = server.next_request().await.unwrap();     // TODO: don't unwrap
+                        let (request_id, method) = match server.next_event().await.unwrap() {        // TODO: don't unwrap
+                            $crate::server::ServerEvent::Notification(n) => unimplemented!(),       // TODO:
+                            $crate::server::ServerEvent::Request(r) => (r.id(), r.method().to_owned()),
+                        };
 
                         $(
-                            if request.method() == stringify!($name) {
+                            if method == stringify!($name) {
+                                let request = server.request_by_id(&request_id).unwrap();
                                 $(
                                     let $pn: $pty = {
                                         let raw_val = match request.params().get(stringify!($pn)) {
@@ -67,7 +71,7 @@ macro_rules! rpc_api {
                             }
                         )*
 
-                        request.respond(Err($crate::common::Error::method_not_found())).await;
+                        server.request_by_id(&request_id).unwrap().respond(Err($crate::common::Error::method_not_found())).await;
                     }
                 }
             }
@@ -77,8 +81,15 @@ macro_rules! rpc_api {
 
 // TODO: too much pub
 pub struct RpcApiResponder<'a, R, I, T> {
-    pub rq: crate::server::ServerRq<'a, R, I>,
+    pub rq: crate::server::ServerRequest<'a, R, I>,
     pub response_ty: std::marker::PhantomData<T>,
 }
 
-impl<'a, R, I, T> RpcApiResponder<'a, R, I, T> {}
+impl<'a, R, I, T> RpcApiResponder<'a, R, I, T>
+where R: crate::server::raw::RawServer<RequestId = I>,
+        I: Clone + PartialEq + Eq + Send + Sync,
+{
+    pub async fn respond(self, response: Result<crate::common::JsonValue, crate::common::Error>) {
+        self.rq.respond(response).await
+    }
+}
