@@ -132,8 +132,9 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         });
     }
 
+    let visibility = &api.visibility;
     quote! {
-        enum #enum_name<'a, R, I> {
+        #visibility enum #enum_name<'a, R, I> {
             #(#variants),*
         }
 

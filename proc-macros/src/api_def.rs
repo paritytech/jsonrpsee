@@ -26,6 +26,8 @@ impl syn::parse::Parse for ApiDefinitions {
 /// A single API defined by the user.
 #[derive(Debug)]
 pub struct ApiDefinition {
+    /// Visibility of the definition (e.g. `pub`, `pub(crate)`, ...).
+    pub visibility: syn::Visibility,
     /// Name of the API. For example `System`.
     pub name: syn::Ident,
     /// List of RPC functions defined for this API.
@@ -34,12 +36,14 @@ pub struct ApiDefinition {
 
 impl syn::parse::Parse for ApiDefinition {
     fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+        let visibility = input.parse()?;
         let name = input.parse()?;
         let group: proc_macro2::Group = input.parse()?;
         assert_eq!(group.delimiter(), proc_macro2::Delimiter::Brace);
         let defs: ApiMethods = syn::parse2(group.stream())?;
 
         Ok(ApiDefinition {
+            visibility,
             name,
             definitions: defs.definitions,
         })
