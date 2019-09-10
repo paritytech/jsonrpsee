@@ -1,4 +1,3 @@
-use futures::prelude::*;
 
 jsonrpsee::rpc_api! {
     Health {
@@ -17,10 +16,10 @@ fn main() {
 
         while let Ok(request) = Health::next_request(&mut server1).await {
             match request {
-                Health::system_name { respond } => {
+                Health::SystemName { respond } => {
                     respond.ok("hello").await;
                 }
-                Health::system_name2 { respond } => {
+                Health::SystemName2 { respond } => {
                     respond.ok("hello 2").await;
                 }
             }

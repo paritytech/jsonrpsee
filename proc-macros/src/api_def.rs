@@ -1,5 +1,9 @@
+//! Contains implementation of the `syn::parse::Parse` trait. Allows parsing the input tokens
+//! stream in a structured way.
 
-
+/// Multiple `ApiDefinition`s grouped into one struct.
+///
+/// Represents the entire content of the procedural macro.
 #[derive(Debug)]
 pub struct ApiDefinitions {
     pub apis: Vec<ApiDefinition>,
@@ -19,10 +23,12 @@ impl syn::parse::Parse for ApiDefinitions {
     }
 }
 
-
+/// A single API defined by the user.
 #[derive(Debug)]
 pub struct ApiDefinition {
+    /// Name of the API. For example `System`.
     pub name: syn::Ident,
+    /// List of RPC functions defined for this API.
     pub definitions: Vec<syn::Signature>,
 }
 
@@ -40,6 +46,8 @@ impl syn::parse::Parse for ApiDefinition {
     }
 }
 
+/// Implementation detail of `ApiDefinition`.
+/// Parses one single block of function definitions.
 #[derive(Debug)]
 struct ApiMethods {
     definitions: Vec<syn::Signature>,

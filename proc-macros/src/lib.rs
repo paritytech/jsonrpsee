@@ -1,5 +1,6 @@
 extern crate proc_macro;
 
+use inflector::Inflector as _;
 use proc_macro::TokenStream;
 use quote::quote;
 
@@ -17,12 +18,13 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
     })
 }
 
+/// Generates the macro output token stream corresponding to a single API.
 fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     let enum_name = &api.name;
 
     let mut variants = Vec::new();
     for function in &api.definitions {
-        let variant_name = &function.ident;
+        let variant_name = snake_case_to_camel_case(&function.ident);
         let ret = match &function.output {
             syn::ReturnType::Default => quote!{()},
             syn::ReturnType::Type(_, ty) => quote!{#ty},
@@ -38,8 +40,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     let next_request = {
         let mut function_blocks = Vec::new();
         for function in &api.definitions {
-            let f_name = &function.ident;
-            let ret_ty = &function.output;
+            let variant_name = snake_case_to_camel_case(&function.ident);
             let rpc_method_name = function.ident.to_string();
 
             function_blocks.push(quote!{
@@ -69,7 +70,8 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
                         rq: request,
                         response_ty: std::marker::PhantomData,
                     };
-                    return Ok(#enum_name::#f_name { respond });
+
+                    return Ok(#enum_name::#variant_name { respond });
                 }
             });
         }
@@ -93,19 +95,38 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         }
     };
 
+    // Builds the functions that allow performing outbound JSON-RPC queries.
     let mut client_functions = Vec::new();
     for function in &api.definitions {
         let f_name = &function.ident;
         let ret_ty = &function.output;
         let rpc_method_name = function.ident.to_string();
 
-        client_functions.push(quote!{
-            async fn #f_name() #ret_ty {
-                /*$(
-                    let $pn = jsonrpsee::common::to_value($pn).unwrap();        // TODO: don't unwrap
-                )**/
+        let mut params_list = Vec::new();
+        let mut params_to_json = Vec::new();
 
+        for (param_index, input) in function.inputs.iter().enumerate() {
+            let ty = match input {
+                syn::FnArg::Receiver(_) => panic!("Having `self` is not allowed in RPC queries definitions"),
+                syn::FnArg::Typed(syn::PatType { ty, .. }) => ty,
+            };
+
+            let generated_param_name = syn::Ident::new(
+                &format!("param{}", param_index),
+                proc_macro2::Span::call_site()
+            );
+
+            params_list.push(quote!{#generated_param_name: #ty});
+            params_to_json.push(quote!{
+                let #generated_param_name = jsonrpsee::common::to_value(#generated_param_name).unwrap();        // TODO: don't unwrap
+            });
+        }
+
+        client_functions.push(quote!{
+            async fn #f_name(#(#params_list),*) #ret_ty {
+                #(#params_to_json)*
                 let http = jsonrpsee::http_client("http://localhost:8000");
+                // TODO: pass params
                 http.request(#rpc_method_name).await.unwrap()
             }
         });
@@ -124,4 +145,9 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         // inferring generics
         #(#client_functions)*
     }
+}
+
+/// Turns a snake case function name into an UpperCamelCase name suitable to be an enum variant.
+fn snake_case_to_camel_case(snake_case: &syn::Ident) -> syn::Ident {
+    syn::Ident::new(&snake_case.to_string().to_pascal_case(), snake_case.span())
 }
