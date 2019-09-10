@@ -28,6 +28,6 @@ fn main() {
 
     // Client demo.
     // TODO: URL is hardcoded in the library at the moment
-    let v = futures::executor::block_on(system_name());
+    let v = futures::executor::block_on(Health::system_name());
     println!("{:?}", v);
 }

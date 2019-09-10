@@ -21,6 +21,7 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
 /// Generates the macro output token stream corresponding to a single API.
 fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     let enum_name = &api.name;
+    let visibility = &api.visibility;
 
     let mut variants = Vec::new();
     for function in &api.definitions {
@@ -77,7 +78,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         }
 
         quote! {
-            async fn next_request(server: &'a mut jsonrpsee::core::server::Server<R, I>) -> Result<#enum_name<'a, R, I>, std::io::Error>
+            #visibility async fn next_request(server: &'a mut jsonrpsee::core::server::Server<R, I>) -> Result<#enum_name<'a, R, I>, std::io::Error>
                 where R: jsonrpsee::core::server::raw::RawServer<RequestId = I>,
                         I: Clone + PartialEq + Eq + Send + Sync,
             {
@@ -123,7 +124,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         }
 
         client_functions.push(quote!{
-            async fn #f_name(#(#params_list),*) #ret_ty {
+            #visibility async fn #f_name(#(#params_list),*) #ret_ty {
                 #(#params_to_json)*
                 let http = jsonrpsee::http_client("http://localhost:8000");
                 // TODO: pass params
@@ -132,7 +133,6 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         });
     }
 
-    let visibility = &api.visibility;
     quote! {
         #visibility enum #enum_name<'a, R, I> {
             #(#variants),*
@@ -142,9 +142,9 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
             #next_request
         }
 
-        // TODO: move inside of the impl block, but then you've got the question of how to handle
-        // inferring generics
-        #(#client_functions)*
+        impl<'a> #enum_name<'a, (), ()> {
+            #(#client_functions)*
+        }
     }
 }
 
