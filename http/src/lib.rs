@@ -22,6 +22,6 @@ lazy_static::lazy_static! {
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
 // TODO: static addr :(
-pub fn http_client(addr: &str) -> Client<WithServer<'static, 'static>> {
+pub fn http_client(addr: &str) -> Client<WithServer<'static>> {
     Client::new(HTTP_POOL.with_server(addr.to_string()))
 }

@@ -1,7 +1,7 @@
 //! Performing JSON-RPC requests.
 // TODO: expand
 
-pub use crate::{client::raw::RawClientRef, common};
+pub use crate::{client::raw::RawClient, common};
 use derive_more::*;
 use err_derive::*;
 use serde::de::DeserializeOwned;
@@ -29,14 +29,13 @@ impl<R> Client<R> {
 }
 
 impl<R> Client<R>
-where
-    for<'r> &'r R: RawClientRef<'r>,
+where R: RawClient,
 {
     /// Starts a request.
-    pub async fn request<'a, Ret>(
-        &'a self,
+    pub async fn request<Ret>(
+        &mut self,
         method: impl Into<String>,
-    ) -> Result<Ret, ClientError<<&'a R as RawClientRef<'a>>::Error>>
+    ) -> Result<Ret, ClientError<R::Error>>
     where
         Ret: DeserializeOwned,
     {

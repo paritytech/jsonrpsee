@@ -126,7 +126,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         client_functions.push(quote!{
             #visibility async fn #f_name(#(#params_list),*) #ret_ty {
                 #(#params_to_json)*
-                let http = jsonrpsee::http_client("http://localhost:8000");
+                let mut http = jsonrpsee::http_client("http://localhost:8000");
                 // TODO: pass params
                 http.request(#rpc_method_name).await.unwrap()
             }
