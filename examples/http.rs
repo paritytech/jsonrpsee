@@ -7,6 +7,10 @@ jsonrpsee::rpc_api! {
         /// Test2
         fn system_name2() -> String;
     }
+
+    System {
+        fn test_foo() -> String;
+    }
 }
 
 fn main() {

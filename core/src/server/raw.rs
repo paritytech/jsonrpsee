@@ -28,7 +28,8 @@
 //! ```
 //!
 
+pub use self::join::{join, Join, JoinRequestId};
 pub use self::traits::RawServer;
 
-// TODO: mod join;
+mod join;
 mod traits;
