@@ -10,12 +10,18 @@ edition = "2018"
 members = [
     "core",
     "http",
+    "proc-macros",
 ]
 
 [dependencies]
 jsonrpsee-core = { path = "core" }
 jsonrpsee-http = { path = "http", optional = true }
+jsonrpsee-proc-macros = { path = "proc-macros" }
 
 [features]
 default = ["http"]
 http = ["jsonrpsee-http"]
+
+[dev-dependencies]
+async-std = "0.99.4"
+futures-preview = "0.3.0-alpha.18"      # TODO: necessary?

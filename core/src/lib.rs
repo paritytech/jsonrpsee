@@ -4,8 +4,8 @@
 
 //pub use crate::server::run;
 
-#[macro_use]
-pub mod rpc_api; // TODO: not pub
+/*#[macro_use]
+pub mod rpc_api; // TODO: not pub*/
 
 pub mod client;
 pub mod common;

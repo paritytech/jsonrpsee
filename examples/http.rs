@@ -4,6 +4,9 @@ jsonrpsee::rpc_api! {
     Health {
         /// Test
         fn system_name() -> String;
+
+        /// Test2
+        fn system_name2() -> String;
     }
 }
 
@@ -16,6 +19,9 @@ fn main() {
             match request {
                 Health::system_name { respond } => {
                     respond.ok("hello").await;
+                }
+                Health::system_name2 { respond } => {
+                    respond.ok("hello 2").await;
                 }
             }
         }

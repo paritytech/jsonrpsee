@@ -27,9 +27,11 @@ pub use self::params::{
 };
 // TODO: restore: pub use self::run::run;
 pub use self::server::{Server, ServerEvent, ServerRequest, ServerRequestId};
+pub use self::typed_rp::TypedResponder;
 
 pub mod raw;
 
 mod params;
 // TODO: restore: mod run;
 mod server;
+mod typed_rp;
