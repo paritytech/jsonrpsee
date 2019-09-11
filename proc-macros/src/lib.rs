@@ -6,6 +6,8 @@ use quote::quote;
 
 mod api_def;
 
+/// Test doc
+// TODO: ^
 #[proc_macro]
 pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
     // Start by parsing the input into what we expect.

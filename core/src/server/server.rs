@@ -235,11 +235,7 @@ pub struct ServerRequest<'a, R, I> {
     index_in_batch: usize,
 }
 
-impl<'a, R, I> ServerRequest<'a, R, I>
-where
-    R: RawServer<RequestId = I>,
-    I: Clone + PartialEq + Eq + Send + Sync,
-{
+impl<'a, R, I> ServerRequest<'a, R, I> {
     /// Returns the id of the request.
     ///
     /// If this request object is dropped, you can retreive it again later by calling
@@ -270,7 +266,13 @@ where
                 .params,
         )
     }
+}
 
+impl<'a, R, I> ServerRequest<'a, R, I>
+where
+    R: RawServer<RequestId = I>,
+    I: Clone + PartialEq + Eq + Send + Sync,
+{
     /// Send back a response.
     ///
     /// If this request is part of a batch:
@@ -357,6 +359,16 @@ where
         }
 
         self.server
+    }
+}
+
+impl<'a, R, I> fmt::Debug for ServerRequest<'a, R, I> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ServerRequest")
+            // TODO: print request id
+            .field("method", &self.method())
+            .field("params", &self.params())
+            .finish()
     }
 }
 
