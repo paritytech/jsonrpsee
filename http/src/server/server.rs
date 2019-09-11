@@ -2,10 +2,10 @@ use crate::server::response;
 use async_std::net::ToSocketAddrs;
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
-use jsonrpsee_core::common;
-use jsonrpsee_core::server::raw::RawServer;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Error, Response};
+use jsonrpsee_core::common;
+use jsonrpsee_core::server::raw::RawServer;
 use std::{io, pin::Pin, thread};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's

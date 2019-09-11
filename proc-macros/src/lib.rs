@@ -9,11 +9,11 @@ mod api_def;
 #[proc_macro]
 pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
     // Start by parsing the input into what we expect.
-    let defs: api_def::ApiDefinitions = syn::parse(input_token_stream)
-        .expect("failed to parse input");
+    let defs: api_def::ApiDefinitions =
+        syn::parse(input_token_stream).expect("failed to parse input");
 
     let out: Vec<_> = defs.apis.into_iter().map(build_api).collect();
-    TokenStream::from(quote!{
+    TokenStream::from(quote! {
         #(#out)*
     })
 }
@@ -27,11 +27,11 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     for function in &api.definitions {
         let variant_name = snake_case_to_camel_case(&function.ident);
         let ret = match &function.output {
-            syn::ReturnType::Default => quote!{()},
-            syn::ReturnType::Type(_, ty) => quote!{#ty},
+            syn::ReturnType::Default => quote! {()},
+            syn::ReturnType::Type(_, ty) => quote! {#ty},
         };
 
-        variants.push(quote!{
+        variants.push(quote! {
             #variant_name {
                 respond: jsonrpsee::core::server::TypedResponder<'a, R, I, #ret>,
             }
@@ -44,7 +44,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
             let variant_name = snake_case_to_camel_case(&function.ident);
             let rpc_method_name = function.ident.to_string();
 
-            function_blocks.push(quote!{
+            function_blocks.push(quote! {
                 if method == #rpc_method_name {
                     let request = server.request_by_id(&request_id).unwrap();
                     /*$(
@@ -108,17 +108,19 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
 
         for (param_index, input) in function.inputs.iter().enumerate() {
             let ty = match input {
-                syn::FnArg::Receiver(_) => panic!("Having `self` is not allowed in RPC queries definitions"),
+                syn::FnArg::Receiver(_) => {
+                    panic!("Having `self` is not allowed in RPC queries definitions")
+                }
                 syn::FnArg::Typed(syn::PatType { ty, .. }) => ty,
             };
 
             let generated_param_name = syn::Ident::new(
                 &format!("param{}", param_index),
-                proc_macro2::Span::call_site()
+                proc_macro2::Span::call_site(),
             );
 
-            params_list.push(quote!{#generated_param_name: #ty});
-            params_to_json.push(quote!{
+            params_list.push(quote! {#generated_param_name: #ty});
+            params_to_json.push(quote! {
                 let #generated_param_name = jsonrpsee::common::to_value(#generated_param_name).unwrap();        // TODO: don't unwrap
             });
         }

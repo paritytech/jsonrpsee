@@ -1,4 +1,3 @@
-
 // TODO: too much pub
 pub struct TypedResponder<'a, R, I, T> {
     pub rq: crate::server::ServerRequest<'a, R, I>,
@@ -6,9 +5,10 @@ pub struct TypedResponder<'a, R, I, T> {
 }
 
 impl<'a, R, I, T> TypedResponder<'a, R, I, T>
-where R: crate::server::raw::RawServer<RequestId = I>,
-        I: Clone + PartialEq + Eq + Send + Sync,
-        T: serde::Serialize,
+where
+    R: crate::server::raw::RawServer<RequestId = I>,
+    I: Clone + PartialEq + Eq + Send + Sync,
+    T: serde::Serialize,
 {
     pub async fn ok(self, response: impl Into<T>) {
         self.respond(Ok(response)).await

@@ -56,9 +56,10 @@ impl HttpClient {
 impl RawClient for HttpClient {
     type Error = RequestError;
 
-    fn request<'s>(&'s mut self, request: common::Request)
-        -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>>
-    {
+    fn request<'s>(
+        &'s mut self,
+        request: common::Request,
+    ) -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>> {
         let mut requests_tx = self.requests_tx.clone();
 
         let request = common::to_vec(&request).map(|body| {
@@ -80,7 +81,10 @@ impl RawClient for HttpClient {
 
             if requests_tx.send(message).await.is_err() {
                 log::error!("JSONRPC http client background thread has shut down");
-                return Err(RequestError::Http(Box::new(io::Error::new(io::ErrorKind::Other, "background thread is down".to_string()))));
+                return Err(RequestError::Http(Box::new(io::Error::new(
+                    io::ErrorKind::Other,
+                    "background thread is down".to_string(),
+                ))));
             }
 
             let hyper_response = match send_back_rx.await {
@@ -88,7 +92,10 @@ impl RawClient for HttpClient {
                 Ok(Err(err)) => return Err(RequestError::Http(Box::new(err))),
                 Err(_) => {
                     log::error!("JSONRPC http client background thread has shut down");
-                    return Err(RequestError::Http(Box::new(io::Error::new(io::ErrorKind::Other, "background thread is down".to_string()))));
+                    return Err(RequestError::Http(Box::new(io::Error::new(
+                        io::ErrorKind::Other,
+                        "background thread is down".to_string(),
+                    ))));
                 }
             };
 
@@ -142,7 +149,7 @@ pub enum RequestError {
     #[error(display = "server returned an error status code: {:?}", status_code)]
     RequestFailure {
         /// Status code returned by the server.
-        status_code: u16
+        status_code: u16,
     },
 
     /// Failed to parse the JSON returned by the server into a JSON-RPC response.

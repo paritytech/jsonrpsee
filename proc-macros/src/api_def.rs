@@ -11,9 +11,7 @@ pub struct ApiDefinitions {
 
 impl syn::parse::Parse for ApiDefinitions {
     fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
-        let mut out = ApiDefinitions {
-            apis: Vec::new(),
-        };
+        let mut out = ApiDefinitions { apis: Vec::new() };
 
         while !input.is_empty() {
             out.apis.push(input.parse()?);
@@ -66,8 +64,11 @@ impl syn::parse::Parse for ApiMethods {
         while !input.is_empty() {
             let def: syn::TraitItemMethod = input.parse()?;
             if def.default.is_some() {
-                panic!("It is forbidden to provide a default implementation for methods in the \
-                        API definition: {:?}", def);
+                panic!(
+                    "It is forbidden to provide a default implementation for methods in the \
+                     API definition: {:?}",
+                    def
+                );
             }
 
             // TODO: do something with the function attributes?

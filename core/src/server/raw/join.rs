@@ -1,5 +1,5 @@
-use crate::common;
 use super::RawServer;
+use crate::common;
 use futures::prelude::*;
 use std::{io, pin::Pin};
 
@@ -34,7 +34,8 @@ where
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>>
+    {
         unimplemented!()
     }
 

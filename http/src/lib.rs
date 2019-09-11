@@ -12,7 +12,9 @@ pub mod client;
 pub mod server;
 
 /// Starts a [`Server`](../Server) object that serves HTTP.
-pub async fn http_server(addr: impl ToSocketAddrs) -> Server<HttpServer, <HttpServer as RawServer>::RequestId> {
+pub async fn http_server(
+    addr: impl ToSocketAddrs,
+) -> Server<HttpServer, <HttpServer as RawServer>::RequestId> {
     Server::new(HttpServer::bind(addr).await)
 }
 

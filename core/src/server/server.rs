@@ -84,7 +84,11 @@ where
                     ToYield::Notification(n) => return Ok(ServerEvent::Notification(n)),
                 };
                 // TODO: debug assert falseness
-                self.batches.get_mut(&to_yield_id.batch_id).unwrap().requests[to_yield_id.index_in_batch].0 = true;
+                self.batches
+                    .get_mut(&to_yield_id.batch_id)
+                    .unwrap()
+                    .requests[to_yield_id.index_in_batch]
+                    .0 = true;
                 return Ok(ServerEvent::Request(ServerRequest {
                     server: self,
                     batch_id: to_yield_id.batch_id,
@@ -101,7 +105,7 @@ where
 
             let new_batch_id = {
                 let id = self.next_batch_id;
-                self.next_batch_id += 1;        // TODO: overflows
+                self.next_batch_id += 1; // TODO: overflows
                 id
             };
 
@@ -124,12 +128,12 @@ where
                             index_in_batch: batch.requests.len(),
                         }));
                         batch.requests.push((false, Some(call), None));
-                    },
+                    }
                     common::Call::Notification(n) => {
                         self.to_yield.push(ToYield::Notification(n));
-                    },
+                    }
                     common::Call::Invalid { id } => {
-                        batch.requests.push((true, None, None));        // TODO: Some
+                        batch.requests.push((true, None, None)); // TODO: Some
                     }
                 }
             }
@@ -151,8 +155,17 @@ where
     ///
     /// Returns `None` if the request ID is invalid or if the request has already been answered in
     /// the past.
-    pub fn request_by_id<'a>(&'a mut self, id: &ServerRequestId) -> Option<ServerRequest<'a, R, I>> {
-        if !self.batches.get_mut(&id.batch_id)?.requests.get(id.index_in_batch)?.0 {
+    pub fn request_by_id<'a>(
+        &'a mut self,
+        id: &ServerRequestId,
+    ) -> Option<ServerRequest<'a, R, I>> {
+        if !self
+            .batches
+            .get_mut(&id.batch_id)?
+            .requests
+            .get(id.index_in_batch)?
+            .0
+        {
             return None;
         }
 
@@ -164,7 +177,10 @@ where
     }
 
     /// Returns a subscription previously retuend by `into_subscription`.
-    pub fn subscriptions_by_id(&mut self, id: &ServerSubscriptionId) -> Option<ServerSubscription<R, I>> {
+    pub fn subscriptions_by_id(
+        &mut self,
+        id: &ServerSubscriptionId,
+    ) -> Option<ServerSubscription<R, I>> {
         if self.subscriptions.contains_key(&id.0) {
             Some(ServerSubscription {
                 server: self,
@@ -177,7 +193,8 @@ where
 }
 
 impl<R> From<R> for Server<R, R::RequestId>
-    where R: RawServer,
+where
+    R: RawServer,
 {
     fn from(inner: R) -> Server<R, R::RequestId> {
         Server::new(inner)
@@ -236,12 +253,22 @@ where
 
     /// Returns the method of this request.
     pub fn method(&self) -> &str {
-        &self.server.batches.get(&self.batch_id).unwrap().requests[self.index_in_batch].1.as_ref().unwrap().method
+        &self.server.batches.get(&self.batch_id).unwrap().requests[self.index_in_batch]
+            .1
+            .as_ref()
+            .unwrap()
+            .method
     }
 
     /// Returns the parameters of the request, as a `common::Params`.
     pub fn params(&self) -> ServerRequestParams {
-        ServerRequestParams::from(&self.server.batches.get(&self.batch_id).unwrap().requests[self.index_in_batch].1.as_ref().unwrap().params)
+        ServerRequestParams::from(
+            &self.server.batches.get(&self.batch_id).unwrap().requests[self.index_in_batch]
+                .1
+                .as_ref()
+                .unwrap()
+                .params,
+        )
     }
 
     /// Send back a response.
@@ -261,12 +288,19 @@ where
     ///
     /// Returns an error and doesn't do anything if the underlying server doesn't support
     /// subscriptions.
-    pub async fn into_subscription(self, response: JsonValue)
-        -> Result<ServerSubscription<'a, R, I>, ()>
-    {
-        let raw_request_id = self.server.batches.get_mut(&self.batch_id).unwrap().raw_request_id.clone();
+    pub async fn into_subscription(
+        self,
+        response: JsonValue,
+    ) -> Result<ServerSubscription<'a, R, I>, ()> {
+        let raw_request_id = self
+            .server
+            .batches
+            .get_mut(&self.batch_id)
+            .unwrap()
+            .raw_request_id
+            .clone();
         if !self.server.raw.supports_resuming(&raw_request_id) {
-            return Err(())
+            return Err(());
         }
 
         let new_id = {
@@ -278,35 +312,48 @@ where
         let server = self.respond_inner(Ok(response), false).await;
         server.subscriptions.insert(new_id, raw_request_id);
 
-        Ok(ServerSubscription {
-            server,
-            id: new_id,
-        })
+        Ok(ServerSubscription { server, id: new_id })
     }
 
     /// Inner implementation of both `respond` and `into_subscription`.
     ///
     /// Removes the batch from the server if necessary. Returns the reference to the server.
-    async fn respond_inner(self, response: Result<common::JsonValue, common::Error>, finish: bool) -> &'a mut Server<R, I> {
+    async fn respond_inner(
+        self,
+        response: Result<common::JsonValue, common::Error>,
+        finish: bool,
+    ) -> &'a mut Server<R, I> {
         let is_full = {
             let batch = &mut self.server.batches.get_mut(&self.batch_id).unwrap();
-            let request_id = batch.requests[self.index_in_batch].1.as_ref().unwrap().id.clone();
+            let request_id = batch.requests[self.index_in_batch]
+                .1
+                .as_ref()
+                .unwrap()
+                .id
+                .clone();
             let output = common::Output::from(response, request_id, common::Version::V2);
             batch.requests[self.index_in_batch].2 = Some(output);
             batch.requests.iter().all(|b| b.2.is_some())
         };
 
         let mut batch = self.server.batches.remove(&self.batch_id).unwrap();
-        let raw_response = if batch.requests.len() == 1 {       // TODO: not necessarily true, could be a batch
+        let raw_response = if batch.requests.len() == 1 {
+            // TODO: not necessarily true, could be a batch
             common::Response::Single(batch.requests.remove(0).2.unwrap())
         } else {
             common::Response::Batch(batch.requests.drain().map(|r| r.2.unwrap()).collect())
         };
 
         if finish {
-            self.server.raw.finish(&batch.raw_request_id, Some(&raw_response)).await;
+            self.server
+                .raw
+                .finish(&batch.raw_request_id, Some(&raw_response))
+                .await;
         } else {
-            self.server.raw.send(&batch.raw_request_id, &raw_response).await;
+            self.server
+                .raw
+                .send(&batch.raw_request_id, &raw_response)
+                .await;
         }
 
         self.server
@@ -332,7 +379,7 @@ where
     }
 
     pub fn is_valid(&self) -> bool {
-        true        // TODO:
+        true // TODO:
     }
 
     /// Pushes a notification.

@@ -27,7 +27,8 @@ impl<R> Client<R> {
 }
 
 impl<R> Client<R>
-where R: RawClient,
+where
+    R: RawClient,
 {
     /// Starts a request.
     pub async fn request<Ret>(

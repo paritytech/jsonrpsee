@@ -10,6 +10,8 @@ pub trait RawClient {
     type Error: error::Error;
 
     /// Starts a request. Returns a `Future` that finishes when the request succeeds or fails.
-    fn request<'a>(&'a mut self, request: common::Request)
-        -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>>;
+    fn request<'a>(
+        &'a mut self,
+        request: common::Request,
+    ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>>;
 }

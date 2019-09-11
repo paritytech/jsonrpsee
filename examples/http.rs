@@ -1,4 +1,3 @@
-
 jsonrpsee::rpc_api! {
     Health {
         /// Test
