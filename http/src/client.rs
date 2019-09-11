@@ -1,8 +1,8 @@
 use derive_more::*;
 use err_derive::*;
-use jsonrpsee_core::{client::RawClient, common};
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
-use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, thread};
+use jsonrpsee_core::{client::RawClient, common};
+use std::{fmt, io, pin::Pin, thread};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
@@ -13,11 +13,17 @@ use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, thread};
 //
 // In order to perform a request, we send this request to the background thread through a channel
 // and wait for an answer to come back.
+//
+// Addtionally, despite the fact that hyper is capable of performing requests to multiple different
+// servers through the same `hyper::Client`, we don't use that feature on purpose. The reason is
+// that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
+// the JSON-RPC request id to a value that might have already been used.
 
 /// Implementation of a raw client for HTTP requests.
-pub struct HttpClientPool {
+pub struct HttpClient {
     /// Sender that sends requests to the background task.
     requests_tx: mpsc::Sender<FrontToBack>,
+    url: String,
 }
 
 /// Message transmitted from the foreground task to the background.
@@ -28,9 +34,10 @@ struct FrontToBack {
     send_back: oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
-impl HttpClientPool {
-    /// Initializes a new pool for HTTP client reuests.
-    pub fn new() -> Result<Self, io::Error> {
+impl HttpClient {
+    /// Initializes a new HTTP client.
+    // TODO: better type for target
+    pub fn new(target: &str) -> Self {
         let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(4);
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
@@ -39,41 +46,23 @@ impl HttpClientPool {
             .spawn(move || background_thread(requests_rx))
             .unwrap();
 
-        Ok(HttpClientPool { requests_tx })
-    }
-
-    /// Borrows the `HttpClientPool` and builds an object that can perform request towards the
-    /// given URL.
-    pub fn with_server<'a>(&'a self, url: impl Into<Cow<'a, str>>) -> WithServer<'a> {
-        WithServer {
-            pool: self,
-            url: url.into(),
+        HttpClient {
+            requests_tx,
+            url: target.to_owned(),
         }
     }
 }
 
-impl fmt::Debug for HttpClientPool {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("HttpClientPool").finish()
-    }
-}
-
-/// Borrows an [`HttpClientPool`] and a target URL.
-pub struct WithServer<'a> {
-    pool: &'a HttpClientPool,
-    url: Cow<'a, str>,
-}
-
-impl<'a> RawClient for WithServer<'a> {
+impl RawClient for HttpClient {
     type Error = RequestError;
 
     fn request<'s>(&'s mut self, request: common::Request)
         -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>>
     {
-        let mut requests_tx = self.pool.requests_tx.clone();
+        let mut requests_tx = self.requests_tx.clone();
 
         let request = common::to_vec(&request).map(|body| {
-            hyper::Request::post(self.url.as_ref())
+            hyper::Request::post(&self.url)
                 .header(
                     hyper::header::CONTENT_TYPE,
                     hyper::header::HeaderValue::from_static("application/json"),
@@ -91,10 +80,7 @@ impl<'a> RawClient for WithServer<'a> {
 
             if requests_tx.send(message).await.is_err() {
                 log::error!("JSONRPC http client background thread has shut down");
-                return Err(RequestError::Io(io::Error::new(
-                    io::ErrorKind::Other,
-                    "background thread is down",
-                )));
+                return Err(RequestError::Http(Box::new(io::Error::new(io::ErrorKind::Other, "background thread is down".to_string()))));
             }
 
             let hyper_response = match send_back_rx.await {
@@ -102,10 +88,7 @@ impl<'a> RawClient for WithServer<'a> {
                 Ok(Err(err)) => return Err(RequestError::Http(Box::new(err))),
                 Err(_) => {
                     log::error!("JSONRPC http client background thread has shut down");
-                    return Err(RequestError::Io(io::Error::new(
-                        io::ErrorKind::Other,
-                        "background thread is down",
-                    )));
+                    return Err(RequestError::Http(Box::new(io::Error::new(io::ErrorKind::Other, "background thread is down".to_string()))));
                 }
             };
 
@@ -127,33 +110,44 @@ impl<'a> RawClient for WithServer<'a> {
 
             // TODO: use Response::from_json
             let as_json: common::Response =
-                common::from_slice(&body).map_err(|err| RequestError::ParseError(err))?;
+                common::from_slice(&body).map_err(RequestError::ParseError)?;
             Ok(as_json)
         })
+    }
+}
+
+impl fmt::Debug for HttpClient {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_tuple("HttpClient").finish()
     }
 }
 
 /// Error that can happen during a request.
 #[derive(Debug, From, Error)]
 pub enum RequestError {
-    // TODO: remove
-    #[error(display = "network error while performing the request")]
-    Io(#[error(cause)] io::Error),
-
+    /// Error while serializing the request.
+    // TODO: can that happen?
     #[error(display = "error while serializing the request")]
     Serialization(#[error(cause)] serde_json::error::Error),
 
+    /// Response given by the server failed to decode as UTF-8.
     #[error(display = "response body is not UTF-8")]
     Utf8(std::string::FromUtf8Error),
 
+    /// Error during the HTTP request, including networking errors and HTTP protocol errors.
     #[error(display = "error while performing the HTTP request")]
-    Http(Box<std::error::Error + Send + Sync>),
+    Http(Box<dyn std::error::Error + Send + Sync>),
 
+    /// Server returned a non-success status code.
+    #[error(display = "server returned an error status code: {:?}", status_code)]
+    RequestFailure {
+        /// Status code returned by the server.
+        status_code: u16
+    },
+
+    /// Failed to parse the JSON returned by the server into a JSON-RPC response.
     #[error(display = "error while parsing the response body")]
     ParseError(#[error(cause)] serde_json::error::Error),
-
-    #[error(display = "server returned an error status code: {:?}", status_code)]
-    RequestFailure { status_code: u16 },
 }
 
 /// Function that runs in a background thread.

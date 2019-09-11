@@ -124,11 +124,12 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         }
 
         client_functions.push(quote!{
-            #visibility async fn #f_name(#(#params_list),*) #ret_ty {
+            // TODO: what if there's a conflict in the param name?
+            #visibility async fn #f_name(client: &mut jsonrpsee::core::client::Client<impl jsonrpsee::core::client::raw::RawClient> #(, #params_list)*) #ret_ty {
                 #(#params_to_json)*
-                let mut http = jsonrpsee::http_client("http://localhost:8000");
                 // TODO: pass params
-                http.request(#rpc_method_name).await.unwrap()
+                // TODO: don't unwrap
+                client.request(#rpc_method_name).await.unwrap()
             }
         });
     }

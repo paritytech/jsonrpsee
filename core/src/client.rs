@@ -9,8 +9,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 pub mod raw;
 
-// TODO: add a static version of Client<HttpClient> for easier small queries
-
 /// Wraps around a "raw client" and analyzes everything correctly.
 pub struct Client<R> {
     inner: R,

@@ -31,7 +31,7 @@ fn main() {
     });
 
     // Client demo.
-    // TODO: URL is hardcoded in the library at the moment
-    let v = async_std::task::block_on(Health::system_name());
+    let mut client = jsonrpsee::http_client("http://127.0.0.1:8000");
+    let v = async_std::task::block_on(Health::system_name(&mut client));
     println!("{:?}", v);
 }
