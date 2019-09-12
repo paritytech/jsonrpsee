@@ -6,7 +6,6 @@ use std::{io, pin::Pin};
 /// Joins two servers into one.
 ///
 /// The combination of the two will produce a request whenever one of them produces a request.
-//  TODO: example
 pub fn join<A, B>(left: A, right: B) -> Join<A, B> {
     Join { left, right }
 }
@@ -21,14 +20,16 @@ pub struct Join<A, B> {
 /// Request ID corresponding to the [`Join`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JoinRequestId<A, B> {
+    /// The request belongs to the first server.
     Left(A),
+    /// The request belongs to the second server.
     Right(B),
 }
 
 impl<A, B> RawServer for Join<A, B>
 where
-    A: RawServer,
-    B: RawServer,
+    A: RawServer + Send,
+    B: RawServer + Send,
 {
     type RequestId = JoinRequestId<A::RequestId, B::RequestId>;
 
@@ -36,7 +37,18 @@ where
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>>
     {
-        unimplemented!()
+        Box::pin(async move {
+            match future::select(self.left.next_request(), self.right.next_request()).await {
+                future::Either::Left((a, _)) => {
+                    let (rq_id, rq) = a?;
+                    Ok((JoinRequestId::Left(rq_id), rq))
+                }
+                future::Either::Right((b, _)) => {
+                    let (rq_id, rq) = b?;
+                    Ok((JoinRequestId::Right(rq_id), rq))
+                }
+            }
+        })
     }
 
     fn finish<'a>(
