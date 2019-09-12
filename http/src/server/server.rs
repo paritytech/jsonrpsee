@@ -1,15 +1,13 @@
-use crate::server::{background, response};
+use crate::server::background;
 use fnv::FnvHashMap;
-use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Error, Response};
-use jsonrpsee_core::common;
-use jsonrpsee_core::server::raw::RawServer;
-use std::{error, io, net::SocketAddr, pin::Pin, thread};
+use futures::{channel::oneshot, prelude::*};
+use jsonrpsee_core::{common, server::raw::RawServer};
+use std::{error, net::SocketAddr, pin::Pin};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
 
+/// Implementation of the [`RawServer`](jsonrpsee_core::server::raw::RawServer) trait for HTTP.
 pub struct HttpRawServer {
     /// Background thread that processes HTTP requests.
     background_thread: background::BackgroundHttp,
@@ -30,6 +28,7 @@ impl HttpRawServer {
     ///
     /// Returns an error if we fail to start listening, which generally happens if the port is
     /// already occupied.
+    //
     // > Note: This function is `async` despite not performing any asynchronous operation. Normally
     // >       starting to listen on a port is an asynchronous operation, but the hyper library
     // >       hides this to us. In order to be future-proof, this function is async, so that we

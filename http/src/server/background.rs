@@ -1,15 +1,22 @@
 use crate::server::response;
-use fnv::FnvHashMap;
-use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
+use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Error, Response};
+use hyper::Error;
 use jsonrpsee_core::common;
-use jsonrpsee_core::server::raw::RawServer;
-use std::{io, net::SocketAddr, pin::Pin, thread};
+use std::{io, net::SocketAddr, thread};
 
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
+    /// Receiver for requests coming from the background thread.
     rx: mpsc::Receiver<Request>,
+}
+
+/// Request generated from the background thread.
+pub(super) struct Request {
+    /// Sender for the body of the response to send on the network.
+    pub send_back: oneshot::Sender<hyper::Response<hyper::Body>>,
+    /// The JSON body that was sent by the client.
+    pub request: common::Request,
 }
 
 impl BackgroundHttp {
@@ -19,10 +26,10 @@ impl BackgroundHttp {
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
     pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
-        let (mut tx, rx) = mpsc::channel(4);
+        let (tx, rx) = mpsc::channel(4);
 
         let make_service = make_service_fn(move |_| {
-            let mut tx = tx.clone();
+            let tx = tx.clone();
             async move {
                 Ok::<_, Error>(service_fn(move |req| {
                     let mut tx = tx.clone();
@@ -36,14 +43,18 @@ impl BackgroundHttp {
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::spawn(move || {
-            let mut runtime = tokio::runtime::current_thread::Runtime::new().unwrap();
-            runtime.block_on(async move {
-                //future::select(shutdown_rx, server);
-                if let Err(err) = server.await {
-                    panic!("{:?}", err);
-                    // TODO: log
+            let mut runtime = match tokio::runtime::current_thread::Runtime::new() {
+                Ok(r) => r,
+                Err(err) => {
+                    log::error!("Failed to initialize tokio runtime in HTTP JSON-RPC server: {}", err);
+                    return;
                 }
-                panic!("HTTP server closed");
+            };
+
+            runtime.block_on(async move {
+                if let Err(err) = server.await {
+                    log::error!("HTTP JSON-RPC server closed with an error: {}", err);
+                }
             });
         });
 
@@ -54,14 +65,6 @@ impl BackgroundHttp {
     pub async fn next(&mut self) -> Result<Request, ()> {
         self.rx.next().await.ok_or(())
     }
-}
-
-/// Request generated from the background thread.
-pub(super) struct Request {
-    /// Body of the response to send on the network.
-    pub send_back: oneshot::Sender<hyper::Response<hyper::Body>>,
-    /// The JSON body that was sent by the client.
-    pub request: common::Request,
 }
 
 /// Process an HTTP request and sends back a response.

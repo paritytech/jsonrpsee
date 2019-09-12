@@ -1,3 +1,6 @@
+//! Implementation of [`RawClient`](jsonrpsee_core::client::raw::RawClient) and
+//! [`RawServer`](jsonrpsee_core::server::raw::RawServer) for HTTP.
+
 #![deny(unsafe_code)]
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
