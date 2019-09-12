@@ -69,25 +69,21 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
                         };
                     )**/
 
-                    let respond = jsonrpsee::core::server::TypedResponder {
-                        rq: request,
-                        response_ty: std::marker::PhantomData,
-                    };
-
+                    let respond = jsonrpsee::core::server::TypedResponder::from(request);
                     return Ok(#enum_name::#variant_name { respond });
                 }
             });
         }
 
         quote! {
-            #visibility async fn next_request(server: &'a mut jsonrpsee::core::server::Server<R, I>) -> Result<#enum_name<'a, R, I>, std::io::Error>
-                where R: jsonrpsee::core::server::raw::RawServer<RequestId = I>,
+            #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> Result<#enum_name<'a, R, I>, std::io::Error>
+                where R: jsonrpsee::core::RawServer<RequestId = I>,
                         I: Clone + PartialEq + Eq + Send + Sync,
             {
                 loop {
                     let (request_id, method) = match server.next_event().await.unwrap() {        // TODO: don't unwrap
-                        jsonrpsee::core::server::ServerEvent::Notification(n) => unimplemented!(),       // TODO:
-                        jsonrpsee::core::server::ServerEvent::Request(r) => (r.id(), r.method().to_owned()),
+                        jsonrpsee::core::ServerEvent::Notification(n) => unimplemented!(),       // TODO:
+                        jsonrpsee::core::ServerEvent::Request(r) => (r.id(), r.method().to_owned()),
                     };
 
                     #(#function_blocks)*
@@ -129,7 +125,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
 
         client_functions.push(quote!{
             // TODO: what if there's a conflict in the param name?
-            #visibility async fn #f_name(client: &mut jsonrpsee::core::client::Client<impl jsonrpsee::core::client::raw::RawClient> #(, #params_list)*) #ret_ty {
+            #visibility async fn #f_name(client: &mut jsonrpsee::core::Client<impl jsonrpsee::core::RawClient> #(, #params_list)*) #ret_ty {
                 #(#params_to_json)*
                 // TODO: pass params
                 // TODO: don't unwrap
