@@ -22,7 +22,6 @@ pub struct Server<R, I> {
     ///
     /// The identifier is lineraly increasing and is never leaked on the wire or outside of this
     /// module. Therefore there is no risk of hash collision.
-    // TODO: call shrink_to_fit from time to time
     batches: FnvHashMap<u64, Batch<I>>,
 
     /// Pending list of requests to yield from `next_event`.
@@ -30,7 +29,6 @@ pub struct Server<R, I> {
     /// Since `next_event` can pull several requests at once from the inner server, but can only
     /// return one at a time, we need a buffering mechanism.
     /// The first thing that `next_event` does is pop the first element of this array.
-    // TODO: call shrink_to_fit from time to time
     to_yield: SmallVec<[ToYield; 6]>,
 
     /// Identifier of the next subscription to add to `subscriptions`.
@@ -241,7 +239,7 @@ impl<'a, R, I> ServerRequest<'a, R, I> {
     /// Returns the id of the request.
     ///
     /// If this request object is dropped, you can retreive it again later by calling
-    /// `request_by_id`.
+    /// [`request_by_id`](crate::Server::request_by_id).
     pub fn id(&self) -> ServerRequestId {
         ServerRequestId {
             batch_id: self.batch_id,
@@ -388,6 +386,10 @@ where
     R: RawServer<RequestId = I>,
     I: Clone + PartialEq + Eq + Send + Sync,
 {
+    /// Returns the id of the subscription.
+    ///
+    /// If this subscription object is dropped, you can retreive it again later by calling
+    /// [`subscription_by_id`](crate::Server::subscription_by_id).
     pub fn id(&self) -> ServerSubscriptionId {
         ServerSubscriptionId(self.id)
     }
@@ -399,8 +401,9 @@ where
     /// Pushes a notification.
     pub async fn push(self, message: impl Into<JsonValue>) {
         let raw_id = self.server.subscriptions.get(&self.id).unwrap();
-        // TODO: self.server.raw.send(&raw_id, message).await.unwrap();
-        unimplemented!()
+        let output = common::Output::from(Ok(message.into()), common::Id::Null, common::Version::V2);
+        let response = common::Response::Single(output);
+        let _ = self.server.raw.send(&raw_id, &response).await;     // TODO: error handling?
     }
 
     // TODO: close operation
