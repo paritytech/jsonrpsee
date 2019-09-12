@@ -1,7 +1,7 @@
 use derive_more::*;
 use err_derive::*;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
-use jsonrpsee_core::{client::RawClient, common};
+use jsonrpsee_core::{client::Client, client::RawClient, common};
 use std::{fmt, io, pin::Pin, thread};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
@@ -20,7 +20,7 @@ use std::{fmt, io, pin::Pin, thread};
 // the JSON-RPC request id to a value that might have already been used.
 
 /// Implementation of a raw client for HTTP requests.
-pub struct HttpClient {
+pub struct HttpRawClient {
     /// Sender that sends requests to the background task.
     requests_tx: mpsc::Sender<FrontToBack>,
     url: String,
@@ -34,10 +34,16 @@ struct FrontToBack {
     send_back: oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
-impl HttpClient {
+impl HttpRawClient {
     /// Initializes a new HTTP client.
     // TODO: better type for target
-    pub fn new(target: &str) -> Self {
+    pub fn new(target: &str) -> Client<Self> {
+        Client::new(Self::new_raw(target))
+    }
+
+    /// Initializes a new HTTP client.
+    // TODO: better type for target
+    pub fn new_raw(target: &str) -> Self {
         let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(4);
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
@@ -46,14 +52,14 @@ impl HttpClient {
             .spawn(move || background_thread(requests_rx))
             .unwrap();
 
-        HttpClient {
+        HttpRawClient {
             requests_tx,
             url: target.to_owned(),
         }
     }
 }
 
-impl RawClient for HttpClient {
+impl RawClient for HttpRawClient {
     type Error = RequestError;
 
     fn request<'s>(
@@ -123,9 +129,9 @@ impl RawClient for HttpClient {
     }
 }
 
-impl fmt::Debug for HttpClient {
+impl fmt::Debug for HttpRawClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("HttpClient").finish()
+        f.debug_tuple("HttpRawClient").finish()
     }
 }
 
