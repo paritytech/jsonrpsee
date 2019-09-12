@@ -34,7 +34,9 @@ impl HttpRawServer {
     // >       starting to listen on a port is an asynchronous operation, but the hyper library
     // >       hides this to us. In order to be future-proof, this function is async, so that we
     // >       might switch out to a different library later without breaking the API.
-    pub async fn bind(addr: &SocketAddr) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
+    pub async fn bind(
+        addr: &SocketAddr,
+    ) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
         let (background_thread, local_addr) = background::BackgroundHttp::bind(addr)?;
 
         Ok(HttpRawServer {

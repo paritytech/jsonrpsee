@@ -18,9 +18,7 @@ impl BackgroundHttp {
     ///
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
-    pub fn bind(addr: &SocketAddr)
-        -> Result<(BackgroundHttp, SocketAddr), hyper::Error> 
-    {
+    pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
         let (mut tx, rx) = mpsc::channel(4);
 
         let make_service = make_service_fn(move |_| {
