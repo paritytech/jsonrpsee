@@ -46,7 +46,10 @@ impl BackgroundHttp {
             let mut runtime = match tokio::runtime::current_thread::Runtime::new() {
                 Ok(r) => r,
                 Err(err) => {
-                    log::error!("Failed to initialize tokio runtime in HTTP JSON-RPC server: {}", err);
+                    log::error!(
+                        "Failed to initialize tokio runtime in HTTP JSON-RPC server: {}",
+                        err
+                    );
                     return;
                 }
             };
