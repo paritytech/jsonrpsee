@@ -15,7 +15,8 @@ jsonrpsee::rpc_api! {
 fn main() {
     // Spawning a server in a background task.
     async_std::task::spawn(async move {
-        let mut server1 = jsonrpsee::http_server("127.0.0.1:8000").await;
+        let listen_addr = "127.0.0.1:8000".parse().unwrap();
+        let mut server1 = jsonrpsee::http_server(&listen_addr).await.unwrap();
 
         while let Ok(request) = Health::next_request(&mut server1).await {
             match request {

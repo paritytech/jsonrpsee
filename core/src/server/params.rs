@@ -8,14 +8,32 @@ pub struct ServerRequestParams<'a> {
     params: &'a common::Params,
 }
 
+/// Key referring to a potential parameter of a request.
+pub enum ParamKey<'a> {
+    /// String key. Only valid when the parameters list is a map.
+    String(&'a str),
+    /// Integer key. Only valid when the parameters list is an array.
+    Index(usize),
+}
+
 impl<'a> ServerRequestParams<'a> {
     /// Wraps around a `&common::Params` and provides utility functions for the user.
     pub(crate) fn from(params: &'a common::Params) -> ServerRequestParams<'a> {
         ServerRequestParams { params }
     }
 
+    /// Returns a parameter of the request by name and decodes it.
+    ///
+    /// Returns an error if the parameter doesn't exist or is of the wrong type.
+    pub fn get<'k, T>(self, param: impl Into<ParamKey<'k>>) -> Result<T, ()>
+    where T: serde::de::DeserializeOwned,
+    {
+        let val = self.get_raw(param).ok_or(())?;
+        serde_json::from_value(val.clone()).map_err(|_| ())
+    }
+
     /// Returns a parameter of the request by name.
-    pub fn get<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a common::JsonValue> {
+    pub fn get_raw<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a common::JsonValue> {
         match (self.params, param.into()) {
             (common::Params::None, _) => None,
             (common::Params::Map(map), ParamKey::String(key)) => map.get(key),
@@ -63,14 +81,6 @@ impl<'a> Into<&'a common::Params> for ServerRequestParams<'a> {
     }
 }
 
-/// Key referring to a potential parameter of a request.
-pub enum ParamKey<'a> {
-    /// String key. Only valid when the parameters list is a map.
-    String(&'a str),
-    /// Integer key. Only valid when the parameters list is an array.
-    Index(usize),
-}
-
 impl<'a> From<&'a str> for ParamKey<'a> {
     fn from(s: &'a str) -> Self {
         ParamKey::String(s)
@@ -80,12 +90,6 @@ impl<'a> From<&'a str> for ParamKey<'a> {
 impl<'a> From<&'a String> for ParamKey<'a> {
     fn from(s: &'a String) -> Self {
         ParamKey::String(&s[..])
-    }
-}
-
-impl<'a> From<u32> for ParamKey<'a> {
-    fn from(i: u32) -> Self {
-        ParamKey::Index(i as usize) // TODO: stronger check
     }
 }
 
