@@ -134,6 +134,17 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         });
     }
 
+    // Builds the match variants for the implementation of `Debug`.
+    let mut debug_variants = Vec::new();
+    for function in &api.definitions {
+        let variant_name = snake_case_to_camel_case(&function.ident);
+        debug_variants.push(quote!{
+            #enum_name::#variant_name { /* TODO: params */ .. } => {
+                f.debug_struct(stringify!(#enum_name))/* TODO: params */.finish()
+            }
+        });
+    }
+
     quote! {
         #visibility enum #enum_name<'a, R, I> {
             #(#variants),*
@@ -145,6 +156,14 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
 
         impl<'a> #enum_name<'a, (), ()> {
             #(#client_functions)*
+        }
+
+        impl<'a, R, I> std::fmt::Debug for #enum_name<'a, R, I> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self {
+                    #(#debug_variants,)*
+                }
+            }
         }
     }
 }
