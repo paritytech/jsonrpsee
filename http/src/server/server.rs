@@ -1,5 +1,4 @@
 use crate::server::{background, response};
-use async_std::net::ToSocketAddrs;
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
@@ -18,17 +17,25 @@ pub struct HttpRawServer {
     /// Local address of the server.
     local_addr: SocketAddr,
 
+    /// Next identifier to use when inserting an element in `requests`.
     next_request_id: u64,
 
     /// The identifier is lineraly increasing and is never leaked on the wire or outside of this
-    /// module. Therefore there is no risk of hash collision.
+    /// module. Therefore there is no risk of hash collision and using a `FnvHashMap` is safe.
     requests: FnvHashMap<u64, oneshot::Sender<hyper::Response<hyper::Body>>>,
 }
 
 impl HttpRawServer {
-    // TODO: `ToSocketAddrs` can be blocking
-    pub async fn bind(addr: impl ToSocketAddrs) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
-        let (background_thread, local_addr) = background::BackgroundHttp::bind(addr).await?;
+    /// Tries to start an HTTP server that listens on the given address.
+    ///
+    /// Returns an error if we fail to start listening, which generally happens if the port is
+    /// already occupied.
+    // > Note: This function is `async` despite not performing any asynchronous operation. Normally
+    // >       starting to listen on a port is an asynchronous operation, but the hyper library
+    // >       hides this to us. In order to be future-proof, this function is async, so that we
+    // >       might switch out to a different library later without breaking the API.
+    pub async fn bind(addr: &SocketAddr) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
+        let (background_thread, local_addr) = background::BackgroundHttp::bind(addr)?;
 
         Ok(HttpRawServer {
             background_thread,
@@ -36,6 +43,12 @@ impl HttpRawServer {
             requests: Default::default(),
             next_request_id: 0,
         })
+    }
+
+    /// Returns the address we are actually listening on, which might be different from the one
+    /// passed as parameter.
+    pub fn local_addr(&self) -> &SocketAddr {
+        &self.local_addr
     }
 }
 
@@ -121,46 +134,14 @@ impl RawServer for HttpRawServer {
 
 #[cfg(test)]
 mod tests {
-    use super::body_to_request;
-
-    // TODO: restore test
-    /*#[test]
-    fn body_to_request_works() {
-        futures::executor::block_on(async move {
-            let mut body = hyper::Body::from("[{\"a\":\"hello\"}]");
-            let json = body_to_request(body).await.unwrap();
-            assert_eq!(json, serde_json::Value::from(vec![
-                std::iter::once((
-                    "a".to_string(),
-                    serde_json::Value::from("hello")
-                )).collect::<serde_json::Map<_, _>>()
-            ]));
-        });
-    }*/
+    use super::HttpRawServer;
 
     #[test]
-    fn body_to_request_size_limit_json() {
-        let huge_body = serde_json::to_vec(
-            &(0..32768)
-                .map(|_| serde_json::Value::from("test"))
-                .collect::<Vec<_>>(),
-        )
-        .unwrap();
-
+    fn error_if_port_occupied() {
         futures::executor::block_on(async move {
-            let body = hyper::Body::from(huge_body);
-            assert!(body_to_request(body).await.is_err());
-        });
-    }
-
-    #[test]
-    fn body_to_request_size_limit_garbage() {
-        let huge_body = (0..100_000)
-            .map(|_| rand::random::<u8>())
-            .collect::<Vec<_>>();
-        futures::executor::block_on(async move {
-            let body = hyper::Body::from(huge_body);
-            assert!(body_to_request(body).await.is_err());
+            let addr = "127.0.0.1:0".parse().unwrap();
+            let server1 = HttpRawServer::bind(&addr).await.unwrap();
+            assert!(HttpRawServer::bind(server1.local_addr()).await.is_err());
         });
     }
 }

@@ -2,10 +2,9 @@
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
 
-use async_std::net::ToSocketAddrs;
 use jsonrpsee_core::client::Client;
 use jsonrpsee_core::server::{raw::RawServer, Server};
-use std::error;
+use std::{error, net::SocketAddr};
 
 pub use crate::client::HttpRawClient;
 pub use crate::server::HttpRawServer;
@@ -20,7 +19,7 @@ mod server;
 
 /// Starts a [`Server`](../Server) object that serves HTTP.
 pub async fn http_server(
-    addr: impl ToSocketAddrs,
+    addr: &SocketAddr,
 ) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
     Ok(Server::new(HttpRawServer::bind(addr).await?))
 }

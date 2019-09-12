@@ -1,5 +1,4 @@
 use crate::server::response;
-use async_std::net::ToSocketAddrs;
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, channel::oneshot, lock::Mutex, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
@@ -14,13 +13,15 @@ pub(super) struct BackgroundHttp {
 }
 
 impl BackgroundHttp {
-    // TODO: `ToSocketAddrs` can be blocking
-    pub async fn bind(addr: impl ToSocketAddrs)
+    /// Tries to create an HTTP server listening on the given address and start a background
+    /// thread.
+    ///
+    /// In addition to `Self`, also returns the local address the server ends up listening on,
+    /// which might be different than the one passed as parameter.
+    pub fn bind(addr: &SocketAddr)
         -> Result<(BackgroundHttp, SocketAddr), hyper::Error> 
     {
         let (mut tx, rx) = mpsc::channel(4);
-
-        let addr = addr.to_socket_addrs().await.unwrap().next().unwrap(); // TODO: no
 
         let make_service = make_service_fn(move |_| {
             let mut tx = tx.clone();
@@ -32,7 +33,7 @@ impl BackgroundHttp {
             }
         });
 
-        let server = hyper::Server::try_bind(&addr)?.serve(make_service);
+        let server = hyper::Server::try_bind(addr)?.serve(make_service);
         let local_addr = server.local_addr();
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
@@ -175,4 +176,50 @@ async fn body_to_request(mut body: hyper::Body) -> Result<common::Request, io::E
     }
 
     Ok(serde_json::from_slice(&json_body)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::body_to_request;
+
+    // TODO: restore test
+    /*#[test]
+    fn body_to_request_works() {
+        futures::executor::block_on(async move {
+            let mut body = hyper::Body::from("[{\"a\":\"hello\"}]");
+            let json = body_to_request(body).await.unwrap();
+            assert_eq!(json, serde_json::Value::from(vec![
+                std::iter::once((
+                    "a".to_string(),
+                    serde_json::Value::from("hello")
+                )).collect::<serde_json::Map<_, _>>()
+            ]));
+        });
+    }*/
+
+    #[test]
+    fn body_to_request_size_limit_json() {
+        let huge_body = serde_json::to_vec(
+            &(0..32768)
+                .map(|_| serde_json::Value::from("test"))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+
+        futures::executor::block_on(async move {
+            let body = hyper::Body::from(huge_body);
+            assert!(body_to_request(body).await.is_err());
+        });
+    }
+
+    #[test]
+    fn body_to_request_size_limit_garbage() {
+        let huge_body = (0..100_000)
+            .map(|_| rand::random::<u8>())
+            .collect::<Vec<_>>();
+        futures::executor::block_on(async move {
+            let body = hyper::Body::from(huge_body);
+            assert!(body_to_request(body).await.is_err());
+        });
+    }
 }
