@@ -1,6 +1,6 @@
 use crate::common;
 use futures::prelude::*;
-use std::{error, io, pin::Pin};
+use std::{error, hash::Hash, io, pin::Pin};
 
 /// Reference to a server that can produce JSON payloads for us to answer.
 ///
@@ -18,7 +18,7 @@ use std::{error, io, pin::Pin};
 ///
 pub trait RawServer {
     /// Identifier for a request in the context of this server.
-    type RequestId: Clone + PartialEq + Eq + Send + Sync;
+    type RequestId: Clone + PartialEq + Eq + Hash + Send + Sync;
 
     /// Returns the next request, or an error if the server has closed.
     ///

@@ -18,7 +18,7 @@ pub struct Join<A, B> {
 }
 
 /// Request ID corresponding to the [`Join`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum JoinRequestId<A, B> {
     /// The request belongs to the first server.
     Left(A),

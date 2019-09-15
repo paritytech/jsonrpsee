@@ -30,6 +30,8 @@ pub use self::typed_rp::TypedResponder;
 
 pub mod raw;
 
+mod batch;
+mod batches;
 mod params;
 mod server;
 mod typed_rp;
