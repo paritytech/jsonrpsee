@@ -4,10 +4,12 @@ on: [push]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: parity/rust:latest
     steps:
     - uses: actions/checkout@v1
+    - name: Install rustup
+      run: curl https://sh.rustup.rs -sSf | sh -s -- -y
     - name: Build
-      run: cargo build --verbose
+      run: cargo +nightly build --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo +nightly test --verbose
