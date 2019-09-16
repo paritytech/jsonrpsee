@@ -273,3 +273,138 @@ where
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{BatchesEvent, BatchesState};
+    use crate::common;
+
+    #[test]
+    fn basic_notification() {
+        let notif = common::Notification {
+            jsonrpc: common::Version::V2,
+            method: "foo".to_string(),
+            params: common::Params::None,
+        };
+
+        let mut state = BatchesState::new();
+        assert!(state.next_event().is_none());
+        state.inject(
+            common::Request::Single(common::Call::Notification(notif.clone())),
+            (),
+        );
+        match state.next_event() {
+            Some(BatchesEvent::Notification { notification, .. }) if notification == notif => {}
+            _ => panic!(),
+        }
+        assert!(state.next_event().is_none());
+    }
+
+    #[test]
+    fn basic_request() {
+        let call = common::MethodCall {
+            jsonrpc: common::Version::V2,
+            method: "foo".to_string(),
+            params: common::Params::Map(serde_json::from_str("{\"test\":\"foo\"}").unwrap()),
+            id: common::Id::Num(123),
+        };
+
+        let mut state = BatchesState::new();
+        assert!(state.next_event().is_none());
+        state.inject(
+            common::Request::Single(common::Call::MethodCall(call)),
+            8889,
+        );
+
+        let rq_id = match state.next_event() {
+            Some(BatchesEvent::Request(rq)) => {
+                assert_eq!(rq.method(), "foo");
+                assert_eq!(
+                    {
+                        let v: String = rq.params().get("test").unwrap();
+                        v
+                    },
+                    "foo"
+                );
+                assert_eq!(rq.request_id(), &common::Id::Num(123));
+                rq.id()
+            }
+            _ => panic!(),
+        };
+
+        assert!(state.next_event().is_none());
+
+        assert_eq!(state.request_by_id(rq_id).unwrap().method(), "foo");
+        state
+            .request_by_id(rq_id)
+            .unwrap()
+            .set_response(Err(common::Error::method_not_found()));
+
+        match state.next_event() {
+            Some(BatchesEvent::ReadyToSend {
+                response,
+                user_param,
+            }) => {
+                assert_eq!(user_param, 8889);
+                match response {
+                    common::Response::Single(common::Output::Failure(f)) => {
+                        assert_eq!(f.id, common::Id::Num(123));
+                    }
+                    _ => panic!(),
+                }
+            }
+            _ => panic!(),
+        };
+    }
+
+    #[test]
+    fn empty_batch() {
+        let mut state = BatchesState::new();
+        assert!(state.next_event().is_none());
+        state.inject(common::Request::Batch(Vec::new()), ());
+        assert!(state.next_event().is_none());
+    }
+
+    #[test]
+    fn batch_of_notifs() {
+        let notif1 = common::Notification {
+            jsonrpc: common::Version::V2,
+            method: "foo".to_string(),
+            params: common::Params::None,
+        };
+
+        let notif2 = common::Notification {
+            jsonrpc: common::Version::V2,
+            method: "bar".to_string(),
+            params: common::Params::None,
+        };
+
+        let mut state = BatchesState::new();
+        assert!(state.next_event().is_none());
+        state.inject(
+            common::Request::Batch(vec![
+                common::Call::Notification(notif1.clone()),
+                common::Call::Notification(notif2.clone()),
+            ]),
+            2,
+        );
+
+        match state.next_event() {
+            Some(BatchesEvent::Notification {
+                notification,
+                user_param,
+            }) if notification == notif1 && *user_param == 2 => {}
+            _ => panic!(),
+        }
+
+        match state.next_event() {
+            Some(BatchesEvent::Notification {
+                notification,
+                user_param,
+            }) if notification == notif2 && *user_param == 2 => {}
+            _ => panic!(),
+        }
+
+        assert!(state.next_event().is_none());
+    }
+}
