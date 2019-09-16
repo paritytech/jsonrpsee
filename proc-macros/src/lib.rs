@@ -26,13 +26,13 @@ mod api_def;
 /// For each identifier (such as `Foo` and `Bar` in the example above), this macro will generate
 /// an enum where each variant corresponds to a function of the definition. Function names are
 /// turned into PascalCase to conform to the Rust style guide.
-/// 
+///
 /// Each generated enum has a `next_request` method whose signature is:
 ///
 /// ```ignore
 /// async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> Result<Foo<'a, R, I>, std::io::Error>;
 /// ```
-/// 
+///
 /// This method lets you grab the next request incoming from a server, and parse it to match of
 /// the function definitions. Invalid requests are automatically handled.
 ///

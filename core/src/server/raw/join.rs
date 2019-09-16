@@ -1,7 +1,7 @@
 use super::RawServer;
 use crate::common;
 use futures::prelude::*;
-use std::{io, pin::Pin};
+use std::pin::Pin;
 
 /// Joins two servers into one.
 ///

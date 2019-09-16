@@ -1,8 +1,6 @@
 use crate::{common, server::batch, server::params::ServerRequestParams};
 use fnv::FnvHashMap;
-use futures::prelude::*;
-use smallvec::SmallVec;
-use std::{collections::hash_map::Entry, fmt, iter};
+use std::{collections::hash_map::Entry, fmt};
 
 /// Collection of multiple batches.
 ///
@@ -107,7 +105,7 @@ impl<T> BatchesState<T> {
             }
 
             let what_can_we_do = {
-                let (batch, user_param) = self
+                let (batch, _) = self
                     .batches
                     .get_mut(&batch_id)
                     .expect("all keys are valid; qed");
@@ -190,7 +188,7 @@ impl<T> BatchesState<T> {
     ///
     /// Returns `None` if the request ID is invalid or if the request has already been answered in
     /// the past.
-    pub fn request_by_id<'a>(&'a mut self, id: BatchesElemId) -> Option<BatchesElem<'a, T>> {
+    pub fn request_by_id(&mut self, id: BatchesElemId) -> Option<BatchesElem<T>> {
         if let Some((batch, user_param)) = self.batches.get_mut(&id.outer) {
             Some(BatchesElem {
                 batch_id: id.outer,
@@ -294,7 +292,9 @@ mod tests {
             (),
         );
         match state.next_event() {
-            Some(BatchesEvent::Notification { notification, .. }) if notification == notif => {}
+            Some(BatchesEvent::Notification {
+                ref notification, ..
+            }) if *notification == notif => {}
             _ => panic!(),
         }
         assert!(state.next_event().is_none());
@@ -392,17 +392,17 @@ mod tests {
 
         match state.next_event() {
             Some(BatchesEvent::Notification {
-                notification,
-                user_param,
-            }) if notification == notif1 && *user_param == 2 => {}
+                ref notification,
+                ref user_param,
+            }) if *notification == notif1 && **user_param == 2 => {}
             _ => panic!(),
         }
 
         match state.next_event() {
             Some(BatchesEvent::Notification {
-                notification,
-                user_param,
-            }) if notification == notif2 && *user_param == 2 => {}
+                ref notification,
+                ref user_param,
+            }) if *notification == notif2 && **user_param == 2 => {}
             _ => panic!(),
         }
 

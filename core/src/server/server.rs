@@ -1,12 +1,7 @@
-use crate::common::{self, from_value, to_value, JsonValue};
+use crate::common::{self, JsonValue};
 use crate::server::{batches, raw::RawServer, ServerRequestParams};
 use fnv::FnvHashMap;
-use futures::prelude::*;
-use smallvec::SmallVec;
-use std::{
-    collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, io, marker::PhantomData,
-    num::NonZeroUsize, pin::Pin,
-};
+use std::{collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize};
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
@@ -172,7 +167,7 @@ where
     /// [`into_subscription`](crate::server::ServerRequest::into_subscription).
     pub fn subscription_by_id(
         &mut self,
-        id: &ServerSubscriptionId,
+        id: ServerSubscriptionId,
     ) -> Option<ServerSubscription<R, I>> {
         if self.subscriptions.contains_key(&id.0) {
             Some(ServerSubscription {

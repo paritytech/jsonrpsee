@@ -1,6 +1,4 @@
-use crate::common::{self, JsonValue};
-use crate::server::{raw::RawServer, ServerRequestParams};
-use futures::prelude::*;
+use crate::{common, server::ServerRequestParams};
 use smallvec::SmallVec;
 use std::{fmt, iter};
 
@@ -118,7 +116,7 @@ impl BatchState {
     ///
     /// Returns `None` if the request ID is invalid or if the request has already been answered in
     /// the past.
-    pub fn request_by_id<'a>(&'a mut self, id: usize) -> Option<BatchElem<'a>> {
+    pub fn request_by_id(&mut self, id: usize) -> Option<BatchElem> {
         if let Some(elem) = self.requests.get_mut(id) {
             if elem.is_none() {
                 return None;
@@ -273,7 +271,7 @@ mod tests {
 
         assert!(!state.is_ready_to_respond());
         match state.next() {
-            Some(BatchInc::Notification(n)) if n == notif => {}
+            Some(BatchInc::Notification(ref n)) if *n == notif => {}
             _ => panic!(),
         }
         assert!(state.is_ready_to_respond());
