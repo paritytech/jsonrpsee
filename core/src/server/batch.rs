@@ -255,8 +255,8 @@ impl<'a> fmt::Debug for BatchElem<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::common;
     use super::{BatchInc, BatchState};
+    use crate::common;
 
     #[test]
     fn basic_notification() {
@@ -274,13 +274,13 @@ mod tests {
         assert!(!state.is_ready_to_respond());
         match state.next() {
             Some(BatchInc::Notification(n)) if n == notif => {}
-            _ => panic!()
+            _ => panic!(),
         }
         assert!(state.is_ready_to_respond());
         assert!(state.next().is_none());
         match state.into_response() {
             Ok(None) => {}
-            _ => panic!()
+            _ => panic!(),
         }
     }
 
@@ -302,11 +302,17 @@ mod tests {
         let rq_id = match state.next() {
             Some(BatchInc::Request(rq)) => {
                 assert_eq!(rq.method(), "foo");
-                assert_eq!({ let v: String = rq.params().get("test").unwrap(); v }, "foo");
+                assert_eq!(
+                    {
+                        let v: String = rq.params().get("test").unwrap();
+                        v
+                    },
+                    "foo"
+                );
                 assert_eq!(rq.request_id(), &common::Id::Num(123));
                 rq.id()
             }
-            _ => panic!()
+            _ => panic!(),
         };
 
         assert!(state.next().is_none());
@@ -314,7 +320,10 @@ mod tests {
         assert!(state.next().is_none());
 
         assert_eq!(state.request_by_id(rq_id).unwrap().method(), "foo");
-        state.request_by_id(rq_id).unwrap().set_response(Err(common::Error::method_not_found()));
+        state
+            .request_by_id(rq_id)
+            .unwrap()
+            .set_response(Err(common::Error::method_not_found()));
 
         assert!(state.is_ready_to_respond());
         assert!(state.next().is_none());
@@ -323,7 +332,7 @@ mod tests {
             Ok(Some(common::Response::Single(common::Output::Failure(f)))) => {
                 assert_eq!(f.id, common::Id::Num(123));
             }
-            _ => panic!()
+            _ => panic!(),
         }
     }
 
@@ -338,7 +347,7 @@ mod tests {
         assert!(state.next().is_none());
         match state.into_response() {
             Ok(None) => {}
-            _ => panic!()
+            _ => panic!(),
         }
     }
 }
