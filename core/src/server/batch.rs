@@ -89,6 +89,7 @@ impl BatchState {
                     to_yield.push(ToYield::Notification(n));
                 }
                 common::Call::Invalid { id } => {
+                    unimplemented!()
                     // TODO:
                     /*let out = common::Output::
                     responses.push(Elem::AnsweredCall(out));*/
@@ -155,18 +156,32 @@ impl BatchState {
     }
 
     /// Turns this batch into a response to send out to the client.
-    pub fn into_response(self) -> Result<common::Response, Self> {
+    ///
+    /// Returns `Ok(None)` if there is actually nothing to send to the client, such as when the
+    /// client has only sent notifications.
+    pub fn into_response(mut self) -> Result<Option<common::Response>, Self> {
         if !self.is_ready_to_respond() {
             return Err(self)
         }
 
-        unimplemented!()
-        /*let raw_response = if self.to_yield.is_empty() && self.requests.is_empty() {
-            // TODO: not necessarily true, could be a batch
-            common::Response::Single(batch.requests.remove(0).2.unwrap())
+        let raw_response = if self.is_batch {
+            let list: Vec<_> = self.responses.drain().collect();
+            if list.is_empty() {
+                None
+            } else {
+                Some(common::Response::Batch(list))
+            }
+
         } else {
-            common::Response::Batch(batch.requests.drain().map(|r| r.2.unwrap()).collect())
-        };*/
+            debug_assert!(self.responses.len() <= 1);
+            if self.responses.is_empty() {
+                None
+            } else {
+                Some(common::Response::Single(self.responses.remove(0)))
+            }
+        };
+
+        Ok(raw_response)
     }
 }
 

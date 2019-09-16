@@ -107,17 +107,14 @@ where
 {
     /// Returns a `Future` resolving to the next event that this server generates.
     pub async fn next_event<'a>(&'a mut self) -> Result<ServerEvent<'a, R, I>, ()> {
-        loop {
-            let (raw_request_id, raw_request_body) = self.raw.next_request().await?;
-            self.batches.inject(raw_request_body, raw_request_id);
-
+        let request_id = loop {
             match self.batches.next_event() {
                 None => {},
                 Some(batches::BatchesEvent::Notification { notification, .. }) => {
                     return Ok(ServerEvent::Notification(notification))
                 }
-                Some(batches::BatchesEvent::Request(request)) => {
-                    
+                Some(batches::BatchesEvent::Request(inner)) => {
+                    break ServerRequestId { inner: inner.id() };
                 }
                 Some(batches::BatchesEvent::ReadyToSend { response, user_param }) => {
                     // If we have any active subscription, we only use `send` to not close the
@@ -128,9 +125,15 @@ where
                     } else {
                         let _ = self.raw.finish(&user_param, Some(&response)).await;
                     }
+                    continue;
                 }
-            }
-        }
+            };
+
+            let (raw_request_id, raw_request_body) = self.raw.next_request().await?;
+            self.batches.inject(raw_request_body, raw_request_id);
+        };
+
+        return Ok(ServerEvent::Request(self.request_by_id(&request_id).unwrap()));
     }
 
     /// Returns a request previously returned by [`next_event`](crate::Server::next_event) by its
@@ -221,7 +224,7 @@ where
     ///
     pub async fn respond(self, response: Result<common::JsonValue, common::Error>) {
         self.inner.set_response(response);
-        unimplemented!();
+        //unimplemented!();
         // TODO: actually send out response?
     }
 

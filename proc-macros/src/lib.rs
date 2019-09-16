@@ -78,7 +78,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         quote! {
             #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> Result<#enum_name<'a, R, I>, std::io::Error>
                 where R: jsonrpsee::core::RawServer<RequestId = I>,
-                        I: Clone + PartialEq + Eq + Hash + Send + Sync,
+                        I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
             {
                 loop {
                     let (request_id, method) = match server.next_event().await.unwrap() {        // TODO: don't unwrap
