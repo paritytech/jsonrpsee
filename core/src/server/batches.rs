@@ -339,6 +339,7 @@ mod tests {
             .request_by_id(rq_id)
             .unwrap()
             .set_response(Err(common::Error::method_not_found()));
+        assert!(state.request_by_id(rq_id).is_none());
 
         match state.next_event() {
             Some(BatchesEvent::ReadyToSend {

@@ -6,8 +6,39 @@ use quote::quote;
 
 mod api_def;
 
-/// Test doc
-// TODO: ^
+/// Wraps around one or more API definitions and generates an enum.
+///
+/// The format within this macro must be:
+///
+/// ```ignore
+/// rpc_api!{
+///     Foo { ... }
+///     pub(crate) Bar { ... }
+/// }
+/// ```
+///
+/// The `Foo` and `Bar` are identifiers, optionally prefixed with a visibility modifier
+/// (e.g. `pub`).
+///
+/// The content of the blocks is the same as the content of a trait definition, except that
+/// default implementations for methods are forbidden.
+///
+/// For each identifier (such as `Foo` and `Bar` in the example above), this macro will generate
+/// an enum where each variant corresponds to a function of the definition. Function names are
+/// turned into PascalCase to conform to the Rust style guide.
+/// 
+/// Each generated enum has a `next_request` method whose signature is:
+///
+/// ```ignore
+/// async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> Result<Foo<'a, R, I>, std::io::Error>;
+/// ```
+/// 
+/// This method lets you grab the next request incoming from a server, and parse it to match of
+/// the function definitions. Invalid requests are automatically handled.
+///
+/// Additionally, each generated enum has one method per function definition that lets you perform
+/// the method has a client.
+///
 #[proc_macro]
 pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
     // Start by parsing the input into what we expect.

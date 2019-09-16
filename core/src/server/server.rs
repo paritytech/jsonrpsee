@@ -33,6 +33,10 @@ pub struct Server<R, I> {
     /// that are using it.
     ///
     /// If this reaches 0, we can tell the raw server to close the request.
+    ///
+    /// Because we don't have any information about `I`, we have to use a collision-resistant
+    /// hashing algorithm. This incurs a performance cost that is theoretically avoidable (if `I`
+    /// is always local), but that should be negligible in practice.
     num_subscriptions: HashMap<I, NonZeroUsize>,
 }
 
@@ -229,6 +233,11 @@ where
     /// - If all requests of the batch have been responded to, then the response is actively
     ///   sent out.
     /// - Otherwise, this response is buffered.
+    ///
+    /// > **Note**: This method is implemented in a way that doesn't wait for long to send the
+    /// >           response. While calling this method will block your entire server, it
+    /// >           should only block it for a short amount of time. See also [the equivalent
+    /// >           method](crate::RawServer::finish) on the [`RawServer`](crate::RawServer) trait.
     ///
     pub async fn respond(self, response: Result<common::JsonValue, common::Error>) {
         self.inner.set_response(response);
