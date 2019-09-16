@@ -252,3 +252,93 @@ impl<'a> fmt::Debug for BatchElem<'a> {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::common;
+    use super::{BatchInc, BatchState};
+
+    #[test]
+    fn basic_notification() {
+        let notif = common::Notification {
+            jsonrpc: common::Version::V2,
+            method: "foo".to_string(),
+            params: common::Params::None,
+        };
+
+        let mut state = {
+            let rq = common::Request::Single(common::Call::Notification(notif.clone()));
+            BatchState::from_request(rq)
+        };
+
+        assert!(!state.is_ready_to_respond());
+        match state.next() {
+            Some(BatchInc::Notification(n)) if n == notif => {}
+            _ => panic!()
+        }
+        assert!(state.is_ready_to_respond());
+        assert!(state.next().is_none());
+        match state.into_response() {
+            Ok(None) => {}
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn basic_request() {
+        let call = common::MethodCall {
+            jsonrpc: common::Version::V2,
+            method: "foo".to_string(),
+            params: common::Params::Map(serde_json::from_str("{\"test\":\"foo\"}").unwrap()),
+            id: common::Id::Num(123),
+        };
+
+        let mut state = {
+            let rq = common::Request::Single(common::Call::MethodCall(call.clone()));
+            BatchState::from_request(rq)
+        };
+
+        assert!(!state.is_ready_to_respond());
+        let rq_id = match state.next() {
+            Some(BatchInc::Request(rq)) => {
+                assert_eq!(rq.method(), "foo");
+                assert_eq!({ let v: String = rq.params().get("test").unwrap(); v }, "foo");
+                assert_eq!(rq.request_id(), &common::Id::Num(123));
+                rq.id()
+            }
+            _ => panic!()
+        };
+
+        assert!(state.next().is_none());
+        assert!(!state.is_ready_to_respond());
+        assert!(state.next().is_none());
+
+        assert_eq!(state.request_by_id(rq_id).unwrap().method(), "foo");
+        state.request_by_id(rq_id).unwrap().set_response(Err(common::Error::method_not_found()));
+
+        assert!(state.is_ready_to_respond());
+        assert!(state.next().is_none());
+
+        match state.into_response() {
+            Ok(Some(common::Response::Single(common::Output::Failure(f)))) => {
+                assert_eq!(f.id, common::Id::Num(123));
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn empty_batch() {
+        let mut state = {
+            let rq = common::Request::Batch(Vec::new());
+            BatchState::from_request(rq)
+        };
+
+        assert!(state.is_ready_to_respond());
+        assert!(state.next().is_none());
+        match state.into_response() {
+            Ok(None) => {}
+            _ => panic!()
+        }
+    }
+}
