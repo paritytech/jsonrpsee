@@ -5,6 +5,6 @@ rust:
   - nightly
 
 script:
-  - cargo build --verbose
-  - cargo test --verbose
-  - cargo doc --verbose
+  - cargo build --verbose --workspace
+  - cargo test --verbose --workspace
+  - cargo doc --verbose --workspace --document-private-items

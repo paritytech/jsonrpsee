@@ -158,7 +158,7 @@ where
 
     /// Returns a subscription previously returned by
     /// [`into_subscription`](crate::server::ServerRequest::into_subscription).
-    pub fn subscriptions_by_id(
+    pub fn subscription_by_id(
         &mut self,
         id: &ServerSubscriptionId,
     ) -> Option<ServerSubscription<R, I>> {

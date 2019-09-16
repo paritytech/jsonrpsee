@@ -14,7 +14,8 @@ use std::{collections::hash_map::Entry, fmt, iter};
 ///
 /// - Create a new empty [`BatchesState`] with [`new`](BatchesState::new).
 /// - Whenever the server receives a JSON message, call [`inject`](BatchesState::inject).
-/// - Call [`events`](BatchesState::events) and process the events buffered within the object.
+/// - Call [`next_event`](BatchesState::next_event) in a loop and process the events buffered
+/// within the object.
 ///
 /// The [`BatchesState`] also acts as a collection of pending requests, which you can query using
 /// [`request_by_id`](BatchesState::request_by_id).

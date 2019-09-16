@@ -76,7 +76,7 @@
 //! ```no_run
 //! // Should run forever
 //! async_std::task::block_on(async {
-//!     let mut server = jsonrpsee::http_server("localhost:8000").await;
+//!     let mut server = jsonrpsee::http_server(&"localhost:8000".parse().unwrap()).await.unwrap();
 //!     while let Ok(event) = server.next_event().await {
 //!         match event {
 //!             jsonrpsee::core::server::ServerEvent::Notification(notif) => {
@@ -101,7 +101,7 @@
 //! # fn main() {
 //! // Should run forever
 //! async_std::task::block_on(async {
-//!     let mut server = jsonrpsee::http_server("localhost:8000").await;
+//!     let mut server = jsonrpsee::http_server(&"localhost:8000".parse().unwrap()).await.unwrap();
 //!     while let Ok(request) = System::next_request(&mut server).await {
 //!         match request {
 //!             System::SystemName { respond } => {
