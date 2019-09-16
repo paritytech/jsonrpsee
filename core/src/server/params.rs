@@ -26,7 +26,8 @@ impl<'a> ServerRequestParams<'a> {
     ///
     /// Returns an error if the parameter doesn't exist or is of the wrong type.
     pub fn get<'k, T>(self, param: impl Into<ParamKey<'k>>) -> Result<T, ()>
-    where T: serde::de::DeserializeOwned,
+    where
+        T: serde::de::DeserializeOwned,
     {
         let val = self.get_raw(param).ok_or(())?;
         serde_json::from_value(val.clone()).map_err(|_| ())

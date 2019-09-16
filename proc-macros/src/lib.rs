@@ -138,7 +138,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     let mut debug_variants = Vec::new();
     for function in &api.definitions {
         let variant_name = snake_case_to_camel_case(&function.ident);
-        debug_variants.push(quote!{
+        debug_variants.push(quote! {
             #enum_name::#variant_name { /* TODO: params */ .. } => {
                 f.debug_struct(stringify!(#enum_name))/* TODO: params */.finish()
             }

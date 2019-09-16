@@ -19,7 +19,7 @@ use std::{collections::hash_map::Entry, fmt, iter};
 ///
 /// The [`BatchesState`] also acts as a collection of pending requests, which you can query using
 /// [`request_by_id`](BatchesState::request_by_id).
-/// 
+///
 pub struct BatchesState<T> {
     /// Identifier of the next batch to add to `batches`.
     next_batch_id: u64,
@@ -107,7 +107,9 @@ impl<T> BatchesState<T> {
             }
 
             let what_can_we_do = {
-                let (batch, user_param) = self.batches.get_mut(&batch_id)
+                let (batch, user_param) = self
+                    .batches
+                    .get_mut(&batch_id)
                     .expect("all keys are valid; qed");
                 let is_ready_to_respond = batch.is_ready_to_respond();
                 match batch.next() {
@@ -119,26 +121,28 @@ impl<T> BatchesState<T> {
             };
 
             match what_can_we_do {
-                WhatCanWeDo::Nothing => {},
+                WhatCanWeDo::Nothing => {}
                 WhatCanWeDo::ReadyToRespond => {
-                    let (batch, user_param) = self.batches.remove(&batch_id)
+                    let (batch, user_param) = self
+                        .batches
+                        .remove(&batch_id)
                         .expect("key was grabbed from self.batches; qed");
-                    let response = batch.into_response().unwrap_or_else(|_| {
-                        panic!("is_ready_to_respond returned true; qed")
-                    });
+                    let response = batch
+                        .into_response()
+                        .unwrap_or_else(|_| panic!("is_ready_to_respond returned true; qed"));
                     if let Some(response) = response {
                         return Some(BatchesEvent::ReadyToSend {
                             response,
                             user_param,
                         });
                     }
-                },
+                }
                 WhatCanWeDo::Notification(notification) => {
                     return Some(BatchesEvent::Notification {
                         notification,
                         user_param: &mut self.batches.get_mut(&batch_id).unwrap().1,
                     });
-                },
+                }
                 WhatCanWeDo::Request(id) => {
                     let (batch, user_param) = self.batches.get_mut(&batch_id).unwrap();
                     return Some(BatchesEvent::Request(BatchesElem {
@@ -146,7 +150,7 @@ impl<T> BatchesState<T> {
                         inner: batch.request_by_id(id).unwrap(),
                         user_param,
                     }));
-                },
+                }
             }
         }
 
@@ -186,10 +190,7 @@ impl<T> BatchesState<T> {
     ///
     /// Returns `None` if the request ID is invalid or if the request has already been answered in
     /// the past.
-    pub fn request_by_id<'a>(
-        &'a mut self,
-        id: BatchesElemId,
-    ) -> Option<BatchesElem<'a, T>> {
+    pub fn request_by_id<'a>(&'a mut self, id: BatchesElemId) -> Option<BatchesElem<'a, T>> {
         if let Some((batch, user_param)) = self.batches.get_mut(&id.outer) {
             Some(BatchesElem {
                 batch_id: id.outer,
@@ -210,7 +211,7 @@ impl<T> Default for BatchesState<T> {
 
 impl<T> fmt::Debug for BatchesState<T>
 where
-    T: fmt::Debug
+    T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_list().entries(self.batches.values()).finish()
@@ -260,7 +261,7 @@ impl<'a, T> BatchesElem<'a, T> {
 
 impl<'a, T> fmt::Debug for BatchesElem<'a, T>
 where
-    T: fmt::Debug
+    T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("BatchesElem")

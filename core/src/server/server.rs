@@ -3,7 +3,10 @@ use crate::server::{batches, raw::RawServer, ServerRequestParams};
 use fnv::FnvHashMap;
 use futures::prelude::*;
 use smallvec::SmallVec;
-use std::{collections::HashMap, collections::hash_map::Entry, fmt, hash::Hash, io, marker::PhantomData, num::NonZeroUsize, pin::Pin};
+use std::{
+    collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, io, marker::PhantomData,
+    num::NonZeroUsize, pin::Pin,
+};
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
@@ -109,14 +112,17 @@ where
     pub async fn next_event<'a>(&'a mut self) -> Result<ServerEvent<'a, R, I>, ()> {
         let request_id = loop {
             match self.batches.next_event() {
-                None => {},
+                None => {}
                 Some(batches::BatchesEvent::Notification { notification, .. }) => {
                     return Ok(ServerEvent::Notification(notification))
                 }
                 Some(batches::BatchesEvent::Request(inner)) => {
                     break ServerRequestId { inner: inner.id() };
                 }
-                Some(batches::BatchesEvent::ReadyToSend { response, user_param }) => {
+                Some(batches::BatchesEvent::ReadyToSend {
+                    response,
+                    user_param,
+                }) => {
                     // If we have any active subscription, we only use `send` to not close the
                     // client request.
                     if self.num_subscriptions.contains_key(&user_param) {
@@ -133,7 +139,9 @@ where
             self.batches.inject(raw_request_body, raw_request_id);
         };
 
-        return Ok(ServerEvent::Request(self.request_by_id(&request_id).unwrap()));
+        return Ok(ServerEvent::Request(
+            self.request_by_id(&request_id).unwrap(),
+        ));
     }
 
     /// Returns a request previously returned by [`next_event`](crate::Server::next_event) by its
@@ -340,9 +348,10 @@ where
     /// Pushes a notification.
     pub async fn push(self, message: impl Into<JsonValue>) {
         let raw_id = self.server.subscriptions.get(&self.id).unwrap();
-        let output = common::Output::from(Ok(message.into()), common::Id::Null, common::Version::V2);
+        let output =
+            common::Output::from(Ok(message.into()), common::Id::Null, common::Version::V2);
         let response = common::Response::Single(output);
-        let _ = self.server.raw.send(&raw_id, &response).await;     // TODO: error handling?
+        let _ = self.server.raw.send(&raw_id, &response).await; // TODO: error handling?
     }
 
     /// Destroys the subscription object.
@@ -359,7 +368,7 @@ where
                 let e = e.get_mut();
                 *e = NonZeroUsize::new(e.get() - 1).expect("e is >= 2; qed");
                 false
-            },
+            }
             Entry::Occupied(e) => {
                 e.remove();
                 true

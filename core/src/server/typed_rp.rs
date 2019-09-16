@@ -1,4 +1,4 @@
-use crate::server::{ServerRequest, raw::RawServer};
+use crate::server::{raw::RawServer, ServerRequest};
 use std::{hash::Hash, marker::PhantomData};
 
 /// Allows responding to a server request in a more elegant and strongly-typed fashion.

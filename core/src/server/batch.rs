@@ -76,7 +76,10 @@ impl BatchState {
 
     /// Internal implementation of [`from_request`](BatchState::from_request). Generic over the
     /// iterator.
-    fn from_iter(calls_list: impl ExactSizeIterator<Item = common::Call>, is_batch: bool) -> BatchState {
+    fn from_iter(
+        calls_list: impl ExactSizeIterator<Item = common::Call>,
+        is_batch: bool,
+    ) -> BatchState {
         debug_assert!(!(!is_batch && calls_list.len() >= 2));
 
         let mut to_yield = SmallVec::with_capacity(calls_list.len());
@@ -115,10 +118,7 @@ impl BatchState {
     ///
     /// Returns `None` if the request ID is invalid or if the request has already been answered in
     /// the past.
-    pub fn request_by_id<'a>(
-        &'a mut self,
-        id: usize,
-    ) -> Option<BatchElem<'a>> {
+    pub fn request_by_id<'a>(&'a mut self, id: usize) -> Option<BatchElem<'a>> {
         if let Some(elem) = self.requests.get_mut(id) {
             if elem.is_none() {
                 return None;
@@ -149,7 +149,7 @@ impl BatchState {
                     elem: &mut self.requests[request_id],
                     responses: &mut self.responses,
                 }))
-            },
+            }
         }
     }
 
@@ -164,7 +164,7 @@ impl BatchState {
     /// client has only sent notifications.
     pub fn into_response(mut self) -> Result<Option<common::Response>, Self> {
         if !self.is_ready_to_respond() {
-            return Err(self)
+            return Err(self);
         }
 
         let raw_response = if self.is_batch {
@@ -174,7 +174,6 @@ impl BatchState {
             } else {
                 Some(common::Response::Batch(list))
             }
-
         } else {
             debug_assert!(self.responses.len() <= 1);
             if self.responses.is_empty() {
@@ -208,21 +207,27 @@ impl<'a> BatchElem<'a> {
 
     /// Returns the id that the client sent out.
     pub fn request_id(&self) -> &common::Id {
-        let request = self.elem.as_ref()
+        let request = self
+            .elem
+            .as_ref()
             .expect("elem must be Some for the lifetime of the object; qed");
         &request.id
     }
 
     /// Returns the method of this request.
     pub fn method(&self) -> &str {
-        let request = self.elem.as_ref()
+        let request = self
+            .elem
+            .as_ref()
             .expect("elem must be Some for the lifetime of the object; qed");
         &request.method
     }
 
     /// Returns the parameters of the request, as a `common::Params`.
     pub fn params(&self) -> ServerRequestParams {
-        let request = self.elem.as_ref()
+        let request = self
+            .elem
+            .as_ref()
             .expect("elem must be Some for the lifetime of the object; qed");
         ServerRequestParams::from(&request.params)
     }
@@ -230,7 +235,9 @@ impl<'a> BatchElem<'a> {
     /// Responds to the request. This destroys the request object, meaning you can no longer
     /// retrieve it with [`request_by_id`](BatchState::request_by_id) later anymore.
     pub fn set_response(self, response: Result<common::JsonValue, common::Error>) {
-        let request = self.elem.take()
+        let request = self
+            .elem
+            .take()
             .expect("elem must be Some for the lifetime of the object; qed");
         let response = common::Output::from(response, request.id, common::Version::V2);
         self.responses.push(response);
