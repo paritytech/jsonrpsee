@@ -160,7 +160,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
                 #(#params_to_json)*
                 // TODO: pass params
                 // TODO: don't unwrap
-                client.request(#rpc_method_name).await.unwrap()
+                client.request(#rpc_method_name, jsonrpsee::core::common::Params::None).await.unwrap()
             }
         });
     }
