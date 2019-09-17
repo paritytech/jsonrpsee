@@ -87,6 +87,7 @@ pub struct ServerSubscription<'a, R, I> {
 
 impl<R, I> Server<R, I>
 where
+    R: RawServer<RequestId = I>,
     // Note: annoyingly, the `HashMap` constructor with hasher requires trait bounds on the key.
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
