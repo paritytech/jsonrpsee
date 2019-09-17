@@ -2,10 +2,9 @@
 // TODO: expand
 
 pub use crate::{client::raw::RawClient, common};
-use derive_more::*;
-use err_derive::*;
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::{error, fmt};
 
 pub mod raw;
 
@@ -34,6 +33,7 @@ where
     pub async fn request<Ret>(
         &mut self,
         method: impl Into<String>,
+        params: impl Into<common::Params>,
     ) -> Result<Ret, ClientError<R::Error>>
     where
         Ret: DeserializeOwned,
@@ -49,9 +49,7 @@ where
         let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
             jsonrpc: common::Version::V2,
             method: method.into(),
-            params: common::Params::None, /*::Map(
-                                              Default::default()      // TODO:
-                                          )*/
+            params: params.into(),
             id,
         }));
 
@@ -63,7 +61,7 @@ where
 
         let val = match result {
             common::Response::Single(common::Output::Success(s)) => s,
-            _ => panic!("error in request"), // TODO: no
+            _ => return Err(ClientError::WrongResponseKind),
         };
 
         Ok(common::from_value(val.result).map_err(ClientError::Deserialize)?)
@@ -71,11 +69,41 @@ where
 }
 
 /// Error that can happen during a request.
-#[derive(Debug)] // TODO: derive Error
+#[derive(Debug)]
 pub enum ClientError<E> {
-    //#[error(display = "error in the raw client")]
-    Inner(/*#[error(cause)]*/ E),
-
-    //#[error(display = "error while deserializing the server response")]
+    /// Error in the raw client.
+    Inner(E),
+    /// Error while deserializing the server response.
     Deserialize(serde_json::Error),
+    /// Received a batch when we performed a request, or vice-versa.
+    WrongResponseKind,
+}
+
+impl<E> error::Error for ClientError<E>
+where
+    E: error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            ClientError::Inner(ref err) => Some(err),
+            ClientError::Deserialize(ref err) => Some(err),
+            ClientError::WrongResponseKind => None,
+        }
+    }
+}
+
+impl<E> fmt::Display for ClientError<E>
+where
+    E: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ClientError::Inner(ref err) => write!(f, "Error in the raw client: {}", err),
+            ClientError::Deserialize(ref err) => write!(f, "Error when deserializing: {}", err),
+            ClientError::WrongResponseKind => write!(
+                f,
+                "Received a batch when we performed a request, or vice-versa"
+            ),
+        }
+    }
 }
