@@ -120,8 +120,12 @@ impl RawServer for HttpRawServer {
         })
     }
 
-    fn supports_resuming(&self, _: &u64) -> bool {
-        false
+    fn supports_resuming(&self, id: &u64) -> Result<bool, ()> {
+        if self.requests.contains_key(id) {
+            Ok(false)
+        } else {
+            Err(())
+        }
     }
 
     fn send<'a>(

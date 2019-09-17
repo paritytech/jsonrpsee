@@ -52,7 +52,9 @@ pub trait RawServer {
 
     /// Returns true if this implementation supports sending back data on this request without
     /// closing it.
-    fn supports_resuming(&self, request_id: &Self::RequestId) -> bool;
+    ///
+    /// Returns an error if the request id is invalid.
+    fn supports_resuming(&self, request_id: &Self::RequestId) -> Result<bool, ()>;
 
     /// Sends back some data on the request and keeps the request alive.
     ///

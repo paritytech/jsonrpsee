@@ -62,7 +62,7 @@ where
         }
     }
 
-    fn supports_resuming(&self, request_id: &Self::RequestId) -> bool {
+    fn supports_resuming(&self, request_id: &Self::RequestId) -> Result<bool, ()> {
         match request_id {
             JoinRequestId::Left(request_id) => self.left.supports_resuming(request_id),
             JoinRequestId::Right(request_id) => self.right.supports_resuming(request_id),
