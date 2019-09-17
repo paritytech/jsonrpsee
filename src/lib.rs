@@ -42,7 +42,8 @@
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
 //!     let mut client = jsonrpsee::http_client("http://localhost:8000");
-//!     client.request("system_name").await.unwrap()
+//!     let request = client.request("system_name", jsonrpsee::core::common::Params::None);
+//!     request.await.unwrap()
 //! });
 //!
 //! println!("system_name = {:?}", result);
