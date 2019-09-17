@@ -3,9 +3,9 @@
 //!
 //! # Usage
 //!
-//! Call the [`local`] function to build a set of a client and a server.
+//! Call the [`local`](crate::local()) function to build a set of a client and a server.
 //!
-//! The [`LocalClient`] is clonable.
+//! The [`LocalClient`](crate::local::LocalClient) is clonable.
 //!
 //! ```
 //! use jsonrpsee_core::client::Client;
