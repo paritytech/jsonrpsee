@@ -3,6 +3,7 @@ extern crate proc_macro;
 use inflector::Inflector as _;
 use proc_macro::TokenStream;
 use quote::quote;
+use syn::spanned::Spanned as _;
 
 mod api_def;
 
@@ -47,18 +48,26 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
         Err(err) => return err.to_compile_error().into(),
     };
 
-    let out: Vec<_> = defs.apis.into_iter().map(build_api).collect();
+    let mut out = Vec::with_capacity(defs.apis.len());
+    for api in defs.apis {
+        match build_api(api) {
+            Ok(a) => out.push(a),
+            Err(err) => return err.to_compile_error().into(),
+        };
+    }
+
     TokenStream::from(quote! {
         #(#out)*
     })
 }
 
 /// Generates the macro output token stream corresponding to a single API.
-fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
+fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
     let enum_name = &api.name;
     let visibility = &api.visibility;
 
     let mut variants = Vec::new();
+    let mut tmp_variants = Vec::new();
     for function in &api.definitions {
         let variant_name = snake_case_to_camel_case(&function.signature.ident);
         let ret = match &function.signature.output {
@@ -66,15 +75,40 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
             syn::ReturnType::Type(_, ty) => quote! {#ty},
         };
 
+        let mut params_list = Vec::new();
+        for input in function.signature.inputs.iter() {
+            let (ty, param_variant_name) = match input {
+                syn::FnArg::Receiver(_) => {
+                    return Err(syn::Error::new(input.span(), "Having `self` is not allowed in RPC queries definitions"));
+                }
+                syn::FnArg::Typed(syn::PatType { ty, pat, .. }) =>
+                    (ty, param_variant_name(&pat)?),
+            };
+
+            params_list.push(quote! {#param_variant_name: #ty});
+        }
+
+        if params_list.is_empty() {
+            tmp_variants.push(quote! { #variant_name });
+        } else {
+            tmp_variants.push(quote! {
+                #variant_name {
+                    #(#params_list,)*
+                }
+            });
+        }
+
         variants.push(quote! {
             #variant_name {
                 respond: jsonrpsee::core::server::TypedResponder<'a, R, I, #ret>,
+                #(#params_list,)*
             }
         });
     }
 
     let next_request = {
         let mut function_blocks = Vec::new();
+        let mut tmp_to_rq = Vec::new();
         for function in &api.definitions {
             let variant_name = snake_case_to_camel_case(&function.signature.ident);
             let rpc_method_name = function
@@ -83,32 +117,47 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
                 .clone()
                 .unwrap_or_else(|| function.signature.ident.to_string());
 
-            function_blocks.push(quote! {
-                if method == #rpc_method_name {
-                    let request = server.request_by_id(&request_id).unwrap();
-                    /*$(
-                        let $pn: $pty = {
-                            let raw_val = match request.params().get(stringify!($pn)) {
-                                Some(v) => v,
-                                None => {
-                                    request.respond(Err(jsonrpsee::core::common::Error::invalid_params("foo"))).await;       // TODO: message
-                                    continue;
-                                }
-                            };
+            let mut params_builders = Vec::new();
+            let mut params_names_list = Vec::new();
 
-                            match jsonrpsee::core::common::from_value(raw_val.clone()) {
-                                Ok(v) => v,
-                                Err(_) => {
-                                    request.respond(Err(jsonrpsee::core::common::Error::invalid_params("foo"))).await;       // TODO: message
-                                    continue;
-                                }
+            for input in function.signature.inputs.iter() {
+                let (ty, param_variant_name, rpc_param_name) = match input {
+                    syn::FnArg::Receiver(_) => {
+                        return Err(syn::Error::new(input.span(), "Having `self` is not allowed in RPC queries definitions"));
+                    }
+                    syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) =>
+                        (ty, param_variant_name(&pat)?, rpc_param_name(&pat, &attrs)?),
+                };
+
+                params_names_list.push(quote!{#param_variant_name});
+                params_builders.push(quote!{
+                    let #param_variant_name: #ty = {
+                        match request.params().get(#rpc_param_name) {
+                            Ok(v) => v,
+                            Err(_) => {
+                                // TODO: message
+                                request.respond(Err(jsonrpsee::core::common::Error::invalid_params(#rpc_param_name))).await;
+                                continue;
                             }
-                        };
-                    )**/
+                        }
+                    };
+                });
+            }
 
-                    let respond = jsonrpsee::core::server::TypedResponder::from(request);
-                    return Ok(#enum_name::#variant_name { respond });
+            function_blocks.push(quote! {
+                if request_outcome.is_none() && method == #rpc_method_name {
+                    let request = server.request_by_id(&request_id).unwrap();
+                    #(#params_builders)*
+                    request_outcome = Some(Tmp::#variant_name { #(#params_names_list),* });
                 }
+            });
+
+            tmp_to_rq.push(quote! {
+                Some(Tmp::#variant_name { #(#params_names_list),* }) => {
+                    let request = server.request_by_id(&request_id).unwrap();
+                    let respond = jsonrpsee::core::server::TypedResponder::from(request);
+                    return Ok(#enum_name::#variant_name { respond #(, #params_names_list)* });
+                },
             });
         }
 
@@ -117,15 +166,24 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
                 where R: jsonrpsee::core::RawServer<RequestId = I>,
                         I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
             {
+                enum Tmp {
+                    #(#tmp_variants,)*
+                }
+
                 loop {
                     let (request_id, method) = match server.next_event().await.unwrap() {        // TODO: don't unwrap
                         jsonrpsee::core::ServerEvent::Notification(n) => unimplemented!(),       // TODO:
                         jsonrpsee::core::ServerEvent::Request(r) => (r.id(), r.method().to_owned()),
                     };
 
+                    let mut request_outcome: Option<Tmp> = None;
+
                     #(#function_blocks)*
 
-                    server.request_by_id(&request_id).unwrap().respond(Err(jsonrpsee::core::common::Error::method_not_found())).await;
+                    match request_outcome {
+                        #(#tmp_to_rq)*
+                        None => server.request_by_id(&request_id).unwrap().respond(Err(jsonrpsee::core::common::Error::method_not_found())).await,
+                    }
                 }
             }
         }
@@ -135,7 +193,10 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     let mut client_functions = Vec::new();
     for function in &api.definitions {
         let f_name = &function.signature.ident;
-        let ret_ty = &function.signature.output;
+        let ret_ty = match function.signature.output {
+            syn::ReturnType::Default => quote!({}),
+            syn::ReturnType::Type(_, ref ty) => quote!{#ty},
+        };
         let rpc_method_name = function
             .attributes
             .method
@@ -146,11 +207,12 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         let mut params_to_json = Vec::new();
 
         for (param_index, input) in function.signature.inputs.iter().enumerate() {
-            let ty = match input {
+            let (ty, rpc_param_name) = match input {
                 syn::FnArg::Receiver(_) => {
-                    panic!("Having `self` is not allowed in RPC queries definitions")
+                    return Err(syn::Error::new(input.span(), "Having `self` is not allowed in RPC queries definitions"));
                 }
-                syn::FnArg::Typed(syn::PatType { ty, .. }) => ty,
+                syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) =>
+                    (ty, rpc_param_name(&pat, &attrs)?),
             };
 
             let generated_param_name = syn::Ident::new(
@@ -158,19 +220,33 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
                 proc_macro2::Span::call_site(),
             );
 
-            params_list.push(quote! {#generated_param_name: #ty});
+            params_list.push(quote! {#generated_param_name: impl Into<#ty>});
             params_to_json.push(quote! {
-                let #generated_param_name = jsonrpsee::common::to_value(#generated_param_name).unwrap();        // TODO: don't unwrap
+                map.insert(
+                    #rpc_param_name.to_string(),
+                    jsonrpsee::core::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
+                );
             });
         }
 
+        let params_building = if params_list.is_empty() {
+            quote!{jsonrpsee::core::common::Params::None}
+        } else {
+            let params_list_len = params_list.len();
+            quote!{
+                jsonrpsee::core::common::Params::Map({
+                    let mut map = jsonrpsee::core::common::JsonMap::with_capacity(#params_list_len);
+                    #(#params_to_json)*
+                    map
+                })
+            }
+        };
+
         client_functions.push(quote!{
-            // TODO: what if there's a conflict in the param name?
-            #visibility async fn #f_name(client: &mut jsonrpsee::core::Client<impl jsonrpsee::core::RawClient> #(, #params_list)*) #ret_ty {
-                #(#params_to_json)*
-                // TODO: pass params
-                // TODO: don't unwrap
-                client.request(#rpc_method_name, jsonrpsee::core::common::Params::None).await.unwrap()
+            // TODO: what if there's a conflict between `client` and a param name?
+            #visibility async fn #f_name<R: jsonrpsee::core::RawClient>(client: &mut jsonrpsee::core::Client<R> #(, #params_list)*)
+                -> Result<#ret_ty, jsonrpsee::core::client::ClientError<<R as jsonrpsee::core::RawClient>::Error>> {
+                client.request(#rpc_method_name, #params_building).await
             }
         });
     }
@@ -186,7 +262,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         });
     }
 
-    quote! {
+    Ok(quote! {
         #visibility enum #enum_name<'a, R, I> {
             #(#variants),*
         }
@@ -206,10 +282,29 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
                 }
             }
         }
-    }
+    })
 }
 
 /// Turns a snake case function name into an UpperCamelCase name suitable to be an enum variant.
 fn snake_case_to_camel_case(snake_case: &syn::Ident) -> syn::Ident {
     syn::Ident::new(&snake_case.to_string().to_pascal_case(), snake_case.span())
+}
+
+/// Determine the name of the variant in the enum based on the pattern of the function parameter.
+fn param_variant_name(pat: &syn::Pat) -> syn::parse::Result<&syn::Ident> {
+    match pat {
+        // TODO: check other fields of the `PatIdent`
+        syn::Pat::Ident(ident) => Ok(&ident.ident),
+        _ => unimplemented!()
+    }
+}
+
+/// Determine the name of the parameter based on the pattern.
+fn rpc_param_name(pat: &syn::Pat, attrs: &[syn::Attribute]) -> syn::parse::Result<String> {
+    // TODO: look in attributes if the user specified a param name
+    match pat {
+        // TODO: check other fields of the `PatIdent`
+        syn::Pat::Ident(ident) => Ok(ident.ident.to_string()),
+        _ => unimplemented!()
+    }
 }

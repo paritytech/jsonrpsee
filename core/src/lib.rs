@@ -2,6 +2,8 @@
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
 
+use std::{error, fmt};
+
 pub use crate::client::raw::RawClient;
 pub use crate::client::Client;
 pub use crate::local::local;
