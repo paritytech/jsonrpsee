@@ -77,7 +77,11 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
         let mut function_blocks = Vec::new();
         for function in &api.definitions {
             let variant_name = snake_case_to_camel_case(&function.signature.ident);
-            let rpc_method_name = function.signature.ident.to_string();
+            let rpc_method_name = function
+                .attributes
+                .method
+                .clone()
+                .unwrap_or_else(|| function.signature.ident.to_string());
 
             function_blocks.push(quote! {
                 if method == #rpc_method_name {
@@ -132,7 +136,11 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     for function in &api.definitions {
         let f_name = &function.signature.ident;
         let ret_ty = &function.signature.output;
-        let rpc_method_name = function.signature.ident.to_string();
+        let rpc_method_name = function
+            .attributes
+            .method
+            .clone()
+            .unwrap_or_else(|| function.signature.ident.to_string());
 
         let mut params_list = Vec::new();
         let mut params_to_json = Vec::new();
