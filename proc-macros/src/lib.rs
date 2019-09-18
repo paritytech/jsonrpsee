@@ -42,8 +42,10 @@ mod api_def;
 #[proc_macro]
 pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
     // Start by parsing the input into what we expect.
-    let defs: api_def::ApiDefinitions =
-        syn::parse(input_token_stream).expect("failed to parse input");
+    let defs: api_def::ApiDefinitions = match syn::parse(input_token_stream) {
+        Ok(d) => d,
+        Err(err) => return err.to_compile_error().into(),
+    };
 
     let out: Vec<_> = defs.apis.into_iter().map(build_api).collect();
     TokenStream::from(quote! {
@@ -58,8 +60,8 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
 
     let mut variants = Vec::new();
     for function in &api.definitions {
-        let variant_name = snake_case_to_camel_case(&function.ident);
-        let ret = match &function.output {
+        let variant_name = snake_case_to_camel_case(&function.signature.ident);
+        let ret = match &function.signature.output {
             syn::ReturnType::Default => quote! {()},
             syn::ReturnType::Type(_, ty) => quote! {#ty},
         };
@@ -74,8 +76,8 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     let next_request = {
         let mut function_blocks = Vec::new();
         for function in &api.definitions {
-            let variant_name = snake_case_to_camel_case(&function.ident);
-            let rpc_method_name = function.ident.to_string();
+            let variant_name = snake_case_to_camel_case(&function.signature.ident);
+            let rpc_method_name = function.signature.ident.to_string();
 
             function_blocks.push(quote! {
                 if method == #rpc_method_name {
@@ -128,14 +130,14 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     // Builds the functions that allow performing outbound JSON-RPC queries.
     let mut client_functions = Vec::new();
     for function in &api.definitions {
-        let f_name = &function.ident;
-        let ret_ty = &function.output;
-        let rpc_method_name = function.ident.to_string();
+        let f_name = &function.signature.ident;
+        let ret_ty = &function.signature.output;
+        let rpc_method_name = function.signature.ident.to_string();
 
         let mut params_list = Vec::new();
         let mut params_to_json = Vec::new();
 
-        for (param_index, input) in function.inputs.iter().enumerate() {
+        for (param_index, input) in function.signature.inputs.iter().enumerate() {
             let ty = match input {
                 syn::FnArg::Receiver(_) => {
                     panic!("Having `self` is not allowed in RPC queries definitions")
@@ -168,7 +170,7 @@ fn build_api(api: api_def::ApiDefinition) -> proc_macro2::TokenStream {
     // Builds the match variants for the implementation of `Debug`.
     let mut debug_variants = Vec::new();
     for function in &api.definitions {
-        let variant_name = snake_case_to_camel_case(&function.ident);
+        let variant_name = snake_case_to_camel_case(&function.signature.ident);
         debug_variants.push(quote! {
             #enum_name::#variant_name { /* TODO: params */ .. } => {
                 f.debug_struct(stringify!(#enum_name))/* TODO: params */.finish()
