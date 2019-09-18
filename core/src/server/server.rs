@@ -87,6 +87,7 @@ pub struct ServerSubscription<'a, R, I> {
 
 impl<R, I> Server<R, I>
 where
+    R: RawServer<RequestId = I>,
     // Note: annoyingly, the `HashMap` constructor with hasher requires trait bounds on the key.
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
@@ -125,7 +126,7 @@ where
                     // If we have any active subscription, we only use `send` to not close the
                     // client request.
                     if self.num_subscriptions.contains_key(&user_param) {
-                        debug_assert!(self.raw.supports_resuming(&user_param));
+                        debug_assert!(self.raw.supports_resuming(&user_param).unwrap_or(false));
                         let _ = self.raw.send(&user_param, &response).await;
                     } else {
                         let _ = self.raw.finish(&user_param, Some(&response)).await;
@@ -250,7 +251,7 @@ where
         response: JsonValue,
     ) -> Result<ServerSubscription<'a, R, I>, ()> {
         let raw_request_id = self.inner.user_param().clone();
-        if !self.raw.supports_resuming(&raw_request_id) {
+        if !self.raw.supports_resuming(&raw_request_id).unwrap_or(false) {
             return Err(());
         }
 
