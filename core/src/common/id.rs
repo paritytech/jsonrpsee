@@ -13,6 +13,24 @@ pub enum Id {
     Str(String),
 }
 
+impl From<u64> for Id {
+    fn from(id: u64) -> Id {
+        Id::Num(id)
+    }
+}
+
+impl From<String> for Id {
+    fn from(id: String) -> Id {
+        Id::Str(id)
+    }
+}
+
+impl<'a> From<&'a str> for Id {
+    fn from(id: &'a str) -> Id {
+        Id::Str(id.to_owned())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

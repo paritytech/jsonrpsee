@@ -293,7 +293,7 @@ where
                 .unwrap()
                 .id
                 .clone();
-            let output = common::Output::from(response, request_id, common::Version::V2);
+            let output = common::Output::new(response, request_id, common::Version::V2);
             batch.requests[self.index_in_batch].2 = Some(output);
             batch.requests.iter().all(|b| b.2.is_some())
         };
@@ -354,7 +354,7 @@ where
     pub async fn push(self, message: impl Into<JsonValue>) {
         let raw_id = self.server.subscriptions.get(&self.id).unwrap();
         let output =
-            common::Output::from(Ok(message.into()), common::Id::Null, common::Version::V2);
+            common::Output::new(Ok(message.into()), common::Id::Null, common::Version::V2);
         let response = common::Response::Single(output);
         let _ = self.server.raw.send(&raw_id, &response).await; // TODO: error handling?
     }

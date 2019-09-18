@@ -1,9 +1,5 @@
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use serde_json;
-use serde_json::value::from_value;
-
-use super::{Error, JsonValue};
+use super::JsonValue;
 
 /// Request parameters
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -16,29 +12,6 @@ pub enum Params {
     Array(Vec<JsonValue>),
     /// Map of values
     Map(serde_json::Map<String, JsonValue>),
-}
-
-impl Params {
-    /// Parse incoming `Params` into expected common.
-    pub fn parse<D>(self) -> Result<D, Error>
-    where
-        D: DeserializeOwned,
-    {
-        let value: JsonValue = self.into();
-        from_value(value).map_err(|e| Error::invalid_params(format!("Invalid params: {}.", e)))
-    }
-
-    /// Check for no params, returns Err if any params
-    pub fn expect_no_params(self) -> Result<(), Error> {
-        match self {
-            Params::None => Ok(()),
-            Params::Array(ref v) if v.is_empty() => Ok(()),
-            p => Err(Error::invalid_params_with_details(
-                "No parameters were expected",
-                p,
-            )),
-        }
-    }
 }
 
 impl From<Params> for JsonValue {

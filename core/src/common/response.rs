@@ -38,7 +38,7 @@ pub enum Output {
 
 impl Output {
     /// Creates new output given `Result`, `Id` and `Version`.
-    pub fn from(result: Result<JsonValue, Error>, id: Id, jsonrpc: Version) -> Self {
+    pub fn new(result: Result<JsonValue, Error>, id: Id, jsonrpc: Version) -> Self {
         match result {
             Ok(result) => Output::Success(Success {
                 id,
@@ -46,22 +46,6 @@ impl Output {
                 result,
             }),
             Err(error) => Output::Failure(Failure { id, jsonrpc, error }),
-        }
-    }
-
-    /// Get the jsonrpc protocol version.
-    pub fn version(&self) -> Version {
-        match *self {
-            Output::Success(ref s) => s.jsonrpc,
-            Output::Failure(ref f) => f.jsonrpc,
-        }
-    }
-
-    /// Get the correlation id.
-    pub fn id(&self) -> &Id {
-        match *self {
-            Output::Success(ref s) => &s.id,
-            Output::Failure(ref f) => &f.id,
         }
     }
 }
@@ -85,29 +69,6 @@ pub enum Response {
     Single(Output),
     /// Response to batch request (batch of responses)
     Batch(Vec<Output>),
-}
-
-impl Response {
-    /// Creates new `Response` with given error and `Version`
-    pub fn from(error: impl Into<Error>, jsonrpc: Version) -> Self {
-        Failure {
-            id: Id::Null,
-            jsonrpc,
-            error: error.into(),
-        }
-        .into()
-    }
-
-    /// Deserialize `Response` from given JSON string.
-    ///
-    /// This method will handle an empty string as empty batch response.
-    pub fn from_json(s: &str) -> Result<Self, serde_json::Error> {
-        if s.is_empty() {
-            Ok(Response::Batch(vec![]))
-        } else {
-            serde_json::from_str(s)
-        }
-    }
 }
 
 impl From<Failure> for Response {

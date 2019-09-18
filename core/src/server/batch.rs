@@ -95,7 +95,7 @@ impl BatchState {
                 }
                 common::Call::Invalid { id } => {
                     let err = Err(common::Error::invalid_request());
-                    let out = common::Output::from(err, id, common::Version::V2);
+                    let out = common::Output::new(err, id, common::Version::V2);
                     responses.push(out);
                 }
             }
@@ -237,7 +237,7 @@ impl<'a> BatchElem<'a> {
             .elem
             .take()
             .expect("elem must be Some for the lifetime of the object; qed");
-        let response = common::Output::from(response, request.id, common::Version::V2);
+        let response = common::Output::new(response, request.id, common::Version::V2);
         self.responses.push(response);
     }
 }

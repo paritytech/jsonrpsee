@@ -1,7 +1,5 @@
 use super::JsonValue;
-use serde::de::Deserializer;
-use serde::ser::Serializer;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Deserializer, ser::Serializer};
 use std::fmt;
 
 /// JSONRPC error code
@@ -156,6 +154,12 @@ impl Error {
             message: "Unsupported JSON-RPC protocol version".to_owned(),
             data: None,
         }
+    }
+}
+
+impl From<ErrorCode> for Error {
+    fn from(code: ErrorCode) -> Error {
+        Error::new(code)
     }
 }
 
