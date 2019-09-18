@@ -132,9 +132,8 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                             Ok(v) => v,
                             Err(_) => {
                                 // TODO: message
-                                // FIXME: respond
-                                //request.respond(Err(jsonrpsee::core::common::Error::invalid_params(#rpc_param_name))).await;
-                                Default::default()//continue;
+                                request.respond(Err(jsonrpsee::core::common::Error::invalid_params(#rpc_param_name))).await;
+                                continue;
                             }
                         }
                     };
