@@ -111,7 +111,11 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         let mut tmp_to_rq = Vec::new();
         for function in &api.definitions {
             let variant_name = snake_case_to_camel_case(&function.signature.ident);
-            let rpc_method_name = function.signature.ident.to_string();
+            let rpc_method_name = function
+                .attributes
+                .method
+                .clone()
+                .unwrap_or_else(|| function.signature.ident.to_string());
 
             let mut params_builders = Vec::new();
             let mut params_names_list = Vec::new();
@@ -193,7 +197,11 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             syn::ReturnType::Default => quote!({}),
             syn::ReturnType::Type(_, ref ty) => quote!{#ty},
         };
-        let rpc_method_name = function.signature.ident.to_string();
+        let rpc_method_name = function
+            .attributes
+            .method
+            .clone()
+            .unwrap_or_else(|| function.signature.ident.to_string());
 
         let mut params_list = Vec::new();
         let mut params_to_json = Vec::new();

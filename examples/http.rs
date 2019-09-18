@@ -4,6 +4,7 @@ jsonrpsee::rpc_api! {
         fn system_name(foo: String, bar: i32) -> String;
 
         /// Test2
+        #[rpc(method = "foo")]
         fn system_name2() -> String;
     }
 

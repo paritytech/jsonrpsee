@@ -27,6 +27,15 @@ pub struct ApiDefinition {
 pub struct ApiMethod {
     /// Signature of the method.
     pub signature: syn::Signature,
+    /// Attributes on the method.
+    pub attributes: ApiMethodAttrs,
+}
+
+/// List of attributes applied to a method.
+#[derive(Debug, Default)]
+pub struct ApiMethodAttrs {
+    /// Name of the RPC method, if specified.
+    pub method: Option<String>,
 }
 
 /// Implementation detail of `ApiDefinition`.
@@ -34,6 +43,12 @@ pub struct ApiMethod {
 #[derive(Debug)]
 struct ApiMethods {
     definitions: Vec<ApiMethod>,
+}
+
+/// Implementation detail of `ApiMethodAttrs`.
+/// Parses a single attribute.
+enum ApiMethodAttr {
+    Method(proc_macro2::Literal),
 }
 
 impl syn::parse::Parse for ApiDefinitions {
@@ -71,9 +86,77 @@ impl syn::parse::Parse for ApiMethod {
             return Err(syn::Error::new(item.default.span(),
                 "It is forbidden to provide a default implementation for methods in the API definition"));
         }
+
+        let mut attributes = ApiMethodAttrs::default();
+        for attribute in &item.attrs {
+            if attribute.path.is_ident("rpc") {
+                let attrs = attribute.parse_args()?;
+                attributes.try_merge(attrs)?;
+            } else {
+                // TODO: do we copy the attributes somewhere in the output?
+            }
+        }
+
         Ok(ApiMethod {
             signature: item.sig,
+            attributes,
         })
+    }
+}
+
+impl ApiMethodAttrs {
+    /// Tries to merge another `ApiMethodAttrs` within this one. Returns an error if there is an
+    /// overlap in the attributes.
+    // TODO: span
+    fn try_merge(&mut self, other: ApiMethodAttrs) -> syn::parse::Result<()> {
+        if let Some(method) = other.method {
+            if self.method.is_some() {
+                // TODO: return Err(())
+            }
+            self.method = Some(method);
+        }
+
+        Ok(())
+    }
+}
+
+impl syn::parse::Parse for ApiMethodAttrs {
+    fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+        let mut out = ApiMethodAttrs::default();
+
+        let list = input
+            .parse_terminated::<_, syn::token::Comma>(|input| input.parse::<ApiMethodAttr>())?;
+        for attr in list {
+            match attr {
+                ApiMethodAttr::Method(method) => {
+                    if out.method.is_some() {
+                        return Err(syn::Error::new(
+                            method.span(),
+                            "Duplicate method attribute found",
+                        ));
+                    }
+                    out.method = Some(method.to_string());
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+impl syn::parse::Parse for ApiMethodAttr {
+    fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
+        let attr: syn::Ident = input.parse()?;
+
+        if attr == "method" {
+            let _: syn::token::Eq = input.parse()?;
+            let val = input.parse()?;
+            Ok(ApiMethodAttr::Method(val))
+        } else {
+            Err(syn::Error::new(
+                attr.span(),
+                &format!("Unknown attribute: {}", attr.to_string()),
+            ))
+        }
     }
 }
 
