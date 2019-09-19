@@ -24,3 +24,9 @@ http = ["jsonrpsee-http"]
 
 [dev-dependencies]
 async-std = "0.99.4"
+criterion = "0.3"
+rand = "0.7"
+
+[[bench]]
+name = "client-server"
+harness = false

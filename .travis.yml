@@ -8,6 +8,7 @@ script:
   - cargo build --verbose --workspace
   - cargo test --verbose --workspace
   - cargo doc --verbose --workspace --document-private-items
+  - cargo check --verbose --workspace --benches
   #- cargo fmt --all -- --check
 
 notifications:
