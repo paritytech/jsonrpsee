@@ -1,4 +1,4 @@
-use crate::{common, server::batch, server::Notification, server::params::ServerRequestParams};
+use crate::{common, server::batch, server::Notification, server::params::Params};
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, fmt};
 
@@ -243,7 +243,7 @@ impl<'a, T> BatchesElem<'a, T> {
     }
 
     /// Returns the parameters of the request, as a `common::Params`.
-    pub fn params(&self) -> ServerRequestParams {
+    pub fn params(&self) -> Params {
         self.inner.params()
     }
 

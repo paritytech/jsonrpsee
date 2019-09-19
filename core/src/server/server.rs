@@ -1,5 +1,5 @@
 use crate::common::{self, JsonValue};
-use crate::server::{batches, raw::RawServer, Notification, ServerRequestParams};
+use crate::server::{batches, raw::RawServer, Notification, Params};
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize};
 
@@ -200,7 +200,7 @@ impl<'a, R, I> ServerEvent<'a, R, I> {
     }
 
     /// Returns the parameters of the notification or request.
-    pub fn params(&self) -> ServerRequestParams {
+    pub fn params(&self) -> Params {
         match self {
             ServerEvent::Notification(ref n) => n.params(),
             ServerEvent::Request(ref rq) => rq.params(),
@@ -231,7 +231,7 @@ impl<'a, R, I> ServerRequest<'a, R, I> {
     }
 
     /// Returns the parameters of the request, as a `common::Params`.
-    pub fn params(&self) -> ServerRequestParams {
+    pub fn params(&self) -> Params {
         self.inner.params()
     }
 }

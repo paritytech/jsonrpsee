@@ -1,4 +1,4 @@
-use crate::{common, server::Notification, server::ServerRequestParams};
+use crate::{common, server::Notification, server::Params};
 use smallvec::SmallVec;
 use std::{fmt, iter};
 
@@ -223,12 +223,12 @@ impl<'a> BatchElem<'a> {
     }
 
     /// Returns the parameters of the request, as a `common::Params`.
-    pub fn params(&self) -> ServerRequestParams {
+    pub fn params(&self) -> Params {
         let request = self
             .elem
             .as_ref()
             .expect("elem must be Some for the lifetime of the object; qed");
-        ServerRequestParams::from(&request.params)
+        Params::from(&request.params)
     }
 
     /// Responds to the request. This destroys the request object, meaning you can no longer

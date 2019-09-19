@@ -24,7 +24,7 @@
 
 pub use self::notification::Notification;
 pub use self::params::{
-    Iter as ServerRequestParamsIter, ParamKey as ServerRequestParamsKey, ServerRequestParams,
+    Iter as ParamsIter, ParamKey as ParamsKey, Params,
 };
 pub use self::server::{Server, ServerEvent, ServerRequest, ServerRequestId, ServerSubscriptionId};
 pub use self::typed_rp::TypedResponder;

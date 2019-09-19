@@ -1,5 +1,5 @@
 use crate::common;
-use crate::server::ServerRequestParams;
+use crate::server::Params;
 use std::fmt;
 
 /// Notification received on a server.
@@ -26,8 +26,8 @@ impl Notification {
     }
 
     /// Returns the parameters of the notification.
-    pub fn params(&self) -> ServerRequestParams {
-        ServerRequestParams::from(&self.0.params)
+    pub fn params(&self) -> Params {
+        Params::from(&self.0.params)
     }
 }
 

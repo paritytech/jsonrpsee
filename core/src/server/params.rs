@@ -2,9 +2,8 @@ use crate::common;
 use std::fmt;
 
 /// Access to the parameters of a request.
-// TODO: rename, because it's used by Notification as well
 #[derive(Copy, Clone)]
-pub struct ServerRequestParams<'a> {
+pub struct Params<'a> {
     /// Raw parameters of the request.
     params: &'a common::Params,
 }
@@ -17,10 +16,10 @@ pub enum ParamKey<'a> {
     Index(usize),
 }
 
-impl<'a> ServerRequestParams<'a> {
+impl<'a> Params<'a> {
     /// Wraps around a `&common::Params` and provides utility functions for the user.
-    pub(crate) fn from(params: &'a common::Params) -> ServerRequestParams<'a> {
-        ServerRequestParams { params }
+    pub(crate) fn from(params: &'a common::Params) -> Params<'a> {
+        Params { params }
     }
 
     /// Returns a parameter of the request by name and decodes it.
@@ -52,7 +51,7 @@ impl<'a> ServerRequestParams<'a> {
     }
 }
 
-impl<'a> IntoIterator for ServerRequestParams<'a> {
+impl<'a> IntoIterator for Params<'a> {
     type Item = (ParamKey<'a>, &'a common::JsonValue);
     type IntoIter = Iter<'a>;
 
@@ -65,19 +64,19 @@ impl<'a> IntoIterator for ServerRequestParams<'a> {
     }
 }
 
-impl<'a> fmt::Debug for ServerRequestParams<'a> {
+impl<'a> fmt::Debug for Params<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_map().entries(self.into_iter()).finish()
     }
 }
 
-impl<'a> AsRef<common::Params> for ServerRequestParams<'a> {
+impl<'a> AsRef<common::Params> for Params<'a> {
     fn as_ref(&self) -> &common::Params {
         self.params
     }
 }
 
-impl<'a> Into<&'a common::Params> for ServerRequestParams<'a> {
+impl<'a> Into<&'a common::Params> for Params<'a> {
     fn into(self) -> &'a common::Params {
         self.params
     }
@@ -140,6 +139,6 @@ impl<'a> ExactSizeIterator for Iter<'a> {}
 
 impl<'a> fmt::Debug for Iter<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("ServerRequestParamsIter").finish()
+        f.debug_struct("ParamsIter").finish()
     }
 }
