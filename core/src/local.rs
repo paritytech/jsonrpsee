@@ -51,7 +51,7 @@ pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
     (client, server)
 }
 
-/// Client connected to a [`LocalRawServer`]. Can be created using [`local`].
+/// Client connected to a [`LocalRawServer`]. Can be created using [`local_raw`].
 ///
 /// Can be cloned in order to have multiple clients connected to the same server.
 #[derive(Clone)]
@@ -60,7 +60,7 @@ pub struct LocalRawClient {
     rq_tx: mpsc::Sender<(common::Request, mpsc::Sender<common::Response>)>,
 }
 
-/// Server connected to a [`LocalRawClient`]. Can be created using [`local`].
+/// Server connected to a [`LocalRawClient`]. Can be created using [`local_raw`].
 pub struct LocalRawServer {
     /// Receiver connected to the client(s). Receive requests and a way to send back a response.
     rq_rx: mpsc::Receiver<(common::Request, mpsc::Sender<common::Response>)>,
