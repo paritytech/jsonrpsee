@@ -6,7 +6,7 @@ use std::{error, fmt};
 
 pub use crate::client::raw::RawClient;
 pub use crate::client::Client;
-pub use crate::local::local;
+pub use crate::local::local_raw;
 pub use crate::server::raw::RawServer;
 pub use crate::server::{Server, ServerEvent, ServerRequestId, ServerSubscriptionId};
 
