@@ -2,6 +2,7 @@ use crate::common;
 use std::fmt;
 
 /// Access to the parameters of a request.
+// TODO: rename, because it's used by Notification as well
 #[derive(Copy, Clone)]
 pub struct ServerRequestParams<'a> {
     /// Raw parameters of the request.

@@ -1,4 +1,4 @@
-use crate::{common, server::batch, server::params::ServerRequestParams};
+use crate::{common, server::batch, server::Notification, server::params::ServerRequestParams};
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, fmt};
 
@@ -35,7 +35,7 @@ pub enum BatchesEvent<'a, T> {
     /// A notification has been extracted from a batch.
     Notification {
         /// Notification in question.
-        notification: common::Notification,
+        notification: Notification,
         /// User parameter passed when calling [`inject`](BatchesState::inject).
         user_param: &'a mut T,
     },
@@ -100,7 +100,7 @@ impl<T> BatchesState<T> {
             enum WhatCanWeDo {
                 Nothing,
                 ReadyToRespond,
-                Notification(common::Notification),
+                Notification(Notification),
                 Request(usize),
             }
 

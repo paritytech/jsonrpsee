@@ -22,6 +22,7 @@
 //! TODO: write example
 //!
 
+pub use self::notification::Notification;
 pub use self::params::{
     Iter as ServerRequestParamsIter, ParamKey as ServerRequestParamsKey, ServerRequestParams,
 };
@@ -32,6 +33,7 @@ pub mod raw;
 
 mod batch;
 mod batches;
+mod notification;
 mod params;
 mod server;
 mod typed_rp;

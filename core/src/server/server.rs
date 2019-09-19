@@ -1,5 +1,5 @@
 use crate::common::{self, JsonValue};
-use crate::server::{batches, raw::RawServer, ServerRequestParams};
+use crate::server::{batches, raw::RawServer, Notification, ServerRequestParams};
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize};
 
@@ -49,16 +49,16 @@ pub struct ServerSubscriptionId(u64);
 ///
 /// > **Note**: Holds a borrow of the `Server`. Therefore, must be dropped before the `Server` can
 /// >           be dropped.
-// TODO: implement getters on ServerEvent as well
+#[derive(Debug)]
 pub enum ServerEvent<'a, R, I> {
     /// Request is a notification.
-    // TODO: change type of content?
-    Notification(common::Notification),
+    Notification(Notification),
 
     /// Request is a method call.
     Request(ServerRequest<'a, R, I>),
 }
 
+/// Request received by a [`Server`](crate::Server).
 pub struct ServerRequest<'a, R, I> {
     /// Reference to the request within `self.batches`.
     inner: batches::BatchesElem<'a, I>,
@@ -190,6 +190,24 @@ where
     }
 }
 
+impl<'a, R, I> ServerEvent<'a, R, I> {
+    /// Returns the method of this notification or request.
+    pub fn method(&self) -> &str {
+        match self {
+            ServerEvent::Notification(ref n) => n.method(),
+            ServerEvent::Request(ref rq) => rq.method(),
+        }
+    }
+
+    /// Returns the parameters of the notification or request.
+    pub fn params(&self) -> ServerRequestParams {
+        match self {
+            ServerEvent::Notification(ref n) => n.params(),
+            ServerEvent::Request(ref rq) => rq.params(),
+        }
+    }
+}
+
 impl<'a, R, I> ServerRequest<'a, R, I> {
     /// Returns the id of the request.
     ///
@@ -202,6 +220,7 @@ impl<'a, R, I> ServerRequest<'a, R, I> {
     }
 
     /// Returns the id that the client sent out.
+    // TODO: can return None, which is wrong
     pub fn request_id(&self) -> &common::Id {
         self.inner.request_id()
     }
