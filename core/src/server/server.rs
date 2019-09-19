@@ -325,7 +325,7 @@ where
 impl<'a, R, I> fmt::Debug for ServerRequest<'a, R, I> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ServerRequest")
-            // TODO: print request id
+            .field("request_id", &self.request_id())
             .field("method", &self.method())
             .field("params", &self.params())
             .finish()
