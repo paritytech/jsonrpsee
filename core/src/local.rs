@@ -3,7 +3,7 @@
 //!
 //! # Usage
 //!
-//! Call the [`local`](crate::local()) function to build a set of a client and a server.
+//! Call the [`local_raw`](crate::local_raw()) function to build a set of a client and a server.
 //!
 //! The [`LocalRawClient`](crate::local::LocalRawClient) is clonable.
 //!
@@ -11,7 +11,7 @@
 //! use jsonrpsee_core::client::Client;
 //! use jsonrpsee_core::server::{Server, ServerEvent};
 //!
-//! let (raw_client, raw_server) = jsonrpsee_core::local();
+//! let (raw_client, raw_server) = jsonrpsee_core::local_raw();
 //! let mut client = Client::new(raw_client);
 //! let mut server = Server::new(raw_server);
 //!
