@@ -64,16 +64,19 @@ impl RawServer for HttpRawServer {
             let request = self.background_thread.next().await?;
             let request_id = {
                 let id = self.next_request_id;
-                self.next_request_id += 1;
+                self.next_request_id = match self.next_request_id.checked_add(1) {
+                    Some(i) => i,
+                    None => {
+                        log::error!("Overflow in HttpRawServer request ID assignment");
+                        return Err(())
+                    }
+                };
                 id
             };
 
-            // TODO: we actually don't need to insert the request
-            // most requests are answered without being dropped, so as an optimization we can
-            // return the request itself, and insert it later if we drop it
             self.requests.insert(request_id, request.send_back);
 
-            // Every 128 requests, we call `shrink_to_fit` on the list.
+            // Every 128 requests, we call `shrink_to_fit` on the list for a general cleanup.
             if request_id % 128 == 0 {
                 self.requests.shrink_to_fit();
             }
