@@ -3,15 +3,15 @@
 //!
 //! # Usage
 //!
-//! Call the [`local`](crate::local()) function to build a set of a client and a server.
+//! Call the [`local_raw`](crate::local_raw()) function to build a set of a client and a server.
 //!
-//! The [`LocalClient`](crate::local::LocalClient) is clonable.
+//! The [`LocalRawClient`](crate::local::LocalRawClient) is clonable.
 //!
 //! ```
 //! use jsonrpsee_core::client::Client;
 //! use jsonrpsee_core::server::{Server, ServerEvent};
 //!
-//! let (raw_client, raw_server) = jsonrpsee_core::local();
+//! let (raw_client, raw_server) = jsonrpsee_core::local_raw();
 //! let mut client = Client::new(raw_client);
 //! let mut server = Server::new(raw_server);
 //!
@@ -40,10 +40,10 @@ use futures::{channel::mpsc, prelude::*};
 use std::{collections::hash_map::Entry, fmt, pin::Pin};
 
 /// Builds a new client and a new server that are connected to each other.
-pub fn local() -> (LocalClient, LocalServer) {
+pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
     let (rq_tx, rq_rx) = mpsc::channel(4);
-    let client = LocalClient { rq_tx };
-    let server = LocalServer {
+    let client = LocalRawClient { rq_tx };
+    let server = LocalRawServer {
         rq_rx,
         next_request_id: 0,
         requests: Default::default(),
@@ -51,17 +51,17 @@ pub fn local() -> (LocalClient, LocalServer) {
     (client, server)
 }
 
-/// Client connected to a [`LocalServer`]. Can be created using [`local`].
+/// Client connected to a [`LocalRawServer`]. Can be created using [`local_raw`].
 ///
 /// Can be cloned in order to have multiple clients connected to the same server.
 #[derive(Clone)]
-pub struct LocalClient {
+pub struct LocalRawClient {
     /// Channel to the server. Send a request and a way to send back a response.
     rq_tx: mpsc::Sender<(common::Request, mpsc::Sender<common::Response>)>,
 }
 
-/// Server connected to a [`LocalClient`]. Can be created using [`local`].
-pub struct LocalServer {
+/// Server connected to a [`LocalRawClient`]. Can be created using [`local_raw`].
+pub struct LocalRawServer {
     /// Receiver connected to the client(s). Receive requests and a way to send back a response.
     rq_rx: mpsc::Receiver<(common::Request, mpsc::Sender<common::Response>)>,
     /// Id of the next request to insert in the `requests` hashmap.
@@ -73,14 +73,14 @@ pub struct LocalServer {
 
 /// Error that can happen on the client side.
 #[derive(Debug, Error)]
-pub enum LocalClientErr {
-    /// The [`LocalServer`] no longer exists.
+pub enum LocalRawClientErr {
+    /// The [`LocalRawServer`] no longer exists.
     #[error(display = "Server has been closed")]
     ServerClosed,
 }
 
-impl RawClient for LocalClient {
-    type Error = LocalClientErr;
+impl RawClient for LocalRawClient {
+    type Error = LocalRawClientErr;
 
     fn request<'a>(
         &'a mut self,
@@ -91,19 +91,19 @@ impl RawClient for LocalClient {
             self.rq_tx
                 .send((request, tx))
                 .await
-                .map_err(|_| LocalClientErr::ServerClosed)?;
-            rx.next().await.ok_or(LocalClientErr::ServerClosed)
+                .map_err(|_| LocalRawClientErr::ServerClosed)?;
+            rx.next().await.ok_or(LocalRawClientErr::ServerClosed)
         })
     }
 }
 
-impl fmt::Debug for LocalClient {
+impl fmt::Debug for LocalRawClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("LocalClient").finish()
+        f.debug_tuple("LocalRawClient").finish()
     }
 }
 
-impl RawServer for LocalServer {
+impl RawServer for LocalRawServer {
     type RequestId = u64;
 
     fn next_request<'a>(
@@ -166,9 +166,9 @@ impl RawServer for LocalServer {
     }
 }
 
-impl fmt::Debug for LocalServer {
+impl fmt::Debug for LocalRawServer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("LocalServer")
+        f.debug_struct("LocalRawServer")
             .field(
                 "pending_requests",
                 &self.requests.keys().cloned().collect::<Vec<_>>(),
