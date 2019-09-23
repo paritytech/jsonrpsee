@@ -76,8 +76,8 @@ pub enum RawServerEvent<T> {
     /// A new request has arrived on the wire.
     ///
     /// This generates a new "request object" within the state of the [`RawServer`] that is
-    /// identified through the returned [`id`](RawServerEvent::Request::id). You can then use the
-    /// other methods of the [`RawServer`] trait in order to manipulate that request.
+    /// identified through the returned `id`. You can then use the other methods of the
+    /// [`RawServer`] trait in order to manipulate that request.
     Request {
         /// Identifier of the request within the state of the [`RawServer`].
         id: T,
