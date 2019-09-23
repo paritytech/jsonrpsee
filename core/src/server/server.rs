@@ -1,5 +1,6 @@
 use crate::common::{self, JsonValue};
 use crate::server::{batches, raw::RawServer, raw::RawServerEvent, Notification, Params};
+use err_derive::*;
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize};
 
@@ -11,10 +12,10 @@ pub struct Server<R, I> {
     raw: R,
 
     /// List of requests that are in the progress of being answered. Each batch is associated with
-    /// the raw request ID.
+    /// the raw request ID, or with `None` if this raw request has been closed.
     ///
     /// See the documentation of [`BatchesState`][batches::BatchesState] for more information.
-    batches: batches::BatchesState<I>,
+    batches: batches::BatchesState<Option<I>>,
 
     /// Identifier of the next subscription to add to `subscriptions`.
     next_subscription_id: u64,
@@ -56,12 +57,15 @@ pub enum ServerEvent<'a, R, I> {
 
     /// Request is a method call.
     Request(ServerRequest<'a, R, I>),
+
+    /// Subscriptions have been closed because the client closed the connection.
+    SubscriptionsClosed(Vec<ServerSubscriptionId>),
 }
 
 /// Request received by a [`Server`](crate::Server).
 pub struct ServerRequest<'a, R, I> {
     /// Reference to the request within `self.batches`.
-    inner: batches::BatchesElem<'a, I>,
+    inner: batches::BatchesElem<'a, Option<I>>,
 
     /// Reference to the corresponding field in `Server`.
     raw: &'a mut R,
@@ -83,6 +87,17 @@ pub struct ServerRequest<'a, R, I> {
 pub struct ServerSubscription<'a, R, I> {
     server: &'a mut Server<R, I>,
     id: u64,
+}
+
+/// Error that can happen when calling `into_subscription`.
+#[derive(Debug, Error)]
+pub enum IntoSubscriptionErr {
+    /// Underlying server doesn't support subscriptions.
+    #[error(display = "Underlying server doesn't support subscriptions")]
+    NotSupported,
+    /// Request has already been closed by the client.
+    #[error(display = "Request is already closed")]
+    Closed,
 }
 
 impl<R, I> Server<R, I>
@@ -121,26 +136,50 @@ where
                 }
                 Some(batches::BatchesEvent::ReadyToSend {
                     response,
-                    user_param,
+                    user_param: Some(raw_request_id),
                 }) => {
                     // If we have any active subscription, we only use `send` to not close the
                     // client request.
-                    if self.num_subscriptions.contains_key(&user_param) {
-                        debug_assert!(self.raw.supports_resuming(&user_param).unwrap_or(false));
-                        let _ = self.raw.send(&user_param, &response).await;
+                    if self.num_subscriptions.contains_key(&raw_request_id) {
+                        debug_assert!(self.raw.supports_resuming(&raw_request_id).unwrap_or(false));
+                        let _ = self.raw.send(&raw_request_id, &response).await;
                     } else {
-                        let _ = self.raw.finish(&user_param, Some(&response)).await;
+                        let _ = self.raw.finish(&raw_request_id, Some(&response)).await;
                     }
+                    continue;
+                }
+                Some(batches::BatchesEvent::ReadyToSend { response: _, user_param: None }) => {
+                    // This situation happens if the connection has been closed by the client.
+                    // Clients who close their connection.
                     continue;
                 }
             };
 
             match self.raw.next_request().await {
                 RawServerEvent::Request { id, request } => {
-                    self.batches.inject(request, id)
+                    self.batches.inject(request, Some(id))
                 },
-                // TODO: implement
-                RawServerEvent::Closed(_id) => unimplemented!(),
+                RawServerEvent::Closed(raw_id) => {
+                    // The client has a closed their connection. We eliminate all traces of the
+                    // raw request ID from our state.
+                    // TODO: this has an O(n) complexity; make sure that this is not attackable
+                    for ud in self.batches.batches() {
+                        if ud.as_ref() == Some(&raw_id) {
+                            *ud = None;
+                        }
+                    }
+
+                    // Additionally, active subscriptions that were using this subscription are
+                    // closed.
+                    if let Some(_) = self.num_subscriptions.remove(&raw_id) {
+                        let ids = self.subscriptions.iter()
+                            .filter(|(_, v)| **v == raw_id)
+                            .map(|(k, _)| ServerSubscriptionId(*k))
+                            .collect::<Vec<_>>();
+                        for id in &ids { let _ = self.subscriptions.remove(&id.0); }
+                        return Ok(ServerEvent::SubscriptionsClosed(ids));
+                    }
+                },
                 RawServerEvent::ServerClosed => return Err(()),
             };
         };
@@ -193,24 +232,6 @@ where
 {
     fn from(inner: R) -> Server<R, R::RequestId> {
         Server::new(inner)
-    }
-}
-
-impl<'a, R, I> ServerEvent<'a, R, I> {
-    /// Returns the method of this notification or request.
-    pub fn method(&self) -> &str {
-        match self {
-            ServerEvent::Notification(ref n) => n.method(),
-            ServerEvent::Request(ref rq) => rq.method(),
-        }
-    }
-
-    /// Returns the parameters of the notification or request.
-    pub fn params(&self) -> Params {
-        match self {
-            ServerEvent::Notification(ref n) => n.params(),
-            ServerEvent::Request(ref rq) => rq.params(),
-        }
     }
 }
 
@@ -270,81 +291,45 @@ where
     /// that allows you to push more data on the corresponding connection.
     ///
     /// Returns an error and doesn't do anything if the underlying server doesn't support
-    /// subscriptions.
+    /// subscriptions, or if the connection has already been closed by the client.
+    ///
+    /// > **Note**: Because of borrowing issues, we return a [`ServerSubscriptionId`] rather than
+    /// >           a [`ServerSubscription`]. You will have to call
+    /// >           [`subscription_by_id`](Server::subscription_by_id) in order to manipulate the
+    /// >           subscription.
+    // TODO: solve the note
     pub async fn into_subscription(
         mut self,
         response: JsonValue,
-    ) -> Result<ServerSubscription<'a, R, I>, ()> {
-        let raw_request_id = self.inner.user_param().clone();
+    ) -> Result<ServerSubscriptionId, IntoSubscriptionErr> {
+        let raw_request_id = match self.inner.user_param().clone() {
+            Some(id) => id,
+            None => return Err(IntoSubscriptionErr::Closed)
+        };
+
         if !self.raw.supports_resuming(&raw_request_id).unwrap_or(false) {
-            return Err(());
+            return Err(IntoSubscriptionErr::NotSupported);
         }
 
-        let new_id = {
+        let new_subscr_id = {
             let id = *self.next_subscription_id;
             *self.next_subscription_id += 1;
             id
         };
 
         self.num_subscriptions
-            .entry(raw_request_id)
+            .entry(raw_request_id.clone())
             .and_modify(|e| {
                 *e = NonZeroUsize::new(e.get() + 1)
                     .expect("we add 1 to an existing non-zero value; qed");
             })
             .or_insert_with(|| NonZeroUsize::new(1).expect("1 != 0"));
 
-        // TODO:
-        /*let server = self.respond_inner(Ok(response), false).await;
-        self.subscriptions.insert(new_id, raw_request_id);*/
+        let server = self.inner.set_response(Ok(response));
+        self.subscriptions.insert(new_subscr_id, raw_request_id);
 
-        //Ok(ServerSubscription { server, id: new_id })
-        unimplemented!()
+        Ok(ServerSubscriptionId(new_subscr_id))
     }
-
-    /*/// Inner implementation of both `respond` and `into_subscription`.
-    ///
-    /// Removes the batch from the server if necessary. Returns the reference to the server.
-    async fn respond_inner(
-        self,
-        response: Result<common::JsonValue, common::Error>,
-        finish: bool,
-    ) -> &'a mut Server<R, I> {
-        let is_full = {
-            let batch = &mut self.server.batches.get_mut(&self.batch_id).unwrap();
-            let request_id = batch.requests[self.index_in_batch]
-                .1
-                .as_ref()
-                .unwrap()
-                .id
-                .clone();
-            let output = common::Output::from(response, request_id, common::Version::V2);
-            batch.requests[self.index_in_batch].2 = Some(output);
-            batch.requests.iter().all(|b| b.2.is_some())
-        };
-
-        let mut batch = self.server.batches.remove(&self.batch_id).unwrap();
-        let raw_response = if batch.requests.len() == 1 {
-            // TODO: not necessarily true, could be a batch
-            common::Response::Single(batch.requests.remove(0).2.unwrap())
-        } else {
-            common::Response::Batch(batch.requests.drain().map(|r| r.2.unwrap()).collect())
-        };
-
-        if finish {
-            self.server
-                .raw
-                .finish(&batch.raw_request_id, Some(&raw_response))
-                .await;
-        } else {
-            self.server
-                .raw
-                .send(&batch.raw_request_id, &raw_response)
-                .await;
-        }
-
-        self.server
-    }*/
 }
 
 impl<'a, R, I> fmt::Debug for ServerRequest<'a, R, I> {
@@ -371,6 +356,7 @@ where
     }
 
     /// Pushes a notification.
+    // TODO: what if batch response hasn't been sent out yet?
     pub async fn push(self, message: impl Into<JsonValue>) {
         let raw_id = self.server.subscriptions.get(&self.id).unwrap();
         let output =
