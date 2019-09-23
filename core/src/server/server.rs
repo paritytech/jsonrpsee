@@ -1,5 +1,6 @@
 use crate::common::{self, JsonValue};
 use crate::server::{batches, raw::RawServer, raw::RawServerEvent, Notification, Params};
+use err_derive::*;
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize};
 
@@ -86,6 +87,17 @@ pub struct ServerRequest<'a, R, I> {
 pub struct ServerSubscription<'a, R, I> {
     server: &'a mut Server<R, I>,
     id: u64,
+}
+
+/// Error that can happen when calling `into_subscription`.
+#[derive(Debug, Error)]
+pub enum IntoSubscriptionErr {
+    /// Underlying server doesn't support subscriptions.
+    #[error(display = "Underlying server doesn't support subscriptions")]
+    NotSupported,
+    /// Request has already been closed by the client.
+    #[error(display = "Request is already closed")]
+    Closed,
 }
 
 impl<R, I> Server<R, I>
@@ -280,84 +292,44 @@ where
     ///
     /// Returns an error and doesn't do anything if the underlying server doesn't support
     /// subscriptions, or if the connection has already been closed by the client.
+    ///
+    /// > **Note**: Because of borrowing issues, we return a [`ServerSubscriptionId`] rather than
+    /// >           a [`ServerSubscription`]. You will have to call
+    /// >           [`subscription_by_id`](Server::subscription_by_id) in order to manipulate the
+    /// >           subscription.
+    // TODO: solve the note
     pub async fn into_subscription(
         mut self,
         response: JsonValue,
-    ) -> Result<ServerSubscription<'a, R, I>, ()> {
+    ) -> Result<ServerSubscriptionId, IntoSubscriptionErr> {
         let raw_request_id = match self.inner.user_param().clone() {
             Some(id) => id,
-            None => return Err(())
+            None => return Err(IntoSubscriptionErr::Closed)
         };
 
         if !self.raw.supports_resuming(&raw_request_id).unwrap_or(false) {
-            return Err(());
+            return Err(IntoSubscriptionErr::NotSupported);
         }
 
-        let new_id = {
+        let new_subscr_id = {
             let id = *self.next_subscription_id;
             *self.next_subscription_id += 1;
             id
         };
 
         self.num_subscriptions
-            .entry(raw_request_id)
+            .entry(raw_request_id.clone())
             .and_modify(|e| {
                 *e = NonZeroUsize::new(e.get() + 1)
                     .expect("we add 1 to an existing non-zero value; qed");
             })
             .or_insert_with(|| NonZeroUsize::new(1).expect("1 != 0"));
 
-        // TODO:
-        /*let server = self.respond_inner(Ok(response), false).await;
-        self.subscriptions.insert(new_id, raw_request_id);*/
+        let server = self.inner.set_response(Ok(response));
+        self.subscriptions.insert(new_subscr_id, raw_request_id);
 
-        //Ok(ServerSubscription { server, id: new_id })
-        unimplemented!()
+        Ok(ServerSubscriptionId(new_subscr_id))
     }
-
-    /*/// Inner implementation of both `respond` and `into_subscription`.
-    ///
-    /// Removes the batch from the server if necessary. Returns the reference to the server.
-    async fn respond_inner(
-        self,
-        response: Result<common::JsonValue, common::Error>,
-        finish: bool,
-    ) -> &'a mut Server<R, I> {
-        let is_full = {
-            let batch = &mut self.server.batches.get_mut(&self.batch_id).unwrap();
-            let request_id = batch.requests[self.index_in_batch]
-                .1
-                .as_ref()
-                .unwrap()
-                .id
-                .clone();
-            let output = common::Output::from(response, request_id, common::Version::V2);
-            batch.requests[self.index_in_batch].2 = Some(output);
-            batch.requests.iter().all(|b| b.2.is_some())
-        };
-
-        let mut batch = self.server.batches.remove(&self.batch_id).unwrap();
-        let raw_response = if batch.requests.len() == 1 {
-            // TODO: not necessarily true, could be a batch
-            common::Response::Single(batch.requests.remove(0).2.unwrap())
-        } else {
-            common::Response::Batch(batch.requests.drain().map(|r| r.2.unwrap()).collect())
-        };
-
-        if finish {
-            self.server
-                .raw
-                .finish(&batch.raw_request_id, Some(&raw_response))
-                .await;
-        } else {
-            self.server
-                .raw
-                .send(&batch.raw_request_id, &raw_response)
-                .await;
-        }
-
-        self.server
-    }*/
 }
 
 impl<'a, R, I> fmt::Debug for ServerRequest<'a, R, I> {
@@ -384,6 +356,7 @@ where
     }
 
     /// Pushes a notification.
+    // TODO: what if batch response hasn't been sent out yet?
     pub async fn push(self, message: impl Into<JsonValue>) {
         let raw_id = self.server.subscriptions.get(&self.id).unwrap();
         let output =
