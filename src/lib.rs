@@ -123,12 +123,17 @@
 #[cfg(feature = "http")]
 pub use jsonrpsee_http::{http_client, http_server};
 pub use jsonrpsee_proc_macros::rpc_api;
+#[cfg(feature = "ws")]
+pub use jsonrpsee_ws::ws_client;
 
 #[doc(inline)]
 pub use jsonrpsee_core as core;
 #[doc(inline)]
 #[cfg(feature = "http")]
 pub use jsonrpsee_http as http;
+#[doc(inline)]
+#[cfg(feature = "ws")]
+pub use jsonrpsee_ws as ws;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local() -> (core::Client<core::local::LocalRawClient>, core::Server<core::local::LocalRawServer, <core::local::LocalRawServer as core::RawServer>::RequestId>) {
