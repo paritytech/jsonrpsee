@@ -46,6 +46,22 @@ impl HttpRawServer {
         })
     }
 
+    /// Tries to start an HTTP server that listens on the given address with an access control list.
+    pub async fn bind_with_acl(
+        addr: &SocketAddr,
+        allowed_hosts: Vec<SocketAddr>,
+    ) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
+        let (background_thread, local_addr) = background::BackgroundHttp::bind_with_acl(addr, allowed_hosts)?;
+
+        Ok(HttpRawServer {
+            background_thread,
+            local_addr,
+            requests: Default::default(),
+            next_request_id: 0,
+        })
+    }
+
+
     /// Returns the address we are actually listening on, which might be different from the one
     /// passed as parameter.
     pub fn local_addr(&self) -> &SocketAddr {

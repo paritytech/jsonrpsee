@@ -27,6 +27,14 @@ pub async fn http_server(
     Ok(Server::new(HttpRawServer::bind(addr).await?))
 }
 
+/// Starts a [`Server`](../Server) object that serves HTTP with a whitlist access control.
+pub async fn http_server_with_acl(
+    addr: &SocketAddr,
+    allowed_hosts: Vec<SocketAddr>,
+) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
+    Ok(Server::new(HttpRawServer::bind_with_acl(addr, allowed_hosts).await?))
+}
+
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
 pub fn http_client(addr: &str) -> HttpClient {
     HttpRawClient::new(addr)

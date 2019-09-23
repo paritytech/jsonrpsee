@@ -2,6 +2,7 @@ use crate::server::response;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
+use hyper::server::conn::AddrStream;
 use jsonrpsee_core::common;
 use std::{io, net::SocketAddr, thread};
 
@@ -26,14 +27,20 @@ impl BackgroundHttp {
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
     pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
+        Self::bind_with_acl(addr, Vec::new())
+    }
+
+    pub fn bind_with_acl(addr: &SocketAddr, allowed_hosts: Vec<SocketAddr>) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
         let (tx, rx) = mpsc::channel(4);
 
-        let make_service = make_service_fn(move |_| {
+        let make_service = make_service_fn(move |remote: &AddrStream| {
+            let remote = remote.remote_addr();
+            let allowed = allowed_hosts.is_empty() || allowed_hosts.contains(&remote);
             let tx = tx.clone();
             async move {
                 Ok::<_, Error>(service_fn(move |req| {
                     let mut tx = tx.clone();
-                    async move { Ok::<_, Error>(process_request(req, &mut tx).await) }
+                    async move { Ok::<_, Error>(process_request(req, &mut tx, allowed).await) }
                 }))
             }
         });
@@ -79,7 +86,13 @@ impl BackgroundHttp {
 async fn process_request(
     request: hyper::Request<hyper::Body>,
     fg_process_tx: &mut mpsc::Sender<Request>,
+    allowed: bool, 
 ) -> hyper::Response<hyper::Body> {
+    // Process access control 
+    if !allowed {
+        return response::host_not_allowed();
+    }
+
     /*if self.cors_allow_origin == cors::AllowCors::Invalid && !continue_on_invalid_cors {
         return response::invalid_allow_origin();
     }
