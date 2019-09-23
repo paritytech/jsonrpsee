@@ -1,5 +1,5 @@
 use crate::common::{self, JsonValue};
-use crate::server::{batches, raw::RawServer, Notification, Params};
+use crate::server::{batches, raw::RawServer, raw::RawServerEvent, Notification, Params};
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize};
 
@@ -135,8 +135,14 @@ where
                 }
             };
 
-            let (raw_request_id, raw_request_body) = self.raw.next_request().await?;
-            self.batches.inject(raw_request_body, raw_request_id);
+            match self.raw.next_request().await {
+                RawServerEvent::Request { id, request } => {
+                    self.batches.inject(request, id)
+                },
+                // TODO: implement
+                RawServerEvent::Closed(_id) => unimplemented!(),
+                RawServerEvent::ServerClosed => return Err(()),
+            };
         };
 
         return Ok(ServerEvent::Request(
@@ -362,11 +368,6 @@ where
     /// [`subscription_by_id`](crate::Server::subscription_by_id).
     pub fn id(&self) -> ServerSubscriptionId {
         ServerSubscriptionId(self.id)
-    }
-
-    // TODO: does this function make sense at all? how to design this?
-    pub fn is_valid(&self) -> bool {
-        true // TODO:
     }
 
     /// Pushes a notification.

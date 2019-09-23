@@ -20,14 +20,9 @@ pub trait RawServer {
     /// Identifier for a request in the context of this server.
     type RequestId: Clone + PartialEq + Eq + Hash + Send + Sync;
 
-    /// Returns the next request, or an error if the server has closed.
-    ///
-    /// This generates a new "request object" within the state of the `RawServer` that is
-    /// identified through the returned `RequestId`. You can then use the other methods of this
-    /// trait in order to manipulate that request.
-    fn next_request<'a>(
-        &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>>;
+    /// Returns the next event that the raw server wants to notify us.
+    fn next_request<'a>(&'a mut self)
+        -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>;
 
     /// Sends back a response and destroys the request.
     ///
@@ -73,4 +68,30 @@ pub trait RawServer {
         request_id: &'a Self::RequestId,
         response: &'a common::Response,
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>>;
+}
+
+/// Event that the [`RawServer`] can generate.
+#[derive(Debug, PartialEq)]
+pub enum RawServerEvent<T> {
+    /// A new request has arrived on the wire.
+    ///
+    /// This generates a new "request object" within the state of the [`RawServer`] that is
+    /// identified through the returned `id`. You can then use the other methods of the
+    /// [`RawServer`] trait in order to manipulate that request.
+    Request {
+        /// Identifier of the request within the state of the [`RawServer`].
+        id: T,
+        /// Body of the request.
+        request: common::Request,
+    },
+
+    /// A request has been cancelled, most likely because the client has closed the connection.
+    ///
+    /// The corresponding request is no longer valid to manipulate.
+    Closed(T),
+
+    /// The server has been closed and will not produce any more request.
+    // TODO: define the exact semantics of that; can the implementation panic afterwards? is it
+    // even a good idea to have an event?
+    ServerClosed,
 }

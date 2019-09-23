@@ -33,7 +33,7 @@
 //! ```
 //!
 
-use crate::{common, RawClient, RawServer};
+use crate::{common, RawClient, RawServer, RawServerEvent};
 use err_derive::*;
 use fnv::FnvHashMap;
 use futures::{channel::mpsc, prelude::*};
@@ -108,19 +108,22 @@ impl RawServer for LocalRawServer {
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>>
+    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>
     {
         Box::pin(async move {
-            let (rq, send_back) = self.rq_rx.next().await.ok_or(())?;
+            let (request, send_back) = match self.rq_rx.next().await {
+                Some(v) => v,
+                None => return RawServerEvent::ServerClosed,
+            };
 
             loop {
-                let rq_id = self.next_request_id;
+                let id = self.next_request_id;
                 self.next_request_id = self.next_request_id.wrapping_add(1);
-                match self.requests.entry(rq_id) {
+                match self.requests.entry(id) {
                     Entry::Occupied(_) => continue,
                     Entry::Vacant(e) => e.insert(send_back),
                 };
-                return Ok((rq_id, rq));
+                return RawServerEvent::Request { id, request };
             }
         })
     }

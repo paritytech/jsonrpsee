@@ -1,7 +1,7 @@
 use crate::server::background;
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
-use jsonrpsee_core::{common, server::raw::RawServer};
+use jsonrpsee_core::{common, server::raw::{RawServer, RawServerEvent}};
 use std::{error, net::SocketAddr, pin::Pin};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
@@ -58,17 +58,21 @@ impl RawServer for HttpRawServer {
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>>
+    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>
     {
         Box::pin(async move {
-            let request = self.background_thread.next().await?;
+            let request = match self.background_thread.next().await {
+                Ok(r) => r,
+                Err(_) => return RawServerEvent::ServerClosed,
+            };
+
             let request_id = {
                 let id = self.next_request_id;
                 self.next_request_id = match self.next_request_id.checked_add(1) {
                     Some(i) => i,
                     None => {
                         log::error!("Overflow in HttpRawServer request ID assignment");
-                        return Err(())
+                        return RawServerEvent::ServerClosed;
                     }
                 };
                 id
@@ -81,7 +85,10 @@ impl RawServer for HttpRawServer {
                 self.requests.shrink_to_fit();
             }
 
-            Ok((request_id, request.request))
+            RawServerEvent::Request {
+                id: request_id,
+                request: request.request,
+            }
         })
     }
 
