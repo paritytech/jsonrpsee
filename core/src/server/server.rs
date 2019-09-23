@@ -56,6 +56,9 @@ pub enum ServerEvent<'a, R, I> {
 
     /// Request is a method call.
     Request(ServerRequest<'a, R, I>),
+
+    /// Subscriptions have been closed because the client closed the connection.
+    SubscriptionsClosed(Vec<ServerSubscriptionId>),
 }
 
 /// Request received by a [`Server`](crate::Server).
@@ -139,8 +142,16 @@ where
                 RawServerEvent::Request { id, request } => {
                     self.batches.inject(request, id)
                 },
-                // TODO: implement
-                RawServerEvent::Closed(_id) => unimplemented!(),
+                RawServerEvent::Closed(id) => {
+                    // TODO: somehow keep the information so that we don't send back an answer
+                    if let Some(_) = self.num_subscriptions.remove(&id) {
+                        let ids = self.subscriptions.iter()
+                            .filter(|(_, v)| **v == id)
+                            .map(|(k, _)| ServerSubscriptionId(*k))
+                            .collect();
+                        return Ok(ServerEvent::SubscriptionsClosed(ids));
+                    }
+                },
                 RawServerEvent::ServerClosed => return Err(()),
             };
         };
@@ -193,24 +204,6 @@ where
 {
     fn from(inner: R) -> Server<R, R::RequestId> {
         Server::new(inner)
-    }
-}
-
-impl<'a, R, I> ServerEvent<'a, R, I> {
-    /// Returns the method of this notification or request.
-    pub fn method(&self) -> &str {
-        match self {
-            ServerEvent::Notification(ref n) => n.method(),
-            ServerEvent::Request(ref rq) => rq.method(),
-        }
-    }
-
-    /// Returns the parameters of the notification or request.
-    pub fn params(&self) -> Params {
-        match self {
-            ServerEvent::Notification(ref n) => n.params(),
-            ServerEvent::Request(ref rq) => rq.params(),
-        }
     }
 }
 

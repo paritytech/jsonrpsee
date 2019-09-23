@@ -174,6 +174,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                 loop {
                     let (request_id, method) = match server.next_event().await.unwrap() {        // TODO: don't unwrap
                         jsonrpsee::core::ServerEvent::Notification(n) => unimplemented!(),       // TODO:
+                        jsonrpsee::core::ServerEvent::SubscriptionsClosed(_) => unimplemented!(),       // TODO:
                         jsonrpsee::core::ServerEvent::Request(r) => (r.id(), r.method().to_owned()),
                     };
 
