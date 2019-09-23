@@ -11,16 +11,19 @@ members = [
     "core",
     "http",
     "proc-macros",
+    "ws",
 ]
 
 [dependencies]
 jsonrpsee-core = { path = "core" }
 jsonrpsee-http = { path = "http", optional = true }
 jsonrpsee-proc-macros = { path = "proc-macros" }
+jsonrpsee-ws = { path = "ws", optional = true }
 
 [features]
-default = ["http"]
+default = ["http", "ws"]
 http = ["jsonrpsee-http"]
+ws = ["jsonrpsee-ws"]
 
 [dev-dependencies]
 async-std = "0.99.4"
