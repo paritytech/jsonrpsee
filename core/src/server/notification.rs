@@ -5,6 +5,7 @@ use std::fmt;
 /// Notification received on a server.
 ///
 /// Wraps around a `common::Notification`.
+#[derive(PartialEq)]
 pub struct Notification(common::Notification);
 
 impl From<common::Notification> for Notification {

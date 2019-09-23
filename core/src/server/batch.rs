@@ -255,7 +255,7 @@ impl<'a> fmt::Debug for BatchElem<'a> {
 #[cfg(test)]
 mod tests {
     use super::{BatchInc, BatchState};
-    use crate::common;
+    use crate::{common, server::Notification};
 
     #[test]
     fn basic_notification() {
@@ -272,7 +272,7 @@ mod tests {
 
         assert!(!state.is_ready_to_respond());
         match state.next() {
-            Some(BatchInc::Notification(ref n)) if common::Notification::from(n.clone()) == notif => {}
+            Some(BatchInc::Notification(ref n)) if n == &Notification::from(notif) => {}
             _ => panic!(),
         }
         assert!(state.is_ready_to_respond());

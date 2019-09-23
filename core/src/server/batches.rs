@@ -275,7 +275,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BatchesEvent, BatchesState};
-    use crate::common;
+    use crate::{common, server::Notification};
 
     #[test]
     fn basic_notification() {
@@ -294,7 +294,7 @@ mod tests {
         match state.next_event() {
             Some(BatchesEvent::Notification {
                 ref notification, ..
-            }) if *notification == notif => {}
+            }) if *notification == Notification::from(notif) => {}
             _ => panic!(),
         }
         assert!(state.next_event().is_none());
@@ -394,7 +394,7 @@ mod tests {
             Some(BatchesEvent::Notification {
                 ref notification,
                 ref user_param,
-            }) if *notification == notif1 && **user_param == 2 => {}
+            }) if *notification == Notification::from(notif1) && **user_param == 2 => {}
             _ => panic!(),
         }
 
@@ -402,7 +402,7 @@ mod tests {
             Some(BatchesEvent::Notification {
                 ref notification,
                 ref user_param,
-            }) if *notification == notif2 && **user_param == 2 => {}
+            }) if *notification == Notification::from(notif2) && **user_param == 2 => {}
             _ => panic!(),
         }
 
