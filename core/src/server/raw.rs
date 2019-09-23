@@ -7,7 +7,7 @@
 //! ## Example usage
 //!
 //! ```
-//! use jsonrpsee_core::server::raw::RawServer;
+//! use jsonrpsee_core::server::raw::{RawServer, RawServerEvent};
 //! use jsonrpsee_core::common::{Error, Request, Response, Version};
 //!
 //! async fn run_server(server: &mut impl RawServer) {
@@ -15,9 +15,15 @@
 //!     // server while `request_to_response` is running. This is fine as long as building the
 //!     // response is instantaneous (which is the case in this exampe), but probably isn't for
 //!     // actual real-world usages.
-//!     while let Ok((rq_id, rq_body)) = server.next_request().await {
-//!         let response = request_to_response(&rq_body).await;
-//!         let _ = server.finish(&rq_id, Some(&response)).await;
+//!     loop {
+//!         match server.next_request().await {
+//!             RawServerEvent::ServerClosed => break,
+//!             RawServerEvent::Closed(_) => {},
+//!             RawServerEvent::Request { id, request } => {
+//!                 let response = request_to_response(&request).await;
+//!                 let _ = server.finish(&id, Some(&response)).await;
+//!             },
+//!         }
 //!     }
 //! }
 //!
@@ -29,7 +35,7 @@
 //!
 
 pub use self::join::{join, Join, JoinRequestId};
-pub use self::traits::RawServer;
+pub use self::traits::{RawServer, RawServerEvent};
 
 mod join;
 mod traits;

@@ -1,4 +1,4 @@
-use super::RawServer;
+use super::{RawServer, RawServerEvent};
 use crate::common;
 use futures::prelude::*;
 use std::pin::Pin;
@@ -35,17 +35,27 @@ where
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>>
+    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>
     {
         Box::pin(async move {
             match future::select(self.left.next_request(), self.right.next_request()).await {
-                future::Either::Left((a, _)) => {
-                    let (rq_id, rq) = a?;
-                    Ok((JoinRequestId::Left(rq_id), rq))
+                future::Either::Left((RawServerEvent::Request { id, request }, _)) => {
+                    RawServerEvent::Request { id: JoinRequestId::Left(id), request }
                 }
-                future::Either::Right((b, _)) => {
-                    let (rq_id, rq) = b?;
-                    Ok((JoinRequestId::Right(rq_id), rq))
+                future::Either::Left((RawServerEvent::Closed(id), _)) => {
+                    RawServerEvent::Closed(JoinRequestId::Left(id))
+                }
+                future::Either::Left((RawServerEvent::ServerClosed, _)) => {
+                    RawServerEvent::ServerClosed
+                }
+                future::Either::Right((RawServerEvent::Request { id, request }, _)) => {
+                    RawServerEvent::Request { id: JoinRequestId::Right(id), request }
+                }
+                future::Either::Right((RawServerEvent::Closed(id), _)) => {
+                    RawServerEvent::Closed(JoinRequestId::Right(id))
+                }
+                future::Either::Right((RawServerEvent::ServerClosed, _)) => {
+                    RawServerEvent::ServerClosed
                 }
             }
         })
