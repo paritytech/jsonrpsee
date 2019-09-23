@@ -53,9 +53,13 @@ where
             id,
         }));
 
-        let result = self
-            .inner
-            .request(request)
+        self.inner
+            .send_request(request)
+            .await
+            .map_err(ClientError::Inner)?;
+        
+        let result = self.inner
+            .next_response()
             .await
             .map_err(ClientError::Inner)?;
 
@@ -63,6 +67,8 @@ where
             common::Response::Single(common::Output::Success(s)) => s,
             _ => return Err(ClientError::WrongResponseKind),
         };
+
+        // TODO: check correspondance for the request ID
 
         Ok(common::from_value(val.result).map_err(ClientError::Deserialize)?)
     }

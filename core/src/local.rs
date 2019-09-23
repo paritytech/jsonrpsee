@@ -35,40 +35,40 @@
 
 use crate::{common, RawClient, RawServer, RawServerEvent};
 use err_derive::*;
-use fnv::FnvHashMap;
+use fnv::FnvHashSet;
 use futures::{channel::mpsc, prelude::*};
 use std::{collections::hash_map::Entry, fmt, pin::Pin};
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
-    let (rq_tx, rq_rx) = mpsc::channel(4);
-    let client = LocalRawClient { rq_tx };
-    let server = LocalRawServer {
-        rq_rx,
-        next_request_id: 0,
-        requests: Default::default(),
-    };
+    let (to_server, from_client) = mpsc::channel(4);
+    let (to_client, from_server) = mpsc::channel(4);
+    let client = LocalRawClient { to_server, from_server };
+    let server = LocalRawServer { to_client, from_client, next_request_id: 0, requests: Default::default() };
     (client, server)
 }
 
 /// Client connected to a [`LocalRawServer`]. Can be created using [`local_raw`].
 ///
 /// Can be cloned in order to have multiple clients connected to the same server.
-#[derive(Clone)]
+// TODO: restore #[derive(Clone)])
 pub struct LocalRawClient {
-    /// Channel to the server. Send a request and a way to send back a response.
-    rq_tx: mpsc::Sender<(common::Request, mpsc::Sender<common::Response>)>,
+    /// Channel to the server.
+    to_server: mpsc::Sender<common::Request>,
+    /// Channel from the server.
+    from_server: mpsc::Receiver<common::Response>,
 }
 
 /// Server connected to a [`LocalRawClient`]. Can be created using [`local_raw`].
 pub struct LocalRawServer {
-    /// Receiver connected to the client(s). Receive requests and a way to send back a response.
-    rq_rx: mpsc::Receiver<(common::Request, mpsc::Sender<common::Response>)>,
-    /// Id of the next request to insert in the `requests` hashmap.
+    /// Channel to the client.
+    to_client: mpsc::Sender<common::Response>,
+    /// Channel from the client.
+    from_client: mpsc::Receiver<common::Request>,
+    /// Id of the next request to insert in the `requests` hashset.
     next_request_id: u64,
-    /// List of requests waiting for an answer. Each entry is the sender that sends back a
-    /// response to the client.
-    requests: FnvHashMap<u64, mpsc::Sender<common::Response>>,
+    /// List of requests waiting for an answer.
+    requests: FnvHashSet<u64>,
 }
 
 /// Error that can happen on the client side.
@@ -82,17 +82,27 @@ pub enum LocalRawClientErr {
 impl RawClient for LocalRawClient {
     type Error = LocalRawClientErr;
 
-    fn request<'a>(
+    fn send_request<'a>(
         &'a mut self,
         request: common::Request,
-    ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
         Box::pin(async move {
-            let (tx, mut rx) = mpsc::channel(4);
-            self.rq_tx
-                .send((request, tx))
+            self.to_server
+                .send(request)
                 .await
                 .map_err(|_| LocalRawClientErr::ServerClosed)?;
-            rx.next().await.ok_or(LocalRawClientErr::ServerClosed)
+            Ok(())
+        })
+    }
+
+    fn next_response<'a>(&'a mut self)
+        -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            self.from_server
+                .next()
+                .await
+                .ok_or(LocalRawClientErr::ServerClosed)
         })
     }
 }
@@ -111,7 +121,7 @@ impl RawServer for LocalRawServer {
     ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>
     {
         Box::pin(async move {
-            let (request, send_back) = match self.rq_rx.next().await {
+            let request = match self.from_client.next().await {
                 Some(v) => v,
                 None => return RawServerEvent::ServerClosed,
             };
@@ -119,10 +129,9 @@ impl RawServer for LocalRawServer {
             loop {
                 let id = self.next_request_id;
                 self.next_request_id = self.next_request_id.wrapping_add(1);
-                match self.requests.entry(id) {
-                    Entry::Occupied(_) => continue,
-                    Entry::Vacant(e) => e.insert(send_back),
-                };
+                if !self.requests.insert(id) {
+                    continue;
+                }
                 return RawServerEvent::Request { id, request };
             }
         })
@@ -134,11 +143,11 @@ impl RawServer for LocalRawServer {
         response: Option<&'a common::Response>,
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(mut rq) = self.requests.remove(&request_id) {
+            if self.requests.remove(&request_id) {
                 if let Some(response) = response {
-                    rq.send(response.clone()).await.map_err(|_| ())
+                    self.to_client.send(response.clone()).await.map_err(|_| ())
                 } else {
-                    Err(())
+                    Ok(())
                 }
             } else {
                 Err(())
@@ -147,7 +156,7 @@ impl RawServer for LocalRawServer {
     }
 
     fn supports_resuming(&self, request_id: &Self::RequestId) -> Result<bool, ()> {
-        if self.requests.contains_key(request_id) {
+        if self.requests.contains(request_id) {
             Ok(true)
         } else {
             Err(())
@@ -160,8 +169,8 @@ impl RawServer for LocalRawServer {
         response: &'a common::Response,
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(rq) = self.requests.get_mut(&request_id) {
-                rq.send(response.clone()).await.map_err(|_| ())
+            if self.requests.contains(&request_id) {
+                self.to_client.send(response.clone()).await.map_err(|_| ())
             } else {
                 Err(())
             }
@@ -172,10 +181,6 @@ impl RawServer for LocalRawServer {
 impl fmt::Debug for LocalRawServer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("LocalRawServer")
-            .field(
-                "pending_requests",
-                &self.requests.keys().cloned().collect::<Vec<_>>(),
-            )
             .finish()
     }
 }
