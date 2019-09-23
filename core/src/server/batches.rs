@@ -181,6 +181,11 @@ impl<T> BatchesState<T> {
         }
     }
 
+    /// Returns a list of all user data associated to active batches.
+    pub fn batches<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> + 'a {
+        self.batches.values_mut().map(|(_, user_data)| user_data)
+    }
+
     /// Returns a request previously returned by [`next_event`](crate::Server::next_event) by its
     /// id.
     ///
