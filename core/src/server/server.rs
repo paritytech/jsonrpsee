@@ -279,8 +279,13 @@ where
         // TODO: actually send out response?
     }
 
-    /// Sends back a response similar to `respond`, then returns a `ServerSubscription` object
+    /// Sends back a response similar to `respond`, then returns a [`ServerSubscriptionId`] object
     /// that allows you to push more data on the corresponding connection.
+    ///
+    /// The [`ServerSubscriptionId`] corresponds to the identifier that has been sent back to the
+    /// client. If the client refers to this subscription id, you can turn it into a
+    /// [`ServerSubscriptionId`] using
+    /// [`from_wire_message`](ServerSubscriptionId::from_wire_message).
     ///
     /// Returns an error and doesn't do anything if the underlying server doesn't support
     /// subscriptions, or if the connection has already been closed by the client.
@@ -307,7 +312,8 @@ where
 
             match self.subscriptions.entry(new_subscr_id) {
                 Entry::Vacant(e) => e.insert(raw_request_id),
-                Entry::Occupied(_) => continue, // continue looping if we randomly chose an existing ID
+                // Continue looping if we accidentally chose an existing ID.
+                Entry::Occupied(_) => continue,
             };
 
             self.num_subscriptions
@@ -331,6 +337,14 @@ impl<'a, R, I> fmt::Debug for ServerRequest<'a, R, I> {
             .field("method", &self.method())
             .field("params", &self.params())
             .finish()
+    }
+}
+
+impl ServerSubscriptionId {
+    /// When the client sends a unsubscribe message containing a subscription ID, this function can
+    /// be used to parse it into a [`ServerSubscriptionId`].
+    pub fn from_wire_message(params: &JsonValue) -> Result<(), ()> {
+        unimplemented!()
     }
 }
 
