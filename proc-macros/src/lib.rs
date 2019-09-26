@@ -248,7 +248,9 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             // TODO: what if there's a conflict between `client` and a param name?
             #visibility async fn #f_name<R: jsonrpsee::core::RawClient>(client: &mut jsonrpsee::core::Client<R> #(, #params_list)*)
                 -> Result<#ret_ty, jsonrpsee::core::client::ClientError<<R as jsonrpsee::core::RawClient>::Error>> {
-                client.request(#rpc_method_name, #params_building).await
+                let rq_id = client.start_request(#rpc_method_name, #params_building).await?;
+                let data = client.wait_response(rq_id).await?.unwrap();     // TODO: don't unwrap
+                Ok(jsonrpsee::core::common::from_value(data).unwrap())     // TODO: don't unwrap
             }
         ));
     }

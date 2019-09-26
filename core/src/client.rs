@@ -31,6 +31,7 @@ struct Request {
 pub enum ClientEvent {
     /// A request has received a response.
     Response {
+        request_id: u64,
         /// The response itself.
         result: Result<common::JsonValue, common::Error>,
     }
@@ -103,7 +104,7 @@ where
         &mut self,
         method: impl Into<String>,
         params: impl Into<common::Params>,
-    ) -> Result<(), ClientError<R::Error>> {
+    ) -> Result<u64, ClientError<R::Error>> {
         let id = {
             let i = self.next_request_id;
             if i == u64::max_value() {
@@ -124,7 +125,7 @@ where
             .await
             .map_err(ClientError::Inner)?;
         self.requests.insert(id, Request {});
-        Ok(())
+        Ok(id)
     }
 
     /// Starts a request.
@@ -150,20 +151,55 @@ where
                 return Ok(event);
             }
 
-            let result = self.inner
-                .next_response()
-                .await
-                .map_err(ClientError::Inner)?;
-            
-            match result {
-                common::Response::Single(rp) => self.process_response(rp),
-                common::Response::Batch(rps) => {
-                    for rp in rps {
-                        self.process_response(rp);
-                    }
-                },
-            }
+            self.event_step().await?;
         }
+    }
+
+    /// Waits until the server sends back a response for the given request, and returns it.
+    ///
+    /// > **Note**: Be careful when using this method, as all the responses and pubsub events
+    /// >           returned by the server will be buffered up indefinitely until a response to
+    /// >           the right request comes.
+    pub async fn wait_response(&mut self, rq_id: u64)
+        -> Result<Result<common::JsonValue, common::Error>, ClientError<R::Error>>
+    {
+        let mut events_queue_loopkup = 0;
+
+        loop {
+            for (offset, ev) in self.events_queue.iter().enumerate().skip(events_queue_loopkup) {
+                match ev {
+                    ClientEvent::Response { request_id, result } if *request_id == rq_id => {
+                        match self.events_queue.remove(offset) {
+                            Some(ClientEvent::Response { result, .. }) => return Ok(result),
+                            _ => unreachable!()
+                        }
+                    },
+                    _ => {}
+                }
+            }
+
+            events_queue_loopkup = self.events_queue.len();
+            self.event_step().await?;
+        }
+    }
+
+    /// Waits for one server message and processes it.
+    async fn event_step(&mut self) -> Result<(), ClientError<R::Error>> {
+        let result = self.inner
+            .next_response()
+            .await
+            .map_err(ClientError::Inner)?;
+        
+        match result {
+            common::Response::Single(rp) => self.process_response(rp),
+            common::Response::Batch(rps) => {
+                for rp in rps {
+                    self.process_response(rp);
+                }
+            },
+        }
+
+        Ok(())
     }
 
     /// Processes the response obtained from the server. updates the internal state of `self` to
@@ -186,8 +222,10 @@ where
                     }
                 };
 
+                let request_id = *n;
                 self.events_queue.push_back(ClientEvent::Response {
                     result: response.into(),
+                    request_id,
                 });
             }
         }
