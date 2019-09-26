@@ -311,20 +311,21 @@ where
             let new_subscr_id: [u8; 32] = rand::random();
 
             match self.subscriptions.entry(new_subscr_id) {
-                Entry::Vacant(e) => e.insert(raw_request_id),
+                Entry::Vacant(e) => e.insert(raw_request_id.clone()),
                 // Continue looping if we accidentally chose an existing ID.
                 Entry::Occupied(_) => continue,
             };
 
             self.num_subscriptions
-                .entry(raw_request_id.clone())
+                .entry(raw_request_id)
                 .and_modify(|e| {
                     *e = NonZeroUsize::new(e.get() + 1)
                         .expect("we add 1 to an existing non-zero value; qed");
                 })
                 .or_insert_with(|| NonZeroUsize::new(1).expect("1 != 0"));
 
-            let server = self.inner.set_response(Ok(new_subscr_id.to_string()));
+            let subscr_id_string = bs58::encode(&new_subscr_id).into_string();
+            let server = self.inner.set_response(Ok(subscr_id_string.into()));
             break Ok(ServerSubscriptionId(new_subscr_id));
         }
     }
@@ -343,8 +344,21 @@ impl<'a, R, I> fmt::Debug for ServerRequest<'a, R, I> {
 impl ServerSubscriptionId {
     /// When the client sends a unsubscribe message containing a subscription ID, this function can
     /// be used to parse it into a [`ServerSubscriptionId`].
-    pub fn from_wire_message(params: &JsonValue) -> Result<(), ()> {
-        unimplemented!()
+    pub fn from_wire_message(params: &JsonValue) -> Result<Self, ()> {
+        let string = match params {
+            JsonValue::String(s) => s,
+            _ => return Err(())
+        };
+        
+        let decoded = bs58::decode(&string).into_vec().map_err(|_| ())?;
+        if decoded.len() > 32 {
+            return Err(());
+        }
+
+        let mut out = [0; 32];
+        out[(32 - decoded.len())..].copy_from_slice(&decoded);
+        // TODO: write a test to check that encoding/decoding match
+        Ok(ServerSubscriptionId(out))
     }
 }
 
