@@ -24,6 +24,14 @@ pub struct Client<R> {
 }
 
 #[derive(Debug)]
+enum Request {
+    /// A single request expecting a response.
+    Request,
+    /// A potential subscription. As a response, we expect a single subscription id.
+    PendingSubscription,
+}
+
+#[derive(Debug)]
 pub enum ClientEvent {
     /// A request has received a response.
     Response {
@@ -110,8 +118,8 @@ where
             .send_request(request)
             .await
             .map_err(ClientError::Inner)?;
-        let is_new_rq = self.requests.insert(id);
-        assert!(is_new_rq);
+        let old_val = self.requests.insert(id, Request::Request);
+        assert!(old_val.is_none());
         Ok(id)
     }
 
@@ -124,8 +132,31 @@ where
         &mut self,
         method: impl Into<String>,
         params: impl Into<common::Params>,
-    ) -> Result<(), ClientError<R::Error>> {
-        unimplemented!()
+    ) -> Result<u64, ClientError<R::Error>> {
+        let id = {
+            let i = self.next_request_id;
+            self.next_request_id += 1;
+            // TODO: handle that in a better way?
+            if i == u64::max_value() {
+                log::error!("Overflow in client request ID assignment");
+            }
+            i
+        };
+
+        let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
+            jsonrpc: common::Version::V2,
+            method: method.into(),
+            params: params.into(),
+            id: common::Id::Num(id),
+        }));
+
+        self.inner
+            .send_request(request)
+            .await
+            .map_err(ClientError::Inner)?;
+        let old_val = self.requests.insert(id, Request::Request);
+        assert!(old_val.is_none());
+        Ok(id)
     }
 
     /// Waits until the client receives a message from the server.
@@ -201,19 +232,22 @@ where
             }
             common::Id::Num(n) => {
                 // Find the request that this answered.
-                let answered_request = match self.requests.remove(&n) {
-                    Some(r) => r,
+                match self.requests.remove(n) {
+                    Some(Request::Request) => {
+                        let request_id = *n;
+                        self.events_queue.push_back(ClientEvent::Response {
+                            result: response.into(),
+                            request_id,
+                        });
+                    }
+                    Some(Request::PendingSubscription) => {
+                        unimplemented!()
+                    }
                     None => {
                         log::error!("Server responses with an invalid request id: {:?}", n);
                         return;
                     }
                 };
-
-                let request_id = *n;
-                self.events_queue.push_back(ClientEvent::Response {
-                    result: response.into(),
-                    request_id,
-                });
             }
         }
     }
