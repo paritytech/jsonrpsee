@@ -2,7 +2,7 @@
 // TODO: expand
 
 pub use crate::{client::raw::RawClient, common};
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{collections::VecDeque, error, fmt};
@@ -18,13 +18,9 @@ pub struct Client<R> {
     /// Id to assign to the next request.
     next_request_id: u64,
     /// List of active requests.
-    requests: FnvHashMap<u64, Request>,
+    requests: FnvHashSet<u64, Request>,
     /// Queue of events to return from [`Client::next_event`].
     events_queue: VecDeque<ClientEvent>,
-}
-
-struct Request {
-    
 }
 
 #[derive(Debug)]
@@ -83,18 +79,6 @@ where
         Ok(())
     }
 
-    /// Assigns an id for a request.
-    fn assign_id(&mut self) -> u64 {
-        let id = self.next_request_id;
-        if let Some(i) = self.next_request_id.checked_add(1) {
-            self.next_request_id = i;
-        } else {
-            // TODO: what to do here?
-            log::error!("Overflow in client request ID assignment");
-        }
-        id
-    }
-
     /// Starts a request.
     ///
     /// This asynchronous function finishes when the request has been sent to the server. The
@@ -107,6 +91,8 @@ where
     ) -> Result<u64, ClientError<R::Error>> {
         let id = {
             let i = self.next_request_id;
+            self.next_request_id += 1;
+            // TODO: handle that in a better way?
             if i == u64::max_value() {
                 log::error!("Overflow in client request ID assignment");
             }
@@ -124,7 +110,8 @@ where
             .send_request(request)
             .await
             .map_err(ClientError::Inner)?;
-        self.requests.insert(id, Request {});
+        let is_new_rq = self.requests.insert(id);
+        assert!(is_new_rq);
         Ok(id)
     }
 
