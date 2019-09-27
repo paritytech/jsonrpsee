@@ -2,6 +2,7 @@ use crate::server::background;
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
 use jsonrpsee_core::{common, server::raw::{RawServer, RawServerEvent}};
+use jsonrpsee_server_utils::hosts::Host;
 use std::{error, net::SocketAddr, pin::Pin};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
@@ -49,7 +50,7 @@ impl HttpRawServer {
     /// Tries to start an HTTP server that listens on the given address with an access control list.
     pub async fn bind_with_acl(
         addr: &SocketAddr,
-        allowed_hosts: Vec<SocketAddr>,
+        allowed_hosts: Option<Vec<Host>>,
     ) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
         let (background_thread, local_addr) = background::BackgroundHttp::bind_with_acl(addr, allowed_hosts)?;
 

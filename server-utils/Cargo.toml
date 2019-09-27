@@ -1,0 +1,25 @@
+[package]
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Server utils for jsonrpsee-http crate."
+documentation = "https://docs.rs/jsonrpsee-server-utils/"
+edition = "2018"
+homepage = "https://github.com/paritytech/jsonrpsee"
+keywords = ["jsonrpc", "json-rpc", "json", "rpc", "serde"]
+license = "MIT"
+name = "jsonrpsee-server-utils"
+repository = "https://github.com/paritytech/jsonrpsee"
+version = "0.1.0"
+
+[dependencies]
+bytes = "0.4"
+globset = "0.4"
+jsonrpsee-core = { path = "../core" }
+lazy_static = "1.1.0"
+log = "0.4"
+num_cpus = "1.8"
+tokio = { version = "0.1" }
+tokio-codec = { version = "0.1" }
+unicase = "2.0"
+
+[badges]
+travis-ci = { repository = "paritytech/jsonrpc", branch = "master"}

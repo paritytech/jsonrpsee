@@ -11,6 +11,7 @@ members = [
     "core",
     "http",
     "proc-macros",
+    "server-utils",
     "ws",
 ]
 

@@ -4,7 +4,9 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
 use hyper::server::conn::AddrStream;
 use jsonrpsee_core::common;
+use jsonrpsee_server_utils::hosts::Host;
 use std::{io, net::SocketAddr, thread};
+use crate::utils;
 
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
@@ -27,20 +29,20 @@ impl BackgroundHttp {
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
     pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
-        Self::bind_with_acl(addr, Vec::new())
+        Self::bind_with_acl(addr, None)
     }
 
-    pub fn bind_with_acl(addr: &SocketAddr, allowed_hosts: Vec<SocketAddr>) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
+    pub fn bind_with_acl(addr: &SocketAddr, allowed_hosts: Option<Vec<Host>>) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
         let (tx, rx) = mpsc::channel(4);
 
-        let make_service = make_service_fn(move |remote: &AddrStream| {
-            let remote = remote.remote_addr();
-            let allowed = allowed_hosts.is_empty() || allowed_hosts.contains(&remote);
+        let make_service = make_service_fn(move |_| {
             let tx = tx.clone();
+            let allowed_hosts = allowed_hosts.clone();
             async move {
                 Ok::<_, Error>(service_fn(move |req| {
                     let mut tx = tx.clone();
-                    async move { Ok::<_, Error>(process_request(req, &mut tx, allowed).await) }
+                    let allowed_hosts = allowed_hosts.clone();
+                    async move { Ok::<_, Error>(process_request(req, &mut tx, &allowed_hosts).await) }
                 }))
             }
         });
@@ -86,12 +88,12 @@ impl BackgroundHttp {
 async fn process_request(
     request: hyper::Request<hyper::Body>,
     fg_process_tx: &mut mpsc::Sender<Request>,
-    allowed: bool, 
+    allowed_hosts: &Option<Vec<Host>>,
 ) -> hyper::Response<hyper::Body> {
     // Process access control 
-    if !allowed {
+    if utils::is_host_allowed(&request, allowed_hosts) {
         return response::host_not_allowed();
-    }
+    }    
 
     /*if self.cors_allow_origin == cors::AllowCors::Invalid && !continue_on_invalid_cors {
         return response::invalid_allow_origin();
