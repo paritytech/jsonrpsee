@@ -91,7 +91,7 @@ async fn process_request(
     allowed_hosts: &Option<Vec<Host>>,
 ) -> hyper::Response<hyper::Body> {
     // Process access control 
-    if utils::is_host_allowed(&request, allowed_hosts) {
+    if !utils::is_host_allowed(&request, allowed_hosts) {
         return response::host_not_allowed();
     }    
 
