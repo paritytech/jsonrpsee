@@ -1,6 +1,19 @@
 use super::{Error, Id, JsonValue, Version};
 use serde::{Deserialize, Serialize};
 
+/// Synchronous response
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+#[serde(untagged)]
+pub enum Response {
+    /// Single response
+    Single(Output),
+    /// Response to batch request (batch of responses)
+    Batch(Vec<Output>),
+    /// Notification to an active subscription.
+    Notif(SubscriptionNotif),
+}
+
 /// Successful response
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -34,6 +47,28 @@ pub enum Output {
     Success(Success),
     /// Failure
     Failure(Failure),
+}
+
+/// Server notification about something the client is subscribed to.
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubscriptionNotif {
+    /// Protocol version
+    pub jsonrpc: Version,
+    /// A String containing the name of the method that was used for the subscription.
+    pub method: String,
+    /// Parameters of the notification.
+    pub params: SubscriptionNotifParams,
+}
+
+/// Field of a [`SubscriptionNotif`].
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubscriptionNotifParams {
+    /// Subscription id, as communicated during the subscription.
+    pub subscription: String,
+    /// Actual data that the server wants to communicate to us.
+    pub result: JsonValue,
 }
 
 impl Output {
@@ -74,17 +109,6 @@ impl From<Output> for Result<JsonValue, Error> {
             Output::Failure(f) => Err(f.error),
         }
     }
-}
-
-/// Synchronous response
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-#[serde(untagged)]
-pub enum Response {
-    /// Single response
-    Single(Output),
-    /// Response to batch request (batch of responses)
-    Batch(Vec<Output>),
 }
 
 impl Response {
