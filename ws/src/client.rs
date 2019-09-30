@@ -34,7 +34,7 @@ impl WsRawClient {
             },
         }
 
-        let mut connection = client.into_connection(true);
+        let mut connection = client.into_connection();
         connection.validate_utf8(true);
         Ok(WsRawClient {
             inner: connection,
