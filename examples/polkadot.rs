@@ -11,5 +11,10 @@ fn main() {
         let mut client = jsonrpsee::ws_client("127.0.0.1:9944").await.unwrap();
         let v = System::system_name(&mut client).await.unwrap();
         println!("{:?}", v);
+
+        let _ = client.start_subscription("chain_subscribeNewHeads", jsonrpsee::core::common::Params::None).await;
+        while let ev = client.next_event().await {
+            println!("ev: {:?}", ev);
+        }
     });
 }

@@ -246,8 +246,8 @@ where
                 }
             },
             common::Response::Notif(notif) => {
-                let sub_id = &notif.params.subscription;
-                if let Some(request_id) = self.subscriptions.get(sub_id) {
+                let sub_id = notif.params.subscription.into_string();
+                if let Some(request_id) = self.subscriptions.get(&sub_id) {
                     self.events_queue.push_back(ClientEvent::SubscriptionNotif {
                         request_id: *request_id,
                         result: notif.params.result,
@@ -262,7 +262,7 @@ where
         Ok(())
     }
 
-    /// Processes the response obtained from the server. updates the internal state of `self` to
+    /// Processes the response obtained from the server. Updates the internal state of `self` to
     /// account for it.
     fn process_response(&mut self, response: common::Output) {
         let request_id = match response.id() {
@@ -300,8 +300,8 @@ where
                     }
                 };
 
-                let sub_id: String = match common::from_value(response) {
-                    Ok(id) => id,
+                let sub_id = match common::from_value::<common::SubscriptionId>(response) {
+                    Ok(id) => id.into_string(),
                     Err(err) => {
                         // TODO: should that be a variant in ClientEvent? probably yes, otherwise users won't clean up pending subscription
                         log::warn!("Failed to parse string subscription id: {:?}", err);
@@ -331,6 +331,8 @@ where
             }
         };
     }
+
+    // TODO: add a way to close subscriptions
 }
 
 impl<E> error::Error for ClientError<E>
