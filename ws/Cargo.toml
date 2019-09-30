@@ -11,11 +11,11 @@ async-std = "0.99.5"
 bytes = "0.4"
 err-derive = "0.1.5"
 fnv = "1.0"
-futures-preview = "0.3.0-alpha.18"
+futures-preview = "=0.3.0-alpha.18"
 futures-timer = "0.3.0"
 jsonrpsee-core = { path = "../core" }
 lazy_static = "1.4.0"
 log = "0.4"
 serde = { version = "1.0.40", features = ["derive"] }
 serde_json = "1.0.40"
-soketto = { git = "https://github.com/twittner/soketto", branch = "develop" }
+soketto = { git = "https://github.com/twittner/soketto", rev = "86a4e8063bff6f08809febe76824126744240622" }
