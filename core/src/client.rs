@@ -4,8 +4,8 @@
 pub use crate::{client::raw::RawClient, common};
 use fnv::{FnvHashMap, FnvHashSet};
 use serde::de::DeserializeOwned;
+use std::{collections::{HashMap, VecDeque, hash_map::Entry}, error, fmt};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::{collections::HashMap, collections::VecDeque, error, fmt};
 
 pub mod raw;
 
@@ -19,7 +19,11 @@ pub struct Client<R> {
     next_request_id: ClientRequestId,
     /// List of requests that have been sent out and that are waiting for a response.
     requests: FnvHashMap<ClientRequestId, Request>,
-    /// List of active subscriptions by ID known to the server.
+    /// List of active subscriptions by ID chosen by the server. Note that this doesn't cover
+    /// subscription requests that have been sent out but not answered yet, as these are in
+    /// the [`requests`](Client::requests) field.
+    /// Since the keys are decided by the server, we use a regular HashMap and its
+    /// hash-collision-resistant algorithm.
     subscriptions: HashMap<String, ClientRequestId>,
     /// Queue of pending events to return from [`Client::next_event`].
     events_queue: VecDeque<ClientEvent>,
@@ -224,7 +228,10 @@ where
         }
     }
 
-    /// Waits for one server message and processes it.
+    /// Waits for one server message and processes it by updating the state of `self`.
+    ///
+    /// Check the content of [`events_queue`](Client::events_queue) afterwards for events to
+    /// dispatch to the user.
     async fn event_step(&mut self) -> Result<(), ClientError<R::Error>> {
         let result = self.inner
             .next_response()
@@ -302,7 +309,15 @@ where
                     }
                 };
 
-                self.subscriptions.insert(sub_id, request_id);
+                match self.subscriptions.entry(sub_id) {
+                    Entry::Vacant(e) => e.insert(request_id),
+                    Entry::Occupied(e) => {
+                        // TODO: should that be a variant in ClientEvent?
+                        log::warn!("Duplicate subscription id sent by server: {:?}", e.key());
+                        return;
+                    }
+                };
+
                 self.events_queue.push_back(ClientEvent::SubscriptionResponse {
                     result: Ok(()),
                     request_id,
