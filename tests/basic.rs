@@ -40,6 +40,9 @@ fn server_works_the_expected_way() {
         jsonrpsee::core::common::Params::Map(map)
     };
 
-    let v: String = async_std::task::block_on(client.request("concat", params)).unwrap();
+    let v: String = async_std::task::block_on(async {
+        let id = client.start_request("concat", params).await.unwrap();
+        jsonrpsee::core::common::from_value(client.wait_response(id).await.unwrap().unwrap())
+    }).unwrap();
     assert_eq!(v, "hello, 5");
 }
