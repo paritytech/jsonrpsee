@@ -434,6 +434,9 @@ where
 
     /// Destroys the subscription object.
     ///
+    /// This does not send any message back to the client. Instead, this function is supposed to
+    /// be used in reaction to the client requesting to be unsubscribed.
+    ///
     /// If this was the last active subscription, also closes the connection ("raw request") with
     /// the client.
     pub async fn close(self) {
