@@ -23,8 +23,8 @@ impl WsRawClient {
     // TODO: better type for target
     pub async fn new_raw(target: impl ToSocketAddrs) -> Result<Self, WsNewError> {
         let tcp_stream = TcpStream::connect(target).await?;
-        let mut client = WsClient::new(tcp_stream, "localhost:9944" /* TODO: */, "/");
-        //client.set_origin("http://127.0.0.1/");     // TODO: ??
+        let mut client = WsClient::new(tcp_stream, "127.0.0.1:9944" /* TODO: */, "/");
+        client.set_origin("https://polkadot.js.org");     // TODO: ??
         match client.handshake().await? {
             ServerResponse::Accepted { .. } => {},
             ServerResponse::Rejected { status_code } |
@@ -34,7 +34,7 @@ impl WsRawClient {
             },
         }
 
-        let mut connection = client.into_connection(true);
+        let mut connection = client.into_connection();
         connection.validate_utf8(true);
         Ok(WsRawClient {
             inner: connection,

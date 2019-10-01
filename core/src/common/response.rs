@@ -1,6 +1,19 @@
 use super::{Error, Id, JsonValue, Version};
 use serde::{Deserialize, Serialize};
 
+/// Synchronous response
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+#[serde(untagged)]
+pub enum Response {
+    /// Single response
+    Single(Output),
+    /// Response to batch request (batch of responses)
+    Batch(Vec<Output>),
+    /// Notification to an active subscription.
+    Notif(SubscriptionNotif),
+}
+
 /// Successful response
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -34,6 +47,39 @@ pub enum Output {
     Success(Success),
     /// Failure
     Failure(Failure),
+}
+
+/// Server notification about something the client is subscribed to.
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubscriptionNotif {
+    /// Protocol version
+    pub jsonrpc: Version,
+    /// A String containing the name of the method that was used for the subscription.
+    pub method: String,
+    /// Parameters of the notification.
+    pub params: SubscriptionNotifParams,
+}
+
+/// Field of a [`SubscriptionNotif`].
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubscriptionNotifParams {
+    /// Subscription id, as communicated during the subscription.
+    pub subscription: SubscriptionId,
+    /// Actual data that the server wants to communicate to us.
+    pub result: JsonValue,
+}
+
+/// Id of a subscription, communicated by the server.
+#[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+#[serde(untagged)]
+pub enum SubscriptionId {
+    /// Numeric id
+    Num(u64),
+    /// String id
+    Str(String),
 }
 
 impl Output {
@@ -76,17 +122,6 @@ impl From<Output> for Result<JsonValue, Error> {
     }
 }
 
-/// Synchronous response
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-#[serde(untagged)]
-pub enum Response {
-    /// Single response
-    Single(Output),
-    /// Response to batch request (batch of responses)
-    Batch(Vec<Output>),
-}
-
 impl Response {
     /// Creates new `Response` with given error and `Version`
     pub fn from(error: impl Into<Error>, jsonrpc: Version) -> Self {
@@ -119,6 +154,16 @@ impl From<Failure> for Response {
 impl From<Success> for Response {
     fn from(success: Success) -> Self {
         Response::Single(Output::Success(success))
+    }
+}
+
+impl SubscriptionId {
+    /// Turns the subcription ID into a string.
+    pub fn into_string(self) -> String {
+        match self {
+            SubscriptionId::Num(n) => n.to_string(),
+            SubscriptionId::Str(s) => s,
+        }
     }
 }
 
