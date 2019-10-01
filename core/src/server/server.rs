@@ -55,6 +55,9 @@ pub enum ServerEvent<'a, R, I> {
     /// Request is a method call.
     Request(ServerRequest<'a, R, I>),
 
+    /// Subscriptions are now ready.
+    SubscriptionsReady(Vec<ServerSubscriptionId>),
+
     /// Subscriptions have been closed because the client closed the connection.
     SubscriptionsClosed(Vec<ServerSubscriptionId>),
 }
@@ -101,6 +104,10 @@ struct SubscriptionState<I> {
     raw_id: I,
     /// Method that triggered the subscription. Must be sent to the client at each notification.
     method: String,
+    /// If true, the subscription shouldn't accept any notification push because the confirmation
+    /// hasn't been sent to the client yet. Once this has switched to `false`, it can never be
+    /// switched to `true` ever again.
+    pending: bool,
 }
 
 impl<R, I> Server<R, I>
@@ -145,6 +152,16 @@ where
                     if self.num_subscriptions.contains_key(&raw_request_id) {
                         debug_assert!(self.raw.supports_resuming(&raw_request_id).unwrap_or(false));
                         let _ = self.raw.send(&raw_request_id, &response).await;
+                        // TODO: that's O(n)
+                        let mut ready = Vec::new();     // TODO: with_capacity
+                        for (sub_id, sub) in self.subscriptions.iter_mut() {
+                            if sub.raw_id == raw_request_id {
+                                ready.push(ServerSubscriptionId(sub_id.clone()));
+                                sub.pending = false;
+                            }
+                        }
+                        debug_assert!(!ready.is_empty());       // TODO: assert that capacity == len
+                        return Ok(ServerEvent::SubscriptionsReady(ready));
                     } else {
                         let _ = self.raw.finish(&raw_request_id, Some(&response)).await;
                     }
@@ -296,6 +313,12 @@ where
     /// [`ServerSubscriptionId`] using
     /// [`from_wire_message`](ServerSubscriptionId::from_wire_message).
     ///
+    /// After the request has been turned into a subscription, the subscription might be in
+    /// "pending mode". Pushing notifications on that subscription will return an error. This
+    /// mechanism is necessary because the subscription request might be part of a batch, and all
+    /// the requests of that batch have to be processed before informing the client of the start
+    /// of the subscription.
+    ///
     /// Returns an error and doesn't do anything if the underlying server doesn't support
     /// subscriptions, or if the connection has already been closed by the client.
     ///
@@ -324,6 +347,7 @@ where
                     e.insert(SubscriptionState {
                         raw_id: raw_request_id.clone(),
                         method: self.inner.method().to_owned(),
+                        pending: true,
                     })
                 },
                 // Continue looping if we accidentally chose an existing ID.
@@ -390,9 +414,12 @@ where
     }
 
     /// Pushes a notification.
-    // TODO: what if batch response hasn't been sent out yet?
     pub async fn push(self, message: impl Into<JsonValue>) {
         let subscription_state = self.server.subscriptions.get(&self.id).unwrap();
+        if subscription_state.pending {
+            return;     // TODO: notify user with error
+        }
+
         let output = common::SubscriptionNotif {
             jsonrpc: common::Version::V2,
             method: subscription_state.method.clone(),

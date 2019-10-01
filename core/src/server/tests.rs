@@ -90,6 +90,13 @@ fn subscriptions_work() {
             _ => panic!()
         };
 
+        match server.next_event().await.unwrap() {
+            ServerEvent::SubscriptionsReady(ready) => {
+                assert_eq!(ready, vec![sub_id]);
+            },
+            _ => panic!()
+        }
+
         server.subscription_by_id(sub_id).unwrap().push("hey there!").await;
         server.subscription_by_id(sub_id).unwrap().push("notif #2").await;
 
