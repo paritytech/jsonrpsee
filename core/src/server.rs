@@ -36,4 +36,5 @@ mod batches;
 mod notification;
 mod params;
 mod server;
+mod tests;
 mod typed_rp;
