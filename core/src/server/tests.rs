@@ -43,7 +43,7 @@ fn subscriptions_work() {
     };
 
     async_std::task::spawn(async move {
-        let call = common::MethodCall {
+        let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
             jsonrpc: common::Version::V2,
             method: "foo".to_string(),
             id: common::Id::Num(981),
@@ -51,9 +51,8 @@ fn subscriptions_work() {
                 "bar".to_string().into(),
                 52.into(),
             ]),
-        };
+        }));
 
-        let request = common::Request::Single(common::Call::MethodCall(call));
         client.send_request(request).await.unwrap();
 
         let sub_id = match client.next_response().await.unwrap() {
@@ -75,7 +74,8 @@ fn subscriptions_work() {
             };
         }
 
-        // TODO: unsubscribe
+        // We destroy the client here, which triggers the `SubscriptionsClosed` event on the
+        // server side.
     });
 
     async_std::task::block_on(async move {
