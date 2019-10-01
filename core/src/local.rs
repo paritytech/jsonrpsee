@@ -16,8 +16,8 @@
 //! let mut server = Server::new(raw_server);
 //!
 //! async_std::task::spawn(async move {
-//!     loop {
-//!         match server.next_event().await.unwrap() {
+//!     while let Ok(event) = server.next_event().await {
+//!         match event {
 //!             ServerEvent::Request(request) => {
 //!                 request.respond(Ok(From::from("hello".to_owned()))).await;
 //!             },
