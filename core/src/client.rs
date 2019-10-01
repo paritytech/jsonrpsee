@@ -4,8 +4,8 @@
 pub use crate::{client::raw::RawClient, common};
 use fnv::{FnvHashMap, FnvHashSet};
 use serde::de::DeserializeOwned;
+use std::{collections::{HashMap, VecDeque, hash_map::Entry}, error, fmt};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::{collections::VecDeque, error, fmt};
 
 pub mod raw;
 
@@ -16,13 +16,20 @@ pub struct Client<R> {
     /// Inner raw client.
     inner: R,
     /// Id to assign to the next request.
-    next_request_id: u64,
-    /// List of active requests.
-    requests: FnvHashSet<u64, Request>,
-    /// Queue of events to return from [`Client::next_event`].
+    next_request_id: ClientRequestId,
+    /// List of requests that have been sent out and that are waiting for a response.
+    requests: FnvHashMap<ClientRequestId, Request>,
+    /// List of active subscriptions by ID chosen by the server. Note that this doesn't cover
+    /// subscription requests that have been sent out but not answered yet, as these are in
+    /// the [`requests`](Client::requests) field.
+    /// Since the keys are decided by the server, we use a regular HashMap and its
+    /// hash-collision-resistant algorithm.
+    subscriptions: HashMap<String, ClientRequestId>,
+    /// Queue of pending events to return from [`Client::next_event`].
     events_queue: VecDeque<ClientEvent>,
 }
 
+/// Type of request that has been sent out and that is waiting for a response.
 #[derive(Debug)]
 enum Request {
     /// A single request expecting a response.
@@ -31,13 +38,37 @@ enum Request {
     PendingSubscription,
 }
 
+/// Unique identifier of a request within a [`Client`].
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ClientRequestId(u64);
+
+/// Event returned by [`Client::next_event`].
 #[derive(Debug)]
 pub enum ClientEvent {
     /// A request has received a response.
     Response {
-        request_id: u64,
+        /// Identifier of the request. Can be matched with the value that [`Client::start_request`]
+        /// has returned.
+        request_id: ClientRequestId,
         /// The response itself.
         result: Result<common::JsonValue, common::Error>,
+    },
+    /// A subscription request has received a response.
+    SubscriptionResponse {
+        /// Identifier of the request. Can be matched with the value that
+        /// [`Client::start_subscription`] has returned.
+        request_id: ClientRequestId,
+        /// On success, we are now actively subscribed.
+        /// [`SubscriptionNotif`](ClientEvent::SubscriptionNotif) events will now be generated.
+        result: Result<(), common::Error>,
+    },
+    /// Notification about something we are subscribed to.
+    SubscriptionNotif {
+        /// Identifier of the request. Can be matched with the value that
+        /// [`Client::start_subscription`] has returned.
+        request_id: ClientRequestId,
+        /// Opaque data that the server wants to communicate to us.
+        result: common::JsonValue,
     }
 }
 
@@ -55,9 +86,10 @@ impl<R> Client<R> {
     pub fn new(inner: R) -> Self {
         Client {
             inner,
-            next_request_id: 0,
+            next_request_id: ClientRequestId(0),
             requests: FnvHashMap::default(),
             events_queue: VecDeque::with_capacity(6),
+            subscriptions: HashMap::default(),
         }
     }
 }
@@ -96,14 +128,11 @@ where
         &mut self,
         method: impl Into<String>,
         params: impl Into<common::Params>,
-    ) -> Result<u64, ClientError<R::Error>> {
+    ) -> Result<ClientRequestId, ClientError<R::Error>> {
         let id = {
             let i = self.next_request_id;
-            self.next_request_id += 1;
-            // TODO: handle that in a better way?
-            if i == u64::max_value() {
-                log::error!("Overflow in client request ID assignment");
-            }
+            self.next_request_id.0 += 1;
+            // TODO: handle overflows?
             i
         };
 
@@ -111,7 +140,7 @@ where
             jsonrpc: common::Version::V2,
             method: method.into(),
             params: params.into(),
-            id: common::Id::Num(id),
+            id: common::Id::Num(id.0),
         }));
 
         self.inner
@@ -132,14 +161,11 @@ where
         &mut self,
         method: impl Into<String>,
         params: impl Into<common::Params>,
-    ) -> Result<u64, ClientError<R::Error>> {
+    ) -> Result<ClientRequestId, ClientError<R::Error>> {
         let id = {
             let i = self.next_request_id;
-            self.next_request_id += 1;
-            // TODO: handle that in a better way?
-            if i == u64::max_value() {
-                log::error!("Overflow in client request ID assignment");
-            }
+            self.next_request_id.0 += 1;
+            // TODO: handle overflows?
             i
         };
 
@@ -147,14 +173,14 @@ where
             jsonrpc: common::Version::V2,
             method: method.into(),
             params: params.into(),
-            id: common::Id::Num(id),
+            id: common::Id::Num(id.0),
         }));
 
         self.inner
             .send_request(request)
             .await
             .map_err(ClientError::Inner)?;
-        let old_val = self.requests.insert(id, Request::Request);
+        let old_val = self.requests.insert(id, Request::PendingSubscription);
         assert!(old_val.is_none());
         Ok(id)
     }
@@ -178,7 +204,8 @@ where
     /// > **Note**: Be careful when using this method, as all the responses and pubsub events
     /// >           returned by the server will be buffered up indefinitely until a response to
     /// >           the right request comes.
-    pub async fn wait_response(&mut self, rq_id: u64)
+    // TODO: if rq_id is subscription, will just block forever
+    pub async fn wait_response(&mut self, rq_id: ClientRequestId)
         -> Result<Result<common::JsonValue, common::Error>, ClientError<R::Error>>
     {
         let mut events_queue_loopkup = 0;
@@ -201,7 +228,10 @@ where
         }
     }
 
-    /// Waits for one server message and processes it.
+    /// Waits for one server message and processes it by updating the state of `self`.
+    ///
+    /// Check the content of [`events_queue`](Client::events_queue) afterwards for events to
+    /// dispatch to the user.
     async fn event_step(&mut self) -> Result<(), ClientError<R::Error>> {
         let result = self.inner
             .next_response()
@@ -215,42 +245,94 @@ where
                     self.process_response(rp);
                 }
             },
+            common::Response::Notif(notif) => {
+                let sub_id = notif.params.subscription.into_string();
+                if let Some(request_id) = self.subscriptions.get(&sub_id) {
+                    self.events_queue.push_back(ClientEvent::SubscriptionNotif {
+                        request_id: *request_id,
+                        result: notif.params.result,
+                    });
+                } else {
+                    // TODO: should that be a variant in ClientEvent?
+                    log::warn!("Server sent subscription notif with an invalid id: {:?}", sub_id);
+                }
+            }
         }
 
         Ok(())
     }
 
-    /// Processes the response obtained from the server. updates the internal state of `self` to
+    /// Processes the response obtained from the server. Updates the internal state of `self` to
     /// account for it.
     fn process_response(&mut self, response: common::Output) {
-        match response.id() {
+        let request_id = match response.id() {
+            common::Id::Num(n) => ClientRequestId(*n),
             common::Id::Str(s) => {
-                log::error!("Server responses with an invalid request id: {:?}", s);
+                // TODO: should that be a variant in ClientEvent?
+                log::warn!("Server responsed with an invalid request id: {:?}", s);
+                return;
             }
             common::Id::Null => {
-                // TODO: subscriptions
+                // TODO: should that be a variant in ClientEvent?
+                log::warn!("Server responsed with a null request id");
+                return;
             }
-            common::Id::Num(n) => {
-                // Find the request that this answered.
-                match self.requests.remove(n) {
-                    Some(Request::Request) => {
-                        let request_id = *n;
-                        self.events_queue.push_back(ClientEvent::Response {
-                            result: response.into(),
+        };
+
+        // Find the request that this answered.
+        match self.requests.remove(&request_id) {
+            Some(Request::Request) => {
+                self.events_queue.push_back(ClientEvent::Response {
+                    result: response.into(),
+                    request_id,
+                });
+            }
+    
+            Some(Request::PendingSubscription) => {
+                let response = match Result::from(response) {
+                    Ok(r) => r,
+                    Err(err) => {
+                        self.events_queue.push_back(ClientEvent::SubscriptionResponse {
+                            result: Err(err),
                             request_id,
                         });
-                    }
-                    Some(Request::PendingSubscription) => {
-                        unimplemented!()
-                    }
-                    None => {
-                        log::error!("Server responses with an invalid request id: {:?}", n);
                         return;
                     }
                 };
+
+                let sub_id = match common::from_value::<common::SubscriptionId>(response) {
+                    Ok(id) => id.into_string(),
+                    Err(err) => {
+                        // TODO: should that be a variant in ClientEvent? probably yes, otherwise users won't clean up pending subscription
+                        log::warn!("Failed to parse string subscription id: {:?}", err);
+                        return;
+                    }
+                };
+
+                match self.subscriptions.entry(sub_id) {
+                    Entry::Vacant(e) => e.insert(request_id),
+                    Entry::Occupied(e) => {
+                        // TODO: should that be a variant in ClientEvent?
+                        log::warn!("Duplicate subscription id sent by server: {:?}", e.key());
+                        return;
+                    }
+                };
+
+                self.events_queue.push_back(ClientEvent::SubscriptionResponse {
+                    result: Ok(()),
+                    request_id,
+                });
             }
-        }
+
+            None => {
+                // TODO: should that be a variant in ClientEvent?
+                log::warn!("Server responsed with an invalid request id: {:?}", request_id);
+                return;
+            }
+        };
     }
+
+    // TODO: add a way to close subscriptions
 }
 
 impl<E> error::Error for ClientError<E>
