@@ -436,11 +436,12 @@ where
     ///
     /// If this was the last active subscription, also closes the connection ("raw request") with
     /// the client.
-    // TODO: what if batch response hasn't been sent out yet?
     pub async fn close(self) {
         let subscription_state = self.server.subscriptions.remove(&self.id).unwrap();
 
-        let finish = match self.server.num_subscriptions.entry(subscription_state.raw_id.clone()) {
+        // Check if we're the last subscription on this connection.
+        // Remove entry from `num_subscriptions` if so.
+        let is_last_sub = match self.server.num_subscriptions.entry(subscription_state.raw_id.clone()) {
             Entry::Vacant(_) => unreachable!(),
             Entry::Occupied(ref mut e) if e.get().get() >= 2 => {
                 let e = e.get_mut();
@@ -453,7 +454,11 @@ where
             }
         };
 
-        if finish {
+        // If the subscription is pending, we have yet to send something back on that connection
+        // and thus shouldn't close it.
+        // When the response is sent back later, the code will realize that `num_subscriptions`
+        // is zero/empty and call `finish`.
+        if is_last_sub && !subscription_state.pending {
             let _ = self.server.raw.finish(&subscription_state.raw_id, None).await;
         }
     }
