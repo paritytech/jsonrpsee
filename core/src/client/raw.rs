@@ -7,11 +7,12 @@ use std::{error, pin::Pin};
 /// Objects that can act as clients.
 ///
 /// > **Note**: Implementations of this trait are allowed (and encouraged, for example for
-/// >           HTTP 1.0) to open multiple simultaneous connections to the same server. However,
+/// >           HTTP 1.x) to open multiple simultaneous connections to the same server. However,
 /// >           since this trait doesn't expose the concept of a connection, and since
 /// >           implementations aren't expected to associated requests with responses, we have no
 /// >           way to enforce that the response to a request arrived on the same connection as the
-/// >           one where the request has been sent. In practice, this shouldn't be a problem.
+/// >           one where the request has been sent. In practice, though, this shouldn't be a
+/// >           problem.
 ///
 pub trait RawClient {
     /// Error that can happen during a request.
