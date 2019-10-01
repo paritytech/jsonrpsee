@@ -20,7 +20,7 @@ pub struct Server<R, I> {
     /// List of active subscriptions.
     /// The identifier is chosen randomly and uniformy distributed. It is never decided by the
     /// client. There is therefore no risk of hash collision attack.
-    subscriptions: FnvHashMap<[u8; 32], I>,
+    subscriptions: FnvHashMap<[u8; 32], SubscriptionState<I>>,
 
     /// For each raw request ID (i.e. client connection), the number of active subscriptions
     /// that are using it.
@@ -68,7 +68,7 @@ pub struct ServerRequest<'a, R, I> {
     raw: &'a mut R,
 
     /// Reference to the corresponding field in `Server`.
-    subscriptions: &'a mut FnvHashMap<[u8; 32], I>,
+    subscriptions: &'a mut FnvHashMap<[u8; 32], SubscriptionState<I>>,
 
     /// Reference to the corresponding field in `Server`.
     num_subscriptions: &'a mut HashMap<I, NonZeroUsize>,
@@ -92,6 +92,15 @@ pub enum IntoSubscriptionErr {
     /// Request has already been closed by the client.
     #[error(display = "Request is already closed")]
     Closed,
+}
+
+/// Internal structure. Information about a subscription.
+#[derive(Debug)]
+struct SubscriptionState<I> {
+    /// Identifier of the connection in the raw server.
+    raw_id: I,
+    /// Method that triggered the subscription. Must be sent to the client at each notification.
+    method: String,
 }
 
 impl<R, I> Server<R, I>
@@ -162,11 +171,11 @@ where
                         }
                     }
 
-                    // Additionally, active subscriptions that were using this subscription are
+                    // Additionally, active subscriptions that were using this connection are
                     // closed.
                     if let Some(_) = self.num_subscriptions.remove(&raw_id) {
                         let ids = self.subscriptions.iter()
-                            .filter(|(_, v)| **v == raw_id)
+                            .filter(|(_, v)| v.raw_id == raw_id)
                             .map(|(k, _)| ServerSubscriptionId(*k))
                             .collect::<Vec<_>>();
                         for id in &ids { let _ = self.subscriptions.remove(&id.0); }
@@ -311,7 +320,12 @@ where
             let new_subscr_id: [u8; 32] = rand::random();
 
             match self.subscriptions.entry(new_subscr_id) {
-                Entry::Vacant(e) => e.insert(raw_request_id.clone()),
+                Entry::Vacant(e) => {
+                    e.insert(SubscriptionState {
+                        raw_id: raw_request_id.clone(),
+                        method: self.inner.method().to_owned(),
+                    })
+                },
                 // Continue looping if we accidentally chose an existing ID.
                 Entry::Occupied(_) => continue,
             };
@@ -378,11 +392,17 @@ where
     /// Pushes a notification.
     // TODO: what if batch response hasn't been sent out yet?
     pub async fn push(self, message: impl Into<JsonValue>) {
-        let raw_id = self.server.subscriptions.get(&self.id).unwrap();
-        let output =
-            common::Output::from(Ok(message.into()), common::Id::Null, common::Version::V2);
-        let response = common::Response::Single(output);
-        let _ = self.server.raw.send(&raw_id, &response).await; // TODO: error handling?
+        let subscription_state = self.server.subscriptions.get(&self.id).unwrap();
+        let output = common::SubscriptionNotif {
+            jsonrpc: common::Version::V2,
+            method: subscription_state.method.clone(),
+            params: common::SubscriptionNotifParams {
+                subscription: common::SubscriptionId::Str(bs58::encode(&self.id).into_string()),
+                result: message.into(),
+            },
+        };
+        let response = common::Response::Notif(output);
+        let _ = self.server.raw.send(&subscription_state.raw_id, &response).await; // TODO: error handling?
     }
 
     /// Destroys the subscription object.
@@ -391,9 +411,9 @@ where
     /// the client.
     // TODO: what if batch response hasn't been sent out yet?
     pub async fn close(self) {
-        let raw_id = self.server.subscriptions.remove(&self.id).unwrap();
+        let subscription_state = self.server.subscriptions.remove(&self.id).unwrap();
 
-        let finish = match self.server.num_subscriptions.entry(raw_id.clone()) {
+        let finish = match self.server.num_subscriptions.entry(subscription_state.raw_id.clone()) {
             Entry::Vacant(_) => unreachable!(),
             Entry::Occupied(ref mut e) if e.get().get() >= 2 => {
                 let e = e.get_mut();
@@ -407,7 +427,7 @@ where
         };
 
         if finish {
-            let _ = self.server.raw.finish(&raw_id, None).await;
+            let _ = self.server.raw.finish(&subscription_state.raw_id, None).await;
         }
     }
 }
