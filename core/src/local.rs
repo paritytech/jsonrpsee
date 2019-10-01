@@ -27,7 +27,8 @@
 //! });
 //!
 //! let rq: String = futures::executor::block_on(async move {
-//!     client.request("test", jsonrpsee_core::common::Params::None).await
+//!     let request_id = client.start_request("test", jsonrpsee_core::common::Params::None).await.unwrap();
+//!     jsonrpsee_core::common::from_value(client.wait_response(request_id).await.unwrap().unwrap())
 //! }).unwrap();
 //! println!("result: {:?}", rq);
 //! ```

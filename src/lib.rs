@@ -36,14 +36,14 @@
 //! [`Client`](core::client::Client). There exist several shortcuts such as the [`http_client`]
 //! method.
 //!
-//! Once a client is created, you can use the [`request`](core::client::Client::request) to perform
-//! requests.
+//! Once a client is created, you can use the
+//! [`start_request`](core::client::Client::start_request) method to perform requests.
 //!
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
 //!     let mut client = jsonrpsee::http_client("http://localhost:8000");
-//!     let request = client.request("system_name", jsonrpsee::core::common::Params::None);
-//!     request.await.unwrap()
+//!     let request_id = client.start_request("system_name", jsonrpsee::core::common::Params::None).await.unwrap();
+//!     jsonrpsee::core::common::from_value(client.wait_response(request_id).await.unwrap().unwrap()).unwrap()
 //! });
 //!
 //! println!("system_name = {:?}", result);
