@@ -84,6 +84,7 @@
 //!                 println!("received notification: {:?}", notif);
 //!             }
 //!             jsonrpsee::core::server::ServerEvent::SubscriptionsClosed(_) => {}
+//!             jsonrpsee::core::server::ServerEvent::SubscriptionsReady(_) => {}
 //!             jsonrpsee::core::server::ServerEvent::Request(rq) => {
 //!                 // Note that `rq` borrows `server`. If you want to store the request for later,
 //!                 // you should get its id by calling `let id = rq.id();`, then later call
