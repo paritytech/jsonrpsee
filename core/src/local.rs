@@ -16,8 +16,8 @@
 //! let mut server = Server::new(raw_server);
 //!
 //! async_std::task::spawn(async move {
-//!     loop {
-//!         match server.next_event().await.unwrap() {
+//!     while let Ok(event) = server.next_event().await {
+//!         match event {
 //!             ServerEvent::Request(request) => {
 //!                 request.respond(Ok(From::from("hello".to_owned()))).await;
 //!             },
@@ -124,7 +124,16 @@ impl RawServer for LocalRawServer {
         Box::pin(async move {
             let request = match self.from_client.next().await {
                 Some(v) => v,
-                None => return RawServerEvent::ServerClosed,
+                None => {
+                    if let Some(rq_id) = self.requests.iter().cloned().next() {
+                        self.requests.remove(&rq_id);
+                        return RawServerEvent::Closed(rq_id);
+
+                    } else {
+                        // TODO: should we really return that? does that event make sense at all?
+                        return RawServerEvent::ServerClosed;
+                    }
+                },
             };
 
             loop {
