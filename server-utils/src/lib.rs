@@ -1,5 +1,5 @@
-//! JSON-RPC servers utilities.
-#![deny(missing_docs)]
+//! Server utilities for the `jsonrpsee` library
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate log;

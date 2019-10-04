@@ -8,7 +8,7 @@ fn read_header<'a>(req: &'a hyper::Request<hyper::Body>, header_name: &str) -> O
 }
 
 /// Returns `true` if Host header in request matches a list of allowed hosts.
-pub fn is_host_allowed(request: &hyper::Request<hyper::Body>, allowed_hosts: &Option<Vec<hosts::Host>>) -> bool {
+pub fn is_host_allowed(request: &hyper::Request<hyper::Body>, allowed_hosts: &hosts::AllowedHosts) -> bool {
 	hosts::is_host_valid(read_header(request, "host"), allowed_hosts)
 }
 

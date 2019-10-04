@@ -2,11 +2,11 @@ use crate::server::response;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
-use hyper::server::conn::AddrStream;
 use jsonrpsee_core::common;
-use jsonrpsee_server_utils::hosts::Host;
+use jsonrpsee_server_utils::hosts::AllowedHosts;
 use std::{io, net::SocketAddr, thread};
 use crate::utils;
+
 
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
@@ -29,10 +29,10 @@ impl BackgroundHttp {
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
     pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
-        Self::bind_with_acl(addr, None)
+        Self::bind_with_acl(addr, AllowedHosts::Any)
     }
 
-    pub fn bind_with_acl(addr: &SocketAddr, allowed_hosts: Option<Vec<Host>>) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
+    pub fn bind_with_acl(addr: &SocketAddr, allowed_hosts: AllowedHosts) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
         let (tx, rx) = mpsc::channel(4);
 
         let make_service = make_service_fn(move |_| {
@@ -88,7 +88,7 @@ impl BackgroundHttp {
 async fn process_request(
     request: hyper::Request<hyper::Body>,
     fg_process_tx: &mut mpsc::Sender<Request>,
-    allowed_hosts: &Option<Vec<Host>>,
+    allowed_hosts: &AllowedHosts,
 ) -> hyper::Response<hyper::Body> {
     // Process access control 
     if !utils::is_host_allowed(&request, allowed_hosts) {
