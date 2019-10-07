@@ -38,7 +38,7 @@ use crate::{common, RawClient, RawServer, RawServerEvent};
 use err_derive::*;
 use fnv::FnvHashSet;
 use futures::{channel::mpsc, prelude::*};
-use std::{collections::hash_map::Entry, fmt, pin::Pin};
+use std::{fmt, pin::Pin};
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
