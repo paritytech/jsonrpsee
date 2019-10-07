@@ -11,7 +11,7 @@
 //! - Ignore this request and process it later. This can only be done for requests that have an ID,
 //! and not for notifications.
 //!
-// Copyright (c) 2019 Parity Technologies Limited
+// Copyright 2019 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
