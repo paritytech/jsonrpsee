@@ -157,6 +157,14 @@ impl fmt::Debug for WsRawClient {
 }
 
 impl<'a> WsRawClientBuilder<'a> {
+    /// Sets the URL to pass during the HTTP handshake.
+    ///
+    /// The default URL is `/`.
+    pub fn with_url(mut self, url: impl Into<Cow<'a, str>>) -> Self {
+        self.url = url.into();
+        self
+    }
+
     /// Sets the `Origin` header to pass during the HTTP handshake.
     ///
     /// By default, no `Origin` header is sent.
