@@ -22,19 +22,19 @@
 //! TODO: write example
 //!
 
+pub use self::core::{Server, ServerEvent, ServerRequest, ServerRequestId, ServerSubscriptionId};
 pub use self::notification::Notification;
 pub use self::params::{
     Iter as ParamsIter, ParamKey as ParamsKey, Params,
 };
-pub use self::server::{Server, ServerEvent, ServerRequest, ServerRequestId, ServerSubscriptionId};
 pub use self::typed_rp::TypedResponder;
 
 pub mod raw;
 
 mod batch;
 mod batches;
+mod core;
 mod notification;
 mod params;
-mod server;
 mod tests;
 mod typed_rp;
