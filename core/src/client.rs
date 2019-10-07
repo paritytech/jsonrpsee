@@ -264,7 +264,7 @@ where
         loop {
             for (offset, ev) in self.events_queue.iter().enumerate().skip(events_queue_loopkup) {
                 match ev {
-                    ClientEvent::Response { request_id, result } if *request_id == rq_id => {
+                    ClientEvent::Response { request_id, .. } if *request_id == rq_id => {
                         match self.events_queue.remove(offset) {
                             Some(ClientEvent::Response { result, .. }) => return Ok(result),
                             _ => unreachable!()
