@@ -5,10 +5,9 @@
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
 
-use async_std::net::ToSocketAddrs;
 use jsonrpsee_core::client::Client;
 
-pub use crate::client::{WsRawClient, WsNewError, WsConnecError};
+pub use crate::client::{WsConnecError, WsNewError, WsRawClient};
 
 // TODO: server
 
@@ -18,6 +17,6 @@ pub type WsClient = Client<WsRawClient>;
 mod client;
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
-pub async fn ws_client(addr: impl ToSocketAddrs) -> Result<WsClient, client::WsNewError> {
-    WsRawClient::new(addr).await
+pub async fn ws_client(target: &str) -> Result<WsClient, client::WsNewDnsError> {
+    WsRawClient::new(target).await
 }
