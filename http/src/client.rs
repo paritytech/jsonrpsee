@@ -50,7 +50,7 @@ impl HttpRawClient {
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::Builder::new()
-            .name("jsonrpc-hyper-client".to_string())
+            .name("jsonrpsee-hyper-client".to_string())
             .spawn(move || background_thread(requests_rx))
             .unwrap();
 
