@@ -1,7 +1,4 @@
 language: rust
-cache:
-  cargo: true
-  timeout: 1000
 
 rust:
   - nightly
