@@ -32,6 +32,12 @@
 //! you about subscriptions through the [`next_event`](Client::next_event) method and the
 //! [`ClientEvent`] enum.
 //!
+//! > **Note**: The [`wait_response`](Client::wait_response) method will buffer up incoming
+//! >           notifications up to a certain limit. Once this limit is reached, new notifications
+//! >           will be silently discarded. This behaviour exists to prevent DoS attacks from
+//! >           the server. If you want to be certain to not miss any notification, please only
+//! >           use the [`next_event`](Client::next_event) method.
+//!
 
 pub use crate::{client::raw::RawClient, common};
 use fnv::FnvHashMap;
@@ -61,7 +67,15 @@ pub struct Client<R> {
     subscriptions: HashMap<String, ClientRequestId>,
 
     /// Queue of pending events to return from [`Client::next_event`].
+    // TODO: call shrink_to from time to time; see https://github.com/rust-lang/rust/issues/56431
     events_queue: VecDeque<ClientEvent>,
+
+    /// Maximum allowed size of [`Client::events_queue`].
+    ///
+    /// If this size is reached, elements can still be pushed to the queue if they are critical,
+    /// but will be discarded if they are not.
+    // TODO: make this configurable? note: if this is configurable, it should always be >= 1
+    events_queue_max_size: usize,
 }
 
 /// Type of request that has been sent out and that is waiting for a response.
@@ -138,8 +152,9 @@ impl<R> Client<R> {
             inner,
             next_request_id: ClientRequestId(0),
             requests: FnvHashMap::default(),
-            events_queue: VecDeque::with_capacity(6),
             subscriptions: HashMap::default(),
+            events_queue: VecDeque::with_capacity(16),
+            events_queue_max_size: 64,
         }
     }
 }
@@ -252,9 +267,11 @@ where
 
     /// Waits until the server sends back a response for the given request, and returns it.
     ///
-    /// > **Note**: Be careful when using this method, as all the responses and pubsub events
-    /// >           returned by the server will be buffered up indefinitely until a response to
-    /// >           the right request comes.
+    /// > **Note**: While this function is waiting, all the other responses and pubsub events
+    /// >           returned by the server will be buffered up to a certain limit. Once this
+    /// >           limit is reached, server notifications will be discarded. If you want to be
+    /// >           sure to catch all notifications, use [`next_event`](Client::next_event)
+    /// >           instead.
     // TODO: if rq_id is subscription, will just block forever
     pub async fn wait_response(&mut self, rq_id: ClientRequestId)
         -> Result<Result<common::JsonValue, common::Error>, ClientError<R::Error>>
@@ -262,24 +279,28 @@ where
         let mut events_queue_loopkup = 0;
 
         loop {
-            for (offset, ev) in self.events_queue.iter().enumerate().skip(events_queue_loopkup) {
-                match ev {
+            while events_queue_loopkup < self.events_queue.len() {
+                match &self.events_queue[events_queue_loopkup] {
                     ClientEvent::Response { request_id, .. } if *request_id == rq_id => {
-                        match self.events_queue.remove(offset) {
-                            Some(ClientEvent::Response { result, .. }) => return Ok(result),
+                        return match self.events_queue.remove(events_queue_loopkup) {
+                            Some(ClientEvent::Response { result, .. }) => Ok(result),
                             _ => unreachable!()
                         }
                     },
                     _ => {}
                 }
+
+                events_queue_loopkup += 1;
             }
 
-            events_queue_loopkup = self.events_queue.len();
             self.event_step().await?;
         }
     }
 
     /// Waits for one server message and processes it by updating the state of `self`.
+    ///
+    /// If the events queue is full (see [`Client::events_queue_max_size`]), then responses to
+    /// requests will still be pushed to the queue, but notifications will be discarded.
     ///
     /// Check the content of [`events_queue`](Client::events_queue) afterwards for events to
     /// dispatch to the user.
@@ -300,10 +321,12 @@ where
             common::Response::Notif(notif) => {
                 let sub_id = notif.params.subscription.into_string();
                 if let Some(request_id) = self.subscriptions.get(&sub_id) {
-                    self.events_queue.push_back(ClientEvent::SubscriptionNotif {
-                        request_id: *request_id,
-                        result: notif.params.result,
-                    });
+                    if self.events_queue.len() < self.events_queue_max_size {
+                        self.events_queue.push_back(ClientEvent::SubscriptionNotif {
+                            request_id: *request_id,
+                            result: notif.params.result,
+                        });
+                    }
                 } else {
                     log::warn!("Server sent subscription notif with an invalid id: {:?}", sub_id);
                     return Err(ClientError::UnknownSubscriptionId);
