@@ -279,19 +279,20 @@ where
         let mut events_queue_loopkup = 0;
 
         loop {
-            for (offset, ev) in self.events_queue.iter().enumerate().skip(events_queue_loopkup) {
-                match ev {
+            while events_queue_loopkup < self.events_queue.len() {
+                match &self.events_queue[events_queue_loopkup] {
                     ClientEvent::Response { request_id, .. } if *request_id == rq_id => {
-                        match self.events_queue.remove(offset) {
-                            Some(ClientEvent::Response { result, .. }) => return Ok(result),
+                        return match self.events_queue.remove(events_queue_loopkup) {
+                            Some(ClientEvent::Response { result, .. }) => Ok(result),
                             _ => unreachable!()
                         }
                     },
                     _ => {}
                 }
+
+                events_queue_loopkup += 1;
             }
 
-            events_queue_loopkup = self.events_queue.len();
             self.event_step().await?;
         }
     }
