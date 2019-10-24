@@ -64,6 +64,25 @@ pub struct ApiMethodAttrs {
     pub method: Option<String>,
 }
 
+impl ApiMethod {
+    /// Returns true if this method has a `()` return type.
+    ///
+    /// This is used to determine whether this should be a notification or a method call.
+    pub fn is_void_ret_type(&self) -> bool {
+        let ret_ty = match &self.signature.output {
+            syn::ReturnType::Default => return true,
+            syn::ReturnType::Type(_, ty) => ty,
+        };
+
+        let tuple_ret_ty = match &**ret_ty {
+            syn::Type::Tuple(tuple) => tuple,
+            _ => return false,
+        };
+
+        tuple_ret_ty.elems.is_empty()
+    }
+}
+
 /// Implementation detail of `ApiDefinition`.
 /// Parses one single block of function definitions.
 #[derive(Debug)]

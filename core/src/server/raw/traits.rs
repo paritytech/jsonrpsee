@@ -26,7 +26,7 @@
 
 use crate::common;
 use futures::prelude::*;
-use std::{error, hash::Hash, io, pin::Pin};
+use std::{hash::Hash, pin::Pin};
 
 /// Reference to a server that can produce JSON payloads for us to answer.
 ///

@@ -29,6 +29,8 @@ jsonrpsee::rpc_api! {
         /// Test
         fn system_name(foo: String, bar: i32) -> String;
 
+        fn test_notif(foo: String, bar: i32);
+
         /// Test2
         #[rpc(method = "foo")]
         fn system_name2() -> String;
@@ -54,12 +56,18 @@ fn main() {
                 Health::SystemName2 { respond } => {
                     respond.ok("hello 2").await;
                 }
+                Health::TestNotif { foo, bar } => {
+                    println!("server got notif: {:?} {:?}", foo, bar);
+                }
             }
         }
     });
 
     // Client demo.
     let mut client = jsonrpsee::http_client("http://127.0.0.1:8000");
-    let v = async_std::task::block_on(Health::system_name(&mut client, "hello", 5)).unwrap();
+    let v = async_std::task::block_on(async {
+        Health::test_notif(&mut client, "notif_string", 192).await.unwrap();
+        Health::system_name(&mut client, "hello", 5).await.unwrap()
+    });
     println!("{:?}", v);
 }

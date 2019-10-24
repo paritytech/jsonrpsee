@@ -389,7 +389,7 @@ where
                 .or_insert_with(|| NonZeroUsize::new(1).expect("1 != 0"));
 
             let subscr_id_string = bs58::encode(&new_subscr_id).into_string();
-            let server = self.inner.set_response(Ok(subscr_id_string.into()));
+            self.inner.set_response(Ok(subscr_id_string.into()));
             break Ok(ServerSubscriptionId(new_subscr_id));
         }
     }
