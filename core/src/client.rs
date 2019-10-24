@@ -18,7 +18,7 @@
 //! **Requests** are messages that expect an answer. A request can be sent using the
 //! [`start_request`](Client::start_request) method. This method returns a [`ClientRequestId`] that
 //! is used to identify this request within the internals of the [`Client`]. You can then call
-//! [`wait_response`](Client::wait_response) to wait for a response from a server about a specific
+//! [`request_by_id`](Client::request_by_id) to wait for a response from a server about a specific
 //! request. You are however encouraged to use [`next_event`](Client::next_event) instead, which
 //! produces a [`ClientEvent`] indicating you what the server did.
 //!
@@ -32,7 +32,7 @@
 //! you about subscriptions through the [`next_event`](Client::next_event) method and the
 //! [`ClientEvent`] enum.
 //!
-//! > **Note**: The [`wait_response`](Client::wait_response) method will buffer up incoming
+//! > **Note**: The [`request_by_id`](Client::request_by_id) method will buffer up incoming
 //! >           notifications up to a certain limit. Once this limit is reached, new notifications
 //! >           will be silently discarded. This behaviour exists to prevent DoS attacks from
 //! >           the server. If you want to be certain to not miss any notification, please only
