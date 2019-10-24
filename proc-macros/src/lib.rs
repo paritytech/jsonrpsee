@@ -306,7 +306,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             quote_spanned!(function.signature.span()=>
                 let rq_id = client.start_request(#rpc_method_name, #params_building).await
                     .map_err(jsonrpsee::core::client::ClientError::Inner)?;
-                let data = client.wait_response(rq_id).await?.unwrap();     // TODO: don't unwrap
+                let data = client.request_by_id(rq_id).unwrap().await?;     // TODO: don't unwrap?
                 Ok(jsonrpsee::core::common::from_value(data).unwrap())     // TODO: don't unwrap
             )
         };

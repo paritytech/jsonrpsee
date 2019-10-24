@@ -18,7 +18,7 @@
 //! **Requests** are messages that expect an answer. A request can be sent using the
 //! [`start_request`](Client::start_request) method. This method returns a [`ClientRequestId`] that
 //! is used to identify this request within the internals of the [`Client`]. You can then call
-//! [`wait_response`](Client::wait_response) to wait for a response from a server about a specific
+//! [`request_by_id`](Client::request_by_id) to wait for a response from a server about a specific
 //! request. You are however encouraged to use [`next_event`](Client::next_event) instead, which
 //! produces a [`ClientEvent`] indicating you what the server did.
 //!
@@ -32,7 +32,7 @@
 //! you about subscriptions through the [`next_event`](Client::next_event) method and the
 //! [`ClientEvent`] enum.
 //!
-//! > **Note**: The [`wait_response`](Client::wait_response) method will buffer up incoming
+//! > **Note**: The [`request_by_id`](Client::request_by_id) method will buffer up incoming
 //! >           notifications up to a certain limit. Once this limit is reached, new notifications
 //! >           will be silently discarded. This behaviour exists to prevent DoS attacks from
 //! >           the server. If you want to be certain to not miss any notification, please only
@@ -41,7 +41,7 @@
 
 pub use crate::{client::raw::RawClient, common};
 use fnv::FnvHashMap;
-use std::{collections::{HashMap, VecDeque, hash_map::Entry}, error, fmt};
+use std::{collections::{HashMap, VecDeque, hash_map::Entry}, error, fmt, future::Future};
 
 pub mod raw;
 
@@ -79,7 +79,7 @@ pub struct Client<R> {
 }
 
 /// Type of request that has been sent out and that is waiting for a response.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Request {
     /// A single request expecting a response.
     Request,
@@ -123,11 +123,40 @@ pub enum ClientEvent {
     }
 }
 
+/// Access to a subscription within a [`Client`].
+#[derive(Debug)]
+pub enum ClientSubscription<'a, R> {
+    /// The server hasn't accepted our subscription request yet.
+    Pending(ClientPendingSubscription<'a, R>),
+    /// The server has accepted our subscription request. We might receive notifications for it.
+    Active(ClientActiveSubscription<'a, R>),
+}
+
+/// Access to a subscription within a [`Client`].
+#[derive(Debug)]
+pub struct ClientPendingSubscription<'a, R> {
+    /// Reference to the [`Client`].
+    client: &'a mut Client<R>,
+    /// Identifier of the subscription within the [`Client`].
+    id: ClientRequestId,
+}
+
+/// Access to a subscription within a [`Client`].
+#[derive(Debug)]
+pub struct ClientActiveSubscription<'a, R> {
+    /// Reference to the [`Client`].
+    client: &'a mut Client<R>,
+    /// Identifier of the subscription within the [`Client`].
+    id: ClientRequestId,
+}
+
 /// Error that can happen during a request.
 #[derive(Debug)]
 pub enum ClientError<E> {
     /// Error in the raw client.
     Inner(E),
+    /// Server returned an error for our request.
+    RequestError(common::Error),
     /// Server has sent back a subscription ID that has already been used by an earlier
     /// subscription.
     DuplicateSubscriptionId,
@@ -265,35 +294,78 @@ where
         }
     }
 
-    /// Waits until the server sends back a response for the given request, and returns it.
+    /// Returns a `Future` that resolves when the server sends back a response for the given
+    /// request.
+    ///
+    /// Returns `None` if the request identifier is invalid, or if the request is a subscription.
     ///
     /// > **Note**: While this function is waiting, all the other responses and pubsub events
     /// >           returned by the server will be buffered up to a certain limit. Once this
     /// >           limit is reached, server notifications will be discarded. If you want to be
     /// >           sure to catch all notifications, use [`next_event`](Client::next_event)
     /// >           instead.
-    // TODO: if rq_id is subscription, will just block forever
-    pub async fn wait_response(&mut self, rq_id: ClientRequestId)
-        -> Result<Result<common::JsonValue, common::Error>, ClientError<R::Error>>
+    pub fn request_by_id<'a>(&'a mut self, rq_id: ClientRequestId)
+        -> Option<impl Future<Output = Result<common::JsonValue, ClientError<R::Error>>> + 'a>
     {
-        let mut events_queue_loopkup = 0;
+        // First, let's check whether the request ID is valid.
+        if let Some(rq) = self.requests.get(&rq_id) {
+            if *rq != Request::Request {
+                return None;
+            }
+        } else {
+            return None;
+        }
 
-        loop {
-            while events_queue_loopkup < self.events_queue.len() {
-                match &self.events_queue[events_queue_loopkup] {
-                    ClientEvent::Response { request_id, .. } if *request_id == rq_id => {
-                        return match self.events_queue.remove(events_queue_loopkup) {
-                            Some(ClientEvent::Response { result, .. }) => Ok(result),
-                            _ => unreachable!()
-                        }
-                    },
-                    _ => {}
+        Some(async move {
+            let mut events_queue_loopkup = 0;
+
+            loop {
+                while events_queue_loopkup < self.events_queue.len() {
+                    match &self.events_queue[events_queue_loopkup] {
+                        ClientEvent::Response { request_id, .. } if *request_id == rq_id => {
+                            return match self.events_queue.remove(events_queue_loopkup) {
+                                Some(ClientEvent::Response { result, .. }) => {
+                                    result.map_err(ClientError::RequestError)
+                                },
+                                _ => unreachable!()
+                            }
+                        },
+                        _ => {}
+                    }
+
+                    events_queue_loopkup += 1;
                 }
 
-                events_queue_loopkup += 1;
+                self.event_step().await?;
+            }
+        })
+    }
+
+    /// Returns a [`ClientSubscription`] object representing a certain active or pending
+    /// subscription.
+    ///
+    /// Returns `None` if the identifier is invalid, or if it is not a subscription.
+    pub fn subscription_by_id(&mut self, rq_id: ClientRequestId) -> Option<ClientSubscription<R>> {
+        if let Some(rq) = self.requests.get(&rq_id) {
+            debug_assert!(!self.subscriptions.values().any(|i| *i == rq_id));
+            if *rq == Request::PendingSubscription {
+                Some(ClientSubscription::Pending(ClientPendingSubscription {
+                    client: self,
+                    id: rq_id,
+                }))
+
+            } else {
+                None
             }
 
-            self.event_step().await?;
+        } else if self.subscriptions.values().any(|i| *i == rq_id) {
+            Some(ClientSubscription::Active(ClientActiveSubscription {
+                client: self,
+                id: rq_id,
+            }))
+
+        } else {
+            None
         }
     }
 
@@ -403,8 +475,115 @@ where
 
         Ok(())
     }
+}
 
-    // TODO: add a way to close subscriptions
+impl<R> fmt::Debug for Client<R>
+where
+    R: fmt::Debug
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Client")
+            .field("inner", &self.inner)
+            .field("pending_requests", &self.requests.keys())
+            .field("active_subscriptions", &self.subscriptions.keys())
+            .finish()
+    }
+}
+
+impl<'a, R> ClientSubscription<'a, R>
+where
+    R: RawClient,
+{
+    /// Returns true if the subscription is active. That is, if the server has accepted our
+    /// subscription request and might generate events.
+    pub fn is_active(&self) -> bool {
+        match self {
+            ClientSubscription::Pending(_) => false,
+            ClientSubscription::Active(_) => true,
+        }
+    }
+}
+
+impl<'a, R> ClientPendingSubscription<'a, R>
+where
+    R: RawClient,
+{
+    // TODO: since this is the only method, maybe we could replace `ClientPendingSubscription`
+    //       with an `impl Future` once the `impl Trait` feature is stabilized
+    /// Wait until the server sends back an answer to this subscription request.
+    ///
+    /// > **Note**: While this function is waiting, all the other responses and pubsub events
+    /// >           returned by the server will be buffered up to a certain limit. Once this
+    /// >           limit is reached, server notifications will be discarded. If you want to be
+    /// >           sure to catch all notifications, use [`next_event`](Client::next_event)
+    /// >           instead.
+    pub async fn wait(self) -> Result<ClientActiveSubscription<'a, R>, ClientError<R::Error>> {
+        let mut events_queue_loopkup = 0;
+
+        loop {
+            while events_queue_loopkup < self.client.events_queue.len() {
+                match &self.client.events_queue[events_queue_loopkup] {
+                    ClientEvent::SubscriptionResponse { request_id, .. } if *request_id == self.id => {
+                        return match self.client.events_queue.remove(events_queue_loopkup) {
+                            Some(ClientEvent::SubscriptionResponse { result: Ok(()), .. }) =>
+                                Ok(ClientActiveSubscription {
+                                    client: self.client,
+                                    id: self.id,
+                                }),
+                            Some(ClientEvent::SubscriptionResponse { result: Err(err), .. }) =>
+                                Err(ClientError::RequestError(err)),
+                            _ => unreachable!()
+                        }
+                    },
+                    _ => {}
+                }
+
+                events_queue_loopkup += 1;
+            }
+
+            self.client.event_step().await?;
+        }
+    }
+}
+
+impl<'a, R> ClientActiveSubscription<'a, R>
+where
+    R: RawClient,
+{
+    /// Returns a `Future` that resolves when the server sends back a notification for this
+    /// subscription.
+    ///
+    /// > **Note**: While this function is waiting, all the other responses and pubsub events
+    /// >           returned by the server will be buffered up to a certain limit. Once this
+    /// >           limit is reached, server notifications will be discarded. If you want to be
+    /// >           sure to catch all notifications, use [`next_event`](Client::next_event)
+    /// >           instead.
+    pub async fn next_notification(&mut self) -> Result<common::JsonValue, ClientError<R::Error>> {
+        let mut events_queue_loopkup = 0;
+
+        loop {
+            while events_queue_loopkup < self.client.events_queue.len() {
+                match &self.client.events_queue[events_queue_loopkup] {
+                    ClientEvent::SubscriptionNotif { request_id, .. } if *request_id == self.id => {
+                        return match self.client.events_queue.remove(events_queue_loopkup) {
+                            Some(ClientEvent::SubscriptionNotif { result, .. }) => Ok(result),
+                            _ => unreachable!()
+                        }
+                    },
+                    _ => {}
+                }
+
+                events_queue_loopkup += 1;
+            }
+
+            self.client.event_step().await?;
+        }
+    }
+
+    // TODO: add a way to close a subscription; however user needs to pass a method name or
+    //       something though
+    /*pub fn close(self) {
+    }*/
 }
 
 impl<E> error::Error for ClientError<E>
@@ -414,6 +593,7 @@ where
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             ClientError::Inner(ref err) => Some(err),
+            ClientError::RequestError(ref err) => Some(err),
             ClientError::DuplicateSubscriptionId => None,
             ClientError::SubscriptionIdParseError => None,
             ClientError::UnknownRequestId => None,
@@ -430,6 +610,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ClientError::Inner(ref err) => write!(f, "Error in the raw client: {}", err),
+            ClientError::RequestError(ref err) => write!(f, "Server returned error: {}", err),
             ClientError::DuplicateSubscriptionId =>
                 write!(f, "Server has responded with a subscription ID that's already in use"),
             ClientError::SubscriptionIdParseError => write!(f, "Subscription ID parse error"),
