@@ -3,7 +3,8 @@ use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
 use jsonrpsee_core::common;
-use jsonrpsee_server_utils::hosts::AllowedHosts;
+use jsonrpsee_server_utils::cors;
+use jsonrpsee_server_utils::access_control::AccessControl;
 use std::{io, net::SocketAddr, thread};
 use crate::utils;
 
@@ -29,20 +30,20 @@ impl BackgroundHttp {
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
     pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
-        Self::bind_with_acl(addr, AllowedHosts::Any)
+        Self::bind_with_acl(addr, AccessControl::default())
     }
 
-    pub fn bind_with_acl(addr: &SocketAddr, allowed_hosts: AllowedHosts) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
+    pub fn bind_with_acl(addr: &SocketAddr, access_control: AccessControl) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
         let (tx, rx) = mpsc::channel(4);
 
         let make_service = make_service_fn(move |_| {
             let tx = tx.clone();
-            let allowed_hosts = allowed_hosts.clone();
+            let access_control = access_control.clone();
             async move {
                 Ok::<_, Error>(service_fn(move |req| {
                     let mut tx = tx.clone();
-                    let allowed_hosts = allowed_hosts.clone();
-                    async move { Ok::<_, Error>(process_request(req, &mut tx, &allowed_hosts).await) }
+                    let access_control = access_control.clone();
+                    async move { Ok::<_, Error>(process_request(req, &mut tx, &access_control).await) }
                 }))
             }
         });
@@ -91,23 +92,27 @@ impl BackgroundHttp {
 async fn process_request(
     request: hyper::Request<hyper::Body>,
     fg_process_tx: &mut mpsc::Sender<Request>,
-    allowed_hosts: &AllowedHosts,
+    access_control: &AccessControl,
 ) -> hyper::Response<hyper::Body> {
     // Process access control 
-    if !utils::is_host_allowed(&request, allowed_hosts) {
+    if !utils::is_host_allowed(&request, &access_control.allowed_hosts) {
         return response::host_not_allowed();
-    }    
-
-    /*if self.cors_allow_origin == cors::AllowCors::Invalid && !continue_on_invalid_cors {
+    }
+    
+    let cors_allow_origin = utils::cors_allow_origin(&request, &access_control.cors_allow_origin);
+    if cors_allow_origin == cors::AllowCors::Invalid && !access_control.continue_on_invalid_cors {
         return response::invalid_allow_origin();
     }
 
-    if self.cors_allow_headers == cors::AllowCors::Invalid && !continue_on_invalid_cors {
+    let cors_allow_headers = utils::cors_allow_headers(&request, &access_control.cors_allow_headers);
+    if cors_allow_headers == cors::AllowCors::Invalid && !access_control.continue_on_invalid_cors {
         return response::invalid_allow_headers();
     }
-
+    
+    /*
     // Read metadata
-    let metadata = self.jsonrpc_handler.extractor.read_metadata(&request);*/
+    let metadata = self.jsonrpc_handler.extractor.read_metadata(&request);
+    */
 
     // Proceed
     match *request.method() {

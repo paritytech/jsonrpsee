@@ -8,7 +8,7 @@
 use jsonrpsee_core::client::Client;
 use jsonrpsee_core::server::{raw::RawServer, Server};
 use jsonrpsee_server_utils as server_utils;
-use server_utils::hosts::AllowedHosts;
+use server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr};
 
 pub use crate::client::HttpRawClient;
@@ -33,9 +33,9 @@ pub async fn http_server(
 /// Starts a [`Server`](../Server) object that serves HTTP with a whitlist access control.
 pub async fn http_server_with_acl(
     addr: &SocketAddr,
-    allowed_hosts: AllowedHosts,
+    access_control: AccessControl,
 ) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
-    Ok(Server::new(HttpRawServer::bind_with_acl(addr, allowed_hosts).await?))
+    Ok(Server::new(HttpRawServer::bind_with_acl(addr, access_control).await?))
 }
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.

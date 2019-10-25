@@ -171,7 +171,7 @@ pub fn update(hosts: Option<Vec<Host>>, address: &SocketAddr) -> Option<Vec<Host
 	})
 }
 
-/// Access control for http header 'host' 
+/// Allowed hosts for http header 'host' 
 #[derive(Clone)]
 pub enum AllowedHosts {
     /// Allow requests from any host 
@@ -205,6 +205,8 @@ mod tests {
 	#[test]
 	fn should_reject_when_there_is_no_header() {
 		let valid = is_host_valid(None, &AllowedHosts::Any);
+		assert_eq!(valid, false);
+		let valid = is_host_valid(None, &AllowedHosts::Only(vec![]));
 		assert_eq!(valid, false);
 	}
 
