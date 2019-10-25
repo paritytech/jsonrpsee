@@ -21,7 +21,6 @@ pub type HttpServer = Server<HttpRawServer, <HttpRawServer as RawServer>::Reques
 
 mod client;
 mod server;
-mod utils;
 
 /// Starts a [`Server`](../Server) object that serves HTTP.
 pub async fn http_server(

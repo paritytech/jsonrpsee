@@ -14,5 +14,6 @@ pub mod access_control;
 pub mod cors;
 pub mod hosts;
 mod matcher;
+pub mod utils;
 
 pub use crate::matcher::Pattern;

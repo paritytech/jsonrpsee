@@ -3,10 +3,8 @@ use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
 use jsonrpsee_core::common;
-use jsonrpsee_server_utils::cors;
 use jsonrpsee_server_utils::access_control::AccessControl;
 use std::{io, net::SocketAddr, thread};
-use crate::utils;
 
 
 /// Background thread that serves HTTP requests.
@@ -95,17 +93,13 @@ async fn process_request(
     access_control: &AccessControl,
 ) -> hyper::Response<hyper::Body> {
     // Process access control 
-    if !utils::is_host_allowed(&request, &access_control.allow_hosts) {
+    if access_control.deny_host(&request) {
         return response::host_not_allowed();
     }
-
-    let cors_allow_origin = utils::cors_allow_origin(&request, &access_control.cors_allow_origin);
-    if cors_allow_origin == cors::AllowCors::Invalid && !access_control.continue_on_invalid_cors {
+    if access_control.deny_cors_origin(&request) {
         return response::invalid_allow_origin();
     }
-
-    let cors_allow_headers = utils::cors_allow_headers(&request, &access_control.cors_allow_headers);
-    if cors_allow_headers == cors::AllowCors::Invalid && !access_control.continue_on_invalid_cors {
+    if access_control.deny_cors_header(&request) {
         return response::invalid_allow_headers();
     }
     

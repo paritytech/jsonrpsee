@@ -13,6 +13,7 @@ version = "0.1.0"
 [dependencies]
 bytes = "0.4"
 globset = "0.4"
+hyper = "=0.13.0-alpha.1"
 jsonrpsee-core = { path = "../core" }
 lazy_static = "1.1.0"
 log = "0.4"
