@@ -147,14 +147,14 @@ impl<T> From<Option<Vec<T>>> for DomainsValidation<T> {
 	}
 }
 
-/// Returns `true` when `Host` header is whitelisted in `allowed_hosts`.
-pub fn is_host_valid(host: Option<&str>, allowed_hosts: &AllowedHosts) -> bool {
+/// Returns `true` when `Host` header is whitelisted in `allow_hosts`.
+pub fn is_host_valid(host: Option<&str>, allow_hosts: &AllowHosts) -> bool {
 	match host {
 		None => false, 
-		Some(ref host) => match allowed_hosts {
-			AllowedHosts::Any => true, 
-			AllowedHosts::Only(allowed_hosts) => {
-				allowed_hosts.iter().any(|h| h.matches(host))
+		Some(ref host) => match allow_hosts {
+			AllowHosts::Any => true, 
+			AllowHosts::Only(allow_hosts) => {
+				allow_hosts.iter().any(|h| h.matches(host))
 			}
 		}
 	}
@@ -173,7 +173,7 @@ pub fn update(hosts: Option<Vec<Host>>, address: &SocketAddr) -> Option<Vec<Host
 
 /// Allowed hosts for http header 'host' 
 #[derive(Clone)]
-pub enum AllowedHosts {
+pub enum AllowHosts {
     /// Allow requests from any host 
     Any,
     /// Allow only a selection of specific hosts
@@ -182,7 +182,7 @@ pub enum AllowedHosts {
 
 #[cfg(test)]
 mod tests {
-	use super::{is_host_valid, AllowedHosts, Host};
+	use super::{is_host_valid, AllowHosts, Host};
 
 	#[test]
 	fn should_parse_host() {
@@ -204,39 +204,39 @@ mod tests {
 
 	#[test]
 	fn should_reject_when_there_is_no_header() {
-		let valid = is_host_valid(None, &AllowedHosts::Any);
+		let valid = is_host_valid(None, &AllowHosts::Any);
 		assert_eq!(valid, false);
-		let valid = is_host_valid(None, &AllowedHosts::Only(vec![]));
+		let valid = is_host_valid(None, &AllowHosts::Only(vec![]));
 		assert_eq!(valid, false);
 	}
 
 	#[test]
 	fn should_reject_when_validation_is_disabled() {
-		let valid = is_host_valid(Some("any"), &AllowedHosts::Any);
+		let valid = is_host_valid(Some("any"), &AllowHosts::Any);
 		assert_eq!(valid, true);
 	}
 
 	#[test]
 	fn should_reject_if_header_not_on_the_list() {
-		let valid = is_host_valid(Some("parity.io"), &AllowedHosts::Only(vec![]));
+		let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec![]));
 		assert_eq!(valid, false);
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list() {
-		let valid = is_host_valid(Some("parity.io"), &AllowedHosts::Only(vec!["parity.io".into()]));
+		let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec!["parity.io".into()]));
 		assert_eq!(valid, true);
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list_with_port() {
-		let valid = is_host_valid(Some("parity.io:443"), &AllowedHosts::Only(vec!["parity.io:443".into()]));
+		let valid = is_host_valid(Some("parity.io:443"), &AllowHosts::Only(vec!["parity.io:443".into()]));
 		assert_eq!(valid, true);
 	}
 
 	#[test]
 	fn should_support_wildcards() {
-		let valid = is_host_valid(Some("parity.web3.site:8180"), &AllowedHosts::Only(vec!["*.web3.site:*".into()]));
+		let valid = is_host_valid(Some("parity.web3.site:8180"), &AllowHosts::Only(vec!["*.web3.site:*".into()]));
 		assert_eq!(valid, true);
 	}
 }

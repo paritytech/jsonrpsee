@@ -95,10 +95,10 @@ async fn process_request(
     access_control: &AccessControl,
 ) -> hyper::Response<hyper::Body> {
     // Process access control 
-    if !utils::is_host_allowed(&request, &access_control.allowed_hosts) {
+    if !utils::is_host_allowed(&request, &access_control.allow_hosts) {
         return response::host_not_allowed();
     }
-    
+
     let cors_allow_origin = utils::cors_allow_origin(&request, &access_control.cors_allow_origin);
     if cors_allow_origin == cors::AllowCors::Invalid && !access_control.continue_on_invalid_cors {
         return response::invalid_allow_origin();
