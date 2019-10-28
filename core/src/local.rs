@@ -3,21 +3,21 @@
 //!
 //! # Usage
 //!
-//! Call the [`local`](crate::local()) function to build a set of a client and a server.
+//! Call the [`local_raw`](crate::local_raw()) function to build a set of a client and a server.
 //!
-//! The [`LocalClient`](crate::local::LocalClient) is clonable.
+//! The [`LocalRawClient`](crate::local::LocalRawClient) is clonable.
 //!
 //! ```
 //! use jsonrpsee_core::client::Client;
 //! use jsonrpsee_core::server::{Server, ServerEvent};
 //!
-//! let (raw_client, raw_server) = jsonrpsee_core::local();
+//! let (raw_client, raw_server) = jsonrpsee_core::local_raw();
 //! let mut client = Client::new(raw_client);
 //! let mut server = Server::new(raw_server);
 //!
 //! async_std::task::spawn(async move {
-//!     loop {
-//!         match server.next_event().await.unwrap() {
+//!     while let Ok(event) = server.next_event().await {
+//!         match event {
 //!             ServerEvent::Request(request) => {
 //!                 request.respond(Ok(From::from("hello".to_owned()))).await;
 //!             },
@@ -27,100 +27,122 @@
 //! });
 //!
 //! let rq: String = futures::executor::block_on(async move {
-//!     client.request("test", jsonrpsee_core::common::Params::None).await
+//!     let request_id = client.start_request("test", jsonrpsee_core::common::Params::None).await.unwrap();
+//!     jsonrpsee_core::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap())
 //! }).unwrap();
 //! println!("result: {:?}", rq);
 //! ```
 //!
 
-use crate::{common, RawClient, RawServer};
+use crate::{common, RawClient, RawServer, RawServerEvent};
 use err_derive::*;
-use fnv::FnvHashMap;
+use fnv::FnvHashSet;
 use futures::{channel::mpsc, prelude::*};
-use std::{collections::hash_map::Entry, fmt, pin::Pin};
+use std::{fmt, pin::Pin};
 
 /// Builds a new client and a new server that are connected to each other.
-pub fn local() -> (LocalClient, LocalServer) {
-    let (rq_tx, rq_rx) = mpsc::channel(4);
-    let client = LocalClient { rq_tx };
-    let server = LocalServer {
-        rq_rx,
-        next_request_id: 0,
-        requests: Default::default(),
-    };
+pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
+    let (to_server, from_client) = mpsc::channel(4);
+    let (to_client, from_server) = mpsc::channel(4);
+    let client = LocalRawClient { to_server, from_server };
+    let server = LocalRawServer { to_client, from_client, next_request_id: 0, requests: Default::default() };
     (client, server)
 }
 
-/// Client connected to a [`LocalServer`]. Can be created using [`local`].
+/// Client connected to a [`LocalRawServer`]. Can be created using [`local_raw`].
 ///
 /// Can be cloned in order to have multiple clients connected to the same server.
-#[derive(Clone)]
-pub struct LocalClient {
-    /// Channel to the server. Send a request and a way to send back a response.
-    rq_tx: mpsc::Sender<(common::Request, mpsc::Sender<common::Response>)>,
+// TODO: restore #[derive(Clone)])
+pub struct LocalRawClient {
+    /// Channel to the server.
+    to_server: mpsc::Sender<common::Request>,
+    /// Channel from the server.
+    from_server: mpsc::Receiver<common::Response>,
 }
 
-/// Server connected to a [`LocalClient`]. Can be created using [`local`].
-pub struct LocalServer {
-    /// Receiver connected to the client(s). Receive requests and a way to send back a response.
-    rq_rx: mpsc::Receiver<(common::Request, mpsc::Sender<common::Response>)>,
-    /// Id of the next request to insert in the `requests` hashmap.
+/// Server connected to a [`LocalRawClient`]. Can be created using [`local_raw`].
+pub struct LocalRawServer {
+    /// Channel to the client.
+    to_client: mpsc::Sender<common::Response>,
+    /// Channel from the client.
+    from_client: mpsc::Receiver<common::Request>,
+    /// Id of the next request to insert in the `requests` hashset.
     next_request_id: u64,
-    /// List of requests waiting for an answer. Each entry is the sender that sends back a
-    /// response to the client.
-    requests: FnvHashMap<u64, mpsc::Sender<common::Response>>,
+    /// List of requests waiting for an answer.
+    requests: FnvHashSet<u64>,
 }
 
 /// Error that can happen on the client side.
 #[derive(Debug, Error)]
-pub enum LocalClientErr {
-    /// The [`LocalServer`] no longer exists.
+pub enum LocalRawClientErr {
+    /// The [`LocalRawServer`] no longer exists.
     #[error(display = "Server has been closed")]
     ServerClosed,
 }
 
-impl RawClient for LocalClient {
-    type Error = LocalClientErr;
+impl RawClient for LocalRawClient {
+    type Error = LocalRawClientErr;
 
-    fn request<'a>(
+    fn send_request<'a>(
         &'a mut self,
         request: common::Request,
-    ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
         Box::pin(async move {
-            let (tx, mut rx) = mpsc::channel(4);
-            self.rq_tx
-                .send((request, tx))
+            self.to_server
+                .send(request)
                 .await
-                .map_err(|_| LocalClientErr::ServerClosed)?;
-            rx.next().await.ok_or(LocalClientErr::ServerClosed)
+                .map_err(|_| LocalRawClientErr::ServerClosed)?;
+            Ok(())
+        })
+    }
+
+    fn next_response<'a>(&'a mut self)
+        -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            self.from_server
+                .next()
+                .await
+                .ok_or(LocalRawClientErr::ServerClosed)
         })
     }
 }
 
-impl fmt::Debug for LocalClient {
+impl fmt::Debug for LocalRawClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("LocalClient").finish()
+        f.debug_tuple("LocalRawClient").finish()
     }
 }
 
-impl RawServer for LocalServer {
+impl RawServer for LocalRawServer {
     type RequestId = u64;
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<(Self::RequestId, common::Request), ()>> + Send + 'a>>
+    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>
     {
         Box::pin(async move {
-            let (rq, send_back) = self.rq_rx.next().await.ok_or(())?;
+            let request = match self.from_client.next().await {
+                Some(v) => v,
+                None => {
+                    if let Some(rq_id) = self.requests.iter().cloned().next() {
+                        self.requests.remove(&rq_id);
+                        return RawServerEvent::Closed(rq_id);
+
+                    } else {
+                        // TODO: should we really return that? does that event make sense at all?
+                        return RawServerEvent::ServerClosed;
+                    }
+                },
+            };
 
             loop {
-                let rq_id = self.next_request_id;
+                let id = self.next_request_id;
                 self.next_request_id = self.next_request_id.wrapping_add(1);
-                match self.requests.entry(rq_id) {
-                    Entry::Occupied(_) => continue,
-                    Entry::Vacant(e) => e.insert(send_back),
-                };
-                return Ok((rq_id, rq));
+                if !self.requests.insert(id) {
+                    continue;
+                }
+                return RawServerEvent::Request { id, request };
             }
         })
     }
@@ -131,11 +153,11 @@ impl RawServer for LocalServer {
         response: Option<&'a common::Response>,
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(mut rq) = self.requests.remove(&request_id) {
+            if self.requests.remove(&request_id) {
                 if let Some(response) = response {
-                    rq.send(response.clone()).await.map_err(|_| ())
+                    self.to_client.send(response.clone()).await.map_err(|_| ())
                 } else {
-                    Err(())
+                    Ok(())
                 }
             } else {
                 Err(())
@@ -144,7 +166,7 @@ impl RawServer for LocalServer {
     }
 
     fn supports_resuming(&self, request_id: &Self::RequestId) -> Result<bool, ()> {
-        if self.requests.contains_key(request_id) {
+        if self.requests.contains(request_id) {
             Ok(true)
         } else {
             Err(())
@@ -157,8 +179,8 @@ impl RawServer for LocalServer {
         response: &'a common::Response,
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
         Box::pin(async move {
-            if let Some(rq) = self.requests.get_mut(&request_id) {
-                rq.send(response.clone()).await.map_err(|_| ())
+            if self.requests.contains(&request_id) {
+                self.to_client.send(response.clone()).await.map_err(|_| ())
             } else {
                 Err(())
             }
@@ -166,13 +188,9 @@ impl RawServer for LocalServer {
     }
 }
 
-impl fmt::Debug for LocalServer {
+impl fmt::Debug for LocalRawServer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("LocalServer")
-            .field(
-                "pending_requests",
-                &self.requests.keys().cloned().collect::<Vec<_>>(),
-            )
+        f.debug_struct("LocalRawServer")
             .finish()
     }
 }

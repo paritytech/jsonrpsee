@@ -24,6 +24,8 @@ pub struct HttpRawClient {
     /// Sender that sends requests to the background task.
     requests_tx: mpsc::Sender<FrontToBack>,
     url: String,
+    /// Receives responses in any order.
+    responses: stream::FuturesUnordered<oneshot::Receiver<Result<hyper::Response<hyper::Body>, hyper::Error>>>,
 }
 
 /// Message transmitted from the foreground task to the background.
@@ -48,13 +50,14 @@ impl HttpRawClient {
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::Builder::new()
-            .name("jsonrpc-hyper-client".to_string())
+            .name("jsonrpsee-hyper-client".to_string())
             .spawn(move || background_thread(requests_rx))
             .unwrap();
 
         HttpRawClient {
             requests_tx,
             url: target.to_owned(),
+            responses: stream::FuturesUnordered::new(),
         }
     }
 }
@@ -62,10 +65,10 @@ impl HttpRawClient {
 impl RawClient for HttpRawClient {
     type Error = RequestError;
 
-    fn request<'s>(
+    fn send_request<'s>(
         &'s mut self,
         request: common::Request,
-    ) -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), RequestError>> + Send + 's>> {
         let mut requests_tx = self.requests_tx.clone();
 
         let request = common::to_vec(&request).map(|body| {
@@ -93,10 +96,19 @@ impl RawClient for HttpRawClient {
                 ))));
             }
 
-            let hyper_response = match send_back_rx.await {
-                Ok(Ok(r)) => r,
-                Ok(Err(err)) => return Err(RequestError::Http(Box::new(err))),
-                Err(_) => {
+            self.responses.push(send_back_rx);
+            Ok(())
+        })
+    }
+
+    fn next_response<'s>(&'s mut self)
+        -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>>
+    {
+        Box::pin(async move {
+            let hyper_response = match self.responses.next().await {
+                Some(Ok(Ok(r))) => r,
+                Some(Ok(Err(err))) => return Err(RequestError::Http(Box::new(err))),
+                None | Some(Err(_)) => {
                     log::error!("JSONRPC http client background thread has shut down");
                     return Err(RequestError::Http(Box::new(io::Error::new(
                         io::ErrorKind::Other,

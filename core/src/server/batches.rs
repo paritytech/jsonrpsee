@@ -1,4 +1,4 @@
-use crate::{common, server::batch, server::params::ServerRequestParams};
+use crate::{common, server::batch, server::Notification, server::params::Params};
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, fmt};
 
@@ -35,7 +35,7 @@ pub enum BatchesEvent<'a, T> {
     /// A notification has been extracted from a batch.
     Notification {
         /// Notification in question.
-        notification: common::Notification,
+        notification: Notification,
         /// User parameter passed when calling [`inject`](BatchesState::inject).
         user_param: &'a mut T,
     },
@@ -100,7 +100,7 @@ impl<T> BatchesState<T> {
             enum WhatCanWeDo {
                 Nothing,
                 ReadyToRespond,
-                Notification(common::Notification),
+                Notification(Notification),
                 Request(usize),
             }
 
@@ -181,6 +181,11 @@ impl<T> BatchesState<T> {
         }
     }
 
+    /// Returns a list of all user data associated to active batches.
+    pub fn batches<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> + 'a {
+        self.batches.values_mut().map(|(_, user_data)| user_data)
+    }
+
     /// Returns a request previously returned by [`next_event`](crate::Server::next_event) by its
     /// id.
     ///
@@ -243,7 +248,7 @@ impl<'a, T> BatchesElem<'a, T> {
     }
 
     /// Returns the parameters of the request, as a `common::Params`.
-    pub fn params(&self) -> ServerRequestParams {
+    pub fn params(&self) -> Params {
         self.inner.params()
     }
 
@@ -275,7 +280,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BatchesEvent, BatchesState};
-    use crate::common;
+    use crate::{common, server::Notification};
 
     #[test]
     fn basic_notification() {
@@ -294,7 +299,7 @@ mod tests {
         match state.next_event() {
             Some(BatchesEvent::Notification {
                 ref notification, ..
-            }) if *notification == notif => {}
+            }) if *notification == Notification::from(notif) => {}
             _ => panic!(),
         }
         assert!(state.next_event().is_none());
@@ -394,7 +399,7 @@ mod tests {
             Some(BatchesEvent::Notification {
                 ref notification,
                 ref user_param,
-            }) if *notification == notif1 && **user_param == 2 => {}
+            }) if *notification == Notification::from(notif1) && **user_param == 2 => {}
             _ => panic!(),
         }
 
@@ -402,7 +407,7 @@ mod tests {
             Some(BatchesEvent::Notification {
                 ref notification,
                 ref user_param,
-            }) if *notification == notif2 && **user_param == 2 => {}
+            }) if *notification == Notification::from(notif2) && **user_param == 2 => {}
             _ => panic!(),
         }
 

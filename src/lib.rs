@@ -36,14 +36,14 @@
 //! [`Client`](core::client::Client). There exist several shortcuts such as the [`http_client`]
 //! method.
 //!
-//! Once a client is created, you can use the [`request`](core::client::Client::request) to perform
-//! requests.
+//! Once a client is created, you can use the
+//! [`start_request`](core::client::Client::start_request) method to perform requests.
 //!
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
 //!     let mut client = jsonrpsee::http_client("http://localhost:8000");
-//!     let request = client.request("system_name", jsonrpsee::core::common::Params::None);
-//!     request.await.unwrap()
+//!     let request_id = client.start_request("system_name", jsonrpsee::core::common::Params::None).await.unwrap();
+//!     jsonrpsee::core::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap()).unwrap()
 //! });
 //!
 //! println!("system_name = {:?}", result);
@@ -83,6 +83,8 @@
 //!             jsonrpsee::core::server::ServerEvent::Notification(notif) => {
 //!                 println!("received notification: {:?}", notif);
 //!             }
+//!             jsonrpsee::core::server::ServerEvent::SubscriptionsClosed(_) => {}
+//!             jsonrpsee::core::server::ServerEvent::SubscriptionsReady(_) => {}
 //!             jsonrpsee::core::server::ServerEvent::Request(rq) => {
 //!                 // Note that `rq` borrows `server`. If you want to store the request for later,
 //!                 // you should get its id by calling `let id = rq.id();`, then later call
@@ -122,9 +124,22 @@
 #[cfg(feature = "http")]
 pub use jsonrpsee_http::{http_client, http_server};
 pub use jsonrpsee_proc_macros::rpc_api;
+#[cfg(feature = "ws")]
+pub use jsonrpsee_ws::ws_client;
 
 #[doc(inline)]
 pub use jsonrpsee_core as core;
 #[doc(inline)]
 #[cfg(feature = "http")]
 pub use jsonrpsee_http as http;
+#[doc(inline)]
+#[cfg(feature = "ws")]
+pub use jsonrpsee_ws as ws;
+
+/// Builds a new client and a new server that are connected to each other.
+pub fn local() -> (core::Client<core::local::LocalRawClient>, core::Server<core::local::LocalRawServer, <core::local::LocalRawServer as core::RawServer>::RequestId>) {
+    let (client, server) = core::local_raw();
+    let client = core::Client::new(client);
+    let server = core::Server::new(server);
+    (client, server)
+}
