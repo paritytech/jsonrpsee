@@ -251,7 +251,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         });
 
         quote_spanned!(api.name.span()=>
-            #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> Result<#enum_name<'a, R, I>, std::io::Error>
+            #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> core::result::Result<#enum_name<'a, R, I>, std::io::Error>
                 where R: jsonrpsee::core::RawServer<RequestId = I>,
                         I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
             {
@@ -340,7 +340,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         client_functions.push(quote_spanned!(function.signature.span()=>
             // TODO: what if there's a conflict between `client` and a param name?
             #visibility async fn #f_name<R: jsonrpsee::core::RawClient>(client: &mut jsonrpsee::core::Client<R> #(, #params_list)*)
-                -> Result<#ret_ty, jsonrpsee::core::client::ClientError<<R as jsonrpsee::core::RawClient>::Error>> {
+                -> core::result::Result<#ret_ty, jsonrpsee::core::client::ClientError<<R as jsonrpsee::core::RawClient>::Error>> {
                 #function_body
             }
         ));
