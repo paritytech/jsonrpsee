@@ -88,8 +88,14 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
 }
 
 /// Generates the macro output token stream corresponding to a single API.
-fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
+fn build_api(mut api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
     let enum_name = &api.name;
+    // TODO: make sure there's no conflict here
+    api.generics.params.push(From::from(syn::LifetimeDef::new(syn::parse_str::<syn::Lifetime>("'a").unwrap())));
+    api.generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("R").unwrap())));
+    api.generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("I").unwrap())));
+    let raw_generics = &api.generics;
+    let (impl_generics, ty_generics, where_clause) = api.generics.split_for_impl();
     let visibility = &api.visibility;
 
     let mut variants = Vec::new();
@@ -251,7 +257,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         });
 
         quote_spanned!(api.name.span()=>
-            #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> core::result::Result<#enum_name<'a, R, I>, std::io::Error>
+            #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
                 where R: jsonrpsee::core::RawServer<RequestId = I>,
                         I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
             {
@@ -283,6 +289,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 
         let mut params_list = Vec::new();
         let mut params_to_json = Vec::new();
+        let mut params_tys = Vec::new();
 
         for (param_index, input) in function.signature.inputs.iter().enumerate() {
             let (ty, pat_span, rpc_param_name) = match input {
@@ -298,6 +305,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                 proc_macro2::Span::call_site(),
             );
 
+            params_tys.push(ty);
             params_list.push(quote_spanned!(pat_span=> #generated_param_name: impl Into<#ty>));
             params_to_json.push(quote_spanned!(pat_span=>
                 map.insert(
@@ -339,8 +347,10 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 
         client_functions.push(quote_spanned!(function.signature.span()=>
             // TODO: what if there's a conflict between `client` and a param name?
-            #visibility async fn #f_name<R: jsonrpsee::core::RawClient>(client: &mut jsonrpsee::core::Client<R> #(, #params_list)*)
-                -> core::result::Result<#ret_ty, jsonrpsee::core::client::ClientError<<R as jsonrpsee::core::RawClient>::Error>> {
+            #visibility async fn #f_name<C: jsonrpsee::core::RawClient>(client: &mut jsonrpsee::core::Client<C> #(, #params_list)*)
+                -> core::result::Result<#ret_ty, jsonrpsee::core::client::ClientError<<C as jsonrpsee::core::RawClient>::Error>>
+            where #ret_ty: jsonrpsee::core::common::DeserializeOwned #(, #params_tys: jsonrpsee::core::common::Serialize)*
+            {
                 #function_body
             }
         ));
@@ -358,19 +368,21 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
     }
 
     Ok(quote_spanned!(api.name.span()=>
-        #visibility enum #enum_name<'a, R, I> {
+        #visibility enum #enum_name #raw_generics {
             #(#variants),*
         }
 
-        impl<'a, R, I> #enum_name<'a, R, I> {
+        impl #impl_generics #enum_name #ty_generics #where_clause {
             #next_request
         }
 
-        impl<'a> #enum_name<'a, (), ()> {
+        // TODO: fix generics
+        //impl<'a> #enum_name<'a, (), ()> {
+        impl #impl_generics #enum_name #ty_generics {
             #(#client_functions)*
         }
 
-        impl<'a, R, I> std::fmt::Debug for #enum_name<'a, R, I> {
+        impl #impl_generics std::fmt::Debug for #enum_name #ty_generics #where_clause {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match self {
                     #(#debug_variants,)*

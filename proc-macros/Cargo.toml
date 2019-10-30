@@ -13,4 +13,4 @@ proc-macro = true
 Inflector = "0.11.4"
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "1.0", features = ["full", "parsing", "proc-macro"] }
+syn = { version = "1.0", features = ["full", "parsing", "printing", "proc-macro"] }
