@@ -44,6 +44,8 @@ pub struct ApiDefinition {
     pub visibility: syn::Visibility,
     /// Name of the API. For example `System`.
     pub name: syn::Ident,
+    /// Optional generics for the API name.
+    pub generics: syn::Generics,
     /// List of RPC functions defined for this API.
     pub definitions: Vec<ApiMethod>,
 }
@@ -112,6 +114,7 @@ impl syn::parse::Parse for ApiDefinition {
     fn parse(input: syn::parse::ParseStream) -> syn::parse::Result<Self> {
         let visibility = input.parse()?;
         let name = input.parse()?;
+        let generics = input.parse()?;
         let group: proc_macro2::Group = input.parse()?;
         assert_eq!(group.delimiter(), proc_macro2::Delimiter::Brace);
         let defs: ApiMethods = syn::parse2(group.stream())?;
@@ -119,6 +122,7 @@ impl syn::parse::Parse for ApiDefinition {
         Ok(ApiDefinition {
             visibility,
             name,
+            generics,
             definitions: defs.definitions,
         })
     }
