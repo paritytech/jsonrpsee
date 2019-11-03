@@ -37,8 +37,10 @@ use jsonrpsee_server_utils as server_utils;
 use server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr};
 
-pub use crate::client::HttpRawClient;
+pub use crate::client::{HttpRawClient,RequestError};
 pub use crate::server::HttpRawServer;
+
+pub use server_utils::access_control;
 
 /// Type alias for a [`Client`](jsonrpsee_core::client::Client) that operates on HTTP.
 pub type HttpClient = Client<HttpRawClient>;

@@ -7,7 +7,7 @@ license = "MIT"
 edition = "2018"
 
 [dependencies]
-async-std = "0.99.5"
+async-std = "0.99.11"
 derive_more = "0.13.0"
 err-derive = "0.1.5"
 fnv = "1.0"

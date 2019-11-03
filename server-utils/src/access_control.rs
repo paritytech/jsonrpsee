@@ -1,10 +1,9 @@
 //! Access control based on http headers
 use crate::{cors,hosts};
 use crate::cors::{AccessControlAllowHeaders,AccessControlAllowOrigin};
-use crate::hosts::{AllowHosts,Host};
+pub use crate::hosts::{AllowHosts,Host};
 use hyper::{self, header};
 use crate::utils;
-
 
 /// Define access on control on http layer
 #[derive(Clone)]
@@ -20,7 +19,7 @@ pub struct AccessControl {
 impl AccessControl {
     /// Validate incoming request by http HOST
     pub fn deny_host(&self, request: &hyper::Request<hyper::Body>) -> bool {
-        !hosts::is_host_valid(utils::read_header(request, "host"), &self.allow_hosts)
+         !hosts::is_host_valid(utils::read_header(request, "host"), &self.allow_hosts)
     }
 
     /// Validate incoming request by CORS origin 
