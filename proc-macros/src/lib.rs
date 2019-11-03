@@ -1,3 +1,29 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 extern crate proc_macro;
 
 use inflector::Inflector as _;
@@ -62,8 +88,19 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
 }
 
 /// Generates the macro output token stream corresponding to a single API.
-fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
+fn build_api(mut api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
     let enum_name = &api.name;
+    let original_generics = api.generics.clone();
+    let (impl_generics_org, ty_generics_org, where_clause_org) = original_generics.split_for_impl();
+    let lifetimes_org = original_generics.lifetimes();
+    let type_params_org = original_generics.type_params();
+    let const_params_org = original_generics.const_params();
+    // TODO: make sure there's no conflict here
+    api.generics.params.insert(0, From::from(syn::LifetimeDef::new(syn::parse_str::<syn::Lifetime>("'a").unwrap())));
+    api.generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("R").unwrap())));
+    api.generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("I").unwrap())));
+    let raw_generics = &api.generics;
+    let (impl_generics, ty_generics, where_clause) = api.generics.split_for_impl();
     let visibility = &api.visibility;
 
     let mut variants = Vec::new();
@@ -225,7 +262,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         });
 
         quote_spanned!(api.name.span()=>
-            #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> Result<#enum_name<'a, R, I>, std::io::Error>
+            #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
                 where R: jsonrpsee::core::RawServer<RequestId = I>,
                         I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
             {
@@ -241,7 +278,40 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         )
     };
 
-    // Builds the functions that allow performing outbound JSON-RPC queries.
+    let client_functions = build_client_functions(&api)?;
+    let debug_variants = build_debug_variants(&api)?;
+
+    Ok(quote_spanned!(api.name.span()=>
+        #visibility enum #enum_name #raw_generics {
+            #(#variants),*
+        }
+
+        impl #impl_generics #enum_name #ty_generics #where_clause {
+            #next_request
+        }
+
+        // TODO: order between type_params and const_params is undecided
+        impl #impl_generics_org #enum_name<'static #(, #lifetimes_org)* #(, #type_params_org)* #(, #const_params_org)*, (), ()>
+            #where_clause_org
+        {
+            #(#client_functions)*
+        }
+
+        impl #impl_generics std::fmt::Debug for #enum_name #ty_generics #where_clause {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self {
+                    #(#debug_variants,)*
+                }
+            }
+        }
+    ))
+}
+
+/// Builds the functions that allow performing outbound JSON-RPC queries.
+// TODO: better docs
+fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
+    let visibility = &api.visibility;
+
     let mut client_functions = Vec::new();
     for function in &api.definitions {
         let f_name = &function.signature.ident;
@@ -257,6 +327,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 
         let mut params_list = Vec::new();
         let mut params_to_json = Vec::new();
+        let mut params_tys = Vec::new();
 
         for (param_index, input) in function.signature.inputs.iter().enumerate() {
             let (ty, pat_span, rpc_param_name) = match input {
@@ -272,6 +343,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                 proc_macro2::Span::call_site(),
             );
 
+            params_tys.push(ty);
             params_list.push(quote_spanned!(pat_span=> #generated_param_name: impl Into<#ty>));
             params_to_json.push(quote_spanned!(pat_span=>
                 map.insert(
@@ -313,14 +385,23 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 
         client_functions.push(quote_spanned!(function.signature.span()=>
             // TODO: what if there's a conflict between `client` and a param name?
-            #visibility async fn #f_name<R: jsonrpsee::core::RawClient>(client: &mut jsonrpsee::core::Client<R> #(, #params_list)*)
-                -> Result<#ret_ty, jsonrpsee::core::client::ClientError<<R as jsonrpsee::core::RawClient>::Error>> {
+            #visibility async fn #f_name<C: jsonrpsee::core::RawClient>(client: &mut jsonrpsee::core::Client<C> #(, #params_list)*)
+                -> core::result::Result<#ret_ty, jsonrpsee::core::client::ClientError<<C as jsonrpsee::core::RawClient>::Error>>
+            where
+                #ret_ty: jsonrpsee::core::common::DeserializeOwned
+                #(, #params_tys: jsonrpsee::core::common::Serialize)*
+            {
                 #function_body
             }
         ));
     }
 
-    // Builds the match variants for the implementation of `Debug`.
+    Ok(client_functions)
+}
+
+// TODO: better docs
+fn build_debug_variants(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
+    let enum_name = &api.name;
     let mut debug_variants = Vec::new();
     for function in &api.definitions {
         let variant_name = snake_case_to_camel_case(&function.signature.ident);
@@ -330,28 +411,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             }
         ));
     }
-
-    Ok(quote_spanned!(api.name.span()=>
-        #visibility enum #enum_name<'a, R, I> {
-            #(#variants),*
-        }
-
-        impl<'a, R, I> #enum_name<'a, R, I> {
-            #next_request
-        }
-
-        impl<'a> #enum_name<'a, (), ()> {
-            #(#client_functions)*
-        }
-
-        impl<'a, R, I> std::fmt::Debug for #enum_name<'a, R, I> {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                match self {
-                    #(#debug_variants,)*
-                }
-            }
-        }
-    ))
+    Ok(debug_variants)
 }
 
 /// Turns a snake case function name into an UpperCamelCase name suitable to be an enum variant.
