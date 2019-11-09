@@ -159,7 +159,7 @@ impl RawClient for WsRawClient {
     ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
         Box::pin(async move {
             let request = common::to_vec(&request).map_err(WsConnecError::Serialization)?;
-            self.inner.send_text(&mut From::from(request)).await?;
+            self.inner.send(From::from(request)).await?;
             self.inner.flush().await?;
             Ok(())
         })
@@ -169,8 +169,11 @@ impl RawClient for WsRawClient {
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
-            let (data, _is_text) = self.inner.receive().await?;
-            let response = common::from_slice(&data).map_err(WsConnecError::ParseError)?;
+            let data = match self.inner.next().await {
+                Some(v) => v?,
+                None => return Err(From::from(soketto::connection::Error::Closed))
+            };
+            let response = common::from_slice(data.as_ref()).map_err(WsConnecError::ParseError)?;
             Ok(response)
         })
     }
