@@ -42,6 +42,14 @@ use std::{hash::Hash, pin::Pin};
 /// to insert the new request, and returns, in addition to the body of the request, an identifier
 /// that represents that newly-received request in the context of the server.
 ///
+/// ## What to do in case of an error?
+///
+/// In order to avoid introducing ambiguities in the API, this trait has no way to notify the user
+/// of a problem happening on the server side (e.g. the TCP listener being closed).
+///
+/// Instead, implementations are encouraged to try to maintain the server alive as much as
+/// possible. If an unrecoverable error happens, implementations should become permanently idle.
+///
 pub trait RawServer {
     /// Identifier for a request in the context of this server.
     type RequestId: Clone + PartialEq + Eq + Hash + Send + Sync;
