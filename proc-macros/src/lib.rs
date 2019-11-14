@@ -267,7 +267,7 @@ fn build_api(mut api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream
                         I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
             {
                 loop {
-                    match server.next_event().await {        // TODO: don't unwrap
+                    match server.next_event().await {
                         jsonrpsee::core::ServerEvent::Notification(n) => #on_notification,
                         jsonrpsee::core::ServerEvent::SubscriptionsClosed(_) => unimplemented!(),       // TODO:
                         jsonrpsee::core::ServerEvent::SubscriptionsReady(_) => unimplemented!(),       // TODO:
