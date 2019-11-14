@@ -89,7 +89,7 @@ impl RawServer for HttpRawServer {
         Box::pin(async move {
             let request = match self.background_thread.next().await {
                 Ok(r) => r,
-                Err(_) => return RawServerEvent::ServerClosed,
+                Err(_) => loop { futures::pending!() },
             };
 
             let request_id = {
@@ -98,7 +98,7 @@ impl RawServer for HttpRawServer {
                     Some(i) => i,
                     None => {
                         log::error!("Overflow in HttpRawServer request ID assignment");
-                        return RawServerEvent::ServerClosed;
+                        loop { futures::pending!() }
                     }
                 };
                 id

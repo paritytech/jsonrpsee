@@ -71,17 +71,11 @@ where
                 future::Either::Left((RawServerEvent::Closed(id), _)) => {
                     RawServerEvent::Closed(JoinRequestId::Left(id))
                 }
-                future::Either::Left((RawServerEvent::ServerClosed, _)) => {
-                    RawServerEvent::ServerClosed
-                }
                 future::Either::Right((RawServerEvent::Request { id, request }, _)) => {
                     RawServerEvent::Request { id: JoinRequestId::Right(id), request }
                 }
                 future::Either::Right((RawServerEvent::Closed(id), _)) => {
                     RawServerEvent::Closed(JoinRequestId::Right(id))
-                }
-                future::Either::Right((RawServerEvent::ServerClosed, _)) => {
-                    RawServerEvent::ServerClosed
                 }
             }
         })

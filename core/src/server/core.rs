@@ -159,12 +159,12 @@ where
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     /// Returns a `Future` resolving to the next event that this server generates.
-    pub async fn next_event<'a>(&'a mut self) -> Result<ServerEvent<'a, R, I>, ()> {
+    pub async fn next_event<'a>(&'a mut self) -> ServerEvent<'a, R, I> {
         let request_id = loop {
             match self.batches.next_event() {
                 None => {}
                 Some(batches::BatchesEvent::Notification { notification, .. }) => {
-                    return Ok(ServerEvent::Notification(notification))
+                    return ServerEvent::Notification(notification)
                 }
                 Some(batches::BatchesEvent::Request(inner)) => {
                     break ServerRequestId { inner: inner.id() };
@@ -187,7 +187,7 @@ where
                             }
                         }
                         debug_assert!(!ready.is_empty());       // TODO: assert that capacity == len
-                        return Ok(ServerEvent::SubscriptionsReady(ready));
+                        return ServerEvent::SubscriptionsReady(ready);
                     } else {
                         let _ = self.raw.finish(&raw_request_id, Some(&response)).await;
                     }
@@ -222,16 +222,13 @@ where
                             .map(|(k, _)| ServerSubscriptionId(*k))
                             .collect::<Vec<_>>();
                         for id in &ids { let _ = self.subscriptions.remove(&id.0); }
-                        return Ok(ServerEvent::SubscriptionsClosed(ids));
+                        return ServerEvent::SubscriptionsClosed(ids);
                     }
                 },
-                RawServerEvent::ServerClosed => return Err(()),
             };
         };
 
-        return Ok(ServerEvent::Request(
-            self.request_by_id(&request_id).unwrap(),
-        ));
+        ServerEvent::Request(self.request_by_id(&request_id).unwrap())
     }
 
     /// Returns a request previously returned by [`next_event`](crate::Server::next_event) by its

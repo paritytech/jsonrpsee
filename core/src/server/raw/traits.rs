@@ -115,9 +115,4 @@ pub enum RawServerEvent<T> {
     ///
     /// The corresponding request is no longer valid to manipulate.
     Closed(T),
-
-    /// The server has been closed and will not produce any more request.
-    // TODO: define the exact semantics of that; can the implementation panic afterwards? is it
-    // even a good idea to have an event?
-    ServerClosed,
 }

@@ -11,7 +11,7 @@ async-std = "0.99.5"
 derive_more = "0.13.0"
 err-derive = "0.1.5"
 fnv = "1.0"
-futures-preview = "0.3.0-alpha.19"
+futures-preview = { version = "0.3.0-alpha.19", features = ["async-await"] }
 futures-timer = "0.3.0"
 hyper = { version = "0.13.0-alpha.4", features = ["unstable-stream"] }
 jsonrpsee-core = { path = "../core" }
