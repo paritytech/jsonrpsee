@@ -43,7 +43,6 @@
 //!     // actual real-world usages.
 //!     loop {
 //!         match server.next_request().await {
-//!             RawServerEvent::ServerClosed => break,
 //!             RawServerEvent::Closed(_) => {},
 //!             RawServerEvent::Request { id, request } => {
 //!                 let response = request_to_response(&request).await;

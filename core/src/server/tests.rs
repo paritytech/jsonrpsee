@@ -50,7 +50,7 @@ fn notifications_work() {
     });
 
     async_std::task::block_on(async move {
-        match server.next_event().await.unwrap() {
+        match server.next_event().await {
             ServerEvent::Notification(n) => {
                 assert_eq!(n.method(), "foo");
                 assert_eq!({ let v: String = n.params().get(0).unwrap(); v }, "bar");
@@ -105,7 +105,7 @@ fn subscriptions_work() {
     });
 
     async_std::task::block_on(async move {
-        let sub_id = match server.next_event().await.unwrap() {
+        let sub_id = match server.next_event().await {
             ServerEvent::Request(rq) => {
                 assert_eq!(rq.method(), "foo");
                 assert_eq!({ let v: String = rq.params().get(0).unwrap(); v }, "bar");
@@ -116,7 +116,7 @@ fn subscriptions_work() {
             _ => panic!()
         };
 
-        match server.next_event().await.unwrap() {
+        match server.next_event().await {
             ServerEvent::SubscriptionsReady(ready) => {
                 assert_eq!(ready, vec![sub_id]);
             },
@@ -126,7 +126,7 @@ fn subscriptions_work() {
         server.subscription_by_id(sub_id).unwrap().push("hey there!").await;
         server.subscription_by_id(sub_id).unwrap().push("notif #2").await;
 
-        match server.next_event().await.unwrap() {
+        match server.next_event().await {
             ServerEvent::SubscriptionsClosed(closed) => {
                 assert_eq!(closed, vec![sub_id]);
             },

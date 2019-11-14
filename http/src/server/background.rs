@@ -36,7 +36,7 @@ use std::{io, net::SocketAddr, thread};
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
     /// Receiver for requests coming from the background thread.
-    rx: mpsc::Receiver<Request>,
+    rx: stream::Fuse<mpsc::Receiver<Request>>,
 }
 
 /// Request generated from the background thread.
@@ -98,7 +98,7 @@ impl BackgroundHttp {
             })
             .unwrap();
 
-        Ok((BackgroundHttp { rx }, local_addr))
+        Ok((BackgroundHttp { rx: rx.fuse() }, local_addr))
     }
 
     /// Returns the next request, or an error if the background thread has unexpectedly closed.

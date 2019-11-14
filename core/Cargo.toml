@@ -10,7 +10,7 @@ edition = "2018"
 bs58 = "0.3.0"
 err-derive = "0.1.5"
 fnv = "1.0"
-futures-preview = "0.3.0-alpha.19"
+futures-preview = { version = "0.3.0-alpha.19", features = ["async-await"] }
 log = "0.4"
 rand = "0.7"
 serde = { version = "1.0.40", features = ["derive"] }
