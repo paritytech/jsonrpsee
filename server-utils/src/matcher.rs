@@ -1,5 +1,6 @@
 use globset::{GlobBuilder, GlobMatcher};
 use std::{fmt, hash};
+use log::warn;
 
 /// Pattern that can be matched to string.
 pub trait Pattern {

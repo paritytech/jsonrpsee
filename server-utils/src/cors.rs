@@ -6,6 +6,7 @@ use crate::hosts::{Host, Port};
 use crate::matcher::{Matcher, Pattern};
 use std::collections::HashSet;
 use std::{fmt, ops};
+use lazy_static::lazy_static;
 
 /// Origin Protocol
 #[derive(Clone, Hash, Debug, PartialEq, Eq)]
