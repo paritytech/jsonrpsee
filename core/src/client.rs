@@ -248,28 +248,7 @@ where
         method: impl Into<String>,
         params: impl Into<common::Params>,
     ) -> Result<ClientRequestId, R::Error> {
-        let id = {
-            let i = self.next_request_id;
-            self.next_request_id.0 += 1;
-            // TODO: handle overflows?
-            i
-        };
-
-        let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
-            jsonrpc: common::Version::V2,
-            method: method.into(),
-            params: params.into(),
-            id: common::Id::Num(id.0),
-        }));
-
-        // Note that in case of an error, we "lose" the request id (as in, it will never be used).
-        // This isn't a problem, however.
-        self.inner
-            .send_request(request)
-            .await?;
-        let old_val = self.requests.insert(id, Request::Request);
-        assert!(old_val.is_none());
-        Ok(id)
+        self.start_impl(method, params, Request::Request).await
     }
 
     /// Starts a request.
@@ -282,28 +261,41 @@ where
         method: impl Into<String>,
         params: impl Into<common::Params>,
     ) -> Result<ClientRequestId, R::Error> {
-        let id = {
-            let i = self.next_request_id;
-            self.next_request_id.0 += 1;
-            // TODO: handle overflows?
-            i
-        };
+        self.start_impl(method, params, Request::PendingSubscription).await
+    }
 
-        let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
-            jsonrpc: common::Version::V2,
-            method: method.into(),
-            params: params.into(),
-            id: common::Id::Num(id.0),
-        }));
+    /// Inner implementation for starting either a request or a subscription.
+    async fn start_impl(
+        &mut self,
+        method: impl Into<String>,
+        params: impl Into<common::Params>,
+        ty: Request,
+    ) -> Result<ClientRequestId, R::Error> {
+        loop {
+            let id = self.next_request_id;
+            self.next_request_id.0 = self.next_request_id.0.wrapping_add(1);
 
-        // Note that in case of an error, we "lose" the request id (as in, it will never be used).
-        // This isn't a problem, however.
-        self.inner
-            .send_request(request)
-            .await?;
-        let old_val = self.requests.insert(id, Request::PendingSubscription);
-        assert!(old_val.is_none());
-        Ok(id)
+            let entry = match self.requests.entry(id) {
+                Entry::Occupied(_) => continue,
+                Entry::Vacant(e) => e,
+            };
+
+            let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
+                jsonrpc: common::Version::V2,
+                method: method.into(),
+                params: params.into(),
+                id: common::Id::Num(id.0),
+            }));
+
+            // Note that in case of an error, we "lose" the request id (as in, it will never be
+            // used). This isn't a problem, however.
+            self.inner
+                .send_request(request)
+                .await?;
+
+            entry.insert(ty);
+            break Ok(id);
+        }
     }
 
     /// Waits until the client receives a message from the server.
