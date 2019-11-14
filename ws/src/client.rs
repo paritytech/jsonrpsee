@@ -247,9 +247,7 @@ impl<'a> WsRawClientBuilder<'a> {
         }
 
         // If the handshake succeeded, return.
-        let mut connection = client.into_connection();
-        connection.validate_utf8(true); // TODO: no longer necessary in latest soketto; remove when upgrading
-        Ok(WsRawClient { inner: connection })
+        Ok(WsRawClient { inner: client.into_connection() })
     }
 }
 
