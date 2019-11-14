@@ -104,8 +104,8 @@
 //! // Should run forever
 //! async_std::task::block_on(async {
 //!     let mut server = jsonrpsee::http_server(&"localhost:8000".parse().unwrap()).await.unwrap();
-//!     while let Ok(event) = server.next_event().await {
-//!         match event {
+//!     loop {
+//!         match server.next_event().await {
 //!             jsonrpsee::core::server::ServerEvent::Notification(notif) => {
 //!                 println!("received notification: {:?}", notif);
 //!             }
