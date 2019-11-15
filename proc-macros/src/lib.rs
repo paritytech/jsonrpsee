@@ -93,9 +93,22 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 
     // TODO: make sure there's no conflict here
     let mut tweaked_generics = api.generics.clone();
-    tweaked_generics.params.insert(0, From::from(syn::LifetimeDef::new(syn::parse_str::<syn::Lifetime>("'a").unwrap())));
-    tweaked_generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("R").unwrap())));
-    tweaked_generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("I").unwrap())));
+    tweaked_generics.params.insert(
+        0,
+        From::from(syn::LifetimeDef::new(
+            syn::parse_str::<syn::Lifetime>("'a").unwrap(),
+        )),
+    );
+    tweaked_generics
+        .params
+        .push(From::from(syn::TypeParam::from(
+            syn::parse_str::<syn::Ident>("R").unwrap(),
+        )));
+    tweaked_generics
+        .params
+        .push(From::from(syn::TypeParam::from(
+            syn::parse_str::<syn::Ident>("I").unwrap(),
+        )));
     let (impl_generics, ty_generics, where_clause) = tweaked_generics.split_for_impl();
 
     let visibility = &api.visibility;
@@ -106,7 +119,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         let function_is_notification = function.is_void_ret_type();
         let variant_name = snake_case_to_camel_case(&function.signature.ident);
         let ret = match &function.signature.output {
-            syn::ReturnType::Default => quote!{()},
+            syn::ReturnType::Default => quote! {()},
             syn::ReturnType::Type(_, ty) => quote_spanned!(ty.span()=> #ty),
         };
 
@@ -114,10 +127,14 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         for input in function.signature.inputs.iter() {
             let (ty, pat_span, param_variant_name) = match input {
                 syn::FnArg::Receiver(_) => {
-                    return Err(syn::Error::new(input.span(), "Having `self` is not allowed in RPC queries definitions"));
+                    return Err(syn::Error::new(
+                        input.span(),
+                        "Having `self` is not allowed in RPC queries definitions",
+                    ));
                 }
-                syn::FnArg::Typed(syn::PatType { ty, pat, .. }) =>
-                    (ty, pat.span(), param_variant_name(&pat)?),
+                syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => {
+                    (ty, pat.span(), param_variant_name(&pat)?)
+                }
             };
 
             params_list.push(quote_spanned!(pat_span=> #param_variant_name: #ty));
@@ -170,13 +187,18 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             for input in function.signature.inputs.iter() {
                 let (ty, param_variant_name, rpc_param_name) = match input {
                     syn::FnArg::Receiver(_) => {
-                        return Err(syn::Error::new(input.span(), "Having `self` is not allowed in RPC queries definitions"));
+                        return Err(syn::Error::new(
+                            input.span(),
+                            "Having `self` is not allowed in RPC queries definitions",
+                        ));
                     }
-                    syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) =>
-                        (ty, param_variant_name(&pat)?, rpc_param_name(&pat, &attrs)?),
+                    syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => {
+                        (ty, param_variant_name(&pat)?, rpc_param_name(&pat, &attrs)?)
+                    }
                 };
 
-                params_names_list.push(quote_spanned!(function.signature.span()=> #param_variant_name));
+                params_names_list
+                    .push(quote_spanned!(function.signature.span()=> #param_variant_name));
                 if !function_is_notification {
                     params_builders.push(quote_spanned!(function.signature.span()=>
                         let #param_variant_name: #ty = {
@@ -213,7 +235,6 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                         return Ok(#enum_name::#variant_name { #(#params_names_list),* });
                     }
                 ));
-
             } else {
                 function_blocks.push(quote_spanned!(function.signature.span()=>
                     if request_outcome.is_none() && method == #rpc_method_name {
@@ -325,7 +346,9 @@ fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenS
 /// Builds the functions that allow performing outbound JSON-RPC queries.
 ///
 /// Generates a list of functions that perform RPC client calls.
-fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
+fn build_client_functions(
+    api: &api_def::ApiDefinition,
+) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
     let visibility = &api.visibility;
 
     let mut client_functions = Vec::new();
@@ -348,10 +371,14 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
         for (param_index, input) in function.signature.inputs.iter().enumerate() {
             let (ty, pat_span, rpc_param_name) = match input {
                 syn::FnArg::Receiver(_) => {
-                    return Err(syn::Error::new(input.span(), "Having `self` is not allowed in RPC queries definitions"));
+                    return Err(syn::Error::new(
+                        input.span(),
+                        "Having `self` is not allowed in RPC queries definitions",
+                    ));
                 }
-                syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) =>
-                    (ty, pat.span(), rpc_param_name(&pat, &attrs)?),
+                syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => {
+                    (ty, pat.span(), rpc_param_name(&pat, &attrs)?)
+                }
             };
 
             let generated_param_name = syn::Ident::new(
@@ -370,7 +397,7 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
         }
 
         let params_building = if params_list.is_empty() {
-            quote!{jsonrpsee::core::common::Params::None}
+            quote! {jsonrpsee::core::common::Params::None}
         } else {
             let params_list_len = params_list.len();
             quote_spanned!(function.signature.span()=>
@@ -389,7 +416,6 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
                     .map_err(jsonrpsee::core::client::ClientError::Inner)?;
                 Ok(())
             )
-            
         } else {
             quote_spanned!(function.signature.span()=>
                 let rq_id = client.start_request(#rpc_method_name, #params_building).await
@@ -416,7 +442,9 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 }
 
 // TODO: better docs
-fn build_debug_variants(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
+fn build_debug_variants(
+    api: &api_def::ApiDefinition,
+) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
     let enum_name = &api.name;
     let mut debug_variants = Vec::new();
     for function in &api.definitions {
@@ -440,7 +468,7 @@ fn param_variant_name(pat: &syn::Pat) -> syn::parse::Result<&syn::Ident> {
     match pat {
         // TODO: check other fields of the `PatIdent`
         syn::Pat::Ident(ident) => Ok(&ident.ident),
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
 }
 
@@ -450,6 +478,6 @@ fn rpc_param_name(pat: &syn::Pat, attrs: &[syn::Attribute]) -> syn::parse::Resul
     match pat {
         // TODO: check other fields of the `PatIdent`
         syn::Pat::Ident(ident) => Ok(ident.ident.to_string()),
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
 }
