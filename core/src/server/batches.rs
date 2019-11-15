@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{common, server::batch, server::Notification, server::params::Params};
+use crate::{common, server::batch, server::params::Params, server::Notification};
 use fnv::FnvHashMap;
 use std::{collections::hash_map::Entry, fmt};
 

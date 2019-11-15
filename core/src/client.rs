@@ -67,7 +67,11 @@
 
 pub use crate::{client::raw::RawClient, common};
 use fnv::FnvHashMap;
-use std::{collections::{HashMap, VecDeque, hash_map::Entry}, error, fmt, future::Future};
+use std::{
+    collections::{hash_map::Entry, HashMap, VecDeque},
+    error, fmt,
+    future::Future,
+};
 
 pub mod raw;
 
@@ -146,7 +150,7 @@ pub enum ClientEvent {
         request_id: ClientRequestId,
         /// Opaque data that the server wants to communicate to us.
         result: common::JsonValue,
-    }
+    },
 }
 
 /// Access to a subscription within a [`Client`].
@@ -232,9 +236,7 @@ where
             params: params.into(),
         }));
 
-        self.inner
-            .send_request(request)
-            .await?;
+        self.inner.send_request(request).await?;
         Ok(())
     }
 
@@ -261,7 +263,8 @@ where
         method: impl Into<String>,
         params: impl Into<common::Params>,
     ) -> Result<ClientRequestId, R::Error> {
-        self.start_impl(method, params, Request::PendingSubscription).await
+        self.start_impl(method, params, Request::PendingSubscription)
+            .await
     }
 
     /// Inner implementation for starting either a request or a subscription.
@@ -289,9 +292,7 @@ where
 
             // Note that in case of an error, we "lose" the request id (as in, it will never be
             // used). This isn't a problem, however.
-            self.inner
-                .send_request(request)
-                .await?;
+            self.inner.send_request(request).await?;
 
             entry.insert(ty);
             break Ok(id);
@@ -322,9 +323,10 @@ where
     /// >           limit is reached, server notifications will be discarded. If you want to be
     /// >           sure to catch all notifications, use [`next_event`](Client::next_event)
     /// >           instead.
-    pub fn request_by_id<'a>(&'a mut self, rq_id: ClientRequestId)
-        -> Option<impl Future<Output = Result<common::JsonValue, ClientError<R::Error>>> + 'a>
-    {
+    pub fn request_by_id<'a>(
+        &'a mut self,
+        rq_id: ClientRequestId,
+    ) -> Option<impl Future<Output = Result<common::JsonValue, ClientError<R::Error>>> + 'a> {
         // First, let's check whether the request ID is valid.
         if let Some(rq) = self.requests.get(&rq_id) {
             if *rq != Request::Request {
@@ -344,10 +346,10 @@ where
                             return match self.events_queue.remove(events_queue_loopkup) {
                                 Some(ClientEvent::Response { result, .. }) => {
                                     result.map_err(ClientError::RequestError)
-                                },
-                                _ => unreachable!()
+                                }
+                                _ => unreachable!(),
                             }
-                        },
+                        }
                         _ => {}
                     }
 
@@ -371,17 +373,14 @@ where
                     client: self,
                     id: rq_id,
                 }))
-
             } else {
                 None
             }
-
         } else if self.subscriptions.values().any(|i| *i == rq_id) {
             Some(ClientSubscription::Active(ClientActiveSubscription {
                 client: self,
                 id: rq_id,
             }))
-
         } else {
             None
         }
@@ -395,7 +394,8 @@ where
     /// Check the content of [`events_queue`](Client::events_queue) afterwards for events to
     /// dispatch to the user.
     async fn event_step(&mut self) -> Result<(), ClientError<R::Error>> {
-        let result = self.inner
+        let result = self
+            .inner
             .next_response()
             .await
             .map_err(ClientError::Inner)?;
@@ -407,7 +407,7 @@ where
                     // TODO: if an errror happens, we throw away the entire batch
                     self.process_response(rp)?;
                 }
-            },
+            }
             common::Response::Notif(notif) => {
                 let sub_id = notif.params.subscription.into_string();
                 if let Some(request_id) = self.subscriptions.get(&sub_id) {
@@ -418,7 +418,10 @@ where
                         });
                     }
                 } else {
-                    log::warn!("Server sent subscription notif with an invalid id: {:?}", sub_id);
+                    log::warn!(
+                        "Server sent subscription notif with an invalid id: {:?}",
+                        sub_id
+                    );
                     return Err(ClientError::UnknownSubscriptionId);
                 }
             }
@@ -450,15 +453,16 @@ where
                     request_id,
                 });
             }
-    
+
             Some(Request::PendingSubscription) => {
                 let response = match Result::from(response) {
                     Ok(r) => r,
                     Err(err) => {
-                        self.events_queue.push_back(ClientEvent::SubscriptionResponse {
-                            result: Err(err),
-                            request_id,
-                        });
+                        self.events_queue
+                            .push_back(ClientEvent::SubscriptionResponse {
+                                result: Err(err),
+                                request_id,
+                            });
                         return Ok(());
                     }
                 };
@@ -479,14 +483,18 @@ where
                     }
                 };
 
-                self.events_queue.push_back(ClientEvent::SubscriptionResponse {
-                    result: Ok(()),
-                    request_id,
-                });
+                self.events_queue
+                    .push_back(ClientEvent::SubscriptionResponse {
+                        result: Ok(()),
+                        request_id,
+                    });
             }
 
             None => {
-                log::warn!("Server responsed with an invalid request id: {:?}", request_id);
+                log::warn!(
+                    "Server responsed with an invalid request id: {:?}",
+                    request_id
+                );
                 return Err(ClientError::UnknownRequestId);
             }
         };
@@ -497,7 +505,7 @@ where
 
 impl<R> fmt::Debug for Client<R>
 where
-    R: fmt::Debug
+    R: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Client")
@@ -541,18 +549,22 @@ where
         loop {
             while events_queue_loopkup < self.client.events_queue.len() {
                 match &self.client.events_queue[events_queue_loopkup] {
-                    ClientEvent::SubscriptionResponse { request_id, .. } if *request_id == self.id => {
+                    ClientEvent::SubscriptionResponse { request_id, .. }
+                        if *request_id == self.id =>
+                    {
                         return match self.client.events_queue.remove(events_queue_loopkup) {
-                            Some(ClientEvent::SubscriptionResponse { result: Ok(()), .. }) =>
+                            Some(ClientEvent::SubscriptionResponse { result: Ok(()), .. }) => {
                                 Ok(ClientActiveSubscription {
                                     client: self.client,
                                     id: self.id,
-                                }),
-                            Some(ClientEvent::SubscriptionResponse { result: Err(err), .. }) =>
-                                Err(ClientError::RequestError(err)),
-                            _ => unreachable!()
+                                })
+                            }
+                            Some(ClientEvent::SubscriptionResponse {
+                                result: Err(err), ..
+                            }) => Err(ClientError::RequestError(err)),
+                            _ => unreachable!(),
                         }
-                    },
+                    }
                     _ => {}
                 }
 
@@ -585,9 +597,9 @@ where
                     ClientEvent::SubscriptionNotif { request_id, .. } if *request_id == self.id => {
                         return match self.client.events_queue.remove(events_queue_loopkup) {
                             Some(ClientEvent::SubscriptionNotif { result, .. }) => Ok(result),
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         }
-                    },
+                    }
                     _ => {}
                 }
 
@@ -629,14 +641,18 @@ where
         match self {
             ClientError::Inner(ref err) => write!(f, "Error in the raw client: {}", err),
             ClientError::RequestError(ref err) => write!(f, "Server returned error: {}", err),
-            ClientError::DuplicateSubscriptionId =>
-                write!(f, "Server has responded with a subscription ID that's already in use"),
+            ClientError::DuplicateSubscriptionId => write!(
+                f,
+                "Server has responded with a subscription ID that's already in use"
+            ),
             ClientError::SubscriptionIdParseError => write!(f, "Subscription ID parse error"),
-            ClientError::UnknownRequestId =>
-                write!(f, "Server responded with an unknown request ID"),
+            ClientError::UnknownRequestId => {
+                write!(f, "Server responded with an unknown request ID")
+            }
             ClientError::NullRequestId => write!(f, "Server responded with a null request ID"),
-            ClientError::UnknownSubscriptionId =>
-                write!(f, "Server responded with an unknown subscription ID"),
+            ClientError::UnknownSubscriptionId => {
+                write!(f, "Server responded with an unknown subscription ID")
+            }
         }
     }
 }

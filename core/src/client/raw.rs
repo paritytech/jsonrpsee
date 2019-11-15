@@ -52,6 +52,7 @@ pub trait RawClient {
     ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>>;
 
     /// Returns a `Future` resolving when the server sent us something back.
-    fn next_response<'a>(&'a mut self)
-        -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>>;
+    fn next_response<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>>;
 }
