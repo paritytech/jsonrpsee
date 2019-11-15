@@ -300,7 +300,8 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 }
 
 /// Builds the impl block that allow performing outbound JSON-RPC queries.
-// TODO: better docs
+///
+/// Generates the `impl <enum> { }` block containing functions that perform RPC client calls.
 fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
     let enum_name = &api.name;
 
@@ -322,7 +323,8 @@ fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenS
 }
 
 /// Builds the functions that allow performing outbound JSON-RPC queries.
-// TODO: better docs
+///
+/// Generates a list of functions that perform RPC client calls.
 fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
     let visibility = &api.visibility;
 
