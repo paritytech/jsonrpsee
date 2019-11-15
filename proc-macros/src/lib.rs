@@ -90,10 +90,6 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
 /// Generates the macro output token stream corresponding to a single API.
 fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
     let enum_name = &api.name;
-    let (impl_generics_org, ty_generics_org, where_clause_org) = api.generics.split_for_impl();
-    let lifetimes_org = api.generics.lifetimes();
-    let type_params_org = api.generics.type_params();
-    let const_params_org = api.generics.const_params();
 
     // TODO: make sure there's no conflict here
     let mut tweaked_generics = api.generics.clone();
@@ -279,7 +275,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         )
     };
 
-    let client_functions = build_client_functions(&api)?;
+    let client_impl_block = build_client_impl(&api)?;
     let debug_variants = build_debug_variants(&api)?;
 
     Ok(quote_spanned!(api.name.span()=>
@@ -291,12 +287,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             #next_request
         }
 
-        // TODO: order between type_params and const_params is undecided
-        impl #impl_generics_org #enum_name<'static #(, #lifetimes_org)* #(, #type_params_org)* #(, #const_params_org)*, (), ()>
-            #where_clause_org
-        {
-            #(#client_functions)*
-        }
+        #client_impl_block
 
         impl #impl_generics std::fmt::Debug for #enum_name #ty_generics #where_clause {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -304,6 +295,28 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                     #(#debug_variants,)*
                 }
             }
+        }
+    ))
+}
+
+/// Builds the impl block that allow performing outbound JSON-RPC queries.
+// TODO: better docs
+fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
+    let enum_name = &api.name;
+
+    let (impl_generics_org, _, where_clause_org) = api.generics.split_for_impl();
+    let lifetimes_org = api.generics.lifetimes();
+    let type_params_org = api.generics.type_params();
+    let const_params_org = api.generics.const_params();
+
+    let client_functions = build_client_functions(&api)?;
+
+    Ok(quote_spanned!(api.name.span()=>
+        // TODO: order between type_params and const_params is undecided
+        impl #impl_generics_org #enum_name<'static #(, #lifetimes_org)* #(, #type_params_org)* #(, #const_params_org)*, (), ()>
+            #where_clause_org
+        {
+            #(#client_functions)*
         }
     ))
 }
