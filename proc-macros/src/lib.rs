@@ -88,19 +88,20 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
 }
 
 /// Generates the macro output token stream corresponding to a single API.
-fn build_api(mut api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
+fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
     let enum_name = &api.name;
-    let original_generics = api.generics.clone();
-    let (impl_generics_org, ty_generics_org, where_clause_org) = original_generics.split_for_impl();
-    let lifetimes_org = original_generics.lifetimes();
-    let type_params_org = original_generics.type_params();
-    let const_params_org = original_generics.const_params();
+    let (impl_generics_org, ty_generics_org, where_clause_org) = api.generics.split_for_impl();
+    let lifetimes_org = api.generics.lifetimes();
+    let type_params_org = api.generics.type_params();
+    let const_params_org = api.generics.const_params();
+
     // TODO: make sure there's no conflict here
-    api.generics.params.insert(0, From::from(syn::LifetimeDef::new(syn::parse_str::<syn::Lifetime>("'a").unwrap())));
-    api.generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("R").unwrap())));
-    api.generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("I").unwrap())));
-    let raw_generics = &api.generics;
-    let (impl_generics, ty_generics, where_clause) = api.generics.split_for_impl();
+    let mut tweaked_generics = api.generics.clone();
+    tweaked_generics.params.insert(0, From::from(syn::LifetimeDef::new(syn::parse_str::<syn::Lifetime>("'a").unwrap())));
+    tweaked_generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("R").unwrap())));
+    tweaked_generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("I").unwrap())));
+    let (impl_generics, ty_generics, where_clause) = tweaked_generics.split_for_impl();
+
     let visibility = &api.visibility;
 
     let mut variants = Vec::new();
@@ -282,7 +283,7 @@ fn build_api(mut api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream
     let debug_variants = build_debug_variants(&api)?;
 
     Ok(quote_spanned!(api.name.span()=>
-        #visibility enum #enum_name #raw_generics {
+        #visibility enum #enum_name #tweaked_generics {
             #(#variants),*
         }
 
