@@ -48,11 +48,11 @@ pub trait RawClient {
     /// successfully sent.
     fn send_request<'a>(
         &'a mut self,
-        request: common::Request,
+        request: &'a common::Request<'a>,
     ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>>;
 
     /// Returns a `Future` resolving when the server sent us something back.
     fn next_response<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = Result<common::Response<'static>, Self::Error>> + Send + 'a>>;
 }

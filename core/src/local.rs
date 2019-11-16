@@ -89,17 +89,17 @@ pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
 // TODO: restore #[derive(Clone)])
 pub struct LocalRawClient {
     /// Channel to the server.
-    to_server: mpsc::Sender<common::Request>,
+    to_server: mpsc::Sender<common::Request<'static>>,
     /// Channel from the server.
-    from_server: mpsc::Receiver<common::Response>,
+    from_server: mpsc::Receiver<common::Response<'static>>,
 }
 
 /// Server connected to a [`LocalRawClient`]. Can be created using [`local_raw`].
 pub struct LocalRawServer {
     /// Channel to the client.
-    to_client: mpsc::Sender<common::Response>,
+    to_client: mpsc::Sender<common::Response<'static>>,
     /// Channel from the client.
-    from_client: mpsc::Receiver<common::Request>,
+    from_client: mpsc::Receiver<common::Request<'static>>,
     /// Id of the next request to insert in the `requests` hashset.
     next_request_id: u64,
     /// List of requests waiting for an answer.
@@ -119,11 +119,11 @@ impl RawClient for LocalRawClient {
 
     fn send_request<'a>(
         &'a mut self,
-        request: common::Request,
+        request: &'a common::Request<'a>,
     ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
         Box::pin(async move {
             self.to_server
-                .send(request)
+                .send(request.into_owned())
                 .await
                 .map_err(|_| LocalRawClientErr::ServerClosed)?;
             Ok(())
@@ -132,7 +132,7 @@ impl RawClient for LocalRawClient {
 
     fn next_response<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<common::Response<'static>, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
             self.from_server
                 .next()
@@ -188,7 +188,7 @@ impl RawServer for LocalRawServer {
         Box::pin(async move {
             if self.requests.remove(&request_id) {
                 if let Some(response) = response {
-                    self.to_client.send(response.clone()).await.map_err(|_| ())
+                    self.to_client.send(response.to_owned()).await.map_err(|_| ())
                 } else {
                     Ok(())
                 }
@@ -213,7 +213,7 @@ impl RawServer for LocalRawServer {
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
         Box::pin(async move {
             if self.requests.contains(&request_id) {
-                self.to_client.send(response.clone()).await.map_err(|_| ())
+                self.to_client.send(response.to_owned()).await.map_err(|_| ())
             } else {
                 Err(())
             }

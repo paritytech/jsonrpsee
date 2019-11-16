@@ -26,84 +26,138 @@
 
 use super::{Id, Params, Version};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 /// Represents jsonrpc request which is a method call.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct MethodCall {
+pub struct MethodCall<'a> {
     /// A String specifying the version of the JSON-RPC protocol.
     pub jsonrpc: Version,
     /// A String containing the name of the method to be invoked.
-    pub method: String,
+    pub method: Cow<'a, str>,
     /// A Structured value that holds the parameter values to be used
     /// during the invocation of the method. This member MAY be omitted.
     #[serde(default = "default_params")]
     pub params: Params,
-    /// An identifier established by the Client that MUST contain a String,
-    /// Number, or NULL value if included. If it is not included it is assumed
-    /// to be a notification.
-    pub id: Id,
+    /// An identifier established by the client.
+    pub id: Id<'a>,
 }
 
 /// Represents jsonrpc request which is a notification.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct Notification {
+pub struct Notification<'a> {
     /// A String specifying the version of the JSON-RPC protocol.
     pub jsonrpc: Version,
     /// A String containing the name of the method to be invoked.
-    pub method: String,
+    pub method: Cow<'a, str>,
     /// A Structured value that holds the parameter values to be used
     /// during the invocation of the method. This member MAY be omitted.
     #[serde(default = "default_params")]
     pub params: Params,
+    // TODO: accept a NULL id field
 }
 
 /// Represents single jsonrpc call.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum Call {
+pub enum Call<'a> {
     /// Call method
-    MethodCall(MethodCall),
+    MethodCall(MethodCall<'a>),
     /// Fire notification
-    Notification(Notification),
+    Notification(Notification<'a>),
     /// Invalid call
     Invalid {
         /// Call id (if known)
-        #[serde(default = "default_id")]
-        id: Id,
+        #[serde(default = "default_id")]        // TODO: default for Option = None
+        id: Option<Id<'a>>,
     },
-}
-
-fn default_params() -> Params {
-    Params::None
-}
-
-fn default_id() -> Id {
-    Id::Null
-}
-
-impl From<MethodCall> for Call {
-    fn from(mc: MethodCall) -> Self {
-        Call::MethodCall(mc)
-    }
-}
-
-impl From<Notification> for Call {
-    fn from(n: Notification) -> Self {
-        Call::Notification(n)
-    }
 }
 
 /// Represents jsonrpc request.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
-pub enum Request {
+pub enum Request<'a> {
     /// Single request (call)
-    Single(Call),
+    Single(Call<'a>),
     /// Batch of requests (calls)
-    Batch(Vec<Call>),
+    Batch(Cow<'a, [Call<'a>]>),
+}
+
+fn default_params() -> Params {
+    Params::None
+}
+
+fn default_id<'a>() -> Option<Id<'a>> {
+    None
+}
+
+impl<'a> MethodCall<'a> {
+    /// Returns a `'static` version of this struct, potentially performing necessary memory
+    /// allocations.
+    pub fn into_owned(self) -> MethodCall<'static> {
+        MethodCall {
+            jsonrpc: self.jsonrpc,
+            method: match self.method {
+                Cow::Owned(m) => Cow::Owned(m),
+                Cow::Borrowed(m) => Cow::Owned(m.to_owned()),
+            },
+            params: self.params,
+            id: self.id.into_owned(),
+        }
+    }
+}
+
+impl<'a> Notification<'a> {
+    /// Returns a `'static` version of this struct, potentially performing necessary memory
+    /// allocations.
+    pub fn into_owned(self) -> Notification<'static> {
+        Notification {
+            jsonrpc: self.jsonrpc,
+            method: match self.method {
+                Cow::Owned(m) => Cow::Owned(m),
+                Cow::Borrowed(m) => Cow::Owned(m.to_owned()),
+            },
+            params: self.params,
+        }
+    }
+}
+
+impl<'a> Call<'a> {
+    /// Returns a `'static` version of this struct, potentially performing necessary memory
+    /// allocations.
+    pub fn into_owned(self) -> Call<'static> {
+        match self {
+            Call::MethodCall(c) => Call::MethodCall(c.into_owned()),
+            Call::Notification(c) => Call::Notification(c.into_owned()),
+            Call::Invalid { id } => Call::Invalid { id: id.map(|id| id.into_owned()) },
+        }
+    }
+}
+
+impl<'a> From<MethodCall<'a>> for Call<'a> {
+    fn from(mc: MethodCall<'a>) -> Self {
+        Call::MethodCall(mc)
+    }
+}
+
+impl<'a> From<Notification<'a>> for Call<'a> {
+    fn from(n: Notification<'a>) -> Self {
+        Call::Notification(n)
+    }
+}
+
+impl<'a> Request<'a> {
+    /// Returns a `'static` version of this struct, potentially performing necessary memory
+    /// allocations.
+    pub fn into_owned(self) -> Request<'static> {
+        match self {
+            Request::Single(c) => Request::Single(c.into_owned()),
+            Request::Batch(b) => unimplemented!(),      // FIXME:
+        }
+    }
 }
 
 #[cfg(test)]

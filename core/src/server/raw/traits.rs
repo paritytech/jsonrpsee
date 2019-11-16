@@ -117,7 +117,7 @@ pub enum RawServerEvent<T> {
         /// Identifier of the request within the state of the [`RawServer`].
         id: T,
         /// Body of the request.
-        request: common::Request,
+        request: common::Request<'static>,
     },
 
     /// A request has been cancelled, most likely because the client has closed the connection.

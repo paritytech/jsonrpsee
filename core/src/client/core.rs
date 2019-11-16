@@ -27,6 +27,7 @@
 use crate::{client::raw::RawClient, common};
 use fnv::FnvHashMap;
 use std::{
+    borrow::Cow,
     collections::{hash_map::Entry, HashMap, VecDeque},
     error, fmt,
     future::Future,
@@ -155,8 +156,6 @@ pub enum ClientError<E> {
     SubscriptionIdParseError,
     /// Server has sent back a response containing an unknown request ID.
     UnknownRequestId,
-    /// Server has sent back a response containing a null request ID.
-    NullRequestId,
     /// Server has sent back a notification using an unknown subscription ID.
     UnknownSubscriptionId,
 }
@@ -184,7 +183,7 @@ where
     /// This asynchronous function finishes when the notification has finished being sent.
     pub async fn send_notification(
         &mut self,
-        method: impl Into<String>,
+        method: impl Into<Cow<'_, str>>,
         params: impl Into<common::Params>,
     ) -> Result<(), R::Error> {
         let request = common::Request::Single(common::Call::Notification(common::Notification {
@@ -193,7 +192,7 @@ where
             params: params.into(),
         }));
 
-        self.inner.send_request(request).await?;
+        self.inner.send_request(&request).await?;
         Ok(())
     }
 
@@ -204,7 +203,7 @@ where
     /// until you get a response.
     pub async fn start_request(
         &mut self,
-        method: impl Into<String>,
+        method: impl Into<Cow<'_, str>>,
         params: impl Into<common::Params>,
     ) -> Result<ClientRequestId, R::Error> {
         self.start_impl(method, params, Request::Request).await
@@ -217,7 +216,7 @@ where
     /// until you get a response.
     pub async fn start_subscription(
         &mut self,
-        method: impl Into<String>,
+        method: impl Into<Cow<'_, str>>,
         params: impl Into<common::Params>,
     ) -> Result<ClientRequestId, R::Error> {
         self.start_impl(method, params, Request::PendingSubscription)
@@ -227,7 +226,7 @@ where
     /// Inner implementation for starting either a request or a subscription.
     async fn start_impl(
         &mut self,
-        method: impl Into<String>,
+        method: impl Into<Cow<'_, str>>,
         params: impl Into<common::Params>,
         ty: Request,
     ) -> Result<ClientRequestId, R::Error> {
@@ -249,7 +248,7 @@ where
 
             // Note that in case of an error, we "lose" the request id (as in, it will never be
             // used). This isn't a problem, however.
-            self.inner.send_request(request).await?;
+            self.inner.send_request(&request).await?;
 
             entry.insert(ty);
             break Ok(id);
@@ -358,9 +357,9 @@ where
             .map_err(ClientError::Inner)?;
 
         match result {
-            common::Response::Single(rp) => self.process_response(rp)?,
+            common::Response::Single(rp) => self.process_response(&rp)?,
             common::Response::Batch(rps) => {
-                for rp in rps {
+                for rp in rps.iter() {
                     // TODO: if an errror happens, we throw away the entire batch
                     self.process_response(rp)?;
                 }
@@ -389,16 +388,12 @@ where
 
     /// Processes the response obtained from the server. Updates the internal state of `self` to
     /// account for it.
-    fn process_response(&mut self, response: common::Output) -> Result<(), ClientError<R::Error>> {
+    fn process_response(&mut self, response: &common::Output) -> Result<(), ClientError<R::Error>> {
         let request_id = match response.id() {
             common::Id::Num(n) => ClientRequestId(*n),
             common::Id::Str(s) => {
                 log::warn!("Server responded with an invalid request id: {:?}", s);
                 return Err(ClientError::UnknownRequestId);
-            }
-            common::Id::Null => {
-                log::warn!("Server responded with a null request id");
-                return Err(ClientError::NullRequestId);
             }
         };
 
@@ -584,7 +579,6 @@ where
             ClientError::DuplicateSubscriptionId => None,
             ClientError::SubscriptionIdParseError => None,
             ClientError::UnknownRequestId => None,
-            ClientError::NullRequestId => None,
             ClientError::UnknownSubscriptionId => None,
         }
     }
@@ -606,7 +600,6 @@ where
             ClientError::UnknownRequestId => {
                 write!(f, "Server responded with an unknown request ID")
             }
-            ClientError::NullRequestId => write!(f, "Server responded with a null request ID"),
             ClientError::UnknownSubscriptionId => {
                 write!(f, "Server responded with an unknown subscription ID")
             }

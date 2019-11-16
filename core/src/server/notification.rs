@@ -32,21 +32,21 @@ use std::fmt;
 ///
 /// Wraps around a `common::Notification`.
 #[derive(PartialEq)]
-pub struct Notification(common::Notification);
+pub struct Notification<'a>(common::Notification<'a>);
 
-impl From<common::Notification> for Notification {
-    fn from(notif: common::Notification) -> Notification {
+impl<'a> From<common::Notification<'a>> for Notification<'a> {
+    fn from(notif: common::Notification<'a>) -> Notification<'a> {
         Notification(notif)
     }
 }
 
-impl From<Notification> for common::Notification {
-    fn from(notif: Notification) -> common::Notification {
+impl<'a> From<Notification<'a>> for common::Notification<'a> {
+    fn from(notif: Notification<'a>) -> common::Notification<'a> {
         notif.0
     }
 }
 
-impl Notification {
+impl<'a> Notification<'a> {
     /// Returns the method of this notification.
     pub fn method(&self) -> &str {
         &self.0.method
@@ -58,7 +58,7 @@ impl Notification {
     }
 }
 
-impl fmt::Debug for Notification {
+impl<'a> fmt::Debug for Notification<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Notification")
             .field("method", &self.method())

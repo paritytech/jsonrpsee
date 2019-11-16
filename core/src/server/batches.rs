@@ -61,7 +61,7 @@ pub enum BatchesEvent<'a, T> {
     /// A notification has been extracted from a batch.
     Notification {
         /// Notification in question.
-        notification: Notification,
+        notification: Notification<'static>,
         /// User parameter passed when calling [`inject`](BatchesState::inject).
         user_param: &'a mut T,
     },
@@ -72,7 +72,7 @@ pub enum BatchesEvent<'a, T> {
     /// A batch has gotten all its requests answered and a response is ready to be sent out.
     ReadyToSend {
         /// Response to send out to the JSON-RPC client.
-        response: common::Response,
+        response: common::Response<'static>,
         /// User parameter passed when calling [`inject`](BatchesState::inject).
         user_param: T,
     },
@@ -126,7 +126,7 @@ impl<T> BatchesState<T> {
             enum WhatCanWeDo {
                 Nothing,
                 ReadyToRespond,
-                Notification(Notification),
+                Notification(Notification<'static>),
                 Request(usize),
             }
 
@@ -183,7 +183,7 @@ impl<T> BatchesState<T> {
 
     /// Injects a newly-received batch into the list. You must then call
     /// [`next_event`](BatchesState::next_event) in order to process it.
-    pub fn inject(&mut self, request: common::Request, user_param: T) {
+    pub fn inject(&mut self, request: common::Request<'static>, user_param: T) {
         let batch = batch::BatchState::from_request(request);
 
         loop {

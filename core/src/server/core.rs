@@ -76,7 +76,7 @@ pub struct ServerSubscriptionId([u8; 32]);
 #[derive(Debug)]
 pub enum ServerEvent<'a, R, I> {
     /// Request is a notification.
-    Notification(Notification),
+    Notification(Notification<'static>),
 
     /// Request is a method call.
     Request(ServerRequest<'a, R, I>),
@@ -446,9 +446,9 @@ where
 
         let output = common::SubscriptionNotif {
             jsonrpc: common::Version::V2,
-            method: subscription_state.method.clone(),
+            method: From::from(&subscription_state.method),
             params: common::SubscriptionNotifParams {
-                subscription: common::SubscriptionId::Str(bs58::encode(&self.id).into_string()),
+                subscription: common::SubscriptionId::Str(bs58::encode(&self.id).into_string().into()),
                 result: message.into(),
             },
         };

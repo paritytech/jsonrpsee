@@ -26,73 +26,74 @@
 
 use super::{Error, Id, JsonValue, Version};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 /// Synchronous response
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
-pub enum Response {
+pub enum Response<'a> {
     /// Single response
-    Single(Output),
+    Single(Output<'a>),
     /// Response to batch request (batch of responses)
-    Batch(Vec<Output>),
+    Batch(Cow<'a, [Output<'a>]>),
     /// Notification to an active subscription.
-    Notif(SubscriptionNotif),
+    Notif(SubscriptionNotif<'a>),
 }
 
 /// Successful response
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Success {
+pub struct Success<'a> {
     /// Protocol version
     pub jsonrpc: Version,
     /// Result
     pub result: JsonValue,
     /// Correlation id
-    pub id: Id,
+    pub id: Id<'a>,
 }
 
 /// Unsuccessful response
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Failure {
+pub struct Failure<'a> {
     /// Protocol version
     pub jsonrpc: Version,
     /// Error
     pub error: Error,
     /// Correlation id
-    pub id: Id,
+    pub id: Id<'a>,
 }
 
 /// Represents output - failure or success
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
-pub enum Output {
+pub enum Output<'a> {
     /// Success
-    Success(Success),
+    Success(Success<'a>),
     /// Failure
-    Failure(Failure),
+    Failure(Failure<'a>),
 }
 
 /// Server notification about something the client is subscribed to.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SubscriptionNotif {
+pub struct SubscriptionNotif<'a> {
     /// Protocol version
     pub jsonrpc: Version,
     /// A String containing the name of the method that was used for the subscription.
-    pub method: String,
+    pub method: Cow<'a, str>,
     /// Parameters of the notification.
-    pub params: SubscriptionNotifParams,
+    pub params: SubscriptionNotifParams<'a>,
 }
 
 /// Field of a [`SubscriptionNotif`].
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SubscriptionNotifParams {
+pub struct SubscriptionNotifParams<'a> {
     /// Subscription id, as communicated during the subscription.
-    pub subscription: SubscriptionId,
+    pub subscription: SubscriptionId<'a>,
     /// Actual data that the server wants to communicate to us.
     pub result: JsonValue,
 }
@@ -101,16 +102,36 @@ pub struct SubscriptionNotifParams {
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
-pub enum SubscriptionId {
+pub enum SubscriptionId<'a> {
     /// Numeric id
     Num(u64),
     /// String id
-    Str(String),
+    Str(Cow<'a, str>),
 }
 
-impl Output {
+impl<'a> Response<'a> {
+    /// Returns a `'static` version of this struct, potentially performing necessary memory
+    /// allocations.
+    pub fn to_owned(&self) -> Response<'static> {
+        unimplemented!()        // FIXME:
+    }
+}
+
+impl<'a> From<Failure<'a>> for Response<'a> {
+    fn from(failure: Failure<'a>) -> Self {
+        Response::Single(Output::Failure(failure))
+    }
+}
+
+impl<'a> From<Success<'a>> for Response<'a> {
+    fn from(success: Success<'a>) -> Self {
+        Response::Single(Output::Success(success))
+    }
+}
+
+impl<'a> Output<'a> {
     /// Creates new output given `Result`, `Id` and `Version`.
-    pub fn from(result: Result<JsonValue, Error>, id: Id, jsonrpc: Version) -> Self {
+    pub fn new(result: Result<JsonValue, Error>, id: Id<'a>, jsonrpc: Version) -> Self {
         match result {
             Ok(result) => Output::Success(Success {
                 id,
@@ -121,26 +142,18 @@ impl Output {
         }
     }
 
-    /// Get the jsonrpc protocol version.
-    pub fn version(&self) -> Version {
-        match *self {
-            Output::Success(ref s) => s.jsonrpc,
-            Output::Failure(ref f) => f.jsonrpc,
-        }
-    }
-
-    /// Get the correlation id.
-    pub fn id(&self) -> &Id {
-        match *self {
-            Output::Success(ref s) => &s.id,
-            Output::Failure(ref f) => &f.id,
+    /// Returns the id of this output.
+    pub fn id(&self) -> &Id<'a> {
+        match self {
+            Output::Success(s) => &s.id,
+            Output::Failure(f) => &f.id,
         }
     }
 }
 
-impl From<Output> for Result<JsonValue, Error> {
+impl<'a> From<Output<'a>> for Result<JsonValue, Error> {
     /// Convert into a result. Will be `Ok` if it is a `Success` and `Err` if `Failure`.
-    fn from(output: Output) -> Result<JsonValue, Error> {
+    fn from(output: Output<'a>) -> Result<JsonValue, Error> {
         match output {
             Output::Success(s) => Ok(s.result),
             Output::Failure(f) => Err(f.error),
@@ -148,47 +161,12 @@ impl From<Output> for Result<JsonValue, Error> {
     }
 }
 
-impl Response {
-    /// Creates new `Response` with given error and `Version`
-    pub fn from(error: impl Into<Error>, jsonrpc: Version) -> Self {
-        Failure {
-            id: Id::Null,
-            jsonrpc,
-            error: error.into(),
-        }
-        .into()
-    }
-
-    /// Deserialize `Response` from given JSON string.
-    ///
-    /// This method will handle an empty string as empty batch response.
-    pub fn from_json(s: &str) -> Result<Self, serde_json::Error> {
-        if s.is_empty() {
-            Ok(Response::Batch(vec![]))
-        } else {
-            serde_json::from_str(s)
-        }
-    }
-}
-
-impl From<Failure> for Response {
-    fn from(failure: Failure) -> Self {
-        Response::Single(Output::Failure(failure))
-    }
-}
-
-impl From<Success> for Response {
-    fn from(success: Success) -> Self {
-        Response::Single(Output::Success(success))
-    }
-}
-
-impl SubscriptionId {
+impl<'a> SubscriptionId<'a> {
     /// Turns the subcription ID into a string.
     pub fn into_string(self) -> String {
         match self {
             SubscriptionId::Num(n) => n.to_string(),
-            SubscriptionId::Str(s) => s,
+            SubscriptionId::Str(s) => s.into_owned(),
         }
     }
 }
