@@ -136,7 +136,7 @@ fn subscriptions_work() {
 
         match server.next_event().await {
             ServerEvent::SubscriptionsReady(ready) => {
-                assert_eq!(ready, vec![sub_id]);
+                assert_eq!(ready.collect::<Vec<_>>(), vec![sub_id]);
             }
             _ => panic!(),
         }
@@ -154,7 +154,7 @@ fn subscriptions_work() {
 
         match server.next_event().await {
             ServerEvent::SubscriptionsClosed(closed) => {
-                assert_eq!(closed, vec![sub_id]);
+                assert_eq!(closed.collect::<Vec<_>>(), vec![sub_id]);
             }
             _ => panic!(),
         }
