@@ -36,7 +36,7 @@ mod request;
 mod response;
 mod version;
 
-pub use serde::{ser::Serialize, de::DeserializeOwned};
+pub use serde::{de::DeserializeOwned, ser::Serialize};
 pub use serde_json::Map as JsonMap;
 pub use serde_json::Number as JsonNumber;
 pub use serde_json::Value as JsonValue;
@@ -46,5 +46,7 @@ pub use self::error::{Error, ErrorCode};
 pub use self::id::Id;
 pub use self::params::Params;
 pub use self::request::{Call, MethodCall, Notification, Request};
-pub use self::response::{Failure, Output, Response, Success, SubscriptionId, SubscriptionNotif, SubscriptionNotifParams};
+pub use self::response::{
+    Failure, Output, Response, SubscriptionId, SubscriptionNotif, SubscriptionNotifParams, Success,
+};
 pub use self::version::Version;

@@ -70,8 +70,16 @@ use std::{fmt, pin::Pin};
 pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
     let (to_server, from_client) = mpsc::channel(4);
     let (to_client, from_server) = mpsc::channel(4);
-    let client = LocalRawClient { to_server, from_server };
-    let server = LocalRawServer { to_client, from_client, next_request_id: 0, requests: Default::default() };
+    let client = LocalRawClient {
+        to_server,
+        from_server,
+    };
+    let server = LocalRawServer {
+        to_client,
+        from_client,
+        next_request_id: 0,
+        requests: Default::default(),
+    };
     (client, server)
 }
 
@@ -122,9 +130,9 @@ impl RawClient for LocalRawClient {
         })
     }
 
-    fn next_response<'a>(&'a mut self)
-        -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>>
-    {
+    fn next_response<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
             self.from_server
                 .next()
@@ -145,8 +153,7 @@ impl RawServer for LocalRawServer {
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>> {
         Box::pin(async move {
             let request = match self.from_client.next().await {
                 Some(v) => v,
@@ -159,7 +166,7 @@ impl RawServer for LocalRawServer {
                             futures::pending!()
                         }
                     }
-                },
+                }
             };
 
             loop {
@@ -216,7 +223,6 @@ impl RawServer for LocalRawServer {
 
 impl fmt::Debug for LocalRawServer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("LocalRawServer")
-            .finish()
+        f.debug_struct("LocalRawServer").finish()
     }
 }
