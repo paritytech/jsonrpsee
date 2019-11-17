@@ -15,7 +15,7 @@ bytes = "0.4"
 globset = "0.4"
 hyper = "0.13.0-alpha.4"
 jsonrpsee-core = { path = "../core" }
-lazy_static = "1.1.0"
+lazy_static = "1.4"
 log = "0.4"
 num_cpus = "1.8"
 tokio = { version = "0.1" }
