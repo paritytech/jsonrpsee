@@ -27,7 +27,10 @@
 use crate::server::background;
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
-use jsonrpsee_core::{common, server::raw::{RawServer, RawServerEvent}};
+use jsonrpsee_core::{
+    common,
+    server::raw::{RawServer, RawServerEvent},
+};
 use jsonrpsee_server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr, pin::Pin};
 
@@ -78,7 +81,8 @@ impl HttpRawServer {
         addr: &SocketAddr,
         access_control: AccessControl,
     ) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
-        let (background_thread, local_addr) = background::BackgroundHttp::bind_with_acl(addr, access_control)?;
+        let (background_thread, local_addr) =
+            background::BackgroundHttp::bind_with_acl(addr, access_control)?;
 
         Ok(HttpRawServer {
             background_thread,
@@ -87,7 +91,6 @@ impl HttpRawServer {
             next_request_id: 0,
         })
     }
-
 
     /// Returns the address we are actually listening on, which might be different from the one
     /// passed as parameter.
@@ -101,12 +104,13 @@ impl RawServer for HttpRawServer {
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>> {
         Box::pin(async move {
             let request = match self.background_thread.next().await {
                 Ok(r) => r,
-                Err(_) => loop { futures::pending!() },
+                Err(_) => loop {
+                    futures::pending!()
+                },
             };
 
             let request_id = {
@@ -115,7 +119,9 @@ impl RawServer for HttpRawServer {
                     Some(i) => i,
                     None => {
                         log::error!("Overflow in HttpRawServer request ID assignment");
-                        loop { futures::pending!() }
+                        loop {
+                            futures::pending!()
+                        }
                     }
                 };
                 id

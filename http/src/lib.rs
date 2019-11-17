@@ -37,7 +37,7 @@ use jsonrpsee_server_utils as server_utils;
 use server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr};
 
-pub use crate::client::{HttpRawClient,RequestError};
+pub use crate::client::{HttpRawClient, RequestError};
 pub use crate::server::HttpRawServer;
 
 pub use server_utils::access_control;
@@ -62,7 +62,9 @@ pub async fn http_server_with_acl(
     addr: &SocketAddr,
     access_control: AccessControl,
 ) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
-    Ok(Server::new(HttpRawServer::bind_with_acl(addr, access_control).await?))
+    Ok(Server::new(
+        HttpRawServer::bind_with_acl(addr, access_control).await?,
+    ))
 }
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.

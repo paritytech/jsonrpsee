@@ -32,7 +32,6 @@ use jsonrpsee_core::common;
 use jsonrpsee_server_utils::access_control::AccessControl;
 use std::{io, net::SocketAddr, thread};
 
-
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
     /// Receiver for requests coming from the background thread.
@@ -57,7 +56,10 @@ impl BackgroundHttp {
         Self::bind_with_acl(addr, AccessControl::default())
     }
 
-    pub fn bind_with_acl(addr: &SocketAddr, access_control: AccessControl) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
+    pub fn bind_with_acl(
+        addr: &SocketAddr,
+        access_control: AccessControl,
+    ) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
         let (tx, rx) = mpsc::channel(4);
 
         let make_service = make_service_fn(move |_| {
@@ -118,7 +120,7 @@ async fn process_request(
     fg_process_tx: &mut mpsc::Sender<Request>,
     access_control: &AccessControl,
 ) -> hyper::Response<hyper::Body> {
-    // Process access control 
+    // Process access control
     if access_control.deny_host(&request) {
         return response::host_not_allowed();
     }
@@ -128,7 +130,7 @@ async fn process_request(
     if access_control.deny_cors_header(&request) {
         return response::invalid_allow_headers();
     }
-    
+
     /*
     // Read metadata
     let metadata = self.jsonrpc_handler.extractor.read_metadata(&request);
