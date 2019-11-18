@@ -28,7 +28,9 @@ use crate::common::{self, JsonValue};
 use crate::server::{batches, raw::RawServer, raw::RawServerEvent, Notification, Params};
 use err_derive::*;
 use fnv::FnvHashMap;
-use std::{collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize};
+use std::{
+    collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize, vec,
+};
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
@@ -82,10 +84,10 @@ pub enum ServerEvent<'a, R, I> {
     Request(ServerRequest<'a, R, I>),
 
     /// Subscriptions are now ready.
-    SubscriptionsReady(Vec<ServerSubscriptionId>),
+    SubscriptionsReady(SubscriptionsReadyIter),
 
     /// Subscriptions have been closed because the client closed the connection.
-    SubscriptionsClosed(Vec<ServerSubscriptionId>),
+    SubscriptionsClosed(SubscriptionsClosedIter),
 }
 
 /// Request received by a [`Server`](crate::Server).
@@ -122,6 +124,14 @@ pub enum IntoSubscriptionErr {
     #[error(display = "Request is already closed")]
     Closed,
 }
+
+/// Iterator for the list of subscriptions that are now ready.
+#[derive(Debug)]
+pub struct SubscriptionsReadyIter(vec::IntoIter<ServerSubscriptionId>);
+
+/// Iterator for the list of subscriptions that have been closed.
+#[derive(Debug)]
+pub struct SubscriptionsClosedIter(vec::IntoIter<ServerSubscriptionId>);
 
 /// Internal structure. Information about a subscription.
 #[derive(Debug)]
@@ -187,7 +197,9 @@ where
                             }
                         }
                         debug_assert!(!ready.is_empty()); // TODO: assert that capacity == len
-                        return ServerEvent::SubscriptionsReady(ready);
+                        return ServerEvent::SubscriptionsReady(SubscriptionsReadyIter(
+                            ready.into_iter(),
+                        ));
                     } else {
                         let _ = self.raw.finish(&raw_request_id, Some(&response)).await;
                     }
@@ -227,7 +239,9 @@ where
                         for id in &ids {
                             let _ = self.subscriptions.remove(&id.0);
                         }
-                        return ServerEvent::SubscriptionsClosed(ids);
+                        return ServerEvent::SubscriptionsClosed(SubscriptionsClosedIter(
+                            ids.into_iter(),
+                        ));
                     }
                 }
             };
@@ -502,3 +516,31 @@ where
         }
     }
 }
+
+impl Iterator for SubscriptionsReadyIter {
+    type Item = ServerSubscriptionId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl ExactSizeIterator for SubscriptionsReadyIter {}
+
+impl Iterator for SubscriptionsClosedIter {
+    type Item = ServerSubscriptionId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+impl ExactSizeIterator for SubscriptionsClosedIter {}
