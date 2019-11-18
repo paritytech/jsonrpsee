@@ -163,7 +163,13 @@ pub use jsonrpsee_http as http;
 pub use jsonrpsee_ws as ws;
 
 /// Builds a new client and a new server that are connected to each other.
-pub fn local() -> (core::Client<core::local::LocalRawClient>, core::Server<core::local::LocalRawServer, <core::local::LocalRawServer as core::RawServer>::RequestId>) {
+pub fn local() -> (
+    core::Client<core::local::LocalRawClient>,
+    core::Server<
+        core::local::LocalRawServer,
+        <core::local::LocalRawServer as core::RawServer>::RequestId,
+    >,
+) {
     let (client, server) = core::local_raw();
     let client = core::Client::new(client);
     let server = core::Server::new(server);

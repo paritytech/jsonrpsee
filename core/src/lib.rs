@@ -50,7 +50,7 @@
 #![warn(missing_docs)]
 
 pub use crate::client::raw::RawClient;
-pub use crate::client::{Client, ClientEvent, ClientError, ClientRequestId};
+pub use crate::client::{Client, ClientError, ClientEvent, ClientRequestId};
 pub use crate::local::local_raw;
 pub use crate::server::raw::{RawServer, RawServerEvent};
 pub use crate::server::{Server, ServerEvent, ServerRequestId, ServerSubscriptionId};

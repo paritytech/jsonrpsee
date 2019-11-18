@@ -38,7 +38,12 @@ fn main() {
         let v = System::system_name(&mut client).await.unwrap();
         println!("{:?}", v);
 
-        let _ = client.start_subscription("chain_subscribeNewHeads", jsonrpsee::core::common::Params::None).await;
+        let _ = client
+            .start_subscription(
+                "chain_subscribeNewHeads",
+                jsonrpsee::core::common::Params::None,
+            )
+            .await;
         while let ev = client.next_event().await {
             println!("ev: {:?}", ev);
         }
