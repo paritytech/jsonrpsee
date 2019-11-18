@@ -366,6 +366,7 @@ fn build_client_functions(
 
         let mut params_list = Vec::new();
         let mut params_to_json = Vec::new();
+        let mut params_to_array = Vec::new();
         let mut params_tys = Vec::new();
 
         for (param_index, input) in function.signature.inputs.iter().enumerate() {
@@ -394,10 +395,19 @@ fn build_client_functions(
                     jsonrpsee::core::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
                 );
             ));
+            params_to_array.push(quote_spanned!(pat_span=>
+                jsonrpsee::core::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
+            ));
         }
 
         let params_building = if params_list.is_empty() {
             quote! {jsonrpsee::core::common::Params::None}
+        } else if function.attributes.positional_params {
+            quote_spanned!(function.signature.span()=>
+                jsonrpsee::core::common::Params::Array(vec![
+				    #(#params_to_array),*
+                ])
+            )
         } else {
             let params_list_len = params_list.len();
             quote_spanned!(function.signature.span()=>

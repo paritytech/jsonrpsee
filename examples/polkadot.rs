@@ -32,6 +32,9 @@ jsonrpsee::rpc_api! {
         /// Returns the roles the node is running as.
         #[rpc(method = "system_nodeRoles")]
         fn system_node_roles() -> Vec<String>;
+
+        #[rpc(method = "chain_getBlockHash", positional_params)]
+        fn chain_block_hash(id: Option<String>) -> Option<String>;
     }
 }
 
