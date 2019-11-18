@@ -370,7 +370,7 @@ where
                 }))
             }
 
-            _ => None
+            _ => None,
         }
     }
 
@@ -471,7 +471,13 @@ where
                     }
                 };
 
-                self.requests.insert(request_id, Request::ActiveSubscription { sub_id, closing: false });
+                self.requests.insert(
+                    request_id,
+                    Request::ActiveSubscription {
+                        sub_id,
+                        closing: false,
+                    },
+                );
                 self.events_queue
                     .push_back(ClientEvent::SubscriptionResponse {
                         result: Ok(()),
@@ -490,7 +496,7 @@ where
                             debug_assert!(false);
                         }
                     }
-                    _ => debug_assert!(false)
+                    _ => debug_assert!(false),
                 }
             }
 
@@ -629,27 +635,32 @@ where
     ///
     /// Note that, for convenience, we will consider the subscription closed even the server
     /// returns an error to the unsubscription request.
-    pub async fn close(&mut self, method_name: impl Into<String>) -> Result<(), CloseError<R::Error>> {
+    pub async fn close(
+        &mut self,
+        method_name: impl Into<String>,
+    ) -> Result<(), CloseError<R::Error>> {
         let sub_id = match self.client.requests.get(&self.id) {
             Some(Request::ActiveSubscription { sub_id, closing }) => {
                 if *closing {
                     return Err(CloseError::AlreadyClosing);
                 }
                 sub_id.clone()
-            },
-            _ => panic!()
+            }
+            _ => panic!(),
         };
 
         let params = common::Params::Array(vec![sub_id.clone().into()]);
-        self.client.start_impl(method_name, params, Request::Unsubscribe(self.id)).await
+        self.client
+            .start_impl(method_name, params, Request::Unsubscribe(self.id))
+            .await
             .map_err(CloseError::RawClient)?;
 
         match self.client.requests.get_mut(&self.id) {
             Some(Request::ActiveSubscription { closing, .. }) => {
                 debug_assert!(!*closing);
                 *closing = true;
-            },
-            _ => panic!()
+            }
+            _ => panic!(),
         };
 
         Ok(())
@@ -699,7 +710,7 @@ where
 
 impl<E> error::Error for CloseError<E>
 where
-    E: error::Error + 'static
+    E: error::Error + 'static,
 {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
@@ -711,7 +722,7 @@ where
 
 impl<E> fmt::Display for CloseError<E>
 where
-    E: fmt::Display
+    E: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
