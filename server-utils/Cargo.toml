@@ -8,7 +8,7 @@ keywords = ["jsonrpc", "json-rpc", "json", "rpc", "serde"]
 license = "MIT"
 name = "jsonrpsee-server-utils"
 repository = "https://github.com/paritytech/jsonrpsee"
-version = "0.1.0"
+version = "1.0.0"
 
 [dependencies]
 bytes = "0.4"
