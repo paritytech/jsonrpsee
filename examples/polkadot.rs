@@ -27,8 +27,11 @@
 jsonrpsee::rpc_api! {
     System {
         /// Get the node's implementation name. Plain old string.
-        //#[rpc(method = "system_name")]        // TODO: https://github.com/paritytech/jsonrpsee/issues/26
         fn system_name() -> String;
+
+        /// Returns the roles the node is running as.
+        #[rpc(method = "system_nodeRoles")]
+        fn system_node_roles() -> Vec<String>;
     }
 }
 
