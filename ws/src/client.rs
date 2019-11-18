@@ -171,7 +171,7 @@ impl RawClient for WsRawClient {
         Box::pin(async move {
             let data = match self.inner.next().await {
                 Some(v) => v?,
-                None => return Err(From::from(soketto::connection::Error::Closed))
+                None => return Err(From::from(soketto::connection::Error::Closed)),
             };
             let response = common::from_slice(data.as_ref()).map_err(WsConnecError::ParseError)?;
             Ok(response)
@@ -247,7 +247,9 @@ impl<'a> WsRawClientBuilder<'a> {
         }
 
         // If the handshake succeeded, return.
-        Ok(WsRawClient { inner: client.into_connection() })
+        Ok(WsRawClient {
+            inner: client.into_connection(),
+        })
     }
 }
 

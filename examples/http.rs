@@ -66,7 +66,9 @@ fn main() {
     // Client demo.
     let mut client = jsonrpsee::http_client("http://127.0.0.1:8000");
     let v = async_std::task::block_on(async {
-        Health::test_notif(&mut client, "notif_string", 192).await.unwrap();
+        Health::test_notif(&mut client, "notif_string", 192)
+            .await
+            .unwrap();
         Health::system_name(&mut client, "hello", 5).await.unwrap()
     });
     println!("{:?}", v);

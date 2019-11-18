@@ -24,31 +24,20 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-jsonrpsee::rpc_api! {
-    System {
-        /// Get the node's implementation name. Plain old string.
-        fn system_name() -> String;
+//! Server utilities for the `jsonrpsee` library
+#![warn(missing_docs)]
 
-        /// Returns the roles the node is running as.
-        #[rpc(method = "system_nodeRoles")]
-        fn system_node_roles() -> Vec<String>;
-    }
-}
+extern crate log;
 
-fn main() {
-    async_std::task::block_on(async move {
-        let mut client = jsonrpsee::ws_client("127.0.0.1:9944").await.unwrap();
-        let v = System::system_name(&mut client).await.unwrap();
-        println!("{:?}", v);
+extern crate lazy_static;
 
-        let _ = client
-            .start_subscription(
-                "chain_subscribeNewHeads",
-                jsonrpsee::core::common::Params::None,
-            )
-            .await;
-        while let ev = client.next_event().await {
-            println!("ev: {:?}", ev);
-        }
-    });
-}
+pub use tokio;
+pub use tokio_codec;
+
+pub mod access_control;
+pub mod cors;
+pub mod hosts;
+mod matcher;
+pub mod utils;
+
+pub use crate::matcher::Pattern;

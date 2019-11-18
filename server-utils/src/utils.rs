@@ -24,31 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-jsonrpsee::rpc_api! {
-    System {
-        /// Get the node's implementation name. Plain old string.
-        fn system_name() -> String;
+//! Utility methods relying on hyper
+use hyper;
 
-        /// Returns the roles the node is running as.
-        #[rpc(method = "system_nodeRoles")]
-        fn system_node_roles() -> Vec<String>;
-    }
-}
-
-fn main() {
-    async_std::task::block_on(async move {
-        let mut client = jsonrpsee::ws_client("127.0.0.1:9944").await.unwrap();
-        let v = System::system_name(&mut client).await.unwrap();
-        println!("{:?}", v);
-
-        let _ = client
-            .start_subscription(
-                "chain_subscribeNewHeads",
-                jsonrpsee::core::common::Params::None,
-            )
-            .await;
-        while let ev = client.next_event().await {
-            println!("ev: {:?}", ev);
-        }
-    });
+/// Extracts string value of a single header in request.
+pub fn read_header<'a>(req: &'a hyper::Request<hyper::Body>, header_name: &str) -> Option<&'a str> {
+    req.headers().get(header_name).and_then(|v| v.to_str().ok())
 }

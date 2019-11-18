@@ -61,18 +61,23 @@ where
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>
-    {
+    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>> {
         Box::pin(async move {
             match future::select(self.left.next_request(), self.right.next_request()).await {
                 future::Either::Left((RawServerEvent::Request { id, request }, _)) => {
-                    RawServerEvent::Request { id: JoinRequestId::Left(id), request }
+                    RawServerEvent::Request {
+                        id: JoinRequestId::Left(id),
+                        request,
+                    }
                 }
                 future::Either::Left((RawServerEvent::Closed(id), _)) => {
                     RawServerEvent::Closed(JoinRequestId::Left(id))
                 }
                 future::Either::Right((RawServerEvent::Request { id, request }, _)) => {
-                    RawServerEvent::Request { id: JoinRequestId::Right(id), request }
+                    RawServerEvent::Request {
+                        id: JoinRequestId::Right(id),
+                        request,
+                    }
                 }
                 future::Either::Right((RawServerEvent::Closed(id), _)) => {
                     RawServerEvent::Closed(JoinRequestId::Right(id))

@@ -55,8 +55,9 @@ pub trait RawServer {
     type RequestId: Clone + PartialEq + Eq + Hash + Send + Sync;
 
     /// Returns the next event that the raw server wants to notify us.
-    fn next_request<'a>(&'a mut self)
-        -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>;
+    fn next_request<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>;
 
     /// Sends back a response and destroys the request.
     ///

@@ -29,6 +29,7 @@ use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
 use jsonrpsee_core::common;
+use jsonrpsee_server_utils::access_control::AccessControl;
 use std::{io, net::SocketAddr, thread};
 
 /// Background thread that serves HTTP requests.
@@ -52,14 +53,23 @@ impl BackgroundHttp {
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
     pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
+        Self::bind_with_acl(addr, AccessControl::default())
+    }
+
+    pub fn bind_with_acl(
+        addr: &SocketAddr,
+        access_control: AccessControl,
+    ) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
         let (tx, rx) = mpsc::channel(4);
 
         let make_service = make_service_fn(move |_| {
             let tx = tx.clone();
+            let access_control = access_control.clone();
             async move {
                 Ok::<_, Error>(service_fn(move |req| {
                     let mut tx = tx.clone();
-                    async move { Ok::<_, Error>(process_request(req, &mut tx).await) }
+                    let access_control = access_control.clone();
+                    async move { Ok::<_, Error>(process_request(req, &mut tx, &access_control).await) }
                 }))
             }
         });
@@ -108,17 +118,23 @@ impl BackgroundHttp {
 async fn process_request(
     request: hyper::Request<hyper::Body>,
     fg_process_tx: &mut mpsc::Sender<Request>,
+    access_control: &AccessControl,
 ) -> hyper::Response<hyper::Body> {
-    /*if self.cors_allow_origin == cors::AllowCors::Invalid && !continue_on_invalid_cors {
+    // Process access control
+    if access_control.deny_host(&request) {
+        return response::host_not_allowed();
+    }
+    if access_control.deny_cors_origin(&request) {
         return response::invalid_allow_origin();
     }
-
-    if self.cors_allow_headers == cors::AllowCors::Invalid && !continue_on_invalid_cors {
+    if access_control.deny_cors_header(&request) {
         return response::invalid_allow_headers();
     }
 
+    /*
     // Read metadata
-    let metadata = self.jsonrpc_handler.extractor.read_metadata(&request);*/
+    let metadata = self.jsonrpc_handler.extractor.read_metadata(&request);
+    */
 
     // Proceed
     match *request.method() {

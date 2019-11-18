@@ -50,9 +50,7 @@
 
 pub use self::core::{Server, ServerEvent, ServerRequest, ServerRequestId, ServerSubscriptionId};
 pub use self::notification::Notification;
-pub use self::params::{
-    Iter as ParamsIter, ParamKey as ParamsKey, Params,
-};
+pub use self::params::{Iter as ParamsIter, ParamKey as ParamsKey, Params};
 pub use self::typed_rp::TypedResponder;
 
 pub mod raw;

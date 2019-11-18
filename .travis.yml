@@ -1,13 +1,16 @@
 language: rust
 
 rust:
-  - nightly
+  - stable
+
+before_script:
+  - rustup component add rustfmt
 
 script:
   - cargo build --verbose --workspace
   - cargo test --verbose --workspace
-  - cargo doc --verbose --workspace --document-private-items
-  #- cargo fmt --all -- --check
+  - cargo doc --verbose --workspace --no-deps --document-private-items
+  - cargo fmt --all -- --check
 
 notifications:
   email:
