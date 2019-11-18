@@ -95,7 +95,7 @@ struct ApiMethods {
 /// Implementation detail of `ApiMethodAttrs`.
 /// Parses a single attribute.
 enum ApiMethodAttr {
-    Method(proc_macro2::Literal),
+    Method(syn::LitStr),
 }
 
 impl syn::parse::Parse for ApiDefinitions {
@@ -184,7 +184,7 @@ impl syn::parse::Parse for ApiMethodAttrs {
                             "Duplicate method attribute found",
                         ));
                     }
-                    out.method = Some(method.to_string());
+                    out.method = Some(method.value());
                 }
             }
         }
