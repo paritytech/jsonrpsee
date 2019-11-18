@@ -51,7 +51,9 @@ pub struct HttpRawClient {
     requests_tx: mpsc::Sender<FrontToBack>,
     url: String,
     /// Receives responses in any order.
-    responses: stream::FuturesUnordered<oneshot::Receiver<Result<hyper::Response<hyper::Body>, hyper::Error>>>,
+    responses: stream::FuturesUnordered<
+        oneshot::Receiver<Result<hyper::Response<hyper::Body>, hyper::Error>>,
+    >,
 }
 
 /// Message transmitted from the foreground task to the background.
@@ -127,9 +129,9 @@ impl RawClient for HttpRawClient {
         })
     }
 
-    fn next_response<'s>(&'s mut self)
-        -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>>
-    {
+    fn next_response<'s>(
+        &'s mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>> {
         Box::pin(async move {
             let hyper_response = match self.responses.next().await {
                 Some(Ok(Ok(r))) => r,
