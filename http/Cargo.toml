@@ -1,7 +1,7 @@
 [package]
 name = "jsonrpsee-http"
 description = "HTTP client and server for jsonrpsee"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
 edition = "2018"
