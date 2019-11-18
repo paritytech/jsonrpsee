@@ -11,6 +11,7 @@ members = [
     "core",
     "http",
     "proc-macros",
+    "server-utils",
     "ws",
 ]
 
@@ -26,4 +27,4 @@ http = ["jsonrpsee-http"]
 ws = ["jsonrpsee-ws"]
 
 [dev-dependencies]
-async-std = "0.99.4"
+async-std = "0.99.11"
