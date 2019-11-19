@@ -49,6 +49,10 @@ pub struct Client<R> {
     /// List of active subscriptions by ID (ID is chosen by the server). Note that this doesn't
     /// cover subscription requests that have been sent out but not answered yet, as these are in
     /// the [`requests`](Client::requests) field.
+    ///
+    /// The value of this hash map is only ever used for external API purposes and not for
+    /// communication with the server.
+    ///
     /// Since the keys are decided by the server, we use a regular HashMap and its
     /// hash-collision-resistant algorithm.
     subscriptions: HashMap<String, ClientRequestId>,
@@ -72,6 +76,16 @@ enum Request {
     Request,
     /// A potential subscription. As a response, we expect a single subscription id.
     PendingSubscription,
+    /// The request is stale and was originally used to open a subscription. The subscription ID
+    /// decided by the server is contained as parameter.
+    ActiveSubscription {
+        sub_id: String,
+        /// We sent a subscription closing message to the server.
+        closing: bool,
+    },
+    /// Unsubscribing from an active subscription. The request corresponding to the active
+    /// subscription to unsubscribe from is contained as parameter.
+    Unsubscribe(ClientRequestId),
 }
 
 /// Unique identifier of a request within a [`Client`].
@@ -107,6 +121,12 @@ pub enum ClientEvent {
         request_id: ClientRequestId,
         /// Opaque data that the server wants to communicate to us.
         result: common::JsonValue,
+    },
+
+    /// Finished closing a subscription.
+    Unsubscribed {
+        /// Subscription that has been closed.
+        request_id: ClientRequestId,
     },
 }
 
@@ -159,6 +179,16 @@ pub enum ClientError<E> {
     NullRequestId,
     /// Server has sent back a notification using an unknown subscription ID.
     UnknownSubscriptionId,
+}
+
+/// Error that can happen when attempting to close a subscription.
+#[derive(Debug)]
+pub enum CloseError<E> {
+    /// Error in the raw client.
+    RawClient(E),
+
+    /// We are already trying to close this subscription.
+    AlreadyClosing,
 }
 
 impl<R> Client<R> {
@@ -323,23 +353,24 @@ where
     ///
     /// Returns `None` if the identifier is invalid, or if it is not a subscription.
     pub fn subscription_by_id(&mut self, rq_id: ClientRequestId) -> Option<ClientSubscription<R>> {
-        if let Some(rq) = self.requests.get(&rq_id) {
-            debug_assert!(!self.subscriptions.values().any(|i| *i == rq_id));
-            if *rq == Request::PendingSubscription {
+        match self.requests.get(&rq_id)? {
+            Request::PendingSubscription => {
+                debug_assert!(!self.subscriptions.values().any(|i| *i == rq_id));
                 Some(ClientSubscription::Pending(ClientPendingSubscription {
                     client: self,
                     id: rq_id,
                 }))
-            } else {
-                None
             }
-        } else if self.subscriptions.values().any(|i| *i == rq_id) {
-            Some(ClientSubscription::Active(ClientActiveSubscription {
-                client: self,
-                id: rq_id,
-            }))
-        } else {
-            None
+
+            Request::ActiveSubscription { sub_id, .. } => {
+                debug_assert_eq!(self.subscriptions.get(sub_id), Some(&rq_id));
+                Some(ClientSubscription::Active(ClientActiveSubscription {
+                    client: self,
+                    id: rq_id,
+                }))
+            }
+
+            _ => None,
         }
     }
 
@@ -432,7 +463,7 @@ where
                     }
                 };
 
-                match self.subscriptions.entry(sub_id) {
+                match self.subscriptions.entry(sub_id.clone()) {
                     Entry::Vacant(e) => e.insert(request_id),
                     Entry::Occupied(e) => {
                         log::warn!("Duplicate subscription id sent by server: {:?}", e.key());
@@ -440,11 +471,42 @@ where
                     }
                 };
 
+                self.requests.insert(
+                    request_id,
+                    Request::ActiveSubscription {
+                        sub_id,
+                        closing: false,
+                    },
+                );
                 self.events_queue
                     .push_back(ClientEvent::SubscriptionResponse {
                         result: Ok(()),
                         request_id,
                     });
+            }
+
+            Some(Request::Unsubscribe(active_sub_rq_id)) => {
+                match self.requests.remove(&active_sub_rq_id) {
+                    Some(Request::ActiveSubscription { sub_id, .. }) => {
+                        if self.subscriptions.remove(&sub_id).is_some() {
+                            self.events_queue.push_back(ClientEvent::Unsubscribed {
+                                request_id: active_sub_rq_id,
+                            });
+                        } else {
+                            debug_assert!(false);
+                        }
+                    }
+                    _ => debug_assert!(false),
+                }
+            }
+
+            Some(v @ Request::ActiveSubscription { .. }) => {
+                self.requests.insert(request_id, v);
+                log::warn!(
+                    "Server responsed with an invalid request id: {:?}",
+                    request_id
+                );
+                return Err(ClientError::UnknownRequestId);
             }
 
             None => {
@@ -567,10 +629,42 @@ where
         }
     }
 
-    // TODO: add a way to close a subscription; however user needs to pass a method name or
-    //       something though
-    /*pub fn close(self) {
-    }*/
+    /// Starts closing an open subscription by performing an RPC call with the given method name.
+    ///
+    /// Calling this method multiple times with the same subscription will yield an error.
+    ///
+    /// Note that, for convenience, we will consider the subscription closed even the server
+    /// returns an error to the unsubscription request.
+    pub async fn close(
+        &mut self,
+        method_name: impl Into<String>,
+    ) -> Result<(), CloseError<R::Error>> {
+        let sub_id = match self.client.requests.get(&self.id) {
+            Some(Request::ActiveSubscription { sub_id, closing }) => {
+                if *closing {
+                    return Err(CloseError::AlreadyClosing);
+                }
+                sub_id.clone()
+            }
+            _ => panic!(),
+        };
+
+        let params = common::Params::Array(vec![sub_id.clone().into()]);
+        self.client
+            .start_impl(method_name, params, Request::Unsubscribe(self.id))
+            .await
+            .map_err(CloseError::RawClient)?;
+
+        match self.client.requests.get_mut(&self.id) {
+            Some(Request::ActiveSubscription { closing, .. }) => {
+                debug_assert!(!*closing);
+                *closing = true;
+            }
+            _ => panic!(),
+        };
+
+        Ok(())
+    }
 }
 
 impl<E> error::Error for ClientError<E>
@@ -610,6 +704,30 @@ where
             ClientError::UnknownSubscriptionId => {
                 write!(f, "Server responded with an unknown subscription ID")
             }
+        }
+    }
+}
+
+impl<E> error::Error for CloseError<E>
+where
+    E: error::Error + 'static,
+{
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            CloseError::RawClient(err) => Some(err),
+            CloseError::AlreadyClosing => None,
+        }
+    }
+}
+
+impl<E> fmt::Display for CloseError<E>
+where
+    E: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CloseError::RawClient(err) => fmt::Display::fmt(err, f),
+            CloseError::AlreadyClosing => write!(f, "Subscription already being closed"),
         }
     }
 }

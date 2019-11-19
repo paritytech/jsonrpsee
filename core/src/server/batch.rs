@@ -36,14 +36,16 @@ use std::{fmt, iter};
 /// - A list of requests that have been extracted from the batch but are yet to be answered.
 /// - A list of responses waiting to be sent out.
 ///
-/// Using the `BatchState` is done in the following steps:
+/// Using the [`BatchState`] is done in the following steps:
 ///
-/// - Construct a `BatchState` from a raw request.
-/// - Extract one by one the requests by calling [`next`](BatchState::next). This moves requests
-/// from the batch to the list of requests that are yet to be answered.
+/// - Construct a [`BatchState`] from a raw request.
+/// - Extract one by one the requests and notifications by calling [`next`](BatchState::next). This
+/// moves requests from the batch to the list of requests that are yet to be answered.
 /// - Answer these requests by calling [`set_response`](BatchElem::set_response).
-/// - Once all the requests have been answered, call [`into_response`](BatchState::into_response)
-/// and send back the response.
+/// - Once all the requests have been answered, call
+/// [`extract_response`](BatchState::extract_response) and send back the response.
+/// - Once [`next`](BatchState::next) returns `None` and the response has been extracted, you can
+/// destroy the [`BatchState`].
 ///
 pub struct BatchState {
     /// List of elements to present to the user.
