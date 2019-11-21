@@ -45,7 +45,8 @@ pub use server_utils::access_control;
 /// Type alias for a [`Client`](jsonrpsee_core::client::Client) that operates on HTTP.
 pub type HttpClient = Client<HttpTransportClient>;
 /// Type alias for a [`Server`](jsonrpsee_core::server::Server) that operates on HTTP.
-pub type HttpServer = Server<HttpTransportServer, <HttpTransportServer as TransportServer>::RequestId>;
+pub type HttpServer =
+    Server<HttpTransportServer, <HttpTransportServer as TransportServer>::RequestId>;
 
 mod client;
 mod server;

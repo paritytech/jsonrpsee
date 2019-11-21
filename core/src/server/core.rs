@@ -25,7 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::server::{batches, raw::TransportServer, raw::TransportServerEvent, Notification, Params};
+use crate::server::{
+    batches, raw::TransportServer, raw::TransportServerEvent, Notification, Params,
+};
 use err_derive::*;
 use fnv::FnvHashMap;
 use std::{
@@ -216,7 +218,9 @@ where
             };
 
             match self.raw.next_request().await {
-                TransportServerEvent::Request { id, request } => self.batches.inject(request, Some(id)),
+                TransportServerEvent::Request { id, request } => {
+                    self.batches.inject(request, Some(id))
+                }
                 TransportServerEvent::Closed(raw_id) => {
                     // The client has a closed their connection. We eliminate all traces of the
                     // raw request ID from our state.

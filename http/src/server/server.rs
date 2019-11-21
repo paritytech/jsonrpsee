@@ -205,7 +205,9 @@ mod tests {
         futures::executor::block_on(async move {
             let addr = "127.0.0.1:0".parse().unwrap();
             let server1 = HttpTransportServer::bind(&addr).await.unwrap();
-            assert!(HttpTransportServer::bind(server1.local_addr()).await.is_err());
+            assert!(HttpTransportServer::bind(server1.local_addr())
+                .await
+                .is_err());
         });
     }
 }
