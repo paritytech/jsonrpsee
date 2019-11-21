@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Implementation of [`RawClient`](jsonrpsee_core::client::raw::RawClient) and
+//! Implementation of [`TransportClient`](jsonrpsee_core::client::raw::TransportClient) and
 //! [`RawServer`](jsonrpsee_core::server::raw::RawServer) for HTTP.
 
 #![deny(unsafe_code)]
@@ -33,16 +33,16 @@
 
 use jsonrpsee_core::client::Client;
 
-pub use crate::client::{WsConnecError, WsNewError, WsRawClient};
+pub use crate::client::{WsConnecError, WsNewError, WsTransportClient};
 
 // TODO: server
 
 /// Type alias for a [`Client`](jsonrpsee_core::client::Client) that operates on WebSockets.
-pub type WsClient = Client<WsRawClient>;
+pub type WsClient = Client<WsTransportClient>;
 
 mod client;
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
 pub async fn ws_client(target: &str) -> Result<WsClient, client::WsNewDnsError> {
-    WsRawClient::new(target).await
+    WsTransportClient::new(target).await
 }

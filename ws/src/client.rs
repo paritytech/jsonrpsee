@@ -27,19 +27,19 @@
 use async_std::net::{TcpStream, ToSocketAddrs};
 use err_derive::*;
 use futures::prelude::*;
-use jsonrpsee_core::{client::Client, client::RawClient, common};
+use jsonrpsee_core::{client::Client, client::TransportClient, common};
 use soketto::connection::Connection;
 use soketto::handshake::client::{Client as WsClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
 
 /// Implementation of a raw client for WebSockets requests.
-pub struct WsRawClient {
+pub struct WsTransportClient {
     /// TCP/IP connection wrapped around a WebSocket encoder/decoder.
     inner: Connection<TcpStream>,
 }
 
-/// Builder for a [`WsRawClient`].
-pub struct WsRawClientBuilder<'a> {
+/// Builder for a [`WsTransportClient`].
+pub struct WsTransportClientBuilder<'a> {
     /// IP address to try to connect to.
     target: SocketAddr,
     /// Host to send during the HTTP handshake.
@@ -112,13 +112,13 @@ pub enum WsConnecError {
     ParseError(#[error(cause)] serde_json::error::Error),
 }
 
-impl WsRawClient {
-    /// Creates a new [`WsRawClientBuilder`] containing the given address and hostname.
+impl WsTransportClient {
+    /// Creates a new [`WsTransportClientBuilder`] containing the given address and hostname.
     pub fn builder<'a>(
         target: SocketAddr,
         host: impl Into<Cow<'a, str>>,
-    ) -> WsRawClientBuilder<'a> {
-        WsRawClientBuilder {
+    ) -> WsTransportClientBuilder<'a> {
+        WsTransportClientBuilder {
             target,
             host: host.into(),
             url: From::from("/"),
@@ -150,7 +150,7 @@ impl WsRawClient {
     }
 }
 
-impl RawClient for WsRawClient {
+impl TransportClient for WsTransportClient {
     type Error = WsConnecError;
 
     fn send_request<'a>(
@@ -179,13 +179,13 @@ impl RawClient for WsRawClient {
     }
 }
 
-impl fmt::Debug for WsRawClient {
+impl fmt::Debug for WsTransportClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("WsRawClient").finish()
+        f.debug_tuple("WsTransportClient").finish()
     }
 }
 
-impl<'a> WsRawClientBuilder<'a> {
+impl<'a> WsTransportClientBuilder<'a> {
     /// Sets the URL to pass during the HTTP handshake.
     ///
     /// The default URL is `/`.
@@ -212,12 +212,12 @@ impl<'a> WsRawClientBuilder<'a> {
     }
 
     /// Try establish the connection.
-    pub async fn build(self) -> Result<Client<WsRawClient>, WsNewError> {
+    pub async fn build(self) -> Result<Client<WsTransportClient>, WsNewError> {
         Ok(Client::new(self.build_raw().await?))
     }
 
     /// Try establish the connection.
-    pub async fn build_raw(self) -> Result<WsRawClient, WsNewError> {
+    pub async fn build_raw(self) -> Result<WsTransportClient, WsNewError> {
         // Try establish the TCP connection.
         let tcp_stream = {
             let socket = TcpStream::connect(self.target);
@@ -247,7 +247,7 @@ impl<'a> WsRawClientBuilder<'a> {
         }
 
         // If the handshake succeeded, return.
-        Ok(WsRawClient {
+        Ok(WsTransportClient {
             inner: client.into_connection(),
         })
     }

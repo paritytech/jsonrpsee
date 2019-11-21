@@ -164,7 +164,7 @@ pub use jsonrpsee_ws as ws;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local() -> (
-    core::Client<core::local::LocalRawClient>,
+    core::Client<core::local::LocalTransportClient>,
     core::Server<
         core::local::LocalRawServer,
         <core::local::LocalRawServer as core::RawServer>::RequestId,

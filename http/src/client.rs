@@ -27,7 +27,7 @@
 use derive_more::*;
 use err_derive::*;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
-use jsonrpsee_core::{client::Client, client::RawClient, common};
+use jsonrpsee_core::{client::Client, client::TransportClient, common};
 use std::{fmt, io, pin::Pin, thread};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
@@ -46,7 +46,7 @@ use std::{fmt, io, pin::Pin, thread};
 // the JSON-RPC request id to a value that might have already been used.
 
 /// Implementation of a raw client for HTTP requests.
-pub struct HttpRawClient {
+pub struct HttpTransportClient {
     /// Sender that sends requests to the background task.
     requests_tx: mpsc::Sender<FrontToBack>,
     url: String,
@@ -64,7 +64,7 @@ struct FrontToBack {
     send_back: oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
-impl HttpRawClient {
+impl HttpTransportClient {
     /// Initializes a new HTTP client.
     // TODO: better type for target
     pub fn new(target: &str) -> Client<Self> {
@@ -82,7 +82,7 @@ impl HttpRawClient {
             .spawn(move || background_thread(requests_rx))
             .unwrap();
 
-        HttpRawClient {
+        HttpTransportClient {
             requests_tx,
             url: target.to_owned(),
             responses: stream::FuturesUnordered::new(),
@@ -90,7 +90,7 @@ impl HttpRawClient {
     }
 }
 
-impl RawClient for HttpRawClient {
+impl TransportClient for HttpTransportClient {
     type Error = RequestError;
 
     fn send_request<'s>(
@@ -169,9 +169,9 @@ impl RawClient for HttpRawClient {
     }
 }
 
-impl fmt::Debug for HttpRawClient {
+impl fmt::Debug for HttpTransportClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("HttpRawClient").finish()
+        f.debug_tuple("HttpTransportClient").finish()
     }
 }
 

@@ -40,7 +40,7 @@ use std::{error, pin::Pin};
 /// >           one where the request has been sent. In practice, though, this shouldn't be a
 /// >           problem.
 ///
-pub trait RawClient {
+pub trait TransportClient {
     /// Error that can happen during a request.
     type Error: error::Error;
 

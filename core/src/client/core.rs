@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{client::raw::RawClient, common};
+use crate::{client::raw::TransportClient, common};
 use fnv::FnvHashMap;
 use std::{
     collections::{hash_map::Entry, HashMap, VecDeque},
@@ -32,7 +32,7 @@ use std::{
     future::Future,
 };
 
-/// Wraps around a [`RawClient`](crate::RawClient) and analyzes everything correctly.
+/// Wraps around a [`TransportClient`](crate::TransportClient) and analyzes everything correctly.
 ///
 /// See [the module root documentation](crate::client) for more information.
 pub struct Client<R> {
@@ -185,7 +185,7 @@ pub enum ClientError<E> {
 #[derive(Debug)]
 pub enum CloseError<E> {
     /// Error in the raw client.
-    RawClient(E),
+    TransportClient(E),
 
     /// We are already trying to close this subscription.
     AlreadyClosing,
@@ -207,7 +207,7 @@ impl<R> Client<R> {
 
 impl<R> Client<R>
 where
-    R: RawClient,
+    R: TransportClient,
 {
     /// Sends a notification to the server. The notification doesn't need any response.
     ///
@@ -537,7 +537,7 @@ where
 
 impl<'a, R> ClientSubscription<'a, R>
 where
-    R: RawClient,
+    R: TransportClient,
 {
     /// Returns true if the subscription is active. That is, if the server has accepted our
     /// subscription request and might generate events.
@@ -551,7 +551,7 @@ where
 
 impl<'a, R> ClientPendingSubscription<'a, R>
 where
-    R: RawClient,
+    R: TransportClient,
 {
     // TODO: since this is the only method, maybe we could replace `ClientPendingSubscription`
     //       with an `impl Future` once the `impl Trait` feature is stabilized
@@ -597,7 +597,7 @@ where
 
 impl<'a, R> ClientActiveSubscription<'a, R>
 where
-    R: RawClient,
+    R: TransportClient,
 {
     /// Returns a `Future` that resolves when the server sends back a notification for this
     /// subscription.
@@ -662,7 +662,7 @@ where
         self.client
             .start_impl(method_name, params, Request::Unsubscribe(self.id))
             .await
-            .map_err(CloseError::RawClient)?;
+            .map_err(CloseError::TransportClient)?;
 
         match self.client.requests.get_mut(&self.id) {
             Some(Request::ActiveSubscription { closing, .. }) => {
@@ -723,7 +723,7 @@ where
 {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            CloseError::RawClient(err) => Some(err),
+            CloseError::TransportClient(err) => Some(err),
             CloseError::AlreadyClosing => None,
         }
     }
@@ -735,7 +735,7 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            CloseError::RawClient(err) => fmt::Display::fmt(err, f),
+            CloseError::TransportClient(err) => fmt::Display::fmt(err, f),
             CloseError::AlreadyClosing => write!(f, "Subscription already being closed"),
         }
     }

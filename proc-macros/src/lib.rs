@@ -427,8 +427,8 @@ fn build_client_functions(
 
         client_functions.push(quote_spanned!(function.signature.span()=>
             // TODO: what if there's a conflict between `client` and a param name?
-            #visibility async fn #f_name<C: jsonrpsee::core::RawClient>(client: &mut jsonrpsee::core::Client<C> #(, #params_list)*)
-                -> core::result::Result<#ret_ty, jsonrpsee::core::client::ClientError<<C as jsonrpsee::core::RawClient>::Error>>
+            #visibility async fn #f_name<C: jsonrpsee::core::TransportClient>(client: &mut jsonrpsee::core::Client<C> #(, #params_list)*)
+                -> core::result::Result<#ret_ty, jsonrpsee::core::client::ClientError<<C as jsonrpsee::core::TransportClient>::Error>>
             where
                 #ret_ty: jsonrpsee::core::common::DeserializeOwned
                 #(, #params_tys: jsonrpsee::core::common::Serialize)*

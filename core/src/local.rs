@@ -24,14 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Implementation of a [`RawClient`](crate::RawClient) and a [`RawServer`](crate::RawServer)
+//! Implementation of a [`TransportClient`](crate::TransportClient) and a [`RawServer`](crate::RawServer)
 //! that communicate through a memory channel.
 //!
 //! # Usage
 //!
 //! Call the [`local_raw`](crate::local_raw()) function to build a set of a client and a server.
 //!
-//! The [`LocalRawClient`](crate::local::LocalRawClient) is clonable.
+//! The [`LocalTransportClient`](crate::local::LocalTransportClient) is clonable.
 //!
 //! ```
 //! use jsonrpsee_core::client::Client;
@@ -60,17 +60,17 @@
 //! ```
 //!
 
-use crate::{common, RawClient, RawServer, RawServerEvent};
+use crate::{common, TransportClient, RawServer, RawServerEvent};
 use err_derive::*;
 use fnv::FnvHashSet;
 use futures::{channel::mpsc, prelude::*};
 use std::{fmt, pin::Pin};
 
 /// Builds a new client and a new server that are connected to each other.
-pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
+pub fn local_raw() -> (LocalTransportClient, LocalRawServer) {
     let (to_server, from_client) = mpsc::channel(4);
     let (to_client, from_server) = mpsc::channel(4);
-    let client = LocalRawClient {
+    let client = LocalTransportClient {
         to_server,
         from_server,
     };
@@ -87,14 +87,14 @@ pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
 ///
 /// Can be cloned in order to have multiple clients connected to the same server.
 // TODO: restore #[derive(Clone)])
-pub struct LocalRawClient {
+pub struct LocalTransportClient {
     /// Channel to the server.
     to_server: mpsc::Sender<common::Request>,
     /// Channel from the server.
     from_server: mpsc::Receiver<common::Response>,
 }
 
-/// Server connected to a [`LocalRawClient`]. Can be created using [`local_raw`].
+/// Server connected to a [`LocalTransportClient`]. Can be created using [`local_raw`].
 pub struct LocalRawServer {
     /// Channel to the client.
     to_client: mpsc::Sender<common::Response>,
@@ -108,14 +108,14 @@ pub struct LocalRawServer {
 
 /// Error that can happen on the client side.
 #[derive(Debug, Error)]
-pub enum LocalRawClientErr {
+pub enum LocalTransportClientErr {
     /// The [`LocalRawServer`] no longer exists.
     #[error(display = "Server has been closed")]
     ServerClosed,
 }
 
-impl RawClient for LocalRawClient {
-    type Error = LocalRawClientErr;
+impl TransportClient for LocalTransportClient {
+    type Error = LocalTransportClientErr;
 
     fn send_request<'a>(
         &'a mut self,
@@ -125,7 +125,7 @@ impl RawClient for LocalRawClient {
             self.to_server
                 .send(request)
                 .await
-                .map_err(|_| LocalRawClientErr::ServerClosed)?;
+                .map_err(|_| LocalTransportClientErr::ServerClosed)?;
             Ok(())
         })
     }
@@ -137,14 +137,14 @@ impl RawClient for LocalRawClient {
             self.from_server
                 .next()
                 .await
-                .ok_or(LocalRawClientErr::ServerClosed)
+                .ok_or(LocalTransportClientErr::ServerClosed)
         })
     }
 }
 
-impl fmt::Debug for LocalRawClient {
+impl fmt::Debug for LocalTransportClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("LocalRawClient").finish()
+        f.debug_tuple("LocalTransportClient").finish()
     }
 }
 
