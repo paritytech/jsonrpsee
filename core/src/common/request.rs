@@ -75,6 +75,17 @@ pub enum Call {
     },
 }
 
+impl Call {
+    /// If `self` is a [`MethodCall`], then returns the inner [`MethodCall`].
+    pub fn into_method_call(self) -> Option<MethodCall> {
+        match self {
+            Call::MethodCall(c) => Some(c),
+            Call::Notification(_) => None,
+            Call::Invalid { .. } => None,
+        }
+    }
+}
+
 fn default_params() -> Params {
     Params::None
 }
@@ -104,6 +115,16 @@ pub enum Request {
     Single(Call),
     /// Batch of requests (calls)
     Batch(Vec<Call>),
+}
+
+impl Request {
+    /// If `self` is a `Single`, then returns the inner [`Call`].
+    pub fn into_single(self) -> Option<Call> {
+        match self {
+            Request::Single(c) => Some(c),
+            Request::Batch(_) => None,
+        }
+    }
 }
 
 #[cfg(test)]

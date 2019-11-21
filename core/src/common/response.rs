@@ -169,6 +169,21 @@ impl Response {
             serde_json::from_str(s)
         }
     }
+
+    /// If the response contains a single [`Output`], returns it.
+    pub fn into_output(self) -> Option<Output> {
+        match self {
+            Response::Single(s) => Some(s),
+            Response::Batch(mut l) => {
+                if l.len() == 1 {
+                    Some(l.remove(0))
+                } else {
+                    None
+                }
+            }
+            Response::Notif(_) => None,
+        }
+    }
 }
 
 impl From<Failure> for Response {
@@ -180,6 +195,16 @@ impl From<Failure> for Response {
 impl From<Success> for Response {
     fn from(success: Success) -> Self {
         Response::Single(Output::Success(success))
+    }
+}
+
+impl Output {
+    /// If the response is a [`Success`], returns it.
+    pub fn into_success(self) -> Option<Success> {
+        match self {
+            Output::Success(s) => Some(s),
+            Output::Failure(_) => None,
+        }
     }
 }
 

@@ -71,3 +71,4 @@ pub use self::raw::RawClient;
 pub mod raw;
 
 mod core;
+mod tests;
