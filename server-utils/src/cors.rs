@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! CORS handling utility functions
+
 use unicase;
 
 pub use self::unicase::Ascii;
