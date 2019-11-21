@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Implementation of [`TransportClient`](jsonrpsee_core::client::raw::TransportClient) and
-//! [`RawServer`](jsonrpsee_core::server::raw::RawServer) for HTTP.
+//! [`TransportServer`](jsonrpsee_core::server::raw::TransportServer) for HTTP.
 
 #![deny(unsafe_code)]
 #![deny(intra_doc_link_resolution_failure)]

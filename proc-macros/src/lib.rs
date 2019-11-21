@@ -281,7 +281,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 
         quote_spanned!(api.name.span()=>
             #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
-                where R: jsonrpsee::core::RawServer<RequestId = I>,
+                where R: jsonrpsee::core::TransportServer<RequestId = I>,
                         I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
             {
                 loop {

@@ -34,16 +34,16 @@
 //!
 //! - The [`common`] module contains all the primitive types of the JSON-RPC protocol, and
 //!   utilities to convert between them and JSON.
-//! - The [`TransportClient`] and [`RawServer`] traits are implemented on structs that allow performing
+//! - The [`TransportClient`] and [`TransportServer`] traits are implemented on structs that allow performing
 //!   low-level communication with respectively a server or a client. These are the traits that
 //!   you must implement if you are writing a custom transport (similar to HTTP, WebSockets,
 //!   IPC, etc.).
 //! - The [`Client`] and [`Server`] structs wrap around respectively a [`TransportClient`] or a
-//!   [`RawServer`] and allow correctly associating requests with responses and managing pub-sub
+//!   [`TransportServer`] and allow correctly associating requests with responses and managing pub-sub
 //!   subscriptions.
 //!
 //! In order to start a client or a server, first create a struct that implements respectively
-//! [`TransportClient`] or [`RawServer`], then wrap a [`Client`] or a [`Server`] around them.
+//! [`TransportClient`] or [`TransportServer`], then wrap a [`Client`] or a [`Server`] around them.
 
 #![deny(unsafe_code)]
 #![deny(intra_doc_link_resolution_failure)]
@@ -52,7 +52,7 @@
 pub use crate::client::raw::TransportClient;
 pub use crate::client::{Client, ClientError, ClientEvent, ClientRequestId};
 pub use crate::local::local_raw;
-pub use crate::server::raw::{RawServer, RawServerEvent};
+pub use crate::server::raw::{TransportServer, TransportServerEvent};
 pub use crate::server::{Server, ServerEvent, ServerRequestId, ServerSubscriptionId};
 
 pub mod client;

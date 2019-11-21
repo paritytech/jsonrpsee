@@ -29,7 +29,7 @@ use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
 use jsonrpsee_core::{
     common,
-    server::raw::{RawServer, RawServerEvent},
+    server::raw::{TransportServer, TransportServerEvent},
 };
 use jsonrpsee_server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr, pin::Pin};
@@ -37,8 +37,8 @@ use std::{error, net::SocketAddr, pin::Pin};
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
 
-/// Implementation of the [`RawServer`](jsonrpsee_core::server::raw::RawServer) trait for HTTP.
-pub struct HttpRawServer {
+/// Implementation of the [`TransportServer`](jsonrpsee_core::server::raw::TransportServer) trait for HTTP.
+pub struct HttpTransportServer {
     /// Background thread that processes HTTP requests.
     background_thread: background::BackgroundHttp,
 
@@ -53,7 +53,7 @@ pub struct HttpRawServer {
     requests: FnvHashMap<u64, oneshot::Sender<hyper::Response<hyper::Body>>>,
 }
 
-impl HttpRawServer {
+impl HttpTransportServer {
     /// Tries to start an HTTP server that listens on the given address.
     ///
     /// Returns an error if we fail to start listening, which generally happens if the port is
@@ -65,10 +65,10 @@ impl HttpRawServer {
     // >       might switch out to a different library later without breaking the API.
     pub async fn bind(
         addr: &SocketAddr,
-    ) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
+    ) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
         let (background_thread, local_addr) = background::BackgroundHttp::bind(addr)?;
 
-        Ok(HttpRawServer {
+        Ok(HttpTransportServer {
             background_thread,
             local_addr,
             requests: Default::default(),
@@ -80,11 +80,11 @@ impl HttpRawServer {
     pub async fn bind_with_acl(
         addr: &SocketAddr,
         access_control: AccessControl,
-    ) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
+    ) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
         let (background_thread, local_addr) =
             background::BackgroundHttp::bind_with_acl(addr, access_control)?;
 
-        Ok(HttpRawServer {
+        Ok(HttpTransportServer {
             background_thread,
             local_addr,
             requests: Default::default(),
@@ -99,12 +99,12 @@ impl HttpRawServer {
     }
 }
 
-impl RawServer for HttpRawServer {
+impl TransportServer for HttpTransportServer {
     type RequestId = u64;
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = TransportServerEvent<Self::RequestId>> + Send + 'a>> {
         Box::pin(async move {
             let request = match self.background_thread.next().await {
                 Ok(r) => r,
@@ -118,7 +118,7 @@ impl RawServer for HttpRawServer {
                 self.next_request_id = match self.next_request_id.checked_add(1) {
                     Some(i) => i,
                     None => {
-                        log::error!("Overflow in HttpRawServer request ID assignment");
+                        log::error!("Overflow in HttpTransportServer request ID assignment");
                         loop {
                             futures::pending!()
                         }
@@ -134,7 +134,7 @@ impl RawServer for HttpRawServer {
                 self.requests.shrink_to_fit();
             }
 
-            RawServerEvent::Request {
+            TransportServerEvent::Request {
                 id: request_id,
                 request: request.request,
             }
@@ -198,14 +198,14 @@ impl RawServer for HttpRawServer {
 
 #[cfg(test)]
 mod tests {
-    use super::HttpRawServer;
+    use super::HttpTransportServer;
 
     #[test]
     fn error_if_port_occupied() {
         futures::executor::block_on(async move {
             let addr = "127.0.0.1:0".parse().unwrap();
-            let server1 = HttpRawServer::bind(&addr).await.unwrap();
-            assert!(HttpRawServer::bind(server1.local_addr()).await.is_err());
+            let server1 = HttpTransportServer::bind(&addr).await.unwrap();
+            assert!(HttpTransportServer::bind(server1.local_addr()).await.is_err());
         });
     }
 }

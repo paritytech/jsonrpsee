@@ -25,27 +25,27 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Implementation of [`TransportClient`](jsonrpsee_core::client::raw::TransportClient) and
-//! [`RawServer`](jsonrpsee_core::server::raw::RawServer) for HTTP.
+//! [`TransportServer`](jsonrpsee_core::server::raw::TransportServer) for HTTP.
 
 #![deny(unsafe_code)]
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
 
 use jsonrpsee_core::client::Client;
-use jsonrpsee_core::server::{raw::RawServer, Server};
+use jsonrpsee_core::server::{raw::TransportServer, Server};
 use jsonrpsee_server_utils as server_utils;
 use server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr};
 
 pub use crate::client::{HttpTransportClient, RequestError};
-pub use crate::server::HttpRawServer;
+pub use crate::server::HttpTransportServer;
 
 pub use server_utils::access_control;
 
 /// Type alias for a [`Client`](jsonrpsee_core::client::Client) that operates on HTTP.
 pub type HttpClient = Client<HttpTransportClient>;
 /// Type alias for a [`Server`](jsonrpsee_core::server::Server) that operates on HTTP.
-pub type HttpServer = Server<HttpRawServer, <HttpRawServer as RawServer>::RequestId>;
+pub type HttpServer = Server<HttpTransportServer, <HttpTransportServer as TransportServer>::RequestId>;
 
 mod client;
 mod server;
@@ -54,7 +54,7 @@ mod server;
 pub async fn http_server(
     addr: &SocketAddr,
 ) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
-    Ok(Server::new(HttpRawServer::bind(addr).await?))
+    Ok(Server::new(HttpTransportServer::bind(addr).await?))
 }
 
 /// Starts a [`Server`](../Server) object that serves HTTP with a whitlist access control.
@@ -63,7 +63,7 @@ pub async fn http_server_with_acl(
     access_control: AccessControl,
 ) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
     Ok(Server::new(
-        HttpRawServer::bind_with_acl(addr, access_control).await?,
+        HttpTransportServer::bind_with_acl(addr, access_control).await?,
     ))
 }
 

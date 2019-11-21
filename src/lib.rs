@@ -166,8 +166,8 @@ pub use jsonrpsee_ws as ws;
 pub fn local() -> (
     core::Client<core::local::LocalTransportClient>,
     core::Server<
-        core::local::LocalRawServer,
-        <core::local::LocalRawServer as core::RawServer>::RequestId,
+        core::local::LocalTransportServer,
+        <core::local::LocalTransportServer as core::TransportServer>::RequestId,
     >,
 ) {
     let (client, server) = core::local_raw();
