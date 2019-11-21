@@ -638,7 +638,6 @@ where
         }
     }
 
-
     /// Starts closing an open subscription by performing an RPC call with the given method name.
     ///
     /// Calling this method multiple times with the same subscription will yield an error.
