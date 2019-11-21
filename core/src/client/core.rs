@@ -629,6 +629,15 @@ where
         }
     }
 
+    /// Returns `true` if we called [`close`](ClientActiveSubscription::close) earlier on this
+    /// subscription and we are waiting for the server to respond to our close request.
+    pub fn is_closing(&self) -> bool {
+        match self.client.requests.get(&self.id) {
+            Some(Request::ActiveSubscription { closing, .. }) => *closing,
+            _ => panic!(),
+        }
+    }
+
     /// Starts closing an open subscription by performing an RPC call with the given method name.
     ///
     /// Calling this method multiple times with the same subscription will yield an error.
