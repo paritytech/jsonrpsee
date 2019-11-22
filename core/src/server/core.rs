@@ -25,7 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::server::{batches, raw::RawServer, raw::RawServerEvent, Notification, Params};
+use crate::server::{
+    batches, raw::TransportServer, raw::TransportServerEvent, Notification, Params,
+};
 use err_derive::*;
 use fnv::FnvHashMap;
 use std::{
@@ -148,7 +150,7 @@ struct SubscriptionState<I> {
 
 impl<R, I> Server<R, I>
 where
-    R: RawServer<RequestId = I>,
+    R: TransportServer<RequestId = I>,
     // Note: annoyingly, the `HashMap` constructor with hasher requires trait bounds on the key.
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
@@ -165,7 +167,7 @@ where
 
 impl<R, I> Server<R, I>
 where
-    R: RawServer<RequestId = I>,
+    R: TransportServer<RequestId = I>,
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     /// Returns a `Future` resolving to the next event that this server generates.
@@ -216,8 +218,10 @@ where
             };
 
             match self.raw.next_request().await {
-                RawServerEvent::Request { id, request } => self.batches.inject(request, Some(id)),
-                RawServerEvent::Closed(raw_id) => {
+                TransportServerEvent::Request { id, request } => {
+                    self.batches.inject(request, Some(id))
+                }
+                TransportServerEvent::Closed(raw_id) => {
                     // The client has a closed their connection. We eliminate all traces of the
                     // raw request ID from our state.
                     // TODO: this has an O(n) complexity; make sure that this is not attackable
@@ -288,7 +292,7 @@ where
 
 impl<R> From<R> for Server<R, R::RequestId>
 where
-    R: RawServer,
+    R: TransportServer,
 {
     fn from(inner: R) -> Server<R, R::RequestId> {
         Server::new(inner)
@@ -325,7 +329,7 @@ impl<'a, R, I> ServerRequest<'a, R, I> {
 
 impl<'a, R, I> ServerRequest<'a, R, I>
 where
-    R: RawServer<RequestId = I>,
+    R: TransportServer<RequestId = I>,
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     /// Send back a response.
@@ -339,7 +343,7 @@ where
     /// > **Note**: This method is implemented in a way that doesn't wait for long to send the
     /// >           response. While calling this method will block your entire server, it
     /// >           should only block it for a short amount of time. See also [the equivalent
-    /// >           method](crate::RawServer::finish) on the [`RawServer`](crate::RawServer) trait.
+    /// >           method](crate::TransportServer::finish) on the [`TransportServer`](crate::TransportServer) trait.
     ///
     pub async fn respond(self, response: Result<common::JsonValue, common::Error>) {
         self.inner.set_response(response);
@@ -440,7 +444,7 @@ impl ServerSubscriptionId {
 
 impl<'a, R, I> ServerSubscription<'a, R, I>
 where
-    R: RawServer<RequestId = I>,
+    R: TransportServer<RequestId = I>,
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
     /// Returns the id of the subscription.
