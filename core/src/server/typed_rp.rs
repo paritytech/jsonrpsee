@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::{raw::RawServer, ServerRequest};
+use crate::server::{raw::TransportServer, ServerRequest};
 use std::{hash::Hash, marker::PhantomData};
 
 /// Allows responding to a server request in a more elegant and strongly-typed fashion.
@@ -46,7 +46,7 @@ impl<'a, R, I, T> From<ServerRequest<'a, R, I>> for TypedResponder<'a, R, I, T> 
 
 impl<'a, R, I, T> TypedResponder<'a, R, I, T>
 where
-    R: RawServer<RequestId = I>,
+    R: TransportServer<RequestId = I>,
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
     T: serde::Serialize,
 {
