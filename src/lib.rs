@@ -162,6 +162,8 @@ pub use jsonrpsee_http as http;
 #[cfg(feature = "ws")]
 pub use jsonrpsee_ws as ws;
 
+pub use shared_client::SharedClient;
+
 mod shared_client;
 
 /// Builds a new client and a new server that are connected to each other.

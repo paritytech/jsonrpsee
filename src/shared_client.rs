@@ -33,134 +33,85 @@ use futures::{
 use jsonrpsee_core::{
     client::ClientEvent,
     common::{self, JsonValue},
-    Client, RawClient,
+    Client, ClientRequestId, RawClient,
 };
-use std::{collections::HashMap, marker::PhantomData, mem};
+use std::{collections::HashMap, marker::PhantomData};
 
+/// Client that can be cloned.
+///
+/// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background
+/// >           task running in parallel. If this is not desirable, you are encouraged to use the
+/// >           [`Client`] struct instead.
 #[derive(Clone)]
 pub struct SharedClient {
     /// Channel to send requests to the background task.
     to_back: mpsc::Sender<FrontToBack>,
 }
 
+/// Active subscription on a [`SharedClient`].
 pub struct Subscription<Notif> {
+    /// Channel to send requests to the background task.
     to_back: mpsc::Sender<FrontToBack>,
+    /// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
     notifs_rx: mpsc::Receiver<JsonValue>,
-    /// Name of the method to call in order to unsubscribe.
-    unsubscribe_method: String,
     /// Marker in order to pin the `Notif` parameter.
     marker: PhantomData<mpsc::Receiver<Notif>>,
 }
 
+/// Message that the [`SharedClient`] can send to the background task.
 enum FrontToBack {
+    /// Send a one-shot notification to the server. The server doesn't give back any feedback.
     Notification {
+        /// Method for the notification.
         method: String,
+        /// Parameters to send to the server.
         params: common::Params,
     },
+
+    /// Send a request to the server.
     StartRequest {
+        /// Method for the request.
         method: String,
+        /// Parameters of the request.
         params: common::Params,
+        /// One-shot channel where to send back the outcome of that request.
         send_back: oneshot::Sender<Result<JsonValue, common::Error>>,
     },
+
+    /// Send a subscription request to the server.
     Subscribe {
+        /// Method for the subscription request.
         subscribe_method: String,
+        /// Parameters to send for the subscription.
         params: common::Params,
-        notifs_tx: mpsc::Sender<JsonValue>,
+        /// Method to use to later unsubscription. Used if the channel unexpectedly closes.
         unsubscribe_method: String,
+        /// When we get a response from the server about that subscription, we send the result on
+        /// this channel. If the subscription succeeds, we return a `Receiver` that will receive
+        /// notifications.
+        send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, common::Error>>,
     },
-    Unsubscribe {
-        method: String,
-    },
+
+    /// When a request or subscription channel is closed, we send this message to the background
+    /// task in order for it to garbage collect closed requests and subscriptions.
+    ///
+    /// While this means that closing a request or a subscription is a `O(n)` operation, it is
+    /// expected that the volume of requests and subscriptions is low enough that this isn't
+    /// a problem in practice.
+    ChannelClosed,
 }
 
 impl SharedClient {
     /// Initializes a new client based upon this raw client.
-    pub fn new<R>(mut client: Client<R>) -> SharedClient
+    pub fn new<R>(client: Client<R>) -> SharedClient
     where
         R: RawClient + Send + 'static,
         R::Error: Send,
     {
-        let (to_back, mut from_front) = mpsc::channel(16);
-
+        let (to_back, from_front) = mpsc::channel(16);
         async_std::task::spawn(async move {
-            let mut subscriptions = HashMap::new();
-            let mut requests = HashMap::new();
-
-            loop {
-                // We need to do a little transformation in order to destroy the borrow to `client`
-                // and `from_front`.
-                let outcome = {
-                    let next_message = from_front.next();
-                    let next_event = client.next_event();
-                    pin_mut!(next_message);
-                    pin_mut!(next_event);
-                    match future::select(next_message, next_event).await {
-                        Either::Left((v, _)) => Either::Left(v),
-                        Either::Right((v, _)) => Either::Right(v),
-                    }
-                };
-
-                match outcome {
-                    // If the channel is closed, then the `SharedClient` has been destroyed and we
-                    // stop this task.
-                    Either::Left(None) => return,
-
-                    // User called `notification` on the front-end.
-                    Either::Left(Some(FrontToBack::Notification { method, params })) => {
-                        let _ = client.send_notification(method, params).await;
-                    }
-
-                    // User called `request` on the front-end.
-                    Either::Left(Some(FrontToBack::StartRequest {
-                        method,
-                        params,
-                        send_back,
-                    })) => {
-                        if let Ok(id) = client.start_request(method, params).await {
-                            requests.insert(id, send_back);
-                        } else {
-                            // TODO: send back error
-                        }
-                    }
-
-                    // User called `subscribe` on the front-end.
-                    Either::Left(Some(FrontToBack::Subscribe {
-                        subscribe_method,
-                        unsubscribe_method,
-                        params,
-                        notifs_tx,
-                    })) => {
-                        if let Ok(id) = client.start_subscription(subscribe_method, params).await {
-                            subscriptions.insert(id, notifs_tx);
-                        } else {
-                            // TODO: send back error?
-                        }
-                    }
-
-                    Either::Left(Some(FrontToBack::Unsubscribe { method })) => {}
-
-                    // Received a response to a request from the server.
-                    Either::Right(Ok(ClientEvent::Response { request_id, result })) => {
-                        let _ = requests.remove(&request_id).unwrap().send(result);
-                    }
-
-                    Either::Right(Ok(ClientEvent::SubscriptionResponse { request_id, result })) => {
-                    }
-
-                    Either::Right(Ok(ClientEvent::SubscriptionNotif { request_id, result })) => {
-                        subscriptions.get_mut(&request_id).unwrap().send(result).await;
-                    }
-
-                    // Request for the server to unsubscribe us has succeeded.
-                    Either::Right(Ok(ClientEvent::Unsubscribed { request_id })) => {
-                        subscriptions.remove(&request_id).unwrap();
-                    }
-
-                    Either::Right(Err(_)) => {} // TODO: https://github.com/paritytech/jsonrpsee/issues/67
-                }
-            }
+            background_task(client, from_front).await;
         });
-
         SharedClient { to_back }
     }
 
@@ -200,6 +151,8 @@ impl SharedClient {
             })
             .await;
 
+        // TODO: send a `ChannelClosed` message if we close the channel unexpectedly
+
         let json_value = match send_back_rx.await {
             Ok(Ok(v)) => v,
             _ => return Err(()),
@@ -212,31 +165,35 @@ impl SharedClient {
         Err(())
     }
 
+    /// Send a subscription request to the server.
+    ///
+    /// The `subscribe_method` and `params` are used to ask for the subscription towards the
+    /// server. The `unsubscribe_method` is used to close the subscription.
     pub async fn subscribe<Notif>(
         &self,
         subscribe_method: impl Into<String>,
         params: impl Into<jsonrpsee_core::common::Params>,
         unsubscribe_method: impl Into<String>,
-    ) -> Subscription<Notif> {
-        // TODO: what's a good limit here? way more tricky than it looks
-        let (notifs_tx, notifs_rx) = mpsc::channel(4);
-        let unsubscribe_method = unsubscribe_method.into();
-        self.to_back
+    ) -> Result<Subscription<Notif>, ()> {
+        let (send_back_tx, send_back_rx) = oneshot::channel();
+        let _ = self
+            .to_back
             .clone()
             .send(FrontToBack::Subscribe {
                 subscribe_method: subscribe_method.into(),
-                unsubscribe_method: unsubscribe_method.clone(),
+                unsubscribe_method: unsubscribe_method.into(),
                 params: params.into(),
-                notifs_tx,
+                send_back: send_back_tx,
             })
             .await;
 
-        Subscription {
+        let notifs_rx = send_back_rx.await.map_err(|_| ())?.map_err(|_| ())?;
+
+        Ok(Subscription {
             to_back: self.to_back.clone(),
             notifs_rx,
-            unsubscribe_method,
             marker: PhantomData,
-        }
+        })
     }
 }
 
@@ -265,11 +222,154 @@ impl<Notif> Drop for Subscription<Notif> {
         // the channel's buffer will be full, and our unsubscription request will never make it.
         // However, when a notification arrives, the background task will realize that the channel
         // to the `Subscription` has been closed, and will perform the unsubscribe.
-        let _ = self
-            .to_back
-            .send(FrontToBack::Unsubscribe {
-                method: mem::replace(&mut self.unsubscribe_method, String::new()),
-            })
-            .now_or_never();
+        let _ = self.to_back.send(FrontToBack::ChannelClosed).now_or_never();
+    }
+}
+
+/// Function being run in the background that processes messages from the frontend.
+async fn background_task<R>(mut client: Client<R>, mut from_front: mpsc::Receiver<FrontToBack>)
+where
+    R: RawClient + Send + 'static,
+    R::Error: Send,
+{
+    // List of subscription requests that have been sent to the server, with the method name to
+    // unsubscribe.
+    let mut pending_subscriptions: HashMap<ClientRequestId, (oneshot::Sender<_>, _)> =
+        HashMap::new();
+    // List of subscription that are active on the server, with the method name to unsubscribe.
+    let mut active_subscriptions: HashMap<ClientRequestId, (mpsc::Sender<common::JsonValue>, _)> =
+        HashMap::new();
+    // List of requests that the server must answer.
+    let mut ongoing_requests: HashMap<ClientRequestId, oneshot::Sender<Result<_, _>>> =
+        HashMap::new();
+
+    loop {
+        // We need to do a little transformation in order to destroy the borrow to `client`
+        // and `from_front`.
+        let outcome = {
+            let next_message = from_front.next();
+            let next_event = client.next_event();
+            pin_mut!(next_message);
+            pin_mut!(next_event);
+            match future::select(next_message, next_event).await {
+                Either::Left((v, _)) => Either::Left(v),
+                Either::Right((v, _)) => Either::Right(v),
+            }
+        };
+
+        match outcome {
+            // If the channel is closed, then the `SharedClient` has been destroyed and we
+            // stop this task.
+            Either::Left(None) => return,
+
+            // User called `notification` on the front-end.
+            Either::Left(Some(FrontToBack::Notification { method, params })) => {
+                let _ = client.send_notification(method, params).await;
+            }
+
+            // User called `request` on the front-end.
+            Either::Left(Some(FrontToBack::StartRequest {
+                method,
+                params,
+                send_back,
+            })) => {
+                if let Ok(id) = client.start_request(method, params).await {
+                    ongoing_requests.insert(id, send_back);
+                } else {
+                    let _ = send_back.send(Err(panic!())); // TODO:
+                }
+            }
+
+            // User called `subscribe` on the front-end.
+            Either::Left(Some(FrontToBack::Subscribe {
+                subscribe_method,
+                unsubscribe_method,
+                params,
+                send_back,
+            })) => {
+                if let Ok(id) = client.start_subscription(subscribe_method, params).await {
+                    pending_subscriptions.insert(id, (send_back, unsubscribe_method));
+                } else {
+                    let _ = send_back.send(Err(panic!())); // TODO:
+                }
+            }
+
+            Either::Left(Some(FrontToBack::ChannelClosed)) => {
+                while let Some(rq_id) = pending_subscriptions
+                    .iter()
+                    .find(|(_, (v, _))| v.is_canceled())
+                    .map(|(k, _)| *k)
+                {
+                    let (_, unsubscribe) = pending_subscriptions.remove(&rq_id).unwrap();
+                }
+
+                while let Some(rq_id) = active_subscriptions
+                    .iter()
+                    .find(|(_, (v, _))| v.is_closed())
+                    .map(|(k, _)| *k)
+                {
+                    let (_, unsubscribe) = active_subscriptions.remove(&rq_id).unwrap();
+                    client
+                        .subscription_by_id(rq_id)
+                        .unwrap()
+                        .into_active()
+                        .unwrap()
+                        .close(unsubscribe)
+                        .await
+                        .unwrap();
+                }
+            }
+
+            // Received a response to a request from the server.
+            Either::Right(Ok(ClientEvent::Response { request_id, result })) => {
+                let _ = ongoing_requests.remove(&request_id).unwrap().send(result);
+            }
+
+            // Receive a response from the server about a subscription.
+            Either::Right(Ok(ClientEvent::SubscriptionResponse { request_id, result })) => {
+                let (send_back, unsubscribe) = pending_subscriptions.remove(&request_id).unwrap();
+                if let Err(err) = result {
+                    let _ = send_back.send(Err(err));
+                } else {
+                    // TODO: what's a good limit here? way more tricky than it looks
+                    let (notifs_tx, notifs_rx) = mpsc::channel(4);
+                    if send_back.send(Ok(notifs_rx)).is_ok() {
+                        active_subscriptions.insert(request_id, (notifs_tx, unsubscribe));
+                    } else {
+                        client
+                            .subscription_by_id(request_id)
+                            .unwrap()
+                            .into_active()
+                            .unwrap()
+                            .close(unsubscribe)
+                            .await
+                            .unwrap();
+                    }
+                }
+            }
+
+            Either::Right(Ok(ClientEvent::SubscriptionNotif { request_id, result })) => {
+                // TODO: unsubscribe if channel is closed
+                let (notifs_tx, _) = active_subscriptions.get_mut(&request_id).unwrap();
+                if notifs_tx.send(result).await.is_err() {
+                    let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
+                    client
+                        .subscription_by_id(request_id)
+                        .unwrap()
+                        .into_active()
+                        .unwrap()
+                        .close(unsubscribe)
+                        .await
+                        .unwrap();
+                }
+            }
+
+            // Request for the server to unsubscribe us has succeeded.
+            Either::Right(Ok(ClientEvent::Unsubscribed { request_id })) => {
+                active_subscriptions.remove(&request_id).unwrap();
+            }
+
+            Either::Right(Err(_)) => {} // TODO: https://github.com/paritytech/jsonrpsee/issues/67
+        }
     }
 }
