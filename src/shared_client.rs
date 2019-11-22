@@ -202,6 +202,8 @@ where
     Notif: common::DeserializeOwned,
 {
     /// Returns the next notification sent from the server.
+    ///
+    /// Ignores any malformed packet.
     pub async fn next(&mut self) -> Notif {
         loop {
             match self.notifs_rx.next().await {
@@ -295,14 +297,6 @@ where
             }
 
             Either::Left(Some(FrontToBack::ChannelClosed)) => {
-                while let Some(rq_id) = pending_subscriptions
-                    .iter()
-                    .find(|(_, (v, _))| v.is_canceled())
-                    .map(|(k, _)| *k)
-                {
-                    let (_, unsubscribe) = pending_subscriptions.remove(&rq_id).unwrap();
-                }
-
                 while let Some(rq_id) = active_subscriptions
                     .iter()
                     .find(|(_, (v, _))| v.is_closed())
