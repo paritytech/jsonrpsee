@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::{
-    channel::{mpsc, oneshot},
+    channel::mpsc,
     future::Either,
     pin_mut,
     prelude::*,
@@ -33,7 +33,7 @@ use futures::{
 use jsonrpsee_core::{
     server::{ServerEvent, ServerRequestId},
     common::{self, JsonValue},
-    Server, ClientRequestId, server::raw::TransportServer,
+    Server, server::raw::TransportServer,
 };
 use parking_lot::Mutex;
 use std::{collections::HashMap, collections::HashSet, hash::Hash, sync::Arc};
@@ -54,7 +54,20 @@ pub struct SharedServer {
 
 /// Method that's been registered.
 pub struct RegisteredMethod {
-    
+    /// Clone of [`SharedServer::to_back`].
+    to_back: mpsc::UnboundedSender<FrontToBack>,
+    /// Receives requests that the client sent to us.
+    queries_rx: mpsc::Receiver<(ServerRequestId, JsonValue)>,
+}
+
+/// Active request that needs to be answered.
+pub struct IncomingRequest {
+    /// Clone of [`SharedServer::to_back`].
+    to_back: mpsc::UnboundedSender<FrontToBack>,
+    /// Identifier of the request towards the server.
+    request_id: ServerRequestId,
+    /// Parameters of the request.
+    params: JsonValue,
 }
 
 /// Message that the [`SharedServer`] can send to the background task.
@@ -64,7 +77,7 @@ enum FrontToBack {
         /// Name of the method.
         name: String,
         /// Where to send requests.
-        handler: mpsc::Sender<(common::JsonValue, oneshot::Sender<common::JsonValue>)>,
+        handler: mpsc::Sender<(ServerRequestId, common::JsonValue)>,
     },
 
     /// Registers a subscription. The server will then handle subscription requests of that
@@ -119,13 +132,16 @@ impl SharedServer {
             return Err(());
         }
 
+        let (tx, rx) = mpsc::channel(8);
+
         let _ = self.to_back.unbounded_send(FrontToBack::RegisterMethod {
             name: method_name,
-            handler: panic!()
+            handler: tx,
         });
 
         Ok(RegisteredMethod {
-
+            to_back: self.to_back.clone(),
+            queries_rx: rx,
         })
     }
 
@@ -209,6 +225,34 @@ impl SharedServer {
             marker: PhantomData,
         })
     }*/
+}
+
+impl RegisteredMethod {
+    /// Returns the next request.
+    pub async fn next(&mut self) -> IncomingRequest {
+        let (request_id, params) = loop {
+            match self.queries_rx.next().await {
+                Some(v) => break v,
+                None => futures::pending!(),
+            }
+        };
+
+        IncomingRequest {
+            to_back: self.to_back.clone(),
+            request_id,
+            params,
+        }
+    }
+}
+
+impl IncomingRequest {
+    /// Respond to the request.
+    pub async fn respond(mut self, response: impl Into<Result<common::JsonValue, common::Error>>) {
+        let _ = self.to_back.send(FrontToBack::AnswerRequest {
+            request_id: self.request_id,
+            answer: response.into(),
+        }).await;
+    }
 }
 
 /// Function being run in the background that processes messages from the frontend.
