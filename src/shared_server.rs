@@ -52,6 +52,12 @@ pub struct SharedServer {
     registered_methods: Arc<Mutex<HashSet<String>>>,
 }
 
+/// Notifications method that's been registered.
+pub struct RegisteredNotifications {
+    /// Receives notifications that the client sent to us.
+    queries_rx: mpsc::Receiver<JsonValue>,
+}
+
 /// Method that's been registered.
 pub struct RegisteredMethod {
     /// Clone of [`SharedServer::to_back`].
@@ -72,6 +78,14 @@ pub struct IncomingRequest {
 
 /// Message that the [`SharedServer`] can send to the background task.
 enum FrontToBack {
+    /// Registers a notifications endpoint.
+    RegisterNotifications {
+        /// Name of the method.
+        name: String,
+        /// Where to send incoming notifications.
+        handler: mpsc::Sender<common::JsonValue>,
+    },
+
     /// Registers a method. The server will then handle requests using this method.
     RegisterMethod {
         /// Name of the method.
@@ -119,6 +133,30 @@ impl SharedServer {
             to_back,
             registered_methods: Arc::new(Mutex::new(Default::default())),
         }
+    }
+
+    /// Registers a notification method name towards the server.
+    ///
+    /// Clients will then be able to call this method.
+    /// The returned object allows you to process incoming notifications.
+    ///
+    /// Returns an error if the method name was already registered.
+    pub fn register_notifications(&self, method_name: String) -> Result<RegisteredNotifications, ()> {
+        if !self.registered_methods.lock().insert(method_name.clone()) {
+            return Err(());
+        }
+
+        let (tx, rx) = mpsc::channel(8);
+
+        let _ = self.to_back.unbounded_send(FrontToBack::RegisterNotifications {
+            name: method_name,
+            handler: tx,
+        });
+
+        Ok(RegisteredMethod {
+            to_back: self.to_back.clone(),
+            queries_rx: rx,
+        })
     }
 
     /// Registers a method towards the server.
@@ -227,6 +265,18 @@ impl SharedServer {
     }*/
 }
 
+impl RegisteredNotifications {
+    /// Returns the next notification.
+    pub async fn next(&mut self) -> common::JsonValue {
+        loop {
+            match self.queries_rx.next().await {
+                Some(v) => break v,
+                None => futures::pending!(),
+            }
+        }
+    }
+}
+
 impl RegisteredMethod {
     /// Returns the next request.
     pub async fn next(&mut self) -> IncomingRequest {
@@ -246,6 +296,11 @@ impl RegisteredMethod {
 }
 
 impl IncomingRequest {
+    /// Returns the parameters of the request.
+    pub fn params(&self) -> &common::JsonValue {
+        &self.params
+    }
+
     /// Respond to the request.
     pub async fn respond(mut self, response: impl Into<Result<common::JsonValue, common::Error>>) {
         let _ = self.to_back.send(FrontToBack::AnswerRequest {
@@ -261,9 +316,12 @@ where
     R: TransportServer<RequestId = I> + Send + 'static,
     I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
 {
+    // List of notifications methods that the user has registered, and the channels to dispatch
+    // incoming notifications.
+    let mut registered_notifications: HashMap<String, mpsc::Sender<_>> = HashMap::new();
     // List of methods that the user has registered, and the channels to dispatch incoming
     // requests.
-    let mut registered_methods = HashMap::new();
+    let mut registered_methods: HashMap<String, mpsc::Sender<_>> = HashMap::new();
 
     loop {
         // We need to do a little transformation in order to destroy the borrow to `client`
@@ -284,6 +342,9 @@ where
             Either::Left(Some(FrontToBack::AnswerRequest { request_id, answer })) => {
                 server.request_by_id(&request_id).unwrap().respond(answer).await;
             }
+            Either::Left(Some(FrontToBack::RegisterNotifications { name, handler })) => {
+                registered_notifications.insert(name, handler);
+            },
             Either::Left(Some(FrontToBack::RegisterMethod { name, handler })) => {
                 registered_methods.insert(name, handler);
             },
@@ -298,7 +359,9 @@ where
                 let method = request.method();
                 let params = request.params();
                 if let Some(handler) = registered_methods.get(request.method()) {
-
+                    unimplemented!()    // TODO:
+                } else if let Some(handler) = registered_notifications.get(request.method()) {
+                    handler.send(request.params()).await;
                 } else {
                     request.respond(Err(From::from(common::ErrorCode::InvalidRequest))).await;
                 }
