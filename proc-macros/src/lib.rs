@@ -184,7 +184,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             let mut params_builders = Vec::new();
             let mut params_names_list = Vec::new();
 
-            for input in function.signature.inputs.iter() {
+            for (param_index, input) in function.signature.inputs.iter().enumerate() {
                 let (ty, param_variant_name, rpc_param_name) = match input {
                     syn::FnArg::Receiver(_) => {
                         return Err(syn::Error::new(
@@ -202,7 +202,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                 if !function_is_notification {
                     params_builders.push(quote_spanned!(function.signature.span()=>
                         let #param_variant_name: #ty = {
-                            match request.params().get(#rpc_param_name) {
+                            match request.params().get((#rpc_param_name, #param_index)) {
                                 Ok(v) => v,
                                 Err(_) => {
                                     // TODO: message
@@ -215,7 +215,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                 } else {
                     params_builders.push(quote_spanned!(function.signature.span()=>
                         let #param_variant_name: #ty = {
-                            match request.params().get(#rpc_param_name) {
+                            match request.params().get((#rpc_param_name, #param_index)) {
                                 Ok(v) => v,
                                 Err(_) => {
                                     // TODO: log this?

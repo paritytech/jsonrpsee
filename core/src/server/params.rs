@@ -35,11 +35,34 @@ pub struct Params<'a> {
 }
 
 /// Key referring to a potential parameter of a request.
-pub enum ParamKey<'a> {
-    /// String key. Only valid when the parameters list is a map.
-    String(&'a str),
-    /// Integer key. Only valid when the parameters list is an array.
-    Index(usize),
+#[derive(Debug)]
+pub struct ParamKey<'a> {
+    /// String key. Used when the parameters list is a map.
+    name: Option<&'a str>,
+    /// Integer key. Used when the parameters list is an array.
+    index: Option<usize>,
+}
+
+impl<'a> ParamKey<'a> {
+    fn new(s: &'a str, i: usize) -> ParamKey<'a> {
+        ParamKey {
+            name: Some(s),
+            index: Some(i),
+        }
+    }
+    fn named(s: &'a str) -> ParamKey<'a> {
+        ParamKey {
+            name: Some(s),
+            index: None,
+        }
+    }
+
+    fn positioned(i: usize) -> ParamKey<'a> {
+        ParamKey {
+            name: None,
+            index: Some(i),
+        }
+    }
 }
 
 impl<'a> Params<'a> {
@@ -63,16 +86,16 @@ impl<'a> Params<'a> {
     pub fn get_raw<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a common::JsonValue> {
         match (self.params, param.into()) {
             (common::Params::None, _) => None,
-            (common::Params::Map(map), ParamKey::String(key)) => map.get(key),
-            (common::Params::Map(_), ParamKey::Index(_)) => None,
-            (common::Params::Array(_), ParamKey::String(_)) => None,
-            (common::Params::Array(array), ParamKey::Index(index)) => {
+            (common::Params::Map(map), ParamKey { name, .. }) => {
+                name.and_then(|name| map.get(name))
+            }
+            (common::Params::Array(array), ParamKey { index, .. }) => index.and_then(|index| {
                 if index < array.len() {
                     Some(&array[index])
                 } else {
                     None
                 }
-            }
+            }),
         }
     }
 }
@@ -110,28 +133,25 @@ impl<'a> Into<&'a common::Params> for Params<'a> {
 
 impl<'a> From<&'a str> for ParamKey<'a> {
     fn from(s: &'a str) -> Self {
-        ParamKey::String(s)
+        ParamKey::named(s)
     }
 }
 
 impl<'a> From<&'a String> for ParamKey<'a> {
     fn from(s: &'a String) -> Self {
-        ParamKey::String(&s[..])
+        ParamKey::named(&s)
     }
 }
 
 impl<'a> From<usize> for ParamKey<'a> {
     fn from(i: usize) -> Self {
-        ParamKey::Index(i)
+        ParamKey::positioned(i)
     }
 }
 
-impl<'a> fmt::Debug for ParamKey<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ParamKey::String(s) => fmt::Debug::fmt(s, f),
-            ParamKey::Index(s) => fmt::Debug::fmt(s, f),
-        }
+impl<'a> From<(&'a str, usize)> for ParamKey<'a> {
+    fn from(t: (&'a str, usize)) -> Self {
+        ParamKey::new(t.0, t.1)
     }
 }
 
@@ -149,7 +169,7 @@ impl<'a> Iterator for Iter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.0 {
             IterInner::Empty => None,
-            IterInner::Map(iter) => iter.next().map(|(k, v)| (ParamKey::String(&k[..]), v)),
+            IterInner::Map(iter) => iter.next().map(|(k, v)| (ParamKey::named(&k), v)),
         }
     }
 
