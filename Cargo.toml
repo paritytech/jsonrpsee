@@ -22,6 +22,7 @@ jsonrpsee-core = { path = "core" }
 jsonrpsee-http = { path = "http", optional = true }
 jsonrpsee-proc-macros = { path = "proc-macros" }
 jsonrpsee-ws = { path = "ws", optional = true }
+thiserror = "1.0.9"
 
 [features]
 default = ["http", "ws"]

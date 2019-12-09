@@ -35,7 +35,7 @@ use jsonrpsee_core::{
     common::{self, JsonValue},
     Client, ClientRequestId, RawClient,
 };
-use std::{collections::HashMap, marker::PhantomData};
+use std::{collections::HashMap, error, io, marker::PhantomData};
 
 /// Client that can be cloned.
 ///
@@ -58,6 +58,20 @@ pub struct Subscription<Notif> {
     marker: PhantomData<mpsc::Receiver<Notif>>,
 }
 
+/// Error produced by [`SharedClient::request`].
+#[derive(Debug, thiserror::Error)]
+pub enum RequestError {
+    /// Error while reaching the server.
+    #[error("Error while reaching the server: {0}")]
+    TransportError(#[source] Box<dyn error::Error + Send + Sync>),
+    /// Server responded to our request with an error.
+    #[error("Server responded to our request with an error: {0:?}")]
+    Request(#[source] common::Error),
+    /// Failed to parse the data that the server sent back to us.
+    #[error("Parse error: {0}")]
+    ParseError(#[source] common::ParseError),
+}
+
 /// Message that the [`SharedClient`] can send to the background task.
 enum FrontToBack {
     /// Send a one-shot notification to the server. The server doesn't give back any feedback.
@@ -75,7 +89,7 @@ enum FrontToBack {
         /// Parameters of the request.
         params: common::Params,
         /// One-shot channel where to send back the outcome of that request.
-        send_back: oneshot::Sender<Result<JsonValue, common::Error>>,
+        send_back: oneshot::Sender<Result<JsonValue, RequestError>>,
     },
 
     /// Send a subscription request to the server.
@@ -136,7 +150,7 @@ impl SharedClient {
         &self,
         method: impl Into<String>,
         params: impl Into<jsonrpsee_core::common::Params>,
-    ) -> Result<Ret, ()>
+    ) -> Result<Ret, RequestError>
     where
         Ret: common::DeserializeOwned,
     {
@@ -155,14 +169,14 @@ impl SharedClient {
 
         let json_value = match send_back_rx.await {
             Ok(Ok(v)) => v,
-            _ => return Err(()),
+            Ok(Err(err)) => return Err(err),
+            Err(_) => {
+                let err = io::Error::new(io::ErrorKind::Other, "background task closed");
+                return Err(RequestError::TransportError(Box::new(err)));
+            }
         };
 
-        if let Ok(parsed) = common::from_value(json_value) {
-            return Ok(parsed);
-        }
-
-        Err(())
+        common::from_value(json_value).map_err(RequestError::ParseError)
     }
 
     /// Send a subscription request to the server.
@@ -316,7 +330,10 @@ where
 
             // Received a response to a request from the server.
             Either::Right(Ok(ClientEvent::Response { request_id, result })) => {
-                let _ = ongoing_requests.remove(&request_id).unwrap().send(result);
+                let _ = ongoing_requests
+                    .remove(&request_id)
+                    .unwrap()
+                    .send(result.map_err(RequestError::Request));
             }
 
             // Receive a response from the server about a subscription.
