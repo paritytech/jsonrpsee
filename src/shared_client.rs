@@ -58,11 +58,12 @@ pub struct Subscription<Notif> {
     marker: PhantomData<mpsc::Receiver<Notif>>,
 }
 
-/// Error produced by [`SharedClient::request`].
+/// Error produced by [`SharedClient::request`] and [`SharedClient::subscribe`].
 #[derive(Debug, thiserror::Error)]
 pub enum RequestError {
-    /// Error while reaching the server.
-    #[error("Error while reaching the server: {0}")]
+    /// Networking error or error on the low-level protocol layer (e.g. missing field,
+    /// invalid ID, etc.).
+    #[error("Networking or low-level protocol error: {0}")]
     TransportError(#[source] Box<dyn error::Error + Send + Sync>),
     /// Server responded to our request with an error.
     #[error("Server responded to our request with an error: {0:?}")]
@@ -103,7 +104,7 @@ enum FrontToBack {
         /// When we get a response from the server about that subscription, we send the result on
         /// this channel. If the subscription succeeds, we return a `Receiver` that will receive
         /// notifications.
-        send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, common::Error>>,
+        send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, RequestError>>,
     },
 
     /// When a request or subscription channel is closed, we send this message to the background
@@ -120,7 +121,7 @@ impl SharedClient {
     pub fn new<R>(client: Client<R>) -> SharedClient
     where
         R: RawClient + Send + 'static,
-        R::Error: Send,
+        R::Error: Send + Sync,
     {
         let (to_back, from_front) = mpsc::channel(16);
         async_std::task::spawn(async move {
@@ -188,7 +189,7 @@ impl SharedClient {
         subscribe_method: impl Into<String>,
         params: impl Into<jsonrpsee_core::common::Params>,
         unsubscribe_method: impl Into<String>,
-    ) -> Result<Subscription<Notif>, ()> {
+    ) -> Result<Subscription<Notif>, RequestError> {
         let (send_back_tx, send_back_rx) = oneshot::channel();
         let _ = self
             .to_back
@@ -201,7 +202,14 @@ impl SharedClient {
             })
             .await;
 
-        let notifs_rx = send_back_rx.await.map_err(|_| ())?.map_err(|_| ())?;
+        let notifs_rx = match send_back_rx.await {
+            Ok(Ok(v)) => v,
+            Ok(Err(err)) => return Err(err),
+            Err(_) => {
+                let err = io::Error::new(io::ErrorKind::Other, "background task closed");
+                return Err(RequestError::TransportError(Box::new(err)));
+            }
+        };
 
         Ok(Subscription {
             to_back: self.to_back.clone(),
@@ -246,7 +254,7 @@ impl<Notif> Drop for Subscription<Notif> {
 async fn background_task<R>(mut client: Client<R>, mut from_front: mpsc::Receiver<FrontToBack>)
 where
     R: RawClient + Send + 'static,
-    R::Error: Send,
+    R::Error: Send + Sync,
 {
     // List of subscription requests that have been sent to the server, with the method name to
     // unsubscribe.
@@ -288,13 +296,14 @@ where
                 method,
                 params,
                 send_back,
-            })) => {
-                if let Ok(id) = client.start_request(method, params).await {
+            })) => match client.start_request(method, params).await {
+                Ok(id) => {
                     ongoing_requests.insert(id, send_back);
-                } else {
-                    let _ = send_back.send(Err(panic!())); // TODO:
                 }
-            }
+                Err(err) => {
+                    let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+                }
+            },
 
             // User called `subscribe` on the front-end.
             Either::Left(Some(FrontToBack::Subscribe {
@@ -302,15 +311,18 @@ where
                 unsubscribe_method,
                 params,
                 send_back,
-            })) => {
-                if let Ok(id) = client.start_subscription(subscribe_method, params).await {
+            })) => match client.start_subscription(subscribe_method, params).await {
+                Ok(id) => {
                     pending_subscriptions.insert(id, (send_back, unsubscribe_method));
-                } else {
-                    let _ = send_back.send(Err(panic!())); // TODO:
                 }
-            }
+                Err(err) => {
+                    let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+                }
+            },
 
             Either::Left(Some(FrontToBack::ChannelClosed)) => {
+                // TODO: there's no way to cancel pending subscriptions and requests, otherwise
+                // we should clean them up as well
                 while let Some(rq_id) = active_subscriptions
                     .iter()
                     .find(|(_, (v, _))| v.is_closed())
@@ -340,7 +352,7 @@ where
             Either::Right(Ok(ClientEvent::SubscriptionResponse { request_id, result })) => {
                 let (send_back, unsubscribe) = pending_subscriptions.remove(&request_id).unwrap();
                 if let Err(err) = result {
-                    let _ = send_back.send(Err(err));
+                    let _ = send_back.send(Err(RequestError::Request(err)));
                 } else {
                     // TODO: what's a good limit here? way more tricky than it looks
                     let (notifs_tx, notifs_rx) = mpsc::channel(4);
