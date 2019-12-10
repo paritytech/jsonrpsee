@@ -219,6 +219,16 @@ impl SharedClient {
     }
 }
 
+impl<R> From<Client<R>> for SharedClient
+where
+    R: TransportClient + Send + 'static,
+    R::Error: Send + Sync,
+{
+    fn from(client: Client<R>) -> SharedClient {
+        SharedClient::new(client)
+    }
+}
+
 impl<Notif> Subscription<Notif>
 where
     Notif: common::DeserializeOwned,
