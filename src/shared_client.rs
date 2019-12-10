@@ -33,7 +33,7 @@ use futures::{
 use jsonrpsee_core::{
     client::ClientEvent,
     common::{self, JsonValue},
-    Client, ClientRequestId, RawClient,
+    Client, ClientRequestId, TransportClient,
 };
 use std::{collections::HashMap, error, io, marker::PhantomData};
 
@@ -120,7 +120,7 @@ impl SharedClient {
     /// Initializes a new client based upon this raw client.
     pub fn new<R>(client: Client<R>) -> SharedClient
     where
-        R: RawClient + Send + 'static,
+        R: TransportClient + Send + 'static,
         R::Error: Send + Sync,
     {
         let (to_back, from_front) = mpsc::channel(16);
@@ -253,7 +253,7 @@ impl<Notif> Drop for Subscription<Notif> {
 /// Function being run in the background that processes messages from the frontend.
 async fn background_task<R>(mut client: Client<R>, mut from_front: mpsc::Receiver<FrontToBack>)
 where
-    R: RawClient + Send + 'static,
+    R: TransportClient + Send + 'static,
     R::Error: Send + Sync,
 {
     // List of subscription requests that have been sent to the server, with the method name to
