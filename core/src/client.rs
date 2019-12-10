@@ -26,10 +26,10 @@
 
 //! Performing JSON-RPC requests.
 //!
-//! The [`Client`] struct wraps around a [`RawClient`] and handles the higher-level JSON-RPC logic
+//! The [`Client`] struct wraps around a [`TransportClient`] and handles the higher-level JSON-RPC logic
 //! on top of it. In order to build a [`Client`], you need to pass to it an implementation of
-//! [`RawClient`]. There exists shortcut methods that directly create a [`Client`] on top of a
-//! specific [`RawClient`] implementations.
+//! [`TransportClient`]. There exists shortcut methods that directly create a [`Client`] on top of a
+//! specific [`TransportClient`] implementations.
 //!
 //! Once created, a [`Client`] can be used to send out notifications, requests, and subscription
 //! requests to the server. Request identifiers are automatically assigned by the client.
@@ -66,7 +66,7 @@
 //!
 
 pub use self::core::*;
-pub use self::raw::RawClient;
+pub use self::raw::TransportClient;
 
 pub mod raw;
 

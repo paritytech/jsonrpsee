@@ -50,14 +50,14 @@ use std::{hash::Hash, pin::Pin};
 /// Instead, implementations are encouraged to try to maintain the server alive as much as
 /// possible. If an unrecoverable error happens, implementations should become permanently idle.
 ///
-pub trait RawServer {
+pub trait TransportServer {
     /// Identifier for a request in the context of this server.
     type RequestId: Clone + PartialEq + Eq + Hash + Send + Sync;
 
     /// Returns the next event that the raw server wants to notify us.
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>>;
+    ) -> Pin<Box<dyn Future<Output = TransportServerEvent<Self::RequestId>> + Send + 'a>>;
 
     /// Sends back a response and destroys the request.
     ///
@@ -91,12 +91,12 @@ pub trait RawServer {
     /// You can continue sending data on that same request later.
     ///
     /// Returns an error if the request identifier is incorrect, or if the implementation doesn't
-    /// support that operation (see [`supports_resuming`](RawServer::supports_resuming)).
+    /// support that operation (see [`supports_resuming`](TransportServer::supports_resuming)).
     ///
     /// > **Note**: This might not be supported by the underlying implementation. For example, a
     /// >           WebSockets server can support that, but not an HTTP server.
     ///
-    /// > **Note**: Just like for [`finish`](RawServer::finish), the returned `Future` shouldn't
+    /// > **Note**: Just like for [`finish`](TransportServer::finish), the returned `Future` shouldn't
     /// >           take too long to complete.
     fn send<'a>(
         &'a mut self,
@@ -105,16 +105,16 @@ pub trait RawServer {
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>>;
 }
 
-/// Event that the [`RawServer`] can generate.
+/// Event that the [`TransportServer`] can generate.
 #[derive(Debug, PartialEq)]
-pub enum RawServerEvent<T> {
+pub enum TransportServerEvent<T> {
     /// A new request has arrived on the wire.
     ///
-    /// This generates a new "request object" within the state of the [`RawServer`] that is
+    /// This generates a new "request object" within the state of the [`TransportServer`] that is
     /// identified through the returned `id`. You can then use the other methods of the
-    /// [`RawServer`] trait in order to manipulate that request.
+    /// [`TransportServer`] trait in order to manipulate that request.
     Request {
-        /// Identifier of the request within the state of the [`RawServer`].
+        /// Identifier of the request within the state of the [`TransportServer`].
         id: T,
         /// Body of the request.
         request: common::Request,

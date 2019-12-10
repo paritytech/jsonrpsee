@@ -168,10 +168,10 @@ mod shared_client;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local() -> (
-    core::Client<core::local::LocalRawClient>,
+    core::Client<core::local::LocalTransportClient>,
     core::Server<
-        core::local::LocalRawServer,
-        <core::local::LocalRawServer as core::RawServer>::RequestId,
+        core::local::LocalTransportServer,
+        <core::local::LocalTransportServer as core::TransportServer>::RequestId,
     >,
 ) {
     let (client, server) = core::local_raw();

@@ -24,14 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Implementation of a [`RawClient`](crate::RawClient) and a [`RawServer`](crate::RawServer)
+//! Implementation of a [`TransportClient`](crate::TransportClient) and a [`TransportServer`](crate::TransportServer)
 //! that communicate through a memory channel.
 //!
 //! # Usage
 //!
 //! Call the [`local_raw`](crate::local_raw()) function to build a set of a client and a server.
 //!
-//! The [`LocalRawClient`](crate::local::LocalRawClient) is clonable.
+//! The [`LocalTransportClient`](crate::local::LocalTransportClient) is clonable.
 //!
 //! ```
 //! use jsonrpsee_core::client::Client;
@@ -60,21 +60,21 @@
 //! ```
 //!
 
-use crate::{common, RawClient, RawServer, RawServerEvent};
+use crate::{common, TransportClient, TransportServer, TransportServerEvent};
 use err_derive::*;
 use fnv::FnvHashSet;
 use futures::{channel::mpsc, prelude::*};
 use std::{fmt, pin::Pin};
 
 /// Builds a new client and a new server that are connected to each other.
-pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
+pub fn local_raw() -> (LocalTransportClient, LocalTransportServer) {
     let (to_server, from_client) = mpsc::channel(4);
     let (to_client, from_server) = mpsc::channel(4);
-    let client = LocalRawClient {
+    let client = LocalTransportClient {
         to_server,
         from_server,
     };
-    let server = LocalRawServer {
+    let server = LocalTransportServer {
         to_client,
         from_client,
         next_request_id: 0,
@@ -83,19 +83,19 @@ pub fn local_raw() -> (LocalRawClient, LocalRawServer) {
     (client, server)
 }
 
-/// Client connected to a [`LocalRawServer`]. Can be created using [`local_raw`].
+/// Client connected to a [`LocalTransportServer`]. Can be created using [`local_raw`].
 ///
 /// Can be cloned in order to have multiple clients connected to the same server.
 // TODO: restore #[derive(Clone)])
-pub struct LocalRawClient {
+pub struct LocalTransportClient {
     /// Channel to the server.
     to_server: mpsc::Sender<common::Request>,
     /// Channel from the server.
     from_server: mpsc::Receiver<common::Response>,
 }
 
-/// Server connected to a [`LocalRawClient`]. Can be created using [`local_raw`].
-pub struct LocalRawServer {
+/// Server connected to a [`LocalTransportClient`]. Can be created using [`local_raw`].
+pub struct LocalTransportServer {
     /// Channel to the client.
     to_client: mpsc::Sender<common::Response>,
     /// Channel from the client.
@@ -108,14 +108,14 @@ pub struct LocalRawServer {
 
 /// Error that can happen on the client side.
 #[derive(Debug, Error)]
-pub enum LocalRawClientErr {
-    /// The [`LocalRawServer`] no longer exists.
+pub enum LocalTransportClientErr {
+    /// The [`LocalTransportServer`] no longer exists.
     #[error(display = "Server has been closed")]
     ServerClosed,
 }
 
-impl RawClient for LocalRawClient {
-    type Error = LocalRawClientErr;
+impl TransportClient for LocalTransportClient {
+    type Error = LocalTransportClientErr;
 
     fn send_request<'a>(
         &'a mut self,
@@ -125,7 +125,7 @@ impl RawClient for LocalRawClient {
             self.to_server
                 .send(request)
                 .await
-                .map_err(|_| LocalRawClientErr::ServerClosed)?;
+                .map_err(|_| LocalTransportClientErr::ServerClosed)?;
             Ok(())
         })
     }
@@ -137,30 +137,30 @@ impl RawClient for LocalRawClient {
             self.from_server
                 .next()
                 .await
-                .ok_or(LocalRawClientErr::ServerClosed)
+                .ok_or(LocalTransportClientErr::ServerClosed)
         })
     }
 }
 
-impl fmt::Debug for LocalRawClient {
+impl fmt::Debug for LocalTransportClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("LocalRawClient").finish()
+        f.debug_tuple("LocalTransportClient").finish()
     }
 }
 
-impl RawServer for LocalRawServer {
+impl TransportServer for LocalTransportServer {
     type RequestId = u64;
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = TransportServerEvent<Self::RequestId>> + Send + 'a>> {
         Box::pin(async move {
             let request = match self.from_client.next().await {
                 Some(v) => v,
                 None => {
                     if let Some(rq_id) = self.requests.iter().cloned().next() {
                         self.requests.remove(&rq_id);
-                        return RawServerEvent::Closed(rq_id);
+                        return TransportServerEvent::Closed(rq_id);
                     } else {
                         loop {
                             futures::pending!()
@@ -175,7 +175,7 @@ impl RawServer for LocalRawServer {
                 if !self.requests.insert(id) {
                     continue;
                 }
-                return RawServerEvent::Request { id, request };
+                return TransportServerEvent::Request { id, request };
             }
         })
     }
@@ -221,8 +221,8 @@ impl RawServer for LocalRawServer {
     }
 }
 
-impl fmt::Debug for LocalRawServer {
+impl fmt::Debug for LocalTransportServer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("LocalRawServer").finish()
+        f.debug_struct("LocalTransportServer").finish()
     }
 }

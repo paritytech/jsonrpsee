@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use super::{RawServer, RawServerEvent};
+use super::{TransportServer, TransportServerEvent};
 use crate::common;
 use futures::prelude::*;
 use std::pin::Pin;
@@ -52,35 +52,35 @@ pub enum JoinRequestId<A, B> {
     Right(B),
 }
 
-impl<A, B> RawServer for Join<A, B>
+impl<A, B> TransportServer for Join<A, B>
 where
-    A: RawServer + Send,
-    B: RawServer + Send,
+    A: TransportServer + Send,
+    B: TransportServer + Send,
 {
     type RequestId = JoinRequestId<A::RequestId, B::RequestId>;
 
     fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = RawServerEvent<Self::RequestId>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = TransportServerEvent<Self::RequestId>> + Send + 'a>> {
         Box::pin(async move {
             match future::select(self.left.next_request(), self.right.next_request()).await {
-                future::Either::Left((RawServerEvent::Request { id, request }, _)) => {
-                    RawServerEvent::Request {
+                future::Either::Left((TransportServerEvent::Request { id, request }, _)) => {
+                    TransportServerEvent::Request {
                         id: JoinRequestId::Left(id),
                         request,
                     }
                 }
-                future::Either::Left((RawServerEvent::Closed(id), _)) => {
-                    RawServerEvent::Closed(JoinRequestId::Left(id))
+                future::Either::Left((TransportServerEvent::Closed(id), _)) => {
+                    TransportServerEvent::Closed(JoinRequestId::Left(id))
                 }
-                future::Either::Right((RawServerEvent::Request { id, request }, _)) => {
-                    RawServerEvent::Request {
+                future::Either::Right((TransportServerEvent::Request { id, request }, _)) => {
+                    TransportServerEvent::Request {
                         id: JoinRequestId::Right(id),
                         request,
                     }
                 }
-                future::Either::Right((RawServerEvent::Closed(id), _)) => {
-                    RawServerEvent::Closed(JoinRequestId::Right(id))
+                future::Either::Right((TransportServerEvent::Closed(id), _)) => {
+                    TransportServerEvent::Closed(JoinRequestId::Right(id))
                 }
             }
         })
