@@ -155,7 +155,7 @@ impl TransportClient for HttpTransportClient {
             // unnecessary, as a parsing error while happen anyway.
 
             // TODO: enforce a maximum size here
-            let body: hyper::Chunk = hyper_response
+            let body: hyper::body::Bytes = hyper_response
                 .into_body()
                 .try_concat()
                 .await
@@ -207,7 +207,7 @@ pub enum RequestError {
 fn background_thread(mut requests_rx: mpsc::Receiver<FrontToBack>) {
     let client = hyper::Client::new();
 
-    let mut runtime = match tokio::runtime::current_thread::Runtime::new() {
+    let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().build() {
         Ok(r) => r,
         Err(err) => {
             // Ideally, we would try to initialize the tokio runtime in the main thread then move

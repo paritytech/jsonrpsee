@@ -81,7 +81,7 @@ impl BackgroundHttp {
         thread::Builder::new()
             .name("jsonrpsee-hyper-server".to_string())
             .spawn(move || {
-                let mut runtime = match tokio::runtime::current_thread::Runtime::new() {
+                let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().build() {
                     Ok(r) => r,
                     Err(err) => {
                         log::error!(
