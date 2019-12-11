@@ -7,13 +7,13 @@ license = "MIT"
 edition = "2018"
 
 [dependencies]
-async-std = "0.99.11"
+async-std = "1.2.0"
 derive_more = "0.13.0"
 err-derive = "0.1.5"
 fnv = "1.0"
-futures-preview = { version = "0.3.0-alpha.19", features = ["async-await"] }
+futures = "0.3.1"
 futures-timer = "0.3.0"
-hyper = { version = "0.13.0-alpha.4", features = ["unstable-stream"] }
+hyper = { version = "0.13.0" }
 jsonrpsee-core = { path = "../core" }
 jsonrpsee-server-utils = { path = "../server-utils" }
 lazy_static = "1.4.0"
