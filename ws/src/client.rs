@@ -28,14 +28,16 @@ use async_std::net::{TcpStream, ToSocketAddrs};
 use err_derive::*;
 use futures::prelude::*;
 use jsonrpsee_core::{client::Client, client::TransportClient, common};
-use soketto::connection::Connection;
+use soketto::connection;
 use soketto::handshake::client::{Client as WsClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
 
 /// Implementation of a raw client for WebSockets requests.
 pub struct WsTransportClient {
-    /// TCP/IP connection wrapped around a WebSocket encoder/decoder.
-    inner: Connection<TcpStream>,
+    /// Sending half of a TCP/IP connection wrapped around a WebSocket encoder.
+    sender: connection::Sender<TcpStream>,
+    /// Receiving half of a TCP/IP connection wrapped around a WebSocket decoder.
+    receiver: connection::Receiver<TcpStream>,
 }
 
 /// Builder for a [`WsTransportClient`].
@@ -159,8 +161,8 @@ impl TransportClient for WsTransportClient {
     ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
         Box::pin(async move {
             let request = common::to_vec(&request).map_err(WsConnecError::Serialization)?;
-            self.inner.send(From::from(request)).await?;
-            self.inner.flush().await?;
+            self.sender.send_binary(request).await?;
+            self.sender.flush().await?;
             Ok(())
         })
     }
@@ -169,10 +171,7 @@ impl TransportClient for WsTransportClient {
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
-            let data = match self.inner.next().await {
-                Some(v) => v?,
-                None => return Err(From::from(soketto::connection::Error::Closed)),
-            };
+            let data = self.receiver.receive_data().await?;
             let response = common::from_slice(data.as_ref()).map_err(WsConnecError::ParseError)?;
             Ok(response)
         })
@@ -246,9 +245,12 @@ impl<'a> WsTransportClientBuilder<'a> {
             }
         }
 
+        let (sender, receiver) = client.into_builder().finish();
+
         // If the handshake succeeded, return.
         Ok(WsTransportClient {
-            inner: client.into_connection(),
+            sender,
+            receiver,
         })
     }
 }
