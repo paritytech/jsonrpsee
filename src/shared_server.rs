@@ -55,7 +55,7 @@ pub struct SharedServer {
 /// Notifications method that's been registered.
 pub struct RegisteredNotifications {
     /// Receives notifications that the client sent to us.
-    queries_rx: mpsc::Receiver<JsonValue>,
+    queries_rx: mpsc::Receiver<common::Params>,
 }
 
 /// Method that's been registered.
@@ -63,7 +63,7 @@ pub struct RegisteredMethod {
     /// Clone of [`SharedServer::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Receives requests that the client sent to us.
-    queries_rx: mpsc::Receiver<(ServerRequestId, JsonValue)>,
+    queries_rx: mpsc::Receiver<(ServerRequestId, common::Params)>,
 }
 
 /// Active request that needs to be answered.
@@ -73,7 +73,7 @@ pub struct IncomingRequest {
     /// Identifier of the request towards the server.
     request_id: ServerRequestId,
     /// Parameters of the request.
-    params: JsonValue,
+    params: common::Params,
 }
 
 /// Message that the [`SharedServer`] can send to the background task.
@@ -83,7 +83,7 @@ enum FrontToBack {
         /// Name of the method.
         name: String,
         /// Where to send incoming notifications.
-        handler: mpsc::Sender<common::JsonValue>,
+        handler: mpsc::Sender<common::Params>,
     },
 
     /// Registers a method. The server will then handle requests using this method.
@@ -91,7 +91,7 @@ enum FrontToBack {
         /// Name of the method.
         name: String,
         /// Where to send requests.
-        handler: mpsc::Sender<(ServerRequestId, common::JsonValue)>,
+        handler: mpsc::Sender<(ServerRequestId, common::Params)>,
     },
 
     /// Registers a subscription. The server will then handle subscription requests of that
@@ -153,8 +153,7 @@ impl SharedServer {
             handler: tx,
         });
 
-        Ok(RegisteredMethod {
-            to_back: self.to_back.clone(),
+        Ok(RegisteredNotifications {
             queries_rx: rx,
         })
     }
@@ -267,7 +266,7 @@ impl SharedServer {
 
 impl RegisteredNotifications {
     /// Returns the next notification.
-    pub async fn next(&mut self) -> common::JsonValue {
+    pub async fn next(&mut self) -> common::Params {
         loop {
             match self.queries_rx.next().await {
                 Some(v) => break v,
@@ -297,7 +296,7 @@ impl RegisteredMethod {
 
 impl IncomingRequest {
     /// Returns the parameters of the request.
-    pub fn params(&self) -> &common::JsonValue {
+    pub fn params(&self) -> &common::Params {
         &self.params
     }
 
@@ -351,8 +350,11 @@ where
             Either::Left(Some(FrontToBack::RegisterSubscription { subscribe_method, unsubscribe_method })) => {
 
             }
-            Either::Right(ServerEvent::Notification(Notification)) => {
-
+            Either::Right(ServerEvent::Notification(notification)) => {
+                if let Some(handler) = registered_notifications.get_mut(notification.method()) {
+                    let params: &common::Params = notification.params().into();
+                    handler.send(params.clone()).await;
+                }
             }
             Either::Right(ServerEvent::Request(request)) => {
                 let rq_id = request.request_id();
@@ -360,8 +362,8 @@ where
                 let params = request.params();
                 if let Some(handler) = registered_methods.get(request.method()) {
                     unimplemented!()    // TODO:
-                } else if let Some(handler) = registered_notifications.get(request.method()) {
-                    handler.send(request.params()).await;
+                    /*let params: &common::Params = request.params().into();
+                    handler.send(params.clone()).await;*/
                 } else {
                     request.respond(Err(From::from(common::ErrorCode::InvalidRequest))).await;
                 }
