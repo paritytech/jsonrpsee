@@ -12,7 +12,7 @@ bytes = "0.4"
 err-derive = "0.1.5"
 fnv = "1.0"
 futures = "0.3.1"
-futures-timer = "0.3.0"
+futures-timer = "2.0.2"
 jsonrpsee-core = { path = "../core" }
 lazy_static = "1.4.0"
 log = "0.4"
