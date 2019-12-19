@@ -42,6 +42,7 @@ jsonrpsee::rpc_api! {
 }
 
 fn main() {
+    env_logger::try_init().ok();
     // Spawning a server in a background task.
     async_std::task::spawn(async move {
         let listen_addr = "127.0.0.1:8000".parse().unwrap();

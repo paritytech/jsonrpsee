@@ -28,3 +28,4 @@ ws = ["jsonrpsee-ws"]
 
 [dev-dependencies]
 async-std = "1.2.0"
+env_logger = "0.7.1"
