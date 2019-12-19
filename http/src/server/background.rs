@@ -30,7 +30,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
 use jsonrpsee_core::common;
 use jsonrpsee_server_utils::access_control::AccessControl;
-use std::{io, net::SocketAddr, thread};
+use std::{error, io, net::SocketAddr, thread};
 
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
@@ -52,14 +52,14 @@ impl BackgroundHttp {
     ///
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
-    pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
-        Self::bind_with_acl(addr, AccessControl::default())
+    pub async fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
+        Self::bind_with_acl(addr, AccessControl::default()).await
     }
 
-    pub fn bind_with_acl(
+    pub async fn bind_with_acl(
         addr: &SocketAddr,
         access_control: AccessControl,
-    ) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
+    ) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
         let (tx, rx) = mpsc::channel(4);
 
         let make_service = make_service_fn(move |_| {
@@ -74,14 +74,14 @@ impl BackgroundHttp {
             }
         });
 
-        let server = hyper::Server::try_bind(addr)?.serve(make_service);
-        let local_addr = server.local_addr();
+        let (addr_tx, mut addr_rx) = oneshot::channel();
+        let addr = addr.clone();
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::Builder::new()
             .name("jsonrpsee-hyper-server".to_string())
             .spawn(move || {
-                let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().build() {
+                let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().enable_all().build() {
                     Ok(r) => r,
                     Err(err) => {
                         log::error!(
@@ -93,6 +93,19 @@ impl BackgroundHttp {
                 };
 
                 runtime.block_on(async move {
+                    let builder = match hyper::Server::try_bind(&addr) {
+                        Ok(b) => b,
+                        Err(err) => {
+                            log::error!(
+                                "Failed to bind to address {}: {}",
+                                addr,
+                                err
+                            );
+                            return;
+                        }
+                    };
+                    let server = builder.serve(make_service);
+                    addr_tx.send(server.local_addr());
                     if let Err(err) = server.await {
                         log::error!("HTTP JSON-RPC server closed with an error: {}", err);
                     }
@@ -100,6 +113,7 @@ impl BackgroundHttp {
             })
             .unwrap();
 
+        let local_addr = addr_rx.await?;
         Ok((BackgroundHttp { rx: rx.fuse() }, local_addr))
     }
 
