@@ -52,7 +52,9 @@ impl BackgroundHttp {
     ///
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
-    pub async fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
+    pub async fn bind(
+        addr: &SocketAddr,
+    ) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
         Self::bind_with_acl(addr, AccessControl::default()).await
     }
 
@@ -81,7 +83,11 @@ impl BackgroundHttp {
         thread::Builder::new()
             .name("jsonrpsee-hyper-server".to_string())
             .spawn(move || {
-                let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().enable_all().build() {
+                let mut runtime = match tokio::runtime::Builder::new()
+                    .basic_scheduler()
+                    .enable_all()
+                    .build()
+                {
                     Ok(r) => r,
                     Err(err) => {
                         log::error!(
@@ -96,11 +102,7 @@ impl BackgroundHttp {
                     let builder = match hyper::Server::try_bind(&addr) {
                         Ok(b) => b,
                         Err(err) => {
-                            log::error!(
-                                "Failed to bind to address {}: {}",
-                                addr,
-                                err
-                            );
+                            log::error!("Failed to bind to address {}: {}", addr, err);
                             return;
                         }
                     };

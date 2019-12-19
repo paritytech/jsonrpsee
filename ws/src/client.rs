@@ -248,10 +248,7 @@ impl<'a> WsTransportClientBuilder<'a> {
         let (sender, receiver) = client.into_builder().finish();
 
         // If the handshake succeeded, return.
-        Ok(WsTransportClient {
-            sender,
-            receiver,
-        })
+        Ok(WsTransportClient { sender, receiver })
     }
 }
 

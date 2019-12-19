@@ -205,7 +205,11 @@ pub enum RequestError {
 fn background_thread(mut requests_rx: mpsc::Receiver<FrontToBack>) {
     let client = hyper::Client::new();
 
-    let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().enable_all().build() {
+    let mut runtime = match tokio::runtime::Builder::new()
+        .basic_scheduler()
+        .enable_all()
+        .build()
+    {
         Ok(r) => r,
         Err(err) => {
             // Ideally, we would try to initialize the tokio runtime in the main thread then move
