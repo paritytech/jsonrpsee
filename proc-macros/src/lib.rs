@@ -172,6 +172,8 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         let mut notifications_blocks = Vec::new();
         let mut function_blocks = Vec::new();
         let mut tmp_to_rq = Vec::new();
+        let mut params_tys = std::collections::HashSet::new();
+
         for function in &api.definitions {
             let function_is_notification = function.is_void_ret_type();
             let variant_name = snake_case_to_camel_case(&function.signature.ident);
@@ -197,6 +199,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                     }
                 };
 
+                params_tys.insert(ty);
                 params_names_list
                     .push(quote_spanned!(function.signature.span()=> #param_variant_name));
                 if !function_is_notification {
@@ -279,10 +282,14 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             // TODO: we received an unknown notification; log this?
         });
 
+        let params_tys = params_tys.into_iter();
+
         quote_spanned!(api.name.span()=>
             #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
-                where R: jsonrpsee::core::TransportServer<RequestId = I>,
-                        I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
+                where
+                    R: jsonrpsee::core::TransportServer<RequestId = I>,
+                    I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync
+                    #(, #params_tys: jsonrpsee::core::common::DeserializeOwned)*
             {
                 loop {
                     match server.next_event().await {
