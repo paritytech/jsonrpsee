@@ -111,7 +111,10 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             syn::parse_str::<syn::Ident>("I").unwrap(),
         )));
     let (impl_generics, ty_generics, where_clause) = tweaked_generics.split_for_impl();
-    let generics = api.generics.params.iter()
+    let generics = api
+        .generics
+        .params
+        .iter()
         .filter_map(|gp| {
             if let syn::GenericParam::Type(tp) = gp {
                 Some(tp.ident.clone())
@@ -195,7 +198,10 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             }
         }
 
-        let mut generic_params = GenericParams { generics, types: HashSet::new() };
+        let mut generic_params = GenericParams {
+            generics,
+            types: HashSet::new(),
+        };
 
         for function in &api.definitions {
             let function_is_notification = function.is_void_ret_type();
