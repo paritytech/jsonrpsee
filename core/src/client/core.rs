@@ -547,6 +547,14 @@ where
             ClientSubscription::Active(_) => true,
         }
     }
+
+    /// If this subscription is active, returns the [`ClientActiveSubscription`].
+    pub fn into_active(self) -> Option<ClientActiveSubscription<'a, R>> {
+        match self {
+            ClientSubscription::Pending(_) => None,
+            ClientSubscription::Active(s) => Some(s),
+        }
+    }
 }
 
 impl<'a, R> ClientPendingSubscription<'a, R>
