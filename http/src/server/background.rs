@@ -76,7 +76,7 @@ impl BackgroundHttp {
             }
         });
 
-        let (addr_tx, mut addr_rx) = oneshot::channel();
+        let (addr_tx, addr_rx) = oneshot::channel();
         let addr = addr.clone();
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
@@ -99,23 +99,25 @@ impl BackgroundHttp {
                 };
 
                 runtime.block_on(async move {
-                    let builder = match hyper::Server::try_bind(&addr) {
-                        Ok(b) => b,
+                    match hyper::Server::try_bind(&addr) {
+                        Ok(builder) => {
+                            let server = builder.serve(make_service);
+                            let _ = addr_tx.send(Ok(server.local_addr()));
+                            if let Err(err) = server.await {
+                                log::error!("HTTP JSON-RPC server closed with an error: {}", err);
+                            }
+                        }
                         Err(err) => {
                             log::error!("Failed to bind to address {}: {}", addr, err);
+                            let _ = addr_tx.send(Err(err));
                             return;
                         }
                     };
-                    let server = builder.serve(make_service);
-                    addr_tx.send(server.local_addr());
-                    if let Err(err) = server.await {
-                        log::error!("HTTP JSON-RPC server closed with an error: {}", err);
-                    }
                 });
             })
             .unwrap();
 
-        let local_addr = addr_rx.await?;
+        let local_addr = addr_rx.await??;
         Ok((BackgroundHttp { rx: rx.fuse() }, local_addr))
     }
 
