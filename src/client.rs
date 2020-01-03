@@ -37,7 +37,7 @@ use jsonrpsee_core::{
 };
 use std::{collections::HashMap, error, io, marker::PhantomData};
 
-/// RawClient that can be cloned.
+/// Client that can be cloned.
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background
 /// >           task running in parallel. If this is not desirable, you are encouraged to use the

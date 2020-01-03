@@ -63,7 +63,7 @@ fn main() {
         }
     });
 
-    // RawClient demo.
+    // Client demo.
     let mut client = jsonrpsee::http_raw_client("http://127.0.0.1:8000");
     let v = async_std::task::block_on(async {
         Health::test_notif(&mut client, "notif_string", 192)

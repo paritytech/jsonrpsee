@@ -39,7 +39,7 @@ use std::{
     sync::{atomic, Arc},
 };
 
-/// RawServer that can be cloned.
+/// Server that can be cloned.
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background
 /// >           task running in parallel. If this is not desirable, you are encouraged to use the

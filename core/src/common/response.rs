@@ -75,7 +75,7 @@ pub enum Output {
     Failure(Failure),
 }
 
-/// RawServer notification about something the client is subscribed to.
+/// Server notification about something the client is subscribed to.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SubscriptionNotif {
