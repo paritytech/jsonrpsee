@@ -185,6 +185,12 @@ impl Error {
     }
 }
 
+impl From<ErrorCode> for Error {
+    fn from(code: ErrorCode) -> Error {
+        Error::new(code)
+    }
+}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}: {}", self.code.description(), self.message)
