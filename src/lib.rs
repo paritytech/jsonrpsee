@@ -165,6 +165,8 @@ pub use jsonrpsee_ws as ws;
 pub use client::Client;
 pub use server::Server;
 
+use std::{error, net::SocketAddr};
+
 mod client;
 mod server;
 
@@ -188,4 +190,20 @@ pub fn local_raw() -> (
     let client = core::RawClient::new(client);
     let server = core::RawServer::new(server);
     (client, server)
+}
+
+/// Builds a new HTTP server.
+pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
+    jsonrpsee_http::http_raw_server(addr).await.map(From::from)
+}
+
+/// Builds a new HTTP client.
+pub fn http_client(addr: &str) -> Client {
+    Client::from(jsonrpsee_http::http_raw_client(addr))
+}
+
+/// Builds a new WebSockets client.
+#[cfg(feature = "ws")]
+pub async fn ws_client(target: &str) -> Result<Client, jsonrpsee_ws::WsNewDnsError> {
+    jsonrpsee_ws::ws_raw_client(target).await.map(From::from)
 }
