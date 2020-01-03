@@ -21,7 +21,9 @@ macro_rules! spawn_server {
 extern crate jsonrpsee;
 use jsonrpsee::core::RawClientError;
 use jsonrpsee::http;
-use jsonrpsee::http::{access_control::Host, http_raw_server_with_acl, HttpRawClient, RequestError};
+use jsonrpsee::http::{
+    access_control::Host, http_raw_server_with_acl, HttpRawClient, RequestError,
+};
 use std::net::SocketAddr;
 
 fn spawn_client(res: bool, port: u16) -> (HttpRawClient, jsonrpsee::core::common::Params) {
