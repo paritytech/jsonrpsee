@@ -37,7 +37,7 @@ jsonrpsee::rpc_api! {
 
 fn main() {
     async_std::task::block_on(async move {
-        let mut client = jsonrpsee::ws_client("127.0.0.1:9944").await.unwrap();
+        let mut client = jsonrpsee::ws_raw_client("127.0.0.1:9944").await.unwrap();
         let v = System::system_name(&mut client).await.unwrap();
         println!("{:?}", v);
 

@@ -27,9 +27,9 @@
 use async_std::net::{TcpStream, ToSocketAddrs};
 use err_derive::*;
 use futures::prelude::*;
-use jsonrpsee_core::{client::Client, client::TransportClient, common};
+use jsonrpsee_core::{client::TransportClient, common};
 use soketto::connection;
-use soketto::handshake::client::{Client as WsClient, ServerResponse};
+use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
 
 /// Implementation of a raw client for WebSockets requests.
@@ -66,7 +66,7 @@ pub enum WsNewError {
     #[error(display = "Error in the WebSocket handshake: {}", 0)]
     Handshake(#[error(cause)] soketto::handshake::Error),
 
-    /// Server rejected our handshake.
+    /// RawServer rejected our handshake.
     #[error(display = "Server returned an error status code: {}", status_code)]
     Rejected {
         /// HTTP status code that the server returned.
@@ -130,7 +130,7 @@ impl WsTransportClient {
     }
 
     /// Initializes a new HTTP client from a URL.
-    pub async fn new(target: &str) -> Result<Client<Self>, WsNewDnsError> {
+    pub async fn new(target: &str) -> Result<Self, WsNewDnsError> {
         let mut error = None;
 
         for url in target
@@ -139,7 +139,7 @@ impl WsTransportClient {
             .map_err(WsNewDnsError::ResolutionFailed)?
         {
             match Self::builder(url, target).build().await {
-                Ok(ws_client) => return Ok(ws_client),
+                Ok(ws_raw_client) => return Ok(ws_raw_client),
                 Err(err) => error = Some(err),
             }
         }
@@ -211,12 +211,7 @@ impl<'a> WsTransportClientBuilder<'a> {
     }
 
     /// Try establish the connection.
-    pub async fn build(self) -> Result<Client<WsTransportClient>, WsNewError> {
-        Ok(Client::new(self.build_raw().await?))
-    }
-
-    /// Try establish the connection.
-    pub async fn build_raw(self) -> Result<WsTransportClient, WsNewError> {
+    pub async fn build(self) -> Result<WsTransportClient, WsNewError> {
         // Try establish the TCP connection.
         let tcp_stream = {
             let socket = TcpStream::connect(self.target);
@@ -230,7 +225,7 @@ impl<'a> WsTransportClientBuilder<'a> {
         };
 
         // Configure a WebSockets client on top.
-        let mut client = WsClient::new(tcp_stream, &self.host, &self.url);
+        let mut client = WsRawClient::new(tcp_stream, &self.host, &self.url);
         if let Some(origin) = self.origin.as_ref() {
             client.set_origin(origin);
         }

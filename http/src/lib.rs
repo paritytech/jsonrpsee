@@ -31,8 +31,8 @@
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
 
-use jsonrpsee_core::client::Client;
-use jsonrpsee_core::server::{raw::TransportServer, Server};
+use jsonrpsee_core::client::RawClient;
+use jsonrpsee_core::server::{raw::TransportServer, RawServer};
 use jsonrpsee_server_utils as server_utils;
 use server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr};
@@ -42,33 +42,33 @@ pub use crate::server::HttpTransportServer;
 
 pub use server_utils::access_control;
 
-/// Type alias for a [`Client`](jsonrpsee_core::client::Client) that operates on HTTP.
-pub type HttpClient = Client<HttpTransportClient>;
-/// Type alias for a [`Server`](jsonrpsee_core::server::Server) that operates on HTTP.
-pub type HttpServer =
-    Server<HttpTransportServer, <HttpTransportServer as TransportServer>::RequestId>;
+/// Type alias for a [`RawClient`](jsonrpsee_core::client::RawClient) that operates on HTTP.
+pub type HttpRawClient = RawClient<HttpTransportClient>;
+/// Type alias for a [`RawServer`](jsonrpsee_core::server::RawServer) that operates on HTTP.
+pub type HttpRawServer =
+    RawServer<HttpTransportServer, <HttpTransportServer as TransportServer>::RequestId>;
 
 mod client;
 mod server;
 
-/// Starts a [`Server`](../Server) object that serves HTTP.
-pub async fn http_server(
+/// Starts a [`RawServer`](../RawServer) object that serves HTTP.
+pub async fn http_raw_server(
     addr: &SocketAddr,
-) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
-    Ok(Server::new(HttpTransportServer::bind(addr).await?))
+) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
+    Ok(RawServer::new(HttpTransportServer::bind(addr).await?))
 }
 
-/// Starts a [`Server`](../Server) object that serves HTTP with a whitlist access control.
-pub async fn http_server_with_acl(
+/// Starts a [`RawServer`](../RawServer) object that serves HTTP with a whitlist access control.
+pub async fn http_raw_server_with_acl(
     addr: &SocketAddr,
     access_control: AccessControl,
-) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
-    Ok(Server::new(
+) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
+    Ok(RawServer::new(
         HttpTransportServer::bind_with_acl(addr, access_control).await?,
     ))
 }
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
-pub fn http_client(addr: &str) -> HttpClient {
-    HttpTransportClient::new(addr)
+pub fn http_raw_client(addr: &str) -> HttpRawClient {
+    RawClient::new(HttpTransportClient::new(addr))
 }

@@ -24,19 +24,19 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::{raw::TransportServer, ServerRequest};
+use crate::server::{raw::TransportServer, RawServerRequest};
 use std::{hash::Hash, marker::PhantomData};
 
 /// Allows responding to a server request in a more elegant and strongly-typed fashion.
 pub struct TypedResponder<'a, R, I, T> {
     /// The request to answer.
-    rq: ServerRequest<'a, R, I>,
+    rq: RawServerRequest<'a, R, I>,
     /// Marker that pins the type of the response.
     response_ty: PhantomData<T>,
 }
 
-impl<'a, R, I, T> From<ServerRequest<'a, R, I>> for TypedResponder<'a, R, I, T> {
-    fn from(rq: ServerRequest<'a, R, I>) -> TypedResponder<'a, R, I, T> {
+impl<'a, R, I, T> From<RawServerRequest<'a, R, I>> for TypedResponder<'a, R, I, T> {
+    fn from(rq: RawServerRequest<'a, R, I>) -> TypedResponder<'a, R, I, T> {
         TypedResponder {
             rq,
             response_ty: PhantomData,
