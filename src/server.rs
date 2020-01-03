@@ -45,7 +45,7 @@ use std::{
 /// >           task running in parallel. If this is not desirable, you are encouraged to use the
 /// >           [`RawServer`] struct instead.
 #[derive(Clone)]
-pub struct SharedServer {
+pub struct Server {
     /// Channel to send requests to the background task.
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// List of methods (for RPC queries, subscriptions, and unsubscriptions) that have been
@@ -63,7 +63,7 @@ pub struct RegisteredNotifications {
 
 /// Method that's been registered.
 pub struct RegisteredMethod {
-    /// Clone of [`SharedServer::to_back`].
+    /// Clone of [`Server::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Receives requests that the client sent to us.
     queries_rx: mpsc::Receiver<(RawServerRequestId, common::Params)>,
@@ -72,7 +72,7 @@ pub struct RegisteredMethod {
 /// Pub-sub subscription that's been registered.
 // TODO: unregister on drop
 pub struct RegisteredSubscription {
-    /// Clone of [`SharedServer::to_back`].
+    /// Clone of [`Server::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Value passed to [`FrontToBack::RegisterSubscription::unique_id`].
     unique_id: usize,
@@ -80,7 +80,7 @@ pub struct RegisteredSubscription {
 
 /// Active request that needs to be answered.
 pub struct IncomingRequest {
-    /// Clone of [`SharedServer::to_back`].
+    /// Clone of [`Server::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Identifier of the request towards the server.
     request_id: RawServerRequestId,
@@ -88,7 +88,7 @@ pub struct IncomingRequest {
     params: common::Params,
 }
 
-/// Message that the [`SharedServer`] can send to the background task.
+/// Message that the [`Server`] can send to the background task.
 enum FrontToBack {
     /// Registers a notifications endpoint.
     RegisterNotifications {
@@ -96,7 +96,7 @@ enum FrontToBack {
         name: String,
         /// Where to send incoming notifications.
         handler: mpsc::Sender<common::Params>,
-        /// See the documentation of [`SharedServer::register_notifications`].
+        /// See the documentation of [`Server::register_notifications`].
         allow_losses: bool,
     },
 
@@ -137,9 +137,9 @@ enum FrontToBack {
     },
 }
 
-impl SharedServer {
+impl Server {
     /// Initializes a new server based upon this raw server.
-    pub fn new<R, I>(server: RawServer<R, I>) -> SharedServer
+    pub fn new<R, I>(server: RawServer<R, I>) -> Server
     where
         R: TransportServer<RequestId = I> + Send + Sync + 'static,
         I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
@@ -154,7 +154,7 @@ impl SharedServer {
             background_task(server, from_front).await;
         });
 
-        SharedServer {
+        Server {
             to_back,
             registered_methods: Arc::new(Mutex::new(Default::default())),
             next_subscription_unique_id: Arc::new(atomic::AtomicUsize::new(0)),
@@ -198,7 +198,7 @@ impl SharedServer {
     /// Clients will then be able to call this method.
     /// The returned object allows you to handle incoming requests.
     ///
-    /// Contrary to [`register_notifications`](SharedServer::register_notifications), there is no
+    /// Contrary to [`register_notifications`](Server::register_notifications), there is no
     /// `allow_losses` parameter here. If the handler is too slow to process requests, then the
     /// server automatically returns an "internal error" to the client.
     ///

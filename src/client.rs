@@ -43,12 +43,12 @@ use std::{collections::HashMap, error, io, marker::PhantomData};
 /// >           task running in parallel. If this is not desirable, you are encouraged to use the
 /// >           [`RawClient`] struct instead.
 #[derive(Clone)]
-pub struct SharedClient {
+pub struct Client {
     /// Channel to send requests to the background task.
     to_back: mpsc::Sender<FrontToBack>,
 }
 
-/// Active subscription on a [`SharedClient`].
+/// Active subscription on a [`Client`].
 pub struct Subscription<Notif> {
     /// Channel to send requests to the background task.
     to_back: mpsc::Sender<FrontToBack>,
@@ -58,7 +58,7 @@ pub struct Subscription<Notif> {
     marker: PhantomData<mpsc::Receiver<Notif>>,
 }
 
-/// Error produced by [`SharedClient::request`] and [`SharedClient::subscribe`].
+/// Error produced by [`Client::request`] and [`Client::subscribe`].
 #[derive(Debug, thiserror::Error)]
 pub enum RequestError {
     /// Networking error or error on the low-level protocol layer (e.g. missing field,
@@ -73,7 +73,7 @@ pub enum RequestError {
     ParseError(#[source] common::ParseError),
 }
 
-/// Message that the [`SharedClient`] can send to the background task.
+/// Message that the [`Client`] can send to the background task.
 enum FrontToBack {
     /// Send a one-shot notification to the server. The server doesn't give back any feedback.
     Notification {
@@ -116,9 +116,9 @@ enum FrontToBack {
     ChannelClosed,
 }
 
-impl SharedClient {
+impl Client {
     /// Initializes a new client based upon this raw client.
-    pub fn new<R>(client: RawClient<R>) -> SharedClient
+    pub fn new<R>(client: RawClient<R>) -> Client
     where
         R: TransportClient + Send + 'static,
         R::Error: Send + Sync,
@@ -127,7 +127,7 @@ impl SharedClient {
         async_std::task::spawn(async move {
             background_task(client, from_front).await;
         });
-        SharedClient { to_back }
+        Client { to_back }
     }
 
     /// Send a notification to the server.
@@ -219,13 +219,13 @@ impl SharedClient {
     }
 }
 
-impl<R> From<RawClient<R>> for SharedClient
+impl<R> From<RawClient<R>> for Client
 where
     R: TransportClient + Send + 'static,
     R::Error: Send + Sync,
 {
-    fn from(client: RawClient<R>) -> SharedClient {
-        SharedClient::new(client)
+    fn from(client: RawClient<R>) -> Client {
+        Client::new(client)
     }
 }
 
@@ -294,7 +294,7 @@ where
         };
 
         match outcome {
-            // If the channel is closed, then the `SharedClient` has been destroyed and we
+            // If the channel is closed, then the `Client` has been destroyed and we
             // stop this task.
             Either::Left(None) => return,
 
