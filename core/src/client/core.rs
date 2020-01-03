@@ -733,9 +733,7 @@ where
             RawClientError::UnknownRequestId => {
                 write!(f, "Server responded with an unknown request ID")
             }
-            RawClientError::NullRequestId => {
-                write!(f, "Server responded with a null request ID")
-            }
+            RawClientError::NullRequestId => write!(f, "Server responded with a null request ID"),
             RawClientError::UnknownSubscriptionId => {
                 write!(f, "Server responded with an unknown subscription ID")
             }
