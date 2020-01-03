@@ -30,7 +30,7 @@
 pub fn internal_error<T: Into<String>>(msg: T) -> hyper::Response<hyper::Body> {
     from_template(
         hyper::StatusCode::INTERNAL_SERVER_ERROR,
-        format!("Internal Server Error: {}", msg.into()),
+        format!("Internal RawServer Error: {}", msg.into()),
     )
 }
 

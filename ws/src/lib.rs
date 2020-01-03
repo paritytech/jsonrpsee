@@ -31,14 +31,14 @@
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
 
-use jsonrpsee_core::client::Client;
+use jsonrpsee_core::client::RawClient;
 
 pub use crate::client::{WsConnecError, WsNewError, WsTransportClient};
 
 // TODO: server
 
-/// Type alias for a [`Client`](jsonrpsee_core::client::Client) that operates on WebSockets.
-pub type WsClient = Client<WsTransportClient>;
+/// Type alias for a [`RawClient`](jsonrpsee_core::client::RawClient) that operates on WebSockets.
+pub type WsClient = RawClient<WsTransportClient>;
 
 mod client;
 

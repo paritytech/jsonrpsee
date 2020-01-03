@@ -34,17 +34,17 @@
 //! The [`LocalTransportClient`](crate::local::LocalTransportClient) is clonable.
 //!
 //! ```
-//! use jsonrpsee_core::client::Client;
-//! use jsonrpsee_core::server::{Server, ServerEvent};
+//! use jsonrpsee_core::client::RawClient;
+//! use jsonrpsee_core::server::{RawServer, RawServerEvent};
 //!
 //! let (raw_client, raw_server) = jsonrpsee_core::local_raw();
-//! let mut client = Client::new(raw_client);
-//! let mut server = Server::new(raw_server);
+//! let mut client = RawClient::new(raw_client);
+//! let mut server = RawServer::new(raw_server);
 //!
 //! async_std::task::spawn(async move {
 //!     loop {
 //!         match server.next_event().await {
-//!             ServerEvent::Request(request) => {
+//!             RawServerEvent::Request(request) => {
 //!                 request.respond(Ok(From::from("hello".to_owned()))).await;
 //!             },
 //!             _ => {}
@@ -83,7 +83,7 @@ pub fn local_raw() -> (LocalTransportClient, LocalTransportServer) {
     (client, server)
 }
 
-/// Client connected to a [`LocalTransportServer`]. Can be created using [`local_raw`].
+/// RawClient connected to a [`LocalTransportServer`]. Can be created using [`local_raw`].
 ///
 /// Can be cloned in order to have multiple clients connected to the same server.
 // TODO: restore #[derive(Clone)])
@@ -94,7 +94,7 @@ pub struct LocalTransportClient {
     from_server: mpsc::Receiver<common::Response>,
 }
 
-/// Server connected to a [`LocalTransportClient`]. Can be created using [`local_raw`].
+/// RawServer connected to a [`LocalTransportClient`]. Can be created using [`local_raw`].
 pub struct LocalTransportServer {
     /// Channel to the client.
     to_client: mpsc::Sender<common::Response>,
@@ -110,7 +110,7 @@ pub struct LocalTransportServer {
 #[derive(Debug, Error)]
 pub enum LocalTransportClientErr {
     /// The [`LocalTransportServer`] no longer exists.
-    #[error(display = "Server has been closed")]
+    #[error(display = "RawServer has been closed")]
     ServerClosed,
 }
 

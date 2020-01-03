@@ -27,7 +27,7 @@
 use async_std::net::{TcpStream, ToSocketAddrs};
 use err_derive::*;
 use futures::prelude::*;
-use jsonrpsee_core::{client::Client, client::TransportClient, common};
+use jsonrpsee_core::{client::RawClient, client::TransportClient, common};
 use soketto::connection::Connection;
 use soketto::handshake::client::{Client as WsClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
@@ -64,8 +64,8 @@ pub enum WsNewError {
     #[error(display = "Error in the WebSocket handshake: {}", 0)]
     Handshake(#[error(cause)] soketto::handshake::Error),
 
-    /// Server rejected our handshake.
-    #[error(display = "Server returned an error status code: {}", status_code)]
+    /// RawServer rejected our handshake.
+    #[error(display = "RawServer returned an error status code: {}", status_code)]
     Rejected {
         /// HTTP status code that the server returned.
         status_code: u16,
@@ -128,7 +128,7 @@ impl WsTransportClient {
     }
 
     /// Initializes a new HTTP client from a URL.
-    pub async fn new(target: &str) -> Result<Client<Self>, WsNewDnsError> {
+    pub async fn new(target: &str) -> Result<RawClient<Self>, WsNewDnsError> {
         let mut error = None;
 
         for url in target
@@ -212,8 +212,8 @@ impl<'a> WsTransportClientBuilder<'a> {
     }
 
     /// Try establish the connection.
-    pub async fn build(self) -> Result<Client<WsTransportClient>, WsNewError> {
-        Ok(Client::new(self.build_raw().await?))
+    pub async fn build(self) -> Result<RawClient<WsTransportClient>, WsNewError> {
+        Ok(RawClient::new(self.build_raw().await?))
     }
 
     /// Try establish the connection.

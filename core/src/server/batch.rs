@@ -138,7 +138,7 @@ impl BatchState {
         }
     }
 
-    /// Returns a request previously returned by [`next_event`](crate::Server::next_event) by its
+    /// Returns a request previously returned by [`next_event`](crate::RawServer::next_event) by its
     /// id.
     ///
     /// Note that previous notifications don't have an ID and can't be accessed with this method.

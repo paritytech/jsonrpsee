@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Server utilities for the `jsonrpsee` library
+//! RawServer utilities for the `jsonrpsee` library
 
 #![warn(missing_docs)]
 

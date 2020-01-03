@@ -28,8 +28,8 @@ use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use jsonrpsee_core::{
     common::{self, JsonValue},
     server::raw::TransportServer,
-    server::{ServerEvent, ServerRequestId, ServerSubscriptionId},
-    Server,
+    server::{RawServerEvent, RawServerRequestId, RawServerSubscriptionId},
+    RawServer,
 };
 use parking_lot::Mutex;
 use std::{
@@ -39,7 +39,7 @@ use std::{
     sync::{atomic, Arc},
 };
 
-/// Server that can be cloned.
+/// RawServer that can be cloned.
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background
 /// >           task running in parallel. If this is not desirable, you are encouraged to use the
@@ -66,7 +66,7 @@ pub struct RegisteredMethod {
     /// Clone of [`SharedServer::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Receives requests that the client sent to us.
-    queries_rx: mpsc::Receiver<(ServerRequestId, common::Params)>,
+    queries_rx: mpsc::Receiver<(RawServerRequestId, common::Params)>,
 }
 
 /// Pub-sub subscription that's been registered.
@@ -83,7 +83,7 @@ pub struct IncomingRequest {
     /// Clone of [`SharedServer::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Identifier of the request towards the server.
-    request_id: ServerRequestId,
+    request_id: RawServerRequestId,
     /// Parameters of the request.
     params: common::Params,
 }
@@ -105,13 +105,13 @@ enum FrontToBack {
         /// Name of the method.
         name: String,
         /// Where to send requests.
-        handler: mpsc::Sender<(ServerRequestId, common::Params)>,
+        handler: mpsc::Sender<(RawServerRequestId, common::Params)>,
     },
 
     /// Send a response to a request that a client made.
     AnswerRequest {
         /// Request to answer.
-        request_id: ServerRequestId,
+        request_id: RawServerRequestId,
         /// Response to send back.
         answer: Result<JsonValue, common::Error>,
     },
@@ -139,7 +139,7 @@ enum FrontToBack {
 
 impl SharedServer {
     /// Initializes a new server based upon this raw server.
-    pub fn new<R, I>(server: Server<R, I>) -> SharedServer
+    pub fn new<R, I>(server: RawServer<R, I>) -> SharedServer
     where
         R: TransportServer<RequestId = I> + Send + Sync + 'static,
         I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
@@ -322,7 +322,7 @@ impl IncomingRequest {
 
 /// Function being run in the background that processes messages from the frontend.
 async fn background_task<R, I>(
-    mut server: Server<R, I>,
+    mut server: RawServer<R, I>,
     mut from_front: mpsc::UnboundedReceiver<FrontToBack>,
 ) where
     R: TransportServer<RequestId = I> + Send + 'static,
@@ -341,9 +341,9 @@ async fn background_task<R, I>(
     // that subscription.
     let mut unsubscribe_methods: HashMap<String, usize> = HashMap::new();
     // For each registered subscription, a list of clients that are registered towards us.
-    let mut subscribed_clients: HashMap<usize, Vec<ServerSubscriptionId>> = HashMap::new();
+    let mut subscribed_clients: HashMap<usize, Vec<RawServerSubscriptionId>> = HashMap::new();
     // Reversed mapping of `subscribed_clients`. Must always be in sync.
-    let mut active_subscriptions: HashMap<ServerSubscriptionId, usize> = HashMap::new();
+    let mut active_subscriptions: HashMap<RawServerSubscriptionId, usize> = HashMap::new();
 
     loop {
         // We need to do a little transformation in order to destroy the borrow to `client`
@@ -412,7 +412,7 @@ async fn background_task<R, I>(
                     }
                 }
             }
-            Either::Right(ServerEvent::Notification(notification)) => {
+            Either::Right(RawServerEvent::Notification(notification)) => {
                 if let Some((handler, allow_losses)) =
                     registered_notifications.get_mut(notification.method())
                 {
@@ -426,7 +426,7 @@ async fn background_task<R, I>(
                     }
                 }
             }
-            Either::Right(ServerEvent::Request(request)) => {
+            Either::Right(RawServerEvent::Request(request)) => {
                 if let Some(handler) = registered_methods.get_mut(request.method()) {
                     let params: &common::Params = request.params().into();
                     match handler.send((request.id(), params.clone())).now_or_never() {
@@ -449,7 +449,8 @@ async fn background_task<R, I>(
                         active_subscriptions.insert(sub_id, *sub_unique_id);
                     }
                 } else if let Some(sub_unique_id) = unsubscribe_methods.get(request.method()) {
-                    if let Ok(sub_id) = ServerSubscriptionId::from_wire_message(&JsonValue::Null) {
+                    if let Ok(sub_id) = RawServerSubscriptionId::from_wire_message(&JsonValue::Null)
+                    {
                         // FIXME: from request params
                         debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
                         if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
@@ -471,10 +472,10 @@ async fn background_task<R, I>(
                         .await;
                 }
             }
-            Either::Right(ServerEvent::SubscriptionsReady(_)) => {
+            Either::Right(RawServerEvent::SubscriptionsReady(_)) => {
                 // We don't really care whether subscriptions are now ready.
             }
-            Either::Right(ServerEvent::SubscriptionsClosed(iter)) => {
+            Either::Right(RawServerEvent::SubscriptionsClosed(iter)) => {
                 // Remove all the subscriptions from `active_subscriptions` and
                 // `subscribed_clients`.
                 for sub_id in iter {

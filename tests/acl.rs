@@ -19,7 +19,7 @@ macro_rules! spawn_server {
 }
 
 extern crate jsonrpsee;
-use jsonrpsee::core::ClientError;
+use jsonrpsee::core::RawClientError;
 use jsonrpsee::http;
 use jsonrpsee::http::{access_control::Host, http_server_with_acl, HttpClient, RequestError};
 use std::net::SocketAddr;
@@ -84,7 +84,7 @@ fn host_deny_by_not_being_white_listed() {
         let denied = match client.request_by_id(id).unwrap().await {
             Ok(_) => false,
             Err(err) => match err {
-                ClientError::Inner(failure) => match failure {
+                RawClientError::Inner(failure) => match failure {
                     RequestError::RequestFailure { status_code } => status_code == 403,
                     _ => false,
                 },

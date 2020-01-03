@@ -27,7 +27,7 @@
 use derive_more::*;
 use err_derive::*;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
-use jsonrpsee_core::{client::Client, client::TransportClient, common};
+use jsonrpsee_core::{client::RawClient, client::TransportClient, common};
 use std::{fmt, io, pin::Pin, thread};
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
@@ -41,7 +41,7 @@ use std::{fmt, io, pin::Pin, thread};
 // and wait for an answer to come back.
 //
 // Addtionally, despite the fact that hyper is capable of performing requests to multiple different
-// servers through the same `hyper::Client`, we don't use that feature on purpose. The reason is
+// servers through the same `hyper::RawClient`, we don't use that feature on purpose. The reason is
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
@@ -67,8 +67,8 @@ struct FrontToBack {
 impl HttpTransportClient {
     /// Initializes a new HTTP client.
     // TODO: better type for target
-    pub fn new(target: &str) -> Client<Self> {
-        Client::new(Self::new_raw(target))
+    pub fn new(target: &str) -> RawClient<Self> {
+        RawClient::new(Self::new_raw(target))
     }
 
     /// Initializes a new HTTP client.
@@ -191,7 +191,7 @@ pub enum RequestError {
     #[error(display = "error while performing the HTTP request")]
     Http(Box<dyn std::error::Error + Send + Sync>),
 
-    /// Server returned a non-success status code.
+    /// RawServer returned a non-success status code.
     #[error(display = "server returned an error status code: {:?}", status_code)]
     RequestFailure {
         /// Status code returned by the server.

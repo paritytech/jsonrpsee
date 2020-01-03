@@ -59,11 +59,11 @@
 //! # Clients
 //!
 //! In order to perform outgoing requests, you first have to create a
-//! [`Client`](core::client::Client). There exist several shortcuts such as the [`http_client`]
+//! [`RawClient`](core::client::RawClient). There exist several shortcuts such as the [`http_client`]
 //! method.
 //!
 //! Once a client is created, you can use the
-//! [`start_request`](core::client::Client::start_request) method to perform requests.
+//! [`start_request`](core::client::RawClient::start_request) method to perform requests.
 //!
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
@@ -92,12 +92,12 @@
 //!
 //! # Servers
 //!
-//! In order to server JSON-RPC requests, you have to create a [`Server`](core::server::Server).
+//! In order to server JSON-RPC requests, you have to create a [`RawServer`](core::server::RawServer).
 //! Just like for the client, there exists shortcuts for creating a server.
 //!
-//! Once a server is created, use the [`next_event`](core::server::Server::next_event) asynchronous
+//! Once a server is created, use the [`next_event`](core::server::RawServer::next_event) asynchronous
 //! function to wait for a request to arrive. The generated
-//! [`ServerEvent`](core::server::ServerEvent) can be either a "notification", in other words a
+//! [`RawServerEvent`](core::server::RawServerEvent) can be either a "notification", in other words a
 //! message from the client that doesn't expect any answer, or a "request" which you should answer.
 //!
 //! ```no_run
@@ -106,12 +106,12 @@
 //!     let mut server = jsonrpsee::http_server(&"localhost:8000".parse().unwrap()).await.unwrap();
 //!     loop {
 //!         match server.next_event().await {
-//!             jsonrpsee::core::server::ServerEvent::Notification(notif) => {
+//!             jsonrpsee::core::server::RawServerEvent::Notification(notif) => {
 //!                 println!("received notification: {:?}", notif);
 //!             }
-//!             jsonrpsee::core::server::ServerEvent::SubscriptionsClosed(_) => {}
-//!             jsonrpsee::core::server::ServerEvent::SubscriptionsReady(_) => {}
-//!             jsonrpsee::core::server::ServerEvent::Request(rq) => {
+//!             jsonrpsee::core::server::RawServerEvent::SubscriptionsClosed(_) => {}
+//!             jsonrpsee::core::server::RawServerEvent::SubscriptionsReady(_) => {}
+//!             jsonrpsee::core::server::RawServerEvent::Request(rq) => {
 //!                 // Note that `rq` borrows `server`. If you want to store the request for later,
 //!                 // you should get its id by calling `let id = rq.id();`, then later call
 //!                 // `server.request_by_id(id)`.
@@ -170,14 +170,14 @@ mod shared_server;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local() -> (
-    core::Client<core::local::LocalTransportClient>,
-    core::Server<
+    core::RawClient<core::local::LocalTransportClient>,
+    core::RawServer<
         core::local::LocalTransportServer,
         <core::local::LocalTransportServer as core::TransportServer>::RequestId,
     >,
 ) {
     let (client, server) = core::local_raw();
-    let client = core::Client::new(client);
-    let server = core::Server::new(server);
+    let client = core::RawClient::new(client);
+    let server = core::RawServer::new(server);
     (client, server)
 }
