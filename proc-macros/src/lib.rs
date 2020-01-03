@@ -58,7 +58,7 @@ mod api_def;
 /// Each generated enum has a `next_request` method whose signature is:
 ///
 /// ```ignore
-/// async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> Result<Foo<'a, R, I>, std::io::Error>;
+/// async fn next_request(server: &'a mut jsonrpsee::core::RawServer<R, I>) -> Result<Foo<'a, R, I>, std::io::Error>;
 /// ```
 ///
 /// This method lets you grab the next request incoming from a server, and parse it to match of
@@ -325,7 +325,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         let params_tys = generic_params.types.iter();
 
         quote_spanned!(api.name.span()=>
-            #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
+            #visibility async fn next_request(server: &'a mut jsonrpsee::core::RawServer<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
                 where
                     R: jsonrpsee::core::TransportServer<RequestId = I>,
                     I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync
@@ -333,10 +333,10 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             {
                 loop {
                     match server.next_event().await {
-                        jsonrpsee::core::ServerEvent::Notification(n) => #on_notification,
-                        jsonrpsee::core::ServerEvent::SubscriptionsClosed(_) => unimplemented!(),       // TODO:
-                        jsonrpsee::core::ServerEvent::SubscriptionsReady(_) => unimplemented!(),       // TODO:
-                        jsonrpsee::core::ServerEvent::Request(r) => #on_request,
+                        jsonrpsee::core::RawServerEvent::Notification(n) => #on_notification,
+                        jsonrpsee::core::RawServerEvent::SubscriptionsClosed(_) => unimplemented!(),       // TODO:
+                        jsonrpsee::core::RawServerEvent::SubscriptionsReady(_) => unimplemented!(),       // TODO:
+                        jsonrpsee::core::RawServerEvent::Request(r) => #on_request,
                     }
                 }
             }
@@ -460,13 +460,13 @@ fn build_client_functions(
         let function_body = if is_notification {
             quote_spanned!(function.signature.span()=>
                 client.send_notification(#rpc_method_name, #params_building).await
-                    .map_err(jsonrpsee::core::client::ClientError::Inner)?;
+                    .map_err(jsonrpsee::core::client::RawClientError::Inner)?;
                 Ok(())
             )
         } else {
             quote_spanned!(function.signature.span()=>
                 let rq_id = client.start_request(#rpc_method_name, #params_building).await
-                    .map_err(jsonrpsee::core::client::ClientError::Inner)?;
+                    .map_err(jsonrpsee::core::client::RawClientError::Inner)?;
                 let data = client.request_by_id(rq_id).unwrap().await?;     // TODO: don't unwrap?
                 Ok(jsonrpsee::core::common::from_value(data).unwrap())     // TODO: don't unwrap
             )
@@ -474,8 +474,8 @@ fn build_client_functions(
 
         client_functions.push(quote_spanned!(function.signature.span()=>
             // TODO: what if there's a conflict between `client` and a param name?
-            #visibility async fn #f_name<C: jsonrpsee::core::TransportClient>(client: &mut jsonrpsee::core::Client<C> #(, #params_list)*)
-                -> core::result::Result<#ret_ty, jsonrpsee::core::client::ClientError<<C as jsonrpsee::core::TransportClient>::Error>>
+            #visibility async fn #f_name<C: jsonrpsee::core::TransportClient>(client: &mut jsonrpsee::core::RawClient<C> #(, #params_list)*)
+                -> core::result::Result<#ret_ty, jsonrpsee::core::client::RawClientError<<C as jsonrpsee::core::TransportClient>::Error>>
             where
                 #ret_ty: jsonrpsee::core::common::DeserializeOwned
                 #(, #params_tys: jsonrpsee::core::common::Serialize)*

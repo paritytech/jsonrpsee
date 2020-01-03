@@ -28,8 +28,8 @@ use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use jsonrpsee_core::{
     common::{self, JsonValue},
     server::raw::TransportServer,
-    server::{ServerEvent, ServerRequestId, ServerSubscriptionId},
-    Server,
+    server::{RawServerEvent, RawServerRequestId, RawServerSubscriptionId},
+    RawServer,
 };
 use parking_lot::Mutex;
 use std::{
@@ -45,7 +45,7 @@ use std::{
 /// >           task running in parallel. If this is not desirable, you are encouraged to use the
 /// >           [`RawServer`] struct instead.
 #[derive(Clone)]
-pub struct SharedServer {
+pub struct Server {
     /// Channel to send requests to the background task.
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// List of methods (for RPC queries, subscriptions, and unsubscriptions) that have been
@@ -63,16 +63,16 @@ pub struct RegisteredNotifications {
 
 /// Method that's been registered.
 pub struct RegisteredMethod {
-    /// Clone of [`SharedServer::to_back`].
+    /// Clone of [`Server::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Receives requests that the client sent to us.
-    queries_rx: mpsc::Receiver<(ServerRequestId, common::Params)>,
+    queries_rx: mpsc::Receiver<(RawServerRequestId, common::Params)>,
 }
 
 /// Pub-sub subscription that's been registered.
 // TODO: unregister on drop
 pub struct RegisteredSubscription {
-    /// Clone of [`SharedServer::to_back`].
+    /// Clone of [`Server::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Value passed to [`FrontToBack::RegisterSubscription::unique_id`].
     unique_id: usize,
@@ -80,15 +80,15 @@ pub struct RegisteredSubscription {
 
 /// Active request that needs to be answered.
 pub struct IncomingRequest {
-    /// Clone of [`SharedServer::to_back`].
+    /// Clone of [`Server::to_back`].
     to_back: mpsc::UnboundedSender<FrontToBack>,
     /// Identifier of the request towards the server.
-    request_id: ServerRequestId,
+    request_id: RawServerRequestId,
     /// Parameters of the request.
     params: common::Params,
 }
 
-/// Message that the [`SharedServer`] can send to the background task.
+/// Message that the [`Server`] can send to the background task.
 enum FrontToBack {
     /// Registers a notifications endpoint.
     RegisterNotifications {
@@ -96,7 +96,7 @@ enum FrontToBack {
         name: String,
         /// Where to send incoming notifications.
         handler: mpsc::Sender<common::Params>,
-        /// See the documentation of [`SharedServer::register_notifications`].
+        /// See the documentation of [`Server::register_notifications`].
         allow_losses: bool,
     },
 
@@ -105,13 +105,13 @@ enum FrontToBack {
         /// Name of the method.
         name: String,
         /// Where to send requests.
-        handler: mpsc::Sender<(ServerRequestId, common::Params)>,
+        handler: mpsc::Sender<(RawServerRequestId, common::Params)>,
     },
 
     /// Send a response to a request that a client made.
     AnswerRequest {
         /// Request to answer.
-        request_id: ServerRequestId,
+        request_id: RawServerRequestId,
         /// Response to send back.
         answer: Result<JsonValue, common::Error>,
     },
@@ -137,9 +137,9 @@ enum FrontToBack {
     },
 }
 
-impl SharedServer {
+impl Server {
     /// Initializes a new server based upon this raw server.
-    pub fn new<R, I>(server: Server<R, I>) -> SharedServer
+    pub fn new<R, I>(server: RawServer<R, I>) -> Server
     where
         R: TransportServer<RequestId = I> + Send + Sync + 'static,
         I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
@@ -154,7 +154,7 @@ impl SharedServer {
             background_task(server, from_front).await;
         });
 
-        SharedServer {
+        Server {
             to_back,
             registered_methods: Arc::new(Mutex::new(Default::default())),
             next_subscription_unique_id: Arc::new(atomic::AtomicUsize::new(0)),
@@ -198,7 +198,7 @@ impl SharedServer {
     /// Clients will then be able to call this method.
     /// The returned object allows you to handle incoming requests.
     ///
-    /// Contrary to [`register_notifications`](SharedServer::register_notifications), there is no
+    /// Contrary to [`register_notifications`](Server::register_notifications), there is no
     /// `allow_losses` parameter here. If the handler is too slow to process requests, then the
     /// server automatically returns an "internal error" to the client.
     ///
@@ -322,7 +322,7 @@ impl IncomingRequest {
 
 /// Function being run in the background that processes messages from the frontend.
 async fn background_task<R, I>(
-    mut server: Server<R, I>,
+    mut server: RawServer<R, I>,
     mut from_front: mpsc::UnboundedReceiver<FrontToBack>,
 ) where
     R: TransportServer<RequestId = I> + Send + 'static,
@@ -341,9 +341,9 @@ async fn background_task<R, I>(
     // that subscription.
     let mut unsubscribe_methods: HashMap<String, usize> = HashMap::new();
     // For each registered subscription, a list of clients that are registered towards us.
-    let mut subscribed_clients: HashMap<usize, Vec<ServerSubscriptionId>> = HashMap::new();
+    let mut subscribed_clients: HashMap<usize, Vec<RawServerSubscriptionId>> = HashMap::new();
     // Reversed mapping of `subscribed_clients`. Must always be in sync.
-    let mut active_subscriptions: HashMap<ServerSubscriptionId, usize> = HashMap::new();
+    let mut active_subscriptions: HashMap<RawServerSubscriptionId, usize> = HashMap::new();
 
     loop {
         // We need to do a little transformation in order to destroy the borrow to `client`
@@ -412,7 +412,7 @@ async fn background_task<R, I>(
                     }
                 }
             }
-            Either::Right(ServerEvent::Notification(notification)) => {
+            Either::Right(RawServerEvent::Notification(notification)) => {
                 if let Some((handler, allow_losses)) =
                     registered_notifications.get_mut(notification.method())
                 {
@@ -426,7 +426,7 @@ async fn background_task<R, I>(
                     }
                 }
             }
-            Either::Right(ServerEvent::Request(request)) => {
+            Either::Right(RawServerEvent::Request(request)) => {
                 if let Some(handler) = registered_methods.get_mut(request.method()) {
                     let params: &common::Params = request.params().into();
                     match handler.send((request.id(), params.clone())).now_or_never() {
@@ -449,7 +449,8 @@ async fn background_task<R, I>(
                         active_subscriptions.insert(sub_id, *sub_unique_id);
                     }
                 } else if let Some(sub_unique_id) = unsubscribe_methods.get(request.method()) {
-                    if let Ok(sub_id) = ServerSubscriptionId::from_wire_message(&JsonValue::Null) {
+                    if let Ok(sub_id) = RawServerSubscriptionId::from_wire_message(&JsonValue::Null)
+                    {
                         // FIXME: from request params
                         debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
                         if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
@@ -471,10 +472,10 @@ async fn background_task<R, I>(
                         .await;
                 }
             }
-            Either::Right(ServerEvent::SubscriptionsReady(_)) => {
+            Either::Right(RawServerEvent::SubscriptionsReady(_)) => {
                 // We don't really care whether subscriptions are now ready.
             }
-            Either::Right(ServerEvent::SubscriptionsClosed(iter)) => {
+            Either::Right(RawServerEvent::SubscriptionsClosed(iter)) => {
                 // Remove all the subscriptions from `active_subscriptions` and
                 // `subscribed_clients`.
                 for sub_id in iter {

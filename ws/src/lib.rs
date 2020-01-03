@@ -31,18 +31,18 @@
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
 
-use jsonrpsee_core::client::Client;
+use jsonrpsee_core::client::RawClient;
 
 pub use crate::client::{WsConnecError, WsNewError, WsTransportClient};
 
 // TODO: server
 
-/// Type alias for a [`Client`](jsonrpsee_core::client::Client) that operates on WebSockets.
-pub type WsClient = Client<WsTransportClient>;
+/// Type alias for a [`RawClient`](jsonrpsee_core::client::RawClient) that operates on WebSockets.
+pub type WsRawClient = RawClient<WsTransportClient>;
 
 mod client;
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
-pub async fn ws_client(target: &str) -> Result<WsClient, client::WsNewDnsError> {
-    WsTransportClient::new(target).await
+pub async fn ws_raw_client(target: &str) -> Result<WsRawClient, client::WsNewDnsError> {
+    WsTransportClient::new(target).await.map(RawClient::new)
 }

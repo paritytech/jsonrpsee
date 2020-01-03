@@ -31,9 +31,9 @@ use futures::{
     prelude::*,
 };
 use jsonrpsee_core::{
-    client::ClientEvent,
+    client::RawClientEvent,
     common::{self, JsonValue},
-    Client, ClientRequestId, TransportClient,
+    RawClient, RawClientRequestId, TransportClient,
 };
 use std::{collections::HashMap, error, io, marker::PhantomData};
 
@@ -41,14 +41,14 @@ use std::{collections::HashMap, error, io, marker::PhantomData};
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background
 /// >           task running in parallel. If this is not desirable, you are encouraged to use the
-/// >           [`Client`] struct instead.
+/// >           [`RawClient`] struct instead.
 #[derive(Clone)]
-pub struct SharedClient {
+pub struct Client {
     /// Channel to send requests to the background task.
     to_back: mpsc::Sender<FrontToBack>,
 }
 
-/// Active subscription on a [`SharedClient`].
+/// Active subscription on a [`Client`].
 pub struct Subscription<Notif> {
     /// Channel to send requests to the background task.
     to_back: mpsc::Sender<FrontToBack>,
@@ -58,14 +58,14 @@ pub struct Subscription<Notif> {
     marker: PhantomData<mpsc::Receiver<Notif>>,
 }
 
-/// Error produced by [`SharedClient::request`] and [`SharedClient::subscribe`].
+/// Error produced by [`Client::request`] and [`Client::subscribe`].
 #[derive(Debug, thiserror::Error)]
 pub enum RequestError {
     /// Networking error or error on the low-level protocol layer (e.g. missing field,
     /// invalid ID, etc.).
     #[error("Networking or low-level protocol error: {0}")]
     TransportError(#[source] Box<dyn error::Error + Send + Sync>),
-    /// Server responded to our request with an error.
+    /// RawServer responded to our request with an error.
     #[error("Server responded to our request with an error: {0:?}")]
     Request(#[source] common::Error),
     /// Failed to parse the data that the server sent back to us.
@@ -73,7 +73,7 @@ pub enum RequestError {
     ParseError(#[source] common::ParseError),
 }
 
-/// Message that the [`SharedClient`] can send to the background task.
+/// Message that the [`Client`] can send to the background task.
 enum FrontToBack {
     /// Send a one-shot notification to the server. The server doesn't give back any feedback.
     Notification {
@@ -116,9 +116,9 @@ enum FrontToBack {
     ChannelClosed,
 }
 
-impl SharedClient {
+impl Client {
     /// Initializes a new client based upon this raw client.
-    pub fn new<R>(client: Client<R>) -> SharedClient
+    pub fn new<R>(client: RawClient<R>) -> Client
     where
         R: TransportClient + Send + 'static,
         R::Error: Send + Sync,
@@ -127,7 +127,7 @@ impl SharedClient {
         async_std::task::spawn(async move {
             background_task(client, from_front).await;
         });
-        SharedClient { to_back }
+        Client { to_back }
     }
 
     /// Send a notification to the server.
@@ -219,13 +219,13 @@ impl SharedClient {
     }
 }
 
-impl<R> From<Client<R>> for SharedClient
+impl<R> From<RawClient<R>> for Client
 where
     R: TransportClient + Send + 'static,
     R::Error: Send + Sync,
 {
-    fn from(client: Client<R>) -> SharedClient {
-        SharedClient::new(client)
+    fn from(client: RawClient<R>) -> Client {
+        Client::new(client)
     }
 }
 
@@ -261,20 +261,22 @@ impl<Notif> Drop for Subscription<Notif> {
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task<R>(mut client: Client<R>, mut from_front: mpsc::Receiver<FrontToBack>)
+async fn background_task<R>(mut client: RawClient<R>, mut from_front: mpsc::Receiver<FrontToBack>)
 where
     R: TransportClient + Send + 'static,
     R::Error: Send + Sync,
 {
     // List of subscription requests that have been sent to the server, with the method name to
     // unsubscribe.
-    let mut pending_subscriptions: HashMap<ClientRequestId, (oneshot::Sender<_>, _)> =
+    let mut pending_subscriptions: HashMap<RawClientRequestId, (oneshot::Sender<_>, _)> =
         HashMap::new();
     // List of subscription that are active on the server, with the method name to unsubscribe.
-    let mut active_subscriptions: HashMap<ClientRequestId, (mpsc::Sender<common::JsonValue>, _)> =
-        HashMap::new();
+    let mut active_subscriptions: HashMap<
+        RawClientRequestId,
+        (mpsc::Sender<common::JsonValue>, _),
+    > = HashMap::new();
     // List of requests that the server must answer.
-    let mut ongoing_requests: HashMap<ClientRequestId, oneshot::Sender<Result<_, _>>> =
+    let mut ongoing_requests: HashMap<RawClientRequestId, oneshot::Sender<Result<_, _>>> =
         HashMap::new();
 
     loop {
@@ -292,7 +294,7 @@ where
         };
 
         match outcome {
-            // If the channel is closed, then the `SharedClient` has been destroyed and we
+            // If the channel is closed, then the `Client` has been destroyed and we
             // stop this task.
             Either::Left(None) => return,
 
@@ -351,7 +353,7 @@ where
             }
 
             // Received a response to a request from the server.
-            Either::Right(Ok(ClientEvent::Response { request_id, result })) => {
+            Either::Right(Ok(RawClientEvent::Response { request_id, result })) => {
                 let _ = ongoing_requests
                     .remove(&request_id)
                     .unwrap()
@@ -359,7 +361,7 @@ where
             }
 
             // Receive a response from the server about a subscription.
-            Either::Right(Ok(ClientEvent::SubscriptionResponse { request_id, result })) => {
+            Either::Right(Ok(RawClientEvent::SubscriptionResponse { request_id, result })) => {
                 let (send_back, unsubscribe) = pending_subscriptions.remove(&request_id).unwrap();
                 if let Err(err) = result {
                     let _ = send_back.send(Err(RequestError::Request(err)));
@@ -381,7 +383,7 @@ where
                 }
             }
 
-            Either::Right(Ok(ClientEvent::SubscriptionNotif { request_id, result })) => {
+            Either::Right(Ok(RawClientEvent::SubscriptionNotif { request_id, result })) => {
                 // TODO: unsubscribe if channel is closed
                 let (notifs_tx, _) = active_subscriptions.get_mut(&request_id).unwrap();
                 if notifs_tx.send(result).await.is_err() {
@@ -398,7 +400,7 @@ where
             }
 
             // Request for the server to unsubscribe us has succeeded.
-            Either::Right(Ok(ClientEvent::Unsubscribed { request_id })) => {
+            Either::Right(Ok(RawClientEvent::Unsubscribed { request_id })) => {
                 active_subscriptions.remove(&request_id).unwrap();
             }
 
