@@ -65,7 +65,7 @@ pub enum WsNewError {
     Handshake(#[error(cause)] soketto::handshake::Error),
 
     /// RawServer rejected our handshake.
-    #[error(display = "RawServer returned an error status code: {}", status_code)]
+    #[error(display = "Server returned an error status code: {}", status_code)]
     Rejected {
         /// HTTP status code that the server returned.
         status_code: u16,

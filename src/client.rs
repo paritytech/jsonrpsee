@@ -66,7 +66,7 @@ pub enum RequestError {
     #[error("Networking or low-level protocol error: {0}")]
     TransportError(#[source] Box<dyn error::Error + Send + Sync>),
     /// RawServer responded to our request with an error.
-    #[error("RawServer responded to our request with an error: {0:?}")]
+    #[error("Server responded to our request with an error: {0:?}")]
     Request(#[source] common::Error),
     /// Failed to parse the data that the server sent back to us.
     #[error("Parse error: {0}")]

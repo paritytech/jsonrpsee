@@ -69,7 +69,7 @@ impl ErrorCode {
             ErrorCode::MethodNotFound => "Method not found",
             ErrorCode::InvalidParams => "Invalid params",
             ErrorCode::InternalError => "Internal error",
-            ErrorCode::ServerError(_) => "RawServer error",
+            ErrorCode::ServerError(_) => "Server error",
         };
         desc.to_string()
     }

@@ -110,7 +110,7 @@ pub struct LocalTransportServer {
 #[derive(Debug, Error)]
 pub enum LocalTransportClientErr {
     /// The [`LocalTransportServer`] no longer exists.
-    #[error(display = "RawServer has been closed")]
+    #[error(display = "Server has been closed")]
     ServerClosed,
 }
 

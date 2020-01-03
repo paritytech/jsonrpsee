@@ -414,7 +414,7 @@ where
                     }
                 } else {
                     log::warn!(
-                        "RawServer sent subscription notif with an invalid id: {:?}",
+                        "Server sent subscription notif with an invalid id: {:?}",
                         sub_id
                     );
                     return Err(RawClientError::UnknownSubscriptionId);
@@ -434,11 +434,11 @@ where
         let request_id = match response.id() {
             common::Id::Num(n) => RawClientRequestId(*n),
             common::Id::Str(s) => {
-                log::warn!("RawServer responded with an invalid request id: {:?}", s);
+                log::warn!("Server responded with an invalid request id: {:?}", s);
                 return Err(RawClientError::UnknownRequestId);
             }
             common::Id::Null => {
-                log::warn!("RawServer responded with a null request id");
+                log::warn!("Server responded with a null request id");
                 return Err(RawClientError::NullRequestId);
             }
         };
@@ -513,7 +513,7 @@ where
             Some(v @ Request::ActiveSubscription { .. }) => {
                 self.requests.insert(request_id, v);
                 log::warn!(
-                    "RawServer responsed with an invalid request id: {:?}",
+                    "Server responsed with an invalid request id: {:?}",
                     request_id
                 );
                 return Err(RawClientError::UnknownRequestId);
@@ -521,7 +521,7 @@ where
 
             None => {
                 log::warn!(
-                    "RawServer responsed with an invalid request id: {:?}",
+                    "Server responsed with an invalid request id: {:?}",
                     request_id
                 );
                 return Err(RawClientError::UnknownRequestId);
@@ -724,20 +724,20 @@ where
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             RawClientError::Inner(ref err) => write!(f, "Error in the raw client: {}", err),
-            RawClientError::RequestError(ref err) => write!(f, "RawServer returned error: {}", err),
+            RawClientError::RequestError(ref err) => write!(f, "Server returned error: {}", err),
             RawClientError::DuplicateSubscriptionId => write!(
                 f,
-                "RawServer has responded with a subscription ID that's already in use"
+                "Server has responded with a subscription ID that's already in use"
             ),
             RawClientError::SubscriptionIdParseError => write!(f, "Subscription ID parse error"),
             RawClientError::UnknownRequestId => {
-                write!(f, "RawServer responded with an unknown request ID")
+                write!(f, "Server responded with an unknown request ID")
             }
             RawClientError::NullRequestId => {
-                write!(f, "RawServer responded with a null request ID")
+                write!(f, "Server responded with a null request ID")
             }
             RawClientError::UnknownSubscriptionId => {
-                write!(f, "RawServer responded with an unknown subscription ID")
+                write!(f, "Server responded with an unknown subscription ID")
             }
         }
     }
