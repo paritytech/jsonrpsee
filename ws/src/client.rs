@@ -245,9 +245,8 @@ impl<'a> WsTransportClientBuilder<'a> {
             }
         }
 
-        let (sender, receiver) = client.into_builder().finish();
-
         // If the handshake succeeded, return.
+        let (sender, receiver) = client.into_builder().finish();
         Ok(WsTransportClient { sender, receiver })
     }
 }

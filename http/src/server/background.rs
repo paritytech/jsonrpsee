@@ -115,7 +115,7 @@ impl BackgroundHttp {
                     };
                 });
             })
-            .unwrap();
+            ?;
 
         let local_addr = addr_rx.await??;
         Ok((BackgroundHttp { rx: rx.fuse() }, local_addr))
