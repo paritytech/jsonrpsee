@@ -29,6 +29,7 @@ extern crate proc_macro;
 use inflector::Inflector as _;
 use proc_macro::TokenStream;
 use quote::{quote, quote_spanned};
+use std::collections::HashSet;
 use syn::spanned::Spanned as _;
 
 mod api_def;
@@ -110,6 +111,18 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             syn::parse_str::<syn::Ident>("I").unwrap(),
         )));
     let (impl_generics, ty_generics, where_clause) = tweaked_generics.split_for_impl();
+    let generics = api
+        .generics
+        .params
+        .iter()
+        .filter_map(|gp| {
+            if let syn::GenericParam::Type(tp) = gp {
+                Some(tp.ident.clone())
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
 
     let visibility = &api.visibility;
 
@@ -172,6 +185,24 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         let mut notifications_blocks = Vec::new();
         let mut function_blocks = Vec::new();
         let mut tmp_to_rq = Vec::new();
+
+        struct GenericParams {
+            generics: HashSet<syn::Ident>,
+            types: HashSet<syn::Ident>,
+        }
+        impl<'ast> syn::visit::Visit<'ast> for GenericParams {
+            fn visit_ident(&mut self, ident: &'ast syn::Ident) {
+                if self.generics.contains(ident) {
+                    self.types.insert(ident.clone());
+                }
+            }
+        }
+
+        let mut generic_params = GenericParams {
+            generics,
+            types: HashSet::new(),
+        };
+
         for function in &api.definitions {
             let function_is_notification = function.is_void_ret_type();
             let variant_name = snake_case_to_camel_case(&function.signature.ident);
@@ -196,6 +227,8 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                         (ty, param_variant_name(&pat)?, rpc_param_name(&pat, &attrs)?)
                     }
                 };
+
+                syn::visit::visit_type(&mut generic_params, &ty);
 
                 params_names_list
                     .push(quote_spanned!(function.signature.span()=> #param_variant_name));
@@ -254,16 +287,26 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             }
         }
 
+        let params_tys = generic_params.types.iter();
+
+        let tmp_generics = if generic_params.types.is_empty() {
+            quote!()
+        } else {
+            quote_spanned!(api.name.span()=>
+                <#(#params_tys,)*>
+            )
+        };
+
         let on_request = quote_spanned!(api.name.span()=> {
             #[allow(unused)]    // The enum might be empty
-            enum Tmp {
+            enum Tmp #tmp_generics {
                 #(#tmp_variants,)*
             }
 
             let request_id = r.id();
             let method = r.method().to_owned();
 
-            let mut request_outcome: Option<Tmp> = None;
+            let mut request_outcome: Option<Tmp #tmp_generics> = None;
 
             #(#function_blocks)*
 
@@ -279,10 +322,14 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
             // TODO: we received an unknown notification; log this?
         });
 
+        let params_tys = generic_params.types.iter();
+
         quote_spanned!(api.name.span()=>
             #visibility async fn next_request(server: &'a mut jsonrpsee::core::Server<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
-                where R: jsonrpsee::core::TransportServer<RequestId = I>,
-                        I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync,
+                where
+                    R: jsonrpsee::core::TransportServer<RequestId = I>,
+                    I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync
+                    #(, #params_tys: jsonrpsee::core::common::DeserializeOwned)*
             {
                 loop {
                     match server.next_event().await {
