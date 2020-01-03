@@ -169,7 +169,15 @@ mod client;
 mod server;
 
 /// Builds a new client and a new server that are connected to each other.
-pub fn local() -> (
+pub fn local() -> (Client, Server) {
+    let (client, server) = local_raw();
+    let client = Client::from(client);
+    let server = Server::from(server);
+    (client, server)
+}
+
+/// Builds a new client and a new server that are connected to each other.
+pub fn local_raw() -> (
     core::RawClient<core::local::LocalTransportClient>,
     core::RawServer<
         core::local::LocalTransportServer,

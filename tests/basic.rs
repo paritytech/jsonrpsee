@@ -47,7 +47,7 @@ macro_rules! spawn_server {
 
 #[test]
 fn client_server_works() {
-    let (mut client, mut server) = jsonrpsee::local();
+    let (mut client, mut server) = jsonrpsee::local_raw();
     spawn_server!(server);
 
     let v = async_std::task::block_on(Test::concat(&mut client, "hello", 5)).unwrap();
@@ -56,7 +56,7 @@ fn client_server_works() {
 
 #[test]
 fn server_works_the_expected_way() {
-    let (mut client, mut server) = jsonrpsee::local();
+    let (mut client, mut server) = jsonrpsee::local_raw();
     spawn_server!(server);
 
     let params = {
