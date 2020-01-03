@@ -165,8 +165,8 @@ pub use jsonrpsee_ws as ws;
 pub use shared_client::SharedClient;
 pub use shared_server::SharedServer;
 
-mod shared_server;
 mod shared_client;
+mod shared_server;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local() -> (

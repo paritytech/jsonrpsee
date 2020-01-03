@@ -24,19 +24,20 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::{
-    channel::mpsc,
-    future::Either,
-    pin_mut,
-    prelude::*,
-};
+use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use jsonrpsee_core::{
-    server::{ServerEvent, ServerRequestId, ServerSubscriptionId},
     common::{self, JsonValue},
-    Server, server::raw::TransportServer,
+    server::raw::TransportServer,
+    server::{ServerEvent, ServerRequestId, ServerSubscriptionId},
+    Server,
 };
 use parking_lot::Mutex;
-use std::{collections::HashMap, collections::HashSet, hash::Hash, sync::{Arc, atomic}};
+use std::{
+    collections::HashMap,
+    collections::HashSet,
+    hash::Hash,
+    sync::{atomic, Arc},
+};
 
 /// Server that can be cloned.
 ///
@@ -95,6 +96,8 @@ enum FrontToBack {
         name: String,
         /// Where to send incoming notifications.
         handler: mpsc::Sender<common::Params>,
+        /// See the documentation of [`SharedServer::register_notifications`].
+        allow_losses: bool,
     },
 
     /// Registers a method. The server will then handle requests using this method.
@@ -163,22 +166,31 @@ impl SharedServer {
     /// Clients will then be able to call this method.
     /// The returned object allows you to process incoming notifications.
     ///
+    /// If `allow_losses` is true, then the server is allowed to drop notifications if the
+    /// notifications handler (i.e. the code that uses [`RegisteredNotifications`]) is too slow
+    /// to process notifications.
+    ///
     /// Returns an error if the method name was already registered.
-    pub fn register_notifications(&self, method_name: String) -> Result<RegisteredNotifications, ()> {
+    pub fn register_notifications(
+        &self,
+        method_name: String,
+        allow_losses: bool,
+    ) -> Result<RegisteredNotifications, ()> {
         if !self.registered_methods.lock().insert(method_name.clone()) {
             return Err(());
         }
 
-        let (tx, rx) = mpsc::channel(8);
+        let (tx, rx) = mpsc::channel(32);
 
-        let _ = self.to_back.unbounded_send(FrontToBack::RegisterNotifications {
-            name: method_name,
-            handler: tx,
-        });
+        let _ = self
+            .to_back
+            .unbounded_send(FrontToBack::RegisterNotifications {
+                name: method_name,
+                handler: tx,
+                allow_losses,
+            });
 
-        Ok(RegisteredNotifications {
-            queries_rx: rx,
-        })
+        Ok(RegisteredNotifications { queries_rx: rx })
     }
 
     /// Registers a method towards the server.
@@ -186,13 +198,17 @@ impl SharedServer {
     /// Clients will then be able to call this method.
     /// The returned object allows you to handle incoming requests.
     ///
+    /// Contrary to [`register_notifications`](SharedServer::register_notifications), there is no
+    /// `allow_losses` parameter here. If the handler is too slow to process requests, then the
+    /// server automatically returns an "internal error" to the client.
+    ///
     /// Returns an error if the method name was already registered.
     pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, ()> {
         if !self.registered_methods.lock().insert(method_name.clone()) {
             return Err(());
         }
 
-        let (tx, rx) = mpsc::channel(8);
+        let (tx, rx) = mpsc::channel(32);
 
         let _ = self.to_back.unbounded_send(FrontToBack::RegisterMethod {
             name: method_name,
@@ -211,9 +227,11 @@ impl SharedServer {
     /// The returned object allows you to send out notifications.
     ///
     /// Returns an error if one of the method names was already registered.
-    pub fn register_subscription(&self, subscribe_method_name: String, unsubscribe_method_name: String)
-        -> Result<RegisteredSubscription, ()>
-    {
+    pub fn register_subscription(
+        &self,
+        subscribe_method_name: String,
+        unsubscribe_method_name: String,
+    ) -> Result<RegisteredSubscription, ()> {
         {
             let mut registered_methods = self.registered_methods.lock();
             if !registered_methods.insert(subscribe_method_name.clone()) {
@@ -225,13 +243,17 @@ impl SharedServer {
             }
         }
 
-        let unique_id = self.next_subscription_unique_id.fetch_add(1, atomic::Ordering::Relaxed);
+        let unique_id = self
+            .next_subscription_unique_id
+            .fetch_add(1, atomic::Ordering::Relaxed);
 
-        let _ = self.to_back.unbounded_send(FrontToBack::RegisterSubscription {
-            unique_id,
-            subscribe_method: subscribe_method_name,
-            unsubscribe_method: unsubscribe_method_name,
-        });
+        let _ = self
+            .to_back
+            .unbounded_send(FrontToBack::RegisterSubscription {
+                unique_id,
+                subscribe_method: subscribe_method_name,
+                unsubscribe_method: unsubscribe_method_name,
+            });
 
         Ok(RegisteredSubscription {
             to_back: self.to_back.clone(),
@@ -288,22 +310,27 @@ impl IncomingRequest {
 
     /// Respond to the request.
     pub async fn respond(mut self, response: impl Into<Result<JsonValue, common::Error>>) {
-        let _ = self.to_back.send(FrontToBack::AnswerRequest {
-            request_id: self.request_id,
-            answer: response.into(),
-        }).await;
+        let _ = self
+            .to_back
+            .send(FrontToBack::AnswerRequest {
+                request_id: self.request_id,
+                answer: response.into(),
+            })
+            .await;
     }
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task<R, I>(mut server: Server<R, I>, mut from_front: mpsc::UnboundedReceiver<FrontToBack>)
-where
+async fn background_task<R, I>(
+    mut server: Server<R, I>,
+    mut from_front: mpsc::UnboundedReceiver<FrontToBack>,
+) where
     R: TransportServer<RequestId = I> + Send + 'static,
     I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
 {
     // List of notifications methods that the user has registered, and the channels to dispatch
     // incoming notifications.
-    let mut registered_notifications: HashMap<String, mpsc::Sender<_>> = HashMap::new();
+    let mut registered_notifications: HashMap<String, (mpsc::Sender<_>, bool)> = HashMap::new();
     // List of methods that the user has registered, and the channels to dispatch incoming
     // requests.
     let mut registered_methods: HashMap<String, mpsc::Sender<_>> = HashMap::new();
@@ -335,15 +362,27 @@ where
         match outcome {
             Either::Left(None) => return,
             Either::Left(Some(FrontToBack::AnswerRequest { request_id, answer })) => {
-                server.request_by_id(&request_id).unwrap().respond(answer).await;
+                server
+                    .request_by_id(&request_id)
+                    .unwrap()
+                    .respond(answer)
+                    .await;
             }
-            Either::Left(Some(FrontToBack::RegisterNotifications { name, handler })) => {
-                registered_notifications.insert(name, handler);
-            },
+            Either::Left(Some(FrontToBack::RegisterNotifications {
+                name,
+                handler,
+                allow_losses,
+            })) => {
+                registered_notifications.insert(name, (handler, allow_losses));
+            }
             Either::Left(Some(FrontToBack::RegisterMethod { name, handler })) => {
                 registered_methods.insert(name, handler);
-            },
-            Either::Left(Some(FrontToBack::RegisterSubscription { unique_id, subscribe_method, unsubscribe_method })) => {
+            }
+            Either::Left(Some(FrontToBack::RegisterSubscription {
+                unique_id,
+                subscribe_method,
+                unsubscribe_method,
+            })) => {
                 debug_assert_ne!(subscribe_method, unsubscribe_method);
                 debug_assert!(!subscribe_methods.contains_key(&subscribe_method));
                 debug_assert!(!subscribe_methods.contains_key(&unsubscribe_method));
@@ -358,7 +397,10 @@ where
                 unsubscribe_methods.insert(unsubscribe_method, unique_id);
                 subscribed_clients.insert(unique_id, Vec::new());
             }
-            Either::Left(Some(FrontToBack::SendOutNotif { unique_id, notification })) => {
+            Either::Left(Some(FrontToBack::SendOutNotif {
+                unique_id,
+                notification,
+            })) => {
                 debug_assert!(subscribed_clients.contains_key(&unique_id));
                 if let Some(clients) = subscribed_clients.get(&unique_id) {
                     for client in clients {
@@ -371,20 +413,30 @@ where
                 }
             }
             Either::Right(ServerEvent::Notification(notification)) => {
-                if let Some(handler) = registered_notifications.get_mut(notification.method()) {
+                if let Some((handler, allow_losses)) =
+                    registered_notifications.get_mut(notification.method())
+                {
                     let params: &common::Params = notification.params().into();
                     // Note: we just ignore errors. It doesn't make sense logically speaking to
                     // unregister the notification here.
-                    let _ = handler.send(params.clone()).await;
+                    if *allow_losses {
+                        let _ = handler.send(params.clone()).now_or_never();
+                    } else {
+                        let _ = handler.send(params.clone()).await;
+                    }
                 }
             }
             Either::Right(ServerEvent::Request(request)) => {
                 if let Some(handler) = registered_methods.get_mut(request.method()) {
                     let params: &common::Params = request.params().into();
-                    if handler.send((request.id(), params.clone())).await.is_err() {
-                        request.respond(Err(From::from(common::ErrorCode::ServerError(0)))).await;
+                    match handler.send((request.id(), params.clone())).now_or_never() {
+                        Some(Ok(())) => {}
+                        Some(Err(_)) | None => {
+                            request
+                                .respond(Err(From::from(common::ErrorCode::ServerError(0))))
+                                .await;
+                        }
                     }
-
                 } else if let Some(sub_unique_id) = subscribe_methods.get(request.method()) {
                     if let Ok(sub_id) = request.into_subscription().await {
                         debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
@@ -396,9 +448,9 @@ where
                         debug_assert!(!active_subscriptions.contains_key(&sub_id));
                         active_subscriptions.insert(sub_id, *sub_unique_id);
                     }
-
                 } else if let Some(sub_unique_id) = unsubscribe_methods.get(request.method()) {
-                    if let Ok(sub_id) = ServerSubscriptionId::from_wire_message(&JsonValue::Null) { // FIXME: from request params
+                    if let Ok(sub_id) = ServerSubscriptionId::from_wire_message(&JsonValue::Null) {
+                        // FIXME: from request params
                         debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
                         if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
                             // TODO: we don't actually check whether the unscribe comes from the right
@@ -413,9 +465,10 @@ where
                             }
                         }
                     }
-                    
                 } else {
-                    request.respond(Err(From::from(common::ErrorCode::InvalidRequest))).await;
+                    request
+                        .respond(Err(From::from(common::ErrorCode::InvalidRequest)))
+                        .await;
                 }
             }
             Either::Right(ServerEvent::SubscriptionsReady(_)) => {
