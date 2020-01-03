@@ -67,13 +67,7 @@ struct FrontToBack {
 impl HttpTransportClient {
     /// Initializes a new HTTP client.
     // TODO: better type for target
-    pub fn new(target: &str) -> RawClient<Self> {
-        RawClient::new(Self::new_raw(target))
-    }
-
-    /// Initializes a new HTTP client.
-    // TODO: better type for target
-    pub fn new_raw(target: &str) -> Self {
+    pub fn new(target: &str) -> Self {
         let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(4);
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.

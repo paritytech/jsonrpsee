@@ -29,7 +29,7 @@
 //!
 //! # Usage
 //!
-//! Call the [`local_raw`](crate::local_raw()) function to build a set of a client and a server.
+//! Call the [`local_transport`](crate::local_transport()) function to build a set of a client and a server.
 //!
 //! The [`LocalTransportClient`](crate::local::LocalTransportClient) is clonable.
 //!
@@ -37,7 +37,7 @@
 //! use jsonrpsee_core::client::RawClient;
 //! use jsonrpsee_core::server::{RawServer, RawServerEvent};
 //!
-//! let (raw_client, raw_server) = jsonrpsee_core::local_raw();
+//! let (raw_client, raw_server) = jsonrpsee_core::local_transport();
 //! let mut client = RawClient::new(raw_client);
 //! let mut server = RawServer::new(raw_server);
 //!
@@ -67,7 +67,7 @@ use futures::{channel::mpsc, prelude::*};
 use std::{fmt, pin::Pin};
 
 /// Builds a new client and a new server that are connected to each other.
-pub fn local_raw() -> (LocalTransportClient, LocalTransportServer) {
+pub fn local_transport() -> (LocalTransportClient, LocalTransportServer) {
     let (to_server, from_client) = mpsc::channel(4);
     let (to_client, from_server) = mpsc::channel(4);
     let client = LocalTransportClient {
@@ -83,7 +83,7 @@ pub fn local_raw() -> (LocalTransportClient, LocalTransportServer) {
     (client, server)
 }
 
-/// RawClient connected to a [`LocalTransportServer`]. Can be created using [`local_raw`].
+/// RawClient connected to a [`LocalTransportServer`]. Can be created using [`local_transport`].
 ///
 /// Can be cloned in order to have multiple clients connected to the same server.
 // TODO: restore #[derive(Clone)])
@@ -94,7 +94,7 @@ pub struct LocalTransportClient {
     from_server: mpsc::Receiver<common::Response>,
 }
 
-/// RawServer connected to a [`LocalTransportClient`]. Can be created using [`local_raw`].
+/// RawServer connected to a [`LocalTransportClient`]. Can be created using [`local_transport`].
 pub struct LocalTransportServer {
     /// Channel to the client.
     to_client: mpsc::Sender<common::Response>,

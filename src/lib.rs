@@ -59,7 +59,7 @@
 //! # Clients
 //!
 //! In order to perform outgoing requests, you first have to create a
-//! [`RawClient`](core::client::RawClient). There exist several shortcuts such as the [`http_client`]
+//! [`RawClient`](core::client::RawClient). There exist several shortcuts such as the [`http_raw_client`]
 //! method.
 //!
 //! Once a client is created, you can use the
@@ -67,7 +67,7 @@
 //!
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
-//!     let mut client = jsonrpsee::http_client("http://localhost:8000");
+//!     let mut client = jsonrpsee::http_raw_client("http://localhost:8000");
 //!     let request_id = client.start_request("system_name", jsonrpsee::core::common::Params::None).await.unwrap();
 //!     jsonrpsee::core::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap()).unwrap()
 //! });
@@ -82,7 +82,7 @@
 //! # jsonrpsee::rpc_api! { System { fn system_name() -> String; } }
 //! # fn main() {
 //! let result = async_std::task::block_on(async {
-//!     let mut client = jsonrpsee::http_client("http://localhost:8000");
+//!     let mut client = jsonrpsee::http_raw_client("http://localhost:8000");
 //!     System::system_name(&mut client).await
 //! });
 //!
@@ -103,7 +103,7 @@
 //! ```no_run
 //! // Should run forever
 //! async_std::task::block_on(async {
-//!     let mut server = jsonrpsee::http_server(&"localhost:8000".parse().unwrap()).await.unwrap();
+//!     let mut server = jsonrpsee::http_raw_server(&"localhost:8000".parse().unwrap()).await.unwrap();
 //!     loop {
 //!         match server.next_event().await {
 //!             jsonrpsee::core::server::RawServerEvent::Notification(notif) => {
@@ -130,7 +130,7 @@
 //! # fn main() {
 //! // Should run forever
 //! async_std::task::block_on(async {
-//!     let mut server = jsonrpsee::http_server(&"localhost:8000".parse().unwrap()).await.unwrap();
+//!     let mut server = jsonrpsee::http_raw_server(&"localhost:8000".parse().unwrap()).await.unwrap();
 //!     while let Ok(request) = System::next_request(&mut server).await {
 //!         match request {
 //!             System::SystemName { respond } => {
@@ -148,10 +148,10 @@
 #![warn(missing_docs)]
 
 #[cfg(feature = "http")]
-pub use jsonrpsee_http::{http_client, http_server};
+pub use jsonrpsee_http::{http_raw_client, http_raw_server};
 pub use jsonrpsee_proc_macros::rpc_api;
 #[cfg(feature = "ws")]
-pub use jsonrpsee_ws::ws_client;
+pub use jsonrpsee_ws::ws_raw_client;
 
 #[doc(inline)]
 pub use jsonrpsee_core as core;
@@ -176,7 +176,7 @@ pub fn local() -> (
         <core::local::LocalTransportServer as core::TransportServer>::RequestId,
     >,
 ) {
-    let (client, server) = core::local_raw();
+    let (client, server) = core::local_transport();
     let client = core::RawClient::new(client);
     let server = core::RawServer::new(server);
     (client, server)

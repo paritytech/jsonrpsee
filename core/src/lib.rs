@@ -51,7 +51,7 @@
 
 pub use crate::client::raw::TransportClient;
 pub use crate::client::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
-pub use crate::local::local_raw;
+pub use crate::local::local_transport;
 pub use crate::server::raw::{TransportServer, TransportServerEvent};
 pub use crate::server::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};
 

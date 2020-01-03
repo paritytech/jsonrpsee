@@ -38,11 +38,11 @@ pub use crate::client::{WsConnecError, WsNewError, WsTransportClient};
 // TODO: server
 
 /// Type alias for a [`RawClient`](jsonrpsee_core::client::RawClient) that operates on WebSockets.
-pub type WsClient = RawClient<WsTransportClient>;
+pub type WsRawClient = RawClient<WsTransportClient>;
 
 mod client;
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
-pub async fn ws_client(target: &str) -> Result<WsClient, client::WsNewDnsError> {
-    WsTransportClient::new(target).await
+pub async fn ws_raw_client(target: &str) -> Result<WsRawClient, client::WsNewDnsError> {
+    WsTransportClient::new(target).await.map(RawClient::new)
 }

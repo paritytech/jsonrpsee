@@ -43,32 +43,32 @@ pub use crate::server::HttpTransportServer;
 pub use server_utils::access_control;
 
 /// Type alias for a [`RawClient`](jsonrpsee_core::client::RawClient) that operates on HTTP.
-pub type HttpClient = RawClient<HttpTransportClient>;
+pub type HttpRawClient = RawClient<HttpTransportClient>;
 /// Type alias for a [`RawServer`](jsonrpsee_core::server::RawServer) that operates on HTTP.
-pub type HttpServer =
+pub type HttpRawServer =
     RawServer<HttpTransportServer, <HttpTransportServer as TransportServer>::RequestId>;
 
 mod client;
 mod server;
 
 /// Starts a [`RawServer`](../RawServer) object that serves HTTP.
-pub async fn http_server(
+pub async fn http_raw_server(
     addr: &SocketAddr,
-) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
+) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
     Ok(RawServer::new(HttpTransportServer::bind(addr).await?))
 }
 
 /// Starts a [`RawServer`](../RawServer) object that serves HTTP with a whitlist access control.
-pub async fn http_server_with_acl(
+pub async fn http_raw_server_with_acl(
     addr: &SocketAddr,
     access_control: AccessControl,
-) -> Result<HttpServer, Box<dyn error::Error + Send + Sync>> {
+) -> Result<HttpRawServer, Box<dyn error::Error + Send + Sync>> {
     Ok(RawServer::new(
         HttpTransportServer::bind_with_acl(addr, access_control).await?,
     ))
 }
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
-pub fn http_client(addr: &str) -> HttpClient {
-    HttpTransportClient::new(addr)
+pub fn http_raw_client(addr: &str) -> HttpRawClient {
+    RawClient::new(HttpTransportClient::new(addr))
 }

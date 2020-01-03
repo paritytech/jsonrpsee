@@ -26,12 +26,12 @@
 
 #![cfg(test)]
 
-use crate::{common, local_raw, RawServer, RawServerEvent, TransportClient};
+use crate::{common, local_transport, RawServer, RawServerEvent, TransportClient};
 
 #[test]
 fn notifications_work() {
     let (mut client, mut server) = {
-        let (c, s) = local_raw();
+        let (c, s) = local_transport();
         (c, RawServer::new(s))
     };
 
@@ -73,7 +73,7 @@ fn notifications_work() {
 #[test]
 fn subscriptions_work() {
     let (mut client, mut server) = {
-        let (c, s) = local_raw();
+        let (c, s) = local_transport();
         (c, RawServer::new(s))
     };
 
