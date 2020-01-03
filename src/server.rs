@@ -274,6 +274,17 @@ impl RegisteredNotifications {
     }
 }
 
+/// Initializes a new server based upon this raw server.
+impl<R, I> From<RawServer<R, I>> for Server
+where
+    R: TransportServer<RequestId = I> + Send + Sync + 'static,
+    I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
+{
+    fn from(server: RawServer<R, I>) -> Server {
+        Server::new(server)
+    }
+}
+
 impl RegisteredMethod {
     /// Returns the next request.
     pub async fn next(&mut self) -> IncomingRequest {

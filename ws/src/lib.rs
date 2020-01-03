@@ -33,7 +33,7 @@
 
 use jsonrpsee_core::client::RawClient;
 
-pub use crate::client::{WsConnecError, WsNewError, WsTransportClient};
+pub use crate::client::{WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
 
 // TODO: server
 
@@ -43,6 +43,6 @@ pub type WsRawClient = RawClient<WsTransportClient>;
 mod client;
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
-pub async fn ws_raw_client(target: &str) -> Result<WsRawClient, client::WsNewDnsError> {
+pub async fn ws_raw_client(target: &str) -> Result<WsRawClient, WsNewDnsError> {
     WsTransportClient::new(target).await.map(RawClient::new)
 }
