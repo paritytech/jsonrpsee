@@ -300,55 +300,6 @@ where
         }
     }
 
-    /// Returns a `Future` that resolves when the server sends back a response for the given
-    /// request.
-    ///
-    /// Returns `None` if the request identifier is invalid, or if the request is a subscription.
-    ///
-    /// > **Note**: While this function is waiting, all the other responses and pubsub events
-    /// >           returned by the server will be buffered up to a certain limit. Once this
-    /// >           limit is reached, server notifications will be discarded. If you want to be
-    /// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
-    /// >           instead.
-    pub fn request_by_id<'a>(
-        &'a mut self,
-        rq_id: RawClientRequestId,
-    ) -> Option<impl Future<Output = Result<common::JsonValue, RawClientError<R::Error>>> + 'a>
-    {
-        // First, let's check whether the request ID is valid.
-        if let Some(rq) = self.requests.get(&rq_id) {
-            if *rq != Request::Request {
-                return None;
-            }
-        } else {
-            return None;
-        }
-
-        Some(async move {
-            let mut events_queue_loopkup = 0;
-
-            loop {
-                while events_queue_loopkup < self.events_queue.len() {
-                    match &self.events_queue[events_queue_loopkup] {
-                        RawClientEvent::Response { request_id, .. } if *request_id == rq_id => {
-                            return match self.events_queue.remove(events_queue_loopkup) {
-                                Some(RawClientEvent::Response { result, .. }) => {
-                                    result.map_err(RawClientError::RequestError)
-                                }
-                                _ => unreachable!(),
-                            }
-                        }
-                        _ => {}
-                    }
-
-                    events_queue_loopkup += 1;
-                }
-
-                self.event_step().await?;
-            }
-        })
-    }
-
     /// Returns a [`RawClientSubscription`] object representing a certain active or pending
     /// subscription.
     ///
@@ -567,92 +518,10 @@ where
     }
 }
 
-impl<'a, R> RawClientPendingSubscription<'a, R>
-where
-    R: TransportClient,
-{
-    // TODO: since this is the only method, maybe we could replace `RawClientPendingSubscription`
-    //       with an `impl Future` once the `impl Trait` feature is stabilized
-    /// Wait until the server sends back an answer to this subscription request.
-    ///
-    /// > **Note**: While this function is waiting, all the other responses and pubsub events
-    /// >           returned by the server will be buffered up to a certain limit. Once this
-    /// >           limit is reached, server notifications will be discarded. If you want to be
-    /// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
-    /// >           instead.
-    pub async fn wait(
-        self,
-    ) -> Result<RawClientActiveSubscription<'a, R>, RawClientError<R::Error>> {
-        let mut events_queue_loopkup = 0;
-
-        loop {
-            while events_queue_loopkup < self.client.events_queue.len() {
-                match &self.client.events_queue[events_queue_loopkup] {
-                    RawClientEvent::SubscriptionResponse { request_id, .. }
-                        if *request_id == self.id =>
-                    {
-                        return match self.client.events_queue.remove(events_queue_loopkup) {
-                            Some(RawClientEvent::SubscriptionResponse {
-                                result: Ok(()), ..
-                            }) => Ok(RawClientActiveSubscription {
-                                client: self.client,
-                                id: self.id,
-                            }),
-                            Some(RawClientEvent::SubscriptionResponse {
-                                result: Err(err), ..
-                            }) => Err(RawClientError::RequestError(err)),
-                            _ => unreachable!(),
-                        }
-                    }
-                    _ => {}
-                }
-
-                events_queue_loopkup += 1;
-            }
-
-            self.client.event_step().await?;
-        }
-    }
-}
-
 impl<'a, R> RawClientActiveSubscription<'a, R>
 where
     R: TransportClient,
 {
-    /// Returns a `Future` that resolves when the server sends back a notification for this
-    /// subscription.
-    ///
-    /// > **Note**: While this function is waiting, all the other responses and pubsub events
-    /// >           returned by the server will be buffered up to a certain limit. Once this
-    /// >           limit is reached, server notifications will be discarded. If you want to be
-    /// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
-    /// >           instead.
-    pub async fn next_notification(
-        &mut self,
-    ) -> Result<common::JsonValue, RawClientError<R::Error>> {
-        let mut events_queue_loopkup = 0;
-
-        loop {
-            while events_queue_loopkup < self.client.events_queue.len() {
-                match &self.client.events_queue[events_queue_loopkup] {
-                    RawClientEvent::SubscriptionNotif { request_id, .. }
-                        if *request_id == self.id =>
-                    {
-                        return match self.client.events_queue.remove(events_queue_loopkup) {
-                            Some(RawClientEvent::SubscriptionNotif { result, .. }) => Ok(result),
-                            _ => unreachable!(),
-                        }
-                    }
-                    _ => {}
-                }
-
-                events_queue_loopkup += 1;
-            }
-
-            self.client.event_step().await?;
-        }
-    }
-
     /// Returns `true` if we called [`close`](RawClientActiveSubscription::close) earlier on this
     /// subscription and we are waiting for the server to respond to our close request.
     pub fn is_closing(&self) -> bool {
