@@ -288,7 +288,37 @@ where
                 return Ok(event);
             }
 
-            self.event_step().await?;
+            let result = self
+                .inner
+                .next_response()
+                .await
+                .map_err(RawClientError::Inner)?;
+
+            match result {
+                common::Response::Single(rp) => self.process_response(rp)?,
+                common::Response::Batch(rps) => {
+                    for rp in rps {
+                        // TODO: if an errror happens, we throw away the entire batch
+                        self.process_response(rp)?;
+                    }
+                }
+                common::Response::Notif(notif) => {
+                    let sub_id = notif.params.subscription.into_string();
+                    if let Some(request_id) = self.subscriptions.get(&sub_id) {
+                        self.events_queue
+                            .push_back(RawClientEvent::SubscriptionNotif {
+                                request_id: *request_id,
+                                result: notif.params.result,
+                            });
+                    } else {
+                        log::warn!(
+                            "Server sent subscription notif with an invalid id: {:?}",
+                            sub_id
+                        );
+                        return Err(RawClientError::UnknownSubscriptionId);
+                    }
+                }
+            }
         }
     }
 
@@ -321,46 +351,6 @@ where
 
             _ => None,
         }
-    }
-
-    /// Waits for one server message and processes it by updating the state of `self`.
-    ///
-    /// Check the content of [`events_queue`](RawClient::events_queue) afterwards for events to
-    /// dispatch to the user.
-    async fn event_step(&mut self) -> Result<(), RawClientError<R::Error>> {
-        let result = self
-            .inner
-            .next_response()
-            .await
-            .map_err(RawClientError::Inner)?;
-
-        match result {
-            common::Response::Single(rp) => self.process_response(rp)?,
-            common::Response::Batch(rps) => {
-                for rp in rps {
-                    // TODO: if an errror happens, we throw away the entire batch
-                    self.process_response(rp)?;
-                }
-            }
-            common::Response::Notif(notif) => {
-                let sub_id = notif.params.subscription.into_string();
-                if let Some(request_id) = self.subscriptions.get(&sub_id) {
-                    self.events_queue
-                        .push_back(RawClientEvent::SubscriptionNotif {
-                            request_id: *request_id,
-                            result: notif.params.result,
-                        });
-                } else {
-                    log::warn!(
-                        "Server sent subscription notif with an invalid id: {:?}",
-                        sub_id
-                    );
-                    return Err(RawClientError::UnknownSubscriptionId);
-                }
-            }
-        }
-
-        Ok(())
     }
 
     /// Processes the response obtained from the server. Updates the internal state of `self` to
