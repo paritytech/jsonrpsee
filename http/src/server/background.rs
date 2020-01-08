@@ -81,7 +81,7 @@ impl BackgroundHttp {
         thread::Builder::new()
             .name("jsonrpsee-hyper-server".to_string())
             .spawn(move || {
-                let mut runtime = match tokio::runtime::current_thread::Runtime::new() {
+                let mut runtime = match tokio::runtime::Runtime::new() {
                     Ok(r) => r,
                     Err(err) => {
                         log::error!(
@@ -217,7 +217,7 @@ async fn body_to_request(mut body: hyper::Body) -> Result<common::Request, io::E
             Ok(c) => c,
             Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())), // TODO:
         };
-        json_body.extend_from_slice(&chunk.into_bytes());
+        json_body.extend_from_slice(&chunk);
         if json_body.len() >= 16384 {
             // TODO: some limit
             return Err(io::Error::new(io::ErrorKind::Other, "request too large"));
