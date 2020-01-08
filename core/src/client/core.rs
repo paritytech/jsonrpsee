@@ -60,13 +60,6 @@ pub struct RawClient<R> {
     /// Queue of pending events to return from [`RawClient::next_event`].
     // TODO: call shrink_to from time to time; see https://github.com/rust-lang/rust/issues/56431
     events_queue: VecDeque<RawClientEvent>,
-
-    /// Maximum allowed size of [`RawClient::events_queue`].
-    ///
-    /// If this size is reached, elements can still be pushed to the queue if they are critical,
-    /// but will be discarded if they are not.
-    // TODO: make this configurable? note: if this is configurable, it should always be >= 1
-    events_queue_max_size: usize,
 }
 
 /// Type of request that has been sent out and that is waiting for a response.
@@ -200,7 +193,6 @@ impl<R> RawClient<R> {
             requests: FnvHashMap::default(),
             subscriptions: HashMap::default(),
             events_queue: VecDeque::with_capacity(16),
-            events_queue_max_size: 64,
         }
     }
 }
@@ -333,9 +325,6 @@ where
 
     /// Waits for one server message and processes it by updating the state of `self`.
     ///
-    /// If the events queue is full (see [`RawClient::events_queue_max_size`]), then responses to
-    /// requests will still be pushed to the queue, but notifications will be discarded.
-    ///
     /// Check the content of [`events_queue`](RawClient::events_queue) afterwards for events to
     /// dispatch to the user.
     async fn event_step(&mut self) -> Result<(), RawClientError<R::Error>> {
@@ -356,13 +345,11 @@ where
             common::Response::Notif(notif) => {
                 let sub_id = notif.params.subscription.into_string();
                 if let Some(request_id) = self.subscriptions.get(&sub_id) {
-                    if self.events_queue.len() < self.events_queue_max_size {
-                        self.events_queue
-                            .push_back(RawClientEvent::SubscriptionNotif {
-                                request_id: *request_id,
-                                result: notif.params.result,
-                            });
-                    }
+                    self.events_queue
+                        .push_back(RawClientEvent::SubscriptionNotif {
+                            request_id: *request_id,
+                            result: notif.params.result,
+                        });
                 } else {
                     log::warn!(
                         "Server sent subscription notif with an invalid id: {:?}",
