@@ -185,7 +185,10 @@ mod tests {
         ]);
 
         let serialized = serde_json::to_string(&batch).unwrap();
-        assert_eq!(serialized, r#"[{"jsonrpc":"2.0","method":"update","params":[1,2],"id":1},{"jsonrpc":"2.0","method":"update","params":[1]}]"#);
+        assert_eq!(
+            serialized,
+            r#"[{"jsonrpc":"2.0","method":"update","params":[1,2],"id":1},{"jsonrpc":"2.0","method":"update","params":[1]}]"#
+        );
     }
 
     #[test]

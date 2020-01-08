@@ -16,15 +16,16 @@ members = [
 ]
 
 [dependencies]
+async-std = "0.99.11"
+futures-preview = "0.3.0-alpha.19"
+parking_lot = "0.9"
 jsonrpsee-core = { path = "core" }
 jsonrpsee-http = { path = "http", optional = true }
 jsonrpsee-proc-macros = { path = "proc-macros" }
 jsonrpsee-ws = { path = "ws", optional = true }
+thiserror = "1.0.9"
 
 [features]
 default = ["http", "ws"]
 http = ["jsonrpsee-http"]
 ws = ["jsonrpsee-ws"]
-
-[dev-dependencies]
-async-std = "0.99.11"

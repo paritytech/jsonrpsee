@@ -59,15 +59,15 @@
 //! # Clients
 //!
 //! In order to perform outgoing requests, you first have to create a
-//! [`Client`](core::client::Client). There exist several shortcuts such as the [`http_client`]
+//! [`RawClient`](core::client::RawClient). There exist several shortcuts such as the [`http_raw_client`]
 //! method.
 //!
 //! Once a client is created, you can use the
-//! [`start_request`](core::client::Client::start_request) method to perform requests.
+//! [`start_request`](core::client::RawClient::start_request) method to perform requests.
 //!
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
-//!     let mut client = jsonrpsee::http_client("http://localhost:8000");
+//!     let mut client = jsonrpsee::http_raw_client("http://localhost:8000");
 //!     let request_id = client.start_request("system_name", jsonrpsee::core::common::Params::None).await.unwrap();
 //!     jsonrpsee::core::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap()).unwrap()
 //! });
@@ -82,7 +82,7 @@
 //! # jsonrpsee::rpc_api! { System { fn system_name() -> String; } }
 //! # fn main() {
 //! let result = async_std::task::block_on(async {
-//!     let mut client = jsonrpsee::http_client("http://localhost:8000");
+//!     let mut client = jsonrpsee::http_raw_client("http://localhost:8000");
 //!     System::system_name(&mut client).await
 //! });
 //!
@@ -92,26 +92,26 @@
 //!
 //! # Servers
 //!
-//! In order to server JSON-RPC requests, you have to create a [`Server`](core::server::Server).
+//! In order to server JSON-RPC requests, you have to create a [`RawServer`](core::server::RawServer).
 //! Just like for the client, there exists shortcuts for creating a server.
 //!
-//! Once a server is created, use the [`next_event`](core::server::Server::next_event) asynchronous
+//! Once a server is created, use the [`next_event`](core::server::RawServer::next_event) asynchronous
 //! function to wait for a request to arrive. The generated
-//! [`ServerEvent`](core::server::ServerEvent) can be either a "notification", in other words a
+//! [`RawServerEvent`](core::server::RawServerEvent) can be either a "notification", in other words a
 //! message from the client that doesn't expect any answer, or a "request" which you should answer.
 //!
 //! ```no_run
 //! // Should run forever
 //! async_std::task::block_on(async {
-//!     let mut server = jsonrpsee::http_server(&"localhost:8000".parse().unwrap()).await.unwrap();
+//!     let mut server = jsonrpsee::http_raw_server(&"localhost:8000".parse().unwrap()).await.unwrap();
 //!     loop {
 //!         match server.next_event().await {
-//!             jsonrpsee::core::server::ServerEvent::Notification(notif) => {
+//!             jsonrpsee::core::server::RawServerEvent::Notification(notif) => {
 //!                 println!("received notification: {:?}", notif);
 //!             }
-//!             jsonrpsee::core::server::ServerEvent::SubscriptionsClosed(_) => {}
-//!             jsonrpsee::core::server::ServerEvent::SubscriptionsReady(_) => {}
-//!             jsonrpsee::core::server::ServerEvent::Request(rq) => {
+//!             jsonrpsee::core::server::RawServerEvent::SubscriptionsClosed(_) => {}
+//!             jsonrpsee::core::server::RawServerEvent::SubscriptionsReady(_) => {}
+//!             jsonrpsee::core::server::RawServerEvent::Request(rq) => {
 //!                 // Note that `rq` borrows `server`. If you want to store the request for later,
 //!                 // you should get its id by calling `let id = rq.id();`, then later call
 //!                 // `server.request_by_id(id)`.
@@ -130,7 +130,7 @@
 //! # fn main() {
 //! // Should run forever
 //! async_std::task::block_on(async {
-//!     let mut server = jsonrpsee::http_server(&"localhost:8000".parse().unwrap()).await.unwrap();
+//!     let mut server = jsonrpsee::http_raw_server(&"localhost:8000".parse().unwrap()).await.unwrap();
 //!     while let Ok(request) = System::next_request(&mut server).await {
 //!         match request {
 //!             System::SystemName { respond } => {
@@ -148,10 +148,10 @@
 #![warn(missing_docs)]
 
 #[cfg(feature = "http")]
-pub use jsonrpsee_http::{http_client, http_server};
+pub use jsonrpsee_http::{http_raw_client, http_raw_server};
 pub use jsonrpsee_proc_macros::rpc_api;
 #[cfg(feature = "ws")]
-pub use jsonrpsee_ws::ws_client;
+pub use jsonrpsee_ws::ws_raw_client;
 
 #[doc(inline)]
 pub use jsonrpsee_core as core;
@@ -162,16 +162,48 @@ pub use jsonrpsee_http as http;
 #[cfg(feature = "ws")]
 pub use jsonrpsee_ws as ws;
 
+pub use client::Client;
+pub use server::Server;
+
+use std::{error, net::SocketAddr};
+
+mod client;
+mod server;
+
 /// Builds a new client and a new server that are connected to each other.
-pub fn local() -> (
-    core::Client<core::local::LocalTransportClient>,
-    core::Server<
+pub fn local() -> (Client, Server) {
+    let (client, server) = local_raw();
+    let client = Client::from(client);
+    let server = Server::from(server);
+    (client, server)
+}
+
+/// Builds a new client and a new server that are connected to each other.
+pub fn local_raw() -> (
+    core::RawClient<core::local::LocalTransportClient>,
+    core::RawServer<
         core::local::LocalTransportServer,
         <core::local::LocalTransportServer as core::TransportServer>::RequestId,
     >,
 ) {
-    let (client, server) = core::local_raw();
-    let client = core::Client::new(client);
-    let server = core::Server::new(server);
+    let (client, server) = core::local_transport();
+    let client = core::RawClient::new(client);
+    let server = core::RawServer::new(server);
     (client, server)
+}
+
+/// Builds a new HTTP server.
+pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
+    jsonrpsee_http::http_raw_server(addr).await.map(From::from)
+}
+
+/// Builds a new HTTP client.
+pub fn http_client(addr: &str) -> Client {
+    Client::from(jsonrpsee_http::http_raw_client(addr))
+}
+
+/// Builds a new WebSockets client.
+#[cfg(feature = "ws")]
+pub async fn ws_client(target: &str) -> Result<Client, jsonrpsee_ws::WsNewDnsError> {
+    jsonrpsee_ws::ws_raw_client(target).await.map(From::from)
 }

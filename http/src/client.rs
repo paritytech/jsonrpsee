@@ -27,7 +27,7 @@
 use derive_more::*;
 use err_derive::*;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
-use jsonrpsee_core::{client::Client, client::TransportClient, common};
+use jsonrpsee_core::{client::RawClient, client::TransportClient, common};
 use std::{fmt, io, pin::Pin, thread};
 use hyper::body::{Bytes, to_bytes};
 
@@ -68,13 +68,7 @@ struct FrontToBack {
 impl HttpTransportClient {
     /// Initializes a new HTTP client.
     // TODO: better type for target
-    pub fn new(target: &str) -> Client<Self> {
-        Client::new(Self::new_raw(target))
-    }
-
-    /// Initializes a new HTTP client.
-    // TODO: better type for target
-    pub fn new_raw(target: &str) -> Self {
+    pub fn new(target: &str) -> Self {
         let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(4);
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.

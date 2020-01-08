@@ -32,8 +32,8 @@ jsonrpsee::rpc_api! {
     }
 }
 
-/* TODO: this doesn't work:
-    Test<B, T> {
-        fn foo(B) -> T;
+jsonrpsee::rpc_api! {
+    Test2<B, T> {
+        fn foo(b: B) -> T;
     }
-*/
+}

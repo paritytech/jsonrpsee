@@ -45,7 +45,7 @@ fn main() {
     // Spawning a server in a background task.
     async_std::task::spawn(async move {
         let listen_addr = "127.0.0.1:8000".parse().unwrap();
-        let mut server1 = jsonrpsee::http_server(&listen_addr).await.unwrap();
+        let mut server1 = jsonrpsee::http_raw_server(&listen_addr).await.unwrap();
 
         while let Ok(request) = Health::next_request(&mut server1).await {
             match request {
@@ -64,7 +64,7 @@ fn main() {
     });
 
     // Client demo.
-    let mut client = jsonrpsee::http_client("http://127.0.0.1:8000");
+    let mut client = jsonrpsee::http_raw_client("http://127.0.0.1:8000");
     let v = async_std::task::block_on(async {
         Health::test_notif(&mut client, "notif_string", 192)
             .await
