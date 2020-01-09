@@ -66,7 +66,7 @@ impl HttpTransportServer {
     pub async fn bind(
         addr: &SocketAddr,
     ) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
-        let (background_thread, local_addr) = background::BackgroundHttp::bind(addr)?;
+        let (background_thread, local_addr) = background::BackgroundHttp::bind(addr).await?;
 
         Ok(HttpTransportServer {
             background_thread,
@@ -82,7 +82,7 @@ impl HttpTransportServer {
         access_control: AccessControl,
     ) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
         let (background_thread, local_addr) =
-            background::BackgroundHttp::bind_with_acl(addr, access_control)?;
+            background::BackgroundHttp::bind_with_acl(addr, access_control).await?;
 
         Ok(HttpTransportServer {
             background_thread,

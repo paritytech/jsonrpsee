@@ -16,8 +16,8 @@ members = [
 ]
 
 [dependencies]
-async-std = "0.99.11"
-futures-preview = "0.3.0-alpha.19"
+async-std = "1.2.0"
+futures = "0.3.1"
 parking_lot = "0.9"
 jsonrpsee-core = { path = "core" }
 jsonrpsee-http = { path = "http", optional = true }
@@ -29,3 +29,6 @@ thiserror = "1.0.9"
 default = ["http", "ws"]
 http = ["jsonrpsee-http"]
 ws = ["jsonrpsee-ws"]
+
+[dev-dependencies]
+env_logger = "0.7.1"
