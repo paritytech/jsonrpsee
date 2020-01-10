@@ -167,7 +167,7 @@ pub use server::Server;
 
 use std::{error, net::SocketAddr};
 
-mod client;
+pub mod client;
 mod server;
 
 /// Builds a new client and a new server that are connected to each other.
