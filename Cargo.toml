@@ -32,3 +32,5 @@ ws = ["jsonrpsee-ws"]
 
 [dev-dependencies]
 env_logger = "0.7.1"
+serde = { version = "1.0.40", features = ["derive"] }
+
