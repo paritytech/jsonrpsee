@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use jsonrpsee::{client::Subscription, Client};
 jsonrpsee::rpc_api! {
     System {
         /// Get the node's implementation name. Plain old string.
@@ -35,19 +36,29 @@ jsonrpsee::rpc_api! {
     }
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct Header {
+    number: String,
+}
+
 fn main() {
     async_std::task::block_on(async move {
-        let mut client = jsonrpsee::ws_raw_client("127.0.0.1:9944").await.unwrap();
-        let v = System::system_name(&mut client).await.unwrap();
+        let mut raw_client = jsonrpsee::ws_raw_client("127.0.0.1:9944").await.unwrap();
+        let v = System::system_name(&mut raw_client).await.unwrap();
         println!("{:?}", v);
 
-        let _ = client
-            .start_subscription(
+        let client: Client = raw_client.into();
+
+        let mut sub: Subscription<Header> = client
+            .subscribe(
                 "chain_subscribeNewHeads",
                 jsonrpsee::core::common::Params::None,
+                "chain_unsubscribeNewHeads",
             )
-            .await;
-        while let ev = client.next_event().await {
+            .await
+            .unwrap();
+
+        while let ev = sub.next().await {
             println!("ev: {:?}", ev);
         }
     });
