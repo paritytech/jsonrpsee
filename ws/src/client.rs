@@ -224,10 +224,12 @@ impl<'a> WsTransportClientBuilder<'a> {
                     // TODO: construct Either a TLS or Plain socket
                     let connector = async_tls::TlsConnector::default();
                     let host = self.host.split(':').next().unwrap();
-                    let dns_name = webpki::DNSNameRef::try_from_ascii_str(host).unwrap().to_owned();
+                    let dns_name = webpki::DNSNameRef::try_from_ascii_str(host)
+                        .unwrap()
+                        .to_owned();
                     println!("dns_name {:?}", dns_name);
                     connector.connect(&dns_name, socket?)?.await?
-                },
+                }
                 future::Either::Right((_, _)) => return Err(WsNewError::Timeout),
             }
         };
