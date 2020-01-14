@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 async-std = "1.2.0"
+async-tls = "0.6"
 bytes = "0.4"
 err-derive = "0.1.5"
 fnv = "1.0"
@@ -19,4 +20,4 @@ log = "0.4"
 pin-utils = "0.1.0-alpha.4"
 serde = { version = "1.0.40", features = ["derive"] }
 serde_json = "1.0.40"
-soketto = { git = "https://github.com/paritytech/soketto", rev = "a09bfb69af5650f9294e0e21bdda707e7d124b2c" }
+soketto = "0.3.1"

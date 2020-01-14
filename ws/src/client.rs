@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use async_std::net::{TcpStream, ToSocketAddrs};
+use async_tls::client::TlsStream;
 use err_derive::*;
 use futures::prelude::*;
 use jsonrpsee_core::{client::TransportClient, common};
@@ -35,9 +36,9 @@ use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
 /// Implementation of a raw client for WebSockets requests.
 pub struct WsTransportClient {
     /// Sending half of a TCP/IP connection wrapped around a WebSocket encoder.
-    sender: connection::Sender<TcpStream>,
+    sender: connection::Sender<TlsStream<TcpStream>>,
     /// Receiving half of a TCP/IP connection wrapped around a WebSocket decoder.
-    receiver: connection::Receiver<TcpStream>,
+    receiver: connection::Receiver<TlsStream<TcpStream>>,
 }
 
 /// Builder for a [`WsTransportClient`].
@@ -219,7 +220,10 @@ impl<'a> WsTransportClientBuilder<'a> {
             let timeout = async_std::task::sleep(self.timeout);
             pin_utils::pin_mut!(timeout);
             match future::select(socket, timeout).await {
-                future::Either::Left((socket, _)) => socket?,
+                future::Either::Left((socket, _)) => {
+                    let connector = async_tls::TlsConnector::default();
+                    connector.connect(&self.host, socket?)?.await?
+                },
                 future::Either::Right((_, _)) => return Err(WsNewError::Timeout),
             }
         };
