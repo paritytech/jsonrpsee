@@ -248,8 +248,8 @@ impl<'a> WsTransportClientBuilder<'a> {
             pin_utils::pin_mut!(timeout);
             match future::select(socket, timeout).await {
                 future::Either::Left((socket, _)) => match self.mode {
-                    Plain => TlsOrPlain::Plain(socket?),
-                    Tls => {
+                    Mode::Plain => TlsOrPlain::Plain(socket?),
+                    Mode::Tls => {
                         let connector = async_tls::TlsConnector::default();
                         let host = self.host.split(':').next().unwrap();
                         let dns_name = webpki::DNSNameRef::try_from_ascii_str(host)
