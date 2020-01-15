@@ -43,7 +43,7 @@ struct Header {
 
 fn main() {
     async_std::task::block_on(async move {
-//        let mut raw_client = jsonrpsee::ws_raw_client("ws://127.0.0.1:9944")
+        //        let mut raw_client = jsonrpsee::ws_raw_client("ws://127.0.0.1:9944")
         let mut raw_client = jsonrpsee::ws_raw_client("wss://kusama-rpc.polkadot.io:443")
             .await
             .unwrap();
