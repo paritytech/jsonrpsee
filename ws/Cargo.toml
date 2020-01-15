@@ -23,3 +23,4 @@ soketto = "0.3.1"
 # todo: add TLS feature for these?
 webpki = "0.21"
 async-tls = "0.6"
+pin-project = "0.4.6"

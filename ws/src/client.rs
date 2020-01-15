@@ -33,12 +33,14 @@ use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
 
+type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
+
 /// Implementation of a raw client for WebSockets requests.
 pub struct WsTransportClient {
     /// Sending half of a TCP/IP connection wrapped around a WebSocket encoder.
-    sender: connection::Sender<TlsStream<TcpStream>>,
+    sender: connection::Sender<TlsOrPlain>,
     /// Receiving half of a TCP/IP connection wrapped around a WebSocket decoder.
-    receiver: connection::Receiver<TlsStream<TcpStream>>,
+    receiver: connection::Receiver<TlsOrPlain>,
 }
 
 /// Builder for a [`WsTransportClient`].
@@ -47,6 +49,8 @@ pub struct WsTransportClientBuilder<'a> {
     target: SocketAddr,
     /// Host to send during the HTTP handshake.
     host: Cow<'a, str>,
+    /// Stream mode, either plain TCP or TLS.
+    mode: Mode,
     /// Url to send during the HTTP handshake.
     url: Cow<'a, str>,
     /// Timeout for the connection.
@@ -54,6 +58,15 @@ pub struct WsTransportClientBuilder<'a> {
     /// `Origin` header to pass during the HTTP handshake. If `None`, no
     /// `Origin` header is passed.
     origin: Option<Cow<'a, str>>,
+}
+
+/// Stream mode, either plain TCP or TLS.
+#[derive(Clone, Copy, Debug)]
+pub enum Mode {
+    /// Plain mode (`ws://` URL).
+    Plain,
+    /// TLS mode (`wss://` URL).
+    Tls,
 }
 
 /// Error that can happen during the initial handshake.
@@ -120,10 +133,12 @@ impl WsTransportClient {
     pub fn builder<'a>(
         target: SocketAddr,
         host: impl Into<Cow<'a, str>>,
+        mode: Mode,
     ) -> WsTransportClientBuilder<'a> {
         WsTransportClientBuilder {
             target,
             host: host.into(),
+            mode,
             url: From::from("/"),
             timeout: Duration::from_secs(10),
             origin: None,
@@ -133,13 +148,14 @@ impl WsTransportClient {
     /// Initializes a new HTTP client from a URL.
     pub async fn new(target: &str) -> Result<Self, WsNewDnsError> {
         let mut error = None;
+        let mode = Mode::Tls; // TODO parse protocol from url?
 
         for url in target
             .to_socket_addrs()
             .await
             .map_err(WsNewDnsError::ResolutionFailed)?
         {
-            match Self::builder(url, target).build().await {
+            match Self::builder(url, target, mode).build().await {
                 Ok(ws_raw_client) => return Ok(ws_raw_client),
                 Err(err) => error = Some(err),
             }
@@ -211,6 +227,14 @@ impl<'a> WsTransportClientBuilder<'a> {
         self
     }
 
+    /// Sets the stream mode to use
+    ///
+    /// Either plain TCP (unencrypted) or TLS (encrypted).
+    pub fn with_mode(mut self, mode: Mode) -> Self {
+        self.mode = mode;
+        self
+    }
+
     /// Try establish the connection.
     pub async fn build(self) -> Result<WsTransportClient, WsNewError> {
         // Try establish the TCP connection.
@@ -220,16 +244,19 @@ impl<'a> WsTransportClientBuilder<'a> {
             let timeout = async_std::task::sleep(self.timeout);
             pin_utils::pin_mut!(timeout);
             match future::select(socket, timeout).await {
-                future::Either::Left((socket, _)) => {
-                    // TODO: construct Either a TLS or Plain socket
-                    let connector = async_tls::TlsConnector::default();
-                    let host = self.host.split(':').next().unwrap();
-                    let dns_name = webpki::DNSNameRef::try_from_ascii_str(host)
-                        .unwrap()
-                        .to_owned();
-                    println!("dns_name {:?}", dns_name);
-                    connector.connect(&dns_name, socket?)?.await?
-                }
+                future::Either::Left((socket, _)) => match self.mode {
+                    Plain => TlsOrPlain::Plain(socket?),
+                    Tls => {
+                        let connector = async_tls::TlsConnector::default();
+                        let host = self.host.split(':').next().unwrap();
+                        let dns_name = webpki::DNSNameRef::try_from_ascii_str(host)
+                            .unwrap()
+                            .to_owned();
+                        println!("dns_name {:?}", dns_name);
+                        let tls_stream = connector.connect(&dns_name, socket?)?.await?;
+                        TlsOrPlain::Tls(tls_stream)
+                    }
+                },
                 future::Either::Right((_, _)) => return Err(WsNewError::Timeout),
             }
         };
