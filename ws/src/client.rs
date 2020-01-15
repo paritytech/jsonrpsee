@@ -95,6 +95,10 @@ pub enum WsNewError {
 /// Error that can happen during the initial handshake.
 #[derive(Debug, Error)]
 pub enum WsNewDnsError {
+    /// Invalid URL.
+    #[error(display = "Invalid url: {}", 0)]
+    Url(Cow<'static, str>),
+
     /// Error when trying to connect.
     ///
     /// If multiple IP addresses are attempted, only the last error is returned, similar to how
@@ -146,9 +150,8 @@ impl WsTransportClient {
     }
 
     /// Initializes a new HTTP client from a URL.
-    pub async fn new(target: &str) -> Result<Self, WsNewDnsError> {
+    pub async fn new(target: &str, mode: Mode) -> Result<Self, WsNewDnsError> {
         let mut error = None;
-        let mode = Mode::Tls; // TODO parse protocol from url?
 
         for url in target
             .to_socket_addrs()

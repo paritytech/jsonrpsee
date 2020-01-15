@@ -33,7 +33,7 @@
 
 use jsonrpsee_core::client::RawClient;
 
-pub use crate::client::{WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
+pub use crate::client::{Mode, WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
 
 // TODO: server
 
@@ -45,5 +45,18 @@ mod stream;
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
 pub async fn ws_raw_client(target: &str) -> Result<WsRawClient, WsNewDnsError> {
-    WsTransportClient::new(target).await.map(RawClient::new)
+    let url = url::Url::parse(target)
+        .map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
+    let mode =
+        match url.scheme() {
+            "ws" => Mode::Plain,
+            "wss" => Mode::Tls,
+            _ => return Err(WsNewDnsError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
+        };
+    let host = url.host_str().ok_or(WsNewDnsError::Url("No host in URL".into()))?;
+    let target = match url.port_or_known_default() {
+        Some(port) => format!("{}:{}", host, port),
+        None => host.to_string(),
+    };
+    WsTransportClient::new(&target, mode).await.map(RawClient::new)
 }
