@@ -31,7 +31,7 @@ use futures::{
     prelude::*,
 };
 use pin_project::{pin_project, project};
-use std::{fmt, io::Error as IoError, pin::Pin, task::Context, task::Poll};
+use std::{io::Error as IoError, pin::Pin, task::Context, task::Poll};
 
 #[pin_project]
 #[derive(Debug, Copy, Clone)]
