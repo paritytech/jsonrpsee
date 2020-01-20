@@ -400,9 +400,7 @@ where
             }
 
             // Request for the server to unsubscribe us has succeeded.
-            Either::Right(Ok(RawClientEvent::Unsubscribed { request_id })) => {
-                active_subscriptions.remove(&request_id).unwrap();
-            }
+            Either::Right(Ok(RawClientEvent::Unsubscribed { request_id: _ })) => {}
 
             Either::Right(Err(_)) => {} // TODO: https://github.com/paritytech/jsonrpsee/issues/67
         }
