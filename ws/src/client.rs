@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use async_std::net::{TcpStream, ToSocketAddrs};
+use async_tls::client::TlsStream;
 use err_derive::*;
 use futures::prelude::*;
 use jsonrpsee_core::{client::TransportClient, common};
@@ -32,20 +33,26 @@ use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
 
+type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
+
 /// Implementation of a raw client for WebSockets requests.
 pub struct WsTransportClient {
     /// Sending half of a TCP/IP connection wrapped around a WebSocket encoder.
-    sender: connection::Sender<TcpStream>,
+    sender: connection::Sender<TlsOrPlain>,
     /// Receiving half of a TCP/IP connection wrapped around a WebSocket decoder.
-    receiver: connection::Receiver<TcpStream>,
+    receiver: connection::Receiver<TlsOrPlain>,
 }
 
 /// Builder for a [`WsTransportClient`].
 pub struct WsTransportClientBuilder<'a> {
     /// IP address to try to connect to.
     target: SocketAddr,
-    /// Host to send during the HTTP handshake.
+    /// Host to send during the WS handshake.
     host: Cow<'a, str>,
+    /// DNS host name.
+    dns_name: Cow<'a, str>,
+    /// Stream mode, either plain TCP or TLS.
+    mode: Mode,
     /// Url to send during the HTTP handshake.
     url: Cow<'a, str>,
     /// Timeout for the connection.
@@ -53,6 +60,15 @@ pub struct WsTransportClientBuilder<'a> {
     /// `Origin` header to pass during the HTTP handshake. If `None`, no
     /// `Origin` header is passed.
     origin: Option<Cow<'a, str>>,
+}
+
+/// Stream mode, either plain TCP or TLS.
+#[derive(Clone, Copy, Debug)]
+pub enum Mode {
+    /// Plain mode (`ws://` URL).
+    Plain,
+    /// TLS mode (`wss://` URL).
+    Tls,
 }
 
 /// Error that can happen during the initial handshake.
@@ -65,6 +81,10 @@ pub enum WsNewError {
     /// Error in the WebSocket handshake.
     #[error(display = "Error in the WebSocket handshake: {}", 0)]
     Handshake(#[error(cause)] soketto::handshake::Error),
+
+    /// Invalid DNS name error for TLS
+    #[error(display = "Invalid DNS name: {}", 0)]
+    InvalidDNSName(#[error(cause)] webpki::InvalidDNSNameError),
 
     /// RawServer rejected our handshake.
     #[error(display = "Server returned an error status code: {}", status_code)]
@@ -81,6 +101,10 @@ pub enum WsNewError {
 /// Error that can happen during the initial handshake.
 #[derive(Debug, Error)]
 pub enum WsNewDnsError {
+    /// Invalid URL.
+    #[error(display = "Invalid url: {}", 0)]
+    Url(Cow<'static, str>),
+
     /// Error when trying to connect.
     ///
     /// If multiple IP addresses are attempted, only the last error is returned, similar to how
@@ -119,18 +143,41 @@ impl WsTransportClient {
     pub fn builder<'a>(
         target: SocketAddr,
         host: impl Into<Cow<'a, str>>,
+        dns_name: impl Into<Cow<'a, str>>,
+        mode: Mode,
     ) -> WsTransportClientBuilder<'a> {
         WsTransportClientBuilder {
             target,
             host: host.into(),
+            dns_name: dns_name.into(),
+            mode,
             url: From::from("/"),
             timeout: Duration::from_secs(10),
             origin: None,
         }
     }
 
-    /// Initializes a new HTTP client from a URL.
+    /// Initializes a new WS client from a URL.
     pub async fn new(target: &str) -> Result<Self, WsNewDnsError> {
+        let url = url::Url::parse(target)
+            .map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
+        let mode = match url.scheme() {
+            "ws" => Mode::Plain,
+            "wss" => Mode::Tls,
+            _ => {
+                return Err(WsNewDnsError::Url(
+                    "URL scheme not supported, expects 'ws' or 'wss'".into(),
+                ))
+            }
+        };
+        let host = url
+            .host_str()
+            .ok_or(WsNewDnsError::Url("No host in URL".into()))?;
+        let target = match url.port_or_known_default() {
+            Some(port) => format!("{}:{}", host, port),
+            None => host.to_string(),
+        };
+
         let mut error = None;
 
         for url in target
@@ -138,7 +185,7 @@ impl WsTransportClient {
             .await
             .map_err(WsNewDnsError::ResolutionFailed)?
         {
-            match Self::builder(url, target).build().await {
+            match Self::builder(url, &target, host, mode).build().await {
                 Ok(ws_raw_client) => return Ok(ws_raw_client),
                 Err(err) => error = Some(err),
             }
@@ -219,7 +266,15 @@ impl<'a> WsTransportClientBuilder<'a> {
             let timeout = async_std::task::sleep(self.timeout);
             pin_utils::pin_mut!(timeout);
             match future::select(socket, timeout).await {
-                future::Either::Left((socket, _)) => socket?,
+                future::Either::Left((socket, _)) => match self.mode {
+                    Mode::Plain => TlsOrPlain::Plain(socket?),
+                    Mode::Tls => {
+                        let connector = async_tls::TlsConnector::default();
+                        let dns_name = webpki::DNSNameRef::try_from_ascii_str(&self.dns_name)?;
+                        let tls_stream = connector.connect(&dns_name.to_owned(), socket?)?.await?;
+                        TlsOrPlain::Tls(tls_stream)
+                    }
+                },
                 future::Either::Right((_, _)) => return Err(WsNewError::Timeout),
             }
         };
@@ -249,6 +304,12 @@ impl<'a> WsTransportClientBuilder<'a> {
 impl From<io::Error> for WsNewError {
     fn from(err: io::Error) -> WsNewError {
         WsNewError::Io(err)
+    }
+}
+
+impl From<webpki::InvalidDNSNameError> for WsNewError {
+    fn from(err: webpki::InvalidDNSNameError) -> WsNewError {
+        WsNewError::InvalidDNSName(err)
     }
 }
 
