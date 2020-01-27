@@ -402,7 +402,10 @@ where
             // Request for the server to unsubscribe us has succeeded.
             Either::Right(Ok(RawClientEvent::Unsubscribed { request_id: _ })) => {}
 
-            Either::Right(Err(_)) => {} // TODO: https://github.com/paritytech/jsonrpsee/issues/67
+            Either::Right(Err(e)) => {
+                // TODO: https://github.com/paritytech/jsonrpsee/issues/67
+                log::error!("Client Error: {:?}", e);
+            }
         }
     }
 }
