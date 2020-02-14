@@ -531,6 +531,7 @@ impl fmt::Display for IntoSubscriptionErr {
 }
 
 #[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 impl std::error::Error for IntoSubscriptionErr {}
 
 impl Iterator for SubscriptionsReadyIter {
