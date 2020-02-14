@@ -26,7 +26,11 @@
 
 use super::JsonValue;
 
-use alloc::{borrow::ToOwned as _, format, string::{String, ToString as _}};
+use alloc::{
+    borrow::ToOwned as _,
+    format,
+    string::{String, ToString as _},
+};
 use core::fmt;
 use serde::de::Deserializer;
 use serde::ser::Serializer;

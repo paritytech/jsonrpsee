@@ -523,8 +523,9 @@ where
 impl fmt::Display for IntoSubscriptionErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            IntoSubscriptionErr::NotSupported =>
-                write!(f, "Underlying server doesn't support subscriptions"),
+            IntoSubscriptionErr::NotSupported => {
+                write!(f, "Underlying server doesn't support subscriptions")
+            }
             IntoSubscriptionErr::Closed => write!(f, "Request is already closed"),
         }
     }
