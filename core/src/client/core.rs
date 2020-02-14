@@ -25,12 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{client::raw::TransportClient, common};
-use fnv::FnvHashMap;
-use std::{
-    collections::{hash_map::Entry, HashMap, VecDeque},
-    error, fmt,
-    future::Future,
-};
+
+use alloc::{collections::VecDeque, string::String, vec};
+use core::{fmt, future::Future};
+use hashbrown::{hash_map::Entry, HashMap};
 
 /// Wraps around a [`TransportClient`](crate::TransportClient) and analyzes everything correctly.
 ///
@@ -44,7 +42,7 @@ pub struct RawClient<R> {
 
     /// List of requests and subscription requests that have been sent out and that are waiting
     /// for a response.
-    requests: FnvHashMap<RawClientRequestId, Request>,
+    requests: HashMap<RawClientRequestId, Request, fnv::FnvBuildHasher>,
 
     /// List of active subscriptions by ID (ID is chosen by the server). Note that this doesn't
     /// cover subscription requests that have been sent out but not answered yet, as these are in
@@ -197,7 +195,7 @@ impl<R> RawClient<R> {
         RawClient {
             inner,
             next_request_id: RawClientRequestId(0),
-            requests: FnvHashMap::default(),
+            requests: HashMap::default(),
             subscriptions: HashMap::default(),
             events_queue: VecDeque::with_capacity(16),
             events_queue_max_size: 64,
@@ -700,11 +698,13 @@ where
     }
 }
 
-impl<E> error::Error for RawClientError<E>
+#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+impl<E> std::error::Error for RawClientError<E>
 where
-    E: error::Error + 'static,
+    E: std::error::Error + 'static,
 {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             RawClientError::Inner(ref err) => Some(err),
             RawClientError::RequestError(ref err) => Some(err),
@@ -741,11 +741,13 @@ where
     }
 }
 
-impl<E> error::Error for CloseError<E>
+#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+impl<E> std::error::Error for CloseError<E>
 where
-    E: error::Error + 'static,
+    E: std::error::Error + 'static,
 {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             CloseError::TransportClient(err) => Some(err),
             CloseError::AlreadyClosing => None,

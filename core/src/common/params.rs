@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use alloc::{string::String, format, vec::Vec};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json;

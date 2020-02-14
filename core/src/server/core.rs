@@ -28,11 +28,10 @@ use crate::common::{self, JsonValue};
 use crate::server::{
     batches, raw::TransportServer, raw::TransportServerEvent, Notification, Params,
 };
-use err_derive::*;
-use fnv::FnvHashMap;
-use std::{
-    collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize, vec,
-};
+
+use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
+use core::{fmt, hash::Hash, num::NonZeroUsize};
+use hashbrown::{hash_map::Entry, HashMap};
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
@@ -50,7 +49,7 @@ pub struct RawServer<R, I> {
     /// List of active subscriptions.
     /// The identifier is chosen randomly and uniformy distributed. It is never decided by the
     /// client. There is therefore no risk of hash collision attack.
-    subscriptions: FnvHashMap<[u8; 32], SubscriptionState<I>>,
+    subscriptions: HashMap<[u8; 32], SubscriptionState<I>, fnv::FnvBuildHasher>,
 
     /// For each raw request ID (i.e. client connection), the number of active subscriptions
     /// that are using it.
@@ -101,7 +100,7 @@ pub struct RawServerRequest<'a, R, I> {
     raw: &'a mut R,
 
     /// Reference to the corresponding field in `RawServer`.
-    subscriptions: &'a mut FnvHashMap<[u8; 32], SubscriptionState<I>>,
+    subscriptions: &'a mut HashMap<[u8; 32], SubscriptionState<I>, fnv::FnvBuildHasher>,
 
     /// Reference to the corresponding field in `RawServer`.
     num_subscriptions: &'a mut HashMap<I, NonZeroUsize>,
@@ -117,13 +116,11 @@ pub struct ServerSubscription<'a, R, I> {
 }
 
 /// Error that can happen when calling `into_subscription`.
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum IntoSubscriptionErr {
     /// Underlying server doesn't support subscriptions.
-    #[error(display = "Underlying server doesn't support subscriptions")]
     NotSupported,
     /// Request has already been closed by the client.
-    #[error(display = "Request is already closed")]
     Closed,
 }
 
@@ -522,6 +519,19 @@ where
         }
     }
 }
+
+impl fmt::Display for IntoSubscriptionErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            IntoSubscriptionErr::NotSupported =>
+                write!(f, "Underlying server doesn't support subscriptions"),
+            IntoSubscriptionErr::Closed => write!(f, "Request is already closed"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for IntoSubscriptionErr {}
 
 impl Iterator for SubscriptionsReadyIter {
     type Item = RawServerSubscriptionId;

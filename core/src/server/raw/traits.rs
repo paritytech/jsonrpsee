@@ -25,8 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
+
+use alloc::boxed::Box;
+use core::{hash::Hash, pin::Pin};
 use futures::prelude::*;
-use std::{hash::Hash, pin::Pin};
 
 /// Reference to a server that can produce JSON payloads for us to answer.
 ///

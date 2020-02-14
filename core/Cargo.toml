@@ -6,16 +6,20 @@ authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
 edition = "2018"
 
+[features]
+default = ["std"]
+std = ["futures/std"]
+
 [dependencies]
 bs58 = "0.3.0"
-err-derive = "0.1.5"
 fnv = "1.0"
-futures = "0.3.1"
+futures = { version = "0.3.4", default-features = false, features = ["async-await"] }
+hashbrown = "0.7.0"
 log = "0.4"
 rand = "0.7"
-serde = { version = "1.0.40", features = ["derive"] }
-serde_json = "1.0.40"
-smallvec = "0.6.10"
+serde = { version = "1.0.101", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0.48", default-features = false, features = ["alloc"] }
+smallvec = { version = "1.2.0", default-features = false }
 
 [dev-dependencies]
 async-std = "1.2.0"

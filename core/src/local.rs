@@ -60,11 +60,14 @@
 //! ```
 //!
 
+#![cfg(feature = "std")]
+#![cfg_attr(docsrs, doc(cfg(feature = "std")))]
+
 use crate::{common, TransportClient, TransportServer, TransportServerEvent};
-use err_derive::*;
+
+use core::{fmt, pin::Pin};
 use fnv::FnvHashSet;
 use futures::{channel::mpsc, prelude::*};
-use std::{fmt, pin::Pin};
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local_transport() -> (LocalTransportClient, LocalTransportServer) {
@@ -107,10 +110,9 @@ pub struct LocalTransportServer {
 }
 
 /// Error that can happen on the client side.
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum LocalTransportClientErr {
     /// The [`LocalTransportServer`] no longer exists.
-    #[error(display = "Server has been closed")]
     ServerClosed,
 }
 
@@ -224,5 +226,13 @@ impl TransportServer for LocalTransportServer {
 impl fmt::Debug for LocalTransportServer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("LocalTransportServer").finish()
+    }
+}
+
+impl fmt::Display for LocalTransportClientErr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            LocalTransportClientErr::ServerClosed => write!(f, "Server has been closed"),
+        }
     }
 }

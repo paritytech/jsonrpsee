@@ -25,10 +25,12 @@
 // DEALINGS IN THE SOFTWARE.
 
 use super::JsonValue;
+
+use alloc::{borrow::ToOwned as _, format, string::{String, ToString as _}};
+use core::fmt;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// JSONRPC error code
 #[derive(Debug, PartialEq, Clone)]
@@ -191,10 +193,11 @@ impl From<ErrorCode> for Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}: {}", self.code.description(), self.message)
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {}
