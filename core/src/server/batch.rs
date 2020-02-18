@@ -195,7 +195,7 @@ impl BatchState {
         }
 
         let raw_response = if self.is_batch {
-            let list: Vec<_> = self.responses.drain().collect();
+            let list: Vec<_> = self.responses.drain(..).collect();
             if list.is_empty() {
                 None
             } else {

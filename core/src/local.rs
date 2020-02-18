@@ -61,10 +61,10 @@
 //!
 
 use crate::{common, TransportClient, TransportServer, TransportServerEvent};
-use err_derive::*;
 use fnv::FnvHashSet;
 use futures::{channel::mpsc, prelude::*};
 use std::{fmt, pin::Pin};
+use thiserror::Error;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local_transport() -> (LocalTransportClient, LocalTransportServer) {
@@ -110,7 +110,7 @@ pub struct LocalTransportServer {
 #[derive(Debug, Error)]
 pub enum LocalTransportClientErr {
     /// The [`LocalTransportServer`] no longer exists.
-    #[error(display = "Server has been closed")]
+    #[error("Server has been closed")]
     ServerClosed,
 }
 
