@@ -68,6 +68,7 @@ use crate::{common, TransportClient, TransportServer, TransportServerEvent};
 use core::{fmt, pin::Pin};
 use fnv::FnvHashSet;
 use futures::{channel::mpsc, prelude::*};
+use std::error;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local_transport() -> (LocalTransportClient, LocalTransportServer) {
@@ -227,6 +228,9 @@ impl fmt::Debug for LocalTransportServer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("LocalTransportServer").finish()
     }
+}
+
+impl error::Error for LocalTransportClientErr {
 }
 
 impl fmt::Display for LocalTransportClientErr {
