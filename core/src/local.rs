@@ -230,8 +230,7 @@ impl fmt::Debug for LocalTransportServer {
     }
 }
 
-impl error::Error for LocalTransportClientErr {
-}
+impl error::Error for LocalTransportClientErr {}
 
 impl fmt::Display for LocalTransportClientErr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
