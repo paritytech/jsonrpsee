@@ -25,6 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use super::{Id, Params, Version};
+
+use alloc::{string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 
 /// Represents jsonrpc request which is a method call.

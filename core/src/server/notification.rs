@@ -26,7 +26,7 @@
 
 use crate::common;
 use crate::server::Params;
-use std::fmt;
+use core::fmt;
 
 /// Notification received on a server.
 ///

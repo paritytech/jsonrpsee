@@ -121,7 +121,7 @@ impl Client {
     pub fn new<R>(client: RawClient<R>) -> Client
     where
         R: TransportClient + Send + 'static,
-        R::Error: Send + Sync,
+        R::Error: error::Error + Send + Sync,
     {
         let (to_back, from_front) = mpsc::channel(16);
         async_std::task::spawn(async move {
@@ -222,7 +222,7 @@ impl Client {
 impl<R> From<RawClient<R>> for Client
 where
     R: TransportClient + Send + 'static,
-    R::Error: Send + Sync,
+    R::Error: error::Error + Send + Sync,
 {
     fn from(client: RawClient<R>) -> Client {
         Client::new(client)
@@ -264,7 +264,7 @@ impl<Notif> Drop for Subscription<Notif> {
 async fn background_task<R>(mut client: RawClient<R>, mut from_front: mpsc::Receiver<FrontToBack>)
 where
     R: TransportClient + Send + 'static,
-    R::Error: Send + Sync,
+    R::Error: error::Error + Send + Sync,
 {
     // List of subscription requests that have been sent to the server, with the method name to
     // unsubscribe.

@@ -25,7 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
-use std::fmt;
+
+use alloc::string::String;
+use core::fmt;
 
 /// Access to the parameters of a request.
 #[derive(Copy, Clone)]

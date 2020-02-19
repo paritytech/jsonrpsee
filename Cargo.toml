@@ -20,7 +20,7 @@ async-std = "1.2.0"
 futures = "0.3.1"
 log = "0.4"
 parking_lot = "0.10"
-jsonrpsee-core = { path = "core" }
+jsonrpsee-core = { path = "core", default-features = false, features = ["std"] }
 jsonrpsee-http = { path = "http", optional = true }
 jsonrpsee-proc-macros = { path = "proc-macros" }
 jsonrpsee-ws = { path = "ws", optional = true }

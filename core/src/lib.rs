@@ -48,9 +48,14 @@
 #![deny(unsafe_code)]
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
 
 pub use crate::client::raw::TransportClient;
 pub use crate::client::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
+#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 pub use crate::local::local_transport;
 pub use crate::server::raw::{TransportServer, TransportServerEvent};
 pub use crate::server::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};

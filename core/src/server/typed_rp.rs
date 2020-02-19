@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::{raw::TransportServer, RawServerRequest};
-use std::{hash::Hash, marker::PhantomData};
+use core::{hash::Hash, marker::PhantomData};
 
 /// Allows responding to a server request in a more elegant and strongly-typed fashion.
 pub struct TypedResponder<'a, R, I, T> {

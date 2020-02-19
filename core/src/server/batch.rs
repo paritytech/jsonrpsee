@@ -25,8 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{common, server::Notification, server::Params};
+
+use alloc::vec::Vec;
+use core::{fmt, iter};
 use smallvec::SmallVec;
-use std::{fmt, iter};
 
 /// Batch corresponding to a request from a [`TransportServer`](crate::TransportServer).
 ///
