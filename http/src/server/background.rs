@@ -167,7 +167,7 @@ async fn process_request(
             let json_body = match body_to_request(request.into_body()).await {
                 Ok(b) => b,
                 Err(_) => {
-                    unimplemented!()        // TODO:
+                    unimplemented!() // TODO:
                 }
             };
 
@@ -181,7 +181,9 @@ async fn process_request(
             }
             match rx.await {
                 Ok(response) => response,
-                Err(_) => return response::internal_error("JSON request send back channel has shut down"),
+                Err(_) => {
+                    return response::internal_error("JSON request send back channel has shut down")
+                }
             }
         }
         /*Method::POST if /*self.rest_api == RestApi::Unsecure &&*/ request.uri().path().split('/').count() > 2 => {

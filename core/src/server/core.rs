@@ -28,11 +28,11 @@ use crate::common::{self, JsonValue};
 use crate::server::{
     batches, raw::TransportServer, raw::TransportServerEvent, Notification, Params,
 };
-use err_derive::*;
 use fnv::FnvHashMap;
 use std::{
     collections::hash_map::Entry, collections::HashMap, fmt, hash::Hash, num::NonZeroUsize, vec,
 };
+use thiserror::Error;
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
@@ -120,10 +120,10 @@ pub struct ServerSubscription<'a, R, I> {
 #[derive(Debug, Error)]
 pub enum IntoSubscriptionErr {
     /// Underlying server doesn't support subscriptions.
-    #[error(display = "Underlying server doesn't support subscriptions")]
+    #[error("Underlying server doesn't support subscriptions")]
     NotSupported,
     /// Request has already been closed by the client.
-    #[error(display = "Request is already closed")]
+    #[error("Request is already closed")]
     Closed,
 }
 
