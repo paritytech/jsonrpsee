@@ -24,11 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use derive_more::*;
-use err_derive::*;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use jsonrpsee_core::{client::RawClient, client::TransportClient, common};
 use std::{fmt, io, pin::Pin, thread};
+use thiserror::Error;
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
@@ -168,31 +167,31 @@ impl fmt::Debug for HttpTransportClient {
 }
 
 /// Error that can happen during a request.
-#[derive(Debug, From, Error)]
+#[derive(Debug, Error)]
 pub enum RequestError {
     /// Error while serializing the request.
     // TODO: can that happen?
-    #[error(display = "error while serializing the request")]
-    Serialization(#[error(cause)] serde_json::error::Error),
+    #[error("error while serializing the request")]
+    Serialization(#[source] serde_json::error::Error),
 
     /// Response given by the server failed to decode as UTF-8.
-    #[error(display = "response body is not UTF-8")]
-    Utf8(std::string::FromUtf8Error),
+    #[error("response body is not UTF-8")]
+    Utf8(#[source] std::string::FromUtf8Error),
 
     /// Error during the HTTP request, including networking errors and HTTP protocol errors.
-    #[error(display = "error while performing the HTTP request")]
+    #[error("error while performing the HTTP request")]
     Http(Box<dyn std::error::Error + Send + Sync>),
 
     /// Server returned a non-success status code.
-    #[error(display = "server returned an error status code: {:?}", status_code)]
+    #[error("server returned an error status code: {:?}", status_code)]
     RequestFailure {
         /// Status code returned by the server.
         status_code: u16,
     },
 
     /// Failed to parse the JSON returned by the server into a JSON-RPC response.
-    #[error(display = "error while parsing the response body")]
-    ParseError(#[error(cause)] serde_json::error::Error),
+    #[error("error while parsing the response body")]
+    ParseError(#[source] serde_json::error::Error),
 }
 
 /// Function that runs in a background thread.

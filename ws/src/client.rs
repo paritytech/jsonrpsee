@@ -26,12 +26,12 @@
 
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
-use err_derive::*;
 use futures::prelude::*;
 use jsonrpsee_core::{client::TransportClient, common};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
+use thiserror::Error;
 
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
@@ -75,26 +75,26 @@ pub enum Mode {
 #[derive(Debug, Error)]
 pub enum WsNewError {
     /// Error when opening the TCP socket.
-    #[error(display = "Error when opening the TCP socket: {}", 0)]
+    #[error("Error when opening the TCP socket: {}", 0)]
     Io(io::Error),
 
     /// Error in the WebSocket handshake.
-    #[error(display = "Error in the WebSocket handshake: {}", 0)]
-    Handshake(#[error(cause)] soketto::handshake::Error),
+    #[error("Error in the WebSocket handshake: {}", 0)]
+    Handshake(#[source] soketto::handshake::Error),
 
     /// Invalid DNS name error for TLS
-    #[error(display = "Invalid DNS name: {}", 0)]
-    InvalidDNSName(#[error(cause)] webpki::InvalidDNSNameError),
+    #[error("Invalid DNS name: {}", 0)]
+    InvalidDNSName(#[source] webpki::InvalidDNSNameError),
 
     /// RawServer rejected our handshake.
-    #[error(display = "Server returned an error status code: {}", status_code)]
+    #[error("Server returned an error status code: {}", status_code)]
     Rejected {
         /// HTTP status code that the server returned.
         status_code: u16,
     },
 
     /// Timeout while trying to connect.
-    #[error(display = "Timeout when trying to connect")]
+    #[error("Timeout when trying to connect")]
     Timeout,
 }
 
@@ -102,22 +102,22 @@ pub enum WsNewError {
 #[derive(Debug, Error)]
 pub enum WsNewDnsError {
     /// Invalid URL.
-    #[error(display = "Invalid url: {}", 0)]
+    #[error("Invalid url: {}", 0)]
     Url(Cow<'static, str>),
 
     /// Error when trying to connect.
     ///
     /// If multiple IP addresses are attempted, only the last error is returned, similar to how
     /// [`std::net::TcpStream::connect`] behaves.
-    #[error(display = "Error when trying to connect: {}", 0)]
+    #[error("Error when trying to connect: {}", 0)]
     Connect(WsNewError),
 
     /// Failed to resolve IP addresses for this hostname.
-    #[error(display = "Failed to resolve IP addresses for this hostname: {}", 0)]
+    #[error("Failed to resolve IP addresses for this hostname: {}", 0)]
     ResolutionFailed(io::Error),
 
     /// Couldn't find any IP address for this hostname.
-    #[error(display = "Couldn't find any IP address for this hostname")]
+    #[error("Couldn't find any IP address for this hostname")]
     NoAddressFound,
 }
 
@@ -126,16 +126,16 @@ pub enum WsNewDnsError {
 pub enum WsConnecError {
     /// Error while serializing the request.
     // TODO: can that happen?
-    #[error(display = "error while serializing the request")]
-    Serialization(#[error(cause)] serde_json::error::Error),
+    #[error("error while serializing the request")]
+    Serialization(#[source] serde_json::error::Error),
 
     /// Error in the WebSocket connection.
-    #[error(display = "error in the WebSocket connection")]
-    Ws(#[error(cause)] soketto::connection::Error),
+    #[error("error in the WebSocket connection")]
+    Ws(#[source] soketto::connection::Error),
 
     /// Failed to parse the JSON returned by the server into a JSON-RPC response.
-    #[error(display = "error while parsing the response body")]
-    ParseError(#[error(cause)] serde_json::error::Error),
+    #[error("error while parsing the response body")]
+    ParseError(#[source] serde_json::error::Error),
 }
 
 impl WsTransportClient {
