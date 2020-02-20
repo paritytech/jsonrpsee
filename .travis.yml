@@ -8,9 +8,12 @@ before_script:
 
 script:
   - cargo fmt --all -- --check
-  - cargo build --verbose --workspace
-  - cargo test --verbose --workspace
-  - cargo doc --verbose --workspace --no-deps --document-private-items
+  - cargo build --verbose --all-features
+  - cargo test --verbose --all-features
+  - cargo build --verbose --no-default-features
+  - cargo build --verbose --features "http"
+  - cargo build --verbose --features "ws"
+  - cargo doc --verbose --no-deps --document-private-items
 
 notifications:
   email:
