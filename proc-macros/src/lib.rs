@@ -452,7 +452,7 @@ fn build_client_functions(
         } else if function.attributes.positional_params {
             quote_spanned!(function.signature.span()=>
                 jsonrpsee::core::common::Params::Array(vec![
-				    #(#params_to_array),*
+                    #(#params_to_array),*
                 ])
             )
         } else {

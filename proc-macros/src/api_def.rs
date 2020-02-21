@@ -167,7 +167,8 @@ impl ApiMethodAttrs {
             }
             self.method = Some(method);
         }
-		if other.positional_params {
+
+        if other.positional_params {
             self.positional_params = true;
         }
 
@@ -191,8 +192,8 @@ impl syn::parse::Parse for ApiMethodAttrs {
                         ));
                     }
                     out.method = Some(method.value());
-                }
-				ApiMethodAttr::PositionalParams => out.positional_params = true,
+                },
+                ApiMethodAttr::PositionalParams => out.positional_params = true,
             }
         }
         Ok(out)
