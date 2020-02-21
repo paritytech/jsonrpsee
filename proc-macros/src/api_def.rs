@@ -192,7 +192,7 @@ impl syn::parse::Parse for ApiMethodAttrs {
                         ));
                     }
                     out.method = Some(method.value());
-                },
+                }
                 ApiMethodAttr::PositionalParams => out.positional_params = true,
             }
         }
