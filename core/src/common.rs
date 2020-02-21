@@ -37,6 +37,7 @@ mod response;
 mod version;
 
 pub use serde::{de::DeserializeOwned, ser::Serialize};
+pub use serde_json::error::Error as ParseError;
 pub use serde_json::Map as JsonMap;
 pub use serde_json::Number as JsonNumber;
 pub use serde_json::Value as JsonValue;

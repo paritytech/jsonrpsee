@@ -30,7 +30,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
 use jsonrpsee_core::common;
 use jsonrpsee_server_utils::access_control::AccessControl;
-use std::{io, net::SocketAddr, thread};
+use std::{error, io, net::SocketAddr, thread};
 
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
@@ -52,14 +52,16 @@ impl BackgroundHttp {
     ///
     /// In addition to `Self`, also returns the local address the server ends up listening on,
     /// which might be different than the one passed as parameter.
-    pub fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
-        Self::bind_with_acl(addr, AccessControl::default())
+    pub async fn bind(
+        addr: &SocketAddr,
+    ) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
+        Self::bind_with_acl(addr, AccessControl::default()).await
     }
 
-    pub fn bind_with_acl(
+    pub async fn bind_with_acl(
         addr: &SocketAddr,
         access_control: AccessControl,
-    ) -> Result<(BackgroundHttp, SocketAddr), hyper::Error> {
+    ) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
         let (tx, rx) = mpsc::channel(4);
 
         let make_service = make_service_fn(move |_| {
@@ -74,14 +76,18 @@ impl BackgroundHttp {
             }
         });
 
-        let server = hyper::Server::try_bind(addr)?.serve(make_service);
-        let local_addr = server.local_addr();
+        let (addr_tx, addr_rx) = oneshot::channel();
+        let addr = addr.clone();
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::Builder::new()
             .name("jsonrpsee-hyper-server".to_string())
             .spawn(move || {
-                let mut runtime = match tokio::runtime::current_thread::Runtime::new() {
+                let mut runtime = match tokio::runtime::Builder::new()
+                    .basic_scheduler()
+                    .enable_all()
+                    .build()
+                {
                     Ok(r) => r,
                     Err(err) => {
                         log::error!(
@@ -93,13 +99,24 @@ impl BackgroundHttp {
                 };
 
                 runtime.block_on(async move {
-                    if let Err(err) = server.await {
-                        log::error!("HTTP JSON-RPC server closed with an error: {}", err);
-                    }
+                    match hyper::Server::try_bind(&addr) {
+                        Ok(builder) => {
+                            let server = builder.serve(make_service);
+                            let _ = addr_tx.send(Ok(server.local_addr()));
+                            if let Err(err) = server.await {
+                                log::error!("HTTP JSON-RPC server closed with an error: {}", err);
+                            }
+                        }
+                        Err(err) => {
+                            log::error!("Failed to bind to address {}: {}", addr, err);
+                            let _ = addr_tx.send(Err(err));
+                            return;
+                        }
+                    };
                 });
-            })
-            .unwrap();
+            })?;
 
+        let local_addr = addr_rx.await??;
         Ok((BackgroundHttp { rx: rx.fuse() }, local_addr))
     }
 
@@ -150,7 +167,7 @@ async fn process_request(
             let json_body = match body_to_request(request.into_body()).await {
                 Ok(b) => b,
                 Err(_) => {
-                    unimplemented!()        // TODO:
+                    unimplemented!() // TODO:
                 }
             };
 
@@ -164,7 +181,9 @@ async fn process_request(
             }
             match rx.await {
                 Ok(response) => response,
-                Err(_) => return response::internal_error("JSON request send back channel has shut down"),
+                Err(_) => {
+                    return response::internal_error("JSON request send back channel has shut down")
+                }
             }
         }
         /*Method::POST if /*self.rest_api == RestApi::Unsecure &&*/ request.uri().path().split('/').count() > 2 => {
@@ -217,7 +236,7 @@ async fn body_to_request(mut body: hyper::Body) -> Result<common::Request, io::E
             Ok(c) => c,
             Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())), // TODO:
         };
-        json_body.extend_from_slice(&chunk.into_bytes());
+        json_body.extend_from_slice(&chunk);
         if json_body.len() >= 16384 {
             // TODO: some limit
             return Err(io::Error::new(io::ErrorKind::Other, "request too large"));

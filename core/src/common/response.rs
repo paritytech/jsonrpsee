@@ -25,6 +25,12 @@
 // DEALINGS IN THE SOFTWARE.
 
 use super::{Error, Id, JsonValue, Version};
+
+use alloc::{
+    string::{String, ToString as _},
+    vec,
+    vec::Vec,
+};
 use serde::{Deserialize, Serialize};
 
 /// Synchronous response

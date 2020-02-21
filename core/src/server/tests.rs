@@ -26,13 +26,13 @@
 
 #![cfg(test)]
 
-use crate::{common, local_raw, RawClient, Server, ServerEvent};
+use crate::{common, local_transport, RawServer, RawServerEvent, TransportClient};
 
 #[test]
 fn notifications_work() {
     let (mut client, mut server) = {
-        let (c, s) = local_raw();
-        (c, Server::new(s))
+        let (c, s) = local_transport();
+        (c, RawServer::new(s))
     };
 
     async_std::task::spawn(async move {
@@ -48,7 +48,7 @@ fn notifications_work() {
 
     async_std::task::block_on(async move {
         match server.next_event().await {
-            ServerEvent::Notification(n) => {
+            RawServerEvent::Notification(n) => {
                 assert_eq!(n.method(), "foo");
                 assert_eq!(
                     {
@@ -73,8 +73,8 @@ fn notifications_work() {
 #[test]
 fn subscriptions_work() {
     let (mut client, mut server) = {
-        let (c, s) = local_raw();
-        (c, Server::new(s))
+        let (c, s) = local_transport();
+        (c, RawServer::new(s))
     };
 
     async_std::task::spawn(async move {
@@ -112,7 +112,7 @@ fn subscriptions_work() {
 
     async_std::task::block_on(async move {
         let sub_id = match server.next_event().await {
-            ServerEvent::Request(rq) => {
+            RawServerEvent::Request(rq) => {
                 assert_eq!(rq.method(), "foo");
                 assert_eq!(
                     {
@@ -135,7 +135,7 @@ fn subscriptions_work() {
         };
 
         match server.next_event().await {
-            ServerEvent::SubscriptionsReady(ready) => {
+            RawServerEvent::SubscriptionsReady(ready) => {
                 assert_eq!(ready.collect::<Vec<_>>(), vec![sub_id]);
             }
             _ => panic!(),
@@ -153,7 +153,7 @@ fn subscriptions_work() {
             .await;
 
         match server.next_event().await {
-            ServerEvent::SubscriptionsClosed(closed) => {
+            RawServerEvent::SubscriptionsClosed(closed) => {
                 assert_eq!(closed.collect::<Vec<_>>(), vec![sub_id]);
             }
             _ => panic!(),

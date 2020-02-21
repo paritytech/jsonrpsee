@@ -25,7 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
-use std::fmt;
+
+use alloc::string::String;
+use core::fmt;
 
 /// Access to the parameters of a request.
 #[derive(Copy, Clone)]
@@ -102,9 +104,9 @@ impl<'a> AsRef<common::Params> for Params<'a> {
     }
 }
 
-impl<'a> Into<&'a common::Params> for Params<'a> {
-    fn into(self) -> &'a common::Params {
-        self.params
+impl<'a> From<Params<'a>> for &'a common::Params {
+    fn from(params: Params<'a>) -> &'a common::Params {
+        params.params
     }
 }
 

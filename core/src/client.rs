@@ -26,47 +26,47 @@
 
 //! Performing JSON-RPC requests.
 //!
-//! The [`Client`] struct wraps around a [`RawClient`] and handles the higher-level JSON-RPC logic
-//! on top of it. In order to build a [`Client`], you need to pass to it an implementation of
-//! [`RawClient`]. There exists shortcut methods that directly create a [`Client`] on top of a
-//! specific [`RawClient`] implementations.
+//! The [`RawClient`] struct wraps around a [`TransportClient`] and handles the higher-level JSON-RPC logic
+//! on top of it. In order to build a [`RawClient`], you need to pass to it an implementation of
+//! [`TransportClient`]. There exists shortcut methods that directly create a [`RawClient`] on top of a
+//! specific [`TransportClient`] implementations.
 //!
-//! Once created, a [`Client`] can be used to send out notifications, requests, and subscription
+//! Once created, a [`RawClient`] can be used to send out notifications, requests, and subscription
 //! requests to the server. Request identifiers are automatically assigned by the client.
 //!
 //! # Notifications
 //!
 //! **Notifications** are one-shot messages to the server that don't expect any response. They can
-//! be sent using the [`send_notification`](Client::send_notification) method.
+//! be sent using the [`send_notification`](RawClient::send_notification) method.
 //!
 //! # Requests
 //!
 //! **Requests** are messages that expect an answer. A request can be sent using the
-//! [`start_request`](Client::start_request) method. This method returns a [`ClientRequestId`] that
-//! is used to identify this request within the internals of the [`Client`]. You can then call
-//! [`request_by_id`](Client::request_by_id) to wait for a response from a server about a specific
-//! request. You are however encouraged to use [`next_event`](Client::next_event) instead, which
-//! produces a [`ClientEvent`] indicating you what the server did.
+//! [`start_request`](RawClient::start_request) method. This method returns a [`RawClientRequestId`] that
+//! is used to identify this request within the internals of the [`RawClient`]. You can then call
+//! [`request_by_id`](RawClient::request_by_id) to wait for a response from a server about a specific
+//! request. You are however encouraged to use [`next_event`](RawClient::next_event) instead, which
+//! produces a [`RawClientEvent`] indicating you what the server did.
 //!
-//! > **Note**: At the time of writing, the [`Client`] never uses batches and only sends out
+//! > **Note**: At the time of writing, the [`RawClient`] never uses batches and only sends out
 //! >           individual requests.
 //!
 //! # Subscriptions
 //!
 //! **Subscriptions** are similar to requests, except that we stay connected to the server
-//! after the request ended, and expect notifications back from it. The [`Client`] will notify
-//! you about subscriptions through the [`next_event`](Client::next_event) method and the
-//! [`ClientEvent`] enum.
+//! after the request ended, and expect notifications back from it. The [`RawClient`] will notify
+//! you about subscriptions through the [`next_event`](RawClient::next_event) method and the
+//! [`RawClientEvent`] enum.
 //!
-//! > **Note**: The [`request_by_id`](Client::request_by_id) method will buffer up incoming
+//! > **Note**: The [`request_by_id`](RawClient::request_by_id) method will buffer up incoming
 //! >           notifications up to a certain limit. Once this limit is reached, new notifications
 //! >           will be silently discarded. This behaviour exists to prevent DoS attacks from
 //! >           the server. If you want to be certain to not miss any notification, please only
-//! >           use the [`next_event`](Client::next_event) method.
+//! >           use the [`next_event`](RawClient::next_event) method.
 //!
 
 pub use self::core::*;
-pub use self::raw::RawClient;
+pub use self::raw::TransportClient;
 
 pub mod raw;
 

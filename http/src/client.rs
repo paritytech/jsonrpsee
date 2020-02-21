@@ -24,11 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use derive_more::*;
-use err_derive::*;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
-use jsonrpsee_core::{client::Client, client::RawClient, common};
+use jsonrpsee_core::{client::RawClient, client::TransportClient, common};
 use std::{fmt, io, pin::Pin, thread};
+use thiserror::Error;
 
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
@@ -46,7 +45,7 @@ use std::{fmt, io, pin::Pin, thread};
 // the JSON-RPC request id to a value that might have already been used.
 
 /// Implementation of a raw client for HTTP requests.
-pub struct HttpRawClient {
+pub struct HttpTransportClient {
     /// Sender that sends requests to the background task.
     requests_tx: mpsc::Sender<FrontToBack>,
     url: String,
@@ -64,16 +63,10 @@ struct FrontToBack {
     send_back: oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
-impl HttpRawClient {
+impl HttpTransportClient {
     /// Initializes a new HTTP client.
     // TODO: better type for target
-    pub fn new(target: &str) -> Client<Self> {
-        Client::new(Self::new_raw(target))
-    }
-
-    /// Initializes a new HTTP client.
-    // TODO: better type for target
-    pub fn new_raw(target: &str) -> Self {
+    pub fn new(target: &str) -> Self {
         let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(4);
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
@@ -82,7 +75,7 @@ impl HttpRawClient {
             .spawn(move || background_thread(requests_rx))
             .unwrap();
 
-        HttpRawClient {
+        HttpTransportClient {
             requests_tx,
             url: target.to_owned(),
             responses: stream::FuturesUnordered::new(),
@@ -90,7 +83,7 @@ impl HttpRawClient {
     }
 }
 
-impl RawClient for HttpRawClient {
+impl TransportClient for HttpTransportClient {
     type Error = RequestError;
 
     fn send_request<'s>(
@@ -155,9 +148,7 @@ impl RawClient for HttpRawClient {
             // unnecessary, as a parsing error while happen anyway.
 
             // TODO: enforce a maximum size here
-            let body: hyper::Chunk = hyper_response
-                .into_body()
-                .try_concat()
+            let body = hyper::body::to_bytes(hyper_response.into_body())
                 .await
                 .map_err(|err| RequestError::Http(Box::new(err)))?;
 
@@ -169,45 +160,49 @@ impl RawClient for HttpRawClient {
     }
 }
 
-impl fmt::Debug for HttpRawClient {
+impl fmt::Debug for HttpTransportClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_tuple("HttpRawClient").finish()
+        f.debug_tuple("HttpTransportClient").finish()
     }
 }
 
 /// Error that can happen during a request.
-#[derive(Debug, From, Error)]
+#[derive(Debug, Error)]
 pub enum RequestError {
     /// Error while serializing the request.
     // TODO: can that happen?
-    #[error(display = "error while serializing the request")]
-    Serialization(#[error(cause)] serde_json::error::Error),
+    #[error("error while serializing the request")]
+    Serialization(#[source] serde_json::error::Error),
 
     /// Response given by the server failed to decode as UTF-8.
-    #[error(display = "response body is not UTF-8")]
-    Utf8(std::string::FromUtf8Error),
+    #[error("response body is not UTF-8")]
+    Utf8(#[source] std::string::FromUtf8Error),
 
     /// Error during the HTTP request, including networking errors and HTTP protocol errors.
-    #[error(display = "error while performing the HTTP request")]
+    #[error("error while performing the HTTP request")]
     Http(Box<dyn std::error::Error + Send + Sync>),
 
     /// Server returned a non-success status code.
-    #[error(display = "server returned an error status code: {:?}", status_code)]
+    #[error("server returned an error status code: {:?}", status_code)]
     RequestFailure {
         /// Status code returned by the server.
         status_code: u16,
     },
 
     /// Failed to parse the JSON returned by the server into a JSON-RPC response.
-    #[error(display = "error while parsing the response body")]
-    ParseError(#[error(cause)] serde_json::error::Error),
+    #[error("error while parsing the response body")]
+    ParseError(#[source] serde_json::error::Error),
 }
 
 /// Function that runs in a background thread.
 fn background_thread(mut requests_rx: mpsc::Receiver<FrontToBack>) {
     let client = hyper::Client::new();
 
-    let mut runtime = match tokio::runtime::current_thread::Runtime::new() {
+    let mut runtime = match tokio::runtime::Builder::new()
+        .basic_scheduler()
+        .enable_all()
+        .build()
+    {
         Ok(r) => r,
         Err(err) => {
             // Ideally, we would try to initialize the tokio runtime in the main thread then move

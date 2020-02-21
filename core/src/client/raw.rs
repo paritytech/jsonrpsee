@@ -27,8 +27,10 @@
 //! Traits for implementing request-making capabilities.
 
 use crate::common;
+
+use alloc::boxed::Box;
+use core::{fmt, pin::Pin};
 use futures::prelude::*;
-use std::{error, pin::Pin};
 
 /// Objects that can act as clients.
 ///
@@ -40,9 +42,9 @@ use std::{error, pin::Pin};
 /// >           one where the request has been sent. In practice, though, this shouldn't be a
 /// >           problem.
 ///
-pub trait RawClient {
+pub trait TransportClient {
     /// Error that can happen during a request.
-    type Error: error::Error;
+    type Error: fmt::Display;
 
     /// Sends out out a request. Returns a `Future` that finishes when the request has been
     /// successfully sent.

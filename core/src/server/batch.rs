@@ -25,10 +25,12 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{common, server::Notification, server::Params};
-use smallvec::SmallVec;
-use std::{fmt, iter};
 
-/// Batch corresponding to a request from a [`RawServer`](crate::RawServer).
+use alloc::vec::Vec;
+use core::{fmt, iter};
+use smallvec::SmallVec;
+
+/// Batch corresponding to a request from a [`TransportServer`](crate::TransportServer).
 ///
 /// A [`BatchState`] combines three things:
 ///
@@ -36,14 +38,16 @@ use std::{fmt, iter};
 /// - A list of requests that have been extracted from the batch but are yet to be answered.
 /// - A list of responses waiting to be sent out.
 ///
-/// Using the `BatchState` is done in the following steps:
+/// Using the [`BatchState`] is done in the following steps:
 ///
-/// - Construct a `BatchState` from a raw request.
-/// - Extract one by one the requests by calling [`next`](BatchState::next). This moves requests
-/// from the batch to the list of requests that are yet to be answered.
+/// - Construct a [`BatchState`] from a raw request.
+/// - Extract one by one the requests and notifications by calling [`next`](BatchState::next). This
+/// moves requests from the batch to the list of requests that are yet to be answered.
 /// - Answer these requests by calling [`set_response`](BatchElem::set_response).
-/// - Once all the requests have been answered, call [`into_response`](BatchState::into_response)
-/// and send back the response.
+/// - Once all the requests have been answered, call
+/// [`extract_response`](BatchState::extract_response) and send back the response.
+/// - Once [`next`](BatchState::next) returns `None` and the response has been extracted, you can
+/// destroy the [`BatchState`].
 ///
 pub struct BatchState {
     /// List of elements to present to the user.
@@ -136,7 +140,7 @@ impl BatchState {
         }
     }
 
-    /// Returns a request previously returned by [`next_event`](crate::Server::next_event) by its
+    /// Returns a request previously returned by [`next_event`](crate::RawServer::next_event) by its
     /// id.
     ///
     /// Note that previous notifications don't have an ID and can't be accessed with this method.
@@ -193,7 +197,7 @@ impl BatchState {
         }
 
         let raw_response = if self.is_batch {
-            let list: Vec<_> = self.responses.drain().collect();
+            let list: Vec<_> = self.responses.drain(..).collect();
             if list.is_empty() {
                 None
             } else {

@@ -34,26 +34,31 @@
 //!
 //! - The [`common`] module contains all the primitive types of the JSON-RPC protocol, and
 //!   utilities to convert between them and JSON.
-//! - The [`RawClient`] and [`RawServer`] traits are implemented on structs that allow performing
+//! - The [`TransportClient`] and [`TransportServer`] traits are implemented on structs that allow performing
 //!   low-level communication with respectively a server or a client. These are the traits that
 //!   you must implement if you are writing a custom transport (similar to HTTP, WebSockets,
 //!   IPC, etc.).
-//! - The [`Client`] and [`Server`] structs wrap around respectively a [`RawClient`] or a
-//!   [`RawServer`] and allow correctly associating requests with responses and managing pub-sub
+//! - The [`RawClient`] and [`RawServer`] structs wrap around respectively a [`TransportClient`] or a
+//!   [`TransportServer`] and allow correctly associating requests with responses and managing pub-sub
 //!   subscriptions.
 //!
 //! In order to start a client or a server, first create a struct that implements respectively
-//! [`RawClient`] or [`RawServer`], then wrap a [`Client`] or a [`Server`] around them.
+//! [`TransportClient`] or [`TransportServer`], then wrap a [`RawClient`] or a [`RawServer`] around them.
 
 #![deny(unsafe_code)]
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-pub use crate::client::raw::RawClient;
-pub use crate::client::{Client, ClientError, ClientEvent, ClientRequestId};
-pub use crate::local::local_raw;
-pub use crate::server::raw::{RawServer, RawServerEvent};
-pub use crate::server::{Server, ServerEvent, ServerRequestId, ServerSubscriptionId};
+extern crate alloc;
+
+pub use crate::client::raw::TransportClient;
+pub use crate::client::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
+#[cfg(feature = "std")]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+pub use crate::local::local_transport;
+pub use crate::server::raw::{TransportServer, TransportServerEvent};
+pub use crate::server::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};
 
 pub mod client;
 pub mod common;
