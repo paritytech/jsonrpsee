@@ -64,6 +64,8 @@ pub struct ApiMethod {
 pub struct ApiMethodAttrs {
     /// Name of the RPC method, if specified.
     pub method: Option<String>,
+    /// Whether the params are by-position (ie. a JSON array) or by-name (ie. a JSON object).
+    pub positional_params: bool,
 }
 
 impl ApiMethod {
@@ -96,6 +98,7 @@ struct ApiMethods {
 /// Parses a single attribute.
 enum ApiMethodAttr {
     Method(syn::LitStr),
+    PositionalParams,
 }
 
 impl syn::parse::Parse for ApiDefinitions {
@@ -165,6 +168,10 @@ impl ApiMethodAttrs {
             self.method = Some(method);
         }
 
+        if other.positional_params {
+            self.positional_params = true;
+        }
+
         Ok(())
     }
 }
@@ -186,6 +193,7 @@ impl syn::parse::Parse for ApiMethodAttrs {
                     }
                     out.method = Some(method.value());
                 }
+                ApiMethodAttr::PositionalParams => out.positional_params = true,
             }
         }
         Ok(out)
@@ -200,6 +208,8 @@ impl syn::parse::Parse for ApiMethodAttr {
             let _: syn::token::Eq = input.parse()?;
             let val = input.parse()?;
             Ok(ApiMethodAttr::Method(val))
+        } else if attr == "positional_params" {
+            Ok(ApiMethodAttr::PositionalParams)
         } else {
             Err(syn::Error::new(
                 attr.span(),
