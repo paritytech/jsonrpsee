@@ -81,7 +81,7 @@ impl From<Params> for JsonValue {
 #[cfg(test)]
 mod tests {
     use super::Params;
-    use crate::common::{Error, ErrorCode, JsonValue};
+    use crate::core::common::{Error, ErrorCode, JsonValue};
     use serde_json;
 
     #[test]

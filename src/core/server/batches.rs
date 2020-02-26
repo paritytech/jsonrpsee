@@ -308,7 +308,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BatchesEvent, BatchesState};
-    use crate::{common, server::Notification};
+    use crate::core::{common, server::Notification};
 
     #[test]
     fn basic_notification() {

@@ -333,7 +333,7 @@ mod tests {
     use std::iter;
 
     use super::*;
-    use crate::hosts::Host;
+    use crate::server_utils::hosts::Host;
 
     #[test]
     fn should_parse_origin() {

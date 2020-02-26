@@ -34,10 +34,10 @@
 //! The [`LocalTransportClient`](crate::local::LocalTransportClient) is clonable.
 //!
 //! ```
-//! use core::client::RawClient;
-//! use core::server::{RawServer, RawServerEvent};
+//! use jsonrpsee::core::client::RawClient;
+//! use jsonrpsee::core::server::{RawServer, RawServerEvent};
 //!
-//! let (raw_client, raw_server) = core::local_transport();
+//! let (raw_client, raw_server) = jsonrpsee::core::local_transport();
 //! let mut client = RawClient::new(raw_client);
 //! let mut server = RawServer::new(raw_server);
 //!
@@ -53,8 +53,8 @@
 //! });
 //!
 //! let rq: String = futures::executor::block_on(async move {
-//!     let request_id = client.start_request("test", core::common::Params::None).await.unwrap();
-//!     core::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap())
+//!     let request_id = client.start_request("test", jsonrpsee::core::common::Params::None).await.unwrap();
+//!     jsonrpsee::core::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap())
 //! }).unwrap();
 //! println!("result: {:?}", rq);
 //! ```

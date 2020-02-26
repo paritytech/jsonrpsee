@@ -285,7 +285,7 @@ impl<'a> fmt::Debug for BatchElem<'a> {
 #[cfg(test)]
 mod tests {
     use super::{BatchInc, BatchState};
-    use crate::{common, server::Notification};
+    use crate::core::{common, server::Notification};
 
     #[test]
     fn basic_notification() {
