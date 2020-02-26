@@ -147,20 +147,20 @@
 #![deny(intra_doc_link_resolution_failure)]
 #![warn(missing_docs)]
 
+extern crate alloc;
+
 #[cfg(feature = "http")]
-pub use jsonrpsee_http::{http_raw_client, http_raw_server};
+pub use http::{http_raw_client, http_raw_server};
 pub use jsonrpsee_proc_macros::rpc_api;
-#[cfg(feature = "ws")]
+
+/*#[cfg(feature = "ws")]
 pub use jsonrpsee_ws::ws_raw_client;
 
 #[doc(inline)]
 pub use jsonrpsee_core as core;
 #[doc(inline)]
-#[cfg(feature = "http")]
-pub use jsonrpsee_http as http;
-#[doc(inline)]
 #[cfg(feature = "ws")]
-pub use jsonrpsee_ws as ws;
+pub use jsonrpsee_ws as ws;*/
 
 pub use client::Client;
 pub use server::Server;
@@ -168,7 +168,19 @@ pub use server::Server;
 use std::{error, net::SocketAddr};
 
 pub mod client;
+pub mod core;
+
 mod server;
+
+#[cfg(feature = "http")]
+mod server_utils;
+
+#[cfg(feature = "http")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
+pub mod http;
+#[cfg(feature = "ws")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
+pub mod ws;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local() -> (Client, Server) {
@@ -180,30 +192,35 @@ pub fn local() -> (Client, Server) {
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local_raw() -> (
-    core::RawClient<core::local::LocalTransportClient>,
-    core::RawServer<
-        core::local::LocalTransportServer,
-        <core::local::LocalTransportServer as core::TransportServer>::RequestId,
+    crate::core::RawClient<crate::core::local::LocalTransportClient>,
+    crate::core::RawServer<
+        crate::core::local::LocalTransportServer,
+        <crate::core::local::LocalTransportServer as crate::core::TransportServer>::RequestId,
     >,
 ) {
     let (client, server) = core::local_transport();
-    let client = core::RawClient::new(client);
-    let server = core::RawServer::new(server);
+    let client = crate::core::RawClient::new(client);
+    let server = crate::core::RawServer::new(server);
     (client, server)
 }
 
 /// Builds a new HTTP server.
+#[cfg(feature = "http")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
-    jsonrpsee_http::http_raw_server(addr).await.map(From::from)
+    http::http_raw_server(addr).await.map(From::from)
 }
 
 /// Builds a new HTTP client.
+#[cfg(feature = "http")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub fn http_client(addr: &str) -> Client {
-    Client::from(jsonrpsee_http::http_raw_client(addr))
+    Client::from(http::http_raw_client(addr))
 }
 
 /// Builds a new WebSockets client.
 #[cfg(feature = "ws")]
-pub async fn ws_client(target: &str) -> Result<Client, jsonrpsee_ws::WsNewDnsError> {
-    jsonrpsee_ws::ws_raw_client(target).await.map(From::from)
+#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
+pub async fn ws_client(target: &str) -> Result<Client, ws::WsNewDnsError> {
+    ws::ws_raw_client(target).await.map(From::from)
 }

@@ -24,13 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
-use jsonrpsee_core::{
+use crate::core::{
     common::{self, JsonValue},
     server::raw::TransportServer,
     server::{RawServerEvent, RawServerRequestId, RawServerSubscriptionId},
     RawServer,
 };
+
+use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use parking_lot::Mutex;
 use std::{
     collections::HashMap,

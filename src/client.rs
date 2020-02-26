@@ -24,16 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::core::{
+    client::RawClientEvent,
+    common::{self, JsonValue},
+    RawClient, RawClientRequestId, TransportClient,
+};
 use futures::{
     channel::{mpsc, oneshot},
     future::Either,
     pin_mut,
     prelude::*,
-};
-use jsonrpsee_core::{
-    client::RawClientEvent,
-    common::{self, JsonValue},
-    RawClient, RawClientRequestId, TransportClient,
 };
 use std::{collections::HashMap, error, io, marker::PhantomData};
 
@@ -134,7 +134,7 @@ impl Client {
     pub async fn notification(
         &self,
         method: impl Into<String>,
-        params: impl Into<jsonrpsee_core::common::Params>,
+        params: impl Into<crate::core::common::Params>,
     ) {
         let _ = self
             .to_back
@@ -150,7 +150,7 @@ impl Client {
     pub async fn request<Ret>(
         &self,
         method: impl Into<String>,
-        params: impl Into<jsonrpsee_core::common::Params>,
+        params: impl Into<crate::core::common::Params>,
     ) -> Result<Ret, RequestError>
     where
         Ret: common::DeserializeOwned,
@@ -187,7 +187,7 @@ impl Client {
     pub async fn subscribe<Notif>(
         &self,
         subscribe_method: impl Into<String>,
-        params: impl Into<jsonrpsee_core::common::Params>,
+        params: impl Into<crate::core::common::Params>,
         unsubscribe_method: impl Into<String>,
     ) -> Result<Subscription<Notif>, RequestError> {
         let (send_back_tx, send_back_rx) = oneshot::channel();
