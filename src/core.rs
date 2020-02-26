@@ -49,7 +49,9 @@ pub use crate::core::client::raw::TransportClient;
 pub use crate::core::client::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
 pub use crate::core::local::local_transport;
 pub use crate::core::server::raw::{TransportServer, TransportServerEvent};
-pub use crate::core::server::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};
+pub use crate::core::server::{
+    RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId,
+};
 
 pub mod client;
 pub mod common;

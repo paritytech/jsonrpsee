@@ -24,12 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::core::common;
 use crate::http::server::response;
+use crate::server_utils::access_control::AccessControl;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
-use crate::core::common;
-use crate::server_utils::access_control::AccessControl;
 use std::{error, io, net::SocketAddr, thread};
 
 /// Background thread that serves HTTP requests.

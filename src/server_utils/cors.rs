@@ -28,12 +28,12 @@
 
 use unicase;
 
-pub use unicase::Ascii;
 use crate::server_utils::hosts::{Host, Port};
 use crate::server_utils::matcher::{Matcher, Pattern};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::{fmt, ops};
+pub use unicase::Ascii;
 
 /// Origin Protocol
 #[derive(Clone, Hash, Debug, PartialEq, Eq)]
