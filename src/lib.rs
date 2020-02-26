@@ -168,8 +168,8 @@ pub use server::Server;
 use std::{error, net::SocketAddr};
 
 pub mod client;
+pub mod core;
 
-mod core;
 mod server;
 
 #[cfg(feature = "http")]
