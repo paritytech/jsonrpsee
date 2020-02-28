@@ -26,7 +26,8 @@
 
 #![cfg(test)]
 
-use crate::core::{common, local_transport, RawServer, RawServerEvent, TransportClient};
+use crate::common;
+use crate::core::{local_transport, RawServer, RawServerEvent, TransportClient};
 
 #[test]
 fn notifications_work() {

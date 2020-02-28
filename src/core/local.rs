@@ -53,14 +53,15 @@
 //! });
 //!
 //! let rq: String = futures::executor::block_on(async move {
-//!     let request_id = client.start_request("test", jsonrpsee::core::common::Params::None).await.unwrap();
-//!     jsonrpsee::core::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap())
+//!     let request_id = client.start_request("test", jsonrpsee::common::Params::None).await.unwrap();
+//!     jsonrpsee::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap())
 //! }).unwrap();
 //! println!("result: {:?}", rq);
 //! ```
 //!
 
-use crate::core::{common, TransportClient, TransportServer, TransportServerEvent};
+use crate::common;
+use crate::core::{TransportClient, TransportServer, TransportServerEvent};
 
 use core::{fmt, pin::Pin};
 use fnv::FnvHashSet;

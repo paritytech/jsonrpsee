@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::{client::TransportClient, common};
+use crate::{common, core::{client::TransportClient}};
 
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;

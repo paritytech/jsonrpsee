@@ -24,8 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::common::{self, JsonValue};
 use crate::core::{
-    common::{self, JsonValue},
     server::raw::TransportServer,
     server::{RawServerEvent, RawServerRequestId, RawServerSubscriptionId},
     RawServer,

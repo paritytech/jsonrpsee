@@ -60,15 +60,15 @@ fn server_works_the_expected_way() {
     spawn_server!(server);
 
     let params = {
-        let mut map = jsonrpsee::core::common::JsonMap::new();
+        let mut map = jsonrpsee::common::JsonMap::new();
         map.insert("foo".to_owned(), "hello".into());
         map.insert("bar".to_owned(), 5i32.into());
-        jsonrpsee::core::common::Params::Map(map)
+        jsonrpsee::common::Params::Map(map)
     };
 
     let v: String = async_std::task::block_on(async {
         let id = client.start_request("concat", params).await.unwrap();
-        jsonrpsee::core::common::from_value(client.request_by_id(id).unwrap().await.unwrap())
+        jsonrpsee::common::from_value(client.request_by_id(id).unwrap().await.unwrap())
     })
     .unwrap();
     assert_eq!(v, "hello, 5");

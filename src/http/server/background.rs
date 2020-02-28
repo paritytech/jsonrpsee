@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::common;
+use crate::common;
 use crate::http::server::response;
 use crate::server_utils::access_control::AccessControl;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};

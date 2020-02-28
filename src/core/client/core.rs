@@ -24,7 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::{client::raw::TransportClient, common};
+use crate::common;
+use crate::core::{client::raw::TransportClient};
 
 use alloc::{collections::VecDeque, string::String, vec};
 use core::{fmt, future::Future};

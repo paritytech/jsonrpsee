@@ -24,10 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::{
-    common,
-    server::raw::{TransportServer, TransportServerEvent},
-};
+use crate::common;
+use crate::core::server::raw::{TransportServer, TransportServerEvent};
 use crate::http::server::background;
 use crate::server_utils::access_control::AccessControl;
 

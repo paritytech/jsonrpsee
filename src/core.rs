@@ -54,6 +54,5 @@ pub use crate::core::server::{
 };
 
 pub mod client;
-pub mod common;
 pub mod local;
 pub mod server;

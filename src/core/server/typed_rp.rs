@@ -56,15 +56,15 @@ where
     }
 
     /// Returns an erroneous response.
-    pub async fn err(self, err: crate::core::common::Error) {
+    pub async fn err(self, err: crate::common::Error) {
         self.respond(Err::<T, _>(err)).await
     }
 
     /// Returns a response.
-    pub async fn respond(self, response: Result<impl Into<T>, crate::core::common::Error>) {
+    pub async fn respond(self, response: Result<impl Into<T>, crate::common::Error>) {
         let response = match response {
-            Ok(v) => crate::core::common::to_value(v.into())
-                .map_err(|_| crate::core::common::Error::internal_error()),
+            Ok(v) => crate::common::to_value(v.into())
+                .map_err(|_| crate::common::Error::internal_error()),
             Err(err) => Err(err),
         };
 

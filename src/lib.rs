@@ -68,8 +68,8 @@
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
 //!     let mut client = jsonrpsee::http_raw_client("http://localhost:8000");
-//!     let request_id = client.start_request("system_name", jsonrpsee::core::common::Params::None).await.unwrap();
-//!     jsonrpsee::core::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap()).unwrap()
+//!     let request_id = client.start_request("system_name", jsonrpsee::common::Params::None).await.unwrap();
+//!     jsonrpsee::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap()).unwrap()
 //! });
 //!
 //! println!("system_name = {:?}", result);
@@ -116,7 +116,7 @@
 //!                 // you should get its id by calling `let id = rq.id();`, then later call
 //!                 // `server.request_by_id(id)`.
 //!                 println!("received request: {:?}", rq);
-//!                 rq.respond(Err(jsonrpsee::core::common::Error::method_not_found()));
+//!                 rq.respond(Err(jsonrpsee::common::Error::method_not_found()));
 //!             }
 //!         }
 //!     }
@@ -168,6 +168,7 @@ pub use server::Server;
 use std::{error, net::SocketAddr};
 
 pub mod client;
+pub mod common;
 pub mod core;
 
 mod server;

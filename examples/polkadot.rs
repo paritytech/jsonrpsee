@@ -57,7 +57,7 @@ fn main() {
         let mut sub: Subscription<Header> = client
             .subscribe(
                 "chain_subscribeNewHeads",
-                jsonrpsee::core::common::Params::None,
+                jsonrpsee::common::Params::None,
                 "chain_unsubscribeNewHeads",
             )
             .await

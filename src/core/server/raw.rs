@@ -34,7 +34,7 @@
 //!
 //! ```
 //! use jsonrpsee::core::server::raw::{TransportServer, TransportServerEvent};
-//! use jsonrpsee::core::common::{Error, Request, Response, Version};
+//! use jsonrpsee::common::{Error, Request, Response, Version};
 //!
 //! async fn run_server(server: &mut impl TransportServer) {
 //!     // Note that this implementation is a bit naive, as no request will be accepted by the

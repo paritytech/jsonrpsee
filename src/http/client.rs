@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::{client::RawClient, client::TransportClient, common};
+use crate::{common, core::{client::RawClient, client::TransportClient}};
 
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use std::{fmt, io, pin::Pin, thread};

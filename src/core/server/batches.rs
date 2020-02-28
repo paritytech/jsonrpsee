@@ -24,7 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::{common, server::batch, server::params::Params, server::Notification};
+use crate::common;
+use crate::core::server::{batch, params::Params, Notification};
 
 use alloc::vec::Vec;
 use core::fmt;
@@ -308,7 +309,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BatchesEvent, BatchesState};
-    use crate::core::{common, server::Notification};
+    use crate::{common, core::server::Notification};
 
     #[test]
     fn basic_notification() {

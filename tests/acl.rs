@@ -26,12 +26,12 @@ use jsonrpsee::http::{
 };
 use std::net::SocketAddr;
 
-fn spawn_client(res: bool, port: u16) -> (HttpRawClient, jsonrpsee::core::common::Params) {
+fn spawn_client(res: bool, port: u16) -> (HttpRawClient, jsonrpsee::common::Params) {
     let client = jsonrpsee::http_raw_client(&format!("http://localhost:{}", port));
     let params = {
-        let mut map = jsonrpsee::core::common::JsonMap::new();
+        let mut map = jsonrpsee::common::JsonMap::new();
         map.insert("foo".to_owned(), res.into());
-        jsonrpsee::core::common::Params::Map(map)
+        jsonrpsee::common::Params::Map(map)
     };
     (client, params)
 }
@@ -47,7 +47,7 @@ fn host_allow_any() {
         let (mut client, params) = spawn_client(res, 8080);
         let id = client.start_request("allowed", params).await.unwrap();
         let v: bool =
-            jsonrpsee::core::common::from_value(client.request_by_id(id).unwrap().await.unwrap())
+            jsonrpsee::common::from_value(client.request_by_id(id).unwrap().await.unwrap())
                 .unwrap();
         assert_eq!(v, res);
     });
@@ -66,7 +66,7 @@ fn host_allow_by_being_white_listed() {
         let (mut client, params) = spawn_client(res, 8081);
         let id = client.start_request("allowed", params).await.unwrap();
         let v: bool =
-            jsonrpsee::core::common::from_value(client.request_by_id(id).unwrap().await.unwrap())
+            jsonrpsee::common::from_value(client.request_by_id(id).unwrap().await.unwrap())
                 .unwrap();
         assert_eq!(v, res);
     });
