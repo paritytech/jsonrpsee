@@ -24,10 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::common::{self, JsonValue};
-use crate::core::server::{
-    batches, raw::TransportServer, raw::TransportServerEvent, Notification, Params,
-};
+use crate::common::{self, JsonValue};
+use crate::raw::server::{batches, Notification, Params};
+use crate::transport::{TransportServer, TransportServerEvent};
 
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
 use core::{fmt, hash::Hash, num::NonZeroUsize};

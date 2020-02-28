@@ -24,12 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::{
-    common,
-    server::raw::{TransportServer, TransportServerEvent},
-};
-use crate::http::server::background;
+use crate::common;
 use crate::server_utils::access_control::AccessControl;
+use crate::transport::http::server::background;
+use crate::transport::{TransportServer, TransportServerEvent};
 
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};

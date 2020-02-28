@@ -24,9 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Traits for implementing request-making capabilities.
-
-use crate::core::common;
+use crate::common;
 
 use alloc::boxed::Box;
 use core::{fmt, pin::Pin};

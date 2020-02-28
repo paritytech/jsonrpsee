@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::{client::TransportClient, common};
+use crate::{common, transport::TransportClient};
 
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
@@ -34,7 +34,7 @@ use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
 use thiserror::Error;
 
-type TlsOrPlain = crate::ws::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
+type TlsOrPlain = crate::transport::ws::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
 /// Implementation of a raw client for WebSockets requests.
 pub struct WsTransportClient {

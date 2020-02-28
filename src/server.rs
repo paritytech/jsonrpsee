@@ -24,12 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::{
-    common::{self, JsonValue},
-    server::raw::TransportServer,
+use crate::common::{self, JsonValue};
+use crate::raw::{
     server::{RawServerEvent, RawServerRequestId, RawServerSubscriptionId},
     RawServer,
 };
+use crate::transport::TransportServer;
 
 use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use parking_lot::Mutex;
