@@ -66,5 +66,13 @@ pub use server::{TransportServer, TransportServerEvent};
 
 pub mod local;
 
+#[cfg(feature = "http")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
+pub mod http;
+
+#[cfg(feature = "ws")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
+pub mod ws;
+
 mod client;
 mod server;

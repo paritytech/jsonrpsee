@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
-use crate::http::server::response;
+use crate::transport::http::server::response;
 use crate::server_utils::access_control::AccessControl;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};

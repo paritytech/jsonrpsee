@@ -150,7 +150,7 @@
 extern crate alloc;
 
 #[cfg(feature = "http")]
-pub use http::{http_raw_client, http_raw_server};
+pub use transport::http::{http_raw_client, http_raw_server};
 pub use jsonrpsee_proc_macros::rpc_api;
 
 /*#[cfg(feature = "ws")]
@@ -176,13 +176,6 @@ mod server;
 
 #[cfg(feature = "http")]
 mod server_utils;
-
-#[cfg(feature = "http")]
-#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
-pub mod http;
-#[cfg(feature = "ws")]
-#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
-pub mod ws;
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local() -> (Client, Server) {
@@ -210,19 +203,19 @@ pub fn local_raw() -> (
 #[cfg(feature = "http")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
-    http::http_raw_server(addr).await.map(From::from)
+    transport::http::http_raw_server(addr).await.map(From::from)
 }
 
 /// Builds a new HTTP client.
 #[cfg(feature = "http")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub fn http_client(addr: &str) -> Client {
-    Client::from(http::http_raw_client(addr))
+    Client::from(transport::http::http_raw_client(addr))
 }
 
 /// Builds a new WebSockets client.
 #[cfg(feature = "ws")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
-pub async fn ws_client(target: &str) -> Result<Client, ws::WsNewDnsError> {
-    ws::ws_raw_client(target).await.map(From::from)
+pub async fn ws_client(target: &str) -> Result<Client, transport::ws::WsNewDnsError> {
+    transport::ws::ws_raw_client(target).await.map(From::from)
 }

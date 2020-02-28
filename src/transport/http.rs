@@ -34,8 +34,8 @@ use crate::transport::TransportServer;
 use crate::server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr};
 
-pub use crate::http::client::{HttpTransportClient, RequestError};
-pub use crate::http::server::HttpTransportServer;
+pub use crate::transport::http::client::{HttpTransportClient, RequestError};
+pub use crate::transport::http::server::HttpTransportServer;
 
 pub use crate::server_utils::access_control;
 

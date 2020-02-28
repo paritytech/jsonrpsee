@@ -33,7 +33,7 @@
 
 use crate::core::client::RawClient;
 
-pub use crate::ws::client::{Mode, WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
+pub use crate::transport::ws::client::{Mode, WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
 
 // TODO: server
 
