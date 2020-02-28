@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Implementation of [`TransportClient`](core::client::raw::TransportClient) and
-//! [`TransportServer`](core::server::raw::TransportServer) for HTTP.
+//! [`TransportServer`](core::server::raw::TransportServer) for the WebSocket protocol.
 
 #![deny(unsafe_code)]
 #![deny(intra_doc_link_resolution_failure)]
