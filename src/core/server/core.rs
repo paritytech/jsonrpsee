@@ -25,9 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::core::server::{
-    batches, raw::TransportServer, raw::TransportServerEvent, Notification, Params,
-};
+use crate::core::server::{batches, Notification, Params};
+use crate::transport::server::{TransportServer, TransportServerEvent};
 
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
 use core::{fmt, hash::Hash, num::NonZeroUsize};

@@ -28,7 +28,8 @@
 //! [`TransportServer`](core::server::raw::TransportServer) for HTTP.
 
 use crate::core::client::RawClient;
-use crate::core::server::{raw::TransportServer, RawServer};
+use crate::core::server::RawServer;
+use crate::transport::server::TransportServer;
 
 use crate::server_utils::access_control::AccessControl;
 use std::{error, net::SocketAddr};

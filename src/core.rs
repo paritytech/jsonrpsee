@@ -45,14 +45,10 @@
 //! In order to start a client or a server, first create a struct that implements respectively
 //! [`TransportClient`] or [`TransportServer`], then wrap a [`RawClient`] or a [`RawServer`] around them.
 
-pub use crate::core::client::raw::TransportClient;
 pub use crate::core::client::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
-pub use crate::core::local::local_transport;
-pub use crate::core::server::raw::{TransportServer, TransportServerEvent};
 pub use crate::core::server::{
     RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId,
 };
 
 pub mod client;
-pub mod local;
 pub mod server;

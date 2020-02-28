@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
-use crate::core::server::raw::{TransportServer, TransportServerEvent};
 use crate::http::server::background;
+use crate::transport::server::{TransportServer, TransportServerEvent};
 use crate::server_utils::access_control::AccessControl;
 
 use fnv::FnvHashMap;

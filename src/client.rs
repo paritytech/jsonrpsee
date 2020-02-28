@@ -25,10 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::core::{
-    client::RawClientEvent,
-    RawClient, RawClientRequestId, TransportClient,
-};
+use crate::core::{client::RawClientEvent, RawClient, RawClientRequestId};
+use crate::transport::TransportClient;
+
 use futures::{
     channel::{mpsc, oneshot},
     future::Either,

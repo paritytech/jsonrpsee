@@ -37,7 +37,7 @@
 //! use jsonrpsee::core::client::RawClient;
 //! use jsonrpsee::core::server::{RawServer, RawServerEvent};
 //!
-//! let (raw_client, raw_server) = jsonrpsee::core::local_transport();
+//! let (raw_client, raw_server) = jsonrpsee::transport::local_transport();
 //! let mut client = RawClient::new(raw_client);
 //! let mut server = RawServer::new(raw_server);
 //!
@@ -61,7 +61,7 @@
 //!
 
 use crate::common;
-use crate::core::{TransportClient, TransportServer, TransportServerEvent};
+use crate::transport::{TransportClient, TransportServer, TransportServerEvent};
 
 use core::{fmt, pin::Pin};
 use fnv::FnvHashSet;

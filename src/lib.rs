@@ -170,6 +170,7 @@ use std::{error, net::SocketAddr};
 pub mod client;
 pub mod common;
 pub mod core;
+pub mod transport;
 
 mod server;
 
@@ -193,15 +194,15 @@ pub fn local() -> (Client, Server) {
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local_raw() -> (
-    crate::core::RawClient<crate::core::local::LocalTransportClient>,
+    crate::core::RawClient<crate::transport::local::LocalTransportClient>,
     crate::core::RawServer<
-        crate::core::local::LocalTransportServer,
-        <crate::core::local::LocalTransportServer as crate::core::TransportServer>::RequestId,
+        crate::transport::local::LocalTransportServer,
+        <crate::transport::local::LocalTransportServer as crate::transport::TransportServer>::RequestId,
     >,
 ) {
-    let (client, server) = core::local_transport();
-    let client = crate::core::RawClient::new(client);
-    let server = crate::core::RawServer::new(server);
+    let (client, server) = transport::local_transport();
+    let client = core::RawClient::new(client);
+    let server = core::RawServer::new(server);
     (client, server)
 }
 

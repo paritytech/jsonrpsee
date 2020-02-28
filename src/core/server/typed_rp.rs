@@ -24,7 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::server::{raw::TransportServer, RawServerRequest};
+use crate::core::server::RawServerRequest;
+use crate::transport::TransportServer;
+
 use core::{hash::Hash, marker::PhantomData};
 
 /// Allows responding to a server request in a more elegant and strongly-typed fashion.
