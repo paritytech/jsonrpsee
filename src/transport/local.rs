@@ -24,14 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Implementation of a [`TransportClient`](crate::TransportClient) and a [`TransportServer`](crate::TransportServer)
-//! that communicate through a memory channel.
+//! Implementation of a [`TransportClient`](crate::transport::TransportClient) and a
+//! [`TransportServer`](crate::transport::TransportServer) that communicate through a memory
+//! channel.
 //!
 //! # Usage
 //!
-//! Call the [`local_transport`](crate::local_transport()) function to build a set of a client and a server.
+//! Call the [`local_transport`](crate::transport::local_transport()) function to build a set of a
+//! client and a server.
 //!
-//! The [`LocalTransportClient`](crate::local::LocalTransportClient) is clonable.
+//! The [`LocalTransportClient`](crate::transport::local::LocalTransportClient) is clonable.
 //!
 //! ```
 //! use jsonrpsee::raw::client::RawClient;

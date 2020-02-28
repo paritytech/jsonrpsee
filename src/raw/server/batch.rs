@@ -31,7 +31,8 @@ use alloc::vec::Vec;
 use core::{fmt, iter};
 use smallvec::SmallVec;
 
-/// Batch corresponding to a request from a [`TransportServer`](crate::TransportServer).
+/// Batch corresponding to a request from a
+/// [`TransportServer`](crate::transport::TransportServer).
 ///
 /// A [`BatchState`] combines three things:
 ///
@@ -46,7 +47,7 @@ use smallvec::SmallVec;
 /// moves requests from the batch to the list of requests that are yet to be answered.
 /// - Answer these requests by calling [`set_response`](BatchElem::set_response).
 /// - Once all the requests have been answered, call
-/// [`extract_response`](BatchState::extract_response) and send back the response.
+/// [`into_response`](BatchState::into_response) and send back the response.
 /// - Once [`next`](BatchState::next) returns `None` and the response has been extracted, you can
 /// destroy the [`BatchState`].
 ///
@@ -141,8 +142,8 @@ impl BatchState {
         }
     }
 
-    /// Returns a request previously returned by [`next_event`](crate::RawServer::next_event) by its
-    /// id.
+    /// Returns a request previously returned by [`next_event`](crate::raw::RawServer::next_event)
+    /// by its id.
     ///
     /// Note that previous notifications don't have an ID and can't be accessed with this method.
     ///

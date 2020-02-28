@@ -59,8 +59,7 @@
 //! # Clients
 //!
 //! In order to perform outgoing requests, you first have to create a
-//! [`RawClient`](raw::client::RawClient). There exist several shortcuts such as the [`http_raw_client`]
-//! method.
+//! [`RawClient`](raw::client::RawClient).
 //!
 //! Once a client is created, you can use the
 //! [`start_request`](raw::client::RawClient::start_request) method to perform requests.

@@ -27,7 +27,9 @@
 //! State machines that process requests and responses.
 //!
 //! In order to start a client or a server, first create a struct that implements respectively
-//! [`TransportClient`] or [`TransportServer`], then wrap a [`RawClient`] or a [`RawServer`] around them.
+//! [`TransportClient`](crate::transport::TransportClient) or
+//! [`TransportServer`](crate::transport::TransportServer), then wrap a [`RawClient`] or a
+//! [`RawServer`] around them.
 
 #[doc(inline)]
 pub use client::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
