@@ -215,8 +215,8 @@ impl<T> BatchesState<T> {
         self.batches.values_mut().map(|(_, user_data)| user_data)
     }
 
-    /// Returns a request previously returned by [`next_event`](crate::RawServer::next_event) by its
-    /// id.
+    /// Returns a request previously returned by [`next_event`](crate::raw::RawServer::next_event)
+    /// by its id.
     ///
     /// Note that previous notifications don't have an ID and can't be accessed with this method.
     ///

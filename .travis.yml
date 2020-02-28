@@ -5,6 +5,7 @@ rust:
 
 before_script:
   - rustup component add rustfmt
+  - rustup toolchain add nightly
 
 script:
   - cargo fmt --all -- --check
@@ -13,7 +14,7 @@ script:
   - cargo build --verbose --no-default-features
   - cargo build --verbose --features "http"
   - cargo build --verbose --features "ws"
-  - cargo doc --verbose --no-deps --document-private-items
+  - RUSTDOCFLAGS="--deny intra_doc_link_resolution_failure" cargo +nightly doc --verbose --workspace --no-deps --document-private-items
 
 notifications:
   email:
