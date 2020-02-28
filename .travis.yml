@@ -5,6 +5,7 @@ rust:
 
 before_script:
   - rustup component add rustfmt
+  - rustup toolchain add nightly
 
 script:
   - cargo fmt --all -- --check
