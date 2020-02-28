@@ -24,23 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Core traits and structs of the `jsonrpsee` library.
-//!
-//! > **Note**: This document mostly covers the core internal concepts of the `jsonrpsee` library.
-//! >           See instead the documentation of `jsonrpsee` for how to use the library if you
-//! >           just want to use it.
-//!
-//! jsonrpsee-core has five main concepts:
-//!
-//! - The [`common`] module contains all the primitive types of the JSON-RPC protocol, and
-//!   utilities to convert between them and JSON.
-//! - The [`TransportClient`] and [`TransportServer`] traits are implemented on structs that allow performing
-//!   low-level communication with respectively a server or a client. These are the traits that
-//!   you must implement if you are writing a custom transport (similar to HTTP, WebSockets,
-//!   IPC, etc.).
-//! - The [`RawClient`] and [`RawServer`] structs wrap around respectively a [`TransportClient`] or a
-//!   [`TransportServer`] and allow correctly associating requests with responses and managing pub-sub
-//!   subscriptions.
+//! State machines that process requests and responses.
 //!
 //! In order to start a client or a server, first create a struct that implements respectively
 //! [`TransportClient`] or [`TransportServer`], then wrap a [`RawClient`] or a [`RawServer`] around them.

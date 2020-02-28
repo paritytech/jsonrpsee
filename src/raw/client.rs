@@ -28,8 +28,7 @@
 //!
 //! The [`RawClient`] struct wraps around a [`TransportClient`] and handles the higher-level JSON-RPC logic
 //! on top of it. In order to build a [`RawClient`], you need to pass to it an implementation of
-//! [`TransportClient`]. There exists shortcut methods that directly create a [`RawClient`] on top of a
-//! specific [`TransportClient`] implementations.
+//! [`TransportClient`].
 //!
 //! Once created, a [`RawClient`] can be used to send out notifications, requests, and subscription
 //! requests to the server. Request identifiers are automatically assigned by the client.
