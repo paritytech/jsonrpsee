@@ -24,7 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{common, transport::{TransportServer, TransportServerEvent}};
+use crate::{
+    common,
+    transport::{TransportServer, TransportServerEvent},
+};
 
 use async_std::net::{TcpListener, TcpStream};
 use futures::{channel::mpsc, prelude::*};
@@ -182,7 +185,8 @@ impl TransportServer for WsTransportServer {
                         for rq_id in list {
                             let _was_in = self.to_connections.remove(&rq_id);
                             debug_assert!(_was_in.is_some());
-                            self.pending_events.push(TransportServerEvent::Closed(rq_id));
+                            self.pending_events
+                                .push(TransportServerEvent::Closed(rq_id));
                         }
                     }
                 }
@@ -198,8 +202,14 @@ impl TransportServer for WsTransportServer {
         Box::pin(async move {
             if let Some(mut sender) = self.to_connections.remove(request_id) {
                 let serialized = serde_json::to_string(&response).map_err(|_| ())?;
-                sender.send(FrontToBack::Send(serialized)).await.map_err(|_| ())?;
-                sender.send(FrontToBack::Finished(*request_id)).await.map_err(|_| ())?;
+                sender
+                    .send(FrontToBack::Send(serialized))
+                    .await
+                    .map_err(|_| ())?;
+                sender
+                    .send(FrontToBack::Finished(*request_id))
+                    .await
+                    .map_err(|_| ())?;
                 Ok(())
             } else {
                 Err(())
@@ -223,7 +233,10 @@ impl TransportServer for WsTransportServer {
         Box::pin(async move {
             if let Some(sender) = self.to_connections.get_mut(request_id) {
                 let serialized = serde_json::to_string(&response).map_err(|_| ())?;
-                sender.send(FrontToBack::Send(serialized)).await.map_err(|_| ())?;
+                sender
+                    .send(FrontToBack::Send(serialized))
+                    .await
+                    .map_err(|_| ())?;
             }
             Ok(())
         })
@@ -344,13 +357,13 @@ async fn per_connection_task(
                     Ok(()) => {}
                     Err(_) => return pending_requests,
                 }
-            },
+            }
 
             // Received data to send on the connection.
             future::Either::Right((Some(FrontToBack::Finished(rq_id)), _)) => {
                 let pos = pending_requests.iter().position(|r| *r == rq_id).unwrap();
                 pending_requests.remove(pos);
-            },
+            }
 
             // Channel to main WS server struct has closed. Let's close the task.
             future::Either::Right((None, _)) => return pending_requests,

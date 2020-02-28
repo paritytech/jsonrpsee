@@ -27,10 +27,8 @@
 //! Implementation of [`TransportClient`](core::client::raw::TransportClient) and
 //! [`TransportServer`](core::server::raw::TransportServer) for the WebSocket protocol.
 
-pub use client::{
-    Mode, WsConnecError, WsNewDnsError, WsNewError, WsTransportClient,
-};
-pub use server::{WsTransportServer, WsTransportServerBuilder, WsRequestId};
+pub use client::{Mode, WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
+pub use server::{WsRequestId, WsTransportServer, WsTransportServerBuilder};
 
 mod client;
 mod server;
