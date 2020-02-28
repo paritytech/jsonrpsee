@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use super::{TransportServer, TransportServerEvent};
-use crate::core::common;
+use crate::common;
 
 use alloc::boxed::Box;
 use core::pin::Pin;

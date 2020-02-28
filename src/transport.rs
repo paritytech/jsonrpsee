@@ -24,17 +24,18 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Lower-level API for servers that receive JSON payloads.
+//! Low-level traits that abstract over streams of requests/responses.
 //!
-//! A "raw server" is a server that produces JSON payloads and can send back JSON payloads in
-//! return. This module isn't concerned with concepts such as a "batch", "successes" and "failures".
-//! All it does is accept and send back JSON data.
+//! The [`TransportClient`] and [`TransportServer`] traits are implemented on structs that allow performing
+//! low-level communication with respectively a server or a client. These are the traits that
+//! you must implement if you are writing a custom transport (similar to HTTP, WebSockets,
+//! IPC, etc.).
 //!
-//! ## Example usage
+//! ## Server example
 //!
 //! ```
-//! use jsonrpsee::core::server::raw::{TransportServer, TransportServerEvent};
-//! use jsonrpsee::core::common::{Error, Request, Response, Version};
+//! use jsonrpsee::common::{Error, Request, Response, Version};
+//! use jsonrpsee::transport::{TransportServer, TransportServerEvent};
 //!
 //! async fn run_server(server: &mut impl TransportServer) {
 //!     // Note that this implementation is a bit naive, as no request will be accepted by the
@@ -59,8 +60,19 @@
 //! ```
 //!
 
-pub use self::join::{join, Join, JoinRequestId};
-pub use self::traits::{TransportServer, TransportServerEvent};
+pub use client::TransportClient;
+pub use local::local_transport;
+pub use server::{TransportServer, TransportServerEvent};
 
-mod join;
-mod traits;
+pub mod local;
+
+#[cfg(feature = "http")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
+pub mod http;
+
+#[cfg(feature = "ws")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
+pub mod ws;
+
+mod client;
+mod server;

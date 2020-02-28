@@ -58,7 +58,7 @@ mod api_def;
 /// Each generated enum has a `next_request` method whose signature is:
 ///
 /// ```ignore
-/// async fn next_request(server: &'a mut jsonrpsee::core::RawServer<R, I>) -> Result<Foo<'a, R, I>, std::io::Error>;
+/// async fn next_request(server: &'a mut jsonrpsee::raw::RawServer<R, I>) -> Result<Foo<'a, R, I>, std::io::Error>;
 /// ```
 ///
 /// This method lets you grab the next request incoming from a server, and parse it to match of
@@ -174,7 +174,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         } else {
             variants.push(quote_spanned!(function.signature.ident.span()=>
                 #variant_name {
-                    respond: jsonrpsee::core::server::TypedResponder<'a, R, I, #ret>,
+                    respond: jsonrpsee::raw::server::TypedResponder<'a, R, I, #ret>,
                     #(#params_list,)*
                 }
             ));
@@ -239,7 +239,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                                 Ok(v) => v,
                                 Err(_) => {
                                     // TODO: message
-                                    request.respond(Err(jsonrpsee::core::common::Error::invalid_params(#rpc_param_name))).await;
+                                    request.respond(Err(jsonrpsee::common::Error::invalid_params(#rpc_param_name))).await;
                                     continue;
                                 }
                             }
@@ -280,7 +280,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                 tmp_to_rq.push(quote_spanned!(function.signature.span()=>
                     Some(Tmp::#variant_name { #(#params_names_list),* }) => {
                         let request = server.request_by_id(&request_id).unwrap();
-                        let respond = jsonrpsee::core::server::TypedResponder::from(request);
+                        let respond = jsonrpsee::raw::server::TypedResponder::from(request);
                         return Ok(#enum_name::#variant_name { respond #(, #params_names_list)* });
                     },
                 ));
@@ -312,7 +312,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 
             match request_outcome {
                 #(#tmp_to_rq)*
-                None => server.request_by_id(&request_id).unwrap().respond(Err(jsonrpsee::core::common::Error::method_not_found())).await,
+                None => server.request_by_id(&request_id).unwrap().respond(Err(jsonrpsee::common::Error::method_not_found())).await,
             }
         });
 
@@ -325,18 +325,18 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
         let params_tys = generic_params.types.iter();
 
         quote_spanned!(api.name.span()=>
-            #visibility async fn next_request(server: &'a mut jsonrpsee::core::RawServer<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
+            #visibility async fn next_request(server: &'a mut jsonrpsee::raw::RawServer<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
                 where
-                    R: jsonrpsee::core::TransportServer<RequestId = I>,
+                    R: jsonrpsee::transport::TransportServer<RequestId = I>,
                     I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync
-                    #(, #params_tys: jsonrpsee::core::common::DeserializeOwned)*
+                    #(, #params_tys: jsonrpsee::common::DeserializeOwned)*
             {
                 loop {
                     match server.next_event().await {
-                        jsonrpsee::core::RawServerEvent::Notification(n) => #on_notification,
-                        jsonrpsee::core::RawServerEvent::SubscriptionsClosed(_) => unimplemented!(),       // TODO:
-                        jsonrpsee::core::RawServerEvent::SubscriptionsReady(_) => unimplemented!(),       // TODO:
-                        jsonrpsee::core::RawServerEvent::Request(r) => #on_request,
+                        jsonrpsee::raw::RawServerEvent::Notification(n) => #on_notification,
+                        jsonrpsee::raw::RawServerEvent::SubscriptionsClosed(_) => unimplemented!(),       // TODO:
+                        jsonrpsee::raw::RawServerEvent::SubscriptionsReady(_) => unimplemented!(),       // TODO:
+                        jsonrpsee::raw::RawServerEvent::Request(r) => #on_request,
                     }
                 }
             }
@@ -439,27 +439,27 @@ fn build_client_functions(
             params_to_json.push(quote_spanned!(pat_span=>
                 map.insert(
                     #rpc_param_name.to_string(),
-                    jsonrpsee::core::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
+                    jsonrpsee::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
                 );
             ));
             params_to_array.push(quote_spanned!(pat_span=>
-                jsonrpsee::core::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
+                jsonrpsee::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
             ));
         }
 
         let params_building = if params_list.is_empty() {
-            quote! {jsonrpsee::core::common::Params::None}
+            quote! {jsonrpsee::common::Params::None}
         } else if function.attributes.positional_params {
             quote_spanned!(function.signature.span()=>
-                jsonrpsee::core::common::Params::Array(vec![
+                jsonrpsee::common::Params::Array(vec![
                     #(#params_to_array),*
                 ])
             )
         } else {
             let params_list_len = params_list.len();
             quote_spanned!(function.signature.span()=>
-                jsonrpsee::core::common::Params::Map({
-                    let mut map = jsonrpsee::core::common::JsonMap::with_capacity(#params_list_len);
+                jsonrpsee::common::Params::Map({
+                    let mut map = jsonrpsee::common::JsonMap::with_capacity(#params_list_len);
                     #(#params_to_json)*
                     map
                 })
@@ -470,25 +470,25 @@ fn build_client_functions(
         let function_body = if is_notification {
             quote_spanned!(function.signature.span()=>
                 client.send_notification(#rpc_method_name, #params_building).await
-                    .map_err(jsonrpsee::core::client::RawClientError::Inner)?;
+                    .map_err(jsonrpsee::raw::client::RawClientError::Inner)?;
                 Ok(())
             )
         } else {
             quote_spanned!(function.signature.span()=>
                 let rq_id = client.start_request(#rpc_method_name, #params_building).await
-                    .map_err(jsonrpsee::core::client::RawClientError::Inner)?;
+                    .map_err(jsonrpsee::raw::client::RawClientError::Inner)?;
                 let data = client.request_by_id(rq_id).unwrap().await?;     // TODO: don't unwrap?
-                Ok(jsonrpsee::core::common::from_value(data).unwrap())     // TODO: don't unwrap
+                Ok(jsonrpsee::common::from_value(data).unwrap())     // TODO: don't unwrap
             )
         };
 
         client_functions.push(quote_spanned!(function.signature.span()=>
             // TODO: what if there's a conflict between `client` and a param name?
-            #visibility async fn #f_name<C: jsonrpsee::core::TransportClient>(client: &mut jsonrpsee::core::RawClient<C> #(, #params_list)*)
-                -> core::result::Result<#ret_ty, jsonrpsee::core::client::RawClientError<<C as jsonrpsee::core::TransportClient>::Error>>
+            #visibility async fn #f_name<C: jsonrpsee::transport::TransportClient>(client: &mut jsonrpsee::raw::RawClient<C> #(, #params_list)*)
+                -> core::result::Result<#ret_ty, jsonrpsee::raw::client::RawClientError<<C as jsonrpsee::transport::TransportClient>::Error>>
             where
-                #ret_ty: jsonrpsee::core::common::DeserializeOwned
-                #(, #params_tys: jsonrpsee::core::common::Serialize)*
+                #ret_ty: jsonrpsee::common::DeserializeOwned
+                #(, #params_tys: jsonrpsee::common::Serialize)*
             {
                 #function_body
             }
