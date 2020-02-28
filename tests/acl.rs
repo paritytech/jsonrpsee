@@ -19,7 +19,7 @@ macro_rules! spawn_server {
 }
 
 extern crate jsonrpsee;
-use jsonrpsee::core::{RawClient, RawClientError, RawServer};
+use jsonrpsee::raw::{RawClient, RawClientError, RawServer};
 use jsonrpsee::transport::http::{
     self, access_control::Host, RequestError, HttpTransportClient,
 };
@@ -27,7 +27,7 @@ use std::net::SocketAddr;
 
 fn spawn_client(res: bool, port: u16) -> (RawClient<HttpTransportClient>, jsonrpsee::common::Params) {
     let transport = jsonrpsee::transport::http::HttpTransportClient::new(&format!("http://localhost:{}", port));
-    let client = jsonrpsee::core::RawClient::new(transport);
+    let client = jsonrpsee::raw::RawClient::new(transport);
     let params = {
         let mut map = jsonrpsee::common::JsonMap::new();
         map.insert("foo".to_owned(), res.into());

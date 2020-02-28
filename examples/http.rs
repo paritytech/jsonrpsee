@@ -47,7 +47,7 @@ fn main() {
     async_std::task::spawn(async move {
         let listen_addr = "127.0.0.1:8000".parse().unwrap();
         let transport_server = jsonrpsee::transport::http::HttpTransportServer::bind(&listen_addr).await.unwrap();
-        let mut server1 = jsonrpsee::core::RawServer::new(transport_server);
+        let mut server1 = jsonrpsee::raw::RawServer::new(transport_server);
 
         while let Ok(request) = Health::next_request(&mut server1).await {
             match request {
@@ -67,7 +67,7 @@ fn main() {
 
     // Client demo.
     let transport_client = jsonrpsee::transport::http::HttpTransportClient::new("http://127.0.0.1:8000");
-    let mut client = jsonrpsee::core::RawClient::new(transport_client);
+    let mut client = jsonrpsee::raw::RawClient::new(transport_client);
     let v = async_std::task::block_on(async {
         Health::test_notif(&mut client, "notif_string", 192)
             .await

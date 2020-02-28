@@ -34,8 +34,8 @@
 //! The [`LocalTransportClient`](crate::local::LocalTransportClient) is clonable.
 //!
 //! ```
-//! use jsonrpsee::core::client::RawClient;
-//! use jsonrpsee::core::server::{RawServer, RawServerEvent};
+//! use jsonrpsee::raw::client::RawClient;
+//! use jsonrpsee::raw::server::{RawServer, RawServerEvent};
 //!
 //! let (raw_client, raw_server) = jsonrpsee::transport::local_transport();
 //! let mut client = RawClient::new(raw_client);

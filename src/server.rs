@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::core::{
+use crate::raw::{
     server::{RawServerEvent, RawServerRequestId, RawServerSubscriptionId},
     RawServer,
 };

@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::core::server::RawServerRequest;
+use crate::raw::server::RawServerRequest;
 use crate::transport::TransportServer;
 
 use core::{hash::Hash, marker::PhantomData};

@@ -59,16 +59,16 @@
 //! # Clients
 //!
 //! In order to perform outgoing requests, you first have to create a
-//! [`RawClient`](core::client::RawClient). There exist several shortcuts such as the [`http_raw_client`]
+//! [`RawClient`](raw::client::RawClient). There exist several shortcuts such as the [`http_raw_client`]
 //! method.
 //!
 //! Once a client is created, you can use the
-//! [`start_request`](core::client::RawClient::start_request) method to perform requests.
+//! [`start_request`](raw::client::RawClient::start_request) method to perform requests.
 //!
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
 //!     let mut transport = jsonrpsee::transport::http::HttpTransportClient::new("http://localhost:8000");
-//!     let mut client = jsonrpsee::core::RawClient::new(transport);
+//!     let mut client = jsonrpsee::raw::RawClient::new(transport);
 //!     let request_id = client.start_request("system_name", jsonrpsee::common::Params::None).await.unwrap();
 //!     jsonrpsee::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap()).unwrap()
 //! });
@@ -84,7 +84,7 @@
 //! # fn main() {
 //! let result = async_std::task::block_on(async {
 //!     let mut transport = jsonrpsee::transport::http::HttpTransportClient::new("http://localhost:8000");
-//!     let mut client = jsonrpsee::core::RawClient::new(transport);
+//!     let mut client = jsonrpsee::raw::RawClient::new(transport);
 //!     System::system_name(&mut client).await
 //! });
 //!
@@ -94,27 +94,27 @@
 //!
 //! # Servers
 //!
-//! In order to server JSON-RPC requests, you have to create a [`RawServer`](core::server::RawServer).
+//! In order to server JSON-RPC requests, you have to create a [`RawServer`](raw::server::RawServer).
 //! Just like for the client, there exists shortcuts for creating a server.
 //!
-//! Once a server is created, use the [`next_event`](core::server::RawServer::next_event) asynchronous
+//! Once a server is created, use the [`next_event`](raw::server::RawServer::next_event) asynchronous
 //! function to wait for a request to arrive. The generated
-//! [`RawServerEvent`](core::server::RawServerEvent) can be either a "notification", in other words a
+//! [`RawServerEvent`](raw::server::RawServerEvent) can be either a "notification", in other words a
 //! message from the client that doesn't expect any answer, or a "request" which you should answer.
 //!
 //! ```no_run
 //! // Should run forever
 //! async_std::task::block_on(async {
 //!     let mut transport = jsonrpsee::transport::http::HttpTransportServer::bind(&"localhost:8000".parse().unwrap()).await.unwrap();
-//!     let mut server = jsonrpsee::core::RawServer::new(transport);
+//!     let mut server = jsonrpsee::raw::RawServer::new(transport);
 //!     loop {
 //!         match server.next_event().await {
-//!             jsonrpsee::core::server::RawServerEvent::Notification(notif) => {
+//!             jsonrpsee::raw::server::RawServerEvent::Notification(notif) => {
 //!                 println!("received notification: {:?}", notif);
 //!             }
-//!             jsonrpsee::core::server::RawServerEvent::SubscriptionsClosed(_) => {}
-//!             jsonrpsee::core::server::RawServerEvent::SubscriptionsReady(_) => {}
-//!             jsonrpsee::core::server::RawServerEvent::Request(rq) => {
+//!             jsonrpsee::raw::server::RawServerEvent::SubscriptionsClosed(_) => {}
+//!             jsonrpsee::raw::server::RawServerEvent::SubscriptionsReady(_) => {}
+//!             jsonrpsee::raw::server::RawServerEvent::Request(rq) => {
 //!                 // Note that `rq` borrows `server`. If you want to store the request for later,
 //!                 // you should get its id by calling `let id = rq.id();`, then later call
 //!                 // `server.request_by_id(id)`.
@@ -134,7 +134,7 @@
 //! // Should run forever
 //! async_std::task::block_on(async {
 //!     let mut transport = jsonrpsee::transport::http::HttpTransportServer::bind(&"localhost:8000".parse().unwrap()).await.unwrap();
-//!     let mut server = jsonrpsee::core::RawServer::new(transport);
+//!     let mut server = jsonrpsee::raw::RawServer::new(transport);
 //!     while let Ok(request) = System::next_request(&mut server).await {
 //!         match request {
 //!             System::SystemName { respond } => {
@@ -171,7 +171,7 @@ use std::{error, net::SocketAddr};
 
 pub mod client;
 pub mod common;
-pub mod core;
+pub mod raw;
 pub mod transport;
 
 mod server;
@@ -189,15 +189,15 @@ pub fn local() -> (Client, Server) {
 
 /// Builds a new client and a new server that are connected to each other.
 pub fn local_raw() -> (
-    crate::core::RawClient<crate::transport::local::LocalTransportClient>,
-    crate::core::RawServer<
+    crate::raw::RawClient<crate::transport::local::LocalTransportClient>,
+    crate::raw::RawServer<
         crate::transport::local::LocalTransportServer,
         <crate::transport::local::LocalTransportServer as crate::transport::TransportServer>::RequestId,
     >,
 ) {
     let (client, server) = transport::local_transport();
-    let client = core::RawClient::new(client);
-    let server = core::RawServer::new(server);
+    let client = raw::RawClient::new(client);
+    let server = raw::RawServer::new(server);
     (client, server)
 }
 
@@ -206,7 +206,7 @@ pub fn local_raw() -> (
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
     let transport = transport::http::HttpTransportServer::bind(addr).await?;
-    Ok(From::from(core::RawServer::new(transport)))
+    Ok(From::from(raw::RawServer::new(transport)))
 }
 
 /// Builds a new HTTP client.
@@ -214,7 +214,7 @@ pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Err
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub fn http_client(addr: &str) -> Client {
     let transport = transport::http::HttpTransportClient::new(addr);
-    Client::from(core::RawClient::new(transport))
+    Client::from(raw::RawClient::new(transport))
 }
 
 /// Builds a new WebSockets client.
@@ -222,5 +222,5 @@ pub fn http_client(addr: &str) -> Client {
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
 pub async fn ws_client(target: &str) -> Result<Client, transport::ws::WsNewDnsError> {
     let transport = transport::ws::WsTransportClient::new(target).await?;
-    Ok(Client::from(core::RawClient::new(transport)))
+    Ok(Client::from(raw::RawClient::new(transport)))
 }

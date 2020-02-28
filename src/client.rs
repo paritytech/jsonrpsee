@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::core::{client::RawClientEvent, RawClient, RawClientRequestId};
+use crate::raw::{client::RawClientEvent, RawClient, RawClientRequestId};
 use crate::transport::TransportClient;
 
 use futures::{

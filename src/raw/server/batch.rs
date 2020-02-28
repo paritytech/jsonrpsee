@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
-use crate::core::server::{Notification, Params};
+use crate::raw::server::{Notification, Params};
 
 use alloc::vec::Vec;
 use core::{fmt, iter};
@@ -286,7 +286,7 @@ impl<'a> fmt::Debug for BatchElem<'a> {
 #[cfg(test)]
 mod tests {
     use super::{BatchInc, BatchState};
-    use crate::{common, core::server::Notification};
+    use crate::{common, raw::server::Notification};
 
     #[test]
     fn basic_notification() {

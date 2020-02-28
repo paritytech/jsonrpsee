@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
-use crate::core::server::{batch, params::Params, Notification};
+use crate::raw::server::{batch, params::Params, Notification};
 
 use alloc::vec::Vec;
 use core::fmt;
@@ -309,7 +309,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BatchesEvent, BatchesState};
-    use crate::{common, core::server::Notification};
+    use crate::{common, raw::server::Notification};
 
     #[test]
     fn basic_notification() {

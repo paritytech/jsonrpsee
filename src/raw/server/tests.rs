@@ -27,7 +27,7 @@
 #![cfg(test)]
 
 use crate::common;
-use crate::core::{RawServer, RawServerEvent};
+use crate::raw::{RawServer, RawServerEvent};
 use crate::transport::{local_transport, TransportClient};
 
 #[test]
