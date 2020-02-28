@@ -155,15 +155,6 @@ extern crate alloc;
 
 pub use jsonrpsee_proc_macros::rpc_api;
 
-/*#[cfg(feature = "ws")]
-pub use jsonrpsee_ws::ws_raw_client;
-
-#[doc(inline)]
-pub use jsonrpsee_core as core;
-#[doc(inline)]
-#[cfg(feature = "ws")]
-pub use jsonrpsee_ws as ws;*/
-
 pub use client::Client;
 pub use server::Server;
 
