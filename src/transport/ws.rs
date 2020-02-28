@@ -27,23 +27,9 @@
 //! Implementation of [`TransportClient`](core::client::raw::TransportClient) and
 //! [`TransportServer`](core::server::raw::TransportServer) for the WebSocket protocol.
 
-#![deny(unsafe_code)]
-#![deny(intra_doc_link_resolution_failure)]
-#![warn(missing_docs)]
-
-use crate::core::client::RawClient;
-
 pub use crate::transport::ws::client::{Mode, WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
 
 // TODO: server
 
-/// Type alias for a [`RawClient`](core::client::RawClient) that operates on WebSockets.
-pub type WsRawClient = RawClient<WsTransportClient>;
-
 mod client;
 mod stream;
-
-/// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
-pub async fn ws_raw_client(target: &str) -> Result<WsRawClient, WsNewDnsError> {
-    WsTransportClient::new(target).await.map(RawClient::new)
-}

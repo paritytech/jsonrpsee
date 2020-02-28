@@ -46,9 +46,8 @@ struct Header {
 
 fn main() {
     async_std::task::block_on(async move {
-        let mut raw_client = jsonrpsee::transport::ws::ws_raw_client("wss://kusama-rpc.polkadot.io")
-            .await
-            .unwrap();
+        let transport = jsonrpsee::transport::ws::WsTransportClient::new("wss://kusama-rpc.polkadot.io").await.unwrap();
+        let mut raw_client = jsonrpsee::core::RawClient::new(transport);
         let v = System::system_name(&mut raw_client).await.unwrap();
         println!("{:?}", v);
 

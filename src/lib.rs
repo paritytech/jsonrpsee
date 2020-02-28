@@ -67,7 +67,8 @@
 //!
 //! ```no_run
 //! let result: String = async_std::task::block_on(async {
-//!     let mut client = jsonrpsee::http_raw_client("http://localhost:8000");
+//!     let mut transport = jsonrpsee::transport::http::HttpTransportClient::new("http://localhost:8000");
+//!     let mut client = jsonrpsee::core::RawClient::new(transport);
 //!     let request_id = client.start_request("system_name", jsonrpsee::common::Params::None).await.unwrap();
 //!     jsonrpsee::common::from_value(client.request_by_id(request_id).unwrap().await.unwrap()).unwrap()
 //! });
@@ -82,7 +83,8 @@
 //! # jsonrpsee::rpc_api! { System { fn system_name() -> String; } }
 //! # fn main() {
 //! let result = async_std::task::block_on(async {
-//!     let mut client = jsonrpsee::http_raw_client("http://localhost:8000");
+//!     let mut transport = jsonrpsee::transport::http::HttpTransportClient::new("http://localhost:8000");
+//!     let mut client = jsonrpsee::core::RawClient::new(transport);
 //!     System::system_name(&mut client).await
 //! });
 //!
@@ -103,7 +105,8 @@
 //! ```no_run
 //! // Should run forever
 //! async_std::task::block_on(async {
-//!     let mut server = jsonrpsee::http_raw_server(&"localhost:8000".parse().unwrap()).await.unwrap();
+//!     let mut transport = jsonrpsee::transport::http::HttpTransportServer::bind(&"localhost:8000".parse().unwrap()).await.unwrap();
+//!     let mut server = jsonrpsee::core::RawServer::new(transport);
 //!     loop {
 //!         match server.next_event().await {
 //!             jsonrpsee::core::server::RawServerEvent::Notification(notif) => {
@@ -130,7 +133,8 @@
 //! # fn main() {
 //! // Should run forever
 //! async_std::task::block_on(async {
-//!     let mut server = jsonrpsee::http_raw_server(&"localhost:8000".parse().unwrap()).await.unwrap();
+//!     let mut transport = jsonrpsee::transport::http::HttpTransportServer::bind(&"localhost:8000".parse().unwrap()).await.unwrap();
+//!     let mut server = jsonrpsee::core::RawServer::new(transport);
 //!     while let Ok(request) = System::next_request(&mut server).await {
 //!         match request {
 //!             System::SystemName { respond } => {
@@ -149,8 +153,6 @@
 
 extern crate alloc;
 
-#[cfg(feature = "http")]
-pub use transport::http::{http_raw_client, http_raw_server};
 pub use jsonrpsee_proc_macros::rpc_api;
 
 /*#[cfg(feature = "ws")]
@@ -203,19 +205,22 @@ pub fn local_raw() -> (
 #[cfg(feature = "http")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
-    transport::http::http_raw_server(addr).await.map(From::from)
+    let transport = transport::http::HttpTransportServer::bind(addr).await?;
+    Ok(From::from(core::RawServer::new(transport)))
 }
 
 /// Builds a new HTTP client.
 #[cfg(feature = "http")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
 pub fn http_client(addr: &str) -> Client {
-    Client::from(transport::http::http_raw_client(addr))
+    let transport = transport::http::HttpTransportClient::new(addr);
+    Client::from(core::RawClient::new(transport))
 }
 
 /// Builds a new WebSockets client.
 #[cfg(feature = "ws")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
 pub async fn ws_client(target: &str) -> Result<Client, transport::ws::WsNewDnsError> {
-    transport::ws::ws_raw_client(target).await.map(From::from)
+    let transport = transport::ws::WsTransportClient::new(target).await?;
+    Ok(Client::from(core::RawClient::new(transport)))
 }
