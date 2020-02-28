@@ -41,6 +41,7 @@ pub use crate::ws::client::{Mode, WsConnecError, WsNewDnsError, WsNewError, WsTr
 pub type WsRawClient = RawClient<WsTransportClient>;
 
 mod client;
+mod server;
 mod stream;
 
 /// Returns an object that lets you perform JSON-RPC queries towards the given HTTP server.
