@@ -66,7 +66,7 @@
 //!
 
 use crate::common;
-use crate::transport::client::TransportClient;
+use crate::transport::TransportClient;
 
 use alloc::{collections::VecDeque, string::String, vec};
 use core::{fmt, future::Future};

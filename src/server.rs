@@ -29,7 +29,7 @@ use crate::core::{
     server::{RawServerEvent, RawServerRequestId, RawServerSubscriptionId},
     RawServer,
 };
-use crate::transport::server::TransportServer;
+use crate::transport::TransportServer;
 
 use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use parking_lot::Mutex;

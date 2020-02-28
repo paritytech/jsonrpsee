@@ -30,11 +30,41 @@
 //! low-level communication with respectively a server or a client. These are the traits that
 //! you must implement if you are writing a custom transport (similar to HTTP, WebSockets,
 //! IPC, etc.).
+//! 
+//! ## Server example
+//!
+//! ```
+//! use jsonrpsee::common::{Error, Request, Response, Version};
+//! use jsonrpsee::transport::{TransportServer, TransportServerEvent};
+//!
+//! async fn run_server(server: &mut impl TransportServer) {
+//!     // Note that this implementation is a bit naive, as no request will be accepted by the
+//!     // server while `request_to_response` is running. This is fine as long as building the
+//!     // response is instantaneous (which is the case in this exampe), but probably isn't for
+//!     // actual real-world usages.
+//!     loop {
+//!         match server.next_request().await {
+//!             TransportServerEvent::Closed(_) => {},
+//!             TransportServerEvent::Request { id, request } => {
+//!                 let response = request_to_response(&request).await;
+//!                 let _ = server.finish(&id, Some(&response)).await;
+//!             },
+//!         }
+//!     }
+//! }
+//!
+//! async fn request_to_response(rq: &Request) -> Response {
+//!     // ... to be implemented ...
+//!     Response::from(Error::method_not_found(), Version::V2)
+//! }
+//! ```
+//!
 
 pub use client::TransportClient;
 pub use local::local_transport;
 pub use server::{TransportServer, TransportServerEvent};
 
-pub mod client;
 pub mod local;
-pub mod server;
+
+mod client;
+mod server;
