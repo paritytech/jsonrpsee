@@ -30,13 +30,9 @@
 //! [`TransportClient`] or [`TransportServer`], then wrap a [`RawClient`] or a [`RawServer`] around them.
 
 #[doc(inline)]
-pub use client::{
-    RawClient, RawClientError, RawClientEvent, RawClientRequestId,
-};
+pub use client::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
 #[doc(inline)]
-pub use server::{
-    RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId,
-};
+pub use server::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};
 
 pub mod client;
 pub mod server;
