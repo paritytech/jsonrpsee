@@ -25,9 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
+use crate::server_utils::access_control::AccessControl;
 use crate::transport::http::server::background;
 use crate::transport::{TransportServer, TransportServerEvent};
-use crate::server_utils::access_control::AccessControl;
 
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};

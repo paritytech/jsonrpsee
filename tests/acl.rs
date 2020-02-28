@@ -20,13 +20,15 @@ macro_rules! spawn_server {
 
 extern crate jsonrpsee;
 use jsonrpsee::raw::{RawClient, RawClientError, RawServer};
-use jsonrpsee::transport::http::{
-    self, access_control::Host, RequestError, HttpTransportClient,
-};
+use jsonrpsee::transport::http::{self, access_control::Host, HttpTransportClient, RequestError};
 use std::net::SocketAddr;
 
-fn spawn_client(res: bool, port: u16) -> (RawClient<HttpTransportClient>, jsonrpsee::common::Params) {
-    let transport = jsonrpsee::transport::http::HttpTransportClient::new(&format!("http://localhost:{}", port));
+fn spawn_client(
+    res: bool,
+    port: u16,
+) -> (RawClient<HttpTransportClient>, jsonrpsee::common::Params) {
+    let transport =
+        jsonrpsee::transport::http::HttpTransportClient::new(&format!("http://localhost:{}", port));
     let client = jsonrpsee::raw::RawClient::new(transport);
     let params = {
         let mut map = jsonrpsee::common::JsonMap::new();
@@ -41,7 +43,10 @@ fn host_allow_any() {
     async_std::task::block_on(async {
         let ip: SocketAddr = "0.0.0.0:8080".parse().unwrap();
         let acl = http::access_control::AccessControlBuilder::new().build();
-        let transport_server = jsonrpsee::transport::http::HttpTransportServer::bind_with_acl(&ip, acl).await.unwrap();
+        let transport_server =
+            jsonrpsee::transport::http::HttpTransportServer::bind_with_acl(&ip, acl)
+                .await
+                .unwrap();
         let mut server = RawServer::new(transport_server);
         spawn_server!(server);
         let res = true;
@@ -61,7 +66,10 @@ fn host_allow_by_being_white_listed() {
         let acl = http::access_control::AccessControlBuilder::new()
             .allow_host(Host::parse("localhost:*"))
             .build();
-        let transport_server = jsonrpsee::transport::http::HttpTransportServer::bind_with_acl(&ip, acl).await.unwrap();
+        let transport_server =
+            jsonrpsee::transport::http::HttpTransportServer::bind_with_acl(&ip, acl)
+                .await
+                .unwrap();
         let mut server = RawServer::new(transport_server);
         spawn_server!(server);
         let res = true;
@@ -81,7 +89,10 @@ fn host_deny_by_not_being_white_listed() {
         let acl = http::access_control::AccessControlBuilder::new()
             .allow_host(Host::parse("1.2.3.4"))
             .build();
-        let transport_server = jsonrpsee::transport::http::HttpTransportServer::bind_with_acl(&ip, acl).await.unwrap();
+        let transport_server =
+            jsonrpsee::transport::http::HttpTransportServer::bind_with_acl(&ip, acl)
+                .await
+                .unwrap();
         let mut server = RawServer::new(transport_server);
         spawn_server!(server);
         let (mut client, params) = spawn_client(false, 8082);

@@ -185,7 +185,7 @@ pub fn local_raw() -> (
         crate::transport::local::LocalTransportServer,
         <crate::transport::local::LocalTransportServer as crate::transport::TransportServer>::RequestId,
     >,
-) {
+){
     let (client, server) = transport::local_transport();
     let client = raw::RawClient::new(client);
     let server = raw::RawServer::new(server);

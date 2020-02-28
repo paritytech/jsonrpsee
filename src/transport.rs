@@ -30,7 +30,7 @@
 //! low-level communication with respectively a server or a client. These are the traits that
 //! you must implement if you are writing a custom transport (similar to HTTP, WebSockets,
 //! IPC, etc.).
-//! 
+//!
 //! ## Server example
 //!
 //! ```
