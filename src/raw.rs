@@ -29,8 +29,12 @@
 //! In order to start a client or a server, first create a struct that implements respectively
 //! [`TransportClient`] or [`TransportServer`], then wrap a [`RawClient`] or a [`RawServer`] around them.
 
-pub use crate::raw::client::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
-pub use crate::raw::server::{
+#[doc(inline)]
+pub use client::{
+    RawClient, RawClientError, RawClientEvent, RawClientRequestId,
+};
+#[doc(inline)]
+pub use server::{
     RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId,
 };
 

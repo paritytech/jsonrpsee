@@ -155,7 +155,9 @@ extern crate alloc;
 
 pub use jsonrpsee_proc_macros::rpc_api;
 
+#[doc(inline)]
 pub use client::Client;
+#[doc(inline)]
 pub use server::Server;
 
 use std::{error, net::SocketAddr};
