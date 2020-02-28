@@ -36,7 +36,7 @@ use std::{error, net::SocketAddr, pin::Pin};
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
 
-/// Implementation of the [`TransportServer`](core::server::raw::TransportServer) trait for HTTP.
+/// Implementation of the [`TransportServer`](crate::transport::TransportServer) trait for HTTP.
 pub struct HttpTransportServer {
     /// Background thread that processes HTTP requests.
     background_thread: background::BackgroundHttp,
