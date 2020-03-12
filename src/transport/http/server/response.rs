@@ -69,10 +69,10 @@ pub fn parse_error() -> hyper::Response<hyper::Body> {
         .status(hyper::StatusCode::OK)
         .header("Content-type", "application/json")
         .body(hyper::Body::from(
-            serde_json::to_string(&common::Output::Failure(common::Failure {
-                jsonrpc: common::Version::V2,
-                error: common::Error::parse_error(),
-                id: common::Id::Null,
+            serde_json::to_string(&crate::common::Output::Failure(crate::common::Failure {
+                jsonrpc: crate::common::Version::V2,
+                error: crate::common::Error::parse_error(),
+                id: crate::common::Id::Null,
             }))
             .expect("Unable to serialize parse error"),
         ))
