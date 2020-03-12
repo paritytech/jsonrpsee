@@ -65,15 +65,14 @@ pub fn unsupported_content_type() -> hyper::Response<hyper::Body> {
 
 /// Create a response for invalid JSON in request
 pub fn parse_error() -> hyper::Response<hyper::Body> {
-    use crate::common::*;
     hyper::Response::builder()
         .status(hyper::StatusCode::OK)
         .header("Content-type", "application/json")
         .body(hyper::Body::from(
-            serde_json::to_string(&Output::Failure(Failure {
-                jsonrpc: Version::V2,
-                error: Error::parse_error(),
-                id: Id::Null,
+            serde_json::to_string(&common::Output::Failure(common::Failure {
+                jsonrpc: common::Version::V2,
+                error: common::Error::parse_error(),
+                id: common::Id::Null,
             }))
             .expect("Unable to serialize parse error"),
         ))
