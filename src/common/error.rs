@@ -52,6 +52,8 @@ pub enum ErrorCode {
     InternalError,
     /// Reserved for implementation-defined server-errors.
     ServerError(i64),
+    /// Error returned by called method
+    MethodError(i64),
 }
 
 impl ErrorCode {
@@ -64,6 +66,7 @@ impl ErrorCode {
             ErrorCode::InvalidParams => -32602,
             ErrorCode::InternalError => -32603,
             ErrorCode::ServerError(code) => code,
+            ErrorCode::MethodError(code) => code,
         }
     }
 
@@ -76,6 +79,7 @@ impl ErrorCode {
             ErrorCode::InvalidParams => "Invalid params",
             ErrorCode::InternalError => "Internal error",
             ErrorCode::ServerError(_) => "Server error",
+            ErrorCode::MethodError(_) => "Method error",
         };
         desc.to_string()
     }
@@ -89,7 +93,8 @@ impl From<i64> for ErrorCode {
             -32601 => ErrorCode::MethodNotFound,
             -32602 => ErrorCode::InvalidParams,
             -32603 => ErrorCode::InternalError,
-            code => ErrorCode::ServerError(code),
+            -32099..=-32000 => ErrorCode::ServerError(code),
+            code => ErrorCode::MethodError(code),
         }
     }
 }
