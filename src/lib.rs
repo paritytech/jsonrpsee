@@ -158,6 +158,8 @@ pub use client::Client;
 #[doc(inline)]
 pub use server::Server;
 
+pub use crate::common::Runtime;
+
 use std::{error, net::SocketAddr};
 
 pub mod client;
@@ -171,10 +173,10 @@ mod server;
 mod server_utils;
 
 /// Builds a new client and a new server that are connected to each other.
-pub fn local() -> (Client, Server) {
+pub fn local<R: Runtime>(runtime: R) -> (Client, Server) {
     let (client, server) = local_raw();
-    let client = Client::from(client);
-    let server = Server::from(server);
+    let client = Client::new(client, &runtime);
+    let server = Server::new(server, &runtime);
     (client, server)
 }
 
@@ -195,23 +197,29 @@ pub fn local_raw() -> (
 /// Builds a new HTTP server.
 #[cfg(feature = "http")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
-pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
+pub async fn http_server<R: Runtime>(
+    addr: &SocketAddr,
+    runtime: &R,
+) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
     let transport = transport::http::HttpTransportServer::bind(addr).await?;
-    Ok(From::from(raw::RawServer::new(transport)))
+    Ok(Server::new(raw::RawServer::new(transport), runtime))
 }
 
 /// Builds a new HTTP client.
 #[cfg(feature = "http")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]
-pub fn http_client(addr: &str) -> Client {
+pub fn http_client<R: Runtime>(addr: &str, runtime: R) -> Client {
     let transport = transport::http::HttpTransportClient::new(addr);
-    Client::from(raw::RawClient::new(transport))
+    Client::new(raw::RawClient::new(transport), &runtime)
 }
 
 /// Builds a new WebSockets client.
 #[cfg(feature = "ws")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
-pub async fn ws_client(target: &str) -> Result<Client, transport::ws::WsNewDnsError> {
-    let transport = transport::ws::WsTransportClient::new(target).await?;
-    Ok(Client::from(raw::RawClient::new(transport)))
+pub async fn ws_client<R: Runtime>(
+    target: &str,
+    runtime: R,
+) -> Result<Client, transport::ws::WsNewDnsError> {
+    let transport = transport::ws::WsTransportClient::<R::TcpStream>::new(target, &runtime).await?;
+    Ok(Client::new(raw::RawClient::new(transport), &runtime))
 }

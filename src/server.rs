@@ -140,10 +140,11 @@ enum FrontToBack {
 
 impl Server {
     /// Initializes a new server based upon this raw server.
-    pub fn new<R, I>(server: RawServer<R, I>) -> Server
+    pub fn new<R, I, RT>(server: RawServer<R, I>, runtime: &RT) -> Server
     where
         R: TransportServer<RequestId = I> + Send + Sync + 'static,
         I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
+        RT: common::Runtime,
     {
         // We use an unbounded channel because the only exchanged messages concern registering
         // methods. The volume of messages is therefore very low and it doesn't make sense to have
@@ -151,7 +152,7 @@ impl Server {
         // TODO: that's not true anymore ^
         let (to_back, from_front) = mpsc::unbounded();
 
-        async_std::task::spawn(async move {
+        runtime.spawn(async move {
             background_task(server, from_front).await;
         });
 
@@ -272,17 +273,6 @@ impl RegisteredNotifications {
                 None => futures::pending!(),
             }
         }
-    }
-}
-
-/// Initializes a new server based upon this raw server.
-impl<R, I> From<RawServer<R, I>> for Server
-where
-    R: TransportServer<RequestId = I> + Send + Sync + 'static,
-    I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
-{
-    fn from(server: RawServer<R, I>) -> Server {
-        Server::new(server)
     }
 }
 

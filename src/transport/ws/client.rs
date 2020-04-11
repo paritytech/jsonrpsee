@@ -26,7 +26,6 @@
 
 use crate::{common, transport::TransportClient};
 
-use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
 use futures::prelude::*;
 use soketto::connection;
@@ -34,14 +33,14 @@ use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
 use thiserror::Error;
 
-type TlsOrPlain = crate::transport::ws::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
+type TlsOrPlain<Io> = crate::transport::ws::stream::EitherStream<Io, TlsStream<Io>>;
 
 /// Implementation of a raw client for WebSockets requests.
-pub struct WsTransportClient {
+pub struct WsTransportClient<Io> {
     /// Sending half of a TCP/IP connection wrapped around a WebSocket encoder.
-    sender: connection::Sender<TlsOrPlain>,
+    sender: connection::Sender<TlsOrPlain<Io>>,
     /// Receiving half of a TCP/IP connection wrapped around a WebSocket decoder.
-    receiver: connection::Receiver<TlsOrPlain>,
+    receiver: connection::Receiver<TlsOrPlain<Io>>,
 }
 
 /// Builder for a [`WsTransportClient`].
@@ -139,7 +138,7 @@ pub enum WsConnecError {
     ParseError(#[source] serde_json::error::Error),
 }
 
-impl WsTransportClient {
+impl<Io> WsTransportClient<Io> {
     /// Creates a new [`WsTransportClientBuilder`] containing the given address and hostname.
     pub fn builder<'a>(
         target: SocketAddr,
@@ -159,7 +158,10 @@ impl WsTransportClient {
     }
 
     /// Initializes a new WS client from a URL.
-    pub async fn new(target: &str) -> Result<Self, WsNewDnsError> {
+    pub async fn new<R: common::Runtime>(
+        target: &str,
+        runtime: &R,
+    ) -> Result<WsTransportClient<R::TcpStream>, WsNewDnsError> {
         let url = url::Url::parse(target)
             .map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
         let mode = match url.scheme() {
@@ -181,12 +183,12 @@ impl WsTransportClient {
 
         let mut error = None;
 
-        for url in target
-            .to_socket_addrs()
+        for url in runtime
+            .resolve(target.clone())
             .await
             .map_err(WsNewDnsError::ResolutionFailed)?
         {
-            match Self::builder(url, &target, host, mode).build().await {
+            match Self::builder(url, &target, host, mode).build(runtime).await {
                 Ok(ws_raw_client) => return Ok(ws_raw_client),
                 Err(err) => error = Some(err),
             }
@@ -200,7 +202,9 @@ impl WsTransportClient {
     }
 }
 
-impl TransportClient for WsTransportClient {
+impl<Io: AsyncRead + AsyncWrite + Unpin + Send + 'static> TransportClient
+    for WsTransportClient<Io>
+{
     type Error = WsConnecError;
 
     fn send_request<'a>(
@@ -226,7 +230,7 @@ impl TransportClient for WsTransportClient {
     }
 }
 
-impl fmt::Debug for WsTransportClient {
+impl<Io> fmt::Debug for WsTransportClient<Io> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_tuple("WsTransportClient").finish()
     }
@@ -259,11 +263,14 @@ impl<'a> WsTransportClientBuilder<'a> {
     }
 
     /// Try establish the connection.
-    pub async fn build(self) -> Result<WsTransportClient, WsNewError> {
+    pub async fn build<R: common::Runtime>(
+        self,
+        runtime: &R,
+    ) -> Result<WsTransportClient<R::TcpStream>, WsNewError> {
         // Try establish the TCP connection.
         let tcp_stream = {
-            let socket = TcpStream::connect(self.target);
-            let timeout = async_std::task::sleep(self.timeout);
+            let socket = runtime.connect_tcp(self.target.to_string());
+            let timeout = runtime.sleep(self.timeout);
             futures::pin_mut!(socket, timeout);
             match future::select(socket, timeout).await {
                 future::Either::Left((socket, _)) => match self.mode {

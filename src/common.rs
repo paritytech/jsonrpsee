@@ -34,6 +34,7 @@ mod id;
 mod params;
 mod request;
 mod response;
+pub mod runtime;
 mod version;
 
 pub use serde::{de::DeserializeOwned, ser::Serialize};
@@ -50,4 +51,5 @@ pub use self::request::{Call, MethodCall, Notification, Request};
 pub use self::response::{
     Failure, Output, Response, SubscriptionId, SubscriptionNotif, SubscriptionNotifParams, Success,
 };
+pub use self::runtime::Runtime;
 pub use self::version::Version;

@@ -24,7 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{client::Subscription, Client};
+use jsonrpsee::{
+    client::Subscription, common::runtime::async_std_support::AsyncStdRuntime, Client,
+};
 jsonrpsee::rpc_api! {
     System {
         /// Get the node's implementation name. Plain old string.
@@ -46,15 +48,16 @@ struct Header {
 
 fn main() {
     async_std::task::block_on(async move {
-        let transport =
-            jsonrpsee::transport::ws::WsTransportClient::new("wss://kusama-rpc.polkadot.io")
-                .await
-                .unwrap();
+        let transport = jsonrpsee::transport::ws::WsTransportClient::<
+            <AsyncStdRuntime as jsonrpsee::common::Runtime>::TcpStream,
+        >::new("wss://kusama-rpc.polkadot.io", &AsyncStdRuntime)
+        .await
+        .unwrap();
         let mut raw_client = jsonrpsee::raw::RawClient::new(transport);
         let v = System::system_name(&mut raw_client).await.unwrap();
         println!("{:?}", v);
 
-        let client: Client = raw_client.into();
+        let client = Client::new(raw_client, &AsyncStdRuntime);
 
         let mut sub: Subscription<Header> = client
             .subscribe(

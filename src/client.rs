@@ -117,13 +117,14 @@ enum FrontToBack {
 
 impl Client {
     /// Initializes a new client based upon this raw client.
-    pub fn new<R>(client: RawClient<R>) -> Client
+    pub fn new<R, RT>(client: RawClient<R>, runtime: &RT) -> Client
     where
         R: TransportClient + Send + 'static,
         R::Error: error::Error + Send + Sync,
+        RT: common::Runtime,
     {
         let (to_back, from_front) = mpsc::channel(16);
-        async_std::task::spawn(async move {
+        runtime.spawn(async move {
             background_task(client, from_front).await;
         });
         Client { to_back }
@@ -215,16 +216,6 @@ impl Client {
             notifs_rx,
             marker: PhantomData,
         })
-    }
-}
-
-impl<R> From<RawClient<R>> for Client
-where
-    R: TransportClient + Send + 'static,
-    R::Error: error::Error + Send + Sync,
-{
-    fn from(client: RawClient<R>) -> Client {
-        Client::new(client)
     }
 }
 

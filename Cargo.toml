@@ -7,7 +7,8 @@ license = "MIT"
 edition = "2018"
 
 [dependencies]
-async-std = "1.2.0"
+async-std = { version = "1.2.0", optional = true }
+async-trait = { version = "0.1" }
 bs58 = "0.3.0"
 fnv = "1.0"
 futures = "0.3.4"
@@ -28,6 +29,7 @@ thiserror = "1.0.9"
 # HTTP-related dependencies
 hyper = { version = "0.13.0", features = ["stream"], optional = true }
 tokio = { version = "0.2.4", optional = true }
+tokio-util = { version = "0.3", optional = true }
 unicase = { version = "2.0", optional = true }
 
 # WS-related dependencies
@@ -38,13 +40,14 @@ url = { version = "2.1.1", optional = true }
 webpki = { version = "0.21", optional = true }
 
 [features]
-default = ["http", "ws"]
+default = ["async-std-support", "tokio-support", "http", "ws"]
 http = ["hyper", "tokio", "unicase"]
 ws = ["async-tls", "bytes", "soketto", "url", "webpki"]
+async-std-support = ["async-std"]
+tokio-support = ["tokio/dns", "tokio/tcp", "tokio-util/compat"]
 
 [dev-dependencies]
 async-std = "1.2.0"
 env_logger = "0.7.1"
 rand = "0.7"
 serde = { version = "1.0.40", features = ["derive"] }
-
