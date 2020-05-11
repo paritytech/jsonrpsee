@@ -7,8 +7,8 @@ license = "MIT"
 edition = "2018"
 
 [dependencies]
-async-std = "1.6.2"
-bs58 = "0.3.0"
+async-std = "1.2.0"
+bs58 = "0.3.1"
 fnv = "1.0"
 futures = "0.3.4"
 futures-timer = "3.0.2"

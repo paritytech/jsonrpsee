@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::raw::{client::RawClientEvent, RawClient, RawClientRequestId};
+use crate::raw::{client::RawClientEvent, RawClient, RawClientError, RawClientRequestId};
 use crate::transport::TransportClient;
 
 use futures::{
@@ -33,7 +33,10 @@ use futures::{
     future::Either,
     pin_mut,
     prelude::*,
+    ready,
+    task::{Context, Poll},
 };
+use std::pin::Pin;
 use std::{collections::HashMap, error, io, marker::PhantomData};
 
 /// Client that can be cloned.
@@ -249,6 +252,27 @@ where
     }
 }
 
+impl<Notif> Stream for Subscription<Notif>
+where
+    Notif: common::DeserializeOwned,
+{
+    type Item = Notif;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Notif>> {
+        let item = ready!(self.notifs_rx.poll_next_unpin(cx));
+        if let Some(n) = item {
+            if let Ok(parsed) = common::from_value(n) {
+                return Poll::Ready(Some(parsed));
+            }
+        }
+        Poll::Ready(None)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.notifs_rx.size_hint()
+    }
+}
+
 impl<Notif> Drop for Subscription<Notif> {
     fn drop(&mut self) {
         // We can't actually guarantee that this goes through. If the background task is busy, then
@@ -403,8 +427,50 @@ where
 
             Either::Right(Err(e)) => {
                 // TODO: https://github.com/paritytech/jsonrpsee/issues/67
-                log::error!("Client Error: {:?}", e);
+                is_socket_fatal::<R::Error>(e);
+
+                // active_subscriptions.clear();
             }
         }
     }
+}
+
+use soketto::connection::Error as SokError;
+use std::error::Error;
+fn is_socket_fatal<E>(err: RawClientError<E>) -> bool
+where
+    E: error::Error + 'static,
+{
+    err.source().map(|inner| {
+        inner.source().map(
+            |maybe_socket| match maybe_socket.downcast_ref::<SokError>() {
+                Some(n) => match n {
+                    SokError::UnexpectedOpCode(_) => println!("expected, actually"),
+                    _ => println!("unexpected other soketto error"),
+                },
+                None => println!("not soketto error"),
+            },
+        )
+    });
+    // first layer of errors in RawClient are not important.  We care about RawClient::Inner
+    false
+    // if let Some(raw) = e.source() {
+    //     log::error!("internal ws error: {:?}", raw);
+    //     if let Some(raw2) = raw.source() {
+    //         log::error!("soketto error: {:?}", raw2);
+    //         match raw2.downcast_ref::<SokError>() {
+    //             Some(n) => match n {
+    //                 SokError::UnexpectedOpCode(_) => println!("expected, actually"),
+    //                 _ => println!("unexpected other soketto error"),
+    //             },
+    //             None => println!("hello"),
+    //         };
+    //     }
+    //     // log::error!("Internal WS Error: {:?}", raw);
+    //     // let a: Box<dyn Any> = Box::new(raw);
+    //     // match a.downcast_ref::<SokError>() {
+    //     //     Some(d) => log::error!("downcast!"),
+    //     //     None => log::error!("no downcast!"),
+    //     // };
+    // }
 }
