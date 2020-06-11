@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{common, raw::client::RawClient, transport::TransportClient};
+use crate::{common, transport::TransportClient};
 
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use std::{fmt, io, pin::Pin, thread};
@@ -73,7 +73,16 @@ impl HttpTransportClient {
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::Builder::new()
             .name("jsonrpsee-hyper-client".to_string())
-            .spawn(move || background_thread(requests_rx))
+            .spawn(move || {
+                let client = hyper::Client::new();
+                background_thread(requests_rx, move |rq| {
+                    // cloning Hyper client = cloning references
+                    let client = client.clone();
+                    async move {
+                        let _ = rq.send_back.send(client.request(rq.request).await);
+                    }
+                })
+            })
             .unwrap();
 
         HttpTransportClient {
@@ -196,9 +205,10 @@ pub enum RequestError {
 }
 
 /// Function that runs in a background thread.
-fn background_thread(mut requests_rx: mpsc::Receiver<FrontToBack>) {
-    let client = hyper::Client::new();
-
+fn background_thread<T, ProcessRequest: Future<Output = ()>>(
+    mut requests_rx: mpsc::Receiver<T>,
+    process_request: impl Fn(T) -> ProcessRequest,
+) {
     let mut runtime = match tokio::runtime::Builder::new()
         .basic_scheduler()
         .enable_all()
@@ -222,21 +232,74 @@ fn background_thread(mut requests_rx: mpsc::Receiver<FrontToBack>) {
         let mut pending_requests = stream::FuturesUnordered::new();
 
         loop {
-            let rq = match future::select(requests_rx.next(), pending_requests.next()).await {
-                // We received a request from the foreground.
-                future::Either::Left((Some(rq), _)) => rq,
-                // The channel with the foreground has closed.
-                future::Either::Left((None, _)) => break,
-                // One of the elements of `pending_requests` is finished.
-                future::Either::Right(_) => continue,
+            let request = loop {
+                if !pending_requests.is_empty() {
+                    let event = future::select(requests_rx.next(), pending_requests.next()).await;
+                    if let future::Either::Left((rq, _)) = event {
+                        break rq;
+                    }
+                // else: one of the elements of `pending_requests` is finished, but we don't care
+                } else {
+                    break requests_rx.next().await;
+                }
             };
 
-            pending_requests.push(async {
-                let _ = rq.send_back.send(client.request(rq.request).await);
-            });
+            match request {
+                // We received a request from the foreground.
+                Some(rq) => pending_requests.push(process_request(rq)),
+                // The channel with the foreground has closed.
+                None => break,
+            }
         }
 
         // Before returning, complete all pending requests.
         while let Some(_) = pending_requests.next().await {}
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn background_thread_is_able_to_complete_requests() {
+        // start background thread that returns square(passed_value) after signal
+        // from 'main' thread is received
+        let (mut requests_tx, requests_rx) = mpsc::channel(4);
+        let background_thread = thread::spawn(move || {
+            background_thread(
+                requests_rx,
+                move |(send_when, send_back, value): (
+                    oneshot::Receiver<()>,
+                    oneshot::Sender<u32>,
+                    u32,
+                )| async move {
+                    send_when.await.unwrap();
+                    send_back.send(value * value).unwrap();
+                },
+            )
+        });
+
+        // send two requests - there'll be two simultaneous active requests, waiting for
+        // main thread' signals
+        let mut pool = futures::executor::LocalPool::new();
+        let (send_when_tx1, send_when_rx1) = oneshot::channel();
+        let (send_when_tx2, send_when_rx2) = oneshot::channel();
+        let (send_back_tx1, send_back_rx1) = oneshot::channel();
+        let (send_back_tx2, send_back_rx2) = oneshot::channel();
+        pool.run_until(requests_tx.send((send_when_rx1, send_back_tx1, 32)))
+            .unwrap();
+        pool.run_until(requests_tx.send((send_when_rx2, send_back_tx2, 1024)))
+            .unwrap();
+
+        // send both signals and wait for responses
+        send_when_tx1.send(()).unwrap();
+        send_when_tx2.send(()).unwrap();
+        assert_eq!(pool.run_until(send_back_rx1), Ok(32 * 32));
+        assert_eq!(pool.run_until(send_back_rx2), Ok(1024 * 1024));
+
+        // drop requests sender, asking background thread to exit gently
+        drop(requests_tx);
+        background_thread.join().unwrap();
+    }
 }
