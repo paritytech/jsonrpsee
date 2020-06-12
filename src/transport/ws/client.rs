@@ -219,8 +219,9 @@ impl TransportClient for WsTransportClient {
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
-            let data = self.receiver.receive_data().await?;
-            let response = common::from_slice(data.as_ref()).map_err(WsConnecError::ParseError)?;
+            let mut message = Vec::new();
+            self.receiver.receive_data(&mut message).await?;
+            let response = common::from_slice(&message).map_err(WsConnecError::ParseError)?;
             Ok(response)
         })
     }
