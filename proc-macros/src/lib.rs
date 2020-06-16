@@ -530,7 +530,7 @@ fn param_variant_name(pat: &syn::Pat) -> syn::parse::Result<&syn::Ident> {
 }
 
 /// Determine the name of the parameter based on the pattern.
-fn rpc_param_name(pat: &syn::Pat, attrs: &[syn::Attribute]) -> syn::parse::Result<String> {
+fn rpc_param_name(pat: &syn::Pat, _attrs: &[syn::Attribute]) -> syn::parse::Result<String> {
     // TODO: look in attributes if the user specified a param name
     match pat {
         // TODO: check other fields of the `PatIdent`
