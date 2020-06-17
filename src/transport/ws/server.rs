@@ -320,7 +320,7 @@ async fn per_connection_task(
             let mut buf = Vec::new();
             match receiver.receive_data(&mut buf).await {
                 Ok(ty) => Ok((ty, buf)),
-                Err(err) => Err(err)
+                Err(err) => Err(err),
             }
         };
         let next_from_front = from_front.next();
