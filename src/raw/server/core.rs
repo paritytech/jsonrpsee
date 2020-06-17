@@ -90,7 +90,7 @@ pub enum RawServerEvent<'a, R, I> {
     SubscriptionsClosed(SubscriptionsClosedIter),
 }
 
-/// Request received by a [`RawServer`](crate::RawServer).
+/// Request received by a [`RawServer`](crate::raw::RawServer).
 pub struct RawServerRequest<'a, R, I> {
     /// Reference to the request within `self.batches`.
     inner: batches::BatchesElem<'a, Option<I>>,
@@ -150,7 +150,7 @@ where
     // Note: annoyingly, the `HashMap` constructor with hasher requires trait bounds on the key.
     I: Clone + PartialEq + Eq + Hash + Send + Sync,
 {
-    /// Starts a [`RawServer`](crate::RawServer) using the given raw server internally.
+    /// Starts a [`RawServer`](crate::raw::RawServer) using the given raw server internally.
     pub fn new(inner: R) -> RawServer<R, I> {
         RawServer {
             raw: inner,
@@ -250,8 +250,8 @@ where
         RawServerEvent::Request(self.request_by_id(&request_id).unwrap())
     }
 
-    /// Returns a request previously returned by [`next_event`](crate::RawServer::next_event) by its
-    /// id.
+    /// Returns a request previously returned by [`next_event`](crate::raw::RawServer::next_event)
+    /// by its id.
     ///
     /// Note that previous notifications don't have an ID and can't be accessed with this method.
     ///
@@ -270,7 +270,7 @@ where
     }
 
     /// Returns a subscription previously returned by
-    /// [`into_subscription`](crate::server::RawServerRequest::into_subscription).
+    /// [`into_subscription`](crate::raw::server::RawServerRequest::into_subscription).
     pub fn subscription_by_id(
         &mut self,
         id: RawServerSubscriptionId,
@@ -299,7 +299,7 @@ impl<'a, R, I> RawServerRequest<'a, R, I> {
     /// Returns the id of the request.
     ///
     /// If this request object is dropped, you can retreive it again later by calling
-    /// [`request_by_id`](crate::RawServer::request_by_id).
+    /// [`request_by_id`](crate::raw::RawServer::request_by_id).
     pub fn id(&self) -> RawServerRequestId {
         RawServerRequestId {
             inner: self.inner.id(),
@@ -339,7 +339,8 @@ where
     /// > **Note**: This method is implemented in a way that doesn't wait for long to send the
     /// >           response. While calling this method will block your entire server, it
     /// >           should only block it for a short amount of time. See also [the equivalent
-    /// >           method](crate::TransportServer::finish) on the [`TransportServer`](crate::TransportServer) trait.
+    /// >           method](crate::transport::TransportServer::finish) on the
+    /// >           [`TransportServer`](crate::transport::TransportServer) trait.
     ///
     pub async fn respond(self, response: Result<common::JsonValue, common::Error>) {
         self.inner.set_response(response);
@@ -448,7 +449,7 @@ where
     /// Returns the id of the subscription.
     ///
     /// If this subscription object is dropped, you can retreive it again later by calling
-    /// [`subscription_by_id`](crate::RawServer::subscription_by_id).
+    /// [`subscription_by_id`](crate::raw::RawServer::subscription_by_id).
     pub fn id(&self) -> RawServerSubscriptionId {
         RawServerSubscriptionId(self.id)
     }

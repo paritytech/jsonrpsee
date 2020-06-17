@@ -24,8 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Implementation of [`TransportClient`](core::client::raw::TransportClient) and
-//! [`TransportServer`](core::server::raw::TransportServer) for the WebSocket protocol.
+//! Implementation of [`TransportClient`](crate::transport::TransportClient) and
+//! [`TransportServer`](crate::transport::TransportServer) for the WebSocket protocol.
 
 pub use client::{Mode, WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
 pub use server::{WsRequestId, WsTransportServer, WsTransportServerBuilder};

@@ -219,8 +219,9 @@ impl TransportClient for WsTransportClient {
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = Result<common::Response, Self::Error>> + Send + 'a>> {
         Box::pin(async move {
-            let data = self.receiver.receive_data().await?;
-            let response = common::from_slice(data.as_ref()).map_err(WsConnecError::ParseError)?;
+            let mut message = Vec::new();
+            self.receiver.receive_data(&mut message).await?;
+            let response = common::from_slice(&message).map_err(WsConnecError::ParseError)?;
             Ok(response)
         })
     }
@@ -271,7 +272,7 @@ impl<'a> WsTransportClientBuilder<'a> {
                     Mode::Tls => {
                         let connector = async_tls::TlsConnector::default();
                         let dns_name = webpki::DNSNameRef::try_from_ascii_str(&self.dns_name)?;
-                        let tls_stream = connector.connect(&dns_name.to_owned(), socket?)?.await?;
+                        let tls_stream = connector.connect(&dns_name.to_owned(), socket?).await?;
                         TlsOrPlain::Tls(tls_stream)
                     }
                 },

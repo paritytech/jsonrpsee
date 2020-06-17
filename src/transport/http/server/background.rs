@@ -166,9 +166,12 @@ async fn process_request(
 
             let json_body = match body_to_request(request.into_body()).await {
                 Ok(b) => b,
-                Err(_) => {
-                    unimplemented!() // TODO:
-                }
+                Err(e) => match (e.kind(), e.into_inner()) {
+                    (io::ErrorKind::InvalidData, _) => return response::parse_error(),
+                    (io::ErrorKind::UnexpectedEof, _) => return response::parse_error(),
+                    (_, Some(inner)) => return response::internal_error(inner.to_string()),
+                    (kind, None) => return response::internal_error(format!("{:?}", kind)),
+                },
             };
 
             let (tx, rx) = oneshot::channel();

@@ -24,8 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Implementation of [`TransportClient`](core::client::raw::TransportClient) and
-//! [`TransportServer`](core::server::raw::TransportServer) for HTTP.
+//! Implementation of [`TransportClient`](crate::transport::TransportClient) and
+//! [`TransportServer`](crate::transport::TransportServer) for HTTP.
 
 pub use crate::transport::http::client::{HttpTransportClient, RequestError};
 pub use crate::transport::http::server::HttpTransportServer;
