@@ -316,18 +316,21 @@ async fn per_connection_task(
     let (to_connec, mut from_front) = mpsc::channel(0);
 
     loop {
-        let next_socket_packet = receiver.receive_data();
+        let next_socket_packet = async {
+            let mut buf = Vec::new();
+            match receiver.receive_data(&mut buf).await {
+                Ok(ty) => Ok((ty, buf)),
+                Err(err) => Err(err)
+            }
+        };
         let next_from_front = from_front.next();
         futures::pin_mut!(next_socket_packet, next_from_front);
         match future::select(next_socket_packet, next_from_front).await {
             future::Either::Left((socket_packet, _)) => {
                 let socket_packet = match socket_packet {
-                    Ok(pq) => pq,
-                    Err(_) => return pending_requests,
+                    Ok((ty, pq)) if ty.is_text() => pq,
+                    _ => return pending_requests,
                 };
-                if !socket_packet.is_text() {
-                    return pending_requests;
-                }
 
                 let body = match serde_json::from_slice(socket_packet.as_ref()) {
                     Ok(b) => b,
