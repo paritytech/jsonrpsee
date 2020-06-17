@@ -65,8 +65,8 @@ pub struct WsTransportServer {
     next_request_id: Arc<atomic::AtomicU64>,
     /// Events received from connections.
     from_connections: mpsc::Receiver<BackToFront>,
-    /// Sending side of [`WsTransportServer::from_connections_rx`]. Cloned in each member of
-    /// [`WsTransportServer::events_in`].
+    /// Sending side of [`WsTransportServer::from_connections`]. Cloned in each member of
+    /// [`WsTransportServer::connections_tasks`].
     to_front: mpsc::Sender<BackToFront>,
     /// List of connections, and senders to send them messages.
     to_connections: HashMap<WsRequestId, mpsc::Sender<FrontToBack>>,
