@@ -31,7 +31,7 @@ tokio = { version = "0.2.4", optional = true }
 unicase = { version = "2.0", optional = true }
 
 # WS-related dependencies
-async-tls = { version = "0.6", optional = true }
+async-tls = { version = "0.7.0", optional = true }
 bytes = { version = "0.5", optional = true }
 soketto = { version = "0.4.0", optional = true }
 url = { version = "2.1.1", optional = true }

@@ -272,7 +272,7 @@ impl<'a> WsTransportClientBuilder<'a> {
                     Mode::Tls => {
                         let connector = async_tls::TlsConnector::default();
                         let dns_name = webpki::DNSNameRef::try_from_ascii_str(&self.dns_name)?;
-                        let tls_stream = connector.connect(&dns_name.to_owned(), socket?)?.await?;
+                        let tls_stream = connector.connect(&dns_name.to_owned(), socket?).await?;
                         TlsOrPlain::Tls(tls_stream)
                     }
                 },
