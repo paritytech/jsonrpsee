@@ -17,7 +17,7 @@ hashbrown = "0.7.0"
 lazy_static = "1.4.0"
 log = "0.4"
 parking_lot = "0.10"
-pin-project = "0.4.6"
+pin-project = "0.4.22"
 jsonrpsee-proc-macros = { path = "proc-macros" }
 rand = "0.7"
 serde = { version = "1.0.101", default-features = false, features = ["derive"] }
