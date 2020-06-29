@@ -342,7 +342,7 @@ where
     /// >           method](crate::transport::TransportServer::finish) on the
     /// >           [`TransportServer`](crate::transport::TransportServer) trait.
     ///
-    pub async fn respond(self, response: Result<common::JsonValue, common::Error>) {
+    pub fn respond(self, response: Result<common::JsonValue, common::Error>) {
         self.inner.set_response(response);
         //unimplemented!();
         // TODO: actually send out response?
@@ -370,9 +370,7 @@ where
     /// >           [`subscription_by_id`](RawServer::subscription_by_id) in order to manipulate the
     /// >           subscription.
     // TODO: solve the note
-    pub async fn into_subscription(
-        mut self,
-    ) -> Result<RawServerSubscriptionId, IntoSubscriptionErr> {
+    pub fn into_subscription(mut self) -> Result<RawServerSubscriptionId, IntoSubscriptionErr> {
         let raw_request_id = match self.inner.user_param().clone() {
             Some(id) => id,
             None => return Err(IntoSubscriptionErr::Closed),

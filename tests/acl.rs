@@ -10,7 +10,7 @@ macro_rules! spawn_server {
             while let Ok(request) = Test::next_request(&mut $server).await {
                 match request {
                     Test::Allowed { respond, foo } => {
-                        respond.ok(foo).await;
+                        respond.ok(foo);
                     }
                 }
             }

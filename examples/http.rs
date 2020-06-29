@@ -55,10 +55,10 @@ fn main() {
             match request {
                 Health::SystemName { respond, foo, bar } => {
                     let value = format!("{}, {}", foo, bar);
-                    respond.ok(value).await;
+                    respond.ok(value);
                 }
                 Health::SystemName2 { respond } => {
-                    respond.ok("hello 2").await;
+                    respond.ok("hello 2");
                 }
                 Health::TestNotif { foo, bar } => {
                     println!("server got notif: {:?} {:?}", foo, bar);

@@ -53,23 +53,23 @@ where
     T: serde::Serialize,
 {
     /// Returns a successful response.
-    pub async fn ok(self, response: impl Into<T>) {
-        self.respond(Ok(response)).await
+    pub fn ok(self, response: impl Into<T>) {
+        self.respond(Ok(response))
     }
 
     /// Returns an erroneous response.
-    pub async fn err(self, err: crate::common::Error) {
-        self.respond(Err::<T, _>(err)).await
+    pub fn err(self, err: crate::common::Error) {
+        self.respond(Err::<T, _>(err))
     }
 
     /// Returns a response.
-    pub async fn respond(self, response: Result<impl Into<T>, crate::common::Error>) {
+    pub fn respond(self, response: Result<impl Into<T>, crate::common::Error>) {
         let response = match response {
             Ok(v) => crate::common::to_value(v.into())
                 .map_err(|_| crate::common::Error::internal_error()),
             Err(err) => Err(err),
         };
 
-        self.rq.respond(response).await
+        self.rq.respond(response)
     }
 }

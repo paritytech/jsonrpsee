@@ -137,7 +137,7 @@
 //!     while let Ok(request) = System::next_request(&mut server).await {
 //!         match request {
 //!             System::SystemName { respond } => {
-//!                 respond.ok("my name").await;
+//!                 respond.ok("my name");
 //!             }
 //!         }
 //!     }
@@ -206,6 +206,16 @@ pub async fn http_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Err
 pub fn http_client(addr: &str) -> Client {
     let transport = transport::http::HttpTransportClient::new(addr);
     Client::from(raw::RawClient::new(transport))
+}
+
+/// Builds a new WebSockets server.
+#[cfg(feature = "ws")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
+pub async fn ws_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
+    let transport = transport::ws::WsTransportServer::builder(*addr)
+        .build()
+        .await?;
+    Ok(From::from(raw::RawServer::new(transport)))
 }
 
 /// Builds a new WebSockets client.
