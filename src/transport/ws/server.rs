@@ -268,7 +268,7 @@ impl WsTransportServerBuilder {
             futures
         };
 
-        let (to_front, from_connections) = mpsc::channel(0);
+        let (to_front, from_connections) = mpsc::channel(256);
 
         Ok(WsTransportServer {
             pending_events: Vec::new(),
@@ -313,7 +313,7 @@ async fn per_connection_task(
 
     let (mut sender, mut receiver) = server.into_builder().finish();
     let mut pending_requests = Vec::new();
-    let (to_connec, mut from_front) = mpsc::channel(0);
+    let (to_connec, mut from_front) = mpsc::channel(16);
 
     loop {
         let next_socket_packet = async {
@@ -342,14 +342,24 @@ async fn per_connection_task(
                 debug_assert_ne!(request_id.0, u64::max_value());
                 pending_requests.push(request_id);
 
+                // Important note: since the background task sends messages to the front task via
+                // a channel, and the front task sends messages to the background task via a
+                // channel as well, and considering that these channels are bounded, a deadlock
+                // situation would arise if both the front and background task waited while trying
+                // to send something while both channels are full.
+                // In order to prevent this from happening, the background -> front sending never
+                // blocks. If the back -> front channel is full, we simply kill the task, which
+                // has the same effect as a disconnect.
+                // The channel is normally large enough for this to never happen unless the server
+                // is considerably slowed down or subject to a DoS attack.
                 let result = to_front
                     .send(BackToFront::NewRequest {
                         id: request_id,
                         body,
                         sender: to_connec.clone(),
                     })
-                    .await;
-                if result.is_err() {
+                    .now_or_never();
+                if !matches!(result, Some(Ok(_))) {
                     return pending_requests;
                 }
             }
