@@ -131,7 +131,7 @@ fn subscriptions_work() {
                     52
                 );
 
-                rq.into_subscription().await.unwrap()
+                rq.into_subscription().unwrap()
             }
             _ => panic!(),
         };

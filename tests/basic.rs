@@ -37,7 +37,7 @@ macro_rules! spawn_server {
                 match request {
                     Test::Concat { respond, foo, bar } => {
                         let value = format!("{}, {}", foo, bar);
-                        respond.ok(value).await;
+                        respond.ok(value);
                     }
                 }
             }

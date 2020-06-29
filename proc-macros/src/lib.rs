@@ -239,7 +239,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
                                 Ok(v) => v,
                                 Err(_) => {
                                     // TODO: message
-                                    request.respond(Err(jsonrpsee::common::Error::invalid_params(#rpc_param_name))).await;
+                                    request.respond(Err(jsonrpsee::common::Error::invalid_params(#rpc_param_name)));
                                     continue;
                                 }
                             }
@@ -312,7 +312,7 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 
             match request_outcome {
                 #(#tmp_to_rq)*
-                None => server.request_by_id(&request_id).unwrap().respond(Err(jsonrpsee::common::Error::method_not_found())).await,
+                None => server.request_by_id(&request_id).unwrap().respond(Err(jsonrpsee::common::Error::method_not_found())),
             }
         });
 

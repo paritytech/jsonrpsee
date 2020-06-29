@@ -47,7 +47,7 @@
 //!     loop {
 //!         match server.next_event().await {
 //!             RawServerEvent::Request(request) => {
-//!                 request.respond(Ok(From::from("hello".to_owned()))).await;
+//!                 request.respond(Ok(From::from("hello".to_owned())));
 //!             },
 //!             _ => {}
 //!         }
