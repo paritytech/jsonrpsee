@@ -212,7 +212,9 @@ pub fn http_client(addr: &str) -> Client {
 #[cfg(feature = "ws")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
 pub async fn ws_server(addr: &SocketAddr) -> Result<Server, Box<dyn error::Error + Send + Sync>> {
-    let transport = transport::ws::WsTransportServer::builder(*addr).build().await?;
+    let transport = transport::ws::WsTransportServer::builder(*addr)
+        .build()
+        .await?;
     Ok(From::from(raw::RawServer::new(transport)))
 }
 

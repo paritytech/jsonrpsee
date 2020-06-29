@@ -374,10 +374,7 @@ async fn background_task<R, I>(
         match outcome {
             Either::Left(None) => return,
             Either::Left(Some(FrontToBack::AnswerRequest { request_id, answer })) => {
-                server
-                    .request_by_id(&request_id)
-                    .unwrap()
-                    .respond(answer);
+                server.request_by_id(&request_id).unwrap().respond(answer);
             }
             Either::Left(Some(FrontToBack::RegisterNotifications {
                 name,
@@ -443,8 +440,7 @@ async fn background_task<R, I>(
                     match handler.send((request.id(), params.clone())).now_or_never() {
                         Some(Ok(())) => {}
                         Some(Err(_)) | None => {
-                            request
-                                .respond(Err(From::from(common::ErrorCode::ServerError(0))));
+                            request.respond(Err(From::from(common::ErrorCode::ServerError(0))));
                         }
                     }
                 } else if let Some(sub_unique_id) = subscribe_methods.get(request.method()) {
@@ -477,8 +473,7 @@ async fn background_task<R, I>(
                         }
                     }
                 } else {
-                    request
-                        .respond(Err(From::from(common::ErrorCode::InvalidRequest)));
+                    request.respond(Err(From::from(common::ErrorCode::InvalidRequest)));
                 }
             }
             Either::Right(RawServerEvent::SubscriptionsReady(_)) => {

@@ -370,9 +370,7 @@ where
     /// >           [`subscription_by_id`](RawServer::subscription_by_id) in order to manipulate the
     /// >           subscription.
     // TODO: solve the note
-    pub fn into_subscription(
-        mut self,
-    ) -> Result<RawServerSubscriptionId, IntoSubscriptionErr> {
+    pub fn into_subscription(mut self) -> Result<RawServerSubscriptionId, IntoSubscriptionErr> {
         let raw_request_id = match self.inner.user_param().clone() {
             Some(id) => id,
             None => return Err(IntoSubscriptionErr::Closed),
