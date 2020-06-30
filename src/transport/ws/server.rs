@@ -311,24 +311,28 @@ async fn per_connection_task(
         }
     }
 
-    let (mut sender, mut receiver) = server.into_builder().finish();
+    let (mut sender, receiver) = server.into_builder().finish();
     let mut pending_requests = Vec::new();
     let (to_connec, mut from_front) = mpsc::channel(16);
 
-    loop {
-        let next_socket_packet = async {
-            let mut buf = Vec::new();
-            match receiver.receive_data(&mut buf).await {
-                Ok(ty) => Ok((ty, buf)),
-                Err(err) => Err(err),
-            }
+    let socket_packets = stream::unfold(receiver, move |mut receiver| async {
+        let mut buf = Vec::new();
+        let ret = match receiver.receive_data(&mut buf).await {
+            Ok(ty) => Ok((ty, buf)),
+            Err(err) => Err(err),
         };
+        Some((ret, receiver))
+    });
+    futures::pin_mut!(socket_packets);
+
+    loop {
         let next_from_front = from_front.next();
+        let next_socket_packet = socket_packets.next();
         futures::pin_mut!(next_socket_packet, next_from_front);
         match future::select(next_socket_packet, next_from_front).await {
             future::Either::Left((socket_packet, _)) => {
                 let socket_packet = match socket_packet {
-                    Ok((ty, pq)) if ty.is_text() => pq,
+                    Some(Ok((ty, pq))) if ty.is_text() => pq,
                     _ => return pending_requests,
                 };
 
