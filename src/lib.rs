@@ -163,9 +163,8 @@ use std::{error, net::SocketAddr};
 pub mod client;
 pub mod common;
 pub mod raw;
+pub mod server;
 pub mod transport;
-
-mod server;
 
 #[cfg(feature = "http")]
 mod server_utils;
