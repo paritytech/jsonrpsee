@@ -346,3 +346,23 @@ fn should_parse_empty_response_as_batch() {
     );
     assert_eq!(deserialized2.unwrap(), Response::Batch(vec![]));
 }
+
+#[test]
+fn single_response_with_nulls_deserialize() {
+    use serde_json;
+    use serde_json::Value;
+
+    let dbr = r#"{"jsonrpc":"2.0","result":null,"id":1}"#;
+
+    let deserialized: Response = serde_json::from_str(dbr).unwrap();
+    assert_eq!(
+        deserialized,
+        Response::Single(
+            Output::Success(Success {
+                jsonrpc: Version::V2,
+                result: Value::Null,
+                id: Id::Num(1)
+            }),
+        )
+    );
+}

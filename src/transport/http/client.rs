@@ -139,7 +139,14 @@ impl TransportClient for HttpTransportClient {
             let hyper_response = match self.responses.next().await {
                 Some(Ok(Ok(r))) => r,
                 Some(Ok(Err(err))) => return Err(RequestError::Http(Box::new(err))),
-                None | Some(Err(_)) => {
+                None => {
+                    // We got a `null` JSON value from the server; we switch to an empty dict instead
+                    hyper::Response::builder()
+                        .status(200)
+                        .body(hyper::Body::from("[]"))
+                        .map_err(|e| RequestError::Http(Box::new(e)))?
+                },
+                Some(Err(_)) => {
                     log::error!("JSONRPC http client background thread has shut down");
                     return Err(RequestError::Http(Box::new(io::Error::new(
                         io::ErrorKind::Other,
