@@ -427,9 +427,9 @@ where
 
             Either::Right(Err(e)) => {
                 // TODO: https://github.com/paritytech/jsonrpsee/issues/67
-                is_socket_fatal::<R::Error>(e);
-
-                // active_subscriptions.clear();
+                if is_socket_fatal::<R::Error>(e) {
+                    active_subscriptions.clear();
+                }
             }
         }
     }
@@ -441,36 +441,20 @@ fn is_socket_fatal<E>(err: RawClientError<E>) -> bool
 where
     E: error::Error + 'static,
 {
-    err.source().map(|inner| {
-        inner.source().map(
-            |maybe_socket| match maybe_socket.downcast_ref::<SokError>() {
-                Some(n) => match n {
-                    SokError::UnexpectedOpCode(_) => println!("expected, actually"),
-                    _ => println!("unexpected other soketto error"),
-                },
-                None => println!("not soketto error"),
-            },
-        )
-    });
-    // first layer of errors in RawClient are not important.  We care about RawClient::Inner
-    false
-    // if let Some(raw) = e.source() {
-    //     log::error!("internal ws error: {:?}", raw);
-    //     if let Some(raw2) = raw.source() {
-    //         log::error!("soketto error: {:?}", raw2);
-    //         match raw2.downcast_ref::<SokError>() {
-    //             Some(n) => match n {
-    //                 SokError::UnexpectedOpCode(_) => println!("expected, actually"),
-    //                 _ => println!("unexpected other soketto error"),
-    //             },
-    //             None => println!("hello"),
-    //         };
-    //     }
-    //     // log::error!("Internal WS Error: {:?}", raw);
-    //     // let a: Box<dyn Any> = Box::new(raw);
-    //     // match a.downcast_ref::<SokError>() {
-    //     //     Some(d) => log::error!("downcast!"),
-    //     //     None => log::error!("no downcast!"),
-    //     // };
-    // }
+    err.source()
+        .map(|inner| {
+            inner
+                .source()
+                .map(
+                    |maybe_socket| match maybe_socket.downcast_ref::<SokError>() {
+                        Some(n) => match n {
+                            SokError::UnexpectedOpCode(_) => false, // unexpected opcode errors are benign
+                            _ => return true,                       // everything else is fatal
+                        },
+                        None => false, // all other types should be E::Error, which currently is only HTTP (non fatal)
+                    },
+                )
+                .unwrap_or(false) // transport layer is mostly ok?
+        })
+        .unwrap_or(false) // first level RawClientError with no Source() are safe not fatal
 }
