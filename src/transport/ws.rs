@@ -27,7 +27,7 @@
 //! Implementation of [`TransportClient`](crate::transport::TransportClient) and
 //! [`TransportServer`](crate::transport::TransportServer) for the WebSocket protocol.
 
-pub use client::{Mode, WsConnecError, WsNewDnsError, WsNewError, WsTransportClient};
+pub use client::{Mode, WsConnectError, WsNewDnsError, WsNewError, WsTransportClient};
 pub use server::{WsRequestId, WsTransportServer, WsTransportServerBuilder};
 
 mod client;

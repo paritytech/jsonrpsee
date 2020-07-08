@@ -124,7 +124,7 @@ pub enum WsNewDnsError {
 
 /// Error that can happen during a request.
 #[derive(Debug, Error)]
-pub enum WsConnecError {
+pub enum WsConnectError {
     /// Error while serializing the request.
     // TODO: can that happen?
     #[error("error while serializing the request")]
@@ -201,14 +201,14 @@ impl WsTransportClient {
 }
 
 impl TransportClient for WsTransportClient {
-    type Error = WsConnecError;
+    type Error = WsConnectError;
 
     fn send_request<'a>(
         &'a mut self,
         request: common::Request,
     ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
         Box::pin(async move {
-            let request = common::to_vec(&request).map_err(WsConnecError::Serialization)?;
+            let request = common::to_vec(&request).map_err(WsConnectError::Serialization)?;
             self.sender.send_binary(request).await?;
             self.sender.flush().await?;
             Ok(())
@@ -221,7 +221,7 @@ impl TransportClient for WsTransportClient {
         Box::pin(async move {
             let mut message = Vec::new();
             self.receiver.receive_data(&mut message).await?;
-            let response = common::from_slice(&message).map_err(WsConnecError::ParseError)?;
+            let response = common::from_slice(&message).map_err(WsConnectError::ParseError)?;
             Ok(response)
         })
     }
@@ -326,8 +326,8 @@ impl From<WsNewError> for WsNewDnsError {
     }
 }
 
-impl From<soketto::connection::Error> for WsConnecError {
-    fn from(err: soketto::connection::Error) -> WsConnecError {
-        WsConnecError::Ws(err)
+impl From<soketto::connection::Error> for WsConnectError {
+    fn from(err: soketto::connection::Error) -> WsConnectError {
+        WsConnectError::Ws(err)
     }
 }
