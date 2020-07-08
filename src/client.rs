@@ -36,8 +36,12 @@ use futures::{
     ready,
     task::{Context, Poll},
 };
+use std::error::Error;
 use std::pin::Pin;
 use std::{collections::HashMap, error, io, marker::PhantomData};
+
+#[cfg(feature = "ws")]
+use soketto::connection::Error as SokError;
 
 /// Client that can be cloned.
 ///
@@ -427,7 +431,7 @@ where
 
             Either::Right(Err(e)) => {
                 // TODO: https://github.com/paritytech/jsonrpsee/issues/67
-                if is_socket_fatal::<R::Error>(e) {
+                if fatal_socket_error::<R::Error>(e) {
                     active_subscriptions.clear();
                 }
             }
@@ -435,13 +439,13 @@ where
     }
 }
 
-use soketto::connection::Error as SokError;
-use std::error::Error;
-fn is_socket_fatal<E>(err: RawClientError<E>) -> bool
+fn fatal_socket_error<E>(err: RawClientError<E>) -> bool
 where
     E: error::Error + 'static,
 {
-    err.source()
+    #[cfg(any(feature = "default", feature = "ws"))]
+    return err
+        .source()
         .map(|inner| {
             inner
                 .source()
@@ -456,5 +460,8 @@ where
                 )
                 .unwrap_or(false) // transport layer is mostly ok?
         })
-        .unwrap_or(false) // first level RawClientError with no Source() are safe not fatal
+        .unwrap_or(false); // first level RawClientError with no Source() are safe not fatal
+
+    #[cfg(not(feature = "default"))]
+    return false;
 }
