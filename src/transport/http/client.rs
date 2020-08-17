@@ -26,7 +26,7 @@
 
 use crate::{common, transport::TransportClient};
 
-use futures::{channel::mpsc, channel::oneshot, prelude::*};
+use futures::{channel::mpsc, prelude::*};
 use std::{fmt, io, pin::Pin, thread};
 use thiserror::Error;
 
@@ -50,10 +50,10 @@ pub struct HttpTransportClient {
     /// Sender that sends requests to the background task.
     requests_tx: mpsc::Sender<FrontToBack>,
     url: String,
-    /// Receives responses in any order.
-    responses: stream::FuturesUnordered<
-        oneshot::Receiver<Result<hyper::Response<hyper::Body>, hyper::Error>>,
-    >,
+    /// Responses receiver.
+    responses_rx: mpsc::UnboundedReceiver<Result<hyper::Response<hyper::Body>, hyper::Error>>,
+    /// Responses transmitter
+    responses_tx: mpsc::UnboundedSender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
 /// Message transmitted from the foreground task to the background.
@@ -61,7 +61,7 @@ struct FrontToBack {
     /// Request that the background task should perform.
     request: hyper::Request<hyper::Body>,
     /// Channel to send back to the response.
-    send_back: oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
+    send_back: mpsc::UnboundedSender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
 impl HttpTransportClient {
@@ -79,16 +79,18 @@ impl HttpTransportClient {
                     // cloning Hyper client = cloning references
                     let client = client.clone();
                     async move {
-                        let _ = rq.send_back.send(client.request(rq.request).await);
+                        let _ = rq.send_back.unbounded_send(client.request(rq.request).await);
                     }
                 })
             })
             .unwrap();
 
+        let (responses_tx, responses_rx) = futures::channel::mpsc::unbounded();
         HttpTransportClient {
             requests_tx,
             url: target.to_owned(),
-            responses: stream::FuturesUnordered::new(),
+            responses_rx,
+            responses_tx,
         }
     }
 }
@@ -113,10 +115,9 @@ impl TransportClient for HttpTransportClient {
         });
 
         Box::pin(async move {
-            let (send_back_tx, send_back_rx) = oneshot::channel();
             let message = FrontToBack {
                 request: request.map_err(RequestError::Serialization)?,
-                send_back: send_back_tx,
+                send_back: self.responses_tx.clone(),
             };
 
             if requests_tx.send(message).await.is_err() {
@@ -127,7 +128,6 @@ impl TransportClient for HttpTransportClient {
                 ))));
             }
 
-            self.responses.push(send_back_rx);
             Ok(())
         })
     }
@@ -136,10 +136,10 @@ impl TransportClient for HttpTransportClient {
         &'s mut self,
     ) -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>> {
         Box::pin(async move {
-            let hyper_response = match self.responses.next().await {
-                Some(Ok(Ok(r))) => r,
-                Some(Ok(Err(err))) => return Err(RequestError::Http(Box::new(err))),
-                None | Some(Err(_)) => {
+            let hyper_response = match self.responses_rx.next().await {
+                Some(Ok(r)) => r,
+                Some(Err(err)) => return Err(RequestError::Http(Box::new(err))),
+                None => {
                     log::error!("JSONRPC http client background thread has shut down");
                     return Err(RequestError::Http(Box::new(io::Error::new(
                         io::ErrorKind::Other,
@@ -259,6 +259,7 @@ fn background_thread<T, ProcessRequest: Future<Output = ()>>(
 
 #[cfg(test)]
 mod tests {
+    use futures::channel::oneshot;
     use super::*;
 
     #[test]
