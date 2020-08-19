@@ -79,7 +79,9 @@ impl HttpTransportClient {
                     // cloning Hyper client = cloning references
                     let client = client.clone();
                     async move {
-                        let _ = rq.send_back.unbounded_send(client.request(rq.request).await);
+                        let _ = rq
+                            .send_back
+                            .unbounded_send(client.request(rq.request).await);
                     }
                 })
             })
@@ -259,8 +261,8 @@ fn background_thread<T, ProcessRequest: Future<Output = ()>>(
 
 #[cfg(test)]
 mod tests {
-    use futures::channel::oneshot;
     use super::*;
+    use futures::channel::oneshot;
 
     #[test]
     fn background_thread_is_able_to_complete_requests() {
