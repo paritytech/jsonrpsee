@@ -24,58 +24,41 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-jsonrpsee::rpc_api! {
-    Health {
-        /// Test
-        fn system_name(foo: String, bar: i32) -> String;
+use async_std::task;
+use futures::channel::oneshot::{self, Sender};
+use jsonrpsee::client::HttpClient;
+use jsonrpsee::common::{JsonValue, Params};
+use jsonrpsee::http::HttpServer;
 
-        fn test_notif(foo: String, bar: i32);
+const SOCK_ADDR: &str = "127.0.0.1:9933";
+const SERVER_URI: &str = "http://127.0.0.1:9933";
 
-        /// Test2
-        #[rpc(method = "foo")]
-        fn system_name2() -> String;
-    }
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
 
-    System {
-        fn test_foo() -> String;
-    }
+    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
+    let _server = task::spawn(async move {
+        run_server(server_started_tx, SOCK_ADDR).await;
+    });
+
+    server_started_rx.await?;
+
+    let client = HttpClient::new(SERVER_URI);
+    let params = Params::None;
+    let response: Result<JsonValue, _> = client.request("say_hello", params).await;
+    println!("r: {:?}", response);
+
+    Ok(())
 }
 
-fn main() {
-    env_logger::try_init().ok();
-    // Spawning a server in a background task.
-    async_std::task::spawn(async move {
-        let listen_addr = "127.0.0.1:8000".parse().unwrap();
-        let transport_server = jsonrpsee::transport::http::HttpTransportServer::bind(&listen_addr)
-            .await
-            .unwrap();
-        let mut server1 = jsonrpsee::raw::RawServer::new(transport_server);
+async fn run_server(server_started_tx: Sender<()>, url: &str) {
+    let server = HttpServer::new(url).await.unwrap();
+    let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
 
-        while let Ok(request) = Health::next_request(&mut server1).await {
-            match request {
-                Health::SystemName { respond, foo, bar } => {
-                    let value = format!("{}, {}", foo, bar);
-                    respond.ok(value);
-                }
-                Health::SystemName2 { respond } => {
-                    respond.ok("hello 2");
-                }
-                Health::TestNotif { foo, bar } => {
-                    println!("server got notif: {:?} {:?}", foo, bar);
-                }
-            }
-        }
-    });
-
-    // Client demo.
-    let transport_client =
-        jsonrpsee::transport::http::HttpTransportClient::new("http://127.0.0.1:8000");
-    let mut client = jsonrpsee::raw::RawClient::new(transport_client);
-    let v = async_std::task::block_on(async {
-        Health::test_notif(&mut client, "notif_string", 192)
-            .await
-            .unwrap();
-        Health::system_name(&mut client, "hello", 5).await.unwrap()
-    });
-    println!("{:?}", v);
+    server_started_tx.send(()).unwrap();
+    loop {
+        let r = say_hello.next().await;
+        r.respond(Ok(JsonValue::String("lo".to_owned()))).await;
+    }
 }

@@ -1,13 +1,13 @@
 [package]
 name = "jsonrpsee"
 description = "JSON-RPC crate"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
 edition = "2018"
 
 [dependencies]
-async-std = "1.6.2"
+async-std = { version = "1.6.5", features = ["attributes"] }
 bs58 = "0.3.0"
 fnv = "1.0"
 futures = "0.3.4"
@@ -43,7 +43,6 @@ http = ["hyper", "tokio", "unicase"]
 ws = ["async-tls", "bytes", "soketto", "url", "webpki"]
 
 [dev-dependencies]
-async-std = "1.6.2"
 env_logger = "0.7.1"
 rand = "0.7"
 serde = { version = "1.0.40", features = ["derive"] }
