@@ -24,21 +24,19 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::raw::server::RawServerRequest;
-use crate::transport::TransportServer;
-
-use core::{hash::Hash, marker::PhantomData};
+use crate::http::raw::RawServerRequest;
+use core::marker::PhantomData;
 
 /// Allows responding to a server request in a more elegant and strongly-typed fashion.
-pub struct TypedResponder<'a, R, I, T> {
+pub struct TypedResponder<'a, T> {
     /// The request to answer.
-    rq: RawServerRequest<'a, R, I>,
+    rq: RawServerRequest<'a>,
     /// Marker that pins the type of the response.
     response_ty: PhantomData<T>,
 }
 
-impl<'a, R, I, T> From<RawServerRequest<'a, R, I>> for TypedResponder<'a, R, I, T> {
-    fn from(rq: RawServerRequest<'a, R, I>) -> TypedResponder<'a, R, I, T> {
+impl<'a, T> From<RawServerRequest<'a>> for TypedResponder<'a, T> {
+    fn from(rq: RawServerRequest<'a>) -> TypedResponder<'a, T> {
         TypedResponder {
             rq,
             response_ty: PhantomData,
@@ -46,10 +44,8 @@ impl<'a, R, I, T> From<RawServerRequest<'a, R, I>> for TypedResponder<'a, R, I, 
     }
 }
 
-impl<'a, R, I, T> TypedResponder<'a, R, I, T>
+impl<'a, T> TypedResponder<'a, T>
 where
-    R: TransportServer<RequestId = I>,
-    I: Clone + PartialEq + Eq + Hash + Send + Sync,
     T: serde::Serialize,
 {
     /// Returns a successful response.

@@ -86,7 +86,7 @@ impl<'a> IntoIterator for Params<'a> {
     fn into_iter(self) -> Self::IntoIter {
         Iter(match self.params {
             common::Params::None => IterInner::Empty,
-            common::Params::Array(_) => unimplemented!(),
+            common::Params::Array(arr) => IterInner::Array(arr.iter()),
             common::Params::Map(map) => IterInner::Map(map.iter()),
         })
     }
@@ -143,6 +143,7 @@ pub struct Iter<'a>(IterInner<'a>);
 enum IterInner<'a> {
     Empty,
     Map(serde_json::map::Iter<'a>),
+    Array(std::slice::Iter<'a, serde_json::Value>),
 }
 
 impl<'a> Iterator for Iter<'a> {
@@ -152,6 +153,7 @@ impl<'a> Iterator for Iter<'a> {
         match &mut self.0 {
             IterInner::Empty => None,
             IterInner::Map(iter) => iter.next().map(|(k, v)| (ParamKey::String(&k[..]), v)),
+            IterInner::Array(iter) => iter.next().map(|v| (ParamKey::String(""), v)),
         }
     }
 
@@ -159,6 +161,7 @@ impl<'a> Iterator for Iter<'a> {
         match &self.0 {
             IterInner::Empty => (0, Some(0)),
             IterInner::Map(iter) => iter.size_hint(),
+            IterInner::Array(iter) => iter.size_hint(),
         }
     }
 }

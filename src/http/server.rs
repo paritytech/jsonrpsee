@@ -25,18 +25,14 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::raw::{
-    server::{RawServerEvent, RawServerRequestId, RawServerSubscriptionId},
-    RawServer,
-};
-use crate::transport::TransportServer;
+use crate::http::raw::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};
+use crate::http::transport::HttpTransportServer;
 
 use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use parking_lot::Mutex;
 use std::{
-    collections::HashMap,
-    collections::HashSet,
-    hash::Hash,
+    collections::{HashMap, HashSet},
+    error,
     sync::{atomic, Arc},
 };
 
@@ -56,8 +52,8 @@ pub struct Server {
     next_subscription_unique_id: Arc<atomic::AtomicUsize>,
 }
 
-/// Notifications method that's been registered.
-pub struct RegisteredNotifications {
+/// Notification method that's been registered.
+pub struct RegisteredNotification {
     /// Receives notifications that the client sent to us.
     queries_rx: mpsc::Receiver<common::Params>,
 }
@@ -140,11 +136,10 @@ enum FrontToBack {
 
 impl Server {
     /// Initializes a new server based upon this raw server.
-    pub fn new<R, I>(server: RawServer<R, I>) -> Server
-    where
-        R: TransportServer<RequestId = I> + Send + 'static,
-        I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
-    {
+    pub async fn new(url: &str) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
+        let sockaddr = url.parse()?;
+        let server: RawServer = HttpTransportServer::bind(&sockaddr).await?.into();
+
         // We use an unbounded channel because the only exchanged messages concern registering
         // methods. The volume of messages is therefore very low and it doesn't make sense to have
         // a backpressure mechanism.
@@ -155,11 +150,11 @@ impl Server {
             background_task(server, from_front).await;
         });
 
-        Server {
+        Ok(Server {
             to_back,
             registered_methods: Arc::new(Mutex::new(Default::default())),
             next_subscription_unique_id: Arc::new(atomic::AtomicUsize::new(0)),
-        }
+        })
     }
 
     /// Registers a notification method name towards the server.
@@ -172,11 +167,11 @@ impl Server {
     /// to process notifications.
     ///
     /// Returns an error if the method name was already registered.
-    pub fn register_notifications(
+    pub fn register_notification(
         &self,
         method_name: String,
         allow_losses: bool,
-    ) -> Result<RegisteredNotifications, ()> {
+    ) -> Result<RegisteredNotification, ()> {
         if !self.registered_methods.lock().insert(method_name.clone()) {
             return Err(());
         }
@@ -191,7 +186,7 @@ impl Server {
                 allow_losses,
             });
 
-        Ok(RegisteredNotifications { queries_rx: rx })
+        Ok(RegisteredNotification { queries_rx: rx })
     }
 
     /// Registers a method towards the server.
@@ -263,7 +258,7 @@ impl Server {
     }
 }
 
-impl RegisteredNotifications {
+impl RegisteredNotification {
     /// Returns the next notification.
     pub async fn next(&mut self) -> common::Params {
         loop {
@@ -272,17 +267,6 @@ impl RegisteredNotifications {
                 None => futures::pending!(),
             }
         }
-    }
-}
-
-/// Initializes a new server based upon this raw server.
-impl<R, I> From<RawServer<R, I>> for Server
-where
-    R: TransportServer<RequestId = I> + Send + 'static,
-    I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
-{
-    fn from(server: RawServer<R, I>) -> Server {
-        Server::new(server)
     }
 }
 
@@ -295,7 +279,6 @@ impl RegisteredMethod {
                 None => futures::pending!(),
             }
         };
-
         IncomingRequest {
             to_back: self.to_back.clone(),
             request_id,
@@ -333,13 +316,10 @@ impl IncomingRequest {
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task<R, I>(
-    mut server: RawServer<R, I>,
+async fn background_task(
+    mut server: RawServer,
     mut from_front: mpsc::UnboundedReceiver<FrontToBack>,
-) where
-    R: TransportServer<RequestId = I> + Send + 'static,
-    I: Clone + PartialEq + Eq + Hash + Send + Sync + 'static,
-{
+) {
     // List of notifications methods that the user has registered, and the channels to dispatch
     // incoming notifications.
     let mut registered_notifications: HashMap<String, (mpsc::Sender<_>, bool)> = HashMap::new();
@@ -421,6 +401,7 @@ async fn background_task<R, I>(
                 }
             }
             Either::Right(RawServerEvent::Notification(notification)) => {
+                log::debug!("server received notification: {:?}", notification);
                 if let Some((handler, allow_losses)) =
                     registered_notifications.get_mut(notification.method())
                 {
@@ -435,6 +416,7 @@ async fn background_task<R, I>(
                 }
             }
             Either::Right(RawServerEvent::Request(request)) => {
+                log::debug!("server received request: {:?}", request);
                 if let Some(handler) = registered_methods.get_mut(request.method()) {
                     let params: &common::Params = request.params().into();
                     match handler.send((request.id(), params.clone())).now_or_never() {
@@ -460,7 +442,7 @@ async fn background_task<R, I>(
                         // FIXME: from request params
                         debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
                         if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
-                            // TODO: we don't actually check whether the unscribe comes from the right
+                            // TODO: we don't actually check whether the unsubscribe comes from the right
                             //       clients, but since this the ID is randomly-generated, it should be
                             //       fine
                             if let Some(client_pos) = clients.iter().position(|c| *c == sub_id) {
@@ -473,7 +455,9 @@ async fn background_task<R, I>(
                         }
                     }
                 } else {
-                    request.respond(Err(From::from(common::ErrorCode::InvalidRequest)));
+                    // TODO: we assert that the request is valid because the parsing succeeded but
+                    // not registered.
+                    request.respond(Err(From::from(common::ErrorCode::MethodNotFound)));
                 }
             }
             Either::Right(RawServerEvent::SubscriptionsReady(_)) => {

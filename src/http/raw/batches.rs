@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
-use crate::raw::server::{batch, params::Params, Notification};
+use crate::http::raw::{batch, notification::Notification, params::Params};
 
 use alloc::vec::Vec;
 use core::fmt;
@@ -309,7 +309,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{BatchesEvent, BatchesState};
-    use crate::{common, raw::server::Notification};
+    use crate::{common, http::HttpRawNotification};
 
     #[test]
     fn basic_notification() {
@@ -328,7 +328,7 @@ mod tests {
         match state.next_event() {
             Some(BatchesEvent::Notification {
                 ref notification, ..
-            }) if *notification == Notification::from(notif) => {}
+            }) if *notification == HttpRawNotification::from(notif) => {}
             _ => panic!(),
         }
         assert!(state.next_event().is_none());
@@ -428,7 +428,7 @@ mod tests {
             Some(BatchesEvent::Notification {
                 ref notification,
                 ref user_param,
-            }) if *notification == Notification::from(notif1) && **user_param == 2 => {}
+            }) if *notification == HttpRawNotification::from(notif1) && **user_param == 2 => {}
             _ => panic!(),
         }
 
@@ -436,7 +436,7 @@ mod tests {
             Some(BatchesEvent::Notification {
                 ref notification,
                 ref user_param,
-            }) if *notification == Notification::from(notif2) && **user_param == 2 => {}
+            }) if *notification == HttpRawNotification::from(notif2) && **user_param == 2 => {}
             _ => panic!(),
         }
 

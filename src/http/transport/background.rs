@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
+use crate::http::transport::response;
 use crate::server_utils::access_control::AccessControl;
-use crate::transport::http::server::response;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
@@ -77,7 +77,7 @@ impl BackgroundHttp {
         });
 
         let (addr_tx, addr_rx) = oneshot::channel();
-        let addr = addr.clone();
+        let addr = *addr;
 
         // Because hyper can only be polled through tokio, we spawn it in a background thread.
         thread::Builder::new()
@@ -110,7 +110,6 @@ impl BackgroundHttp {
                         Err(err) => {
                             log::error!("Failed to bind to address {}: {}", addr, err);
                             let _ = addr_tx.send(Err(err));
-                            return;
                         }
                     };
                 });
@@ -137,6 +136,8 @@ async fn process_request(
     fg_process_tx: &mut mpsc::Sender<Request>,
     access_control: &AccessControl,
 ) -> hyper::Response<hyper::Body> {
+    log::debug!(target: "jsonrpc-http-transport-server", "Recevied request={:?}", request);
+
     // Process access control
     if access_control.deny_host(&request) {
         return response::host_not_allowed();
@@ -173,6 +174,8 @@ async fn process_request(
                     (kind, None) => return response::internal_error(format!("{:?}", kind)),
                 },
             };
+
+            log::debug!(target: "http-server transport", "received request={:?}", json_body);
 
             let (tx, rx) = oneshot::channel();
             let user_facing_rq = Request {
@@ -253,20 +256,16 @@ async fn body_to_request(mut body: hyper::Body) -> Result<common::Request, io::E
 mod tests {
     use super::body_to_request;
 
-    // TODO: restore test
-    /*#[test]
+    #[test]
     fn body_to_request_works() {
-        futures::executor::block_on(async move {
-            let mut body = hyper::Body::from("[{\"a\":\"hello\"}]");
-            let json = body_to_request(body).await.unwrap();
-            assert_eq!(json, serde_json::Value::from(vec![
-                std::iter::once((
-                    "a".to_string(),
-                    serde_json::Value::from("hello")
-                )).collect::<serde_json::Map<_, _>>()
-            ]));
+        let s = r#"[{"a":"hello"}]"#;
+        let expected: super::common::Request = serde_json::from_str(s).unwrap();
+        let req = futures::executor::block_on(async move {
+            let mut body = hyper::Body::from(s);
+            body_to_request(body).await.unwrap()
         });
-    }*/
+        assert_eq!(req, expected);
+    }
 
     #[test]
     fn body_to_request_size_limit_json() {

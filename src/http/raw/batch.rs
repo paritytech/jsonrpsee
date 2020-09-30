@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common;
-use crate::raw::server::{Notification, Params};
+use crate::http::raw::{notification::Notification, params::Params};
 
 use alloc::vec::Vec;
 use core::{fmt, iter};
@@ -287,7 +287,7 @@ impl<'a> fmt::Debug for BatchElem<'a> {
 #[cfg(test)]
 mod tests {
     use super::{BatchInc, BatchState};
-    use crate::{common, raw::server::Notification};
+    use crate::{common, http::HttpRawNotification};
 
     #[test]
     fn basic_notification() {
@@ -304,7 +304,7 @@ mod tests {
 
         assert!(!state.is_ready_to_respond());
         match state.next() {
-            Some(BatchInc::Notification(ref n)) if n == &Notification::from(notif) => {}
+            Some(BatchInc::Notification(ref n)) if n == &HttpRawNotification::from(notif) => {}
             _ => panic!(),
         }
         assert!(state.is_ready_to_respond());

@@ -24,17 +24,38 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+mod background;
+mod response;
+
 use crate::common;
 use crate::server_utils::access_control::AccessControl;
-use crate::transport::http::server::background;
-use crate::transport::{TransportServer, TransportServerEvent};
 
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
 use std::{error, net::SocketAddr, pin::Pin};
 
-// Implementation note: hyper's API is not adapted to async/await at all, and there's
-// unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
+pub type RequestId = u64;
+
+/// Event that the [`TransportServer`] can generate.
+#[derive(Debug, PartialEq)]
+pub enum TransportServerEvent<T> {
+    /// A new request has arrived on the wire.
+    ///
+    /// This generates a new "request object" within the state of the [`TransportServer`] that is
+    /// identified through the returned `id`. You can then use the other methods of the
+    /// [`TransportServer`] trait in order to manipulate that request.
+    Request {
+        /// Identifier of the request within the state of the [`TransportServer`].
+        id: T,
+        /// Body of the request.
+        request: common::Request,
+    },
+
+    /// A request has been cancelled, most likely because the client has closed the connection.
+    ///
+    /// The corresponding request is no longer valid to manipulate.
+    Closed(T),
+}
 
 /// Implementation of the [`TransportServer`](crate::transport::TransportServer) trait for HTTP.
 pub struct HttpTransportServer {
@@ -67,6 +88,8 @@ impl HttpTransportServer {
     ) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
         let (background_thread, local_addr) = background::BackgroundHttp::bind(addr).await?;
 
+        log::debug!(target: "jsonrpc-http-server", "Starting jsonrpc http server at address={:?}, local_addr={:?}", addr, local_addr);
+
         Ok(HttpTransportServer {
             background_thread,
             local_addr,
@@ -98,16 +121,16 @@ impl HttpTransportServer {
     }
 }
 
-impl TransportServer for HttpTransportServer {
-    type RequestId = u64;
-
-    fn next_request<'a>(
+// former `TransportServer trait impl`
+impl HttpTransportServer {
+    pub fn next_request<'a>(
         &'a mut self,
-    ) -> Pin<Box<dyn Future<Output = TransportServerEvent<Self::RequestId>> + Send + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = TransportServerEvent<RequestId>> + Send + 'a>> {
         Box::pin(async move {
             let request = match self.background_thread.next().await {
                 Ok(r) => r,
                 Err(_) => loop {
+                    log::debug!("http transport server inf loop?!");
                     futures::pending!()
                 },
             };
@@ -133,16 +156,19 @@ impl TransportServer for HttpTransportServer {
                 self.requests.shrink_to_fit();
             }
 
-            TransportServerEvent::Request {
+            let request = TransportServerEvent::Request {
                 id: request_id,
                 request: request.request,
-            }
+            };
+
+            log::debug!(target: "jsonrpc-http-transport-server", "received request: {:?}", request);
+            request
         })
     }
 
-    fn finish<'a>(
+    pub fn finish<'a>(
         &'a mut self,
-        request_id: &'a Self::RequestId,
+        request_id: &'a RequestId,
         response: Option<&'a common::Response>,
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
         Box::pin(async move {
@@ -178,7 +204,7 @@ impl TransportServer for HttpTransportServer {
         })
     }
 
-    fn supports_resuming(&self, id: &u64) -> Result<bool, ()> {
+    pub fn supports_resuming(&self, id: &u64) -> Result<bool, ()> {
         if self.requests.contains_key(id) {
             Ok(false)
         } else {
@@ -186,9 +212,9 @@ impl TransportServer for HttpTransportServer {
         }
     }
 
-    fn send<'a>(
+    pub fn send<'a>(
         &'a mut self,
-        _: &'a Self::RequestId,
+        _: &'a RequestId,
         _: &'a common::Response,
     ) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
         Box::pin(async move { Err(()) })

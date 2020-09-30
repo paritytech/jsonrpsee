@@ -1,35 +1,3 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
-//
-// Permission is hereby granted, free of charge, to any
-// person obtaining a copy of this software and associated
-// documentation files (the "Software"), to deal in the
-// Software without restriction, including without
-// limitation the rights to use, copy, modify, merge,
-// publish, distribute, sublicense, and/or sell copies of
-// the Software, and to permit persons to whom the Software
-// is furnished to do so, subject to the following
-// conditions:
-//
-// The above copyright notice and this permission notice
-// shall be included in all copies or substantial portions
-// of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-// DEALINGS IN THE SOFTWARE.
-
-use crate::{common, transport::TransportClient};
-
-use futures::{channel::mpsc, channel::oneshot, prelude::*};
-use std::{fmt, io, pin::Pin, thread};
-use thiserror::Error;
-
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
 //
@@ -45,15 +13,24 @@ use thiserror::Error;
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+use std::pin::Pin;
+use std::{fmt, io, thread};
+
+use crate::common;
+
+use futures::{channel::mpsc, prelude::*};
+use thiserror::Error;
+
 /// Implementation of a raw client for HTTP requests.
 pub struct HttpTransportClient {
     /// Sender that sends requests to the background task.
     requests_tx: mpsc::Sender<FrontToBack>,
+    /// URL of the server to connect to.
     url: String,
-    /// Receives responses in any order.
-    responses: stream::FuturesUnordered<
-        oneshot::Receiver<Result<hyper::Response<hyper::Body>, hyper::Error>>,
-    >,
+    /// Responses receiver.
+    responses_rx: mpsc::UnboundedReceiver<Result<hyper::Response<hyper::Body>, hyper::Error>>,
+    /// Responses transmitter
+    responses_tx: mpsc::UnboundedSender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
 /// Message transmitted from the foreground task to the background.
@@ -61,7 +38,7 @@ struct FrontToBack {
     /// Request that the background task should perform.
     request: hyper::Request<hyper::Body>,
     /// Channel to send back to the response.
-    send_back: oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
+    send_back: mpsc::UnboundedSender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
 }
 
 impl HttpTransportClient {
@@ -79,24 +56,25 @@ impl HttpTransportClient {
                     // cloning Hyper client = cloning references
                     let client = client.clone();
                     async move {
-                        let _ = rq.send_back.send(client.request(rq.request).await);
+                        let _ = rq
+                            .send_back
+                            .unbounded_send(client.request(rq.request).await);
                     }
                 })
             })
             .unwrap();
 
+        let (responses_tx, responses_rx) = futures::channel::mpsc::unbounded();
         HttpTransportClient {
             requests_tx,
             url: target.to_owned(),
-            responses: stream::FuturesUnordered::new(),
+            responses_tx,
+            responses_rx,
         }
     }
-}
 
-impl TransportClient for HttpTransportClient {
-    type Error = RequestError;
-
-    fn send_request<'s>(
+    /// Send request to the target
+    pub fn send_request<'s>(
         &'s mut self,
         request: common::Request,
     ) -> Pin<Box<dyn Future<Output = Result<(), RequestError>> + Send + 's>> {
@@ -113,10 +91,9 @@ impl TransportClient for HttpTransportClient {
         });
 
         Box::pin(async move {
-            let (send_back_tx, send_back_rx) = oneshot::channel();
             let message = FrontToBack {
                 request: request.map_err(RequestError::Serialization)?,
-                send_back: send_back_tx,
+                send_back: self.responses_tx.clone(),
             };
 
             if requests_tx.send(message).await.is_err() {
@@ -127,19 +104,19 @@ impl TransportClient for HttpTransportClient {
                 ))));
             }
 
-            self.responses.push(send_back_rx);
             Ok(())
         })
     }
 
-    fn next_response<'s>(
+    /// Waits for the next response.
+    pub fn next_response<'s>(
         &'s mut self,
     ) -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>> {
         Box::pin(async move {
-            let hyper_response = match self.responses.next().await {
-                Some(Ok(Ok(r))) => r,
-                Some(Ok(Err(err))) => return Err(RequestError::Http(Box::new(err))),
-                None | Some(Err(_)) => {
+            let hyper_response = match self.responses_rx.next().await {
+                Some(Ok(r)) => r,
+                Some(Err(err)) => return Err(RequestError::Http(Box::new(err))),
+                None => {
                     log::error!("JSONRPC http client background thread has shut down");
                     return Err(RequestError::Http(Box::new(io::Error::new(
                         io::ErrorKind::Other,
@@ -253,13 +230,14 @@ fn background_thread<T, ProcessRequest: Future<Output = ()>>(
         }
 
         // Before returning, complete all pending requests.
-        while let Some(_) = pending_requests.next().await {}
+        while pending_requests.next().await.is_some() {}
     });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::channel::oneshot;
 
     #[test]
     fn background_thread_is_able_to_complete_requests() {

@@ -24,13 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Implementation of [`TransportClient`](crate::transport::TransportClient) and
-//! [`TransportServer`](crate::transport::TransportServer) for HTTP.
-
-pub use crate::transport::http::client::{HttpTransportClient, RequestError};
-pub use crate::transport::http::server::HttpTransportServer;
-
-pub use crate::server_utils::access_control;
-
-mod client;
+mod raw;
 mod server;
+mod transport;
+
+#[cfg(test)]
+mod tests;
+
+pub use raw::Notification as HttpRawNotification;
+pub use raw::RawServer as HttpRawServer;
+pub use raw::RawServerEvent as HttpRawServerEvent;
+pub use server::{RegisteredMethod, RegisteredNotification, Server as HttpServer};
+pub use transport::HttpTransportServer;

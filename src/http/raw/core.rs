@@ -25,30 +25,32 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::common::{self, JsonValue};
-use crate::raw::server::{batches, Notification, Params};
-use crate::transport::{TransportServer, TransportServerEvent};
+use crate::http::raw::{batches, Notification, Params};
+use crate::http::transport::{HttpTransportServer, TransportServerEvent};
 
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
 use core::{fmt, hash::Hash, num::NonZeroUsize};
 use hashbrown::{hash_map::Entry, HashMap};
 
+pub type RequestId = u64;
+
 /// Wraps around a "raw server" and adds capabilities.
 ///
 /// See the module-level documentation for more information.
-pub struct RawServer<R, I> {
+pub struct RawServer {
     /// Internal "raw" server.
-    raw: R,
+    raw: HttpTransportServer,
 
     /// List of requests that are in the progress of being answered. Each batch is associated with
     /// the raw request ID, or with `None` if this raw request has been closed.
     ///
     /// See the documentation of [`BatchesState`][batches::BatchesState] for more information.
-    batches: batches::BatchesState<Option<I>>,
+    batches: batches::BatchesState<Option<RequestId>>,
 
     /// List of active subscriptions.
     /// The identifier is chosen randomly and uniformy distributed. It is never decided by the
     /// client. There is therefore no risk of hash collision attack.
-    subscriptions: HashMap<[u8; 32], SubscriptionState<I>, fnv::FnvBuildHasher>,
+    subscriptions: HashMap<[u8; 32], SubscriptionState<RequestId>, fnv::FnvBuildHasher>,
 
     /// For each raw request ID (i.e. client connection), the number of active subscriptions
     /// that are using it.
@@ -58,7 +60,7 @@ pub struct RawServer<R, I> {
     /// Because we don't have any information about `I`, we have to use a collision-resistant
     /// hashing algorithm. This incurs a performance cost that is theoretically avoidable (if `I`
     /// is always local), but that should be negligible in practice.
-    num_subscriptions: HashMap<I, NonZeroUsize>,
+    num_subscriptions: HashMap<RequestId, NonZeroUsize>,
 }
 
 /// Identifier of a request within a `RawServer`.
@@ -76,12 +78,12 @@ pub struct RawServerSubscriptionId([u8; 32]);
 /// > **Note**: Holds a borrow of the `RawServer`. Therefore, must be dropped before the `RawServer` can
 /// >           be dropped.
 #[derive(Debug)]
-pub enum RawServerEvent<'a, R, I> {
+pub enum RawServerEvent<'a> {
     /// Request is a notification.
     Notification(Notification),
 
     /// Request is a method call.
-    Request(RawServerRequest<'a, R, I>),
+    Request(RawServerRequest<'a>),
 
     /// Subscriptions are now ready.
     SubscriptionsReady(SubscriptionsReadyIter),
@@ -91,26 +93,26 @@ pub enum RawServerEvent<'a, R, I> {
 }
 
 /// Request received by a [`RawServer`](crate::raw::RawServer).
-pub struct RawServerRequest<'a, R, I> {
+pub struct RawServerRequest<'a> {
     /// Reference to the request within `self.batches`.
-    inner: batches::BatchesElem<'a, Option<I>>,
+    inner: batches::BatchesElem<'a, Option<RequestId>>,
 
     /// Reference to the corresponding field in `RawServer`.
-    raw: &'a mut R,
+    raw: &'a mut HttpTransportServer,
+
+    /// Pending subscriptions.
+    subscriptions: &'a mut HashMap<[u8; 32], SubscriptionState<RequestId>, fnv::FnvBuildHasher>,
 
     /// Reference to the corresponding field in `RawServer`.
-    subscriptions: &'a mut HashMap<[u8; 32], SubscriptionState<I>, fnv::FnvBuildHasher>,
-
-    /// Reference to the corresponding field in `RawServer`.
-    num_subscriptions: &'a mut HashMap<I, NonZeroUsize>,
+    num_subscriptions: &'a mut HashMap<RequestId, NonZeroUsize>,
 }
 
 /// Active subscription of a client towards a server.
 ///
 /// > **Note**: Holds a borrow of the `RawServer`. Therefore, must be dropped before the `RawServer` can
 /// >           be dropped.
-pub struct ServerSubscription<'a, R, I> {
-    server: &'a mut RawServer<R, I>,
+pub struct ServerSubscription<'a> {
+    server: &'a mut RawServer,
     id: [u8; 32],
 }
 
@@ -144,16 +146,11 @@ struct SubscriptionState<I> {
     pending: bool,
 }
 
-impl<R, I> RawServer<R, I>
-where
-    R: TransportServer<RequestId = I>,
-    // Note: annoyingly, the `HashMap` constructor with hasher requires trait bounds on the key.
-    I: Clone + PartialEq + Eq + Hash + Send + Sync,
-{
+impl RawServer {
     /// Starts a [`RawServer`](crate::raw::RawServer) using the given raw server internally.
-    pub fn new(inner: R) -> RawServer<R, I> {
+    pub fn new(raw: HttpTransportServer) -> RawServer {
         RawServer {
-            raw: inner,
+            raw,
             batches: batches::BatchesState::new(),
             subscriptions: HashMap::with_capacity_and_hasher(8, Default::default()),
             num_subscriptions: HashMap::with_capacity_and_hasher(8, Default::default()),
@@ -161,13 +158,9 @@ where
     }
 }
 
-impl<R, I> RawServer<R, I>
-where
-    R: TransportServer<RequestId = I>,
-    I: Clone + PartialEq + Eq + Hash + Send + Sync,
-{
+impl RawServer {
     /// Returns a `Future` resolving to the next event that this server generates.
-    pub async fn next_event<'a>(&'a mut self) -> RawServerEvent<'a, R, I> {
+    pub async fn next_event<'a>(&'a mut self) -> RawServerEvent<'a> {
         let request_id = loop {
             match self.batches.next_event() {
                 None => {}
@@ -260,7 +253,7 @@ where
     pub fn request_by_id<'a>(
         &'a mut self,
         id: &RawServerRequestId,
-    ) -> Option<RawServerRequest<'a, R, I>> {
+    ) -> Option<RawServerRequest<'a>> {
         Some(RawServerRequest {
             inner: self.batches.request_by_id(id.inner)?,
             raw: &mut self.raw,
@@ -274,7 +267,7 @@ where
     pub fn subscription_by_id(
         &mut self,
         id: RawServerSubscriptionId,
-    ) -> Option<ServerSubscription<R, I>> {
+    ) -> Option<ServerSubscription> {
         if self.subscriptions.contains_key(&id.0) {
             Some(ServerSubscription {
                 server: self,
@@ -286,16 +279,13 @@ where
     }
 }
 
-impl<R> From<R> for RawServer<R, R::RequestId>
-where
-    R: TransportServer,
-{
-    fn from(inner: R) -> RawServer<R, R::RequestId> {
+impl From<HttpTransportServer> for RawServer {
+    fn from(inner: HttpTransportServer) -> Self {
         RawServer::new(inner)
     }
 }
 
-impl<'a, R, I> RawServerRequest<'a, R, I> {
+impl<'a> RawServerRequest<'a> {
     /// Returns the id of the request.
     ///
     /// If this request object is dropped, you can retreive it again later by calling
@@ -323,11 +313,7 @@ impl<'a, R, I> RawServerRequest<'a, R, I> {
     }
 }
 
-impl<'a, R, I> RawServerRequest<'a, R, I>
-where
-    R: TransportServer<RequestId = I>,
-    I: Clone + PartialEq + Eq + Hash + Send + Sync,
-{
+impl<'a> RawServerRequest<'a> {
     /// Send back a response.
     ///
     /// If this request is part of a batch:
@@ -408,7 +394,7 @@ where
     }
 }
 
-impl<'a, R, I> fmt::Debug for RawServerRequest<'a, R, I> {
+impl<'a> fmt::Debug for RawServerRequest<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RawServerRequest")
             .field("request_id", &self.request_id())
@@ -439,11 +425,7 @@ impl RawServerSubscriptionId {
     }
 }
 
-impl<'a, R, I> ServerSubscription<'a, R, I>
-where
-    R: TransportServer<RequestId = I>,
-    I: Clone + PartialEq + Eq + Hash + Send + Sync,
-{
+impl<'a> ServerSubscription<'a> {
     /// Returns the id of the subscription.
     ///
     /// If this subscription object is dropped, you can retreive it again later by calling
@@ -453,6 +435,8 @@ where
     }
 
     /// Pushes a notification.
+    ///
+    // TODO: refactor to progate the error.
     pub async fn push(self, message: impl Into<JsonValue>) {
         let subscription_state = self.server.subscriptions.get(&self.id).unwrap();
         if subscription_state.pending {
@@ -468,6 +452,7 @@ where
             },
         };
         let response = common::Response::Notif(output);
+
         let _ = self
             .server
             .raw
