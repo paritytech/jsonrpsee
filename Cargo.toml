@@ -21,7 +21,7 @@ pin-project = "0.4.24"
 jsonrpsee-proc-macros = { path = "proc-macros" }
 rand = "0.7.3"
 serde = { version = "1.0.116", default-features = false, features = ["derive"] }
-serde_json = "1.0.57"
+serde_json = "1.0.58"
 smallvec = { version = "1.4.2", default-features = false }
 thiserror = "1.0.20"
 
@@ -44,6 +44,3 @@ ws = ["async-tls", "bytes", "soketto", "url", "webpki"]
 
 [dev-dependencies]
 env_logger = "0.7.1"
-rand = "0.7.3"
-serde = { version = "1.0.116", features = ["derive"] }
-
