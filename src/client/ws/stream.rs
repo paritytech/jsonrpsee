@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Convenience wrapper for a stream (AsyncRead + AsyncWrite) which can either be plain TCP and TLS.
+//! Convenience wrapper for a stream (AsyncRead + AsyncWrite) which can either be plain TCP or TLS.
 
 use futures::{
     io::{IoSlice, IoSliceMut},

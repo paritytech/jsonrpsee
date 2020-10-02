@@ -143,7 +143,7 @@ impl WsTransportServer {
 
                 enum Event {
                     TaskFinished(Vec<WsRequestId>),
-                    NewConnec(TcpStream),
+                    NewConnection(TcpStream),
                     Event(BackToFront),
                 }
 
@@ -153,7 +153,7 @@ impl WsTransportServer {
                         async move {
                             loop {
                                 if let Ok((connec, _)) = listener.accept().await {
-                                    break Event::NewConnec(connec);
+                                    break Event::NewConnection(connec);
                                 }
                             }
                         }
@@ -183,7 +183,8 @@ impl WsTransportServer {
                 };
 
                 match next {
-                    Event::NewConnec(connec) => {
+                    Event::NewConnection(connec) => {
+                        log::debug!("new connection with id: {:?}", self.next_request_id);
                         self.connections_tasks.push(
                             per_connection_task(
                                 connec,
@@ -194,12 +195,14 @@ impl WsTransportServer {
                         );
                     }
                     Event::Event(BackToFront::NewRequest { id, body, sender }) => {
+                        log::debug!("new request with id: {:?}", id);
                         let _was_in = self.to_connections.insert(id.clone(), sender);
                         debug_assert!(_was_in.is_none());
                         return TransportServerEvent::Request { id, request: body };
                     }
                     Event::TaskFinished(list) => {
                         for rq_id in list {
+                            log::debug!("closed connection with id: {:?}", rq_id);
                             let _was_in = self.to_connections.remove(&rq_id);
                             debug_assert!(_was_in.is_some());
                             self.pending_events
@@ -300,6 +303,8 @@ impl WsTransportServerBuilder {
 }
 
 /// Processes a single connection.
+//
+// TODO: return error instead of logging everthing.
 async fn per_connection_task(
     socket: TcpStream,
     next_request_id: Arc<atomic::AtomicU64>,
@@ -348,14 +353,29 @@ async fn per_connection_task(
         futures::pin_mut!(next_socket_packet, next_from_front);
         match future::select(next_socket_packet, next_from_front).await {
             future::Either::Left((socket_packet, _)) => {
+                log::debug!("received socket_packet: {:?}", socket_packet);
                 let socket_packet = match socket_packet {
                     Some(Ok((ty, pq))) if ty.is_text() => pq,
-                    _ => return pending_requests,
+                    Some(Ok((ty, _))) => {
+                        log::error!("expected to receive text data from WebSocket, got: {:?}", ty);
+                        return pending_requests;
+                    }
+                    Some(Err(err)) => {
+                        log::error!("failed to receive data from WebSocket: {:?}", err);
+                        return pending_requests;
+                    }
+                    None => {
+                        log::error!("failed to receive data from Websocket channel closed");
+                        return pending_requests;
+                    }
                 };
 
                 let body = match serde_json::from_slice(socket_packet.as_ref()) {
                     Ok(b) => b,
-                    Err(_) => return pending_requests,
+                    Err(err) => {
+                        log::error!("Deserialization of incoming request failed: {:?}", err);
+                        return pending_requests;
+                    }
                 };
 
                 let request_id =

@@ -435,7 +435,7 @@ impl RawClient {
             common::Response::Single(rp) => self.process_response(rp)?,
             common::Response::Batch(rps) => {
                 for rp in rps {
-                    // TODO: if an errror happens, we throw away the entire batch
+                    // TODO: if an error happens, we throw away the entire batch
                     self.process_response(rp)?;
                 }
             }
@@ -468,6 +468,7 @@ impl RawClient {
         &mut self,
         response: common::Output,
     ) -> Result<(), RawClientError> {
+        log::debug!(target: "ws-client-raw", "received response: {:?}", response);
         let request_id = match response.id() {
             common::Id::Num(n) => RawClientRequestId(*n),
             common::Id::Str(s) => {

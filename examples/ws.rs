@@ -30,8 +30,8 @@ use jsonrpsee::client::WsClient;
 use jsonrpsee::common::{JsonValue, Params};
 use jsonrpsee::ws::WsServer;
 
-const SOCK_ADDR: &str = "127.0.0.1:9933";
-const SERVER_URI: &str = "ws://127.0.0.1:9933";
+const SOCK_ADDR: &str = "127.0.0.1:9944";
+const SERVER_URI: &str = "ws://127.0.0.1:9944";
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -43,10 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     server_started_rx.await?;
-
     let client = WsClient::new(SERVER_URI).await?;
-    let params = Params::None;
-    let response: Result<JsonValue, _> = client.request("say_hello", params).await;
+    let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
     println!("r: {:?}", response);
 
     Ok(())
