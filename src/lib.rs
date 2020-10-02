@@ -47,12 +47,16 @@ extern crate alloc;
 
 pub use jsonrpsee_proc_macros::rpc_api;
 
-/// Client implementions
+/// Client implementations.
 pub mod client;
-/// Common types
+/// Common types.
 pub mod common;
-/// JSONRPC 2.0 HTTP server
+/// JSONRPC 2.0 HTTP server.
 #[cfg(feature = "http")]
 pub mod http;
+/// JSONRPC 2.0 WebSocket server.
+#[cfg(feature = "ws")]
+pub mod ws;
+
 #[cfg(feature = "http")]
 mod server_utils;

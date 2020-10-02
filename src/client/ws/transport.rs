@@ -207,8 +207,9 @@ impl WsTransportClient {
         request: common::Request,
     ) -> Pin<Box<dyn Future<Output = Result<(), WsConnectError>> + Send + 'a>> {
         Box::pin(async move {
-            let request = common::to_vec(&request).map_err(WsConnectError::Serialization)?;
-            self.sender.send_binary(request).await?;
+            log::debug!("send request: {:?}", request);
+            let request = common::to_string(&request).map_err(WsConnectError::Serialization)?;
+            self.sender.send_text(request).await?;
             self.sender.flush().await?;
             Ok(())
         })
@@ -221,6 +222,7 @@ impl WsTransportClient {
             let mut message = Vec::new();
             self.receiver.receive_data(&mut message).await?;
             let response = common::from_slice(&message).map_err(WsConnectError::ParseError)?;
+            log::debug!("received response: {:?}", response);
             Ok(response)
         })
     }
