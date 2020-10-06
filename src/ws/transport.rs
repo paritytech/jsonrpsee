@@ -74,6 +74,8 @@ pub enum TransportServerEvent<T> {
 // If a task finishes, it must return the list of requests that were assigned to it so that they
 // get removed from [`WsTransportServer::to_connections`].
 pub struct WsTransportServer {
+    /// Local socket address.
+    local_addr: SocketAddr,
     /// List of events to for `next_request` to immediately produce.
     pending_events: Vec<TransportServerEvent<WsRequestId>>,
     /// Endpoint for incoming TCP sockets.
@@ -125,6 +127,11 @@ impl WsTransportServer {
     /// Creates a new [`WsTransportServerBuilder`] containing the given address and hostname.
     pub fn builder(bind: SocketAddr) -> WsTransportServerBuilder {
         WsTransportServerBuilder { bind }
+    }
+
+    /// Local socket address.
+    pub fn local_addr(&self) -> &SocketAddr {
+        &self.local_addr
     }
 }
 
@@ -273,6 +280,7 @@ impl WsTransportServerBuilder {
     /// Try establish the connection.
     pub async fn build(self) -> Result<WsTransportServer, io::Error> {
         let listener = TcpListener::bind(self.bind).await?;
+        let local_addr = listener.local_addr()?;
 
         let connections_tasks = {
             let futures = stream::FuturesUnordered::new();
@@ -291,6 +299,7 @@ impl WsTransportServerBuilder {
         let (to_front, from_connections) = mpsc::channel(256);
 
         Ok(WsTransportServer {
+            local_addr,
             pending_events: Vec::new(),
             listener,
             next_request_id: Arc::new(atomic::AtomicU64::new(1)),

@@ -34,6 +34,7 @@ use std::{
     collections::{HashMap, HashSet},
     error,
     sync::{atomic, Arc},
+    net::SocketAddr
 };
 
 /// Server that can be cloned.
@@ -50,6 +51,8 @@ pub struct Server {
     registered_methods: Arc<Mutex<HashSet<String>>>,
     /// Next unique ID used when registering a subscription.
     next_subscription_unique_id: Arc<atomic::AtomicUsize>,
+    /// Local socket address of the transport server.
+    local_addr: SocketAddr,
 }
 
 /// Notification method that's been registered.
@@ -135,10 +138,11 @@ enum FrontToBack {
 }
 
 impl Server {
-    /// Initializes a new server based upon this raw server.
+    /// Initializes a new server.
     pub async fn new(url: &str) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
         let sockaddr = url.parse()?;
-        let server: RawServer = WsTransportServer::builder(sockaddr).build().await?.into();
+        let transport_server = WsTransportServer::builder(sockaddr).build().await?;
+        let local_addr = *transport_server.local_addr();
 
         // We use an unbounded channel because the only exchanged messages concern registering
         // methods. The volume of messages is therefore very low and it doesn't make sense to have
@@ -147,14 +151,20 @@ impl Server {
         let (to_back, from_front) = mpsc::unbounded();
 
         async_std::task::spawn(async move {
-            background_task(server, from_front).await;
+            background_task(transport_server.into(), from_front).await;
         });
 
         Ok(Server {
             to_back,
             registered_methods: Arc::new(Mutex::new(Default::default())),
             next_subscription_unique_id: Arc::new(atomic::AtomicUsize::new(0)),
+            local_addr
         })
+    }
+
+    /// Local socket address of the underlying transport server.
+    pub fn local_addr(&self) -> &SocketAddr {
+        &self.local_addr
     }
 
     /// Registers a notification method name towards the server.
