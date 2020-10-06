@@ -30,24 +30,21 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 
-use crate::client::HttpTransportClient;
+use crate::client::WsTransportClient;
 use crate::common::{self, Call, MethodCall, Notification, Params, Request, Version};
-use crate::http::{HttpRawServer, HttpRawServerEvent, HttpTransportServer};
+use crate::ws::{RawWsServer, RawWsServerEvent, WsTransportServer};
 use hyper::{Body, Response, Uri};
 use serde_json::Value;
 use tokio::runtime::Runtime;
 
-async fn connection_context(sockaddr: SocketAddr) -> (HttpTransportClient, HttpRawServer) {
-    let mut server: HttpRawServer = HttpTransportServer::bind(&sockaddr).await.unwrap().into();
-    let uri = format!("http://{}", sockaddr);
-    let client = HttpTransportClient::new(&uri);
-    (client, server)
-}
-
 #[tokio::test]
 async fn request_work() {
-    let (mut client, mut server) = connection_context("127.0.0.1:63000".parse().unwrap()).await;
+    let sockaddr = "127.0.0.1:63111".parse().unwrap();
+    let uri = format!("ws://{}", sockaddr);
+    let mut server: RawWsServer = WsTransportServer::builder(sockaddr).build().await.unwrap().into();
+
     tokio::spawn(async move {
+        let mut client = WsTransportClient::new(&uri).await.unwrap();
         let call = Call::MethodCall(MethodCall {
             jsonrpc: Version::V2,
             method: "hello_world".to_owned(),
@@ -58,7 +55,7 @@ async fn request_work() {
     });
 
     match server.next_event().await {
-        HttpRawServerEvent::Request(r) => {
+        RawWsServerEvent::Request(r) => {
             assert_eq!(r.method(), "hello_world");
             let p1: i32 = r.params().get(0).unwrap();
             let p2: i32 = r.params().get(1).unwrap();
@@ -72,8 +69,12 @@ async fn request_work() {
 
 #[tokio::test]
 async fn notification_work() {
-    let (mut client, mut server) = connection_context("127.0.0.1:63001".parse().unwrap()).await;
+    let sockaddr = "127.0.0.1:63112".parse().unwrap();
+    let uri = format!("ws://{}", sockaddr);
+    let mut server: RawWsServer = WsTransportServer::builder(sockaddr).build().await.unwrap().into();
+
     tokio::spawn(async move {
+        let mut client = WsTransportClient::new(&uri).await.unwrap();
         let n = Notification {
             jsonrpc: Version::V2,
             method: "hello_world".to_owned(),
@@ -86,7 +87,7 @@ async fn notification_work() {
     });
 
     match server.next_event().await {
-        HttpRawServerEvent::Notification(r) => {
+        RawWsServerEvent::Notification(r) => {
             assert_eq!(r.method(), "hello_world");
             let p1: String = r.params().get(0).unwrap();
             let p2: i32 = r.params().get(1).unwrap();

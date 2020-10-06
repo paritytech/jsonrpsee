@@ -419,6 +419,7 @@ async fn background_task(
                 log::debug!("server received request: {:?}", request);
                 if let Some(handler) = registered_methods.get_mut(request.method()) {
                     let params: &common::Params = request.params().into();
+                    log::debug!("server called handler");
                     match handler.send((request.id(), params.clone())).now_or_never() {
                         Some(Ok(())) => {}
                         Some(Err(_)) | None => {

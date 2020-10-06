@@ -28,11 +28,11 @@ mod raw;
 mod server;
 mod transport;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 pub use raw::Notification as WsRawNotification;
 pub use raw::RawServer as RawWsServer;
-pub use raw::RawServerEvent as WsRawServerEvent;
+pub use raw::RawServerEvent as RawWsServerEvent;
 pub use server::{RegisteredMethod, RegisteredNotification, Server as WsServer};
 pub use transport::WsTransportServer;

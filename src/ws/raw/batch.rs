@@ -287,7 +287,7 @@ impl<'a> fmt::Debug for BatchElem<'a> {
 #[cfg(test)]
 mod tests {
     use super::{BatchInc, BatchState};
-    use crate::{common, http::HttpRawNotification};
+    use crate::{common, ws::WsRawNotification};
 
     #[test]
     fn basic_notification() {
@@ -304,7 +304,7 @@ mod tests {
 
         assert!(!state.is_ready_to_respond());
         match state.next() {
-            Some(BatchInc::Notification(ref n)) if n == &HttpRawNotification::from(notif) => {}
+            Some(BatchInc::Notification(ref n)) if n == &WsRawNotification::from(notif) => {}
             _ => panic!(),
         }
         assert!(state.is_ready_to_respond());
