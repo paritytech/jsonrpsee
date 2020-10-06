@@ -26,27 +26,21 @@
 
 #![cfg(test)]
 
-use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
-
 use crate::client::HttpTransportClient;
 use crate::common::{self, Call, MethodCall, Notification, Params, Request, Version};
 use crate::http::{HttpRawServer, HttpRawServerEvent, HttpTransportServer};
-use hyper::{Body, Response, Uri};
 use serde_json::Value;
-use tokio::runtime::Runtime;
 
-async fn connection_context(sockaddr: SocketAddr) -> (HttpTransportClient, HttpRawServer) {
-    let mut server: HttpRawServer = HttpTransportServer::bind(&sockaddr).await.unwrap().into();
-    let uri = format!("http://{}", sockaddr);
+async fn connection_context() -> (HttpTransportClient, HttpRawServer) {
+    let server = HttpTransportServer::bind(&"127.0.0.1:0".parse().unwrap()).await.unwrap();
+    let uri = format!("http://{}", server.local_addr());
     let client = HttpTransportClient::new(&uri);
-    (client, server)
+    (client, server.into())
 }
 
 #[tokio::test]
 async fn request_work() {
-    let (mut client, mut server) = connection_context("127.0.0.1:63000".parse().unwrap()).await;
+    let (mut client, mut server) = connection_context().await;
     tokio::spawn(async move {
         let call = Call::MethodCall(MethodCall {
             jsonrpc: Version::V2,
@@ -72,7 +66,7 @@ async fn request_work() {
 
 #[tokio::test]
 async fn notification_work() {
-    let (mut client, mut server) = connection_context("127.0.0.1:63001".parse().unwrap()).await;
+    let (mut client, mut server) = connection_context().await;
     tokio::spawn(async move {
         let n = Notification {
             jsonrpc: Version::V2,

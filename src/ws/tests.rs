@@ -1,12 +1,13 @@
 #![cfg(test)]
 
-use crate::common::{self, Id, JsonValue, Response};
-use crate::ws::{WsServer, RegisteredMethod};
+use crate::common::{Id, JsonValue};
+use crate::ws::WsServer;
 use futures::channel::oneshot::{self, Sender};
-use futures::future::{Fuse, FusedFuture, FutureExt};
+use futures::future::FutureExt;
 use futures::io::{BufReader, BufWriter};
 use futures::{pin_mut, select};
-use soketto::{BoxedError, connection, handshake};
+use soketto::handshake;
+use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, Tokio02AsyncReadCompatExt};
 
@@ -18,9 +19,9 @@ struct WebSocketTestClient {
 }
 
 impl WebSocketTestClient {
-    async fn new(url: &str) -> Result<Self, Error> {
+    async fn new(url: SocketAddr) -> Result<Self, Error> {
         let socket = TcpStream::connect(url).await?;
-        let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), url, "/");
+        let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), "test-client", "/");
         match client.handshake().await {
             Ok(handshake::ServerResponse::Accepted {..}) => {
                 let (tx, rx) = client.into_builder().finish();
@@ -43,14 +44,16 @@ impl WebSocketTestClient {
     }
 }
 
-async fn server(sockaddr: &str, server_started_tx: Sender<()>) {
-    let mut server = WsServer::new(sockaddr).await.unwrap();
+/// Spawn a WebSocket server where the OS assigns the port number and
+/// sends back the `local_addr` via a channel.
+async fn server(server_started_tx: Sender<SocketAddr>) {
+    let server = WsServer::new("127.0.0.1:0").await.unwrap();
     let mut hello = server.register_method("say_hello".to_owned()).unwrap();
     let mut add = server.register_method("add".to_owned()).unwrap();
     let mut notif = server
         .register_notification("notif".to_owned(), false)
         .unwrap();
-    server_started_tx.send(()).unwrap();
+    server_started_tx.send(*server.local_addr()).unwrap();
 
     loop {
         let hello_fut = async {
@@ -67,7 +70,7 @@ async fn server(sockaddr: &str, server_started_tx: Sender<()>) {
             let params: Vec<u64> = handle.params().clone().parse().unwrap();
             let sum: u64 = params.iter().sum();
             handle.respond(Ok(JsonValue::Number(sum.into()))).await;
-        }
+        } 
         .fuse();
 
         let notif_fut = async {
@@ -124,11 +127,10 @@ fn invalid_params(id: Id) -> String {
 
 #[tokio::test]
 async fn single_method_call_works() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64201", server_started_tx));
-    server_started_rx.await.unwrap();
-
-    let mut client = WebSocketTestClient::new("127.0.0.1:64201").await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
+    let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
 
     for i in 0..10 {
         let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
@@ -144,11 +146,11 @@ async fn single_method_call_works() {
 
 #[tokio::test]
 async fn single_method_call_with_params() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64202", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
+    let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
 
-    let mut client = WebSocketTestClient::new("127.0.0.1:64202").await.unwrap();
     let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
     let response = client.send_request(req).await.unwrap();
     assert_eq!(response, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
@@ -156,11 +158,11 @@ async fn single_method_call_with_params() {
 
 #[tokio::test]
 async fn should_return_method_not_found() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64203", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
+    let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
 
-    let mut client = WebSocketTestClient::new("127.0.0.1:64203").await.unwrap();
     let req = r#"{"jsonrpc":"2.0","method":"bar","id":"foo"}"#;
     let response = client.send_request(req)
         .await
@@ -170,11 +172,11 @@ async fn should_return_method_not_found() {
 
 #[tokio::test]
 async fn invalid_json_id_missing_value() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64204", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
 
-    let mut client = WebSocketTestClient::new("127.0.0.1:64204").await.unwrap();
+    let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
     let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
     let response = client.send_request(req)
         .await
@@ -185,11 +187,11 @@ async fn invalid_json_id_missing_value() {
 
 #[tokio::test]
 async fn invalid_request_object() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64205", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
 
-    let mut client = WebSocketTestClient::new("127.0.0.1:64205").await.unwrap();
+    let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
     let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
     let response = client.send_request(req)
         .await

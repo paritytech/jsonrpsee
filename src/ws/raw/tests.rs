@@ -27,28 +27,27 @@
 #![cfg(test)]
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
-
 use crate::client::WsTransportClient;
 use crate::common::{self, Call, MethodCall, Notification, Params, Request, Version};
 use crate::ws::{RawWsServer, RawWsServerEvent, WsTransportServer};
-use hyper::{Body, Response, Uri};
 use serde_json::Value;
-use tokio::runtime::Runtime;
+
+fn to_uri(sockaddr: SocketAddr) -> String {
+    format!("ws://{}", sockaddr)
+}
+
+async fn raw_server() -> (RawWsServer, SocketAddr) {
+    let server = WsTransportServer::builder("127.0.0.1:0".parse().unwrap()).build().await.unwrap();
+    let addr = *server.local_addr();
+    (server.into(), addr)
+}
 
 #[tokio::test]
 async fn request_work() {
-    let sockaddr = "127.0.0.1:63111".parse().unwrap();
-    let uri = format!("ws://{}", sockaddr);
-    let mut server: RawWsServer = WsTransportServer::builder(sockaddr)
-        .build()
-        .await
-        .unwrap()
-        .into();
+    let (mut server, server_addr) = raw_server().await;
 
     tokio::spawn(async move {
-        let mut client = WsTransportClient::new(&uri).await.unwrap();
+        let mut client = WsTransportClient::new(&to_uri(server_addr)).await.unwrap();
         let call = Call::MethodCall(MethodCall {
             jsonrpc: Version::V2,
             method: "hello_world".to_owned(),
@@ -73,16 +72,10 @@ async fn request_work() {
 
 #[tokio::test]
 async fn notification_work() {
-    let sockaddr = "127.0.0.1:63112".parse().unwrap();
-    let uri = format!("ws://{}", sockaddr);
-    let mut server: RawWsServer = WsTransportServer::builder(sockaddr)
-        .build()
-        .await
-        .unwrap()
-        .into();
+    let (mut server, server_addr) = raw_server().await;
 
     tokio::spawn(async move {
-        let mut client = WsTransportClient::new(&uri).await.unwrap();
+        let mut client = WsTransportClient::new(&to_uri(server_addr)).await.unwrap();
         let n = Notification {
             jsonrpc: Version::V2,
             method: "hello_world".to_owned(),

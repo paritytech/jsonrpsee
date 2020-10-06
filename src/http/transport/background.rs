@@ -261,7 +261,7 @@ mod tests {
         let s = r#"[{"a":"hello"}]"#;
         let expected: super::common::Request = serde_json::from_str(s).unwrap();
         let req = futures::executor::block_on(async move {
-            let mut body = hyper::Body::from(s);
+            let body = hyper::Body::from(s);
             body_to_request(body).await.unwrap()
         });
         assert_eq!(req, expected);

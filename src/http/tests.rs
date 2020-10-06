@@ -1,11 +1,12 @@
 #![cfg(test)]
 
-use crate::common::{self, Id, JsonValue};
-use crate::http::{HttpServer, RegisteredMethod};
+use crate::common::{Id, JsonValue};
+use crate::http::HttpServer;
 use futures::channel::oneshot::{self, Sender};
-use futures::future::{Fuse, FusedFuture, FutureExt};
+use futures::future::FutureExt;
 use futures::{pin_mut, select};
 use hyper::{Body, HeaderMap, StatusCode, Uri};
+use std::net::SocketAddr;
 
 #[derive(Debug)]
 struct Response {
@@ -35,14 +36,14 @@ async fn request(body: Body, uri: Uri) -> Result<Response, String> {
     })
 }
 
-async fn server(sockaddr: &str, server_started_tx: Sender<()>) {
-    let mut server = HttpServer::new(sockaddr).await.unwrap();
+async fn server(server_started_tx: Sender<SocketAddr>) {
+    let server = HttpServer::new("127.0.0.1:0").await.unwrap();
     let mut hello = server.register_method("say_hello".to_owned()).unwrap();
     let mut add = server.register_method("add".to_owned()).unwrap();
     let mut notif = server
         .register_notification("notif".to_owned(), false)
         .unwrap();
-    server_started_tx.send(()).unwrap();
+    server_started_tx.send(*server.local_addr()).unwrap();
 
     loop {
         let hello_fut = async {
@@ -76,6 +77,17 @@ async fn server(sockaddr: &str, server_started_tx: Sender<()>) {
             complete => (),
         };
     }
+}
+
+fn to_http_uri(sockaddr: SocketAddr) -> Uri {
+    let s = sockaddr.to_string();
+
+    Uri::builder()
+        .scheme("http")
+        .authority(s.as_str())
+        .path_and_query("/")
+        .build()
+        .unwrap()
 }
 
 fn ok_response(result: JsonValue, id: Id) -> String {
@@ -116,13 +128,14 @@ fn invalid_params(id: Id) -> String {
 
 #[tokio::test]
 async fn single_method_call_works() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64001", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
+    let uri = to_http_uri(server_addr);
 
     for i in 0..10 {
         let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
-        let response = request(req.into(), Uri::from_static("http://127.0.0.1:64001"))
+        let response = request(req.into(), uri.clone())
             .await
             .unwrap();
         assert_eq!(response.status, StatusCode::OK);
@@ -135,12 +148,12 @@ async fn single_method_call_works() {
 
 #[tokio::test]
 async fn single_method_call_with_params() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64011", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-    let response = request(req.into(), Uri::from_static("http://127.0.0.1:64011"))
+    let response = request(req.into(), to_http_uri(server_addr))
         .await
         .unwrap();
     assert_eq!(response.status, StatusCode::OK);
@@ -152,12 +165,12 @@ async fn single_method_call_with_params() {
 
 #[tokio::test]
 async fn should_return_method_not_found() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64002", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"bar","id":"foo"}"#;
-    let response = request(req.into(), Uri::from_static("http://127.0.0.1:64002"))
+    let response = request(req.into(), to_http_uri(server_addr))
         .await
         .unwrap();
     assert_eq!(response.status, StatusCode::OK);
@@ -166,12 +179,12 @@ async fn should_return_method_not_found() {
 
 #[tokio::test]
 async fn invalid_json_id_missing_value() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64003", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
-    let response = request(req.into(), Uri::from_static("http://127.0.0.1:64003"))
+    let response = request(req.into(), to_http_uri(server_addr))
         .await
         .unwrap();
     // If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
@@ -180,12 +193,12 @@ async fn invalid_json_id_missing_value() {
 
 #[tokio::test]
 async fn invalid_request_object() {
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    tokio::spawn(server("127.0.0.1:64004", server_started_tx));
-    server_started_rx.await.unwrap();
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
-    let response = request(req.into(), Uri::from_static("http://127.0.0.1:64004"))
+    let response = request(req.into(), to_http_uri(server_addr))
         .await
         .unwrap();
     assert_eq!(response.status, StatusCode::OK);
