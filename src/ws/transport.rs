@@ -357,7 +357,10 @@ async fn per_connection_task(
                 let socket_packet = match socket_packet {
                     Some(Ok((ty, pq))) if ty.is_text() => pq,
                     Some(Ok((ty, _))) => {
-                        log::error!("expected to receive text data from WebSocket, got: {:?}", ty);
+                        log::error!(
+                            "expected to receive text data from WebSocket, got: {:?}",
+                            ty
+                        );
                         return pending_requests;
                     }
                     Some(Err(err)) => {

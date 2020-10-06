@@ -1,8 +1,8 @@
 pub mod client;
-pub mod transport;
-pub mod stream;
 pub mod raw;
+pub mod stream;
+pub mod transport;
 
 pub use client::Client;
 pub use raw::{RawClient, RawClientEvent, RawClientRequestId};
-pub use transport::{WsTransportClient, WsConnectError};
+pub use transport::{WsConnectError, WsTransportClient};

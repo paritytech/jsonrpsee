@@ -24,8 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common::{self, JsonValue};
 use crate::client::ws::{RawClient, RawClientEvent, RawClientRequestId, WsTransportClient};
+use crate::common::{self, JsonValue};
 
 use futures::{
     channel::{mpsc, oneshot},
@@ -135,14 +135,15 @@ impl Client {
     ) {
         let method = method.into();
         let params = params.into();
-        log::debug!("send notification: method={:?}, params={:?}", method, params);
+        log::debug!(
+            "send notification: method={:?}, params={:?}",
+            method,
+            params
+        );
         let _ = self
             .to_back
             .clone()
-            .send(FrontToBack::Notification {
-                method,
-                params,
-            })
+            .send(FrontToBack::Notification { method, params })
             .await;
     }
 
@@ -301,18 +302,16 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
                 method,
                 params,
                 send_back,
-            })) => {
-                match client.start_request(method, params).await {
-                    Ok(id) => {
-                        log::trace!("background thread; inserting ingoing request={:?}", id);
-                        ongoing_requests.insert(id, send_back);
-                    }
-                    Err(err) => {
-                        log::trace!("background thread; start_request failed: {:?}", err);
-                        let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
-                    }
+            })) => match client.start_request(method, params).await {
+                Ok(id) => {
+                    log::trace!("background thread; inserting ingoing request={:?}", id);
+                    ongoing_requests.insert(id, send_back);
                 }
-            }
+                Err(err) => {
+                    log::trace!("background thread; start_request failed: {:?}", err);
+                    let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+                }
+            },
 
             // User called `subscribe` on the front-end.
             Either::Left(Some(FrontToBack::Subscribe {
@@ -351,7 +350,11 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 
             // Received a response to a request from the server.
             Either::Right(Ok(RawClientEvent::Response { request_id, result })) => {
-                log::trace!("background thread; received response to req={:?}, result={:?}", request_id, result);
+                log::trace!(
+                    "background thread; received response to req={:?}, result={:?}",
+                    request_id,
+                    result
+                );
                 let _ = ongoing_requests
                     .remove(&request_id)
                     .unwrap()

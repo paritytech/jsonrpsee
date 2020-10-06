@@ -26,7 +26,7 @@
 
 use crate::common::{self, JsonValue};
 use crate::ws::raw::{batches, Notification, Params};
-use crate::ws::transport::{WsTransportServer, TransportServerEvent, WsRequestId as RequestId};
+use crate::ws::transport::{TransportServerEvent, WsRequestId as RequestId, WsTransportServer};
 
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
 use core::{fmt, hash::Hash, num::NonZeroUsize};

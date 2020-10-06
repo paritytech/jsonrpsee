@@ -20,7 +20,7 @@ struct WebSocketTestClient {
 impl WebSocketTestClient {
     async fn new(url: &str) -> Result<Self, Error> {
         let socket = TcpStream::connect(url).await?;
-        let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), url, "foo");
+        let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), url, "/");
         match client.handshake().await {
             Ok(handshake::ServerResponse::Accepted {..}) => {
                 let (tx, rx) = client.into_builder().finish();
@@ -124,8 +124,6 @@ fn invalid_params(id: Id) -> String {
 
 #[tokio::test]
 async fn single_method_call_works() {
-    env_logger::init();
-
     let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
     tokio::spawn(server("127.0.0.1:64201", server_started_tx));
     server_started_rx.await.unwrap();

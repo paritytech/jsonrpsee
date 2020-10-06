@@ -41,7 +41,11 @@ use tokio::runtime::Runtime;
 async fn request_work() {
     let sockaddr = "127.0.0.1:63111".parse().unwrap();
     let uri = format!("ws://{}", sockaddr);
-    let mut server: RawWsServer = WsTransportServer::builder(sockaddr).build().await.unwrap().into();
+    let mut server: RawWsServer = WsTransportServer::builder(sockaddr)
+        .build()
+        .await
+        .unwrap()
+        .into();
 
     tokio::spawn(async move {
         let mut client = WsTransportClient::new(&uri).await.unwrap();
@@ -71,7 +75,11 @@ async fn request_work() {
 async fn notification_work() {
     let sockaddr = "127.0.0.1:63112".parse().unwrap();
     let uri = format!("ws://{}", sockaddr);
-    let mut server: RawWsServer = WsTransportServer::builder(sockaddr).build().await.unwrap().into();
+    let mut server: RawWsServer = WsTransportServer::builder(sockaddr)
+        .build()
+        .await
+        .unwrap()
+        .into();
 
     tokio::spawn(async move {
         let mut client = WsTransportClient::new(&uri).await.unwrap();

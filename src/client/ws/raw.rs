@@ -64,8 +64,8 @@
 //! >           use the [`next_event`](RawClient::next_event) method.
 //!
 
+use crate::client::ws::{WsConnectError, WsTransportClient};
 use crate::common;
-use crate::client::ws::{WsTransportClient, WsConnectError};
 
 use alloc::{collections::VecDeque, string::String, vec};
 use core::{fmt, future::Future};
@@ -350,8 +350,7 @@ impl RawClient {
     pub fn request_by_id<'a>(
         &'a mut self,
         rq_id: RawClientRequestId,
-    ) -> Option<impl Future<Output = Result<common::JsonValue, RawClientError>> + 'a>
-    {
+    ) -> Option<impl Future<Output = Result<common::JsonValue, RawClientError>> + 'a> {
         // First, let's check whether the request ID is valid.
         if let Some(rq) = self.requests.get(&rq_id) {
             if *rq != Request::Request {
@@ -464,10 +463,7 @@ impl RawClient {
 
     /// Processes the response obtained from the server. Updates the internal state of `self` to
     /// account for it.
-    fn process_response(
-        &mut self,
-        response: common::Output,
-    ) -> Result<(), RawClientError> {
+    fn process_response(&mut self, response: common::Output) -> Result<(), RawClientError> {
         log::debug!(target: "ws-client-raw", "received response: {:?}", response);
         let request_id = match response.id() {
             common::Id::Num(n) => RawClientRequestId(*n),
@@ -609,9 +605,7 @@ impl<'a> RawClientPendingSubscription<'a> {
     /// >           limit is reached, server notifications will be discarded. If you want to be
     /// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
     /// >           instead.
-    pub async fn wait(
-        self,
-    ) -> Result<RawClientActiveSubscription<'a>, RawClientError> {
+    pub async fn wait(self) -> Result<RawClientActiveSubscription<'a>, RawClientError> {
         let mut events_queue_loopkup = 0;
 
         loop {
@@ -653,9 +647,7 @@ impl<'a> RawClientActiveSubscription<'a> {
     /// >           limit is reached, server notifications will be discarded. If you want to be
     /// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
     /// >           instead.
-    pub async fn next_notification(
-        &mut self,
-    ) -> Result<common::JsonValue, RawClientError> {
+    pub async fn next_notification(&mut self) -> Result<common::JsonValue, RawClientError> {
         let mut events_queue_loopkup = 0;
 
         loop {
@@ -694,10 +686,7 @@ impl<'a> RawClientActiveSubscription<'a> {
     ///
     /// Note that, for convenience, we will consider the subscription closed even the server
     /// returns an error to the unsubscription request.
-    pub async fn close(
-        &mut self,
-        method_name: impl Into<String>,
-    ) -> Result<(), CloseError> {
+    pub async fn close(&mut self, method_name: impl Into<String>) -> Result<(), CloseError> {
         let sub_id = match self.client.requests.get(&self.id) {
             Some(Request::ActiveSubscription { sub_id, closing }) => {
                 if *closing {
