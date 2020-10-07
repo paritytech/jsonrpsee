@@ -135,9 +135,7 @@ async fn single_method_call_works() {
 
     for i in 0..10 {
         let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
-        let response = request(req.into(), uri.clone())
-            .await
-            .unwrap();
+        let response = request(req.into(), uri.clone()).await.unwrap();
         assert_eq!(response.status, StatusCode::OK);
         assert_eq!(
             response.body,
@@ -153,9 +151,7 @@ async fn single_method_call_with_params() {
     let server_addr = server_started_rx.await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-    let response = request(req.into(), to_http_uri(server_addr))
-        .await
-        .unwrap();
+    let response = request(req.into(), to_http_uri(server_addr)).await.unwrap();
     assert_eq!(response.status, StatusCode::OK);
     assert_eq!(
         response.body,
@@ -170,9 +166,7 @@ async fn should_return_method_not_found() {
     let server_addr = server_started_rx.await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"bar","id":"foo"}"#;
-    let response = request(req.into(), to_http_uri(server_addr))
-        .await
-        .unwrap();
+    let response = request(req.into(), to_http_uri(server_addr)).await.unwrap();
     assert_eq!(response.status, StatusCode::OK);
     assert_eq!(response.body, method_not_found(Id::Str("foo".into())));
 }
@@ -184,9 +178,7 @@ async fn invalid_json_id_missing_value() {
     let server_addr = server_started_rx.await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
-    let response = request(req.into(), to_http_uri(server_addr))
-        .await
-        .unwrap();
+    let response = request(req.into(), to_http_uri(server_addr)).await.unwrap();
     // If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
     assert_eq!(response.body, parse_error(Id::Null));
 }
@@ -198,9 +190,7 @@ async fn invalid_request_object() {
     let server_addr = server_started_rx.await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
-    let response = request(req.into(), to_http_uri(server_addr))
-        .await
-        .unwrap();
+    let response = request(req.into(), to_http_uri(server_addr)).await.unwrap();
     assert_eq!(response.status, StatusCode::OK);
     assert_eq!(response.body, invalid_request(Id::Num(1)));
 }

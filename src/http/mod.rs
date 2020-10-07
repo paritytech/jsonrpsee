@@ -26,9 +26,9 @@
 
 mod raw;
 mod server;
-mod transport;
 #[allow(unused)]
 mod server_utils;
+mod transport;
 
 #[cfg(test)]
 mod tests;

@@ -33,8 +33,8 @@ use parking_lot::Mutex;
 use std::{
     collections::{HashMap, HashSet},
     error,
+    net::SocketAddr,
     sync::{atomic, Arc},
-    net::SocketAddr
 };
 
 /// Server that can be cloned.
@@ -158,7 +158,7 @@ impl Server {
             to_back,
             registered_methods: Arc::new(Mutex::new(Default::default())),
             next_subscription_unique_id: Arc::new(atomic::AtomicUsize::new(0)),
-            local_addr
+            local_addr,
         })
     }
 

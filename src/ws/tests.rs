@@ -21,13 +21,17 @@ struct WebSocketTestClient {
 impl WebSocketTestClient {
     async fn new(url: SocketAddr) -> Result<Self, Error> {
         let socket = TcpStream::connect(url).await?;
-        let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), "test-client", "/");
+        let mut client = handshake::Client::new(
+            BufReader::new(BufWriter::new(socket.compat())),
+            "test-client",
+            "/",
+        );
         match client.handshake().await {
-            Ok(handshake::ServerResponse::Accepted {..}) => {
+            Ok(handshake::ServerResponse::Accepted { .. }) => {
                 let (tx, rx) = client.into_builder().finish();
                 Ok(Self { tx, rx })
-            },
-            r @ _ => Err(format!("WebSocketHandshake failed: {:?}", r).into())
+            }
+            r @ _ => Err(format!("WebSocketHandshake failed: {:?}", r).into()),
         }
     }
 
@@ -134,9 +138,7 @@ async fn single_method_call_works() {
 
     for i in 0..10 {
         let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
-        let response = client.send_request(req)
-            .await
-            .unwrap();
+        let response = client.send_request(req).await.unwrap();
         assert_eq!(
             response,
             ok_response(JsonValue::String("hello".to_owned()), Id::Num(i))
@@ -153,7 +155,10 @@ async fn single_method_call_with_params() {
 
     let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
     let response = client.send_request(req).await.unwrap();
-    assert_eq!(response, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
+    assert_eq!(
+        response,
+        ok_response(JsonValue::Number(3.into()), Id::Num(1))
+    );
 }
 
 #[tokio::test]
@@ -164,9 +169,7 @@ async fn should_return_method_not_found() {
     let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
 
     let req = r#"{"jsonrpc":"2.0","method":"bar","id":"foo"}"#;
-    let response = client.send_request(req)
-        .await
-        .unwrap();
+    let response = client.send_request(req).await.unwrap();
     assert_eq!(response, method_not_found(Id::Str("foo".into())));
 }
 
@@ -178,9 +181,7 @@ async fn invalid_json_id_missing_value() {
 
     let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
     let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
-    let response = client.send_request(req)
-        .await
-        .unwrap();
+    let response = client.send_request(req).await.unwrap();
     // If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
     assert_eq!(response, parse_error(Id::Null));
 }
@@ -193,8 +194,6 @@ async fn invalid_request_object() {
 
     let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
     let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
-    let response = client.send_request(req)
-        .await
-        .unwrap();
+    let response = client.send_request(req).await.unwrap();
     assert_eq!(response, invalid_request(Id::Num(1)));
 }
