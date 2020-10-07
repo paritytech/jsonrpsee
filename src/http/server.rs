@@ -141,7 +141,7 @@ impl Server {
     /// Initializes a new server based upon this raw server.
     pub async fn new(url: &str) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
         let sockaddr = url.parse()?;
-        let transport_server = HttpTransportServer::bind(&sockaddr).await?;
+        let transport_server = HttpTransportServer::new(&sockaddr).await?;
         let local_addr = *transport_server.local_addr();
 
         // We use an unbounded channel because the only exchanged messages concern registering

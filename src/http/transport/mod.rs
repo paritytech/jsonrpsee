@@ -83,7 +83,7 @@ impl HttpTransportServer {
     // >       starting to listen on a port is an asynchronous operation, but the hyper library
     // >       hides this to us. In order to be future-proof, this function is async, so that we
     // >       might switch out to a different library later without breaking the API.
-    pub async fn bind(
+    pub async fn new(
         addr: &SocketAddr,
     ) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
         let (background_thread, local_addr) = background::BackgroundHttp::bind(addr).await?;
@@ -262,8 +262,8 @@ mod tests {
     fn error_if_port_occupied() {
         futures::executor::block_on(async move {
             let addr = "127.0.0.1:0".parse().unwrap();
-            let server1 = HttpTransportServer::bind(&addr).await.unwrap();
-            assert!(HttpTransportServer::bind(server1.local_addr())
+            let server1 = HttpTransportServer::new(&addr).await.unwrap();
+            assert!(HttpTransportServer::new(server1.local_addr())
                 .await
                 .is_err());
         });
