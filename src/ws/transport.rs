@@ -210,11 +210,21 @@ impl WsTransportServer {
                     }
                     Event::TaskFinished(list) => {
                         for rq_id in list {
-                            log::debug!("closed connection with id: {:?}", rq_id);
-                            let _was_in = self.to_connections.remove(&rq_id);
-                            debug_assert!(_was_in.is_some());
-                            self.pending_events
-                                .push(TransportServerEvent::Closed(rq_id));
+                            let was_in = self.to_connections.remove(&rq_id);
+
+                            // It is possible that `per_connection_task` returns a list
+                            // with non-existing connections if `task stream`
+                            // gets read twice before the actual `event stream` gets read.
+                            //
+                            //  -> Poll #1 Ok(read x bytes)
+                            //  -> Poll #2 Err(receiver closed)
+                            //
+                            // The `ws::raw::tests::request_work` is emperic proof of it.
+                            if was_in.is_some() {
+                                log::debug!("closed connection with id: {:?}", rq_id);
+                                self.pending_events
+                                    .push(TransportServerEvent::Closed(rq_id));
+                            }
                         }
                     }
                 }
@@ -339,7 +349,9 @@ impl WsTransportServerBuilder {
 
 /// Processes a single connection.
 //
-// TODO: return error instead of logging everthing.
+//
+// TODO: document this function it is quite hard to understand the outcome when it returns.
+// For example it returns when it receives an error and terminates all pending tasks in the connection.
 async fn per_connection_task(
     socket: TcpStream,
     next_request_id: Arc<atomic::AtomicU64>,
@@ -388,9 +400,11 @@ async fn per_connection_task(
         futures::pin_mut!(next_socket_packet, next_from_front);
         match future::select(next_socket_packet, next_from_front).await {
             future::Either::Left((socket_packet, _)) => {
-                log::debug!("received socket_packet: {:?}", socket_packet);
                 let socket_packet = match socket_packet {
-                    Some(Ok((ty, pq))) if ty.is_text() => pq,
+                    Some(Ok((ty, pq))) if ty.is_text() => {
+                        log::debug!("received text data from WebSocket: {:?}", pq);
+                        pq
+                    }
                     Some(Ok((ty, _))) => {
                         log::error!(
                             "expected to receive text data from WebSocket, got: {:?}",
@@ -431,7 +445,6 @@ async fn per_connection_task(
                 let request_id =
                     WsRequestId(next_request_id.fetch_add(1, atomic::Ordering::Relaxed));
                 debug_assert_ne!(request_id.0, u64::max_value());
-                pending_requests.push(request_id);
 
                 // Important note: since the background task sends messages to the front task via
                 // a channel, and the front task sends messages to the background task via a
@@ -450,13 +463,22 @@ async fn per_connection_task(
                         sender: to_connec.clone(),
                     })
                     .now_or_never();
-                if !matches!(result, Some(Ok(_))) {
+
+                if let Some(Ok(_)) = result {
+                    pending_requests.push(request_id);
+                } else {
+                    // TODO: why are we terminating all pending requests if only one fails?!.
+                    log::error!(
+                        "Send request={:?} failed; terminating all pending_requests",
+                        request_id
+                    );
                     return pending_requests;
                 }
             }
 
             // Received data to send on the connection.
             future::Either::Right((Some(FrontToBack::Send(to_send)), _)) => {
+                log::trace!("transmit: {:?}", to_send);
                 if let Err(err) = sender.send_text(&to_send).await {
                     log::warn!(
                         "failed to send: {:?} over WebSocket transport with error: {:?}",
@@ -469,6 +491,7 @@ async fn per_connection_task(
 
             // Received data to send on the connection.
             future::Either::Right((Some(FrontToBack::Finished(rq_id)), _)) => {
+                log::trace!("finished request_id={:?}", rq_id);
                 let pos = pending_requests.iter().position(|r| *r == rq_id).unwrap();
                 pending_requests.remove(pos);
             }
