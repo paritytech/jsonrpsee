@@ -202,6 +202,8 @@ impl WsTransportClient {
 
 // former transport client impl,
 impl WsTransportClient {
+    /// Sends out out a request. Returns a `Future` that finishes when the request has been
+    /// successfully sent.
     pub fn send_request<'a>(
         &'a mut self,
         request: common::Request,
@@ -215,6 +217,7 @@ impl WsTransportClient {
         })
     }
 
+    /// Returns a `Future` resolving when the server sent us something back.
     pub fn next_response<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = Result<common::Response, WsConnectError>> + Send + 'a>> {

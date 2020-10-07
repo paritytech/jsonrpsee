@@ -24,15 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Server utilities for the `jsonrpsee` library
-
-#![warn(missing_docs)]
+//! HTTP Server utilities for the `jsonrpsee` library
 
 pub mod access_control;
 pub mod cors;
 pub mod hosts;
 pub mod utils;
 
-pub use crate::server_utils::matcher::Pattern;
-
 mod matcher;
+
+pub use matcher::Pattern;

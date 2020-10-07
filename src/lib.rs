@@ -57,6 +57,3 @@ pub mod http;
 /// JSONRPC 2.0 WebSocket server.
 #[cfg(feature = "ws")]
 pub mod ws;
-
-#[cfg(feature = "http")]
-mod server_utils;

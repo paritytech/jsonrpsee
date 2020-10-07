@@ -26,10 +26,9 @@
 
 //! Access control based on http headers
 
-use crate::server_utils::cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
-pub use crate::server_utils::hosts::{AllowHosts, Host};
-use crate::server_utils::utils;
-use crate::server_utils::{cors, hosts};
+use crate::http::server_utils::cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
+use crate::http::server_utils::hosts::{AllowHosts, Host};
+use crate::http::server_utils::{cors, hosts, utils};
 use hyper::{self, header};
 
 /// Define access on control on http layer

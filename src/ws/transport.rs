@@ -137,6 +137,7 @@ impl WsTransportServer {
 
 // former `trait TransportServer` impl.
 impl WsTransportServer {
+    /// Returns the next event that the raw server wants to notify us.
     pub fn next_request<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = TransportServerEvent<WsRequestId>> + Send + 'a>> {
@@ -221,6 +222,21 @@ impl WsTransportServer {
         })
     }
 
+    /// Sends back a response and destroys the request.
+    ///
+    /// You can pass `None` in order to destroy the request object without sending back anything.
+    ///
+    /// The implementation blindly sends back the response and doesn't check whether there is any
+    /// correspondance with the request in terms of logic. For example, `respond` will accept
+    /// sending back a batch of six responses even if the original request was a single
+    /// notification.
+    ///
+    /// > **Note**: While this method returns a `Future` that must be driven to completion,
+    /// >           implementations must be aware that the entire requests processing logic is
+    /// >           blocked for as long as this `Future` is pending. As an example, you shouldn't
+    /// >           use this `Future` to send back a TCP message, because if the remote is
+    /// >           unresponsive and the buffers full, the `Future` would then wait for a long time.
+    ///
     pub fn finish<'a>(
         &'a mut self,
         request_id: &'a WsRequestId,
@@ -244,6 +260,10 @@ impl WsTransportServer {
         })
     }
 
+    /// Returns true if this implementation supports sending back data on this request without
+    /// closing it.
+    ///
+    /// Returns an error if the request id is invalid.
     pub fn supports_resuming(&self, request_id: &WsRequestId) -> Result<bool, ()> {
         if self.to_connections.contains_key(request_id) {
             Ok(true)
@@ -252,6 +272,12 @@ impl WsTransportServer {
         }
     }
 
+    /// Sends back some data on the request and keeps the request alive.
+    ///
+    /// You can continue sending data on that same request later.
+    ///
+    /// Returns an error if the request identifier is incorrect, or if the implementation doesn't
+    /// support that operation (see [`supports_resuming`](TransportServer::supports_resuming)).
     pub fn send<'a>(
         &'a mut self,
         request_id: &'a WsRequestId,

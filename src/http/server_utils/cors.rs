@@ -26,14 +26,12 @@
 
 //! CORS handling utility functions
 
-use unicase;
-
-use crate::server_utils::hosts::{Host, Port};
-use crate::server_utils::matcher::{Matcher, Pattern};
+use crate::http::server_utils::hosts::{Host, Port};
+use crate::http::server_utils::matcher::{Matcher, Pattern};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::{fmt, ops};
-pub use unicase::Ascii;
+use unicase::Ascii;
 
 /// Origin Protocol
 #[derive(Clone, Hash, Debug, PartialEq, Eq)]
@@ -333,7 +331,7 @@ mod tests {
     use std::iter;
 
     use super::*;
-    use crate::server_utils::hosts::Host;
+    use crate::http::server_utils::hosts::Host;
 
     #[test]
     fn should_parse_origin() {

@@ -27,6 +27,8 @@
 mod raw;
 mod server;
 mod transport;
+#[allow(unused)]
+mod server_utils;
 
 #[cfg(test)]
 mod tests;
@@ -34,5 +36,6 @@ mod tests;
 pub use raw::Notification as HttpRawNotification;
 pub use raw::RawServer as HttpRawServer;
 pub use raw::RawServerEvent as HttpRawServerEvent;
+pub use raw::TypedResponder as HttpTypedResponder;
 pub use server::{RegisteredMethod, RegisteredNotification, Server as HttpServer};
 pub use transport::HttpTransportServer;
