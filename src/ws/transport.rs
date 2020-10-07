@@ -411,7 +411,11 @@ async fn per_connection_task(
                 let body = match serde_json::from_slice(socket_packet.as_ref()) {
                     Ok(b) => b,
                     Err(err) => {
-                        log::error!("Deserialization of incoming request failed: {:?}", err);
+                        log::debug!("Deserialization of incoming request failed: {:?}", err);
+                        let response = serde_json::to_string(&crate::common::Response::from(crate::common::Error::parse_error(), crate::common::Version::V2)).expect("valid JSON; qed");
+                        if let Err(e) = sender.send_text(&response).await {
+                            log::warn!("Failed to send: {:?} over WebSocket transport with error: {:?}", response, e);
+                        }
                         return pending_requests;
                     }
                 };
@@ -445,9 +449,9 @@ async fn per_connection_task(
 
             // Received data to send on the connection.
             future::Either::Right((Some(FrontToBack::Send(to_send)), _)) => {
-                match sender.send_text(&to_send).await {
-                    Ok(()) => {}
-                    Err(_) => return pending_requests,
+                if let Err(err) = sender.send_text(&to_send).await {
+                    log::warn!("failed to send: {:?} over WebSocket transport with error: {:?}", to_send, err);
+                    return pending_requests;
                 }
             }
 

@@ -35,7 +35,7 @@ impl WebSocketTestClient {
         self.tx.send_text(msg).await?;
         self.tx.flush().await?;
         let mut data = Vec::new();
-        self.rx.receive(&mut data).await?;
+        self.rx.receive_data(&mut data).await?;
         String::from_utf8(data).map_err(Into::into)
     }
 
@@ -70,7 +70,7 @@ async fn server(server_started_tx: Sender<SocketAddr>) {
             let params: Vec<u64> = handle.params().clone().parse().unwrap();
             let sum: u64 = params.iter().sum();
             handle.respond(Ok(JsonValue::Number(sum.into()))).await;
-        } 
+        }
         .fuse();
 
         let notif_fut = async {
