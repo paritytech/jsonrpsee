@@ -387,7 +387,8 @@ async fn per_connection_task(
     let socket_packets = stream::unfold(receiver, move |mut receiver| async {
         let mut buf = Vec::new();
         let ret = match receiver.receive_data(&mut buf).await {
-            Ok(ty) => Ok((ty, buf)),
+            // data is text or binary.
+            Ok(_) => Ok(buf),
             Err(err) => Err(err),
         };
         Some((ret, receiver))
@@ -401,16 +402,9 @@ async fn per_connection_task(
         match future::select(next_socket_packet, next_from_front).await {
             future::Either::Left((socket_packet, _)) => {
                 let socket_packet = match socket_packet {
-                    Some(Ok((ty, pq))) if ty.is_text() => {
+                    Some(Ok(pq)) => {
                         log::debug!("received text data from WebSocket: {:?}", pq);
                         pq
-                    }
-                    Some(Ok((ty, _))) => {
-                        log::error!(
-                            "expected to receive text data from WebSocket, got: {:?}",
-                            ty
-                        );
-                        return pending_requests;
                     }
                     Some(Err(err)) => {
                         log::error!("failed to receive data from WebSocket: {:?}", err);
