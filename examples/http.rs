@@ -31,7 +31,7 @@ use jsonrpsee::common::{JsonValue, Params};
 use jsonrpsee::http::HttpServer;
 
 const SOCK_ADDR: &str = "127.0.0.1:9933";
-const SERVER_URI: &str = "http://127.0.0.1:9933";
+const SERVER_URI: &str = "http://localhost:9933";
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -45,8 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     server_started_rx.await?;
 
     let client = HttpClient::new(SERVER_URI);
-    let params = Params::None;
-    let response: Result<JsonValue, _> = client.request("say_hello", params).await;
+    let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
     println!("r: {:?}", response);
 
     Ok(())
