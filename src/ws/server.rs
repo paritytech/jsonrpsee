@@ -238,7 +238,11 @@ impl Server {
         subscribe_method_name: String,
         unsubscribe_method_name: String,
     ) -> Result<RegisteredSubscription, ()> {
-        log::debug!("[register_subscription]: subscribe_method={}, unsubscribe_method={}", subscribe_method_name, unsubscribe_method_name);
+        log::debug!(
+            "[register_subscription]: subscribe_method={}, unsubscribe_method={}",
+            subscribe_method_name,
+            unsubscribe_method_name
+        );
         {
             let mut registered_methods = self.registered_methods.lock();
             if !registered_methods.insert(subscribe_method_name.clone()) {
@@ -253,13 +257,13 @@ impl Server {
             .next_subscription_unique_id
             .fetch_add(1, atomic::Ordering::Relaxed);
 
-        self
-            .to_back
+        self.to_back
             .unbounded_send(FrontToBack::RegisterSubscription {
                 unique_id,
                 subscribe_method: subscribe_method_name,
                 unsubscribe_method: unsubscribe_method_name,
-            }).map_err(|_| ())?;
+            })
+            .map_err(|_| ())?;
 
         Ok(RegisteredSubscription {
             to_back: self.to_back.clone(),
@@ -301,10 +305,13 @@ impl RegisteredSubscription {
     /// Sends out a value to all the registered clients.
     // TODO: return `Result<(), ()>`
     pub async fn send(&mut self, value: JsonValue) {
-        let _ = self.to_back.send(FrontToBack::SendOutNotif {
-            unique_id: self.unique_id,
-            notification: value,
-        }).await;
+        let _ = self
+            .to_back
+            .send(FrontToBack::SendOutNotif {
+                unique_id: self.unique_id,
+                notification: value,
+            })
+            .await;
     }
 }
 
@@ -405,7 +412,11 @@ async fn background_task(
                 log::debug!("server send response to subscription={:?}", unique_id);
                 debug_assert!(subscribed_clients.contains_key(&unique_id));
                 if let Some(clients) = subscribed_clients.get(&unique_id) {
-                    log::debug!("{} client(s) is subscribing to {:?}", clients.len(), unique_id);
+                    log::debug!(
+                        "{} client(s) is subscribing to {:?}",
+                        clients.len(),
+                        unique_id
+                    );
                     for client in clients {
                         debug_assert_eq!(active_subscriptions.get(client), Some(&unique_id));
                         debug_assert!(server.subscription_by_id(*client).is_some());

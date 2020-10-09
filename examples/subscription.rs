@@ -70,7 +70,9 @@ async fn run_server(server_started_tx: Sender<()>, url: &str) {
 
     server_started_tx.send(()).unwrap();
     loop {
-        subscription.send(JsonValue::String("hello my friend".to_owned())).await;
+        subscription
+            .send(JsonValue::String("hello my friend".to_owned()))
+            .await;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
