@@ -226,9 +226,22 @@ async fn register_methods_works() {
     let server = WsServer::new("127.0.0.1:0").await.unwrap();
     assert!(server.register_method("say_hello".to_owned()).is_ok());
     assert!(server.register_method("say_hello".to_owned()).is_err());
-    assert!(server.register_notification("notif".to_owned(), false).is_ok());
-    assert!(server.register_notification("notif".to_owned(), false).is_err());
-    assert!(server.register_subscription("subscribe_hello".to_owned(), "unsubscribe_hello".to_owned()).is_ok());
-    assert!(server.register_subscription("subscribe_hello_again".to_owned(), "notif".to_owned()).is_err());
-    assert!(server.register_method("subscribe_hello_again".to_owned()).is_ok(), "Failed register_subscription should not have side-effects");
+    assert!(server
+        .register_notification("notif".to_owned(), false)
+        .is_ok());
+    assert!(server
+        .register_notification("notif".to_owned(), false)
+        .is_err());
+    assert!(server
+        .register_subscription("subscribe_hello".to_owned(), "unsubscribe_hello".to_owned())
+        .is_ok());
+    assert!(server
+        .register_subscription("subscribe_hello_again".to_owned(), "notif".to_owned())
+        .is_err());
+    assert!(
+        server
+            .register_method("subscribe_hello_again".to_owned())
+            .is_ok(),
+        "Failed register_subscription should not have side-effects"
+    );
 }

@@ -245,7 +245,9 @@ impl Server {
         );
         {
             let mut registered_methods = self.registered_methods.lock();
-            if registered_methods.contains(&subscribe_method_name) || registered_methods.contains(&unsubscribe_method_name) {
+            if registered_methods.contains(&subscribe_method_name)
+                || registered_methods.contains(&unsubscribe_method_name)
+            {
                 return Err(());
             }
             registered_methods.insert(subscribe_method_name.clone());
