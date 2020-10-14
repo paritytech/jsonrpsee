@@ -32,17 +32,77 @@ async fn subscription_works() {
     let server_addr = server_started_rx.await.unwrap();
     let uri = format!("ws://{}", server_addr);
     let client = WsClient::new(&uri).await.unwrap();
-    let mut subscribe: WsSubscription<JsonValue> = client
+    let mut hello_sub: WsSubscription<JsonValue> = client
         .subscribe("subscribe_hello", Params::None, "unsubscribe_hello")
+        .await
+        .unwrap();
+    let mut foo_sub: WsSubscription<JsonValue> = client
+        .subscribe("subscribe_foo", Params::None, "unsubscribe_foo")
         .await
         .unwrap();
 
     for _ in 0..10 {
-        let response = subscribe.next().await;
+        let hello = hello_sub.next().await;
+        let foo = foo_sub.next().await;
         assert_eq!(
-            response,
+            hello,
             JsonValue::String("hello from subscription".to_owned())
         );
+        assert_eq!(foo, JsonValue::Number(1337_u64.into()));
+    }
+}
+
+#[tokio::test]
+async fn subscription_several_clients() {
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    server_subscribe_only(server_started_tx);
+    let server_addr = server_started_rx.await.unwrap();
+
+    let mut clients = Vec::with_capacity(10);
+    for _ in 0..10 {
+        let uri = format!("ws://{}", server_addr);
+        let client = WsClient::new(&uri).await.unwrap();
+        let hello_sub: WsSubscription<JsonValue> = client
+            .subscribe("subscribe_hello", Params::None, "unsubscribe_hello")
+            .await
+            .unwrap();
+        let foo_sub: WsSubscription<JsonValue> = client
+            .subscribe("subscribe_foo", Params::None, "unsubscribe_foo")
+            .await
+            .unwrap();
+        clients.push((client, hello_sub, foo_sub))
+    }
+
+    for _ in 0..10 {
+        for (_client, hello_sub, foo_sub) in &mut clients {
+            let hello = hello_sub.next().await;
+            let foo = foo_sub.next().await;
+            assert_eq!(
+                hello,
+                JsonValue::String("hello from subscription".to_owned())
+            );
+            assert_eq!(foo, JsonValue::Number(1337_u64.into()));
+        }
+    }
+
+    for i in 0..5 {
+        let (client, _, _) = clients.remove(i);
+        drop(client);
+    }
+
+    // make sure nothing weird happend after dropping half the clients (should be `unsubscribed` in the server)
+    // would be good to know that subscriptions actually were removed but not possible to verify at
+    // this layer.
+    for _ in 0..10 {
+        for (_client, hello_sub, foo_sub) in &mut clients {
+            let hello = hello_sub.next().await;
+            let foo = foo_sub.next().await;
+            assert_eq!(
+                hello,
+                JsonValue::String("hello from subscription".to_owned())
+            );
+            assert_eq!(foo, JsonValue::Number(1337_u64.into()));
+        }
     }
 }
 
@@ -139,10 +199,9 @@ async fn register_methods_works() {
 }
 
 mod helpers {
-    use crate::client::{WsClient, WsSubscription};
-    use crate::common::{Id, JsonValue, Params};
+    use crate::common::{Id, JsonValue};
     use crate::ws::WsServer;
-    use futures::channel::oneshot::{self, Sender};
+    use futures::channel::oneshot::Sender;
     use futures::future::FutureExt;
     use futures::io::{BufReader, BufWriter};
     use futures::{pin_mut, select};
@@ -196,19 +255,26 @@ mod helpers {
         }
     }
 
-    /// Spawns a dummy `JSONRPC v2 WebSocket` that just send subscriptions to `subscribe_hello`
-    // TODO: not sure why `tokio::spawn` works for this.
+    /// Spawns a dummy `JSONRPC v2 WebSocket` that just send subscriptions to `subscribe_hello` and
+    /// `subscribe_foo`.
+    //
+    // TODO: not sure why `tokio::spawn` doesn't works for this.
     pub fn server_subscribe_only(server_started: Sender<SocketAddr>) {
         std::thread::spawn(move || {
             use async_std::task::block_on;
             let server = block_on(WsServer::new("127.0.0.1:0")).unwrap();
-            let mut sub = server
+            let mut hello = server
                 .register_subscription("subscribe_hello".to_owned(), "unsubscribe_hello".to_owned())
+                .unwrap();
+            let mut foo = server
+                .register_subscription("subscribe_foo".to_owned(), "unsubscribe_foo".to_owned())
                 .unwrap();
             server_started.send(*server.local_addr()).unwrap();
 
             loop {
-                block_on(sub.send(JsonValue::String("hello from subscription".to_owned())));
+                block_on(hello.send(JsonValue::String("hello from subscription".to_owned())));
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                block_on(foo.send(JsonValue::Number(1337_u64.into())));
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
         });
