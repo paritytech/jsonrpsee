@@ -182,6 +182,7 @@ impl Server {
         method_name: String,
         allow_losses: bool,
     ) -> Result<RegisteredNotification, ()> {
+        log::debug!("[frontend]: register_notification={}", method_name);
         if !self.registered_methods.lock().insert(method_name.clone()) {
             return Err(());
         }
@@ -210,6 +211,7 @@ impl Server {
     ///
     /// Returns an error if the method name was already registered.
     pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, ()> {
+        log::debug!("[frontend]: register_method={}", method_name);
         if !self.registered_methods.lock().insert(method_name.clone()) {
             return Err(());
         }
@@ -239,7 +241,7 @@ impl Server {
         unsubscribe_method_name: String,
     ) -> Result<RegisteredSubscription, ()> {
         log::debug!(
-            "[register_subscription]: subscribe_method={}, unsubscribe_method={}",
+            "[frontend]: server register subscription: subscribe_method={}, unsubscribe_method={}",
             subscribe_method_name,
             unsubscribe_method_name
         );
@@ -391,7 +393,7 @@ async fn background_task(
                 subscribe_method,
                 unsubscribe_method,
             })) => {
-                log::debug!("server register subscription=id={:?}, subscribe_method:{}, unsubscribe_method={}", unique_id, subscribe_method, unsubscribe_method);
+                log::debug!("[backend]: server register subscription=id={:?}, subscribe_method:{}, unsubscribe_method={}", unique_id, subscribe_method, unsubscribe_method);
                 debug_assert_ne!(subscribe_method, unsubscribe_method);
                 debug_assert!(!subscribe_methods.contains_key(&subscribe_method));
                 debug_assert!(!subscribe_methods.contains_key(&unsubscribe_method));
@@ -410,11 +412,14 @@ async fn background_task(
                 unique_id,
                 notification,
             })) => {
-                log::debug!("server send response to subscription={:?}", unique_id);
+                log::debug!(
+                    "[backend]: server preparing response to subscription={:?}",
+                    unique_id
+                );
                 debug_assert!(subscribed_clients.contains_key(&unique_id));
                 if let Some(clients) = subscribed_clients.get(&unique_id) {
-                    log::debug!(
-                        "{} client(s) is subscribing to {:?}",
+                    log::trace!(
+                        "[backend]: {} client(s) is subscribing to subscription={:?}",
                         clients.len(),
                         unique_id
                     );
@@ -426,11 +431,17 @@ async fn background_task(
                         }
                     }
                 } else {
-                    log::warn!("server subscription: {:?} not found", unique_id);
+                    log::warn!(
+                        "[backend]: server received invalid subscription={:?}",
+                        unique_id
+                    );
                 }
             }
             Either::Right(RawServerEvent::Notification(notification)) => {
-                log::debug!("server received notification: {:?}", notification);
+                log::debug!(
+                    "[backend]: server received notification: {:?}",
+                    notification
+                );
                 if let Some((handler, allow_losses)) =
                     registered_notifications.get_mut(notification.method())
                 {
@@ -445,7 +456,7 @@ async fn background_task(
                 }
             }
             Either::Right(RawServerEvent::Request(request)) => {
-                log::debug!("server received request: {:?}", request);
+                log::debug!("[backend]: server received request: {:?}", request);
                 if let Some(handler) = registered_methods.get_mut(request.method()) {
                     let params: &common::Params = request.params().into();
                     log::debug!("server called handler");
@@ -493,10 +504,11 @@ async fn background_task(
             Either::Right(RawServerEvent::SubscriptionsReady(_)) => {
                 // We don't really care whether subscriptions are now ready.
             }
-            Either::Right(RawServerEvent::SubscriptionsClosed(iter)) => {
+            Either::Right(RawServerEvent::SubscriptionsClosed(subscriptions)) => {
+                log::debug!("[backend]: server close subscriptions: {:?}", subscriptions);
                 // Remove all the subscriptions from `active_subscriptions` and
                 // `subscribed_clients`.
-                for sub_id in iter {
+                for sub_id in subscriptions {
                     debug_assert!(active_subscriptions.contains_key(&sub_id));
                     if let Some(unique_id) = active_subscriptions.remove(&sub_id) {
                         debug_assert!(subscribed_clients.contains_key(&unique_id));

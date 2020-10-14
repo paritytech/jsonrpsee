@@ -136,7 +136,7 @@ impl Client {
         let method = method.into();
         let params = params.into();
         log::debug!(
-            "send notification: method={:?}, params={:?}",
+            "[frontend]: client send notification: method={:?}, params={:?}",
             method,
             params
         );
@@ -158,7 +158,11 @@ impl Client {
     {
         let method = method.into();
         let params = params.into();
-        log::debug!("send request: method={:?}, params={:?}", method, params);
+        log::debug!(
+            "[frontend]: send request: method={:?}, params={:?}",
+            method,
+            params
+        );
         let (send_back_tx, send_back_rx) = oneshot::channel();
         let _ = self
             .to_back
@@ -287,13 +291,13 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
             // If the channel is closed, then the `Client` has been destroyed and we
             // stop this task.
             Either::Left(None) => {
-                log::trace!("background thread dropped");
+                log::trace!("[backend]: client terminated");
                 return;
             }
 
             // User called `notification` on the front-end.
             Either::Left(Some(FrontToBack::Notification { method, params })) => {
-                log::trace!("background thread; notification sent");
+                log::trace!("[backend]: client send notification");
                 let _ = client.send_notification(method, params).await;
             }
 
@@ -302,32 +306,36 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
                 method,
                 params,
                 send_back,
-            })) => match client.start_request(method, params).await {
-                Ok(id) => {
-                    log::trace!("background thread; inserting ingoing request={:?}", id);
-                    ongoing_requests.insert(id, send_back);
+            })) => {
+                log::trace!("[backend]: client prepare to send request={:?}", method);
+                match client.start_request(method, params).await {
+                    Ok(id) => {
+                        ongoing_requests.insert(id, send_back);
+                    }
+                    Err(err) => {
+                        log::warn!("[backend]: client send request failed: {:?}", err);
+                        let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+                    }
                 }
-                Err(err) => {
-                    log::trace!("background thread; start_request failed: {:?}", err);
-                    let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
-                }
-            },
-
+            }
             // User called `subscribe` on the front-end.
             Either::Left(Some(FrontToBack::Subscribe {
                 subscribe_method,
                 unsubscribe_method,
                 params,
                 send_back,
-            })) => match client.start_subscription(subscribe_method, params).await {
-                Ok(id) => {
-                    pending_subscriptions.insert(id, (send_back, unsubscribe_method));
+            })) => {
+                log::trace!("[backend]: client prepare to start subscription, subscribe_method={:?} unsubscribe_method:{:?}", subscribe_method, unsubscribe_method);
+                match client.start_subscription(subscribe_method, params).await {
+                    Ok(id) => {
+                        pending_subscriptions.insert(id, (send_back, unsubscribe_method));
+                    }
+                    Err(err) => {
+                        log::warn!("[backend]: client start subscription failed: {:?}", err);
+                        let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+                    }
                 }
-                Err(err) => {
-                    let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
-                }
-            },
-
+            }
             Either::Left(Some(FrontToBack::ChannelClosed)) => {
                 // TODO: there's no way to cancel pending subscriptions and requests, otherwise
                 // we should clean them up as well
@@ -351,7 +359,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
             // Received a response to a request from the server.
             Either::Right(Ok(RawClientEvent::Response { request_id, result })) => {
                 log::trace!(
-                    "background thread; received response to req={:?}, result={:?}",
+                    "[backend] client received response to req={:?}, result={:?}",
                     request_id,
                     result
                 );
@@ -363,6 +371,10 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 
             // Receive a response from the server about a subscription.
             Either::Right(Ok(RawClientEvent::SubscriptionResponse { request_id, result })) => {
+                log::trace!(
+                    "[backend]: client received response to subscription: {:?}",
+                    result
+                );
                 let (send_back, unsubscribe) = pending_subscriptions.remove(&request_id).unwrap();
                 if let Err(err) = result {
                     let _ = send_back.send(Err(RequestError::Request(err)));
