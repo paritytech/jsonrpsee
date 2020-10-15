@@ -1,0 +1,17 @@
+[package]
+name = "jsonrpsee-test-utils"
+version = "0.1.0"
+authors = ["Niklas <niklasadolfsson1@gmail.com>"]
+license = "MIT"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3.6"
+hyper = "0.13.8"
+serde = { version = "1.0.116", default-features = false, features = ["derive"] }
+serde_json = "1.0.58"
+soketto = "0.4.2"
+tokio = { version = "0.2.22", features = ["dns", "stream", "tcp", "rt-threaded", "macros"] }
+tokio-util = { version = "0.3", features = ["compat"] }

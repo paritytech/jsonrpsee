@@ -29,12 +29,9 @@
 use crate::client::WsTransportClient;
 use crate::common::{self, Call, MethodCall, Notification, Params, Request, Version};
 use crate::ws::{RawWsServer, RawWsServerEvent, WsTransportServer};
+use jsonrpsee_test_utils::helpers::*;
 use serde_json::Value;
 use std::net::SocketAddr;
-
-fn to_uri(sockaddr: SocketAddr) -> String {
-    format!("ws://{}", sockaddr)
-}
 
 async fn raw_server() -> (RawWsServer, SocketAddr) {
     let server = WsTransportServer::builder("127.0.0.1:0".parse().unwrap())
@@ -50,7 +47,7 @@ async fn request_work() {
     let (mut server, server_addr) = raw_server().await;
 
     tokio::spawn(async move {
-        let mut client = WsTransportClient::new(&to_uri(server_addr)).await.unwrap();
+        let mut client = WsTransportClient::new(&to_ws_uri_string(server_addr)).await.unwrap();
         let call = Call::MethodCall(MethodCall {
             jsonrpc: Version::V2,
             method: "hello_world".to_owned(),
@@ -78,7 +75,7 @@ async fn notification_work() {
     let (mut server, server_addr) = raw_server().await;
 
     tokio::spawn(async move {
-        let mut client = WsTransportClient::new(&to_uri(server_addr)).await.unwrap();
+        let mut client = WsTransportClient::new(&to_ws_uri_string(server_addr)).await.unwrap();
         let n = Notification {
             jsonrpc: Version::V2,
             method: "hello_world".to_owned(),

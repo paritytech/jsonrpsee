@@ -26,7 +26,7 @@ thiserror = "1.0.20"
 
 # used for tests and HTTP/hyper
 # the features are used only for tests but enabled because `dev-depedencies` are leaked into dependencies.
-tokio = { version = "0.2.22", features = ["dns", "stream", "tcp", "rt-threaded", "macros"], optional = true }
+tokio = { version = "0.2.22", features = ["stream", "rt-threaded", "macros"], optional = true }
 
 # HTTP-related dependencies
 hyper = { version = "0.13.8", features = ["stream"], optional = true }
@@ -46,4 +46,4 @@ ws = ["async-tls", "bytes", "soketto", "url", "webpki"]
 
 [dev-dependencies]
 env_logger = "0.7.1"
-tokio-util = { version = "0.3", features = ["compat"] }
+jsonrpsee-test-utils = { path = "test-utils" }
