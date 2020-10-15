@@ -425,7 +425,7 @@ async fn per_connection_task(
                         ))
                         .expect("valid JSON; qed");
 
-                        // deserialization failed and then client not alive then close the connection.
+                        // deserialization failed and the client is not alive then close the connection.
                         if let Err(e) = sender.send_text(&response).await {
                             log::warn!(
                                 "Failed to send: {:?} over WebSocket transport with error: {:?}",
