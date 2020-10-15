@@ -349,9 +349,8 @@ impl WsTransportServerBuilder {
 
 /// Processes a single connection.
 //
-//
-// TODO: document this function it is quite hard to understand the outcome when it returns.
-// For example it returns when it receives an error and terminates all pending tasks in the connection.
+// TODO: document this function it is quite hard to understand the outcome when it returns `Vec<WsRequestId>`
+// both when an error or if the actual connection was terminated.
 async fn per_connection_task(
     socket: TcpStream,
     next_request_id: Arc<atomic::AtomicU64>,
@@ -425,14 +424,18 @@ async fn per_connection_task(
                             crate::common::Version::V2,
                         ))
                         .expect("valid JSON; qed");
+
+                        // deserialization failed and then client not alive then close the connection.
                         if let Err(e) = sender.send_text(&response).await {
                             log::warn!(
                                 "Failed to send: {:?} over WebSocket transport with error: {:?}",
                                 response,
                                 e
                             );
+                            return pending_requests;
+                        } else {
+                            continue;
                         }
-                        return pending_requests;
                     }
                 };
 
@@ -461,7 +464,7 @@ async fn per_connection_task(
                 if let Some(Ok(_)) = result {
                     pending_requests.push(request_id);
                 } else {
-                    // TODO: why are we terminating all pending requests if only one fails?!.
+                    // The internal channel not responsive, close connection
                     log::error!(
                         "Send request={:?} failed; terminating all pending_requests",
                         request_id
