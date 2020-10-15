@@ -1,11 +1,85 @@
 #![cfg(test)]
 
 use crate::client::{WsClient, WsSubscription};
-use crate::common::{Id, JsonValue, Params};
+use crate::common::Params;
 use crate::ws::WsServer;
-use futures::channel::oneshot;
-use helpers::*;
+use futures::channel::oneshot::{self, Sender};
+use futures::future::FutureExt;
+use futures::{pin_mut, select};
+use jsonrpsee_test_utils::helpers::*;
+use jsonrpsee_test_utils::types::{Id, WebSocketTestClient};
+use serde_json::Value as JsonValue;
 use std::net::SocketAddr;
+
+/// Spawns a dummy `JSONRPC v2 WebSocket` that just send subscriptions to `subscribe_hello` and
+/// `subscribe_foo`.
+//
+// TODO: not sure why `tokio::spawn` doesn't works for this.
+pub fn server_subscribe_only(server_started: Sender<SocketAddr>) {
+    std::thread::spawn(move || {
+        use async_std::task::block_on;
+        let server = block_on(WsServer::new("127.0.0.1:0")).unwrap();
+        let mut hello = server
+            .register_subscription("subscribe_hello".to_owned(), "unsubscribe_hello".to_owned())
+            .unwrap();
+        let mut foo = server
+            .register_subscription("subscribe_foo".to_owned(), "unsubscribe_foo".to_owned())
+            .unwrap();
+        server_started.send(*server.local_addr()).unwrap();
+
+        loop {
+            block_on(hello.send(JsonValue::String("hello from subscription".to_owned())));
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            block_on(foo.send(JsonValue::Number(1337_u64.into())));
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+}
+
+/// Spawns a dummy `JSONRPC v2 WebSocket`
+/// It has two hardcoded methods "say_hello" and "add", one hardcoded notification "notif"
+pub async fn server(server_started: Sender<SocketAddr>) {
+    let server = WsServer::new("127.0.0.1:0").await.unwrap();
+    let mut hello = server.register_method("say_hello".to_owned()).unwrap();
+    let mut add = server.register_method("add".to_owned()).unwrap();
+    let mut notif = server
+        .register_notification("notif".to_owned(), false)
+        .unwrap();
+    server_started.send(*server.local_addr()).unwrap();
+
+    loop {
+        let hello_fut = async {
+            let handle = hello.next().await;
+            log::debug!("server respond to hello");
+            handle
+                .respond(Ok(JsonValue::String("hello".to_owned())))
+                .await;
+        }
+        .fuse();
+
+        let add_fut = async {
+            let handle = add.next().await;
+            let params: Vec<u64> = handle.params().clone().parse().unwrap();
+            let sum: u64 = params.iter().sum();
+            handle.respond(Ok(JsonValue::Number(sum.into()))).await;
+        }
+        .fuse();
+
+        let notif_fut = async {
+            let params = notif.next().await;
+            println!("received notification: say_hello params[{:?}]", params);
+        }
+        .fuse();
+
+        pin_mut!(hello_fut, add_fut, notif_fut);
+        select! {
+            say_hello = hello_fut => (),
+            add = add_fut => (),
+            notif = notif_fut => (),
+            complete => (),
+        };
+    }
+}
 
 #[tokio::test]
 async fn single_method_call_works() {
@@ -196,168 +270,4 @@ async fn register_methods_works() {
             .is_ok(),
         "Failed register_subscription should not have side-effects"
     );
-}
-
-mod helpers {
-    use crate::common::{Id, JsonValue};
-    use crate::ws::WsServer;
-    use futures::channel::oneshot::Sender;
-    use futures::future::FutureExt;
-    use futures::io::{BufReader, BufWriter};
-    use futures::{pin_mut, select};
-    use soketto::handshake;
-    use std::net::SocketAddr;
-    use tokio::net::TcpStream;
-    use tokio_util::compat::{Compat, Tokio02AsyncReadCompatExt};
-
-    type Error = Box<dyn std::error::Error>;
-
-    pub struct WebSocketTestClient {
-        tx: soketto::Sender<BufReader<BufWriter<Compat<TcpStream>>>>,
-        rx: soketto::Receiver<BufReader<BufWriter<Compat<TcpStream>>>>,
-    }
-
-    impl WebSocketTestClient {
-        pub async fn new(url: SocketAddr) -> Result<Self, Error> {
-            let socket = TcpStream::connect(url).await?;
-            let mut client = handshake::Client::new(
-                BufReader::new(BufWriter::new(socket.compat())),
-                "test-client",
-                "/",
-            );
-            match client.handshake().await {
-                Ok(handshake::ServerResponse::Accepted { .. }) => {
-                    let (tx, rx) = client.into_builder().finish();
-                    Ok(Self { tx, rx })
-                }
-                r @ _ => Err(format!("WebSocketHandshake failed: {:?}", r).into()),
-            }
-        }
-
-        pub async fn send_request_text(&mut self, msg: impl AsRef<str>) -> Result<String, Error> {
-            self.tx.send_text(msg).await?;
-            self.tx.flush().await?;
-            let mut data = Vec::new();
-            self.rx.receive_data(&mut data).await?;
-            String::from_utf8(data).map_err(Into::into)
-        }
-
-        pub async fn send_request_binary(&mut self, msg: &[u8]) -> Result<String, Error> {
-            self.tx.send_binary(msg).await?;
-            self.tx.flush().await?;
-            let mut data = Vec::new();
-            self.rx.receive_data(&mut data).await?;
-            String::from_utf8(data).map_err(Into::into)
-        }
-
-        pub async fn close(&mut self) -> Result<(), Error> {
-            self.tx.close().await.map_err(Into::into)
-        }
-    }
-
-    /// Spawns a dummy `JSONRPC v2 WebSocket` that just send subscriptions to `subscribe_hello` and
-    /// `subscribe_foo`.
-    //
-    // TODO: not sure why `tokio::spawn` doesn't works for this.
-    pub fn server_subscribe_only(server_started: Sender<SocketAddr>) {
-        std::thread::spawn(move || {
-            use async_std::task::block_on;
-            let server = block_on(WsServer::new("127.0.0.1:0")).unwrap();
-            let mut hello = server
-                .register_subscription("subscribe_hello".to_owned(), "unsubscribe_hello".to_owned())
-                .unwrap();
-            let mut foo = server
-                .register_subscription("subscribe_foo".to_owned(), "unsubscribe_foo".to_owned())
-                .unwrap();
-            server_started.send(*server.local_addr()).unwrap();
-
-            loop {
-                block_on(hello.send(JsonValue::String("hello from subscription".to_owned())));
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                block_on(foo.send(JsonValue::Number(1337_u64.into())));
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-        });
-    }
-
-    /// Spawns a dummy `JSONRPC v2 WebSocket`
-    /// It has two hardcoded methods "say_hello" and "add", one hardcoded notification "notif"
-    pub async fn server(server_started: Sender<SocketAddr>) {
-        let server = WsServer::new("127.0.0.1:0").await.unwrap();
-        let mut hello = server.register_method("say_hello".to_owned()).unwrap();
-        let mut add = server.register_method("add".to_owned()).unwrap();
-        let mut notif = server
-            .register_notification("notif".to_owned(), false)
-            .unwrap();
-        server_started.send(*server.local_addr()).unwrap();
-
-        loop {
-            let hello_fut = async {
-                let handle = hello.next().await;
-                log::debug!("server respond to hello");
-                handle
-                    .respond(Ok(JsonValue::String("hello".to_owned())))
-                    .await;
-            }
-            .fuse();
-
-            let add_fut = async {
-                let handle = add.next().await;
-                let params: Vec<u64> = handle.params().clone().parse().unwrap();
-                let sum: u64 = params.iter().sum();
-                handle.respond(Ok(JsonValue::Number(sum.into()))).await;
-            }
-            .fuse();
-
-            let notif_fut = async {
-                let params = notif.next().await;
-                println!("received notification: say_hello params[{:?}]", params);
-            }
-            .fuse();
-
-            pin_mut!(hello_fut, add_fut, notif_fut);
-            select! {
-                say_hello = hello_fut => (),
-                add = add_fut => (),
-                notif = notif_fut => (),
-                complete => (),
-            };
-        }
-    }
-
-    pub fn ok_response(result: JsonValue, id: Id) -> String {
-        format!(
-            r#"{{"jsonrpc":"2.0","result":{},"id":{}}}"#,
-            result,
-            serde_json::to_string(&id).unwrap()
-        )
-    }
-
-    pub fn method_not_found(id: Id) -> String {
-        format!(
-            r#"{{"jsonrpc":"2.0","error":{{"code":-32601,"message":"Method not found"}},"id":{}}}"#,
-            serde_json::to_string(&id).unwrap()
-        )
-    }
-
-    pub fn parse_error(id: Id) -> String {
-        format!(
-            r#"{{"jsonrpc":"2.0","error":{{"code":-32700,"message":"Parse error"}},"id":{}}}"#,
-            serde_json::to_string(&id).unwrap()
-        )
-    }
-
-    pub fn invalid_request(id: Id) -> String {
-        format!(
-            r#"{{"jsonrpc":"2.0","error":{{"code":-32600,"message":"Invalid request"}},"id":{}}}"#,
-            serde_json::to_string(&id).unwrap()
-        )
-    }
-
-    pub fn invalid_params(id: Id) -> String {
-        format!(
-            r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid params"}},"id":{}}}"#,
-            serde_json::to_string(&id).unwrap()
-        )
-    }
 }
