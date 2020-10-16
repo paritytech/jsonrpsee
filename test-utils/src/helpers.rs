@@ -67,7 +67,11 @@ pub async fn http_request(body: Body, uri: Uri) -> Result<HttpResponse, String> 
         )
         .body(body)
         .expect("uri and request headers are valid; qed");
-    let res = client.request(r).compat().await.map_err(|e| format!("{:?}", e))?;
+    let res = client
+        .request(r)
+        .compat()
+        .await
+        .map_err(|e| format!("{:?}", e))?;
 
     let (parts, body) = res.into_parts();
     let bytes = hyper::body::to_bytes(body).await.unwrap();

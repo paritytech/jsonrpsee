@@ -99,21 +99,27 @@ impl BackgroundHttp {
                 };
 
                 // hyper v0.13 is using tokio v0.2 that's why compat() is used.
-                runtime.block_on(async move {
-                    match hyper::Server::try_bind(&addr) {
-                        Ok(builder) => {
-                            let server = builder.serve(make_service);
-                            let _ = addr_tx.send(Ok(server.local_addr()));
-                            if let Err(err) = server.await {
-                                log::error!("HTTP JSON-RPC server closed with an error: {}", err);
+                runtime.block_on(
+                    async move {
+                        match hyper::Server::try_bind(&addr) {
+                            Ok(builder) => {
+                                let server = builder.serve(make_service);
+                                let _ = addr_tx.send(Ok(server.local_addr()));
+                                if let Err(err) = server.await {
+                                    log::error!(
+                                        "HTTP JSON-RPC server closed with an error: {}",
+                                        err
+                                    );
+                                }
                             }
-                        }
-                        Err(err) => {
-                            log::error!("Failed to bind to address {}: {}", addr, err);
-                            let _ = addr_tx.send(Err(err));
-                        }
-                    };
-                }.compat());
+                            Err(err) => {
+                                log::error!("Failed to bind to address {}: {}", addr, err);
+                                let _ = addr_tx.send(Err(err));
+                            }
+                        };
+                    }
+                    .compat(),
+                );
             })?;
 
         let local_addr = addr_rx.await??;

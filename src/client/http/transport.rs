@@ -60,7 +60,8 @@ impl HttpTransportClient {
                         let _ = rq
                             .send_back
                             .unbounded_send(client.request(rq.request).await);
-                    }.compat()
+                    }
+                    .compat()
                 })
             })
             .unwrap();
