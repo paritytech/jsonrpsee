@@ -74,7 +74,7 @@ impl ErrorCode {
     pub fn description(&self) -> String {
         let desc = match *self {
             ErrorCode::ParseError => "Parse error",
-            ErrorCode::InvalidRequest => "Invalid request",
+            ErrorCode::InvalidRequest => "Invalid Request",
             ErrorCode::MethodNotFound => "Method not found",
             ErrorCode::InvalidParams => "Invalid params",
             ErrorCode::InternalError => "Internal error",

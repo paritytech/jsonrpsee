@@ -224,8 +224,8 @@ impl WsTransportClient {
         Box::pin(async move {
             let mut message = Vec::new();
             self.receiver.receive_data(&mut message).await?;
+            log::debug!("received response: {:?}", message);
             let response = common::from_slice(&message).map_err(WsConnectError::ParseError)?;
-            log::debug!("received response: {:?}", response);
             Ok(response)
         })
     }

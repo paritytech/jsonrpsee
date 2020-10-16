@@ -2,6 +2,12 @@ use crate::types::{Body, HttpResponse, Id, Uri};
 use serde_json::Value;
 use std::net::SocketAddr;
 
+pub const PARSE_ERROR: &str = "Parse error";
+pub const INTERNAL_ERROR: &str = "Internal error";
+pub const INVALID_PARAMS: &str = "Invalid params";
+pub const INVALID_REQUEST: &str = "Invalid Request";
+pub const METHOD_NOT_FOUND: &str = "Method not found";
+
 /// Converts a sockaddress to a WebSocket URI.
 pub fn to_ws_uri_string(addr: SocketAddr) -> String {
     let mut s = String::new();
@@ -45,7 +51,7 @@ pub fn parse_error(id: Id) -> String {
 
 pub fn invalid_request(id: Id) -> String {
     format!(
-        r#"{{"jsonrpc":"2.0","error":{{"code":-32600,"message":"Invalid request"}},"id":{}}}"#,
+        r#"{{"jsonrpc":"2.0","error":{{"code":-32600,"message":"Invalid Request"}},"id":{}}}"#,
         serde_json::to_string(&id).unwrap()
     )
 }
@@ -53,6 +59,13 @@ pub fn invalid_request(id: Id) -> String {
 pub fn invalid_params(id: Id) -> String {
     format!(
         r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid params"}},"id":{}}}"#,
+        serde_json::to_string(&id).unwrap()
+    )
+}
+
+pub fn internal_error(id: Id) -> String {
+    format!(
+        r#"{{"jsonrpc":"2.0","error":{{"code":-32603,"message":"Internal error"}},"id":{}}}"#,
         serde_json::to_string(&id).unwrap()
     )
 }
