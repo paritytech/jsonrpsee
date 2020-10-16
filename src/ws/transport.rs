@@ -425,16 +425,18 @@ async fn per_connection_task(
                         ))
                         .expect("valid JSON; qed");
 
-                        // deserialization failed and the client is not alive then close the connection.
-                        if let Err(e) = sender.send_text(&response).await {
-                            log::warn!(
-                                "Failed to send: {:?} over WebSocket transport with error: {:?}",
-                                response,
-                                e
-                            );
-                            return pending_requests;
-                        } else {
-                            continue;
+                        match sender.send_text(&response).await {
+                            // deserialization failed but the client is still alive
+                            Ok(_) => continue,
+                            // deserialization failed and the client is not alive
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to send: {:?} over WebSocket transport with error: {:?}",
+                                    response,
+                                    e
+                                );
+                                return pending_requests;
+                            }
                         }
                     }
                 };
@@ -461,15 +463,27 @@ async fn per_connection_task(
                     })
                     .now_or_never();
 
-                if let Some(Ok(_)) = result {
-                    pending_requests.push(request_id);
-                } else {
-                    // The internal channel not responsive, close connection
-                    log::error!(
-                        "Send request={:?} failed; terminating all pending_requests",
-                        request_id
-                    );
-                    return pending_requests;
+                match result {
+                    // Request was succesfully transmitted to the frontend.
+                    Some(Ok(_)) => pending_requests.push(request_id),
+                    // The channel is down or full.
+                    Some(Err(e)) => {
+                        log::error!(
+                            "send request={:?} to frontend failed because of {:?}, terminating the connection",
+                            request_id,
+                            e,
+                        );
+                        return pending_requests;
+                    }
+                    // The future wasn't ready.
+                    // TODO(niklasad1): verify if this is possible to happen "in practice".
+                    None => {
+                        log::error!(
+                            "send request={:?} to frontend failed future not ready, terminating the connection",
+                            request_id,
+                        );
+                        return pending_requests;
+                    }
                 }
             }
 
