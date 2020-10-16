@@ -24,11 +24,11 @@ serde_json = "1.0.58"
 smallvec = { version = "1.4.2", default-features = false }
 thiserror = "1.0.20"
 
-# used for tests and HTTP/hyper
-# the features are used only for tests but enabled because `dev-depedencies` are leaked into dependencies.
-tokio = { version = "0.2.22", features = ["stream", "rt-threaded", "macros"], optional = true }
-
 # HTTP-related dependencies
+# the features `rt-multi-thread` and `macros` are used only for tests but enabled because `dev-dependencies` are leaked into dependencies.
+tokio = { version = "0.3.0", features = ["stream", "rt-multi-thread", "macros"], optional = true }
+# hyper is using tokio v0.2, remove when hyper upgrades.
+tokio-compat-02 = "0.1.0"
 hyper = { version = "0.13.8", features = ["stream"], optional = true }
 unicase = { version = "2.6.0", optional = true }
 

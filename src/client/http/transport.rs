@@ -17,9 +17,9 @@ use std::pin::Pin;
 use std::{fmt, io, thread};
 
 use crate::common;
-
 use futures::{channel::mpsc, prelude::*};
 use thiserror::Error;
+use tokio_compat_02::FutureExt;
 
 /// Implementation of a raw client for HTTP requests.
 pub struct HttpTransportClient {
@@ -52,6 +52,7 @@ impl HttpTransportClient {
             .name("jsonrpsee-hyper-client".to_string())
             .spawn(move || {
                 let client = hyper::Client::new();
+                // hyper v0.13 requires tokio v0.2 that's why compat() is used.
                 background_thread(requests_rx, move |rq| {
                     // cloning Hyper client = cloning references
                     let client = client.clone();
@@ -59,7 +60,7 @@ impl HttpTransportClient {
                         let _ = rq
                             .send_back
                             .unbounded_send(client.request(rq.request).await);
-                    }
+                    }.compat()
                 })
             })
             .unwrap();
@@ -186,8 +187,7 @@ fn background_thread<T, ProcessRequest: Future<Output = ()>>(
     mut requests_rx: mpsc::Receiver<T>,
     process_request: impl Fn(T) -> ProcessRequest,
 ) {
-    let mut runtime = match tokio::runtime::Builder::new()
-        .basic_scheduler()
+    let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     {

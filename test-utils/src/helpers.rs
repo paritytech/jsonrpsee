@@ -1,6 +1,7 @@
 use crate::types::{Body, HttpResponse, Id, Uri};
 use serde_json::Value;
 use std::net::SocketAddr;
+use tokio_compat_02::FutureExt;
 
 /// Converts a sockaddress to a WebSocket URI.
 pub fn to_ws_uri_string(addr: SocketAddr) -> String {
@@ -66,7 +67,7 @@ pub async fn http_request(body: Body, uri: Uri) -> Result<HttpResponse, String> 
         )
         .body(body)
         .expect("uri and request headers are valid; qed");
-    let res = client.request(r).await.map_err(|e| format!("{:?}", e))?;
+    let res = client.request(r).compat().await.map_err(|e| format!("{:?}", e))?;
 
     let (parts, body) = res.into_parts();
     let bytes = hyper::body::to_bytes(body).await.unwrap();

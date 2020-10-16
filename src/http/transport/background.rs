@@ -31,6 +31,7 @@ use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
 use std::{error, io, net::SocketAddr, thread};
+use tokio_compat_02::FutureExt;
 
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
@@ -83,8 +84,7 @@ impl BackgroundHttp {
         thread::Builder::new()
             .name("jsonrpsee-hyper-server".to_string())
             .spawn(move || {
-                let mut runtime = match tokio::runtime::Builder::new()
-                    .basic_scheduler()
+                let runtime = match tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
                 {
@@ -98,6 +98,7 @@ impl BackgroundHttp {
                     }
                 };
 
+                // hyper v0.13 is using tokio v0.2 that's why compat() is used.
                 runtime.block_on(async move {
                     match hyper::Server::try_bind(&addr) {
                         Ok(builder) => {
@@ -112,7 +113,7 @@ impl BackgroundHttp {
                             let _ = addr_tx.send(Err(err));
                         }
                     };
-                });
+                }.compat());
             })?;
 
         let local_addr = addr_rx.await??;
