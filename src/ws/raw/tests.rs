@@ -47,7 +47,9 @@ async fn request_work() {
     let (mut server, server_addr) = raw_server().await;
 
     tokio::spawn(async move {
-        let mut client = WsTransportClient::new(&to_ws_uri_string(server_addr)).await.unwrap();
+        let mut client = WsTransportClient::new(&to_ws_uri_string(server_addr))
+            .await
+            .unwrap();
         let call = Call::MethodCall(MethodCall {
             jsonrpc: Version::V2,
             method: "hello_world".to_owned(),
@@ -75,7 +77,9 @@ async fn notification_work() {
     let (mut server, server_addr) = raw_server().await;
 
     tokio::spawn(async move {
-        let mut client = WsTransportClient::new(&to_ws_uri_string(server_addr)).await.unwrap();
+        let mut client = WsTransportClient::new(&to_ws_uri_string(server_addr))
+            .await
+            .unwrap();
         let n = Notification {
             jsonrpc: Version::V2,
             method: "hello_world".to_owned(),

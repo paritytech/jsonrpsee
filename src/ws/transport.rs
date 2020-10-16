@@ -349,9 +349,8 @@ impl WsTransportServerBuilder {
 
 /// Processes a single connection.
 //
-//
-// TODO: document this function it is quite hard to understand the outcome when it returns.
-// For example it returns when it receives an error and terminates all pending tasks in the connection.
+// TODO: document this function it is quite hard to understand the outcome when it returns `Vec<WsRequestId>`
+// both when an error or if the actual connection was terminated.
 async fn per_connection_task(
     socket: TcpStream,
     next_request_id: Arc<atomic::AtomicU64>,
@@ -425,14 +424,20 @@ async fn per_connection_task(
                             crate::common::Version::V2,
                         ))
                         .expect("valid JSON; qed");
-                        if let Err(e) = sender.send_text(&response).await {
-                            log::warn!(
-                                "Failed to send: {:?} over WebSocket transport with error: {:?}",
-                                response,
-                                e
-                            );
+
+                        match sender.send_text(&response).await {
+                            // deserialization failed but the client is still alive
+                            Ok(_) => continue,
+                            // deserialization failed and the client is not alive
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to send: {:?} over WebSocket transport with error: {:?}",
+                                    response,
+                                    e
+                                );
+                                return pending_requests;
+                            }
                         }
-                        return pending_requests;
                     }
                 };
 
@@ -458,15 +463,27 @@ async fn per_connection_task(
                     })
                     .now_or_never();
 
-                if let Some(Ok(_)) = result {
-                    pending_requests.push(request_id);
-                } else {
-                    // TODO: why are we terminating all pending requests if only one fails?!.
-                    log::error!(
-                        "Send request={:?} failed; terminating all pending_requests",
-                        request_id
-                    );
-                    return pending_requests;
+                match result {
+                    // Request was succesfully transmitted to the frontend.
+                    Some(Ok(_)) => pending_requests.push(request_id),
+                    // The channel is down or full.
+                    Some(Err(e)) => {
+                        log::error!(
+                            "send request={:?} to frontend failed because of {:?}, terminating the connection",
+                            request_id,
+                            e,
+                        );
+                        return pending_requests;
+                    }
+                    // The future wasn't ready.
+                    // TODO(niklasad1): verify if this is possible to happen "in practice".
+                    None => {
+                        log::error!(
+                            "send request={:?} to frontend failed future not ready, terminating the connection",
+                            request_id,
+                        );
+                        return pending_requests;
+                    }
                 }
             }
 

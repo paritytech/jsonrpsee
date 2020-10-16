@@ -271,3 +271,39 @@ async fn register_methods_works() {
         "Failed register_subscription should not have side-effects"
     );
 }
+
+#[tokio::test]
+async fn parse_error_request_should_not_close_connection() {
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
+
+    let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+    let invalid_request = r#"{"jsonrpc":"2.0","method":"bar","params":[1,"id":99}"#;
+    let response1 = client.send_request_text(invalid_request).await.unwrap();
+    assert_eq!(response1, parse_error(Id::Null));
+    let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
+    let response2 = client.send_request_text(request).await.unwrap();
+    assert_eq!(
+        response2,
+        ok_response(JsonValue::String("hello".to_owned()), Id::Num(33))
+    );
+}
+
+#[tokio::test]
+async fn invalid_request_should_not_close_connection() {
+    let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+    tokio::spawn(server(server_started_tx));
+    let server_addr = server_started_rx.await.unwrap();
+
+    let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+    let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
+    let response = client.send_request_text(req).await.unwrap();
+    assert_eq!(response, invalid_request(Id::Num(1)));
+    let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
+    let response = client.send_request_text(request).await.unwrap();
+    assert_eq!(
+        response,
+        ok_response(JsonValue::String("hello".to_owned()), Id::Num(33))
+    );
+}
