@@ -1,8 +1,8 @@
 use futures::channel::mpsc::{self, Receiver, Sender};
 use futures::future;
 use futures::io::{BufReader, BufWriter};
-use futures::stream::{self, StreamExt};
 use futures::sink::SinkExt;
+use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use soketto::handshake;
 use soketto::handshake::{server::Response, Server};
@@ -91,7 +91,10 @@ impl WebSocketTestServer {
         let (tx, rx) = mpsc::channel::<()>(4);
         tokio::spawn(server_backend(listener, rx, answer));
 
-        Self { local_addr, exit: tx }
+        Self {
+            local_addr,
+            exit: tx,
+        }
     }
 
     pub fn local_addr(&self) -> SocketAddr {
@@ -103,7 +106,11 @@ impl WebSocketTestServer {
     }
 }
 
-async fn server_backend(listener: async_std::net::TcpListener, mut exit: Receiver<()>, answer: String) {
+async fn server_backend(
+    listener: async_std::net::TcpListener,
+    mut exit: Receiver<()>,
+    answer: String,
+) {
     let mut connections = Vec::new();
 
     loop {
@@ -129,7 +136,11 @@ async fn server_backend(listener: async_std::net::TcpListener, mut exit: Receive
     }
 }
 
-async fn connection_task(socket: async_std::net::TcpStream, answer: String, mut exit: Receiver<()>) {
+async fn connection_task(
+    socket: async_std::net::TcpStream,
+    answer: String,
+    mut exit: Receiver<()>,
+) {
     let mut server = Server::new(socket);
 
     let websocket_key = match server.receive_request().await {
@@ -137,10 +148,12 @@ async fn connection_task(socket: async_std::net::TcpStream, answer: String, mut 
         Err(_) => return,
     };
 
-    let accept = server.send_response(&Response::Accept {
-         key: &websocket_key,
-         protocol: None,
-    }).await;
+    let accept = server
+        .send_response(&Response::Accept {
+            key: &websocket_key,
+            protocol: None,
+        })
+        .await;
 
     if accept.is_err() {
         return;
