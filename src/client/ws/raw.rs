@@ -464,7 +464,7 @@ impl RawClient {
     /// Processes the response obtained from the server. Updates the internal state of `self` to
     /// account for it.
     fn process_response(&mut self, response: common::Output) -> Result<(), RawClientError> {
-        log::debug!(target: "ws-client-raw", "received response: {:?}", response);
+        log::debug!("received response: {:?}", response);
         let request_id = match response.id() {
             common::Id::Num(n) => RawClientRequestId(*n),
             common::Id::Str(s) => {
