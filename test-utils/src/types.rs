@@ -1,11 +1,12 @@
 use futures::channel::mpsc::{self, Receiver, Sender};
-use futures::future;
+use futures::future::{self, FutureExt};
 use futures::io::{BufReader, BufWriter};
 use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use soketto::handshake;
 use soketto::handshake::{server::Response, Server};
+use std::time::Duration;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, Tokio02AsyncReadCompatExt};
@@ -78,6 +79,14 @@ impl WebSocketTestClient {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ServerMode {
+    // Send out a hardcoded response on every connection.
+    Response(String),
+    // Send out a subscription ID and continuously send out data on the subscription.
+    Subscription((String, String)),
+}
+
 /// JSONRPC v2 dummy WebSocket server that sends a hardcoded response.
 pub struct WebSocketTestServer {
     local_addr: SocketAddr,
@@ -85,11 +94,29 @@ pub struct WebSocketTestServer {
 }
 
 impl WebSocketTestServer {
-    pub async fn with_hardcoded_response(sockaddr: SocketAddr, answer: String) -> Self {
+    pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
         let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
         let local_addr = listener.local_addr().unwrap();
         let (tx, rx) = mpsc::channel::<()>(4);
-        tokio::spawn(server_backend(listener, rx, answer));
+        tokio::spawn(server_backend(listener, rx, ServerMode::Response(response)));
+
+        Self {
+            local_addr,
+            exit: tx,
+        }
+    }
+
+    pub async fn with_hardcoded_subscription(sockaddr: SocketAddr, method: String, result: String) -> Self {
+        let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
+        let local_addr = listener.local_addr().unwrap();
+        let (tx, rx) = mpsc::channel::<()>(4);
+        let subscription_id = r#"{"jsonrpc":"2.0","result":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","id":0}"#.to_string();
+        let subscription_response = format!(
+            r#"{{"jsonrpc":"2.0","method":"{}","params":{{"subscription":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","result":"{}"}}}}"#,
+            method,
+            result
+        );
+        tokio::spawn(server_backend(listener, rx, ServerMode::Subscription((subscription_id, subscription_response))));
 
         Self {
             local_addr,
@@ -109,7 +136,7 @@ impl WebSocketTestServer {
 async fn server_backend(
     listener: async_std::net::TcpListener,
     mut exit: Receiver<()>,
-    answer: String,
+    mode: ServerMode,
 ) {
     let mut connections = Vec::new();
 
@@ -122,7 +149,7 @@ async fn server_backend(
             future::Either::Left(_) => break,
             future::Either::Right((Ok((stream, _)), _)) => {
                 let (tx, rx) = mpsc::channel::<()>(4);
-                let handle = tokio::spawn(connection_task(stream, answer.clone(), rx));
+                let handle = tokio::spawn(connection_task(stream, mode.clone(), rx));
                 connections.push((handle, tx));
             }
             future::Either::Right((Err(_), _)) => {}
@@ -138,7 +165,7 @@ async fn server_backend(
 
 async fn connection_task(
     socket: async_std::net::TcpStream,
-    answer: String,
+    mode: ServerMode,
     mut exit: Receiver<()>,
 ) {
     let mut server = Server::new(socket);
@@ -172,19 +199,37 @@ async fn connection_task(
     futures::pin_mut!(ws_stream);
 
     loop {
-        let next_ws = ws_stream.next();
-        let next_exit = exit.next();
-        futures::pin_mut!(next_exit, next_ws);
+        let next_ws = ws_stream.next().fuse();
+        let next_exit = exit.next().fuse();
+        let time_out = tokio::time::delay_for(Duration::from_secs(1)).fuse();
+        futures::pin_mut!(time_out, next_exit, next_ws);
 
-        match future::select(next_exit, next_ws).await {
-            future::Either::Left(_) => break,
-            // don't care about the received data
-            future::Either::Right((Some(Ok(_)), _)) => {
-                let _ = sender.send_text(&answer).await.unwrap();
+        futures::select! {
+            subscription = time_out => {
+                if let ServerMode::Subscription((_, r)) = &mode {
+                    if let Err(e) = sender.send_text(&r).await {
+                        log::warn!("send response to subscription: {:?}", e);
+                    }
+                }
             }
-            future::Either::Right((e, _)) => {
-                log::warn!("server error: {:?}", e);
+            ws = next_ws => {
+                // we got a request on the connection but don't care about the content.
+                if let Some(Ok(_)) = ws {
+                    match &mode {
+                        ServerMode::Response(r) => {
+                            if let Err(e) = sender.send_text(&r).await {
+                                log::warn!("send response to request error: {:?}", e);
+                            }
+                        }
+                        ServerMode::Subscription((sub_id, sub_response)) => {
+                            if let Err(e) = sender.send_text(&sub_id).await {
+                                log::warn!("send subscription id error: {:?}", e);
+                            }
+                        }
+                    }
+                }
             }
+            exit = next_exit => break,
         }
     }
 }

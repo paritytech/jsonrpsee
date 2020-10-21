@@ -247,13 +247,15 @@ impl Server {
         );
         {
             let mut registered_methods = self.registered_methods.lock();
-            if registered_methods.contains(&subscribe_method_name)
-                || registered_methods.contains(&unsubscribe_method_name)
-            {
+            // optimized for that both method names are not equal
+            // and not already registrered.
+            if !registered_methods.insert(subscribe_method_name.clone()) {
                 return Err(());
             }
-            registered_methods.insert(subscribe_method_name.clone());
-            registered_methods.insert(unsubscribe_method_name.clone());
+            if !registered_methods.insert(unsubscribe_method_name.clone()) {
+                registered_methods.remove(&subscribe_method_name);
+                return Err(());
+            }
         }
 
         let unique_id = self
@@ -407,14 +409,20 @@ async fn background_task(
                 subscribe_methods.insert(subscribe_method, unique_id);
                 unsubscribe_methods.insert(unsubscribe_method, unique_id);
                 subscribed_clients.insert(unique_id, Vec::new());
+                log::trace!(
+                    "[backend]: active_subscriptions: {:?}",
+                    active_subscriptions
+                );
+                log::trace!("[backend]: subscribed_clients: {:?}", subscribed_clients);
             }
             Either::Left(Some(FrontToBack::SendOutNotif {
                 unique_id,
                 notification,
             })) => {
                 log::debug!(
-                    "[backend]: server preparing response to subscription={:?}",
-                    unique_id
+                    "[backend]: server preparing response to subscription={:?}, subscribed_clients={:?}",
+                    unique_id,
+                    subscribed_clients.len()
                 );
                 debug_assert!(subscribed_clients.contains_key(&unique_id));
                 if let Some(clients) = subscribed_clients.get(&unique_id) {
@@ -456,8 +464,8 @@ async fn background_task(
                 }
             }
             Either::Right(RawServerEvent::Request(request)) => {
-                log::debug!("[backend]: server received request: {:?}", request);
                 if let Some(handler) = registered_methods.get_mut(request.method()) {
+                    log::debug!("[backend]: server received request: {:?}", request);
                     let params: &common::Params = request.params().into();
                     log::debug!("server called handler");
                     match handler.send((request.id(), params.clone())).now_or_never() {
@@ -467,6 +475,7 @@ async fn background_task(
                         }
                     }
                 } else if let Some(sub_unique_id) = subscribe_methods.get(request.method()) {
+                    log::debug!("[backend]: server received subscription: {:?}", request);
                     if let Ok(sub_id) = request.into_subscription() {
                         debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
                         if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
@@ -478,26 +487,41 @@ async fn background_task(
                         active_subscriptions.insert(sub_id, *sub_unique_id);
                     }
                 } else if let Some(sub_unique_id) = unsubscribe_methods.get(request.method()) {
-                    if let Ok(sub_id) = RawServerSubscriptionId::from_wire_message(&JsonValue::Null)
-                    {
+                    log::debug!("[backend]: server received unsubscription: {:?}", request);
+                    let json_val: JsonValue = request.params().get(0).unwrap();
+                    log::debug!("[backend]: id parsed: {:?}", json_val);
+                    if let Ok(sub_id) = RawServerSubscriptionId::from_wire_message(&json_val) {
                         // FIXME: from request params
                         debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
+                        log::trace!("[backend]: subscribed_clients: {:?}", subscribed_clients);
                         if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
                             // TODO: we don't actually check whether the unsubscribe comes from the right
                             //       clients, but since this the ID is randomly-generated, it should be
                             //       fine
                             if let Some(client_pos) = clients.iter().position(|c| *c == sub_id) {
                                 clients.remove(client_pos);
+                                log::debug!(
+                                    "[backend]: server unsubscribe, removed={:?} from clients={:?}",
+                                    sub_id,
+                                    clients.len()
+                                );
                             }
+                        }
 
-                            if let Some(s_u_id) = active_subscriptions.remove(&sub_id) {
-                                debug_assert_eq!(s_u_id, *sub_unique_id);
-                            }
+                        if let Some(s_u_id) = active_subscriptions.remove(&sub_id) {
+                            log::debug!("[backend]: server unsubscribe removed={:?} from active subscriptions={:?}", sub_id, active_subscriptions.len());
+                            debug_assert_eq!(s_u_id, *sub_unique_id);
+                        } else {
+                            log::debug!("[backend]: server unsubscribe failed to remove id={:?} from active subscription", sub_id);
+                            log::trace!(
+                                "[backend]: active_subscriptions: {:?}",
+                                active_subscriptions
+                            );
                         }
                     }
                 } else {
-                    // TODO: we assert that the request is valid because the parsing succeeded but
-                    // not registered.
+                    // The request is valid (parsing succeeded) but not yet a registered
+                    // as a method or subscription.
                     request.respond(Err(From::from(common::ErrorCode::MethodNotFound)));
                 }
             }
@@ -505,19 +529,29 @@ async fn background_task(
                 // We don't really care whether subscriptions are now ready.
             }
             Either::Right(RawServerEvent::SubscriptionsClosed(subscriptions)) => {
-                log::debug!("[backend]: server close subscriptions: {:?}", subscriptions);
                 // Remove all the subscriptions from `active_subscriptions` and
                 // `subscribed_clients`.
                 for sub_id in subscriptions {
                     debug_assert!(active_subscriptions.contains_key(&sub_id));
                     if let Some(unique_id) = active_subscriptions.remove(&sub_id) {
+                        log::trace!("[backend]: server closed active subscription: {:?}", sub_id);
                         debug_assert!(subscribed_clients.contains_key(&unique_id));
                         if let Some(clients) = subscribed_clients.get_mut(&unique_id) {
                             assert_eq!(clients.iter().filter(|c| **c == sub_id).count(), 1);
                             clients.retain(|c| *c != sub_id);
                         }
+                    } else {
+                        log::trace!(
+                            "[backend]: server failed to close active subscription: {:?}",
+                            sub_id
+                        );
                     }
                 }
+                log::trace!(
+                    "[backend]: active_subscriptions: {:?}",
+                    active_subscriptions
+                );
+                log::trace!("[backend]: subscribed_clients: {:?}", subscribed_clients);
             }
         }
     }
