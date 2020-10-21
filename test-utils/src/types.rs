@@ -6,8 +6,8 @@ use futures::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use soketto::handshake;
 use soketto::handshake::{server::Response, Server};
-use std::time::Duration;
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, Tokio02AsyncReadCompatExt};
 
@@ -106,17 +106,26 @@ impl WebSocketTestServer {
         }
     }
 
-    pub async fn with_hardcoded_subscription(sockaddr: SocketAddr, method: String, result: String) -> Self {
+    pub async fn with_hardcoded_subscription(
+        sockaddr: SocketAddr,
+        method: String,
+        result: String,
+    ) -> Self {
         let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
         let local_addr = listener.local_addr().unwrap();
         let (tx, rx) = mpsc::channel::<()>(4);
-        let subscription_id = r#"{"jsonrpc":"2.0","result":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","id":0}"#.to_string();
+        let subscription_id =
+            r#"{"jsonrpc":"2.0","result":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","id":0}"#
+                .to_string();
         let subscription_response = format!(
             r#"{{"jsonrpc":"2.0","method":"{}","params":{{"subscription":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","result":"{}"}}}}"#,
-            method,
-            result
+            method, result
         );
-        tokio::spawn(server_backend(listener, rx, ServerMode::Subscription((subscription_id, subscription_response))));
+        tokio::spawn(server_backend(
+            listener,
+            rx,
+            ServerMode::Subscription((subscription_id, subscription_response)),
+        ));
 
         Self {
             local_addr,

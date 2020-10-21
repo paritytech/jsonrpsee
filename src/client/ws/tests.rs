@@ -33,8 +33,7 @@ async fn method_call_works() {
     .await;
     let uri = to_ws_uri_string(server.local_addr());
     let client = WsClient::new(&uri).await.unwrap();
-    let response: JsonValue =
-        client.request("say_hello", Params::None).await.unwrap();
+    let response: JsonValue = client.request("say_hello", Params::None).await.unwrap();
     let exp = JsonValue::String("hello".to_string());
     assert_eq!(response, exp);
 }
