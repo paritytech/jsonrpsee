@@ -464,7 +464,7 @@ impl RawClient {
     /// Processes the response obtained from the server. Updates the internal state of `self` to
     /// account for it.
     fn process_response(&mut self, response: common::Output) -> Result<(), RawClientError> {
-        log::debug!("received response: {:?}", response);
+        log::debug!("Received response: {:?}", response);
         let request_id = match response.id() {
             common::Id::Num(n) => RawClientRequestId(*n),
             common::Id::Str(s) => {
@@ -545,9 +545,11 @@ impl RawClient {
             }
 
             Some(v @ Request::ActiveSubscription { .. }) => {
+                // The request was removed above and should not be removed permantely.
+                // That's why it is inserted back.
                 self.requests.insert(request_id, v);
                 log::warn!(
-                    "Server responsed with an invalid request id: {:?}",
+                    "Server responded with an invalid request id: {:?}",
                     request_id
                 );
                 return Err(RawClientError::UnknownRequestId);
@@ -555,7 +557,7 @@ impl RawClient {
 
             None => {
                 log::warn!(
-                    "Server responsed with an invalid request id: {:?}",
+                    "Server responded with an invalid request id: {:?}",
                     request_id
                 );
                 return Err(RawClientError::UnknownRequestId);
