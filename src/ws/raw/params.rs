@@ -80,7 +80,7 @@ impl<'a> Params<'a> {
 }
 
 impl<'a> IntoIterator for Params<'a> {
-    type Item = (ParamKey<'a>, &'a common::JsonValue);
+    type Item = Entry<'a>;
     type IntoIter = Iter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -94,7 +94,7 @@ impl<'a> IntoIterator for Params<'a> {
 
 impl<'a> fmt::Debug for Params<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_map().entries(self.into_iter()).finish()
+        write!(f, "{:?}", self.params)
     }
 }
 
@@ -146,14 +146,22 @@ enum IterInner<'a> {
     Array(std::slice::Iter<'a, serde_json::Value>),
 }
 
+#[derive(Debug)]
+pub enum Entry<'a> {
+    Value(&'a common::JsonValue),
+    KeyValue(ParamKey<'a>, &'a common::JsonValue),
+}
+
 impl<'a> Iterator for Iter<'a> {
-    type Item = (ParamKey<'a>, &'a common::JsonValue);
+    type Item = Entry<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &mut self.0 {
             IterInner::Empty => None,
-            IterInner::Map(iter) => iter.next().map(|(k, v)| (ParamKey::String(&k[..]), v)),
-            IterInner::Array(iter) => iter.next().map(|v| (ParamKey::String(""), v)),
+            IterInner::Map(iter) => iter
+                .next()
+                .map(|(k, v)| Entry::KeyValue(ParamKey::String(&k[..]), v)),
+            IterInner::Array(iter) => iter.next().map(|v| Entry::Value(v)),
         }
     }
 
