@@ -697,7 +697,7 @@ impl<'a> RawClientActiveSubscription<'a> {
             _ => panic!(),
         };
 
-        let params = common::Params::Array(vec![sub_id.clone().into()]);
+        let params = common::Params::Array(vec![sub_id.into()]);
         self.client
             .start_impl(method_name, params, Request::Unsubscribe(self.id))
             .await
