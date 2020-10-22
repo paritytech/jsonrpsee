@@ -136,19 +136,23 @@ async fn close_server_on_pending_request() {
 
 #[tokio::test]
 async fn subscription_works() {
-    env_logger::init();
     let server = WebSocketTestServer::with_hardcoded_subscription(
         "127.0.0.1:0".parse().unwrap(),
-        "subscribe_hello".to_owned(),
-        "hello my friend".to_owned(),
+        server_subscription_id_response(Id::Num(0)),
+        server_subscription_response(JsonValue::String("hello my friend".to_owned())),
     )
     .await;
     let uri = to_ws_uri_string(server.local_addr());
     let client = WsClient::new(&uri).await.unwrap();
-    let mut sub: WsSubscription<String> = client
-        .subscribe("subscribe_hello", Params::None, "unsubscribe_hello")
-        .await
-        .unwrap();
-    let response: String = sub.next().await.into();
-    assert_eq!("hello my friend".to_owned(), response);
+    {
+        let mut sub: WsSubscription<String> = client
+            .subscribe("subscribe_hello", Params::None, "unsubscribe_hello")
+            .await
+            .unwrap();
+        let response: String = sub.next().await.into();
+        assert_eq!("hello my friend".to_owned(), response);
+
+    }
+    // Make sure that subscription has been dropped and `unsubscribe_hello` call succeeded.
+    std::thread::sleep(std::time::Duration::from_secs(1));
 }

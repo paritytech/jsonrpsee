@@ -1,5 +1,5 @@
 use futures::channel::mpsc::{self, Receiver, Sender};
-use futures::future::{self, FutureExt};
+use futures::future::FutureExt;
 use futures::io::{BufReader, BufWriter};
 use futures::sink::SinkExt;
 use futures::stream::{self, StreamExt};
@@ -94,6 +94,7 @@ pub struct WebSocketTestServer {
 }
 
 impl WebSocketTestServer {
+    // Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every connection.
     pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
         let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
         let local_addr = listener.local_addr().unwrap();
@@ -106,25 +107,21 @@ impl WebSocketTestServer {
         }
     }
 
+    // Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription response.
+    //
+    // NOTE: ignores the actual subscription and unsubscription method.
     pub async fn with_hardcoded_subscription(
         sockaddr: SocketAddr,
-        method: String,
-        result: String,
+        subscription_id_response: String,
+        subscription_response: String,
     ) -> Self {
         let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
         let local_addr = listener.local_addr().unwrap();
         let (tx, rx) = mpsc::channel::<()>(4);
-        let subscription_id =
-            r#"{"jsonrpc":"2.0","result":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","id":0}"#
-                .to_string();
-        let subscription_response = format!(
-            r#"{{"jsonrpc":"2.0","method":"{}","params":{{"subscription":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","result":"{}"}}}}"#,
-            method, result
-        );
         tokio::spawn(server_backend(
             listener,
             rx,
-            ServerMode::Subscription((subscription_id, subscription_response)),
+            ServerMode::Subscription((subscription_id_response, subscription_response)),
         ));
 
         Self {
@@ -150,24 +147,27 @@ async fn server_backend(
     let mut connections = Vec::new();
 
     loop {
-        let next_conn = listener.accept();
-        let next_exit = exit.next();
-        futures::pin_mut!(next_exit, next_conn);
+        let conn_fut = listener.accept().fuse();
+        let exit_fut = exit.next();
+        futures::pin_mut!(exit_fut, conn_fut);
 
-        match future::select(next_exit, next_conn).await {
-            future::Either::Left(_) => break,
-            future::Either::Right((Ok((stream, _)), _)) => {
-                let (tx, rx) = mpsc::channel::<()>(4);
-                let handle = tokio::spawn(connection_task(stream, mode.clone(), rx));
-                connections.push((handle, tx));
+        futures::select! {
+            exit = exit_fut => break,
+            conn = conn_fut => {
+                if let Ok((stream, _)) = conn {
+                    let (tx, rx) = mpsc::channel::<()>(4);
+                    let handle = tokio::spawn(connection_task(stream, mode.clone(), rx));
+                    connections.push((handle, tx));
+                }
             }
-            future::Either::Right((Err(_), _)) => {}
-        };
+        }
     }
 
     // close connections
     for (handle, mut exit) in connections {
-        exit.send(()).await.unwrap();
+        // If the actual connection was never established i.e., returned early
+        // It will most likely be caught on the client-side but just to explicit.
+        exit.send(()).await.expect("WebSocket connection was never established");
         handle.await.unwrap();
     }
 }
@@ -222,7 +222,8 @@ async fn connection_task(
                 }
             }
             ws = next_ws => {
-                // we got a request on the connection but don't care about the content.
+                // Got a request on the connection but don't care about the contents.
+                // Just send out the pre-configured hardcoded responses.
                 if let Some(Ok(_)) = ws {
                     match &mode {
                         ServerMode::Response(r) => {
