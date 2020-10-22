@@ -431,9 +431,9 @@ impl<'a> TryFrom<Params<'a>> for RawServerSubscriptionId {
 
     fn try_from(params: Params) -> Result<Self, Self::Error> {
         if let Ok(other_id) = params.get(0) {
-           Self::from_wire_message(&other_id)
+            Self::from_wire_message(&other_id)
         } else if let Ok(other_id) = params.get("subscription") {
-           Self::from_wire_message(&other_id)
+            Self::from_wire_message(&other_id)
         } else {
             Err(())
         }
