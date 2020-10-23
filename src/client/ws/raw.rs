@@ -76,56 +76,56 @@ use hashbrown::{hash_map::Entry, HashMap};
 ///
 /// See [the module root documentation](crate::client) for more information.
 pub struct RawClient {
-    /// Inner raw client.
-    inner: WsTransportClient,
+	/// Inner raw client.
+	inner: WsTransportClient,
 
-    /// Id to assign to the next request. We always assign linearly-increasing numeric keys.
-    next_request_id: RawClientRequestId,
+	/// Id to assign to the next request. We always assign linearly-increasing numeric keys.
+	next_request_id: RawClientRequestId,
 
-    /// List of requests and subscription requests that have been sent out and that are waiting
-    /// for a response.
-    requests: HashMap<RawClientRequestId, Request, fnv::FnvBuildHasher>,
+	/// List of requests and subscription requests that have been sent out and that are waiting
+	/// for a response.
+	requests: HashMap<RawClientRequestId, Request, fnv::FnvBuildHasher>,
 
-    /// List of active subscriptions by ID (ID is chosen by the server). Note that this doesn't
-    /// cover subscription requests that have been sent out but not answered yet, as these are in
-    /// the [`requests`](RawClient::requests) field.
-    ///
-    /// The value of this hash map is only ever used for external API purposes and not for
-    /// communication with the server.
-    ///
-    /// Since the keys are decided by the server, we use a regular HashMap and its
-    /// hash-collision-resistant algorithm.
-    subscriptions: HashMap<String, RawClientRequestId>,
+	/// List of active subscriptions by ID (ID is chosen by the server). Note that this doesn't
+	/// cover subscription requests that have been sent out but not answered yet, as these are in
+	/// the [`requests`](RawClient::requests) field.
+	///
+	/// The value of this hash map is only ever used for external API purposes and not for
+	/// communication with the server.
+	///
+	/// Since the keys are decided by the server, we use a regular HashMap and its
+	/// hash-collision-resistant algorithm.
+	subscriptions: HashMap<String, RawClientRequestId>,
 
-    /// Queue of pending events to return from [`RawClient::next_event`].
-    // TODO: call shrink_to from time to time; see https://github.com/rust-lang/rust/issues/56431
-    events_queue: VecDeque<RawClientEvent>,
+	/// Queue of pending events to return from [`RawClient::next_event`].
+	// TODO: call shrink_to from time to time; see https://github.com/rust-lang/rust/issues/56431
+	events_queue: VecDeque<RawClientEvent>,
 
-    /// Maximum allowed size of [`RawClient::events_queue`].
-    ///
-    /// If this size is reached, elements can still be pushed to the queue if they are critical,
-    /// but will be discarded if they are not.
-    // TODO: make this configurable? note: if this is configurable, it should always be >= 1
-    events_queue_max_size: usize,
+	/// Maximum allowed size of [`RawClient::events_queue`].
+	///
+	/// If this size is reached, elements can still be pushed to the queue if they are critical,
+	/// but will be discarded if they are not.
+	// TODO: make this configurable? note: if this is configurable, it should always be >= 1
+	events_queue_max_size: usize,
 }
 
 /// Type of request that has been sent out and that is waiting for a response.
 #[derive(Debug, PartialEq, Eq)]
 enum Request {
-    /// A single request expecting a response.
-    Request,
-    /// A potential subscription. As a response, we expect a single subscription id.
-    PendingSubscription,
-    /// The request is stale and was originally used to open a subscription. The subscription ID
-    /// decided by the server is contained as parameter.
-    ActiveSubscription {
-        sub_id: String,
-        /// We sent a subscription closing message to the server.
-        closing: bool,
-    },
-    /// Unsubscribing from an active subscription. The request corresponding to the active
-    /// subscription to unsubscribe from is contained as parameter.
-    Unsubscribe(RawClientRequestId),
+	/// A single request expecting a response.
+	Request,
+	/// A potential subscription. As a response, we expect a single subscription id.
+	PendingSubscription,
+	/// The request is stale and was originally used to open a subscription. The subscription ID
+	/// decided by the server is contained as parameter.
+	ActiveSubscription {
+		sub_id: String,
+		/// We sent a subscription closing message to the server.
+		closing: bool,
+	},
+	/// Unsubscribing from an active subscription. The request corresponding to the active
+	/// subscription to unsubscribe from is contained as parameter.
+	Unsubscribe(RawClientRequestId),
 }
 
 /// Unique identifier of a request within a [`RawClient`].
@@ -135,114 +135,114 @@ pub struct RawClientRequestId(u64);
 /// Event returned by [`RawClient::next_event`].
 #[derive(Debug)]
 pub enum RawClientEvent {
-    /// A request has received a response.
-    Response {
-        /// Identifier of the request. Can be matched with the value that [`RawClient::start_request`]
-        /// has returned.
-        request_id: RawClientRequestId,
-        /// The response itself.
-        result: Result<common::JsonValue, common::Error>,
-    },
+	/// A request has received a response.
+	Response {
+		/// Identifier of the request. Can be matched with the value that [`RawClient::start_request`]
+		/// has returned.
+		request_id: RawClientRequestId,
+		/// The response itself.
+		result: Result<common::JsonValue, common::Error>,
+	},
 
-    /// A subscription request has received a response.
-    SubscriptionResponse {
-        /// Identifier of the request. Can be matched with the value that
-        /// [`RawClient::start_subscription`] has returned.
-        request_id: RawClientRequestId,
-        /// On success, we are now actively subscribed.
-        /// [`SubscriptionNotif`](RawClientEvent::SubscriptionNotif) events will now be generated.
-        result: Result<(), common::Error>,
-    },
+	/// A subscription request has received a response.
+	SubscriptionResponse {
+		/// Identifier of the request. Can be matched with the value that
+		/// [`RawClient::start_subscription`] has returned.
+		request_id: RawClientRequestId,
+		/// On success, we are now actively subscribed.
+		/// [`SubscriptionNotif`](RawClientEvent::SubscriptionNotif) events will now be generated.
+		result: Result<(), common::Error>,
+	},
 
-    /// Notification about something we are subscribed to.
-    SubscriptionNotif {
-        /// Identifier of the request. Can be matched with the value that
-        /// [`RawClient::start_subscription`] has returned.
-        request_id: RawClientRequestId,
-        /// Opaque data that the server wants to communicate to us.
-        result: common::JsonValue,
-    },
+	/// Notification about something we are subscribed to.
+	SubscriptionNotif {
+		/// Identifier of the request. Can be matched with the value that
+		/// [`RawClient::start_subscription`] has returned.
+		request_id: RawClientRequestId,
+		/// Opaque data that the server wants to communicate to us.
+		result: common::JsonValue,
+	},
 
-    /// Finished closing a subscription.
-    Unsubscribed {
-        /// Subscription that has been closed.
-        request_id: RawClientRequestId,
-    },
+	/// Finished closing a subscription.
+	Unsubscribed {
+		/// Subscription that has been closed.
+		request_id: RawClientRequestId,
+	},
 }
 
 /// Access to a subscription within a [`RawClient`].
 #[derive(Debug)]
 pub enum RawClientSubscription<'a> {
-    /// The server hasn't accepted our subscription request yet.
-    Pending(RawClientPendingSubscription<'a>),
-    /// The server has accepted our subscription request. We might receive notifications for it.
-    Active(RawClientActiveSubscription<'a>),
+	/// The server hasn't accepted our subscription request yet.
+	Pending(RawClientPendingSubscription<'a>),
+	/// The server has accepted our subscription request. We might receive notifications for it.
+	Active(RawClientActiveSubscription<'a>),
 }
 
 /// Access to a subscription within a [`RawClient`].
 #[derive(Debug)]
 pub struct RawClientPendingSubscription<'a> {
-    /// Reference to the [`RawClient`].
-    client: &'a mut RawClient,
-    /// Identifier of the subscription within the [`RawClient`].
-    id: RawClientRequestId,
+	/// Reference to the [`RawClient`].
+	client: &'a mut RawClient,
+	/// Identifier of the subscription within the [`RawClient`].
+	id: RawClientRequestId,
 }
 
 /// Access to a subscription within a [`RawClient`].
 #[derive(Debug)]
 pub struct RawClientActiveSubscription<'a> {
-    /// Reference to the [`RawClient`].
-    client: &'a mut RawClient,
-    /// Identifier of the subscription within the [`RawClient`].
-    id: RawClientRequestId,
+	/// Reference to the [`RawClient`].
+	client: &'a mut RawClient,
+	/// Identifier of the subscription within the [`RawClient`].
+	id: RawClientRequestId,
 }
 
 /// Error that can happen during a request.
 #[derive(Debug)]
 pub enum RawClientError {
-    /// Error in the raw client.
-    Inner(WsConnectError),
-    /// RawServer returned an error for our request.
-    RequestError(common::Error),
-    /// RawServer has sent back a subscription ID that has already been used by an earlier
-    /// subscription.
-    DuplicateSubscriptionId,
-    /// Failed to parse subscription ID send by server.
-    ///
-    /// On a successful subscription, the server is expected to send back a single number or
-    /// string representing the ID of the subscription. This error happens if the server returns
-    /// something else than a number or string.
-    SubscriptionIdParseError,
-    /// RawServer has sent back a response containing an unknown request ID.
-    UnknownRequestId,
-    /// RawServer has sent back a response containing a null request ID.
-    NullRequestId,
-    /// RawServer has sent back a notification using an unknown subscription ID.
-    UnknownSubscriptionId,
+	/// Error in the raw client.
+	Inner(WsConnectError),
+	/// RawServer returned an error for our request.
+	RequestError(common::Error),
+	/// RawServer has sent back a subscription ID that has already been used by an earlier
+	/// subscription.
+	DuplicateSubscriptionId,
+	/// Failed to parse subscription ID send by server.
+	///
+	/// On a successful subscription, the server is expected to send back a single number or
+	/// string representing the ID of the subscription. This error happens if the server returns
+	/// something else than a number or string.
+	SubscriptionIdParseError,
+	/// RawServer has sent back a response containing an unknown request ID.
+	UnknownRequestId,
+	/// RawServer has sent back a response containing a null request ID.
+	NullRequestId,
+	/// RawServer has sent back a notification using an unknown subscription ID.
+	UnknownSubscriptionId,
 }
 
 /// Error that can happen when attempting to close a subscription.
 #[derive(Debug)]
 pub enum CloseError {
-    /// Error in the raw client.
-    TransportClient(WsConnectError),
+	/// Error in the raw client.
+	TransportClient(WsConnectError),
 
-    /// We are already trying to close this subscription.
-    AlreadyClosing,
+	/// We are already trying to close this subscription.
+	AlreadyClosing,
 }
 
 impl RawClient {
-    /// Initializes a new `RawClient` using the given raw client as backend.
-    pub fn new(inner: WsTransportClient) -> Self {
-        RawClient {
-            inner,
-            next_request_id: RawClientRequestId(0),
-            requests: HashMap::default(),
-            subscriptions: HashMap::default(),
-            events_queue: VecDeque::with_capacity(16),
-            events_queue_max_size: 64,
-        }
-    }
+	/// Initializes a new `RawClient` using the given raw client as backend.
+	pub fn new(inner: WsTransportClient) -> Self {
+		RawClient {
+			inner,
+			next_request_id: RawClientRequestId(0),
+			requests: HashMap::default(),
+			subscriptions: HashMap::default(),
+			events_queue: VecDeque::with_capacity(16),
+			events_queue_max_size: 64,
+		}
+	}
 }
 
 impl RawClient {
@@ -569,203 +569,191 @@ impl RawClient {
 }
 
 impl fmt::Debug for RawClient {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("RawClient")
-            .field("inner", &self.inner)
-            .field("pending_requests", &self.requests.keys())
-            .field("active_subscriptions", &self.subscriptions.keys())
-            .finish()
-    }
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.debug_struct("RawClient")
+			.field("inner", &self.inner)
+			.field("pending_requests", &self.requests.keys())
+			.field("active_subscriptions", &self.subscriptions.keys())
+			.finish()
+	}
 }
 
 impl<'a> RawClientSubscription<'a> {
-    /// Returns true if the subscription is active. That is, if the server has accepted our
-    /// subscription request and might generate events.
-    pub fn is_active(&self) -> bool {
-        match self {
-            RawClientSubscription::Pending(_) => false,
-            RawClientSubscription::Active(_) => true,
-        }
-    }
+	/// Returns true if the subscription is active. That is, if the server has accepted our
+	/// subscription request and might generate events.
+	pub fn is_active(&self) -> bool {
+		match self {
+			RawClientSubscription::Pending(_) => false,
+			RawClientSubscription::Active(_) => true,
+		}
+	}
 
-    /// If this subscription is active, returns the [`RawClientActiveSubscription`].
-    pub fn into_active(self) -> Option<RawClientActiveSubscription<'a>> {
-        match self {
-            RawClientSubscription::Pending(_) => None,
-            RawClientSubscription::Active(s) => Some(s),
-        }
-    }
+	/// If this subscription is active, returns the [`RawClientActiveSubscription`].
+	pub fn into_active(self) -> Option<RawClientActiveSubscription<'a>> {
+		match self {
+			RawClientSubscription::Pending(_) => None,
+			RawClientSubscription::Active(s) => Some(s),
+		}
+	}
 }
 
 impl<'a> RawClientPendingSubscription<'a> {
-    // TODO: since this is the only method, maybe we could replace `RawClientPendingSubscription`
-    //       with an `impl Future` once the `impl Trait` feature is stabilized
-    /// Wait until the server sends back an answer to this subscription request.
-    ///
-    /// > **Note**: While this function is waiting, all the other responses and pubsub events
-    /// >           returned by the server will be buffered up to a certain limit. Once this
-    /// >           limit is reached, server notifications will be discarded. If you want to be
-    /// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
-    /// >           instead.
-    pub async fn wait(self) -> Result<RawClientActiveSubscription<'a>, RawClientError> {
-        let mut events_queue_loopkup = 0;
+	// TODO: since this is the only method, maybe we could replace `RawClientPendingSubscription`
+	//       with an `impl Future` once the `impl Trait` feature is stabilized
+	/// Wait until the server sends back an answer to this subscription request.
+	///
+	/// > **Note**: While this function is waiting, all the other responses and pubsub events
+	/// >           returned by the server will be buffered up to a certain limit. Once this
+	/// >           limit is reached, server notifications will be discarded. If you want to be
+	/// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
+	/// >           instead.
+	pub async fn wait(self) -> Result<RawClientActiveSubscription<'a>, RawClientError> {
+		let mut events_queue_loopkup = 0;
 
-        loop {
-            while events_queue_loopkup < self.client.events_queue.len() {
-                match &self.client.events_queue[events_queue_loopkup] {
-                    RawClientEvent::SubscriptionResponse { request_id, .. }
-                        if *request_id == self.id =>
-                    {
-                        return match self.client.events_queue.remove(events_queue_loopkup) {
-                            Some(RawClientEvent::SubscriptionResponse {
-                                result: Ok(()), ..
-                            }) => Ok(RawClientActiveSubscription {
-                                client: self.client,
-                                id: self.id,
-                            }),
-                            Some(RawClientEvent::SubscriptionResponse {
-                                result: Err(err), ..
-                            }) => Err(RawClientError::RequestError(err)),
-                            _ => unreachable!(),
-                        }
-                    }
-                    _ => {}
-                }
+		loop {
+			while events_queue_loopkup < self.client.events_queue.len() {
+				match &self.client.events_queue[events_queue_loopkup] {
+					RawClientEvent::SubscriptionResponse { request_id, .. } if *request_id == self.id => {
+						return match self.client.events_queue.remove(events_queue_loopkup) {
+							Some(RawClientEvent::SubscriptionResponse { result: Ok(()), .. }) => {
+								Ok(RawClientActiveSubscription { client: self.client, id: self.id })
+							}
+							Some(RawClientEvent::SubscriptionResponse { result: Err(err), .. }) => {
+								Err(RawClientError::RequestError(err))
+							}
+							_ => unreachable!(),
+						}
+					}
+					_ => {}
+				}
 
-                events_queue_loopkup += 1;
-            }
+				events_queue_loopkup += 1;
+			}
 
-            self.client.event_step().await?;
-        }
-    }
+			self.client.event_step().await?;
+		}
+	}
 }
 
 impl<'a> RawClientActiveSubscription<'a> {
-    /// Returns a `Future` that resolves when the server sends back a notification for this
-    /// subscription.
-    ///
-    /// > **Note**: While this function is waiting, all the other responses and pubsub events
-    /// >           returned by the server will be buffered up to a certain limit. Once this
-    /// >           limit is reached, server notifications will be discarded. If you want to be
-    /// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
-    /// >           instead.
-    pub async fn next_notification(&mut self) -> Result<common::JsonValue, RawClientError> {
-        let mut events_queue_loopkup = 0;
+	/// Returns a `Future` that resolves when the server sends back a notification for this
+	/// subscription.
+	///
+	/// > **Note**: While this function is waiting, all the other responses and pubsub events
+	/// >           returned by the server will be buffered up to a certain limit. Once this
+	/// >           limit is reached, server notifications will be discarded. If you want to be
+	/// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
+	/// >           instead.
+	pub async fn next_notification(&mut self) -> Result<common::JsonValue, RawClientError> {
+		let mut events_queue_loopkup = 0;
 
-        loop {
-            while events_queue_loopkup < self.client.events_queue.len() {
-                match &self.client.events_queue[events_queue_loopkup] {
-                    RawClientEvent::SubscriptionNotif { request_id, .. }
-                        if *request_id == self.id =>
-                    {
-                        return match self.client.events_queue.remove(events_queue_loopkup) {
-                            Some(RawClientEvent::SubscriptionNotif { result, .. }) => Ok(result),
-                            _ => unreachable!(),
-                        }
-                    }
-                    _ => {}
-                }
+		loop {
+			while events_queue_loopkup < self.client.events_queue.len() {
+				match &self.client.events_queue[events_queue_loopkup] {
+					RawClientEvent::SubscriptionNotif { request_id, .. } if *request_id == self.id => {
+						return match self.client.events_queue.remove(events_queue_loopkup) {
+							Some(RawClientEvent::SubscriptionNotif { result, .. }) => Ok(result),
+							_ => unreachable!(),
+						}
+					}
+					_ => {}
+				}
 
-                events_queue_loopkup += 1;
-            }
+				events_queue_loopkup += 1;
+			}
 
-            self.client.event_step().await?;
-        }
-    }
+			self.client.event_step().await?;
+		}
+	}
 
-    /// Returns `true` if we called [`close`](RawClientActiveSubscription::close) earlier on this
-    /// subscription and we are waiting for the server to respond to our close request.
-    pub fn is_closing(&self) -> bool {
-        match self.client.requests.get(&self.id) {
-            Some(Request::ActiveSubscription { closing, .. }) => *closing,
-            _ => panic!(),
-        }
-    }
+	/// Returns `true` if we called [`close`](RawClientActiveSubscription::close) earlier on this
+	/// subscription and we are waiting for the server to respond to our close request.
+	pub fn is_closing(&self) -> bool {
+		match self.client.requests.get(&self.id) {
+			Some(Request::ActiveSubscription { closing, .. }) => *closing,
+			_ => panic!(),
+		}
+	}
 
-    /// Starts closing an open subscription by performing an RPC call with the given method name.
-    ///
-    /// Calling this method multiple times with the same subscription will yield an error.
-    ///
-    /// Note that, for convenience, we will consider the subscription closed even the server
-    /// returns an error to the unsubscription request.
-    pub async fn close(&mut self, method_name: impl Into<String>) -> Result<(), CloseError> {
-        let sub_id = match self.client.requests.get(&self.id) {
-            Some(Request::ActiveSubscription { sub_id, closing }) => {
-                if *closing {
-                    return Err(CloseError::AlreadyClosing);
-                }
-                sub_id.clone()
-            }
-            _ => panic!(),
-        };
+	/// Starts closing an open subscription by performing an RPC call with the given method name.
+	///
+	/// Calling this method multiple times with the same subscription will yield an error.
+	///
+	/// Note that, for convenience, we will consider the subscription closed even the server
+	/// returns an error to the unsubscription request.
+	pub async fn close(&mut self, method_name: impl Into<String>) -> Result<(), CloseError> {
+		let sub_id = match self.client.requests.get(&self.id) {
+			Some(Request::ActiveSubscription { sub_id, closing }) => {
+				if *closing {
+					return Err(CloseError::AlreadyClosing);
+				}
+				sub_id.clone()
+			}
+			_ => panic!(),
+		};
 
-        let params = common::Params::Array(vec![sub_id.clone().into()]);
-        self.client
-            .start_impl(method_name, params, Request::Unsubscribe(self.id))
-            .await
-            .map_err(CloseError::TransportClient)?;
+		let params = common::Params::Array(vec![sub_id.clone().into()]);
+		self.client
+			.start_impl(method_name, params, Request::Unsubscribe(self.id))
+			.await
+			.map_err(CloseError::TransportClient)?;
 
-        match self.client.requests.get_mut(&self.id) {
-            Some(Request::ActiveSubscription { closing, .. }) => {
-                debug_assert!(!*closing);
-                *closing = true;
-            }
-            _ => panic!(),
-        };
+		match self.client.requests.get_mut(&self.id) {
+			Some(Request::ActiveSubscription { closing, .. }) => {
+				debug_assert!(!*closing);
+				*closing = true;
+			}
+			_ => panic!(),
+		};
 
-        Ok(())
-    }
+		Ok(())
+	}
 }
 
 impl std::error::Error for RawClientError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            RawClientError::Inner(ref err) => Some(err),
-            RawClientError::RequestError(ref err) => Some(err),
-            RawClientError::DuplicateSubscriptionId => None,
-            RawClientError::SubscriptionIdParseError => None,
-            RawClientError::UnknownRequestId => None,
-            RawClientError::NullRequestId => None,
-            RawClientError::UnknownSubscriptionId => None,
-        }
-    }
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			RawClientError::Inner(ref err) => Some(err),
+			RawClientError::RequestError(ref err) => Some(err),
+			RawClientError::DuplicateSubscriptionId => None,
+			RawClientError::SubscriptionIdParseError => None,
+			RawClientError::UnknownRequestId => None,
+			RawClientError::NullRequestId => None,
+			RawClientError::UnknownSubscriptionId => None,
+		}
+	}
 }
 
 impl fmt::Display for RawClientError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            RawClientError::Inner(ref err) => write!(f, "Error in the raw client: {}", err),
-            RawClientError::RequestError(ref err) => write!(f, "Server returned error: {}", err),
-            RawClientError::DuplicateSubscriptionId => write!(
-                f,
-                "Server has responded with a subscription ID that's already in use"
-            ),
-            RawClientError::SubscriptionIdParseError => write!(f, "Subscription ID parse error"),
-            RawClientError::UnknownRequestId => {
-                write!(f, "Server responded with an unknown request ID")
-            }
-            RawClientError::NullRequestId => write!(f, "Server responded with a null request ID"),
-            RawClientError::UnknownSubscriptionId => {
-                write!(f, "Server responded with an unknown subscription ID")
-            }
-        }
-    }
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			RawClientError::Inner(ref err) => write!(f, "Error in the raw client: {}", err),
+			RawClientError::RequestError(ref err) => write!(f, "Server returned error: {}", err),
+			RawClientError::DuplicateSubscriptionId => {
+				write!(f, "Server has responded with a subscription ID that's already in use")
+			}
+			RawClientError::SubscriptionIdParseError => write!(f, "Subscription ID parse error"),
+			RawClientError::UnknownRequestId => write!(f, "Server responded with an unknown request ID"),
+			RawClientError::NullRequestId => write!(f, "Server responded with a null request ID"),
+			RawClientError::UnknownSubscriptionId => write!(f, "Server responded with an unknown subscription ID"),
+		}
+	}
 }
 
 impl std::error::Error for CloseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            CloseError::TransportClient(err) => Some(err),
-            CloseError::AlreadyClosing => None,
-        }
-    }
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			CloseError::TransportClient(err) => Some(err),
+			CloseError::AlreadyClosing => None,
+		}
+	}
 }
 
 impl fmt::Display for CloseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            CloseError::TransportClient(err) => fmt::Display::fmt(err, f),
-            CloseError::AlreadyClosing => write!(f, "Subscription already being closed"),
-        }
-    }
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			CloseError::TransportClient(err) => fmt::Display::fmt(err, f),
+			CloseError::AlreadyClosing => write!(f, "Subscription already being closed"),
+		}
+	}
 }
