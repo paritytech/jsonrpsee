@@ -79,7 +79,6 @@ impl From<Params> for JsonValue {
 mod tests {
 	use super::Params;
 	use crate::common::{Error, ErrorCode, JsonValue};
-	use serde_json;
 
 	#[test]
 	fn params_deserialization() {

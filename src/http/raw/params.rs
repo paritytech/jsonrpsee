@@ -30,7 +30,7 @@ use alloc::string::String;
 use core::fmt;
 
 /// Access to the parameters of a request.
-#[derive(Copy, Clone)]
+#[derive(Copy, Debug, Clone)]
 pub struct Params<'a> {
 	/// Raw parameters of the request.
 	params: &'a common::Params,
@@ -80,7 +80,7 @@ impl<'a> Params<'a> {
 }
 
 impl<'a> IntoIterator for Params<'a> {
-	type Item = (ParamKey<'a>, &'a common::JsonValue);
+	type Item = Entry<'a>;
 	type IntoIter = Iter<'a>;
 
 	fn into_iter(self) -> Self::IntoIter {
@@ -89,12 +89,6 @@ impl<'a> IntoIterator for Params<'a> {
 			common::Params::Array(arr) => IterInner::Array(arr.iter()),
 			common::Params::Map(map) => IterInner::Map(map.iter()),
 		})
-	}
-}
-
-impl<'a> fmt::Debug for Params<'a> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_map().entries(self.into_iter()).finish()
 	}
 }
 
@@ -146,14 +140,20 @@ enum IterInner<'a> {
 	Array(std::slice::Iter<'a, serde_json::Value>),
 }
 
+#[derive(Debug)]
+pub enum Entry<'a> {
+	Value(&'a common::JsonValue),
+	KeyValue(ParamKey<'a>, &'a common::JsonValue),
+}
+
 impl<'a> Iterator for Iter<'a> {
-	type Item = (ParamKey<'a>, &'a common::JsonValue);
+	type Item = Entry<'a>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		match &mut self.0 {
 			IterInner::Empty => None,
-			IterInner::Map(iter) => iter.next().map(|(k, v)| (ParamKey::String(&k[..]), v)),
-			IterInner::Array(iter) => iter.next().map(|v| (ParamKey::String(""), v)),
+			IterInner::Map(iter) => iter.next().map(|(k, v)| Entry::KeyValue(ParamKey::String(&k[..]), v)),
+			IterInner::Array(iter) => iter.next().map(|v| Entry::Value(v)),
 		}
 	}
 
