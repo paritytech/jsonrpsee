@@ -27,8 +27,8 @@
 //! Convenience wrapper for a stream (AsyncRead + AsyncWrite) which can either be plain TCP or TLS.
 
 use futures::{
-    io::{IoSlice, IoSliceMut},
-    prelude::*,
+	io::{IoSlice, IoSliceMut},
+	prelude::*,
 };
 use pin_project::pin_project;
 use std::{io::Error as IoError, pin::Pin, task::Context, task::Poll};
@@ -36,78 +36,66 @@ use std::{io::Error as IoError, pin::Pin, task::Context, task::Poll};
 #[pin_project(project = EitherStreamProj)]
 #[derive(Debug, Copy, Clone)]
 pub enum EitherStream<S, T> {
-    /// Unencrypted socket stream.
-    Plain(#[pin] S),
-    /// Encrypted socket stream.
-    Tls(#[pin] T),
+	/// Unencrypted socket stream.
+	Plain(#[pin] S),
+	/// Encrypted socket stream.
+	Tls(#[pin] T),
 }
 
 impl<S, T> AsyncRead for EitherStream<S, T>
 where
-    S: AsyncRead,
-    T: AsyncRead,
+	S: AsyncRead,
+	T: AsyncRead,
 {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize, IoError>> {
-        match self.project() {
-            EitherStreamProj::Plain(s) => AsyncRead::poll_read(s, cx, buf),
-            EitherStreamProj::Tls(t) => AsyncRead::poll_read(t, cx, buf),
-        }
-    }
+	fn poll_read(self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]) -> Poll<Result<usize, IoError>> {
+		match self.project() {
+			EitherStreamProj::Plain(s) => AsyncRead::poll_read(s, cx, buf),
+			EitherStreamProj::Tls(t) => AsyncRead::poll_read(t, cx, buf),
+		}
+	}
 
-    fn poll_read_vectored(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        bufs: &mut [IoSliceMut],
-    ) -> Poll<Result<usize, IoError>> {
-        match self.project() {
-            EitherStreamProj::Plain(s) => AsyncRead::poll_read_vectored(s, cx, bufs),
-            EitherStreamProj::Tls(t) => AsyncRead::poll_read_vectored(t, cx, bufs),
-        }
-    }
+	fn poll_read_vectored(
+		self: Pin<&mut Self>,
+		cx: &mut Context,
+		bufs: &mut [IoSliceMut],
+	) -> Poll<Result<usize, IoError>> {
+		match self.project() {
+			EitherStreamProj::Plain(s) => AsyncRead::poll_read_vectored(s, cx, bufs),
+			EitherStreamProj::Tls(t) => AsyncRead::poll_read_vectored(t, cx, bufs),
+		}
+	}
 }
 
 impl<S, T> AsyncWrite for EitherStream<S, T>
 where
-    S: AsyncWrite,
-    T: AsyncWrite,
+	S: AsyncWrite,
+	T: AsyncWrite,
 {
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        buf: &[u8],
-    ) -> Poll<Result<usize, IoError>> {
-        match self.project() {
-            EitherStreamProj::Plain(s) => AsyncWrite::poll_write(s, cx, buf),
-            EitherStreamProj::Tls(t) => AsyncWrite::poll_write(t, cx, buf),
-        }
-    }
+	fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<Result<usize, IoError>> {
+		match self.project() {
+			EitherStreamProj::Plain(s) => AsyncWrite::poll_write(s, cx, buf),
+			EitherStreamProj::Tls(t) => AsyncWrite::poll_write(t, cx, buf),
+		}
+	}
 
-    fn poll_write_vectored(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        bufs: &[IoSlice],
-    ) -> Poll<Result<usize, IoError>> {
-        match self.project() {
-            EitherStreamProj::Plain(s) => AsyncWrite::poll_write_vectored(s, cx, bufs),
-            EitherStreamProj::Tls(t) => AsyncWrite::poll_write_vectored(t, cx, bufs),
-        }
-    }
+	fn poll_write_vectored(self: Pin<&mut Self>, cx: &mut Context, bufs: &[IoSlice]) -> Poll<Result<usize, IoError>> {
+		match self.project() {
+			EitherStreamProj::Plain(s) => AsyncWrite::poll_write_vectored(s, cx, bufs),
+			EitherStreamProj::Tls(t) => AsyncWrite::poll_write_vectored(t, cx, bufs),
+		}
+	}
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), IoError>> {
-        match self.project() {
-            EitherStreamProj::Plain(s) => AsyncWrite::poll_flush(s, cx),
-            EitherStreamProj::Tls(t) => AsyncWrite::poll_flush(t, cx),
-        }
-    }
+	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), IoError>> {
+		match self.project() {
+			EitherStreamProj::Plain(s) => AsyncWrite::poll_flush(s, cx),
+			EitherStreamProj::Tls(t) => AsyncWrite::poll_flush(t, cx),
+		}
+	}
 
-    fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), IoError>> {
-        match self.project() {
-            EitherStreamProj::Plain(s) => AsyncWrite::poll_close(s, cx),
-            EitherStreamProj::Tls(t) => AsyncWrite::poll_close(t, cx),
-        }
-    }
+	fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), IoError>> {
+		match self.project() {
+			EitherStreamProj::Plain(s) => AsyncWrite::poll_close(s, cx),
+			EitherStreamProj::Tls(t) => AsyncWrite::poll_close(t, cx),
+		}
+	}
 }
