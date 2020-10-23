@@ -31,6 +31,7 @@ use crate::ws::transport::{TransportServerEvent, WsRequestId as RequestId, WsTra
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
 use core::{fmt, hash::Hash, num::NonZeroUsize};
 use hashbrown::{hash_map::Entry, HashMap};
+use std::convert::TryFrom;
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
@@ -396,6 +397,22 @@ impl RawServerSubscriptionId {
 		out[(32 - decoded.len())..].copy_from_slice(&decoded);
 		// TODO: write a test to check that encoding/decoding match
 		Ok(RawServerSubscriptionId(out))
+	}
+}
+
+// Try to parse a subscription ID from `Params` where we try both index 0 of an array or `subscription`
+// in a `Map`.
+impl<'a> TryFrom<Params<'a>> for RawServerSubscriptionId {
+	type Error = ();
+
+	fn try_from(params: Params) -> Result<Self, Self::Error> {
+		if let Ok(other_id) = params.get(0) {
+			Self::from_wire_message(&other_id)
+		} else if let Ok(other_id) = params.get("subscription") {
+			Self::from_wire_message(&other_id)
+		} else {
+			Err(())
+		}
 	}
 }
 
