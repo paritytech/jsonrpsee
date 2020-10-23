@@ -30,7 +30,7 @@ use alloc::string::String;
 use core::fmt;
 
 /// Access to the parameters of a request.
-#[derive(Copy, Clone)]
+#[derive(Copy, Debug, Clone)]
 pub struct Params<'a> {
     /// Raw parameters of the request.
     params: &'a common::Params,
@@ -89,12 +89,6 @@ impl<'a> IntoIterator for Params<'a> {
             common::Params::Array(arr) => IterInner::Array(arr.iter()),
             common::Params::Map(map) => IterInner::Map(map.iter()),
         })
-    }
-}
-
-impl<'a> fmt::Debug for Params<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.params)
     }
 }
 
