@@ -35,28 +35,28 @@ const SERVER_URI: &str = "ws://localhost:9944";
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+	env_logger::init();
 
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    let _server = task::spawn(async move {
-        run_server(server_started_tx, SOCK_ADDR).await;
-    });
+	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
+	let _server = task::spawn(async move {
+		run_server(server_started_tx, SOCK_ADDR).await;
+	});
 
-    server_started_rx.await?;
-    let client = WsClient::new(SERVER_URI).await?;
-    let response: JsonValue = client.request("say_hello", Params::None).await?;
-    println!("r: {:?}", response);
+	server_started_rx.await?;
+	let client = WsClient::new(SERVER_URI).await?;
+	let response: JsonValue = client.request("say_hello", Params::None).await?;
+	println!("r: {:?}", response);
 
-    Ok(())
+	Ok(())
 }
 
 async fn run_server(server_started_tx: Sender<()>, url: &str) {
-    let server = WsServer::new(url).await.unwrap();
-    let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
+	let server = WsServer::new(url).await.unwrap();
+	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
 
-    server_started_tx.send(()).unwrap();
-    loop {
-        let r = say_hello.next().await;
-        r.respond(Ok(JsonValue::String("lo".to_owned()))).await;
-    }
+	server_started_tx.send(()).unwrap();
+	loop {
+		let r = say_hello.next().await;
+		r.respond(Ok(JsonValue::String("lo".to_owned()))).await;
+	}
 }

@@ -36,43 +36,36 @@ const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::init();
+	env_logger::init();
 
-    let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-    let _server = task::spawn(async move {
-        run_server(server_started_tx, SOCK_ADDR).await;
-    });
+	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
+	let _server = task::spawn(async move {
+		run_server(server_started_tx, SOCK_ADDR).await;
+	});
 
-    server_started_rx.await?;
-    let client = WsClient::new(SERVER_URI).await?;
-    let mut subscribe_hello: WsSubscription<JsonValue> = client
-        .subscribe("subscribe_hello", Params::None, "unsubscribe_hello")
-        .await?;
+	server_started_rx.await?;
+	let client = WsClient::new(SERVER_URI).await?;
+	let mut subscribe_hello: WsSubscription<JsonValue> =
+		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await?;
 
-    let mut i = 0;
-    while i <= NUM_SUBSCRIPTION_RESPONSES {
-        let r = subscribe_hello.next().await;
-        log::debug!("received {:?}", r);
-        i += 1;
-    }
+	let mut i = 0;
+	while i <= NUM_SUBSCRIPTION_RESPONSES {
+		let r = subscribe_hello.next().await;
+		log::debug!("received {:?}", r);
+		i += 1;
+	}
 
-    Ok(())
+	Ok(())
 }
 
 async fn run_server(server_started_tx: Sender<()>, url: &str) {
-    let server = WsServer::new(url).await.unwrap();
-    let mut subscription = server
-        .register_subscription(
-            "subscribe_hello".to_string(),
-            "unsubscribe_hello".to_string(),
-        )
-        .unwrap();
+	let server = WsServer::new(url).await.unwrap();
+	let mut subscription =
+		server.register_subscription("subscribe_hello".to_string(), "unsubscribe_hello".to_string()).unwrap();
 
-    server_started_tx.send(()).unwrap();
-    loop {
-        subscription
-            .send(JsonValue::String("hello my friend".to_owned()))
-            .await;
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
+	server_started_tx.send(()).unwrap();
+	loop {
+		subscription.send(JsonValue::String("hello my friend".to_owned())).await;
+		std::thread::sleep(std::time::Duration::from_secs(1));
+	}
 }
