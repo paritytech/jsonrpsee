@@ -236,13 +236,17 @@ impl Server {
 		);
 		{
 			let mut registered_methods = self.registered_methods.lock();
-			if registered_methods.contains(&subscribe_method_name)
-				|| registered_methods.contains(&unsubscribe_method_name)
-			{
+
+			// NOTE: optimized for that both methods are not registered
+			// For example if the strings are equal this will be slower than just comparing the
+			// strings.
+			if !registered_methods.insert(subscribe_method_name.clone()) {
 				return Err(());
 			}
-			registered_methods.insert(subscribe_method_name.clone());
-			registered_methods.insert(unsubscribe_method_name.clone());
+			if !registered_methods.insert(unsubscribe_method_name.clone()) {
+				registered_methods.remove(&subscribe_method_name);
+				return Err(());
+			}
 		}
 
 		let unique_id = self.next_subscription_unique_id.fetch_add(1, atomic::Ordering::Relaxed);
