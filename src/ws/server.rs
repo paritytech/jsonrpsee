@@ -237,8 +237,8 @@ impl Server {
 		{
 			let mut registered_methods = self.registered_methods.lock();
 
-			// NOTE: optimized for that both methods are not registered
-			// For example if the strings are equal this will be slower than just comparing the
+			// NOTE: We optimise for the case where neither method is registered.
+			// This means that if the strings are equal this will be slower than just comparing the
 			// strings.
 			if !registered_methods.insert(subscribe_method_name.clone()) {
 				return Err(());
