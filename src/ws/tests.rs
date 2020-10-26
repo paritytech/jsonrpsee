@@ -230,6 +230,12 @@ async fn register_methods_works() {
 }
 
 #[tokio::test]
+async fn register_same_subscribe_unsubscribe_is_err() {
+	let server = WsServer::new("127.0.0.1:0").await.unwrap();
+	matches!(server.register_subscription("subscribe_hello".to_owned(), "subscribe_hello".to_owned()), Err(()));
+}
+
+#[tokio::test]
 async fn parse_error_request_should_not_close_connection() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
 	tokio::spawn(server(server_started_tx));
