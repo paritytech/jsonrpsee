@@ -58,7 +58,7 @@ pub struct Subscription<Notif> {
 
 /// Error produced by [`Client::request`] and [`Client::subscribe`].
 #[derive(Debug, thiserror::Error)]
-pub enum RequestError {
+pub enum Error {
 	/// Networking error or error on the low-level protocol layer (e.g. missing field,
 	/// invalid ID, etc.).
 	#[error("Networking or low-level protocol error: {0}")]
@@ -66,6 +66,12 @@ pub enum RequestError {
 	/// RawServer responded to our request with an error.
 	#[error("Server responded to our request with an error: {0:?}")]
 	Request(#[source] common::Error),
+	/// Subscription and unsubscription methods are the same.
+	#[error("Subscription error, subscribe_method={0}, unsubscribe_method={1}")]
+	SubscriptionMethod(String, String),
+	/// Frontend/backend channel error.
+	#[error("Frontend/backend channel error: {0}")]
+	InternalChannel(#[from] futures::channel::mpsc::SendError),
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] common::ParseError),
@@ -88,7 +94,7 @@ enum FrontToBack {
 		/// Parameters of the request.
 		params: common::Params,
 		/// One-shot channel where to send back the outcome of that request.
-		send_back: oneshot::Sender<Result<JsonValue, RequestError>>,
+		send_back: oneshot::Sender<Result<JsonValue, Error>>,
 	},
 
 	/// Send a subscription request to the server.
@@ -102,7 +108,7 @@ enum FrontToBack {
 		/// When we get a response from the server about that subscription, we send the result on
 		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
 		/// notifications.
-		send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, RequestError>>,
+		send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, Error>>,
 	},
 
 	/// When a request or subscription channel is closed, we send this message to the background
@@ -117,9 +123,10 @@ enum FrontToBack {
 impl Client {
 	/// Initializes a new WebSocket client
 	///
-	/// Failes when the URI is invalid i.e, doesn't start with `ws://` or `wss://`
-	pub async fn new(target: &str) -> Result<Self, Box<dyn std::error::Error>> {
-		let client = RawClient::new(WsTransportClient::new(target).await?);
+	/// Fails when the URI is invalid i.e, doesn't start with `ws://` or `wss://`
+	pub async fn new(target: &str) -> Result<Self, Error> {
+		let transport = WsTransportClient::new(target).await.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let client = RawClient::new(transport);
 		let (to_back, from_front) = mpsc::channel(16);
 		async_std::task::spawn(async move {
 			background_task(client, from_front).await;
@@ -128,11 +135,15 @@ impl Client {
 	}
 
 	/// Send a notification to the server.
-	pub async fn notification(&self, method: impl Into<String>, params: impl Into<crate::common::Params>) {
+	pub async fn notification(
+		&self,
+		method: impl Into<String>,
+		params: impl Into<crate::common::Params>,
+	) -> Result<(), Error> {
 		let method = method.into();
 		let params = params.into();
 		log::debug!("[frontend]: client send notification: method={:?}, params={:?}", method, params);
-		let _ = self.to_back.clone().send(FrontToBack::Notification { method, params }).await;
+		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::InternalChannel)
 	}
 
 	/// Perform a request towards the server.
@@ -140,7 +151,7 @@ impl Client {
 		&self,
 		method: impl Into<String>,
 		params: impl Into<crate::common::Params>,
-	) -> Result<Ret, RequestError>
+	) -> Result<Ret, Error>
 	where
 		Ret: common::DeserializeOwned,
 	{
@@ -148,7 +159,7 @@ impl Client {
 		let params = params.into();
 		log::debug!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let _ = self.to_back.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx }).await;
+		self.to_back.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx }).await?;
 
 		// TODO: send a `ChannelClosed` message if we close the channel unexpectedly
 
@@ -157,11 +168,11 @@ impl Client {
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
 				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(RequestError::TransportError(Box::new(err)));
+				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
 
-		common::from_value(json_value).map_err(RequestError::ParseError)
+		common::from_value(json_value).map_err(Error::ParseError)
 	}
 
 	/// Send a subscription request to the server.
@@ -173,25 +184,31 @@ impl Client {
 		subscribe_method: impl Into<String>,
 		params: impl Into<crate::common::Params>,
 		unsubscribe_method: impl Into<String>,
-	) -> Result<Subscription<Notif>, RequestError> {
+	) -> Result<Subscription<Notif>, Error> {
+		let subscribe_method = subscribe_method.into();
+		let unsubscribe_method = unsubscribe_method.into();
+
+		if subscribe_method == unsubscribe_method {
+			return Err(Error::SubscriptionMethod(subscribe_method, unsubscribe_method));
+		}
+
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let _ = self
-			.to_back
+		self.to_back
 			.clone()
 			.send(FrontToBack::Subscribe {
-				subscribe_method: subscribe_method.into(),
-				unsubscribe_method: unsubscribe_method.into(),
+				subscribe_method,
+				unsubscribe_method,
 				params: params.into(),
 				send_back: send_back_tx,
 			})
-			.await;
+			.await?;
 
 		let notifs_rx = match send_back_rx.await {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
 				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(RequestError::TransportError(Box::new(err)));
+				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
 
@@ -277,7 +294,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					}
 					Err(err) => {
 						log::warn!("[backend]: client send request failed: {:?}", err);
-						let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+						let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
 					}
 				}
 			}
@@ -294,7 +311,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					}
 					Err(err) => {
 						log::warn!("[backend]: client start subscription failed: {:?}", err);
-						let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+						let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
 					}
 				}
 			}
@@ -310,7 +327,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 			// Received a response to a request from the server.
 			Either::Right(Ok(RawClientEvent::Response { request_id, result })) => {
 				log::trace!("[backend] client received response to req={:?}, result={:?}", request_id, result);
-				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(RequestError::Request));
+				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(Error::Request));
 			}
 
 			// Receive a response from the server about a subscription.
@@ -318,7 +335,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 				log::trace!("[backend]: client received response to subscription: {:?}", result);
 				let (send_back, unsubscribe) = pending_subscriptions.remove(&request_id).unwrap();
 				if let Err(err) = result {
-					let _ = send_back.send(Err(RequestError::Request(err)));
+					let _ = send_back.send(Err(Error::Request(err)));
 				} else {
 					// TODO: what's a good limit here? way more tricky than it looks
 					let (notifs_tx, notifs_rx) = mpsc::channel(4);
