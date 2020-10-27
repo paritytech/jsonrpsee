@@ -66,9 +66,9 @@ pub enum Error {
 	/// RawServer responded to our request with an error.
 	#[error("Server responded to our request with an error: {0:?}")]
 	Request(#[source] common::Error),
-	/// Subscription and unsubscription methods are the same.
-	#[error("Subscription error, subscribe_method={0}, unsubscribe_method={1}")]
-	SubscriptionMethod(String, String),
+	/// Subscription error.
+	#[error("Subscription of subscribe_method={0}, unsubscribe_method={1} failed")]
+	Subscription(String, String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	InternalChannel(#[from] futures::channel::mpsc::SendError),
@@ -189,7 +189,7 @@ impl Client {
 		let unsubscribe_method = unsubscribe_method.into();
 
 		if subscribe_method == unsubscribe_method {
-			return Err(Error::SubscriptionMethod(subscribe_method, unsubscribe_method));
+			return Err(Error::Subscription(subscribe_method, unsubscribe_method));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
