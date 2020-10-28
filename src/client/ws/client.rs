@@ -151,7 +151,6 @@ impl Client {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-
 		common::from_value(json_value).map_err(Error::ParseError)
 	}
 
