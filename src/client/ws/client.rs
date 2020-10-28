@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::ws::{RawClient, RawClientEvent, RawClientRequestId, WsTransportClient};
+use crate::client::Error;
 use crate::common::{self, JsonValue};
 
 use futures::{
@@ -33,7 +34,7 @@ use futures::{
 	pin_mut,
 	prelude::*,
 };
-use std::{collections::HashMap, error, io, marker::PhantomData};
+use std::{collections::HashMap, io, marker::PhantomData};
 
 /// Client that can be cloned.
 ///
@@ -54,27 +55,6 @@ pub struct Subscription<Notif> {
 	notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<mpsc::Receiver<Notif>>,
-}
-
-/// Error produced by [`Client::request`] and [`Client::subscribe`].
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-	/// Networking error or error on the low-level protocol layer (e.g. missing field,
-	/// invalid ID, etc.).
-	#[error("Networking or low-level protocol error: {0}")]
-	TransportError(#[source] Box<dyn error::Error + Send + Sync>),
-	/// RawServer responded to our request with an error.
-	#[error("Server responded to our request with an error: {0:?}")]
-	Request(#[source] common::Error),
-	/// Subscription error.
-	#[error("Subscription of subscribe_method={0}, unsubscribe_method={1} failed")]
-	Subscription(String, String),
-	/// Frontend/backend channel error.
-	#[error("Frontend/backend channel error: {0}")]
-	InternalChannel(#[from] futures::channel::mpsc::SendError),
-	/// Failed to parse the data that the server sent back to us.
-	#[error("Parse error: {0}")]
-	ParseError(#[source] common::ParseError),
 }
 
 /// Message that the [`Client`] can send to the background task.

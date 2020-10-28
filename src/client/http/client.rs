@@ -1,8 +1,9 @@
 use std::collections::HashMap;
-use std::{error, io};
+use std::io;
 
 use crate::client::http::raw::*;
 use crate::client::http::transport::HttpTransportClient;
+use crate::client::Error;
 use crate::common::{self, JsonValue};
 
 use futures::{channel::mpsc, channel::oneshot, future::Either, pin_mut, prelude::*};
@@ -32,23 +33,8 @@ enum FrontToBack {
 		/// Parameters of the request.
 		params: common::Params,
 		/// One-shot channel where to send back the outcome of that request.
-		send_back: oneshot::Sender<Result<JsonValue, RequestError>>,
+		send_back: oneshot::Sender<Result<JsonValue, Error>>,
 	},
-}
-
-/// Error produced by [`Client::request`] and [`Client::subscribe`].
-#[derive(Debug, thiserror::Error)]
-pub enum RequestError {
-	/// Networking error or error on the low-level protocol layer (e.g. missing field,
-	/// invalid ID, etc.).
-	#[error("Networking or low-level protocol error: {0}")]
-	TransportError(#[source] Box<dyn error::Error + Send + Sync>),
-	/// RawServer responded to our request with an error.
-	#[error("Server responded to our request with an error: {0:?}")]
-	Request(#[source] common::Error),
-	/// Failed to parse the data that the server sent back to us.
-	#[error("Parse error: {0}")]
-	ParseError(#[source] common::ParseError),
 }
 
 impl Client {
@@ -79,7 +65,7 @@ impl Client {
 		&self,
 		method: impl Into<String>,
 		params: impl Into<crate::common::Params>,
-	) -> Result<Ret, RequestError>
+	) -> Result<Ret, Error>
 	where
 		Ret: common::DeserializeOwned,
 	{
@@ -103,11 +89,11 @@ impl Client {
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
 				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(RequestError::TransportError(Box::new(err)));
+				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
 
-		common::from_value(json_value).map_err(RequestError::ParseError)
+		common::from_value(json_value).map_err(Error::ParseError)
 	}
 }
 
@@ -156,14 +142,14 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 						ongoing_requests.insert(id, send_back);
 					}
 					Err(err) => {
-						let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+						let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
 					}
 				}
 			}
 
 			// Received a response to a request from the server.
 			Either::Right(Ok(RawClientEvent::Response { request_id, result })) => {
-				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(RequestError::Request));
+				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(Error::Request));
 			}
 
 			Either::Right(Err(e)) => {
