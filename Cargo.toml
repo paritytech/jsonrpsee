@@ -45,5 +45,10 @@ http = ["hyper", "tokio", "unicase"]
 ws = ["async-tls", "bytes", "soketto", "url", "webpki"]
 
 [dev-dependencies]
+criterion = "0.3.3"
 env_logger = "0.7.1"
 jsonrpsee-test-utils = { path = "test-utils" }
+
+[[bench]]
+name = "benches"
+harness = false
