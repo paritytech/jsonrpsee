@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::http::transport::{HttpTransportServer, TransportServerEvent};
-use crate::types::jsonrpc_v2;
-use crate::types::jsonrpc_v2::wrapped::{batches, Notification, Params};
+use crate::types::jsonrpc;
+use crate::types::jsonrpc::wrapped::{batches, Notification, Params};
 
 use core::{fmt, hash::Hash};
 
@@ -154,7 +154,7 @@ impl<'a> RawServerRequest<'a> {
 
 	/// Returns the id that the client sent out.
 	// TODO: can return None, which is wrong
-	pub fn request_id(&self) -> &jsonrpc_v2::Id {
+	pub fn request_id(&self) -> &jsonrpc::Id {
 		self.inner.request_id()
 	}
 
@@ -163,7 +163,7 @@ impl<'a> RawServerRequest<'a> {
 		self.inner.method()
 	}
 
-	/// Returns the parameters of the request, as a `jsonrpc_v2::Params`.
+	/// Returns the parameters of the request, as a `jsonrpc::Params`.
 	pub fn params(&self) -> Params {
 		self.inner.params()
 	}
@@ -184,7 +184,7 @@ impl<'a> RawServerRequest<'a> {
 	/// >           method](crate::transport::TransportServer::finish) on the
 	/// >           [`TransportServer`](crate::transport::TransportServer) trait.
 	///
-	pub fn respond(self, response: Result<jsonrpc_v2::JsonValue, jsonrpc_v2::Error>) {
+	pub fn respond(self, response: Result<jsonrpc::JsonValue, jsonrpc::Error>) {
 		self.inner.set_response(response);
 		//unimplemented!();
 		// TODO: actually send out response?

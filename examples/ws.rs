@@ -27,7 +27,7 @@
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee::client::WsClient;
-use jsonrpsee::types::jsonrpc_v2::{JsonValue, Params};
+use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 use jsonrpsee::ws::WsServer;
 
 const SOCK_ADDR: &str = "127.0.0.1:9944";

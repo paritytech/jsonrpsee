@@ -26,7 +26,7 @@
 
 //! Contains common builders for hyper responses.
 
-use crate::types::jsonrpc_v2;
+use crate::types::jsonrpc;
 
 /// Create a response for plaintext internal error.
 pub fn internal_error<T: Into<String>>(msg: T) -> hyper::Response<hyper::Body> {
@@ -61,10 +61,10 @@ pub fn parse_error() -> hyper::Response<hyper::Body> {
 		.status(hyper::StatusCode::OK)
 		.header("Content-type", "application/json")
 		.body(hyper::Body::from(
-			serde_json::to_string(&jsonrpc_v2::Output::Failure(jsonrpc_v2::Failure {
-				jsonrpc: jsonrpc_v2::Version::V2,
-				error: jsonrpc_v2::Error::parse_error(),
-				id: jsonrpc_v2::Id::Null,
+			serde_json::to_string(&jsonrpc::Output::Failure(jsonrpc::Failure {
+				jsonrpc: jsonrpc::Version::V2,
+				error: jsonrpc::Error::parse_error(),
+				id: jsonrpc::Id::Null,
 			}))
 			.expect("Unable to serialize parse error"),
 		))

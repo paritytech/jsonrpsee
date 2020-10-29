@@ -27,7 +27,7 @@
 #![cfg(test)]
 
 use crate::client::WsTransportClient;
-use crate::types::jsonrpc_v2::{self, Call, MethodCall, Notification, Params, Request, Version};
+use crate::types::jsonrpc::{self, Call, MethodCall, Notification, Params, Request, Version};
 use crate::ws::{RawWsServer, RawWsServerEvent, WsTransportServer};
 use jsonrpsee_test_utils::helpers::*;
 use serde_json::Value;
@@ -49,7 +49,7 @@ async fn request_work() {
 			jsonrpc: Version::V2,
 			method: "hello_world".to_owned(),
 			params: Params::Array(vec![Value::from(1), Value::from(2)]),
-			id: jsonrpc_v2::Id::Num(3),
+			id: jsonrpc::Id::Num(3),
 		});
 		client.send_request(Request::Single(call)).await.unwrap();
 	});
@@ -61,7 +61,7 @@ async fn request_work() {
 			let p2: i32 = r.params().get(1).unwrap();
 			assert_eq!(p1, 1);
 			assert_eq!(p2, 2);
-			assert_eq!(r.request_id(), &jsonrpc_v2::Id::Num(3));
+			assert_eq!(r.request_id(), &jsonrpc::Id::Num(3));
 		}
 		e @ _ => panic!("Invalid server event: {:?} expected Request", e),
 	}

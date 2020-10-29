@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::jsonrpc_v2;
+use crate::types::jsonrpc;
 
 use async_std::net::{TcpListener, TcpStream};
 use futures::{channel::mpsc, prelude::*};
@@ -49,7 +49,7 @@ pub enum TransportServerEvent<T> {
 		/// Identifier of the request within the state of the [`TransportServer`].
 		id: T,
 		/// Body of the request.
-		request: jsonrpc_v2::Request,
+		request: jsonrpc::Request,
 	},
 
 	/// A request has been cancelled, most likely because the client has closed the connection.
@@ -97,7 +97,7 @@ pub struct WsTransportServer {
 
 /// Message sent from a per-connection task to the main frontend.
 enum BackToFront {
-	NewRequest { id: WsRequestId, body: jsonrpc_v2::Request, sender: mpsc::Sender<FrontToBack> },
+	NewRequest { id: WsRequestId, body: jsonrpc::Request, sender: mpsc::Sender<FrontToBack> },
 }
 
 /// Message sent from the main frontend to a per-connection task.
@@ -234,7 +234,7 @@ impl WsTransportServer {
 	pub fn finish<'a>(
 		&'a mut self,
 		request_id: &'a WsRequestId,
-		response: Option<&'a jsonrpc_v2::Response>,
+		response: Option<&'a jsonrpc::Response>,
 	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
 		Box::pin(async move {
 			if let Some(mut sender) = self.to_connections.remove(request_id) {
@@ -269,7 +269,7 @@ impl WsTransportServer {
 	pub fn send<'a>(
 		&'a mut self,
 		request_id: &'a WsRequestId,
-		response: &'a jsonrpc_v2::Response,
+		response: &'a jsonrpc::Response,
 	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
 		Box::pin(async move {
 			if let Some(sender) = self.to_connections.get_mut(request_id) {
@@ -387,9 +387,9 @@ async fn per_connection_task(
 					Ok(b) => b,
 					Err(err) => {
 						log::debug!("Deserialization of incoming request failed: {:?}", err);
-						let response = serde_json::to_string(&jsonrpc_v2::Response::from(
-							jsonrpc_v2::Error::parse_error(),
-							jsonrpc_v2::Version::V2,
+						let response = serde_json::to_string(&jsonrpc::Response::from(
+							jsonrpc::Error::parse_error(),
+							jsonrpc::Version::V2,
 						))
 						.expect("valid JSON; qed");
 

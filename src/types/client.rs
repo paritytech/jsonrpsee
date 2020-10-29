@@ -1,4 +1,4 @@
-use crate::types::jsonrpc_v2;
+use crate::types::jsonrpc;
 
 /// Error produced by the client.
 #[derive(Debug, thiserror::Error)]
@@ -9,7 +9,7 @@ pub enum Error {
 	TransportError(#[source] Box<dyn std::error::Error + Send + Sync>),
 	/// RawServer responded to our request with an error.
 	#[error("Server responded to our request with an error: {0:?}")]
-	Request(#[source] jsonrpc_v2::Error),
+	Request(#[source] jsonrpc::Error),
 	/// Subscription error.
 	#[error("Subscription to subscribe_method: {0} with unsubscribe_metho: {1} failed")]
 	Subscription(String, String),
@@ -18,5 +18,5 @@ pub enum Error {
 	InternalChannel(#[from] futures::channel::mpsc::SendError),
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
-	ParseError(#[source] jsonrpc_v2::ParseError),
+	ParseError(#[source] jsonrpc::ParseError),
 }

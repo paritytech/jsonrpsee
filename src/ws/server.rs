@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::jsonrpc_v2::{self, JsonValue};
+use crate::types::jsonrpc::{self, JsonValue};
 use crate::types::server::Error;
 use crate::ws::raw::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};
 use crate::ws::transport::WsTransportServer;
@@ -60,7 +60,7 @@ pub struct Server {
 /// Notification method that's been registered.
 pub struct RegisteredNotification {
 	/// Receives notifications that the client sent to us.
-	queries_rx: mpsc::Receiver<jsonrpc_v2::Params>,
+	queries_rx: mpsc::Receiver<jsonrpc::Params>,
 }
 
 /// Method that's been registered.
@@ -68,7 +68,7 @@ pub struct RegisteredMethod {
 	/// Clone of [`Server::to_back`].
 	to_back: mpsc::UnboundedSender<FrontToBack>,
 	/// Receives requests that the client sent to us.
-	queries_rx: mpsc::Receiver<(RawServerRequestId, jsonrpc_v2::Params)>,
+	queries_rx: mpsc::Receiver<(RawServerRequestId, jsonrpc::Params)>,
 }
 
 /// Pub-sub subscription that's been registered.
@@ -87,7 +87,7 @@ pub struct IncomingRequest {
 	/// Identifier of the request towards the server.
 	request_id: RawServerRequestId,
 	/// Parameters of the request.
-	params: jsonrpc_v2::Params,
+	params: jsonrpc::Params,
 }
 
 /// Message that the [`Server`] can send to the background task.
@@ -97,7 +97,7 @@ enum FrontToBack {
 		/// Name of the method.
 		name: String,
 		/// Where to send incoming notifications.
-		handler: mpsc::Sender<jsonrpc_v2::Params>,
+		handler: mpsc::Sender<jsonrpc::Params>,
 		/// See the documentation of [`Server::register_notifications`].
 		allow_losses: bool,
 	},
@@ -107,7 +107,7 @@ enum FrontToBack {
 		/// Name of the method.
 		name: String,
 		/// Where to send requests.
-		handler: mpsc::Sender<(RawServerRequestId, jsonrpc_v2::Params)>,
+		handler: mpsc::Sender<(RawServerRequestId, jsonrpc::Params)>,
 	},
 
 	/// Send a response to a request that a client made.
@@ -115,7 +115,7 @@ enum FrontToBack {
 		/// Request to answer.
 		request_id: RawServerRequestId,
 		/// Response to send back.
-		answer: Result<JsonValue, jsonrpc_v2::Error>,
+		answer: Result<JsonValue, jsonrpc::Error>,
 	},
 
 	/// Registers a subscription. The server will then handle subscription requests of that
@@ -270,7 +270,7 @@ impl Server {
 
 impl RegisteredNotification {
 	/// Returns the next notification.
-	pub async fn next(&mut self) -> jsonrpc_v2::Params {
+	pub async fn next(&mut self) -> jsonrpc::Params {
 		loop {
 			match self.queries_rx.next().await {
 				Some(v) => break v,
@@ -305,12 +305,12 @@ impl RegisteredSubscription {
 
 impl IncomingRequest {
 	/// Returns the parameters of the request.
-	pub fn params(&self) -> &jsonrpc_v2::Params {
+	pub fn params(&self) -> &jsonrpc::Params {
 		&self.params
 	}
 
 	/// Respond to the request.
-	pub async fn respond(mut self, response: impl Into<Result<JsonValue, jsonrpc_v2::Error>>) -> Result<(), Error> {
+	pub async fn respond(mut self, response: impl Into<Result<JsonValue, jsonrpc::Error>>) -> Result<(), Error> {
 		self.to_back
 			.send(FrontToBack::AnswerRequest { request_id: self.request_id, answer: response.into() })
 			.await
@@ -410,7 +410,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 			Either::Right(RawServerEvent::Notification(notification)) => {
 				log::debug!("[backend]: server received notification: {:?}", notification);
 				if let Some((handler, allow_losses)) = registered_notifications.get_mut(notification.method()) {
-					let params: &jsonrpc_v2::Params = notification.params().into();
+					let params: &jsonrpc::Params = notification.params().into();
 					// Note: we just ignore errors. It doesn't make sense logically speaking to
 					// unregister the notification here.
 					if *allow_losses {
@@ -423,12 +423,12 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 			Either::Right(RawServerEvent::Request(request)) => {
 				if let Some(handler) = registered_methods.get_mut(request.method()) {
 					log::debug!("[backend]: server received request: {:?}", request);
-					let params: &jsonrpc_v2::Params = request.params().into();
+					let params: &jsonrpc::Params = request.params().into();
 					log::debug!("server called handler");
 					match handler.send((request.id(), params.clone())).now_or_never() {
 						Some(Ok(())) => {}
 						Some(Err(_)) | None => {
-							request.respond(Err(From::from(jsonrpc_v2::ErrorCode::ServerError(0))));
+							request.respond(Err(From::from(jsonrpc::ErrorCode::ServerError(0))));
 						}
 					}
 				} else if let Some(sub_unique_id) = subscribe_methods.get(request.method()) {
@@ -466,7 +466,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				} else {
 					// TODO: we assert that the request is valid because the parsing succeeded but
 					// not registered.
-					request.respond(Err(From::from(jsonrpc_v2::ErrorCode::MethodNotFound)));
+					request.respond(Err(From::from(jsonrpc::ErrorCode::MethodNotFound)));
 				}
 			}
 			Either::Right(RawServerEvent::SubscriptionsReady(_)) => {

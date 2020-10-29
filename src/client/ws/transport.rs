@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::jsonrpc_v2;
+use crate::types::jsonrpc;
 
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
@@ -195,11 +195,11 @@ impl WsTransportClient {
 	/// successfully sent.
 	pub fn send_request<'a>(
 		&'a mut self,
-		request: jsonrpc_v2::Request,
+		request: jsonrpc::Request,
 	) -> Pin<Box<dyn Future<Output = Result<(), WsConnectError>> + Send + 'a>> {
 		Box::pin(async move {
 			log::debug!("send request: {:?}", request);
-			let request = jsonrpc_v2::to_string(&request).map_err(WsConnectError::Serialization)?;
+			let request = jsonrpc::to_string(&request).map_err(WsConnectError::Serialization)?;
 			self.sender.send_text(request).await?;
 			self.sender.flush().await?;
 			Ok(())
@@ -209,11 +209,11 @@ impl WsTransportClient {
 	/// Returns a `Future` resolving when the server sent us something back.
 	pub fn next_response<'a>(
 		&'a mut self,
-	) -> Pin<Box<dyn Future<Output = Result<jsonrpc_v2::Response, WsConnectError>> + Send + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<jsonrpc::Response, WsConnectError>> + Send + 'a>> {
 		Box::pin(async move {
 			let mut message = Vec::new();
 			self.receiver.receive_data(&mut message).await?;
-			let response = jsonrpc_v2::from_slice(&message).map_err(WsConnectError::ParseError)?;
+			let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
 			log::debug!("received response: {:?}", response);
 			Ok(response)
 		})

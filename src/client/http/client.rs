@@ -4,7 +4,7 @@ use std::io;
 use crate::client::http::raw::*;
 use crate::client::http::transport::HttpTransportClient;
 use crate::types::client::Error;
-use crate::types::jsonrpc_v2::{self, JsonValue};
+use crate::types::jsonrpc::{self, JsonValue};
 
 use futures::{channel::mpsc, channel::oneshot, future::Either, pin_mut, prelude::*};
 
@@ -23,7 +23,7 @@ enum FrontToBack {
 		/// Method for the notification.
 		method: String,
 		/// Parameters to send to the server.
-		params: jsonrpc_v2::Params,
+		params: jsonrpc::Params,
 	},
 
 	/// Send a request to the server.
@@ -31,7 +31,7 @@ enum FrontToBack {
 		/// Method for the request.
 		method: String,
 		/// Parameters of the request.
-		params: jsonrpc_v2::Params,
+		params: jsonrpc::Params,
 		/// One-shot channel where to send back the outcome of that request.
 		send_back: oneshot::Sender<Result<JsonValue, Error>>,
 	},
@@ -54,7 +54,7 @@ impl Client {
 	pub async fn notification(
 		&self,
 		method: impl Into<String>,
-		params: impl Into<jsonrpc_v2::Params>,
+		params: impl Into<jsonrpc::Params>,
 	) -> Result<(), Error> {
 		let method = method.into();
 		let params = params.into();
@@ -66,10 +66,10 @@ impl Client {
 	pub async fn request<Ret>(
 		&self,
 		method: impl Into<String>,
-		params: impl Into<jsonrpc_v2::Params>,
+		params: impl Into<jsonrpc::Params>,
 	) -> Result<Ret, Error>
 	where
-		Ret: jsonrpc_v2::DeserializeOwned,
+		Ret: jsonrpc::DeserializeOwned,
 	{
 		let method = method.into();
 		let params = params.into();
@@ -87,7 +87,7 @@ impl Client {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-		jsonrpc_v2::from_value(json_value).map_err(Error::ParseError)
+		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
 }
 

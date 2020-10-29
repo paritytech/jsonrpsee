@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::jsonrpc_v2;
+use crate::types::jsonrpc;
 
 use alloc::string::String;
 use core::fmt;
@@ -33,7 +33,7 @@ use core::fmt;
 #[derive(Copy, Debug, Clone)]
 pub struct Params<'a> {
 	/// Raw parameters of the request.
-	params: &'a jsonrpc_v2::Params,
+	params: &'a jsonrpc::Params,
 }
 
 /// Key referring to a potential parameter of a request.
@@ -45,8 +45,8 @@ pub enum ParamKey<'a> {
 }
 
 impl<'a> Params<'a> {
-	/// Wraps around a `&jsonrpc_v2::Params` and provides utility functions for the user.
-	pub(crate) fn from(params: &'a jsonrpc_v2::Params) -> Params<'a> {
+	/// Wraps around a `&jsonrpc::Params` and provides utility functions for the user.
+	pub(crate) fn from(params: &'a jsonrpc::Params) -> Params<'a> {
 		Params { params }
 	}
 
@@ -62,13 +62,13 @@ impl<'a> Params<'a> {
 	}
 
 	/// Returns a parameter of the request by name.
-	pub fn get_raw<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a jsonrpc_v2::JsonValue> {
+	pub fn get_raw<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a jsonrpc::JsonValue> {
 		match (self.params, param.into()) {
-			(jsonrpc_v2::Params::None, _) => None,
-			(jsonrpc_v2::Params::Map(map), ParamKey::String(key)) => map.get(key),
-			(jsonrpc_v2::Params::Map(_), ParamKey::Index(_)) => None,
-			(jsonrpc_v2::Params::Array(_), ParamKey::String(_)) => None,
-			(jsonrpc_v2::Params::Array(array), ParamKey::Index(index)) => {
+			(jsonrpc::Params::None, _) => None,
+			(jsonrpc::Params::Map(map), ParamKey::String(key)) => map.get(key),
+			(jsonrpc::Params::Map(_), ParamKey::Index(_)) => None,
+			(jsonrpc::Params::Array(_), ParamKey::String(_)) => None,
+			(jsonrpc::Params::Array(array), ParamKey::Index(index)) => {
 				if index < array.len() {
 					Some(&array[index])
 				} else {
@@ -85,21 +85,21 @@ impl<'a> IntoIterator for Params<'a> {
 
 	fn into_iter(self) -> Self::IntoIter {
 		Iter(match self.params {
-			jsonrpc_v2::Params::None => IterInner::Empty,
-			jsonrpc_v2::Params::Array(arr) => IterInner::Array(arr.iter()),
-			jsonrpc_v2::Params::Map(map) => IterInner::Map(map.iter()),
+			jsonrpc::Params::None => IterInner::Empty,
+			jsonrpc::Params::Array(arr) => IterInner::Array(arr.iter()),
+			jsonrpc::Params::Map(map) => IterInner::Map(map.iter()),
 		})
 	}
 }
 
-impl<'a> AsRef<jsonrpc_v2::Params> for Params<'a> {
-	fn as_ref(&self) -> &jsonrpc_v2::Params {
+impl<'a> AsRef<jsonrpc::Params> for Params<'a> {
+	fn as_ref(&self) -> &jsonrpc::Params {
 		self.params
 	}
 }
 
-impl<'a> From<Params<'a>> for &'a jsonrpc_v2::Params {
-	fn from(params: Params<'a>) -> &'a jsonrpc_v2::Params {
+impl<'a> From<Params<'a>> for &'a jsonrpc::Params {
+	fn from(params: Params<'a>) -> &'a jsonrpc::Params {
 		params.params
 	}
 }
@@ -142,8 +142,8 @@ enum IterInner<'a> {
 
 #[derive(Debug)]
 pub enum Entry<'a> {
-	Value(&'a jsonrpc_v2::JsonValue),
-	KeyValue(ParamKey<'a>, &'a jsonrpc_v2::JsonValue),
+	Value(&'a jsonrpc::JsonValue),
+	KeyValue(ParamKey<'a>, &'a jsonrpc::JsonValue),
 }
 
 impl<'a> Iterator for Iter<'a> {

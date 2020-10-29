@@ -65,7 +65,7 @@
 //!
 
 use crate::client::http::transport::{HttpTransportClient, RequestError};
-use crate::types::jsonrpc_v2;
+use crate::types::jsonrpc;
 
 use alloc::{collections::VecDeque, string::String};
 use core::{fmt, future::Future};
@@ -113,7 +113,7 @@ pub enum RawClientEvent {
 		/// has returned.
 		request_id: RawClientRequestId,
 		/// The response itself.
-		result: Result<jsonrpc_v2::JsonValue, jsonrpc_v2::Error>,
+		result: Result<jsonrpc::JsonValue, jsonrpc::Error>,
 	},
 }
 
@@ -123,7 +123,7 @@ pub enum RawClientError {
 	/// Error in the raw client.
 	Inner(RequestError),
 	/// RawServer returned an error for our request.
-	RequestError(jsonrpc_v2::Error),
+	RequestError(jsonrpc::Error),
 	/// RawServer has sent back a response containing an unknown request ID.
 	UnknownRequestId,
 	/// RawServer has sent back a response containing a null request ID.
@@ -150,10 +150,10 @@ impl RawClient {
 	pub async fn send_notification(
 		&mut self,
 		method: impl Into<String>,
-		params: impl Into<jsonrpc_v2::Params>,
+		params: impl Into<jsonrpc::Params>,
 	) -> Result<(), RequestError> {
-		let request = jsonrpc_v2::Request::Single(jsonrpc_v2::Call::Notification(jsonrpc_v2::Notification {
-			jsonrpc: jsonrpc_v2::Version::V2,
+		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
+			jsonrpc: jsonrpc::Version::V2,
 			method: method.into(),
 			params: params.into(),
 		}));
@@ -170,7 +170,7 @@ impl RawClient {
 	pub async fn start_request(
 		&mut self,
 		method: impl Into<String>,
-		params: impl Into<jsonrpc_v2::Params>,
+		params: impl Into<jsonrpc::Params>,
 	) -> Result<RawClientRequestId, RequestError> {
 		loop {
 			let id = self.next_request_id;
@@ -182,11 +182,11 @@ impl RawClient {
 				self.requests.insert(id);
 			}
 
-			let request = jsonrpc_v2::Request::Single(jsonrpc_v2::Call::MethodCall(jsonrpc_v2::MethodCall {
-				jsonrpc: jsonrpc_v2::Version::V2,
+			let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
+				jsonrpc: jsonrpc::Version::V2,
 				method: method.into(),
 				params: params.into(),
-				id: jsonrpc_v2::Id::Num(id.0),
+				id: jsonrpc::Id::Num(id.0),
 			}));
 
 			log::debug!(target: "jsonrpsee-http-raw-client", "request={:?}", request);
@@ -225,7 +225,7 @@ impl RawClient {
 	pub fn request_by_id<'a>(
 		&'a mut self,
 		rq_id: RawClientRequestId,
-	) -> Option<impl Future<Output = Result<jsonrpc_v2::JsonValue, RawClientError>> + 'a> {
+	) -> Option<impl Future<Output = Result<jsonrpc::JsonValue, RawClientError>> + 'a> {
 		// First, let's check whether the request ID is valid.
 		if !self.requests.contains(&rq_id) {
 			return None;
@@ -267,15 +267,15 @@ impl RawClient {
 		let result = self.inner.next_response().await.map_err(RawClientError::Inner)?;
 
 		match result {
-			jsonrpc_v2::Response::Single(rp) => self.process_response(rp)?,
-			jsonrpc_v2::Response::Batch(rps) => {
+			jsonrpc::Response::Single(rp) => self.process_response(rp)?,
+			jsonrpc::Response::Batch(rps) => {
 				for rp in rps {
 					// TODO: if an error happens, we throw away the entire batch
 					self.process_response(rp)?;
 				}
 			}
 			// Server MUST NOT reply to a Notification.
-			jsonrpc_v2::Response::Notif(_notif) => unreachable!(),
+			jsonrpc::Response::Notif(_notif) => unreachable!(),
 		}
 
 		Ok(())
@@ -286,14 +286,14 @@ impl RawClient {
 	///
 	/// Regards all `response IDs` that is not a number as error because only numbers are used as
 	/// `id` in this library even though that `JSONRPC 2.0` allows String and Null as valid IDs.
-	fn process_response(&mut self, response: jsonrpc_v2::Output) -> Result<(), RawClientError> {
+	fn process_response(&mut self, response: jsonrpc::Output) -> Result<(), RawClientError> {
 		let request_id = match response.id() {
-			jsonrpc_v2::Id::Num(n) => RawClientRequestId(*n),
-			jsonrpc_v2::Id::Str(s) => {
+			jsonrpc::Id::Num(n) => RawClientRequestId(*n),
+			jsonrpc::Id::Str(s) => {
 				log::warn!("Server responded with an invalid request id: {:?}", s);
 				return Err(RawClientError::UnknownRequestId);
 			}
-			jsonrpc_v2::Id::Null => {
+			jsonrpc::Id::Null => {
 				log::warn!("Server responded with a null request id");
 				return Err(RawClientError::NullRequestId);
 			}

@@ -24,23 +24,23 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::jsonrpc_v2::{self, wrapped::Params};
+use crate::types::jsonrpc::{self, wrapped::Params};
 use core::fmt;
 
 /// Notification received on a server.
 ///
-/// Wraps around a `jsonrpc_v2::Notification`.
+/// Wraps around a `jsonrpc::Notification`.
 #[derive(PartialEq)]
-pub struct Notification(jsonrpc_v2::Notification);
+pub struct Notification(jsonrpc::Notification);
 
-impl From<jsonrpc_v2::Notification> for Notification {
-	fn from(notif: jsonrpc_v2::Notification) -> Notification {
+impl From<jsonrpc::Notification> for Notification {
+	fn from(notif: jsonrpc::Notification) -> Notification {
 		Notification(notif)
 	}
 }
 
-impl From<Notification> for jsonrpc_v2::Notification {
-	fn from(notif: Notification) -> jsonrpc_v2::Notification {
+impl From<Notification> for jsonrpc::Notification {
+	fn from(notif: Notification) -> jsonrpc::Notification {
 		notif.0
 	}
 }

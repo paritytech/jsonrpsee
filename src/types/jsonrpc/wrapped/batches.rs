@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::jsonrpc_v2::{
+use crate::types::jsonrpc::{
 	self,
 	wrapped::{batch, Notification, Params},
 };
@@ -77,7 +77,7 @@ pub enum BatchesEvent<'a, T> {
 	/// A batch has gotten all its requests answered and a response is ready to be sent out.
 	ReadyToSend {
 		/// Response to send out to the JSON-RPC client.
-		response: jsonrpc_v2::Response,
+		response: jsonrpc::Response,
 		/// User parameter passed when calling [`inject`](BatchesState::inject).
 		user_param: T,
 	},
@@ -179,7 +179,7 @@ impl<T> BatchesState<T> {
 
 	/// Injects a newly-received batch into the list. You must then call
 	/// [`next_event`](BatchesState::next_event) in order to process it.
-	pub fn inject(&mut self, request: jsonrpc_v2::Request, user_param: T) {
+	pub fn inject(&mut self, request: jsonrpc::Request, user_param: T) {
 		let batch = batch::BatchState::from_request(request);
 
 		loop {
@@ -253,7 +253,7 @@ impl<'a, T> BatchesElem<'a, T> {
 	}
 
 	/// Returns the id that the client sent out.
-	pub fn request_id(&self) -> &jsonrpc_v2::Id {
+	pub fn request_id(&self) -> &jsonrpc::Id {
 		self.inner.request_id()
 	}
 
@@ -262,7 +262,7 @@ impl<'a, T> BatchesElem<'a, T> {
 		self.inner.method()
 	}
 
-	/// Returns the parameters of the request, as a `jsonrpc_v2::Params`.
+	/// Returns the parameters of the request, as a `jsonrpc::Params`.
 	pub fn params(&self) -> Params {
 		self.inner.params()
 	}
@@ -272,7 +272,7 @@ impl<'a, T> BatchesElem<'a, T> {
 	///
 	/// A [`ReadyToSend`](BatchesEvent::ReadyToSend) event containing this response might be
 	/// generated the next time you call [`next_event`](BatchesState::next_event).
-	pub fn set_response(self, response: Result<jsonrpc_v2::JsonValue, jsonrpc_v2::Error>) {
+	pub fn set_response(self, response: Result<jsonrpc::JsonValue, jsonrpc::Error>) {
 		self.inner.set_response(response)
 	}
 }
@@ -295,19 +295,19 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{BatchesEvent, BatchesState};
-	use crate::types::jsonrpc_v2::{self, wrapped::Notification};
+	use crate::types::jsonrpc::{self, wrapped::Notification};
 
 	#[test]
 	fn basic_notification() {
-		let notif = jsonrpc_v2::Notification {
-			jsonrpc: jsonrpc_v2::Version::V2,
+		let notif = jsonrpc::Notification {
+			jsonrpc: jsonrpc::Version::V2,
 			method: "foo".to_string(),
-			params: jsonrpc_v2::Params::None,
+			params: jsonrpc::Params::None,
 		};
 
 		let mut state = BatchesState::new();
 		assert!(state.next_event().is_none());
-		state.inject(jsonrpc_v2::Request::Single(jsonrpc_v2::Call::Notification(notif.clone())), ());
+		state.inject(jsonrpc::Request::Single(jsonrpc::Call::Notification(notif.clone())), ());
 		match state.next_event() {
 			Some(BatchesEvent::Notification { ref notification, .. }) if *notification == Notification::from(notif) => {
 			}
@@ -318,16 +318,16 @@ mod tests {
 
 	#[test]
 	fn basic_request() {
-		let call = jsonrpc_v2::MethodCall {
-			jsonrpc: jsonrpc_v2::Version::V2,
+		let call = jsonrpc::MethodCall {
+			jsonrpc: jsonrpc::Version::V2,
 			method: "foo".to_string(),
-			params: jsonrpc_v2::Params::Map(serde_json::from_str("{\"test\":\"foo\"}").unwrap()),
-			id: jsonrpc_v2::Id::Num(123),
+			params: jsonrpc::Params::Map(serde_json::from_str("{\"test\":\"foo\"}").unwrap()),
+			id: jsonrpc::Id::Num(123),
 		};
 
 		let mut state = BatchesState::new();
 		assert!(state.next_event().is_none());
-		state.inject(jsonrpc_v2::Request::Single(jsonrpc_v2::Call::MethodCall(call)), 8889);
+		state.inject(jsonrpc::Request::Single(jsonrpc::Call::MethodCall(call)), 8889);
 
 		let rq_id = match state.next_event() {
 			Some(BatchesEvent::Request(rq)) => {
@@ -339,7 +339,7 @@ mod tests {
 					},
 					"foo"
 				);
-				assert_eq!(rq.request_id(), &jsonrpc_v2::Id::Num(123));
+				assert_eq!(rq.request_id(), &jsonrpc::Id::Num(123));
 				rq.id()
 			}
 			_ => panic!(),
@@ -348,15 +348,15 @@ mod tests {
 		assert!(state.next_event().is_none());
 
 		assert_eq!(state.request_by_id(rq_id).unwrap().method(), "foo");
-		state.request_by_id(rq_id).unwrap().set_response(Err(jsonrpc_v2::Error::method_not_found()));
+		state.request_by_id(rq_id).unwrap().set_response(Err(jsonrpc::Error::method_not_found()));
 		assert!(state.request_by_id(rq_id).is_none());
 
 		match state.next_event() {
 			Some(BatchesEvent::ReadyToSend { response, user_param }) => {
 				assert_eq!(user_param, 8889);
 				match response {
-					jsonrpc_v2::Response::Single(jsonrpc_v2::Output::Failure(f)) => {
-						assert_eq!(f.id, jsonrpc_v2::Id::Num(123));
+					jsonrpc::Response::Single(jsonrpc::Output::Failure(f)) => {
+						assert_eq!(f.id, jsonrpc::Id::Num(123));
 					}
 					_ => panic!(),
 				}
@@ -369,30 +369,30 @@ mod tests {
 	fn empty_batch() {
 		let mut state = BatchesState::new();
 		assert!(state.next_event().is_none());
-		state.inject(jsonrpc_v2::Request::Batch(Vec::new()), ());
+		state.inject(jsonrpc::Request::Batch(Vec::new()), ());
 		assert!(state.next_event().is_none());
 	}
 
 	#[test]
 	fn batch_of_notifs() {
-		let notif1 = jsonrpc_v2::Notification {
-			jsonrpc: jsonrpc_v2::Version::V2,
+		let notif1 = jsonrpc::Notification {
+			jsonrpc: jsonrpc::Version::V2,
 			method: "foo".to_string(),
-			params: jsonrpc_v2::Params::None,
+			params: jsonrpc::Params::None,
 		};
 
-		let notif2 = jsonrpc_v2::Notification {
-			jsonrpc: jsonrpc_v2::Version::V2,
+		let notif2 = jsonrpc::Notification {
+			jsonrpc: jsonrpc::Version::V2,
 			method: "bar".to_string(),
-			params: jsonrpc_v2::Params::None,
+			params: jsonrpc::Params::None,
 		};
 
 		let mut state = BatchesState::new();
 		assert!(state.next_event().is_none());
 		state.inject(
-			jsonrpc_v2::Request::Batch(vec![
-				jsonrpc_v2::Call::Notification(notif1.clone()),
-				jsonrpc_v2::Call::Notification(notif2.clone()),
+			jsonrpc::Request::Batch(vec![
+				jsonrpc::Call::Notification(notif1.clone()),
+				jsonrpc::Call::Notification(notif2.clone()),
 			]),
 			2,
 		);

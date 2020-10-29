@@ -1,5 +1,5 @@
 /// JSON-RPC 2.0 specification related types.
-pub mod jsonrpc_v2;
+pub mod jsonrpc;
 
 /// Shared types for client implementation.
 pub mod client;
