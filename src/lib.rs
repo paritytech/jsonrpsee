@@ -49,8 +49,8 @@ pub use jsonrpsee_proc_macros::rpc_api;
 
 /// Client implementations.
 pub mod client;
-/// Common types.
-pub mod common;
+/// Shared types.
+pub mod types;
 /// JSONRPC 2.0 HTTP server.
 #[cfg(feature = "http")]
 pub mod http;

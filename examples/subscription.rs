@@ -27,7 +27,7 @@
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee::client::{WsClient, WsSubscription};
-use jsonrpsee::common::{JsonValue, Params};
+use jsonrpsee::types::jsonrpc_v2::{JsonValue, Params};
 use jsonrpsee::ws::WsServer;
 
 const SOCK_ADDR: &str = "127.0.0.1:9966";
@@ -65,7 +65,7 @@ async fn run_server(server_started_tx: Sender<()>, url: &str) {
 
 	server_started_tx.send(()).unwrap();
 	loop {
-		subscription.send(JsonValue::String("hello my friend".to_owned())).await;
+		subscription.send(JsonValue::String("hello my friend".to_owned())).await.unwrap();
 		std::thread::sleep(std::time::Duration::from_secs(1));
 	}
 }

@@ -32,7 +32,7 @@ mod transport;
 mod tests;
 
 pub use raw::{
-	Notification as WsRawNotification, RawServer as RawWsServer, RawServerEvent as RawWsServerEvent,
+	RawServer as RawWsServer, RawServerEvent as RawWsServerEvent,
 	TypedResponder as WsTypedResponder,
 };
 pub use server::{RegisteredMethod, RegisteredNotification, Server as WsServer};

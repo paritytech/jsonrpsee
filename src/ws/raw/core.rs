@@ -24,8 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common::{self, JsonValue};
-use crate::ws::raw::{batches, Notification, Params};
+use crate::types::jsonrpc_v2::{self, JsonValue};
+use crate::types::jsonrpc_v2::wrapped::{batches, Params, Notification};
 use crate::ws::transport::{TransportServerEvent, WsRequestId as RequestId, WsTransportServer};
 
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
@@ -274,7 +274,7 @@ impl<'a> RawServerRequest<'a> {
 
 	/// Returns the id that the client sent out.
 	// TODO: can return None, which is wrong
-	pub fn request_id(&self) -> &common::Id {
+	pub fn request_id(&self) -> &jsonrpc_v2::Id {
 		self.inner.request_id()
 	}
 
@@ -283,7 +283,7 @@ impl<'a> RawServerRequest<'a> {
 		self.inner.method()
 	}
 
-	/// Returns the parameters of the request, as a `common::Params`.
+	/// Returns the parameters of the request, as a `jsonrpc_v2::Params`.
 	pub fn params(&self) -> Params {
 		self.inner.params()
 	}
@@ -304,7 +304,7 @@ impl<'a> RawServerRequest<'a> {
 	/// >           method](crate::transport::TransportServer::finish) on the
 	/// >           [`TransportServer`](crate::transport::TransportServer) trait.
 	///
-	pub fn respond(self, response: Result<common::JsonValue, common::Error>) {
+	pub fn respond(self, response: Result<JsonValue, jsonrpc_v2::Error>) {
 		self.inner.set_response(response);
 		//unimplemented!();
 		// TODO: actually send out response?
@@ -434,15 +434,15 @@ impl<'a> ServerSubscription<'a> {
 			return; // TODO: notify user with error
 		}
 
-		let output = common::SubscriptionNotif {
-			jsonrpc: common::Version::V2,
+		let output = jsonrpc_v2::SubscriptionNotif {
+			jsonrpc: jsonrpc_v2::Version::V2,
 			method: subscription_state.method.clone(),
-			params: common::SubscriptionNotifParams {
-				subscription: common::SubscriptionId::Str(bs58::encode(&self.id).into_string()),
+			params: jsonrpc_v2::SubscriptionNotifParams {
+				subscription: jsonrpc_v2::SubscriptionId::Str(bs58::encode(&self.id).into_string()),
 				result: message.into(),
 			},
 		};
-		let response = common::Response::Notif(output);
+		let response = jsonrpc_v2::Response::Notif(output);
 
 		let _ = self.server.raw.send(&subscription_state.raw_id, &response).await; // TODO: error handling?
 	}

@@ -1,15 +1,18 @@
 #![cfg(test)]
 
+use crate::types::jsonrpc_v2::{JsonValue, Params};
+use crate::types::server::Error;
 use crate::client::{WsClient, WsSubscription};
-use crate::common::Params;
 use crate::ws::WsServer;
+
+use std::net::SocketAddr;
+
 use futures::channel::oneshot::{self, Sender};
 use futures::future::FutureExt;
 use futures::{pin_mut, select};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestClient};
-use serde_json::Value as JsonValue;
-use std::net::SocketAddr;
+// use serde_json::Value as JsonValue;
 
 /// Spawns a dummy `JSONRPC v2 WebSocket` that just send subscriptions to `subscribe_hello` and
 /// `subscribe_foo`.
@@ -25,9 +28,9 @@ pub fn server_subscribe_only(server_started: Sender<SocketAddr>) {
 		server_started.send(*server.local_addr()).unwrap();
 
 		loop {
-			block_on(hello.send(JsonValue::String("hello from subscription".to_owned())));
+			block_on(hello.send(JsonValue::String("hello from subscription".to_owned()))).unwrap();
 			std::thread::sleep(std::time::Duration::from_millis(100));
-			block_on(foo.send(JsonValue::Number(1337_u64.into())));
+			block_on(foo.send(JsonValue::Number(1337_u64.into()))).unwrap();
 			std::thread::sleep(std::time::Duration::from_millis(100));
 		}
 	});
@@ -46,7 +49,7 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 		let hello_fut = async {
 			let handle = hello.next().await;
 			log::debug!("server respond to hello");
-			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await;
+			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
 		}
 		.fuse();
 
@@ -54,7 +57,7 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 			let handle = add.next().await;
 			let params: Vec<u64> = handle.params().clone().parse().unwrap();
 			let sum: u64 = params.iter().sum();
-			handle.respond(Ok(JsonValue::Number(sum.into()))).await;
+			handle.respond(Ok(JsonValue::Number(sum.into()))).await.unwrap();
 		}
 		.fuse();
 
@@ -232,7 +235,7 @@ async fn register_methods_works() {
 #[tokio::test]
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let server = WsServer::new("127.0.0.1:0").await.unwrap();
-	matches!(server.register_subscription("subscribe_hello".to_owned(), "subscribe_hello".to_owned()), Err(()));
+	matches!(server.register_subscription("subscribe_hello".to_owned(), "subscribe_hello".to_owned()), Err(Error::AlreadyRegistered(_)));
 }
 
 #[tokio::test]

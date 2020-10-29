@@ -16,7 +16,7 @@
 use std::pin::Pin;
 use std::{fmt, io, thread};
 
-use crate::common;
+use crate::types::jsonrpc_v2;
 
 use futures::{channel::mpsc, prelude::*};
 use thiserror::Error;
@@ -69,11 +69,11 @@ impl HttpTransportClient {
 	/// Send request to the target
 	pub fn send_request<'s>(
 		&'s mut self,
-		request: common::Request,
+		request: jsonrpc_v2::Request,
 	) -> Pin<Box<dyn Future<Output = Result<(), RequestError>> + Send + 's>> {
 		let mut requests_tx = self.requests_tx.clone();
 
-		let request = common::to_vec(&request).map(|body| {
+		let request = jsonrpc_v2::to_vec(&request).map(|body| {
 			hyper::Request::post(&self.url)
 				.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static("application/json"))
 				.body(From::from(body))
@@ -101,7 +101,7 @@ impl HttpTransportClient {
 	/// Waits for the next response.
 	pub fn next_response<'s>(
 		&'s mut self,
-	) -> Pin<Box<dyn Future<Output = Result<common::Response, RequestError>> + Send + 's>> {
+	) -> Pin<Box<dyn Future<Output = Result<jsonrpc_v2::Response, RequestError>> + Send + 's>> {
 		Box::pin(async move {
 			let hyper_response = match self.responses_rx.next().await {
 				Some(Ok(r)) => r,
@@ -128,7 +128,7 @@ impl HttpTransportClient {
 				.map_err(|err| RequestError::Http(Box::new(err)))?;
 
 			// TODO: use Response::from_json
-			let as_json: common::Response = common::from_slice(&body).map_err(RequestError::ParseError)?;
+			let as_json: jsonrpc_v2::Response = jsonrpc_v2::from_slice(&body).map_err(RequestError::ParseError)?;
 			Ok(as_json)
 		})
 	}

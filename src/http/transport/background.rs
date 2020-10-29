@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common;
+use crate::types::jsonrpc_v2;
 use crate::http::server_utils::access_control::AccessControl;
 use crate::http::transport::response;
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
@@ -43,7 +43,7 @@ pub(super) struct Request {
 	/// Sender for the body of the response to send on the network.
 	pub send_back: oneshot::Sender<hyper::Response<hyper::Body>>,
 	/// The JSON body that was sent by the client.
-	pub request: common::Request,
+	pub request: jsonrpc_v2::Request,
 }
 
 impl BackgroundHttp {
@@ -219,7 +219,7 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 /// Converts a `hyper` body into a structured JSON object.
 ///
 /// Enforces a size limit on the body.
-async fn body_to_request(mut body: hyper::Body) -> Result<common::Request, io::Error> {
+async fn body_to_request(mut body: hyper::Body) -> Result<jsonrpc_v2::Request, io::Error> {
 	let mut json_body = Vec::new();
 	while let Some(chunk) = body.next().await {
 		let chunk = match chunk {
@@ -243,7 +243,7 @@ mod tests {
 	#[test]
 	fn body_to_request_works() {
 		let s = r#"[{"a":"hello"}]"#;
-		let expected: super::common::Request = serde_json::from_str(s).unwrap();
+		let expected: super::jsonrpc_v2::Request = serde_json::from_str(s).unwrap();
 		let req = futures::executor::block_on(async move {
 			let body = hyper::Body::from(s);
 			body_to_request(body).await.unwrap()

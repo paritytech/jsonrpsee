@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::ws::{RawClient, RawClientEvent, RawClientRequestId, WsTransportClient};
-use crate::client::Error;
-use crate::common::{self, JsonValue};
+use crate::types::jsonrpc_v2::{self, JsonValue};
+use crate::types::client::Error;
 
 use futures::{
 	channel::{mpsc, oneshot},
@@ -64,7 +64,7 @@ enum FrontToBack {
 		/// Method for the notification.
 		method: String,
 		/// Parameters to send to the server.
-		params: common::Params,
+		params: jsonrpc_v2::Params,
 	},
 
 	/// Send a request to the server.
@@ -72,7 +72,7 @@ enum FrontToBack {
 		/// Method for the request.
 		method: String,
 		/// Parameters of the request.
-		params: common::Params,
+		params: jsonrpc_v2::Params,
 		/// One-shot channel where to send back the outcome of that request.
 		send_back: oneshot::Sender<Result<JsonValue, Error>>,
 	},
@@ -82,7 +82,7 @@ enum FrontToBack {
 		/// Method for the subscription request.
 		subscribe_method: String,
 		/// Parameters to send for the subscription.
-		params: common::Params,
+		params: jsonrpc_v2::Params,
 		/// Method to use to later unsubscription. Used if the channel unexpectedly closes.
 		unsubscribe_method: String,
 		/// When we get a response from the server about that subscription, we send the result on
@@ -118,7 +118,7 @@ impl Client {
 	pub async fn notification(
 		&self,
 		method: impl Into<String>,
-		params: impl Into<crate::common::Params>,
+		params: impl Into<jsonrpc_v2::Params>,
 	) -> Result<(), Error> {
 		let method = method.into();
 		let params = params.into();
@@ -130,10 +130,10 @@ impl Client {
 	pub async fn request<Ret>(
 		&self,
 		method: impl Into<String>,
-		params: impl Into<crate::common::Params>,
+		params: impl Into<jsonrpc_v2::Params>,
 	) -> Result<Ret, Error>
 	where
-		Ret: common::DeserializeOwned,
+		Ret: jsonrpc_v2::DeserializeOwned,
 	{
 		let method = method.into();
 		let params = params.into();
@@ -151,7 +151,7 @@ impl Client {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-		common::from_value(json_value).map_err(Error::ParseError)
+		jsonrpc_v2::from_value(json_value).map_err(Error::ParseError)
 	}
 
 	/// Send a subscription request to the server.
@@ -161,7 +161,7 @@ impl Client {
 	pub async fn subscribe<Notif>(
 		&self,
 		subscribe_method: impl Into<String>,
-		params: impl Into<crate::common::Params>,
+		params: impl Into<jsonrpc_v2::Params>,
 		unsubscribe_method: impl Into<String>,
 	) -> Result<Subscription<Notif>, Error> {
 		let subscribe_method = subscribe_method.into();
@@ -197,7 +197,7 @@ impl Client {
 
 impl<Notif> Subscription<Notif>
 where
-	Notif: common::DeserializeOwned,
+	Notif: jsonrpc_v2::DeserializeOwned,
 {
 	/// Returns the next notification sent from the server.
 	///
@@ -206,7 +206,7 @@ where
 		loop {
 			match self.notifs_rx.next().await {
 				Some(n) => {
-					if let Ok(parsed) = common::from_value(n) {
+					if let Ok(parsed) = jsonrpc_v2::from_value(n) {
 						return parsed;
 					}
 				}
@@ -232,7 +232,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 	// unsubscribe.
 	let mut pending_subscriptions: HashMap<RawClientRequestId, (oneshot::Sender<_>, _)> = HashMap::new();
 	// List of subscription that are active on the server, with the method name to unsubscribe.
-	let mut active_subscriptions: HashMap<RawClientRequestId, (mpsc::Sender<common::JsonValue>, _)> = HashMap::new();
+	let mut active_subscriptions: HashMap<RawClientRequestId, (mpsc::Sender<jsonrpc_v2::JsonValue>, _)> = HashMap::new();
 	// List of requests that the server must answer.
 	let mut ongoing_requests: HashMap<RawClientRequestId, oneshot::Sender<Result<_, _>>> = HashMap::new();
 

@@ -65,7 +65,7 @@
 //!
 
 use crate::client::ws::{WsConnectError, WsTransportClient};
-use crate::common;
+use crate::types::jsonrpc_v2;
 
 use alloc::{collections::VecDeque, string::String, vec};
 use core::{fmt, future::Future};
@@ -141,7 +141,7 @@ pub enum RawClientEvent {
 		/// has returned.
 		request_id: RawClientRequestId,
 		/// The response itself.
-		result: Result<common::JsonValue, common::Error>,
+		result: Result<jsonrpc_v2::JsonValue, jsonrpc_v2::Error>,
 	},
 
 	/// A subscription request has received a response.
@@ -151,7 +151,7 @@ pub enum RawClientEvent {
 		request_id: RawClientRequestId,
 		/// On success, we are now actively subscribed.
 		/// [`SubscriptionNotif`](RawClientEvent::SubscriptionNotif) events will now be generated.
-		result: Result<(), common::Error>,
+		result: Result<(), jsonrpc_v2::Error>,
 	},
 
 	/// Notification about something we are subscribed to.
@@ -160,7 +160,7 @@ pub enum RawClientEvent {
 		/// [`RawClient::start_subscription`] has returned.
 		request_id: RawClientRequestId,
 		/// Opaque data that the server wants to communicate to us.
-		result: common::JsonValue,
+		result: jsonrpc_v2::JsonValue,
 	},
 
 	/// Finished closing a subscription.
@@ -203,7 +203,7 @@ pub enum RawClientError {
 	/// Error in the raw client.
 	Inner(WsConnectError),
 	/// RawServer returned an error for our request.
-	RequestError(common::Error),
+	RequestError(jsonrpc_v2::Error),
 	/// RawServer has sent back a subscription ID that has already been used by an earlier
 	/// subscription.
 	DuplicateSubscriptionId,
@@ -252,10 +252,10 @@ impl RawClient {
 	pub async fn send_notification(
 		&mut self,
 		method: impl Into<String>,
-		params: impl Into<common::Params>,
+		params: impl Into<jsonrpc_v2::Params>,
 	) -> Result<(), WsConnectError> {
-		let request = common::Request::Single(common::Call::Notification(common::Notification {
-			jsonrpc: common::Version::V2,
+		let request = jsonrpc_v2::Request::Single(jsonrpc_v2::Call::Notification(jsonrpc_v2::Notification {
+			jsonrpc: jsonrpc_v2::Version::V2,
 			method: method.into(),
 			params: params.into(),
 		}));
@@ -272,7 +272,7 @@ impl RawClient {
 	pub async fn start_request(
 		&mut self,
 		method: impl Into<String>,
-		params: impl Into<common::Params>,
+		params: impl Into<jsonrpc_v2::Params>,
 	) -> Result<RawClientRequestId, WsConnectError> {
 		self.start_impl(method, params, Request::Request).await
 	}
@@ -285,7 +285,7 @@ impl RawClient {
 	pub async fn start_subscription(
 		&mut self,
 		method: impl Into<String>,
-		params: impl Into<common::Params>,
+		params: impl Into<jsonrpc_v2::Params>,
 	) -> Result<RawClientRequestId, WsConnectError> {
 		self.start_impl(method, params, Request::PendingSubscription).await
 	}
@@ -294,7 +294,7 @@ impl RawClient {
 	async fn start_impl(
 		&mut self,
 		method: impl Into<String>,
-		params: impl Into<common::Params>,
+		params: impl Into<jsonrpc_v2::Params>,
 		ty: Request,
 	) -> Result<RawClientRequestId, WsConnectError> {
 		loop {
@@ -306,11 +306,11 @@ impl RawClient {
 				Entry::Vacant(e) => e,
 			};
 
-			let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
-				jsonrpc: common::Version::V2,
+			let request = jsonrpc_v2::Request::Single(jsonrpc_v2::Call::MethodCall(jsonrpc_v2::MethodCall {
+				jsonrpc: jsonrpc_v2::Version::V2,
 				method: method.into(),
 				params: params.into(),
-				id: common::Id::Num(id.0),
+				id: jsonrpc_v2::Id::Num(id.0),
 			}));
 
 			// Note that in case of an error, we "lose" the request id (as in, it will never be
@@ -349,7 +349,7 @@ impl RawClient {
 	pub fn request_by_id<'a>(
 		&'a mut self,
 		rq_id: RawClientRequestId,
-	) -> Option<impl Future<Output = Result<common::JsonValue, RawClientError>> + 'a> {
+	) -> Option<impl Future<Output = Result<jsonrpc_v2::JsonValue, RawClientError>> + 'a> {
 		// First, let's check whether the request ID is valid.
 		if let Some(rq) = self.requests.get(&rq_id) {
 			if *rq != Request::Request {
@@ -415,14 +415,14 @@ impl RawClient {
 		let result = self.inner.next_response().await.map_err(RawClientError::Inner)?;
 
 		match result {
-			common::Response::Single(rp) => self.process_response(rp)?,
-			common::Response::Batch(rps) => {
+			jsonrpc_v2::Response::Single(rp) => self.process_response(rp)?,
+			jsonrpc_v2::Response::Batch(rps) => {
 				for rp in rps {
 					// TODO: if an error happens, we throw away the entire batch
 					self.process_response(rp)?;
 				}
 			}
-			common::Response::Notif(notif) => {
+			jsonrpc_v2::Response::Notif(notif) => {
 				let sub_id = notif.params.subscription.into_string();
 				if let Some(request_id) = self.subscriptions.get(&sub_id) {
 					if self.events_queue.len() < self.events_queue_max_size {
@@ -443,15 +443,15 @@ impl RawClient {
 
 	/// Processes the response obtained from the server. Updates the internal state of `self` to
 	/// account for it.
-	fn process_response(&mut self, response: common::Output) -> Result<(), RawClientError> {
+	fn process_response(&mut self, response: jsonrpc_v2::Output) -> Result<(), RawClientError> {
 		log::debug!(target: "ws-client-raw", "received response: {:?}", response);
 		let request_id = match response.id() {
-			common::Id::Num(n) => RawClientRequestId(*n),
-			common::Id::Str(s) => {
+			jsonrpc_v2::Id::Num(n) => RawClientRequestId(*n),
+			jsonrpc_v2::Id::Str(s) => {
 				log::warn!("Server responded with an invalid request id: {:?}", s);
 				return Err(RawClientError::UnknownRequestId);
 			}
-			common::Id::Null => {
+			jsonrpc_v2::Id::Null => {
 				log::warn!("Server responded with a null request id");
 				return Err(RawClientError::NullRequestId);
 			}
@@ -473,7 +473,7 @@ impl RawClient {
 					}
 				};
 
-				let sub_id = match common::from_value::<common::SubscriptionId>(response) {
+				let sub_id = match jsonrpc_v2::from_value::<jsonrpc_v2::SubscriptionId>(response) {
 					Ok(id) => id.into_string(),
 					Err(err) => {
 						log::warn!("Failed to parse string subscription id: {:?}", err);
@@ -596,7 +596,7 @@ impl<'a> RawClientActiveSubscription<'a> {
 	/// >           limit is reached, server notifications will be discarded. If you want to be
 	/// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
 	/// >           instead.
-	pub async fn next_notification(&mut self) -> Result<common::JsonValue, RawClientError> {
+	pub async fn next_notification(&mut self) -> Result<jsonrpc_v2::JsonValue, RawClientError> {
 		let mut events_queue_loopkup = 0;
 
 		loop {
@@ -644,7 +644,7 @@ impl<'a> RawClientActiveSubscription<'a> {
 			_ => panic!(),
 		};
 
-		let params = common::Params::Array(vec![sub_id.clone().into()]);
+		let params = jsonrpc_v2::Params::Array(vec![sub_id.clone().into()]);
 		self.client
 			.start_impl(method_name, params, Request::Unsubscribe(self.id))
 			.await

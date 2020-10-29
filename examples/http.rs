@@ -27,7 +27,7 @@
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee::client::HttpClient;
-use jsonrpsee::common::{JsonValue, Params};
+use jsonrpsee::types::jsonrpc_v2::{JsonValue, Params};
 use jsonrpsee::http::HttpServer;
 
 const SOCK_ADDR: &str = "127.0.0.1:9933";
@@ -58,6 +58,6 @@ async fn run_server(server_started_tx: Sender<()>, url: &str) {
 	server_started_tx.send(()).unwrap();
 	loop {
 		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await;
+		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
 	}
 }

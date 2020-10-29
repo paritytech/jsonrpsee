@@ -27,7 +27,7 @@
 mod background;
 mod response;
 
-use crate::common;
+use crate::types::jsonrpc_v2;
 use crate::http::server_utils::access_control::AccessControl;
 
 use fnv::FnvHashMap;
@@ -48,7 +48,7 @@ pub enum TransportServerEvent<T> {
 		/// Identifier of the request within the state of the [`TransportServer`].
 		id: T,
 		/// Body of the request.
-		request: common::Request,
+		request: jsonrpc_v2::Request,
 	},
 
 	/// A request has been cancelled, most likely because the client has closed the connection.
@@ -169,7 +169,7 @@ impl HttpTransportServer {
 	pub fn finish<'a>(
 		&'a mut self,
 		request_id: &'a RequestId,
-		response: Option<&'a common::Response>,
+		response: Option<&'a jsonrpc_v2::Response>,
 	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
 		Box::pin(async move {
 			let send_back = match self.requests.remove(request_id) {
@@ -229,7 +229,7 @@ impl HttpTransportServer {
 	pub fn send<'a>(
 		&'a mut self,
 		_: &'a RequestId,
-		_: &'a common::Response,
+		_: &'a jsonrpc_v2::Response,
 	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
 		Box::pin(async move { Err(()) })
 	}
