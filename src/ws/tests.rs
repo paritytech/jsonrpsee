@@ -235,7 +235,7 @@ async fn register_methods_works() {
 #[tokio::test]
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let server = WsServer::new("127.0.0.1:0").await.unwrap();
-	matches!(server.register_subscription("subscribe_hello".to_owned(), "subscribe_hello".to_owned()), Err(Error::AlreadyRegistered(_)));
+	assert!(matches!(server.register_subscription("subscribe_hello".to_owned(), "subscribe_hello".to_owned()), Err(Error::AlreadyRegistered(_))));
 }
 
 #[tokio::test]
