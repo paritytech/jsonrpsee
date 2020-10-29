@@ -200,39 +200,6 @@ impl HttpTransportServer {
 			Ok(())
 		})
 	}
-
-	/// Returns true if this implementation supports sending back data on this request without
-	/// closing it.
-	///
-	/// Returns an error if the request id is invalid.
-	/// > **Note**: Not supported by HTTP
-	//
-	// TODO: this method is useless remove or create abstraction.
-	pub fn supports_resuming(&self, id: &u64) -> Result<bool, ()> {
-		if self.requests.contains_key(id) {
-			Ok(false)
-		} else {
-			Err(())
-		}
-	}
-
-	/// Sends back some data on the request and keeps the request alive.
-	///
-	/// You can continue sending data on that same request later.
-	///
-	/// Returns an error if the request identifier is incorrect, or if the implementation doesn't
-	/// support that operation (see [`supports_resuming`](TransportServer::supports_resuming)).
-	///
-	/// > **Note**: Not supported by HTTP.
-	//
-	// TODO: this method is useless remove or create abstraction.
-	pub fn send<'a>(
-		&'a mut self,
-		_: &'a RequestId,
-		_: &'a jsonrpc::Response,
-	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
-		Box::pin(async move { Err(()) })
-	}
 }
 
 #[cfg(test)]
