@@ -24,9 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::http::transport::{HttpTransportServer, TransportServerEvent};
 use crate::types::jsonrpc_v2;
 use crate::types::jsonrpc_v2::wrapped::{batches, Notification, Params};
-use crate::http::transport::{HttpTransportServer, TransportServerEvent};
 
 use core::{fmt, hash::Hash};
 
@@ -81,10 +81,7 @@ pub struct RawServerRequest<'a> {
 impl RawServer {
 	/// Starts a [`RawServer`](crate::raw::RawServer) using the given raw server internally.
 	pub fn new(raw: HttpTransportServer) -> RawServer {
-		RawServer {
-			raw,
-			batches: batches::BatchesState::new(),
-		}
+		RawServer { raw, batches: batches::BatchesState::new() }
 	}
 }
 
@@ -136,10 +133,7 @@ impl RawServer {
 	/// Returns `None` if the request ID is invalid or if the request has already been answered in
 	/// the past.
 	pub fn request_by_id<'a>(&'a mut self, id: &RawServerRequestId) -> Option<RawServerRequest<'a>> {
-		Some(RawServerRequest {
-			inner: self.batches.request_by_id(id.inner)?,
-			raw: &mut self.raw,
-		})
+		Some(RawServerRequest { inner: self.batches.request_by_id(id.inner)?, raw: &mut self.raw })
 	}
 }
 

@@ -24,10 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::server::Error;
-use crate::types::jsonrpc_v2::{self, JsonValue};
 use crate::http::raw::{RawServer, RawServerEvent, RawServerRequestId};
 use crate::http::transport::HttpTransportServer;
+use crate::types::jsonrpc_v2::{self, JsonValue};
+use crate::types::server::Error;
 
 use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use parking_lot::Mutex;
@@ -149,7 +149,11 @@ impl Server {
 	/// to process notifications.
 	///
 	/// Returns an error if the method name was already registered.
-	pub fn register_notification(&self, method_name: String, allow_losses: bool) -> Result<RegisteredNotification, Error> {
+	pub fn register_notification(
+		&self,
+		method_name: String,
+		allow_losses: bool,
+	) -> Result<RegisteredNotification, Error> {
 		if !self.registered_methods.lock().insert(method_name.clone()) {
 			return Err(Error::AlreadyRegistered(method_name));
 		}

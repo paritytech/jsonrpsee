@@ -1,7 +1,7 @@
 #![cfg(test)]
 
-use crate::types::jsonrpc_v2::JsonValue;
 use crate::http::HttpServer;
+use crate::types::jsonrpc_v2::JsonValue;
 use futures::channel::oneshot::{self, Sender};
 use futures::future::FutureExt;
 use futures::{pin_mut, select};

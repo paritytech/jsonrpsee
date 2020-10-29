@@ -24,8 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::jsonrpc_v2;
 use crate::http::raw::RawServerRequest;
+use crate::types::jsonrpc_v2;
 use core::marker::PhantomData;
 
 /// Allows responding to a server request in a more elegant and strongly-typed fashion.

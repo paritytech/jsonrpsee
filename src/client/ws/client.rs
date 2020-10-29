@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::ws::{RawClient, RawClientEvent, RawClientRequestId, WsTransportClient};
-use crate::types::jsonrpc_v2::{self, JsonValue};
 use crate::types::client::Error;
+use crate::types::jsonrpc_v2::{self, JsonValue};
 
 use futures::{
 	channel::{mpsc, oneshot},
@@ -232,7 +232,8 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 	// unsubscribe.
 	let mut pending_subscriptions: HashMap<RawClientRequestId, (oneshot::Sender<_>, _)> = HashMap::new();
 	// List of subscription that are active on the server, with the method name to unsubscribe.
-	let mut active_subscriptions: HashMap<RawClientRequestId, (mpsc::Sender<jsonrpc_v2::JsonValue>, _)> = HashMap::new();
+	let mut active_subscriptions: HashMap<RawClientRequestId, (mpsc::Sender<jsonrpc_v2::JsonValue>, _)> =
+		HashMap::new();
 	// List of requests that the server must answer.
 	let mut ongoing_requests: HashMap<RawClientRequestId, oneshot::Sender<Result<_, _>>> = HashMap::new();
 

@@ -27,8 +27,8 @@
 #![cfg(test)]
 
 use crate::client::HttpTransportClient;
-use crate::types::jsonrpc_v2::{self, Call, MethodCall, Notification, Params, Request, Version};
 use crate::http::{HttpRawServer, HttpRawServerEvent, HttpTransportServer};
+use crate::types::jsonrpc_v2::{self, Call, MethodCall, Notification, Params, Request, Version};
 use serde_json::Value;
 
 async fn connection_context() -> (HttpTransportClient, HttpRawServer) {

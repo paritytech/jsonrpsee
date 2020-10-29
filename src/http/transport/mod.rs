@@ -27,8 +27,8 @@
 mod background;
 mod response;
 
-use crate::types::jsonrpc_v2;
 use crate::http::server_utils::access_control::AccessControl;
+use crate::types::jsonrpc_v2;
 
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};

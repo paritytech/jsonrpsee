@@ -3,8 +3,8 @@ use std::io;
 
 use crate::client::http::raw::*;
 use crate::client::http::transport::HttpTransportClient;
-use crate::types::jsonrpc_v2::{self, JsonValue};
 use crate::types::client::Error;
+use crate::types::jsonrpc_v2::{self, JsonValue};
 
 use futures::{channel::mpsc, channel::oneshot, future::Either, pin_mut, prelude::*};
 
