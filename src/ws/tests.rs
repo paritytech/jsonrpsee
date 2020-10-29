@@ -12,7 +12,6 @@ use futures::future::FutureExt;
 use futures::{pin_mut, select};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestClient};
-// use serde_json::Value as JsonValue;
 
 /// Spawns a dummy `JSONRPC v2 WebSocket` that just send subscriptions to `subscribe_hello` and
 /// `subscribe_foo`.
