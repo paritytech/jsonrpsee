@@ -2,8 +2,8 @@ use async_std::task::block_on;
 use criterion::*;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee::client::{HttpClient, WsClient};
-use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 use jsonrpsee::http::HttpServer;
+use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 use jsonrpsee::ws::WsServer;
 use std::net::SocketAddr;
 
