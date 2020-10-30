@@ -2,7 +2,7 @@ use async_std::task::block_on;
 use criterion::*;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee::client::{HttpClient, WsClient};
-use jsonrpsee::common::{JsonValue, Params};
+use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 use jsonrpsee::http::HttpServer;
 use jsonrpsee::ws::WsServer;
 use std::net::SocketAddr;
@@ -16,7 +16,7 @@ async fn http_server(tx: Sender<SocketAddr>) {
 	tx.send(*server.local_addr()).unwrap();
 	loop {
 		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await;
+		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
 	}
 }
 
@@ -26,7 +26,7 @@ async fn ws_server(tx: Sender<SocketAddr>) {
 	tx.send(*server.local_addr()).unwrap();
 	loop {
 		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await;
+		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
 	}
 }
 
