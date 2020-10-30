@@ -471,7 +471,6 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				// Remove all the subscriptions from `active_subscriptions` and
 				// `subscribed_clients`.
 				for sub_id in subscriptions {
-					debug_assert!(active_subscriptions.contains_key(&sub_id));
 					if let Some(unique_id) = active_subscriptions.remove(&sub_id) {
 						debug_assert!(subscribed_clients.contains_key(&unique_id));
 						if let Some(clients) = subscribed_clients.get_mut(&unique_id) {
