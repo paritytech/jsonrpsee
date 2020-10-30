@@ -11,6 +11,7 @@ use futures::{channel::mpsc, channel::oneshot, future::Either, pin_mut, prelude:
 ///
 /// The communication is performed via a `mpsc` channel where the `Client` acts as simple frontend
 /// and just passes requests along to the backend (worker thread)
+#[derive(Clone)]
 pub struct Client {
 	backend: mpsc::Sender<FrontToBack>,
 }
