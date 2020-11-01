@@ -21,6 +21,8 @@ use crate::common;
 use futures::{channel::mpsc, prelude::*};
 use thiserror::Error;
 
+const REQUEST_PARALLELISM: usize = 4;
+
 /// Implementation of a raw client for HTTP requests.
 pub struct HttpTransportClient {
 	/// Sender that sends requests to the background task.
@@ -45,7 +47,7 @@ impl HttpTransportClient {
 	/// Initializes a new HTTP client.
 	// TODO: better type for target
 	pub fn new(target: &str) -> Self {
-		let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(4);
+		let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(REQUEST_PARALLELISM);
 
 		// Because hyper can only be polled through tokio, we spawn it in a background thread.
 		thread::Builder::new()
@@ -170,7 +172,7 @@ pub enum RequestError {
 
 /// Function that runs in a background thread.
 fn background_thread<T, ProcessRequest: Future<Output = ()>>(
-	mut requests_rx: mpsc::Receiver<T>,
+	requests_rx: mpsc::Receiver<T>,
 	process_request: impl Fn(T) -> ProcessRequest,
 ) {
 	let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().enable_all().build() {
@@ -187,34 +189,7 @@ fn background_thread<T, ProcessRequest: Future<Output = ()>>(
 	};
 
 	// Running until the channel has been closed, and all requests have been completed.
-	runtime.block_on(async move {
-		// Collection of futures that process ongoing requests.
-		let mut pending_requests = stream::FuturesUnordered::new();
-
-		loop {
-			let request = loop {
-				if !pending_requests.is_empty() {
-					let event = future::select(requests_rx.next(), pending_requests.next()).await;
-					if let future::Either::Left((rq, _)) = event {
-						break rq;
-					}
-				// else: one of the elements of `pending_requests` is finished, but we don't care
-				} else {
-					break requests_rx.next().await;
-				}
-			};
-
-			match request {
-				// We received a request from the foreground.
-				Some(rq) => pending_requests.push(process_request(rq)),
-				// The channel with the foreground has closed.
-				None => break,
-			}
-		}
-
-		// Before returning, complete all pending requests.
-		while pending_requests.next().await.is_some() {}
-	});
+	runtime.block_on(requests_rx.for_each_concurrent(Some(REQUEST_PARALLELISM), process_request));
 }
 
 #[cfg(test)]
