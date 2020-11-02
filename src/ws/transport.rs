@@ -370,7 +370,7 @@ async fn per_connection_task(
 			future::Either::Left((socket_packet, _)) => {
 				let socket_packet = match socket_packet {
 					Some(Ok(pq)) => {
-						log::debug!("received text data from WebSocket: {:?}", pq);
+						log::debug!("received data from WebSocket: {:?}", pq);
 						pq
 					}
 					Some(Err(err)) => {
