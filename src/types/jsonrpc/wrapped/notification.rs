@@ -24,24 +24,23 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common;
-use crate::ws::raw::params::Params;
+use crate::types::jsonrpc::{self, wrapped::Params};
 use core::fmt;
 
 /// Notification received on a server.
 ///
-/// Wraps around a `common::Notification`.
+/// Wraps around a `jsonrpc::Notification`.
 #[derive(PartialEq)]
-pub struct Notification(common::Notification);
+pub struct Notification(jsonrpc::Notification);
 
-impl From<common::Notification> for Notification {
-	fn from(notif: common::Notification) -> Notification {
+impl From<jsonrpc::Notification> for Notification {
+	fn from(notif: jsonrpc::Notification) -> Notification {
 		Notification(notif)
 	}
 }
 
-impl From<Notification> for common::Notification {
-	fn from(notif: Notification) -> common::Notification {
+impl From<Notification> for jsonrpc::Notification {
+	fn from(notif: Notification) -> jsonrpc::Notification {
 		notif.0
 	}
 }

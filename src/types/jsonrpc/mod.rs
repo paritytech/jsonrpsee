@@ -36,6 +36,9 @@ mod request;
 mod response;
 mod version;
 
+/// Wrappers on-top of plain serialize/deserialize types with additional convience methods.
+pub mod wrapped;
+
 pub use serde::{de::DeserializeOwned, ser::Serialize};
 pub use serde_json::error::Error as ParseError;
 pub use serde_json::Map as JsonMap;

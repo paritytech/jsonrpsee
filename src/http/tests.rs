@@ -1,7 +1,7 @@
 #![cfg(test)]
 
-use crate::common::JsonValue;
 use crate::http::HttpServer;
+use crate::types::jsonrpc::JsonValue;
 use futures::channel::oneshot::{self, Sender};
 use futures::future::FutureExt;
 use futures::{pin_mut, select};
@@ -20,7 +20,7 @@ async fn server(server_started_tx: Sender<SocketAddr>) {
 		let hello_fut = async {
 			let handle = hello.next().await;
 			log::debug!("server respond to hello");
-			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await;
+			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
 		}
 		.fuse();
 
@@ -28,7 +28,7 @@ async fn server(server_started_tx: Sender<SocketAddr>) {
 			let handle = add.next().await;
 			let params: Vec<u64> = handle.params().clone().parse().unwrap();
 			let sum: u64 = params.iter().sum();
-			handle.respond(Ok(JsonValue::Number(sum.into()))).await;
+			handle.respond(Ok(JsonValue::Number(sum.into()))).await.unwrap();
 		}
 		.fuse();
 

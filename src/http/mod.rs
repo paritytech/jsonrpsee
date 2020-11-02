@@ -33,7 +33,6 @@ mod transport;
 #[cfg(test)]
 mod tests;
 
-pub use raw::Notification as HttpRawNotification;
 pub use raw::RawServer as HttpRawServer;
 pub use raw::RawServerEvent as HttpRawServerEvent;
 pub use raw::TypedResponder as HttpTypedResponder;

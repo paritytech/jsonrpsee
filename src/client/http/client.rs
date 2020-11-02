@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use std::{error, io};
+use std::io;
 
 use crate::client::http::raw::*;
 use crate::client::http::transport::HttpTransportClient;
-use crate::common::{self, JsonValue};
+use crate::types::client::Error;
+use crate::types::jsonrpc::{self, JsonValue};
 
 use futures::{channel::mpsc, channel::oneshot, future::Either, pin_mut, prelude::*};
 
@@ -23,7 +24,7 @@ enum FrontToBack {
 		/// Method for the notification.
 		method: String,
 		/// Parameters to send to the server.
-		params: common::Params,
+		params: jsonrpc::Params,
 	},
 
 	/// Send a request to the server.
@@ -31,25 +32,10 @@ enum FrontToBack {
 		/// Method for the request.
 		method: String,
 		/// Parameters of the request.
-		params: common::Params,
+		params: jsonrpc::Params,
 		/// One-shot channel where to send back the outcome of that request.
-		send_back: oneshot::Sender<Result<JsonValue, RequestError>>,
+		send_back: oneshot::Sender<Result<JsonValue, Error>>,
 	},
-}
-
-/// Error produced by [`Client::request`] and [`Client::subscribe`].
-#[derive(Debug, thiserror::Error)]
-pub enum RequestError {
-	/// Networking error or error on the low-level protocol layer (e.g. missing field,
-	/// invalid ID, etc.).
-	#[error("Networking or low-level protocol error: {0}")]
-	TransportError(#[source] Box<dyn error::Error + Send + Sync>),
-	/// RawServer responded to our request with an error.
-	#[error("Server responded to our request with an error: {0:?}")]
-	Request(#[source] common::Error),
-	/// Failed to parse the data that the server sent back to us.
-	#[error("Parse error: {0}")]
-	ParseError(#[source] common::ParseError),
 }
 
 impl Client {
@@ -66,56 +52,48 @@ impl Client {
 	}
 
 	/// Send a notification to the server.
-	pub async fn notification(&self, method: impl Into<String>, params: impl Into<crate::common::Params>) {
+	pub async fn notification(
+		&self,
+		method: impl Into<String>,
+		params: impl Into<jsonrpc::Params>,
+	) -> Result<(), Error> {
 		let method = method.into();
 		let params = params.into();
-		log::debug!(target: "jsonrpsee-http-client", "transmitting notification: method={:?}, params={:?}", method, params);
-
-		// TODO: do we care if the channel is just temporarly full or closed in this context?
-		let _ = self.backend.clone().send(FrontToBack::Notification { method, params }).await;
+		log::debug!("[frontend]: client send notification: method={:?}, params={:?}", method, params);
+		self.backend.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::InternalChannel)
 	}
 
 	/// Perform a request towards the server.
 	pub async fn request<Ret>(
 		&self,
 		method: impl Into<String>,
-		params: impl Into<crate::common::Params>,
-	) -> Result<Ret, RequestError>
+		params: impl Into<jsonrpc::Params>,
+	) -> Result<Ret, Error>
 	where
-		Ret: common::DeserializeOwned,
+		Ret: jsonrpc::DeserializeOwned,
 	{
 		let method = method.into();
 		let params = params.into();
-		log::debug!(target: "jsonrpsee-http-client", "transmitting request: method={:?}, params={:?}", method, params);
+		log::debug!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
-		// TODO: do we care if the channel is just temporarly full or closed in this context?
-		if let Err(e) =
-			self.backend.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx }).await
-		{
-			log::debug!(target: "jsonrpsee-http-client", "failed to send request to background task={:?}", e);
-		}
+		// TODO: send a `ChannelClosed` message if we close the channel unexpectedly
 
+		self.backend.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx }).await?;
 		let json_value = match send_back_rx.await {
-			Ok(Ok(v)) => {
-				log::debug!(target: "jsonrpsee-http-client", "response={:?}", v);
-				v
-			}
+			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
 				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(RequestError::TransportError(Box::new(err)));
+				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-
-		common::from_value(json_value).map_err(RequestError::ParseError)
+		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
 }
 
 /// Function being run in the background that processes messages from the frontend.
 async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<FrontToBack>) {
-	log::debug!(target: "jsonrpsee-http-client", "background thread started");
-
 	// List of requests that the server must answer.
 	let mut ongoing_requests: HashMap<RawClientRequestId, oneshot::Sender<Result<_, _>>> = HashMap::new();
 
@@ -137,34 +115,37 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 			// If the channel is closed, then the `Client` has been destroyed and we
 			// stop this task.
 			Either::Left(None) => {
-				log::debug!(target: "jsonrpsee-http-client", "background thread terminated");
+				log::trace!("[backend]: client terminated");
 				if !ongoing_requests.is_empty() {
-					log::warn!(target: "jsonrpsee-http-client", "client was dropped with {} pending requests", ongoing_requests.len());
+					log::warn!("client was dropped with {} pending requests", ongoing_requests.len());
 				}
 				return;
 			}
 
 			// User called `notification` on the front-end.
 			Either::Left(Some(FrontToBack::Notification { method, params })) => {
+				log::trace!("[backend]: client send notification");
 				let _ = client.send_notification(method, params).await;
 			}
 
 			// User called `request` on the front-end.
 			Either::Left(Some(FrontToBack::StartRequest { method, params, send_back })) => {
+				log::trace!("[backend]: client prepare to send request={:?}", method);
 				match client.start_request(method, params).await {
 					Ok(id) => {
 						log::debug!(target: "jsonrpsee-http-client", "background thread; inserting ingoing request={:?}", id);
 						ongoing_requests.insert(id, send_back);
 					}
 					Err(err) => {
-						let _ = send_back.send(Err(RequestError::TransportError(Box::new(err))));
+						let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
 					}
 				}
 			}
 
 			// Received a response to a request from the server.
 			Either::Right(Ok(RawClientEvent::Response { request_id, result })) => {
-				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(RequestError::Request));
+				log::trace!("[backend] client received response to req={:?}, result={:?}", request_id, result);
+				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(Error::Request));
 			}
 
 			Either::Right(Err(e)) => {

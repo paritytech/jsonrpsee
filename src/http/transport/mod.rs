@@ -27,8 +27,8 @@
 mod background;
 mod response;
 
-use crate::common;
 use crate::http::server_utils::access_control::AccessControl;
+use crate::types::jsonrpc;
 
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
@@ -48,7 +48,7 @@ pub enum TransportServerEvent<T> {
 		/// Identifier of the request within the state of the [`TransportServer`].
 		id: T,
 		/// Body of the request.
-		request: common::Request,
+		request: jsonrpc::Request,
 	},
 
 	/// A request has been cancelled, most likely because the client has closed the connection.
@@ -169,7 +169,7 @@ impl HttpTransportServer {
 	pub fn finish<'a>(
 		&'a mut self,
 		request_id: &'a RequestId,
-		response: Option<&'a common::Response>,
+		response: Option<&'a jsonrpc::Response>,
 	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
 		Box::pin(async move {
 			let send_back = match self.requests.remove(request_id) {
@@ -199,39 +199,6 @@ impl HttpTransportServer {
 
 			Ok(())
 		})
-	}
-
-	/// Returns true if this implementation supports sending back data on this request without
-	/// closing it.
-	///
-	/// Returns an error if the request id is invalid.
-	/// > **Note**: Not supported by HTTP
-	//
-	// TODO: this method is useless remove or create abstraction.
-	pub fn supports_resuming(&self, id: &u64) -> Result<bool, ()> {
-		if self.requests.contains_key(id) {
-			Ok(false)
-		} else {
-			Err(())
-		}
-	}
-
-	/// Sends back some data on the request and keeps the request alive.
-	///
-	/// You can continue sending data on that same request later.
-	///
-	/// Returns an error if the request identifier is incorrect, or if the implementation doesn't
-	/// support that operation (see [`supports_resuming`](TransportServer::supports_resuming)).
-	///
-	/// > **Note**: Not supported by HTTP.
-	//
-	// TODO: this method is useless remove or create abstraction.
-	pub fn send<'a>(
-		&'a mut self,
-		_: &'a RequestId,
-		_: &'a common::Response,
-	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
-		Box::pin(async move { Err(()) })
 	}
 }
 
