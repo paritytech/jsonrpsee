@@ -125,8 +125,6 @@ async fn process_request(
 	fg_process_tx: &mut mpsc::Sender<Request>,
 	access_control: &AccessControl,
 ) -> hyper::Response<hyper::Body> {
-	log::debug!(target: "jsonrpc-http-transport-server", "Recevied request={:?}", request);
-
 	// Process access control
 	if access_control.deny_host(&request) {
 		return response::host_not_allowed();
@@ -164,15 +162,17 @@ async fn process_request(
 				},
 			};
 
-			log::debug!(target: "http-server transport", "received request={:?}", json_body);
-
 			let (tx, rx) = oneshot::channel();
+			log::debug!("recv: {}", jsonrpc::to_string(&json_body).unwrap());
 			let user_facing_rq = Request { send_back: tx, request: json_body };
 			if fg_process_tx.send(user_facing_rq).await.is_err() {
 				return response::internal_error("JSON requests processing channel has shut down");
 			}
 			match rx.await {
-				Ok(response) => response,
+				Ok(response) => {
+					log::debug!("send: {:?}", response.body());
+					response
+				}
 				Err(_) => return response::internal_error("JSON request send back channel has shut down"),
 			}
 		}
