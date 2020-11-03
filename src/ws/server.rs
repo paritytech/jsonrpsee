@@ -354,7 +354,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 		match outcome {
 			Either::Left(None) => {
 				log::trace!("[backend]: background_task terminated");
-				return
+				return;
 			}
 			Either::Left(Some(FrontToBack::AnswerRequest { request_id, answer })) => {
 				log::trace!("[backend]: answer_request: {:?} id: {:?}", answer, request_id);
