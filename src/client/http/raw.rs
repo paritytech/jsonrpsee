@@ -189,7 +189,6 @@ impl RawClient {
 				id: jsonrpc::Id::Num(id.0),
 			}));
 
-			log::debug!(target: "jsonrpsee-http-raw-client", "request={:?}", request);
 			// Note that in case of an error, we "lose" the request id (as in, it will never be
 			// used). This isn't a problem, however.
 			self.inner.send_request(request).await?;

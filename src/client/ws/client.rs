@@ -122,7 +122,7 @@ impl Client {
 	) -> Result<(), Error> {
 		let method = method.into();
 		let params = params.into();
-		log::debug!("[frontend]: client send notification: method={:?}, params={:?}", method, params);
+		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
 		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::InternalChannel)
 	}
 
@@ -137,7 +137,7 @@ impl Client {
 	{
 		let method = method.into();
 		let params = params.into();
-		log::debug!("[frontend]: send request: method={:?}, params={:?}", method, params);
+		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		self.to_back.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx }).await?;
 
@@ -171,6 +171,7 @@ impl Client {
 			return Err(Error::Subscription(subscribe_method, unsubscribe_method));
 		}
 
+		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		self.to_back
 			.clone()

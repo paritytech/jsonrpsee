@@ -182,13 +182,13 @@ impl WsTransportServer {
 
 				match next {
 					Event::NewConnection(connec) => {
-						log::debug!("new connection with id: {:?}", self.next_request_id);
+						log::trace!("{:?}: new connection", self.next_request_id);
 						self.connections_tasks.push(
 							per_connection_task(connec, self.next_request_id.clone(), self.to_front.clone()).boxed(),
 						);
 					}
 					Event::Event(BackToFront::NewRequest { id, body, sender }) => {
-						log::debug!("new request with id: {:?}", id);
+						log::trace!("{:?}: new request", self.next_request_id);
 						let _was_in = self.to_connections.insert(id.clone(), sender);
 						debug_assert!(_was_in.is_none());
 						return TransportServerEvent::Request { id, request: body };
@@ -206,7 +206,7 @@ impl WsTransportServer {
 							//
 							// The `ws::raw::tests::request_work` is emperic proof of it.
 							if was_in.is_some() {
-								log::debug!("closed connection with id: {:?}", rq_id);
+								log::trace!("{:?}: closed connection", self.next_request_id);
 								self.pending_events.push(TransportServerEvent::Closed(rq_id));
 							}
 						}
@@ -370,15 +370,15 @@ async fn per_connection_task(
 			future::Either::Left((socket_packet, _)) => {
 				let socket_packet = match socket_packet {
 					Some(Ok(pq)) => {
-						log::debug!("received data from WebSocket: {:?}", pq);
+						log::trace!("{:?}: received data from WebSocket: {:?}", next_request_id, pq);
 						pq
 					}
 					Some(Err(err)) => {
-						log::error!("failed to receive data from WebSocket: {:?}", err);
+						log::error!("{:?}: failed to receive data from WebSocket: {:?}", next_request_id, err);
 						return pending_requests;
 					}
 					None => {
-						log::error!("failed to receive data from Websocket channel closed");
+						log::error!("{:?}: failed to receive data from Websocket channel closed", next_request_id);
 						return pending_requests;
 					}
 				};
@@ -399,7 +399,8 @@ async fn per_connection_task(
 							// deserialization failed and the client is not alive
 							Err(e) => {
 								log::warn!(
-									"Failed to send: {:?} over WebSocket transport with error: {:?}",
+									"{:?}: Failed to send: {:?} over WebSocket transport with error: {:?}",
+									next_request_id,
 									response,
 									e
 								);
@@ -411,6 +412,7 @@ async fn per_connection_task(
 
 				let request_id = WsRequestId(next_request_id.fetch_add(1, atomic::Ordering::Relaxed));
 				debug_assert_ne!(request_id.0, u64::max_value());
+				log::debug!("recv: {}", jsonrpc::to_string(&body).expect("valid Request; qed"));
 
 				// Important note: since the background task sends messages to the front task via
 				// a channel, and the front task sends messages to the background task via a
@@ -432,7 +434,7 @@ async fn per_connection_task(
 					// The channel is down or full.
 					Some(Err(e)) => {
 						log::error!(
-							"send request={:?} to frontend failed because of {:?}, terminating the connection",
+							"{:?}: send request to frontend failed because of {:?}, terminating the connection",
 							request_id,
 							e,
 						);
@@ -442,7 +444,7 @@ async fn per_connection_task(
 					// TODO(niklasad1): verify if this is possible to happen "in practice".
 					None => {
 						log::error!(
-							"send request={:?} to frontend failed future not ready, terminating the connection",
+							"{:?}: send request to frontend failed future not ready, terminating the connection",
 							request_id,
 						);
 						return pending_requests;
@@ -452,14 +454,14 @@ async fn per_connection_task(
 
 			// Received data to send on the connection.
 			future::Either::Right((Some(FrontToBack::Send(to_send)), _)) => {
-				log::trace!("transmit: {:?}", to_send);
+				log::debug!("send: {}", to_send);
 				if let Err(err) = sender.send_text(&to_send).await {
 					log::warn!("failed to send: {:?} over WebSocket transport with error: {:?}", to_send, err);
 					return pending_requests;
 				}
 			}
 
-			// Received data to send on the connection.
+			// Request finished.
 			future::Either::Right((Some(FrontToBack::Finished(rq_id)), _)) => {
 				log::trace!("finished request_id={:?}", rq_id);
 				let pos = pending_requests.iter().position(|r| *r == rq_id).unwrap();
