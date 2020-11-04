@@ -73,6 +73,7 @@ impl HttpTransportClient {
 		&'s mut self,
 		request: jsonrpc::Request,
 	) -> Pin<Box<dyn Future<Output = Result<(), RequestError>> + Send + 's>> {
+		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
 		let mut requests_tx = self.requests_tx.clone();
 
 		let request = jsonrpc::to_vec(&request).map(|body| {
@@ -131,6 +132,7 @@ impl HttpTransportClient {
 
 			// TODO: use Response::from_json
 			let as_json: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(RequestError::ParseError)?;
+			log::debug!("recv: {}", jsonrpc::to_string(&as_json).expect("request valid JSON; qed"));
 			Ok(as_json)
 		})
 	}

@@ -184,11 +184,11 @@ impl Server {
 		method_name: String,
 		allow_losses: bool,
 	) -> Result<RegisteredNotification, Error> {
-		log::debug!("[frontend]: register_notification={}", method_name);
 		if !self.registered_methods.lock().insert(method_name.clone()) {
 			return Err(Error::AlreadyRegistered(method_name));
 		}
 
+		log::trace!("[frontend]: register_notification={}", method_name);
 		let (tx, rx) = mpsc::channel(32);
 
 		self.to_back
@@ -209,11 +209,11 @@ impl Server {
 	///
 	/// Returns an error if the method name was already registered.
 	pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, Error> {
-		log::debug!("[frontend]: register_method={}", method_name);
 		if !self.registered_methods.lock().insert(method_name.clone()) {
 			return Err(Error::AlreadyRegistered(method_name));
 		}
 
+		log::trace!("[frontend]: register_method={}", method_name);
 		let (tx, rx) = mpsc::channel(32);
 
 		self.to_back
@@ -234,11 +234,6 @@ impl Server {
 		subscribe_method_name: String,
 		unsubscribe_method_name: String,
 	) -> Result<RegisteredSubscription, Error> {
-		log::debug!(
-			"[frontend]: server register subscription: subscribe_method={}, unsubscribe_method={}",
-			subscribe_method_name,
-			unsubscribe_method_name
-		);
 		{
 			let mut registered_methods = self.registered_methods.lock();
 
@@ -254,6 +249,11 @@ impl Server {
 			}
 		}
 
+		log::trace!(
+			"[frontend]: server register subscription: subscribe_method={}, unsubscribe_method={}",
+			subscribe_method_name,
+			unsubscribe_method_name
+		);
 		let unique_id = self.next_subscription_unique_id.fetch_add(1, atomic::Ordering::Relaxed);
 
 		self.to_back
@@ -352,14 +352,20 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 		};
 
 		match outcome {
-			Either::Left(None) => return,
+			Either::Left(None) => {
+				log::trace!("[backend]: background_task terminated");
+				return;
+			}
 			Either::Left(Some(FrontToBack::AnswerRequest { request_id, answer })) => {
+				log::trace!("[backend]: answer_request: {:?} id: {:?}", answer, request_id);
 				server.request_by_id(&request_id).unwrap().respond(answer);
 			}
 			Either::Left(Some(FrontToBack::RegisterNotifications { name, handler, allow_losses })) => {
+				log::trace!("[backend]: register_notification: {:?}", name);
 				registered_notifications.insert(name, (handler, allow_losses));
 			}
 			Either::Left(Some(FrontToBack::RegisterMethod { name, handler })) => {
+				log::trace!("[backend]: register_method: {:?}", name);
 				registered_methods.insert(name, handler);
 			}
 			Either::Left(Some(FrontToBack::RegisterSubscription {
@@ -367,8 +373,8 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				subscribe_method,
 				unsubscribe_method,
 			})) => {
-				log::debug!(
-					"[backend]: server register subscription=id={:?}, subscribe_method:{}, unsubscribe_method={}",
+				log::trace!(
+					"[backend]: register subscription=id={:?}, subscribe_method:{}, unsubscribe_method={}",
 					unique_id,
 					subscribe_method,
 					unsubscribe_method
@@ -388,7 +394,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				subscribed_clients.insert(unique_id, Vec::new());
 			}
 			Either::Left(Some(FrontToBack::SendOutNotif { unique_id, notification })) => {
-				log::debug!("[backend]: server preparing response to subscription={:?}", unique_id);
+				log::trace!("[backend]: preparing response to subscription={:?}", unique_id);
 				debug_assert!(subscribed_clients.contains_key(&unique_id));
 				if let Some(clients) = subscribed_clients.get(&unique_id) {
 					log::trace!(
@@ -408,7 +414,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				}
 			}
 			Either::Right(RawServerEvent::Notification(notification)) => {
-				log::debug!("[backend]: server received notification: {:?}", notification);
+				log::debug!("[backend]: received notification: {:?}", notification);
 				if let Some((handler, allow_losses)) = registered_notifications.get_mut(notification.method()) {
 					let params: &jsonrpc::Params = notification.params().into();
 					// Note: we just ignore errors. It doesn't make sense logically speaking to
@@ -422,9 +428,8 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 			}
 			Either::Right(RawServerEvent::Request(request)) => {
 				if let Some(handler) = registered_methods.get_mut(request.method()) {
-					log::debug!("[backend]: server received request: {:?}", request);
+					log::trace!("[backend]: received request: {:?}", request);
 					let params: &jsonrpc::Params = request.params().into();
-					log::debug!("server called handler");
 					match handler.send((request.id(), params.clone())).now_or_never() {
 						Some(Ok(())) => {}
 						Some(Err(_)) | None => {
@@ -432,7 +437,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 						}
 					}
 				} else if let Some(sub_unique_id) = subscribe_methods.get(request.method()) {
-					log::debug!("[backend]: server received subscription: {:?}", request);
+					log::trace!("[backend]: received subscription: {:?}", request);
 					if let Ok(sub_id) = request.into_subscription() {
 						debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
 						if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
@@ -444,7 +449,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 						active_subscriptions.insert(sub_id, *sub_unique_id);
 					}
 				} else if let Some(sub_unique_id) = unsubscribe_methods.get(request.method()) {
-					log::debug!("[backend]: server received unsubscription: {:?}", request);
+					log::trace!("[backend]: received unsubscription: {:?}", request);
 					match RawServerSubscriptionId::try_from(request.params()) {
 						Ok(sub_id) => {
 							debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
@@ -473,7 +478,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				// We don't really care whether subscriptions are now ready.
 			}
 			Either::Right(RawServerEvent::SubscriptionsClosed(subscriptions)) => {
-				log::debug!("[backend]: server close subscriptions: {:?}", subscriptions);
+				log::trace!("[backend]: close subscriptions: {:?}", subscriptions);
 				// Remove all the subscriptions from `active_subscriptions` and
 				// `subscribed_clients`.
 				for sub_id in subscriptions {

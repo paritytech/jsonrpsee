@@ -158,6 +158,7 @@ impl Server {
 			return Err(Error::AlreadyRegistered(method_name));
 		}
 
+		log::trace!("[frontend]: register_notification={}", method_name);
 		let (tx, rx) = mpsc::channel(32);
 
 		self.to_back
@@ -178,11 +179,11 @@ impl Server {
 	///
 	/// Returns an error if the method name was already registered.
 	pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, Error> {
-		log::debug!("[frontend]: register_method={}", method_name);
 		if !self.registered_methods.lock().insert(method_name.clone()) {
 			return Err(Error::AlreadyRegistered(method_name));
 		}
 
+		log::trace!("[frontend]: register_method={}", method_name);
 		let (tx, rx) = mpsc::channel(32);
 
 		self.to_back
@@ -257,18 +258,24 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 		};
 
 		match outcome {
-			Either::Left(None) => return,
+			Either::Left(None) => {
+				log::trace!("[backend]: background_task terminated");
+				return;
+			}
 			Either::Left(Some(FrontToBack::AnswerRequest { request_id, answer })) => {
+				log::trace!("[backend]: answer_request: {:?} id: {:?}", answer, request_id);
 				server.request_by_id(&request_id).unwrap().respond(answer);
 			}
 			Either::Left(Some(FrontToBack::RegisterNotifications { name, handler, allow_losses })) => {
+				log::trace!("[backend]: register_notification: {:?}", name);
 				registered_notifications.insert(name, (handler, allow_losses));
 			}
 			Either::Left(Some(FrontToBack::RegisterMethod { name, handler })) => {
+				log::trace!("[backend]: register_method: {:?}", name);
 				registered_methods.insert(name, handler);
 			}
 			Either::Right(RawServerEvent::Notification(notification)) => {
-				log::debug!("server received notification: {:?}", notification);
+				log::trace!("[backend]: received notification: {:?}", notification);
 				if let Some((handler, allow_losses)) = registered_notifications.get_mut(notification.method()) {
 					let params: &jsonrpc::Params = notification.params().into();
 					// Note: we just ignore errors. It doesn't make sense logically speaking to
@@ -281,7 +288,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				}
 			}
 			Either::Right(RawServerEvent::Request(request)) => {
-				log::debug!("server received request: {:?}", request);
+				log::trace!("[backend]: received request: {:?}", request);
 				if let Some(handler) = registered_methods.get_mut(request.method()) {
 					let params: &jsonrpc::Params = request.params().into();
 					match handler.send((request.id(), params.clone())).now_or_never() {

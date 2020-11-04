@@ -59,7 +59,7 @@ impl Client {
 	) -> Result<(), Error> {
 		let method = method.into();
 		let params = params.into();
-		log::debug!("[frontend]: client send notification: method={:?}, params={:?}", method, params);
+		log::trace!("[frontend]: client send notification: method={:?}, params={:?}", method, params);
 		self.backend.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::InternalChannel)
 	}
 
@@ -74,7 +74,7 @@ impl Client {
 	{
 		let method = method.into();
 		let params = params.into();
-		log::debug!("[frontend]: send request: method={:?}, params={:?}", method, params);
+		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
 		// TODO: send a `ChannelClosed` message if we close the channel unexpectedly
@@ -115,7 +115,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 			// If the channel is closed, then the `Client` has been destroyed and we
 			// stop this task.
 			Either::Left(None) => {
-				log::trace!("[backend]: client terminated");
+				log::trace!("[backend]: background task terminated");
 				if !ongoing_requests.is_empty() {
 					log::warn!("client was dropped with {} pending requests", ongoing_requests.len());
 				}
@@ -124,16 +124,15 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 
 			// User called `notification` on the front-end.
 			Either::Left(Some(FrontToBack::Notification { method, params })) => {
-				log::trace!("[backend]: client send notification");
+				log::trace!("[backend]: send notification");
 				let _ = client.send_notification(method, params).await;
 			}
 
 			// User called `request` on the front-end.
 			Either::Left(Some(FrontToBack::StartRequest { method, params, send_back })) => {
-				log::trace!("[backend]: client prepare to send request={:?}", method);
-				match client.start_request(method, params).await {
+				match client.start_request(&method, params).await {
 					Ok(id) => {
-						log::debug!(target: "jsonrpsee-http-client", "background thread; inserting ingoing request={:?}", id);
+						log::trace!("[backend]; send request: {:?} id: {:?}", method, id);
 						ongoing_requests.insert(id, send_back);
 					}
 					Err(err) => {
@@ -144,7 +143,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 
 			// Received a response to a request from the server.
 			Either::Right(Ok(RawClientEvent::Response { request_id, result })) => {
-				log::trace!("[backend] client received response to req={:?}, result={:?}", request_id, result);
+				log::trace!("[backend] received response to req={:?}, result={:?}", request_id, result);
 				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(Error::Request));
 			}
 

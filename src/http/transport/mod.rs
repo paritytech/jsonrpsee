@@ -85,9 +85,6 @@ impl HttpTransportServer {
 	// >       might switch out to a different library later without breaking the API.
 	pub async fn new(addr: &SocketAddr) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
 		let (background_thread, local_addr) = background::BackgroundHttp::bind(addr).await?;
-
-		log::debug!(target: "jsonrpc-http-server", "Starting jsonrpc http server at address={:?}, local_addr={:?}", addr, local_addr);
-
 		Ok(HttpTransportServer { background_thread, local_addr, requests: Default::default(), next_request_id: 0 })
 	}
 
@@ -118,7 +115,6 @@ impl HttpTransportServer {
 			let request = match self.background_thread.next().await {
 				Ok(r) => r,
 				Err(_) => loop {
-					log::debug!("http transport server inf loop?!");
 					futures::pending!()
 				},
 			};
@@ -144,10 +140,7 @@ impl HttpTransportServer {
 				self.requests.shrink_to_fit();
 			}
 
-			let request = TransportServerEvent::Request { id: request_id, request: request.request };
-
-			log::debug!(target: "jsonrpc-http-transport-server", "received request: {:?}", request);
-			request
+			TransportServerEvent::Request { id: request_id, request: request.request }
 		})
 	}
 
