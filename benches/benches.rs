@@ -35,7 +35,7 @@ pub fn http(c: &mut criterion::Criterion) {
 		let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
 		async_std::task::spawn(http_server(tx_addr));
 		let server_addr = block_on(rx_addr).unwrap();
-		let client = HttpClient::new(&format!("http://{}", server_addr));
+		let mut client = HttpClient::new(&format!("http://{}", server_addr));
 
 		b.iter(|| {
 			block_on(async {

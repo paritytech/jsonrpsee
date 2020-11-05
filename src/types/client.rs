@@ -1,4 +1,4 @@
-use crate::types::jsonrpc;
+use crate::types::jsonrpc::{self, JsonValue};
 
 /// Error produced by the client.
 #[derive(Debug, thiserror::Error)]
@@ -19,4 +19,10 @@ pub enum Error {
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] jsonrpc::ParseError),
+	#[error("Invalid ID in response; expected: {0}, got: {1}")]
+	/// Invalid id in response to a request.
+	InvalidRequestId(JsonValue, JsonValue),
+	#[error("Custom error: {0}")]
+	/// Custom error.
+	Custom(String),
 }
