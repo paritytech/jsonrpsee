@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	server_started_rx.await?;
 
-	let mut client = HttpClient::new(SERVER_URI);
+	let client = HttpClient::new(SERVER_URI, Default::default());
 	let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
 	println!("r: {:?}", response);
 

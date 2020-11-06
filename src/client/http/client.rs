@@ -1,22 +1,34 @@
 use crate::client::http::transport::HttpTransportClient;
 use crate::types::client::Error;
 use crate::types::jsonrpc::{self, JsonValue};
-
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Client that wraps a `RawClient` where the `RawClient` is spawned in a background worker tasks.
-///
-/// The communication is performed via a `mpsc` channel where the `Client` acts as simple frontend
-/// and just passes requests along to the backend (worker thread)
-pub struct Client {
+/// Default maximium request body size (10 MB).
+const DEFAULT_MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
+
+/// HTTP configuration.
+#[derive(Copy, Clone)]
+pub struct HttpConfig {
+	/// Maximum request body size in bytes.
+	pub max_request_body_size: usize,
+}
+
+/// HTTP Client.
+pub struct HttpClient {
 	transport: HttpTransportClient,
 	request_id: AtomicU64,
 }
 
-impl Client {
+impl Default for HttpConfig {
+	fn default() -> Self {
+		Self { max_request_body_size: DEFAULT_MAX_BODY_SIZE }
+	}
+}
+
+impl HttpClient {
 	/// Create a client to connect to the server at address `endpoint`
-	pub fn new(endpoint: &str) -> Self {
-		let transport = HttpTransportClient::new(endpoint);
+	pub fn new(endpoint: &str, config: HttpConfig) -> Self {
+		let transport = HttpTransportClient::new(endpoint, config.max_request_body_size);
 		Self { transport, request_id: AtomicU64::new(0) }
 	}
 

@@ -7,6 +7,6 @@ mod ws;
 // Unless we want the user to have to possibility to not spawn a background thread to
 // handle responses.
 #[cfg(feature = "http")]
-pub use http::{Client as HttpClient, HttpTransportClient};
+pub use http::{HttpClient, HttpTransportClient, HttpConfig};
 #[cfg(feature = "ws")]
 pub use ws::{Client as WsClient, RawClient as RawWsClient, Subscription as WsSubscription, WsTransportClient};

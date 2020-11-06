@@ -1,40 +1,41 @@
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
 //
-// In particular, hyper can only be polled by tokio, but we don't want users to have to suffer
-// from this restriction. We therefore spawn a background thread dedicated to running the tokio
-// runtime.
-//
-// In order to perform a request, we send this request to the background thread through a channel
-// and wait for an answer to come back.
-//
 // Additionally, despite the fact that hyper is capable of performing requests to multiple different
 // servers through the same `hyper::Client`, we don't use that feature on purpose. The reason is
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
 use crate::types::jsonrpc;
-use std::fmt;
+use futures::StreamExt;
 use thiserror::Error;
 
 /// Implementation of a raw client for HTTP requests.
+#[derive(Debug, Clone)]
 pub struct HttpTransportClient {
 	/// URI to connect to.
 	uri: String,
 	/// Hyper to client,
 	client: hyper::Client<hyper::client::HttpConnector>,
+	/// Max request body size
+	max_request_body_size: usize,
 }
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
 	// TODO: better type for target
-	pub fn new(uri: &str) -> Self {
-		HttpTransportClient { client: hyper::Client::new(), uri: uri.to_owned() }
+	pub fn new(uri: &str, max_request_body_size: usize) -> Self {
+		HttpTransportClient { client: hyper::Client::new(), uri: uri.to_owned(), max_request_body_size }
 	}
 
 	/// Send request.
 	pub async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, RequestError> {
+		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
 		let body = jsonrpc::to_vec(&request).map_err(|e| RequestError::Serialization(e))?;
+
+		if body.len() > self.max_request_body_size {
+			return Err(RequestError::RequestTooLarge);
+		}
 
 		let req = hyper::Request::post(&self.uri)
 			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static("application/json"))
@@ -49,6 +50,7 @@ impl HttpTransportClient {
 		if !response.status().is_success() {
 			return Err(RequestError::RequestFailure { status_code: response.status().into() });
 		}
+
 		Ok(response)
 	}
 
@@ -64,10 +66,17 @@ impl HttpTransportClient {
 		request: jsonrpc::Request,
 	) -> Result<jsonrpc::Response, RequestError> {
 		let response = self.send_request(request).await?;
+		let mut body_fut: hyper::Body = response.into_body();
 
-		// TODO: enforce a maximum size here
-		let body =
-			hyper::body::to_bytes(response.into_body()).await.map_err(|err| RequestError::Http(Box::new(err)))?;
+		let mut body = Vec::new();
+
+		while let Some(chunk) = body_fut.next().await {
+			let chunk = chunk.map_err(|e| RequestError::Http(Box::new(e)))?;
+			if chunk.len() + body.len() > self.max_request_body_size {
+				return Err(RequestError::RequestTooLarge);
+			}
+			body.extend_from_slice(&chunk);
+		}
 
 		// Note that we don't check the Content-Type of the request. This is deemed
 		// unnecessary, as a parsing error while happen anyway.
@@ -75,12 +84,6 @@ impl HttpTransportClient {
 		let as_json: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(RequestError::ParseError)?;
 		log::debug!("recv: {}", jsonrpc::to_string(&as_json).expect("request valid JSON; qed"));
 		Ok(as_json)
-	}
-}
-
-impl fmt::Debug for HttpTransportClient {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_tuple("HttpTransportClient").finish()
 	}
 }
 
@@ -110,10 +113,8 @@ pub enum RequestError {
 	/// Failed to parse the JSON returned by the server into a JSON-RPC response.
 	#[error("error while parsing the response body")]
 	ParseError(#[source] serde_json::error::Error),
-}
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use futures::channel::oneshot;
+	/// Request body too large.
+	#[error("The request body was to large")]
+	RequestTooLarge,
 }
