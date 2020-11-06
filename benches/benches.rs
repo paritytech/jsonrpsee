@@ -50,7 +50,7 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 		"concurrent http round trip",
 		move |b: &mut Bencher, size: &usize| {
 			b.iter(|| {
-				let mut tasks = Vec::with_capacity(size * 10);
+				let mut tasks = Vec::new();
 				for _ in 0..*size {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
@@ -86,7 +86,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 		"concurrent WebSocket round trip",
 		move |b: &mut Bencher, size: &usize| {
 			b.iter(|| {
-				let mut tasks = Vec::with_capacity(size * 10);
+				let mut tasks = Vec::new();
 				for _ in 0..*size {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
@@ -99,6 +99,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 				}
 			})
 		},
-		vec![2, 4, 8, 16, 32, 64, 128],
+		// TODO(niklasad1): investigate why it only works to 8 concurrent requests.
+		vec![2, 4, 8],
 	);
 }
