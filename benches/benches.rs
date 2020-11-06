@@ -6,8 +6,9 @@ use jsonrpsee::http::HttpServer;
 use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 use jsonrpsee::ws::WsServer;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
-criterion_group!(benches, http, ws);
+criterion_group!(benches, http_requests, websocket_requests);
 criterion_main!(benches);
 
 async fn http_server(tx: Sender<SocketAddr>) {
@@ -30,36 +31,74 @@ async fn ws_server(tx: Sender<SocketAddr>) {
 	}
 }
 
-pub fn http(c: &mut criterion::Criterion) {
-	c.bench_function("http 100 requests", |b| {
-		let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
-		async_std::task::spawn(http_server(tx_addr));
-		let server_addr = block_on(rx_addr).unwrap();
-		let mut client = HttpClient::new(&format!("http://{}", server_addr));
+pub fn http_requests(c: &mut criterion::Criterion) {
+	let mut rt = tokio::runtime::Runtime::new().unwrap();
+	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
+	async_std::task::spawn(http_server(tx_addr));
+	let server_addr = block_on(rx_addr).unwrap();
+	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr)));
 
+	c.bench_function("synchronous http round trip", |b| {
 		b.iter(|| {
-			block_on(async {
-				for _ in 0..100 {
-					let _: JsonValue = black_box(client.request("say_hello", Params::None).await.unwrap());
-				}
+			rt.block_on(async {
+				let _: JsonValue = black_box(client.request("say_hello", Params::None).await.unwrap());
 			})
 		})
 	});
+
+	c.bench_function_over_inputs(
+		"concurrent http round trip",
+		move |b: &mut Bencher, size: &usize| {
+			b.iter(|| {
+				let mut tasks = Vec::with_capacity(size * 10);
+				for _ in 0..*size {
+					let client_rc = client.clone();
+					let task = rt.spawn(async move {
+						let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
+					});
+					tasks.push(task);
+				}
+				for task in tasks {
+					rt.block_on(task).unwrap();
+				}
+			})
+		},
+		vec![2, 4, 8, 16, 32, 64, 128],
+	);
 }
 
-pub fn ws(c: &mut criterion::Criterion) {
-	c.bench_function("ws 100 request", |b| {
-		let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
-		async_std::task::spawn(ws_server(tx_addr));
-		let server_addr = block_on(rx_addr).unwrap();
-		let client = block_on(WsClient::new(&format!("ws://{}", server_addr))).unwrap();
+pub fn websocket_requests(c: &mut criterion::Criterion) {
+	let mut rt = tokio::runtime::Runtime::new().unwrap();
+	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
+	async_std::task::spawn(ws_server(tx_addr));
+	let server_addr = block_on(rx_addr).unwrap();
+	let client = Arc::new(block_on(WsClient::new(&format!("ws://{}", server_addr))).unwrap());
 
+	c.bench_function("synchronous WebSocket round trip", |b| {
 		b.iter(|| {
-			block_on(async {
-				for _ in 0..100 {
-					let _: JsonValue = black_box(client.request("say_hello", Params::None).await.unwrap());
-				}
+			rt.block_on(async {
+				let _: JsonValue = black_box(client.request("say_hello", Params::None).await.unwrap());
 			})
 		})
 	});
+
+	c.bench_function_over_inputs(
+		"concurrent WebSocket round trip",
+		move |b: &mut Bencher, size: &usize| {
+			b.iter(|| {
+				let mut tasks = Vec::with_capacity(size * 10);
+				for _ in 0..*size {
+					let client_rc = client.clone();
+					let task = rt.spawn(async move {
+						let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
+					});
+					tasks.push(task);
+				}
+				for task in tasks {
+					rt.block_on(task).unwrap();
+				}
+			})
+		},
+		vec![2, 4, 8, 16, 32, 64, 128],
+	);
 }
