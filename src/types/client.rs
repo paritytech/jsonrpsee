@@ -1,4 +1,20 @@
 use crate::types::jsonrpc::{self, JsonValue};
+use std::fmt;
+
+/// Mismatch of the expected value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Mismatch<T> {
+	/// Expected value.
+	pub expected: T,
+	/// Actual value.
+	pub got: T,
+}
+
+impl<T: fmt::Display> fmt::Display for Mismatch<T> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.write_fmt(format_args!("Expected: {}, Got: {}", self.expected, self.got))
+	}
+}
 
 /// Error produced by the client.
 #[derive(Debug, thiserror::Error)]
@@ -11,7 +27,7 @@ pub enum Error {
 	#[error("Server responded to our request with an error: {0:?}")]
 	Request(#[source] jsonrpc::Error),
 	/// Subscription error.
-	#[error("Subscription to subscribe_method: {0} with unsubscribe_metho: {1} failed")]
+	#[error("Subscription to subscribe_method: {0} with unsubscribe_methon: {1} failed")]
 	Subscription(String, String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
@@ -19,9 +35,9 @@ pub enum Error {
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] jsonrpc::ParseError),
-	#[error("Invalid ID in response; expected: {0}, got: {1}")]
 	/// Invalid id in response to a request.
-	InvalidRequestId(JsonValue, JsonValue),
+	#[error("Invalid ID in response: {0}")]
+	InvalidRequestId(Mismatch<JsonValue>),
 	#[error("Custom error: {0}")]
 	/// Custom error.
 	Custom(String),

@@ -122,7 +122,7 @@ pub enum RequestError {
 #[cfg(test)]
 mod tests {
 	use super::{HttpTransportClient, RequestError};
-	use crate::types::jsonrpc::{Call, Id, JsonValue, MethodCall, Params, Request, Version};
+	use crate::types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
 
 	#[tokio::test]
 	async fn request_limit_works() {

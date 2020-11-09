@@ -1,9 +1,9 @@
 use crate::client::http::transport::HttpTransportClient;
-use crate::types::client::Error;
+use crate::types::client::{Error, Mismatch};
 use crate::types::jsonrpc::{self, JsonValue};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Default maximium request body size (10 MB).
+/// Default maximum request body size (10 MB).
 const DEFAULT_MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
 
 /// HTTP configuration.
@@ -53,6 +53,7 @@ impl HttpClient {
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
 	) -> Result<JsonValue, Error> {
+		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
 		let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 			jsonrpc: jsonrpc::Version::V2,
@@ -89,9 +90,15 @@ impl HttpClient {
 				let ret: Result<JsonValue, _> = response.into();
 				ret.map_err(|e| Error::Request(e))
 			}
-			jsonrpc::Id::Num(n) => Err(Error::InvalidRequestId(expected_id.into(), (*n).into())),
-			jsonrpc::Id::Str(s) => Err(Error::InvalidRequestId(expected_id.into(), s.to_string().into())),
-			jsonrpc::Id::Null => Err(Error::InvalidRequestId(expected_id.into(), JsonValue::Null)),
+			jsonrpc::Id::Num(n) => {
+				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: (*n).into() }))
+			}
+			jsonrpc::Id::Str(s) => {
+				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: s.to_string().into() }))
+			}
+			jsonrpc::Id::Null => {
+				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: JsonValue::Null }))
+			}
 		}
 	}
 }
