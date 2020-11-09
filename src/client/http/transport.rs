@@ -118,3 +118,27 @@ pub enum RequestError {
 	#[error("The request body was to large")]
 	RequestTooLarge,
 }
+
+#[cfg(test)]
+mod tests {
+	use super::{HttpTransportClient, RequestError};
+	use crate::types::jsonrpc::{Call, Id, JsonValue, MethodCall, Params, Request, Version};
+
+	#[tokio::test]
+	async fn request_limit_works() {
+		let eighty_bytes_limit = 80;
+		let client = HttpTransportClient::new("http:://localhost:9933", eighty_bytes_limit);
+		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
+
+		let request = Request::Single(Call::MethodCall(MethodCall {
+			jsonrpc: Version::V2,
+			method: "request_larger_than_eightybytes".to_string(),
+			params: Params::None,
+			id: Id::Num(1),
+		}));
+		let bytes = serde_json::to_vec(&request).unwrap();
+		assert_eq!(bytes.len(), 81);
+		let response = client.send_request(request).await.unwrap_err();
+		assert!(matches!(response, RequestError::RequestTooLarge));
+	}
+}
