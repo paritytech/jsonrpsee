@@ -27,7 +27,7 @@ pub enum Error {
 	#[error("Server responded to our request with an error: {0:?}")]
 	Request(#[source] jsonrpc::Error),
 	/// Subscription error.
-	#[error("Subscription to subscribe_method: {0} with unsubscribe_methon: {1} failed")]
+	#[error("Subscription to subscribe_method: {0} with unsubscribe_method: {1} failed")]
 	Subscription(String, String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
