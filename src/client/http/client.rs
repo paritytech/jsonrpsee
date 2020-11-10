@@ -88,7 +88,7 @@ impl HttpClient {
 		match response.id() {
 			jsonrpc::Id::Num(n) if n == &expected_id => {
 				let ret: Result<JsonValue, _> = response.into();
-				ret.map_err(|e| Error::Request(e))
+				ret.map_err(Error::Request)
 			}
 			jsonrpc::Id::Num(n) => {
 				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: (*n).into() }))

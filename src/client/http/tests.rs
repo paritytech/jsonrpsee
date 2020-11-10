@@ -58,6 +58,13 @@ async fn internal_error_works() {
 	assert_jsonrpc_error_response(err, ErrorCode::InternalError, INTERNAL_ERROR.into());
 }
 
+#[tokio::test]
+async fn subscription_response_to_request() {
+	let req = r#"{"jsonrpc":"2.0","method":"subscribe_hello","params":{"subscription":"3px4FrtxSYQ1zBKW154NoVnrDhrq764yQNCXEgZyM6Mu","result":"hello my friend"}}"#.to_string();
+	let err = run_request_with_response(req).await.unwrap_err();
+	assert!(matches!(err, Error::Custom(_)));
+}
+
 async fn run_request_with_response(response: String) -> Result<JsonValue, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).await;
 	let uri = format!("http://{}", server_addr);

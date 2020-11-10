@@ -23,7 +23,7 @@ pub enum Error {
 	/// invalid ID, etc.).
 	#[error("Networking or low-level protocol error: {0}")]
 	TransportError(#[source] Box<dyn std::error::Error + Send + Sync>),
-	/// RawServer responded to our request with an error.
+	/// Request error.
 	#[error("Server responded to our request with an error: {0:?}")]
 	Request(#[source] jsonrpc::Error),
 	/// Subscription error.
