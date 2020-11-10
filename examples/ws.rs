@@ -43,11 +43,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 
 	server_started_rx.await?;
-	let c1 = WsClient::new(SERVER_URI).await?;
-
-	for _ in 0..10 {
-		let _: Result<String, _> = c1.request("say_hello", Params::None).await;
-	}
+	let client = WsClient::new(SERVER_URI).await?;
+	let response: JsonValue = client.request("say_hello", Params::None).await?;
+	println!("r: {:?}", response);
 
 	Ok(())
 }
