@@ -10,52 +10,55 @@ use crate::types::jsonrpc;
 use futures::StreamExt;
 use thiserror::Error;
 
-/// Implementation of a raw client for HTTP requests.
+/// HTTP Transport Client.
 #[derive(Debug, Clone)]
 pub struct HttpTransportClient {
-	/// URI to connect to.
-	uri: String,
-	/// Hyper to client,
+	/// Target to connect to.
+	target: url::Url,
+	/// HTTP client,
 	client: hyper::Client<hyper::client::HttpConnector>,
-	/// Max request body size
+	/// Configurable max request body size
 	max_request_body_size: usize,
 }
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	// TODO: better type for target
-	pub fn new(uri: &str, max_request_body_size: usize) -> Self {
-		HttpTransportClient { client: hyper::Client::new(), uri: uri.to_owned(), max_request_body_size }
+	pub fn new(target: &str, max_request_body_size: usize) -> Result<Self, Error> {
+		let target = url::Url::parse(target).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
+		if target.scheme() != "http" {
+			return Err(Error::Url("URL scheme not supported, expects 'http'".into()));
+		};
+		Ok(HttpTransportClient { client: hyper::Client::new(), target, max_request_body_size })
 	}
 
 	/// Send request.
-	pub async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, RequestError> {
+	async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, Error> {
 		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
-		let body = jsonrpc::to_vec(&request).map_err(|e| RequestError::Serialization(e))?;
+		let body = jsonrpc::to_vec(&request).map_err(|e| Error::Serialization(e))?;
 
 		if body.len() > self.max_request_body_size {
-			return Err(RequestError::RequestTooLarge);
+			return Err(Error::RequestTooLarge);
 		}
 
-		let req = hyper::Request::post(&self.uri)
+		let req = hyper::Request::post(self.target.as_str())
 			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static("application/json"))
 			.body(From::from(body))
 			.expect("Uri and request headers are valid; qed");
 
 		let response = match self.client.request(req).await {
 			Ok(r) => r,
-			Err(err) => return Err(RequestError::Http(Box::new(err))),
+			Err(err) => return Err(Error::Http(Box::new(err))),
 		};
 
 		if !response.status().is_success() {
-			return Err(RequestError::RequestFailure { status_code: response.status().into() });
+			return Err(Error::RequestFailure { status_code: response.status().into() });
 		}
 
 		Ok(response)
 	}
 
 	/// Send notification.
-	pub async fn send_notification(&self, request: jsonrpc::Request) -> Result<(), RequestError> {
+	pub async fn send_notification(&self, request: jsonrpc::Request) -> Result<(), Error> {
 		let _response = self.send_request(request).await?;
 		Ok(())
 	}
@@ -64,16 +67,16 @@ impl HttpTransportClient {
 	pub async fn send_request_and_wait_for_response(
 		&self,
 		request: jsonrpc::Request,
-	) -> Result<jsonrpc::Response, RequestError> {
+	) -> Result<jsonrpc::Response, Error> {
 		let response = self.send_request(request).await?;
 		let mut body_fut: hyper::Body = response.into_body();
 
 		let mut body = Vec::new();
 
 		while let Some(chunk) = body_fut.next().await {
-			let chunk = chunk.map_err(|e| RequestError::Http(Box::new(e)))?;
+			let chunk = chunk.map_err(|e| Error::Http(Box::new(e)))?;
 			if chunk.len() + body.len() > self.max_request_body_size {
-				return Err(RequestError::RequestTooLarge);
+				return Err(Error::RequestTooLarge);
 			}
 			body.extend_from_slice(&chunk);
 		}
@@ -81,7 +84,7 @@ impl HttpTransportClient {
 		// Note that we don't check the Content-Type of the request. This is deemed
 		// unnecessary, as a parsing error while happen anyway.
 		// TODO: use Response::from_json
-		let as_json: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(RequestError::ParseError)?;
+		let as_json: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::ParseError)?;
 		log::debug!("recv: {}", jsonrpc::to_string(&as_json).expect("request valid JSON; qed"));
 		Ok(as_json)
 	}
@@ -89,29 +92,33 @@ impl HttpTransportClient {
 
 /// Error that can happen during a request.
 #[derive(Debug, Error)]
-pub enum RequestError {
+pub enum Error {
+	/// Invalid URL.
+	#[error("Invalid Uri: {0}")]
+	Url(String),
+
 	/// Error while serializing the request.
 	// TODO: can that happen?
-	#[error("error while serializing the request")]
+	#[error("Error while serializing the request")]
 	Serialization(#[source] serde_json::error::Error),
 
 	/// Response given by the server failed to decode as UTF-8.
-	#[error("response body is not UTF-8")]
+	#[error("Response body is not UTF-8")]
 	Utf8(#[source] std::string::FromUtf8Error),
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
-	#[error("error while performing the HTTP request")]
+	#[error("Error while performing the HTTP request")]
 	Http(Box<dyn std::error::Error + Send + Sync>),
 
 	/// Server returned a non-success status code.
-	#[error("server returned an error status code: {:?}", status_code)]
+	#[error("Server returned an error status code: {:?}", status_code)]
 	RequestFailure {
 		/// Status code returned by the server.
 		status_code: u16,
 	},
 
 	/// Failed to parse the JSON returned by the server into a JSON-RPC response.
-	#[error("error while parsing the response body")]
+	#[error("Error while parsing the response body")]
 	ParseError(#[source] serde_json::error::Error),
 
 	/// Request body too large.
@@ -121,13 +128,19 @@ pub enum RequestError {
 
 #[cfg(test)]
 mod tests {
-	use super::{HttpTransportClient, RequestError};
+	use super::{Error, HttpTransportClient};
 	use crate::types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
+
+	#[test]
+	fn invalid_http_url_rejected() {
+		let err = HttpTransportClient::new("ws://localhost:9933", 1337).unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+	}
 
 	#[tokio::test]
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
-		let client = HttpTransportClient::new("http:://localhost:9933", eighty_bytes_limit);
+		let client = HttpTransportClient::new("http://localhost:9933", eighty_bytes_limit).unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
 		let request = Request::Single(Call::MethodCall(MethodCall {
@@ -139,6 +152,6 @@ mod tests {
 		let bytes = serde_json::to_vec(&request).unwrap();
 		assert_eq!(bytes.len(), 81);
 		let response = client.send_request(request).await.unwrap_err();
-		assert!(matches!(response, RequestError::RequestTooLarge));
+		assert!(matches!(response, Error::RequestTooLarge));
 	}
 }

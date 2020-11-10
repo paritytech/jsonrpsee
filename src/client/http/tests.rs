@@ -15,7 +15,7 @@ async fn method_call_works() {
 async fn notification_works() {
 	let server_addr = http_server_with_hardcoded_response(String::new()).await;
 	let uri = format!("http://{}", server_addr);
-	let client = HttpClient::new(&uri, Default::default());
+	let client = HttpClient::new(&uri, Default::default()).unwrap();
 	client
 		.notification("i_dont_care_about_the_response_because_the_server_should_not_respond", Params::None)
 		.await
@@ -68,7 +68,7 @@ async fn subscription_response_to_request() {
 async fn run_request_with_response(response: String) -> Result<JsonValue, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).await;
 	let uri = format!("http://{}", server_addr);
-	let client = HttpClient::new(&uri, Default::default());
+	let client = HttpClient::new(&uri, Default::default())?;
 	client.request("say_hello", Params::None).await
 }
 

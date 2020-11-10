@@ -103,7 +103,7 @@ enum FrontToBack {
 impl Client {
 	/// Initializes a new WebSocket client
 	///
-	/// Fails when the URI is invalid i.e, doesn't start with `ws://` or `wss://`
+	/// Fails when the URL is invalid.
 	pub async fn new(target: &str) -> Result<Self, Error> {
 		let transport = WsTransportClient::new(target).await.map_err(|e| Error::TransportError(Box::new(e)))?;
 		let client = RawClient::new(transport);

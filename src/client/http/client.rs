@@ -4,7 +4,7 @@ use crate::types::jsonrpc::{self, JsonValue};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Default maximum request body size (10 MB).
-const DEFAULT_MAX_BODY_SIZE: usize = 10 * 1024 * 1024;
+const DEFAULT_MAX_BODY_SIZE_TEN_MB: usize = 10 * 1024 * 1024;
 
 /// HTTP configuration.
 #[derive(Copy, Clone)]
@@ -13,26 +13,35 @@ pub struct HttpConfig {
 	pub max_request_body_size: usize,
 }
 
-/// HTTP Client.
+/// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
+///
+/// WARNING: The async methods must be executed on [Tokio 0.2](https://docs.rs/tokio/0.2.22/tokio).
 pub struct HttpClient {
+	/// HTTP transport client.
 	transport: HttpTransportClient,
+	/// Request ID that wraps around when overflowing.
 	request_id: AtomicU64,
 }
 
 impl Default for HttpConfig {
 	fn default() -> Self {
-		Self { max_request_body_size: DEFAULT_MAX_BODY_SIZE }
+		Self { max_request_body_size: DEFAULT_MAX_BODY_SIZE_TEN_MB }
 	}
 }
 
 impl HttpClient {
-	/// Create a client to connect to the server at address `endpoint`
-	pub fn new(endpoint: &str, config: HttpConfig) -> Self {
-		let transport = HttpTransportClient::new(endpoint, config.max_request_body_size);
-		Self { transport, request_id: AtomicU64::new(0) }
+	/// Initializes a new HTTP client.
+	///
+	/// Fails when the URL is invalid.
+	pub fn new(target: &str, config: HttpConfig) -> Result<Self, Error> {
+		let transport = HttpTransportClient::new(target, config.max_request_body_size)
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
+		Ok(Self { transport, request_id: AtomicU64::new(0) })
 	}
 
 	/// Send a notification to the server.
+	///
+	/// WARNING: This method must be executed on [Tokio 0.2](https://docs.rs/tokio/0.2.22/tokio).
 	pub async fn notification(
 		&self,
 		method: impl Into<String>,
@@ -48,6 +57,8 @@ impl HttpClient {
 	}
 
 	/// Perform a request towards the server.
+	///
+	/// WARNING: This method must be executed on [Tokio 0.2](https://docs.rs/tokio/0.2.22/tokio).
 	pub async fn request(
 		&self,
 		method: impl Into<String>,
@@ -70,14 +81,11 @@ impl HttpClient {
 
 		match response {
 			jsonrpc::Response::Single(rp) => Self::process_response(rp, id),
+			// Server should not send batch response to a single request.
 			jsonrpc::Response::Batch(_rps) => {
-				todo!("batch request not supported");
-				// for rp in rps {
-				//     // TODO: if an error happens, we throw away the entire batch
-				//     self.process_response(rp)?;
-				// }
+				Err(Error::Custom("Server replied with batch response to a single request".to_string()))
 			}
-			// Server MUST NOT reply to a Notification.
+			// Server should not reply to a Notification.
 			jsonrpc::Response::Notif(_notif) => {
 				Err(Error::Custom(format!("Server replied with notification response to request ID: {}", id)))
 			}
