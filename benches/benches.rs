@@ -36,7 +36,7 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
 	async_std::task::spawn(http_server(tx_addr));
 	let server_addr = block_on(rx_addr).unwrap();
-	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr), Default::default()));
+	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr), Default::default()).unwrap());
 
 	c.bench_function("synchronous http round trip", |b| {
 		b.iter(|| {
