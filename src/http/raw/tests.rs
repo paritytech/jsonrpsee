@@ -34,7 +34,7 @@ use serde_json::Value;
 async fn connection_context() -> (HttpTransportClient, HttpRawServer) {
 	let server = HttpTransportServer::new(&"127.0.0.1:0".parse().unwrap()).await.unwrap();
 	let uri = format!("http://{}", server.local_addr());
-	let client = HttpTransportClient::new(&uri, Default::default()).unwrap();
+	let client = HttpTransportClient::new(&uri, 10 * 1024 * 1024).unwrap();
 	(client, server.into())
 }
 
