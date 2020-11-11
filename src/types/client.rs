@@ -1,7 +1,7 @@
 use crate::types::jsonrpc::{self, JsonValue};
 use std::fmt;
 
-/// Mismatch of the expected value.
+/// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
 	/// Expected value.
