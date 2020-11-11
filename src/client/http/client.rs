@@ -33,7 +33,7 @@ impl HttpClient {
 	/// Initializes a new HTTP client.
 	///
 	/// Fails when the URL is invalid.
-	pub fn new(target: &str, config: HttpConfig) -> Result<Self, Error> {
+	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
 		let transport = HttpTransportClient::new(target, config.max_request_body_size)
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 		Ok(Self { transport, request_id: AtomicU64::new(0) })

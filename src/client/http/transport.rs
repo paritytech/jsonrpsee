@@ -23,8 +23,8 @@ pub struct HttpTransportClient {
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	pub fn new(target: &str, max_request_body_size: usize) -> Result<Self, Error> {
-		let target = url::Url::parse(target).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
+	pub fn new(target: impl AsRef<str>, max_request_body_size: usize) -> Result<Self, Error> {
+		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
 		if target.scheme() != "http" {
 			return Err(Error::Url("URL scheme not supported, expects 'http'".into()));
 		};
