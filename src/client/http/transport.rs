@@ -10,6 +10,8 @@ use crate::types::jsonrpc;
 use futures::StreamExt;
 use thiserror::Error;
 
+const CONTENT_TYPE_JSON: &str = "application/json";
+
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
 pub struct HttpTransportClient {
@@ -18,17 +20,18 @@ pub struct HttpTransportClient {
 	/// HTTP client,
 	client: hyper::Client<hyper::client::HttpConnector>,
 	/// Configurable max request body size
-	max_request_body_size: usize,
+	max_request_body_size: u32,
 }
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	pub fn new(target: impl AsRef<str>, max_request_body_size: usize) -> Result<Self, Error> {
+	pub fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
-		if target.scheme() != "http" {
+		if target.scheme() == "http" {
+			Ok(HttpTransportClient { client: hyper::Client::new(), target, max_request_body_size })
+		} else {
 			return Err(Error::Url("URL scheme not supported, expects 'http'".into()));
-		};
-		Ok(HttpTransportClient { client: hyper::Client::new(), target, max_request_body_size })
+		}
 	}
 
 	/// Send request.
@@ -36,25 +39,23 @@ impl HttpTransportClient {
 		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
 		let body = jsonrpc::to_vec(&request).map_err(|e| Error::Serialization(e))?;
 
-		if body.len() > self.max_request_body_size {
+		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
 		}
 
 		let req = hyper::Request::post(self.target.as_str())
-			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static("application/json"))
+			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
+			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
 			.body(From::from(body))
-			.expect("Uri and request headers are valid; qed");
+			.expect("URI and request headers are valid; qed");
 
-		let response = match self.client.request(req).await {
-			Ok(r) => r,
-			Err(err) => return Err(Error::Http(Box::new(err))),
-		};
+		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
 
-		if !response.status().is_success() {
-			return Err(Error::RequestFailure { status_code: response.status().into() });
+		if response.status().is_success() {
+			Ok(response)
+		} else {
+			Err(Error::RequestFailure { status_code: response.status().into() })
 		}
-
-		Ok(response)
 	}
 
 	/// Send notification.
@@ -68,14 +69,20 @@ impl HttpTransportClient {
 		&self,
 		request: jsonrpc::Request,
 	) -> Result<jsonrpc::Response, Error> {
+
 		let response = self.send_request(request).await?;
+		let body_size = read_content_length(response.headers()).unwrap_or(0);
 		let mut body_fut: hyper::Body = response.into_body();
 
-		let mut body = Vec::new();
+		if body_size > self.max_request_body_size {
+			return Err(Error::RequestTooLarge);
+		}
+
+		let mut body = Vec::with_capacity(body_size as usize);
 
 		while let Some(chunk) = body_fut.next().await {
 			let chunk = chunk.map_err(|e| Error::Http(Box::new(e)))?;
-			if chunk.len() + body.len() > self.max_request_body_size {
+			if chunk.len() + body.len() > self.max_request_body_size as usize {
 				return Err(Error::RequestTooLarge);
 			}
 			body.extend_from_slice(&chunk);
@@ -83,11 +90,28 @@ impl HttpTransportClient {
 
 		// Note that we don't check the Content-Type of the request. This is deemed
 		// unnecessary, as a parsing error while happen anyway.
-		// TODO: use Response::from_json
-		let as_json: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::ParseError)?;
-		log::debug!("recv: {}", jsonrpc::to_string(&as_json).expect("request valid JSON; qed"));
-		Ok(as_json)
+		let response: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::ParseError)?;
+		log::debug!("recv: {}", jsonrpc::to_string(&response).expect("request valid JSON; qed"));
+		Ok(response)
 	}
+}
+
+
+// Read `content_length` from HTTP Header.
+//
+// Returns `Some(val)` if `content_length` contains exactly one value.
+// None otherwise.
+fn read_content_length(header: &hyper::header::HeaderMap) -> Option<u32> {
+	let values = header.get_all("content-length");
+	let mut iter = values.iter();
+	let content_length = iter.next()?;
+	if iter.next().is_some() {
+		return None;
+	}
+
+	// HTTP Content-Length indicates number of bytes in decimal.
+	let length = content_length.to_str().ok()?;
+	u32::from_str_radix(length, 10).ok()
 }
 
 /// Error that can happen during a request.
@@ -128,7 +152,7 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-	use super::{Error, HttpTransportClient};
+	use super::{Error, HttpTransportClient, read_content_length};
 	use crate::types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
 
 	#[test]
@@ -153,5 +177,15 @@ mod tests {
 		assert_eq!(bytes.len(), 81);
 		let response = client.send_request(request).await.unwrap_err();
 		assert!(matches!(response, Error::RequestTooLarge));
+	}
+
+	#[test]
+	fn read_content_length_works() {
+		let mut header = hyper::header::HeaderMap::new();
+		header.insert(hyper::header::CONTENT_LENGTH, "177".parse().unwrap());
+		assert_eq!(read_content_length(&header), Some(177));
+
+		header.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
+		assert_eq!(read_content_length(&header), None);
 	}
 }

@@ -4,13 +4,13 @@ use crate::types::jsonrpc::{self, JsonValue};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Default maximum request body size (10 MB).
-const DEFAULT_MAX_BODY_SIZE_TEN_MB: usize = 10 * 1024 * 1024;
+const DEFAULT_MAX_BODY_SIZE_TEN_MB: u32 = 10 * 1024 * 1024;
 
 /// HTTP configuration.
 #[derive(Copy, Clone)]
 pub struct HttpConfig {
 	/// Maximum request body size in bytes.
-	pub max_request_body_size: usize,
+	pub max_request_body_size: u32,
 }
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
