@@ -94,7 +94,7 @@ impl HttpTransportClient {
 #[derive(Debug, Error)]
 pub enum Error {
 	/// Invalid URL.
-	#[error("Invalid Uri: {0}")]
+	#[error("Invalid Url: {0}")]
 	Url(String),
 
 	/// Error while serializing the request.
