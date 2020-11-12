@@ -69,7 +69,6 @@ impl HttpTransportClient {
 		&self,
 		request: jsonrpc::Request,
 	) -> Result<jsonrpc::Response, Error> {
-
 		let response = self.send_request(request).await?;
 		let body_size = read_content_length(response.headers()).unwrap_or(0);
 		let mut body_fut: hyper::Body = response.into_body();
@@ -95,7 +94,6 @@ impl HttpTransportClient {
 		Ok(response)
 	}
 }
-
 
 // Read `content_length` from HTTP Header.
 //
@@ -152,7 +150,7 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
-	use super::{Error, HttpTransportClient, read_content_length};
+	use super::{read_content_length, Error, HttpTransportClient};
 	use crate::types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
 
 	#[test]
