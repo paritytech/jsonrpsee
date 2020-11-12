@@ -19,11 +19,10 @@ impl Default for HttpConfig {
 	}
 }
 
-/// Read response body from a received request with configured `HTTP` settings such as `request_max_body_size`.
-///
+/// Read response body from a received request with configured `HTTP` settings.
 // TODO: move somewhere else!!!
-pub async fn response_to_bytes(response: hyper::Request<hyper::Body>, config: HttpConfig) -> Result<Vec<u8>, Error> {
-	let body_size = read_content_length(response.headers()).unwrap_or(0);
+pub async fn read_http_body(response: hyper::Request<hyper::Body>, config: HttpConfig) -> Result<Vec<u8>, Error> {
+	let body_size = read_http_content_length(response.headers()).unwrap_or(0);
 	let mut body_fut: hyper::Body = response.into_body();
 
 	if body_size > config.max_request_body_size {
@@ -53,7 +52,7 @@ pub async fn response_to_bytes(response: hyper::Request<hyper::Body>, config: Ht
 //
 // Returns `Some(val)` if `content_length` contains exactly one value.
 // None otherwise.
-fn read_content_length(header: &hyper::header::HeaderMap) -> Option<u32> {
+fn read_http_content_length(header: &hyper::header::HeaderMap) -> Option<u32> {
 	let values = header.get_all("content-length");
 	let mut iter = values.iter();
 	let content_length = iter.next()?;
@@ -68,7 +67,7 @@ fn read_content_length(header: &hyper::header::HeaderMap) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
-	use super::{read_content_length, response_to_bytes, HttpConfig};
+	use super::{read_http_body, read_http_content_length, HttpConfig};
 	use crate::types::jsonrpc;
 
 	#[tokio::test]
@@ -76,7 +75,7 @@ mod tests {
 		let s = r#"[{"a":"hello"}]"#;
 		let expected: jsonrpc::Request = serde_json::from_str(s).unwrap();
 		let body = hyper::Body::from(s.to_owned());
-		let bytes = response_to_bytes(hyper::Request::new(body), HttpConfig::default()).await.unwrap();
+		let bytes = read_http_body(hyper::Request::new(body), HttpConfig::default()).await.unwrap();
 		let req: jsonrpc::Request = serde_json::from_slice(&bytes).unwrap();
 		assert_eq!(req, expected);
 	}
@@ -84,16 +83,16 @@ mod tests {
 	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {
 		let body = hyper::Body::from(vec![0; 128]);
-		assert!(response_to_bytes(hyper::Request::new(body), HttpConfig { max_request_body_size: 127 }).await.is_err());
+		assert!(read_http_body(hyper::Request::new(body), HttpConfig { max_request_body_size: 127 }).await.is_err());
 	}
 
 	#[test]
 	fn read_content_length_works() {
 		let mut header = hyper::header::HeaderMap::new();
 		header.insert(hyper::header::CONTENT_LENGTH, "177".parse().unwrap());
-		assert_eq!(read_content_length(&header), Some(177));
+		assert_eq!(read_http_content_length(&header), Some(177));
 
 		header.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
-		assert_eq!(read_content_length(&header), None);
+		assert_eq!(read_http_content_length(&header), None);
 	}
 }

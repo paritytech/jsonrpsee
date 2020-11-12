@@ -8,4 +8,5 @@ pub mod client;
 pub mod server;
 
 /// Shared types for HTTP
+#[cfg(feature = "http")]
 pub mod http;

@@ -149,7 +149,7 @@ async fn process_request(
 		// Validate the ContentType header
 		// to prevent Cross-Origin XHRs with text/plain
 		hyper::Method::POST if is_json(request.headers().get("content-type")) => {
-			let json_body = match http::response_to_bytes(request, config).await {
+			let json_body = match http::read_http_body(request, config).await {
 				Ok(body) => match jsonrpc::from_slice(&body) {
 					Ok(response) => response,
 					Err(_e) => return response::parse_error(),
