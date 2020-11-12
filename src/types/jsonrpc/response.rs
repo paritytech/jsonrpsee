@@ -27,13 +27,14 @@
 use super::{Error, Id, JsonValue, Version};
 
 use alloc::{
+	fmt,
 	string::{String, ToString as _},
 	vec,
 	vec::Vec,
 };
 use serde::{Deserialize, Serialize};
 
-/// Synchronous response
+/// JSONRPC response.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
@@ -44,6 +45,12 @@ pub enum Response {
 	Batch(Vec<Output>),
 	/// Notification to an active subscription.
 	Notif(SubscriptionNotif),
+}
+
+impl fmt::Display for Response {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", super::to_string(self).expect("Response valid JSON; qed"))
+	}
 }
 
 /// Successful response
@@ -190,87 +197,77 @@ impl SubscriptionId {
 	}
 }
 
-#[test]
-fn success_output_serialize() {
-	use serde_json;
+#[cfg(test)]
+mod tests {
 	use serde_json::Value;
+	use super::{Version, Id, Response, Error, Failure, Output, Success};
 
-	let so = Output::Success(Success { jsonrpc: Version::V2, result: Value::from(1), id: Id::Num(1) });
+	#[test]
+	fn success_output_serialize() {
+		let so = Output::Success(Success { jsonrpc: Version::V2, result: Value::from(1), id: Id::Num(1) });
 
-	let serialized = serde_json::to_string(&so).unwrap();
-	assert_eq!(serialized, r#"{"jsonrpc":"2.0","result":1,"id":1}"#);
-}
+		let serialized = serde_json::to_string(&so).unwrap();
+		assert_eq!(serialized, r#"{"jsonrpc":"2.0","result":1,"id":1}"#);
+	}
 
-#[test]
-fn success_output_deserialize() {
-	use serde_json;
-	use serde_json::Value;
+	#[test]
+	fn success_output_deserialize() {
+		let dso = r#"{"jsonrpc":"2.0","result":1,"id":1}"#;
 
-	let dso = r#"{"jsonrpc":"2.0","result":1,"id":1}"#;
+		let deserialized: Output = serde_json::from_str(dso).unwrap();
+		assert_eq!(
+			deserialized,
+			Output::Success(Success { jsonrpc: Version::V2, result: Value::from(1), id: Id::Num(1) })
+		);
+	}
 
-	let deserialized: Output = serde_json::from_str(dso).unwrap();
-	assert_eq!(deserialized, Output::Success(Success { jsonrpc: Version::V2, result: Value::from(1), id: Id::Num(1) }));
-}
+	#[test]
+	fn failure_output_serialize() {
+		let fo = Output::Failure(Failure { jsonrpc: Version::V2, error: Error::parse_error(), id: Id::Num(1) });
 
-#[test]
-fn failure_output_serialize() {
-	use serde_json;
+		let serialized = serde_json::to_string(&fo).unwrap();
+		assert_eq!(serialized, r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":1}"#);
+	}
 
-	let fo = Output::Failure(Failure { jsonrpc: Version::V2, error: Error::parse_error(), id: Id::Num(1) });
+	#[test]
+	fn failure_output_deserialize() {
+		let dfo = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":1}"#;
 
-	let serialized = serde_json::to_string(&fo).unwrap();
-	assert_eq!(serialized, r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":1}"#);
-}
-
-#[test]
-fn failure_output_deserialize() {
-	use serde_json;
-
-	let dfo = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":1}"#;
-
-	let deserialized: Output = serde_json::from_str(dfo).unwrap();
-	assert_eq!(
-		deserialized,
-		Output::Failure(Failure { jsonrpc: Version::V2, error: Error::parse_error(), id: Id::Num(1) })
-	);
-}
-
-#[test]
-fn single_response_deserialize() {
-	use serde_json;
-	use serde_json::Value;
-
-	let dsr = r#"{"jsonrpc":"2.0","result":1,"id":1}"#;
-
-	let deserialized: Response = serde_json::from_str(dsr).unwrap();
-	assert_eq!(
-		deserialized,
-		Response::Single(Output::Success(Success { jsonrpc: Version::V2, result: Value::from(1), id: Id::Num(1) }))
-	);
-}
-
-#[test]
-fn batch_response_deserialize() {
-	use serde_json;
-	use serde_json::Value;
-
-	let dbr = r#"[{"jsonrpc":"2.0","result":1,"id":1},{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":1}]"#;
-
-	let deserialized: Response = serde_json::from_str(dbr).unwrap();
-	assert_eq!(
-		deserialized,
-		Response::Batch(vec![
-			Output::Success(Success { jsonrpc: Version::V2, result: Value::from(1), id: Id::Num(1) }),
+		let deserialized: Output = serde_json::from_str(dfo).unwrap();
+		assert_eq!(
+			deserialized,
 			Output::Failure(Failure { jsonrpc: Version::V2, error: Error::parse_error(), id: Id::Num(1) })
-		])
-	);
-}
+		);
+	}
 
-#[test]
-fn handle_incorrect_responses() {
-	use serde_json;
+	#[test]
+	fn single_response_deserialize() {
+		let dsr = r#"{"jsonrpc":"2.0","result":1,"id":1}"#;
 
-	let dsr = r#"
+		let deserialized: Response = serde_json::from_str(dsr).unwrap();
+		assert_eq!(
+			deserialized,
+			Response::Single(Output::Success(Success { jsonrpc: Version::V2, result: Value::from(1), id: Id::Num(1) }))
+		);
+	}
+
+	#[test]
+	fn batch_response_deserialize() {
+		let dbr = r#"[{"jsonrpc":"2.0","result":1,"id":1},{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":1}]"#;
+
+		let deserialized: Response = serde_json::from_str(dbr).unwrap();
+		assert_eq!(
+			deserialized,
+			Response::Batch(vec![
+				Output::Success(Success { jsonrpc: Version::V2, result: Value::from(1), id: Id::Num(1) }),
+				Output::Failure(Failure { jsonrpc: Version::V2, error: Error::parse_error(), id: Id::Num(1) })
+			])
+		);
+	}
+
+	#[test]
+	fn handle_incorrect_responses() {
+		let dsr = r#"
 {
 	"id": 2,
 	"jsonrpc": "2.0",
@@ -282,18 +279,17 @@ fn handle_incorrect_responses() {
 	}
 }"#;
 
-	let deserialized: Result<Response, _> = serde_json::from_str(dsr);
-	assert!(deserialized.is_err(), "Expected error when deserializing invalid payload.");
-}
+		let deserialized: Result<Response, _> = serde_json::from_str(dsr);
+		assert!(deserialized.is_err(), "Expected error when deserializing invalid payload.");
+	}
 
-#[test]
-fn should_parse_empty_response_as_batch() {
-	use serde_json;
+	#[test]
+	fn should_parse_empty_response_as_batch() {
+		let dsr = r#""#;
 
-	let dsr = r#""#;
-
-	let deserialized1: Result<Response, _> = serde_json::from_str(dsr);
-	let deserialized2: Result<Response, _> = Response::from_json(dsr);
-	assert!(deserialized1.is_err(), "Empty string is not valid JSON, so we should get an error.");
-	assert_eq!(deserialized2.unwrap(), Response::Batch(vec![]));
+		let deserialized1: Result<Response, _> = serde_json::from_str(dsr);
+		let deserialized2: Result<Response, _> = Response::from_json(dsr);
+		assert!(deserialized1.is_err(), "Empty string is not valid JSON, so we should get an error.");
+		assert_eq!(deserialized2.unwrap(), Response::Batch(vec![]));
+	}
 }
