@@ -1,7 +1,7 @@
 use async_std::task::block_on;
 use criterion::*;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee::client::{HttpClient, WsClient};
+use jsonrpsee::client::{HttpClient, HttpConfig, WsClient};
 use jsonrpsee::http::HttpServer;
 use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 use jsonrpsee::ws::WsServer;
@@ -10,6 +10,11 @@ use std::sync::Arc;
 
 criterion_group!(benches, http_requests, websocket_requests);
 criterion_main!(benches);
+
+fn concurrent_tasks() -> Vec<usize> {
+	let cores = num_cpus::get();
+	vec![cores / 4, cores / 2, cores, cores * 2, cores * 4]
+}
 
 async fn http_server(tx: Sender<SocketAddr>) {
 	let server = HttpServer::new("127.0.0.1:0").await.unwrap();
@@ -36,7 +41,7 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
 	async_std::task::spawn(http_server(tx_addr));
 	let server_addr = block_on(rx_addr).unwrap();
-	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr)));
+	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr), HttpConfig::default()).unwrap());
 
 	c.bench_function("synchronous http round trip", |b| {
 		b.iter(|| {
@@ -50,7 +55,7 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 		"concurrent http round trip",
 		move |b: &mut Bencher, size: &usize| {
 			b.iter(|| {
-				let mut tasks = Vec::with_capacity(size * 10);
+				let mut tasks = Vec::new();
 				for _ in 0..*size {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
@@ -63,7 +68,7 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 				}
 			})
 		},
-		vec![2, 4, 16, 32, 64, 128],
+		concurrent_tasks(),
 	);
 }
 
@@ -86,7 +91,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 		"concurrent WebSocket round trip",
 		move |b: &mut Bencher, size: &usize| {
 			b.iter(|| {
-				let mut tasks = Vec::with_capacity(size * 10);
+				let mut tasks = Vec::new();
 				for _ in 0..*size {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
@@ -99,6 +104,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 				}
 			})
 		},
-		vec![2, 4, 16, 32, 64, 128],
+		// TODO(niklasad1): this doesn't work on my machine.
+		concurrent_tasks(),
 	);
 }

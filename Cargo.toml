@@ -48,6 +48,7 @@ ws = ["async-tls", "bytes", "soketto", "url", "webpki"]
 criterion = "0.3.3"
 env_logger = "0.8.1"
 jsonrpsee-test-utils = { path = "test-utils" }
+num_cpus = "1.13.0"
 
 [[bench]]
 name = "benches"

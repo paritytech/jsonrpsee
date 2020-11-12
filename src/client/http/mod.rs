@@ -1,7 +1,8 @@
 mod client;
-mod raw;
 mod transport;
 
-pub use client::Client;
-pub use raw::RawClient;
+#[cfg(test)]
+mod tests;
+
+pub use client::{HttpClient, HttpConfig};
 pub use transport::HttpTransportClient;

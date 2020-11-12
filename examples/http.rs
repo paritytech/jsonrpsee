@@ -26,14 +26,14 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee::client::HttpClient;
+use jsonrpsee::client::{HttpClient, HttpConfig};
 use jsonrpsee::http::HttpServer;
 use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 
 const SOCK_ADDR: &str = "127.0.0.1:9933";
 const SERVER_URI: &str = "http://localhost:9933";
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	env_logger::init();
 
@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	server_started_rx.await?;
 
-	let client = HttpClient::new(SERVER_URI);
+	let client = HttpClient::new(SERVER_URI, HttpConfig::default())?;
 	let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
 	println!("r: {:?}", response);
 

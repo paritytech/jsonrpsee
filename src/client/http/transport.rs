@@ -1,237 +1,189 @@
 // Implementation note: hyper's API is not adapted to async/await at all, and there's
 // unfortunately a lot of boilerplate here that could be removed once/if it gets reworked.
 //
-// In particular, hyper can only be polled by tokio, but we don't want users to have to suffer
-// from this restriction. We therefore spawn a background thread dedicated to running the tokio
-// runtime.
-//
-// In order to perform a request, we send this request to the background thread through a channel
-// and wait for an answer to come back.
-//
-// Addtionally, despite the fact that hyper is capable of performing requests to multiple different
+// Additionally, despite the fact that hyper is capable of performing requests to multiple different
 // servers through the same `hyper::Client`, we don't use that feature on purpose. The reason is
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use std::pin::Pin;
-use std::{fmt, io, thread};
-
 use crate::types::jsonrpc;
-
-use futures::{channel::mpsc, prelude::*};
+use futures::StreamExt;
 use thiserror::Error;
 
-const REQUEST_PARALLELISM: usize = 4;
+const CONTENT_TYPE_JSON: &str = "application/json";
 
-/// Implementation of a raw client for HTTP requests.
+/// HTTP Transport Client.
+#[derive(Debug, Clone)]
 pub struct HttpTransportClient {
-	/// Sender that sends requests to the background task.
-	requests_tx: mpsc::Sender<FrontToBack>,
-	/// URL of the server to connect to.
-	url: String,
-	/// Responses receiver.
-	responses_rx: mpsc::UnboundedReceiver<Result<hyper::Response<hyper::Body>, hyper::Error>>,
-	/// Responses transmitter
-	responses_tx: mpsc::UnboundedSender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
-}
-
-/// Message transmitted from the foreground task to the background.
-struct FrontToBack {
-	/// Request that the background task should perform.
-	request: hyper::Request<hyper::Body>,
-	/// Channel to send back to the response.
-	send_back: mpsc::UnboundedSender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
+	/// Target to connect to.
+	target: url::Url,
+	/// HTTP client,
+	client: hyper::Client<hyper::client::HttpConnector>,
+	/// Configurable max request body size
+	max_request_body_size: u32,
 }
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	// TODO: better type for target
-	pub fn new(target: &str) -> Self {
-		let (requests_tx, requests_rx) = mpsc::channel::<FrontToBack>(REQUEST_PARALLELISM);
-
-		// Because hyper can only be polled through tokio, we spawn it in a background thread.
-		thread::Builder::new()
-			.name("jsonrpsee-hyper-client".to_string())
-			.spawn(move || {
-				let client = hyper::Client::new();
-				background_thread(requests_rx, move |rq| {
-					// cloning Hyper client = cloning references
-					let client = client.clone();
-					async move {
-						let _ = rq.send_back.unbounded_send(client.request(rq.request).await);
-					}
-				})
-			})
-			.unwrap();
-
-		let (responses_tx, responses_rx) = futures::channel::mpsc::unbounded();
-		HttpTransportClient { requests_tx, url: target.to_owned(), responses_tx, responses_rx }
+	pub fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
+		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
+		if target.scheme() == "http" {
+			Ok(HttpTransportClient { client: hyper::Client::new(), target, max_request_body_size })
+		} else {
+			return Err(Error::Url("URL scheme not supported, expects 'http'".into()));
+		}
 	}
 
-	/// Send request to the target
-	pub fn send_request<'s>(
-		&'s mut self,
-		request: jsonrpc::Request,
-	) -> Pin<Box<dyn Future<Output = Result<(), RequestError>> + Send + 's>> {
+	/// Send request.
+	async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, Error> {
 		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
-		let mut requests_tx = self.requests_tx.clone();
+		let body = jsonrpc::to_vec(&request).map_err(|e| Error::Serialization(e))?;
 
-		let request = jsonrpc::to_vec(&request).map(|body| {
-			hyper::Request::post(&self.url)
-				.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static("application/json"))
-				.body(From::from(body))
-				.expect("Uri and request headers are valid; qed") // TODO: not necessarily true for URL here
-		});
+		if body.len() > self.max_request_body_size as usize {
+			return Err(Error::RequestTooLarge);
+		}
 
-		Box::pin(async move {
-			let message = FrontToBack {
-				request: request.map_err(RequestError::Serialization)?,
-				send_back: self.responses_tx.clone(),
-			};
+		let req = hyper::Request::post(self.target.as_str())
+			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
+			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
+			.body(From::from(body))
+			.expect("URI and request headers are valid; qed");
 
-			if requests_tx.send(message).await.is_err() {
-				log::error!("JSONRPC http client background thread has shut down");
-				return Err(RequestError::Http(Box::new(io::Error::new(
-					io::ErrorKind::Other,
-					"background thread is down".to_string(),
-				))));
-			}
+		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
 
-			Ok(())
-		})
+		if response.status().is_success() {
+			Ok(response)
+		} else {
+			Err(Error::RequestFailure { status_code: response.status().into() })
+		}
 	}
 
-	/// Waits for the next response.
-	pub fn next_response<'s>(
-		&'s mut self,
-	) -> Pin<Box<dyn Future<Output = Result<jsonrpc::Response, RequestError>> + Send + 's>> {
-		Box::pin(async move {
-			let hyper_response = match self.responses_rx.next().await {
-				Some(Ok(r)) => r,
-				Some(Err(err)) => return Err(RequestError::Http(Box::new(err))),
-				None => {
-					log::error!("JSONRPC http client background thread has shut down");
-					return Err(RequestError::Http(Box::new(io::Error::new(
-						io::ErrorKind::Other,
-						"background thread is down".to_string(),
-					))));
-				}
-			};
+	/// Send notification.
+	pub async fn send_notification(&self, request: jsonrpc::Request) -> Result<(), Error> {
+		let _response = self.send_request(request).await?;
+		Ok(())
+	}
 
-			if !hyper_response.status().is_success() {
-				return Err(RequestError::RequestFailure { status_code: hyper_response.status().into() });
+	/// Send request and wait for response.
+	pub async fn send_request_and_wait_for_response(
+		&self,
+		request: jsonrpc::Request,
+	) -> Result<jsonrpc::Response, Error> {
+		let response = self.send_request(request).await?;
+		let body_size = read_content_length(response.headers()).unwrap_or(0);
+		let mut body_fut: hyper::Body = response.into_body();
+
+		if body_size > self.max_request_body_size {
+			return Err(Error::RequestTooLarge);
+		}
+
+		let mut body = Vec::with_capacity(body_size as usize);
+
+		while let Some(chunk) = body_fut.next().await {
+			let chunk = chunk.map_err(|e| Error::Http(Box::new(e)))?;
+			if chunk.len() + body.len() > self.max_request_body_size as usize {
+				return Err(Error::RequestTooLarge);
 			}
+			body.extend_from_slice(&chunk);
+		}
 
-			// Note that we don't check the Content-Type of the request. This is deemed
-			// unnecessary, as a parsing error while happen anyway.
-
-			// TODO: enforce a maximum size here
-			let body = hyper::body::to_bytes(hyper_response.into_body())
-				.await
-				.map_err(|err| RequestError::Http(Box::new(err)))?;
-
-			// TODO: use Response::from_json
-			let as_json: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(RequestError::ParseError)?;
-			log::debug!("recv: {}", jsonrpc::to_string(&as_json).expect("request valid JSON; qed"));
-			Ok(as_json)
-		})
+		// Note that we don't check the Content-Type of the request. This is deemed
+		// unnecessary, as a parsing error while happen anyway.
+		let response: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::ParseError)?;
+		log::debug!("recv: {}", jsonrpc::to_string(&response).expect("request valid JSON; qed"));
+		Ok(response)
 	}
 }
 
-impl fmt::Debug for HttpTransportClient {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_tuple("HttpTransportClient").finish()
+// Read `content_length` from HTTP Header.
+//
+// Returns `Some(val)` if `content_length` contains exactly one value.
+// None otherwise.
+fn read_content_length(header: &hyper::header::HeaderMap) -> Option<u32> {
+	let values = header.get_all("content-length");
+	let mut iter = values.iter();
+	let content_length = iter.next()?;
+	if iter.next().is_some() {
+		return None;
 	}
+
+	// HTTP Content-Length indicates number of bytes in decimal.
+	let length = content_length.to_str().ok()?;
+	u32::from_str_radix(length, 10).ok()
 }
 
 /// Error that can happen during a request.
 #[derive(Debug, Error)]
-pub enum RequestError {
+pub enum Error {
+	/// Invalid URL.
+	#[error("Invalid Url: {0}")]
+	Url(String),
+
 	/// Error while serializing the request.
 	// TODO: can that happen?
-	#[error("error while serializing the request")]
+	#[error("Error while serializing the request")]
 	Serialization(#[source] serde_json::error::Error),
 
 	/// Response given by the server failed to decode as UTF-8.
-	#[error("response body is not UTF-8")]
+	#[error("Response body is not UTF-8")]
 	Utf8(#[source] std::string::FromUtf8Error),
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
-	#[error("error while performing the HTTP request")]
+	#[error("Error while performing the HTTP request")]
 	Http(Box<dyn std::error::Error + Send + Sync>),
 
 	/// Server returned a non-success status code.
-	#[error("server returned an error status code: {:?}", status_code)]
+	#[error("Server returned an error status code: {:?}", status_code)]
 	RequestFailure {
 		/// Status code returned by the server.
 		status_code: u16,
 	},
 
 	/// Failed to parse the JSON returned by the server into a JSON-RPC response.
-	#[error("error while parsing the response body")]
+	#[error("Error while parsing the response body")]
 	ParseError(#[source] serde_json::error::Error),
-}
 
-/// Function that runs in a background thread.
-fn background_thread<T, ProcessRequest: Future<Output = ()>>(
-	requests_rx: mpsc::Receiver<T>,
-	process_request: impl Fn(T) -> ProcessRequest,
-) {
-	let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().enable_all().build() {
-		Ok(r) => r,
-		Err(err) => {
-			// Ideally, we would try to initialize the tokio runtime in the main thread then move
-			// it here. That however isn't possible. If we fail to initialize the runtime, the only
-			// thing we can do is print an error and shut down the background thread.
-			// Initialization failures should be almost non-existant anyway, so this isn't a big
-			// deal.
-			log::error!("Failed to initialize tokio runtime: {:?}", err);
-			return;
-		}
-	};
-
-	// Running until the channel has been closed, and all requests have been completed.
-	runtime.block_on(requests_rx.for_each_concurrent(Some(REQUEST_PARALLELISM), process_request));
+	/// Request body too large.
+	#[error("The request body was to large")]
+	RequestTooLarge,
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use futures::channel::oneshot;
+	use super::{read_content_length, Error, HttpTransportClient};
+	use crate::types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
 
 	#[test]
-	fn background_thread_is_able_to_complete_requests() {
-		// start background thread that returns square(passed_value) after signal
-		// from 'main' thread is received
-		let (mut requests_tx, requests_rx) = mpsc::channel(4);
-		let background_thread = thread::spawn(move || {
-			background_thread(
-				requests_rx,
-				move |(send_when, send_back, value): (oneshot::Receiver<()>, oneshot::Sender<u32>, u32)| async move {
-					send_when.await.unwrap();
-					send_back.send(value * value).unwrap();
-				},
-			)
-		});
+	fn invalid_http_url_rejected() {
+		let err = HttpTransportClient::new("ws://localhost:9933", 1337).unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+	}
 
-		// send two requests - there'll be two simultaneous active requests, waiting for
-		// main thread' signals
-		let mut pool = futures::executor::LocalPool::new();
-		let (send_when_tx1, send_when_rx1) = oneshot::channel();
-		let (send_when_tx2, send_when_rx2) = oneshot::channel();
-		let (send_back_tx1, send_back_rx1) = oneshot::channel();
-		let (send_back_tx2, send_back_rx2) = oneshot::channel();
-		pool.run_until(requests_tx.send((send_when_rx1, send_back_tx1, 32))).unwrap();
-		pool.run_until(requests_tx.send((send_when_rx2, send_back_tx2, 1024))).unwrap();
+	#[tokio::test]
+	async fn request_limit_works() {
+		let eighty_bytes_limit = 80;
+		let client = HttpTransportClient::new("http://localhost:9933", eighty_bytes_limit).unwrap();
+		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
-		// send both signals and wait for responses
-		send_when_tx1.send(()).unwrap();
-		send_when_tx2.send(()).unwrap();
-		assert_eq!(pool.run_until(send_back_rx1), Ok(32 * 32));
-		assert_eq!(pool.run_until(send_back_rx2), Ok(1024 * 1024));
+		let request = Request::Single(Call::MethodCall(MethodCall {
+			jsonrpc: Version::V2,
+			method: "request_larger_than_eightybytes".to_string(),
+			params: Params::None,
+			id: Id::Num(1),
+		}));
+		let bytes = serde_json::to_vec(&request).unwrap();
+		assert_eq!(bytes.len(), 81);
+		let response = client.send_request(request).await.unwrap_err();
+		assert!(matches!(response, Error::RequestTooLarge));
+	}
 
-		// drop requests sender, asking background thread to exit gently
-		drop(requests_tx);
-		background_thread.join().unwrap();
+	#[test]
+	fn read_content_length_works() {
+		let mut header = hyper::header::HeaderMap::new();
+		header.insert(hyper::header::CONTENT_LENGTH, "177".parse().unwrap());
+		assert_eq!(read_content_length(&header), Some(177));
+
+		header.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
+		assert_eq!(read_content_length(&header), None);
 	}
 }
