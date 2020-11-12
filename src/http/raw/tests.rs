@@ -38,9 +38,7 @@ async fn connection_context() -> (HttpTransportClient, HttpRawServer) {
 	(client, server.into())
 }
 
-// TODO(niklasad1): fix before eventual merge
 #[tokio::test]
-#[ignore]
 async fn request_work() {
 	let (client, mut server) = connection_context().await;
 	tokio::spawn(async move {
@@ -66,9 +64,7 @@ async fn request_work() {
 	}
 }
 
-// TODO(niklasad1): fix before eventual merge
 #[tokio::test]
-#[ignore]
 async fn notification_work() {
 	let (client, mut server) = connection_context().await;
 	tokio::spawn(async move {
