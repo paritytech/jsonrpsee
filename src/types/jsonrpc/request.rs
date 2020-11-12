@@ -110,7 +110,7 @@ pub enum Request {
 
 impl fmt::Display for Request {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", super::to_string(self).expect("Request valid JSON; qed"))
+		write!(f, "{}", serde_json::to_string(self).expect("Request valid JSON; qed"))
 	}
 }
 

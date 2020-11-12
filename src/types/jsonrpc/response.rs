@@ -49,7 +49,7 @@ pub enum Response {
 
 impl fmt::Display for Response {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", super::to_string(self).expect("Response valid JSON; qed"))
+		write!(f, "{}", serde_json::to_string(self).expect("Response valid JSON; qed"))
 	}
 }
 
