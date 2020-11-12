@@ -11,6 +11,11 @@ use std::sync::Arc;
 criterion_group!(benches, http_requests, websocket_requests);
 criterion_main!(benches);
 
+fn concurrent_tasks() -> Vec<usize> {
+	let cores = num_cpus::get();
+	vec![cores / 4, cores / 2, cores, cores * 2, cores * 4]
+}
+
 async fn http_server(tx: Sender<SocketAddr>) {
 	let server = HttpServer::new("127.0.0.1:0").await.unwrap();
 	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
@@ -63,7 +68,7 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 				}
 			})
 		},
-		vec![2, 4, 8, 16, 32, 64, 128],
+		concurrent_tasks(),
 	);
 }
 
@@ -99,7 +104,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 				}
 			})
 		},
-		// TODO(niklasad1): investigate why it only works to 8 concurrent requests.
-		vec![2, 4, 8],
+		// TODO(niklasad1): this doesn't work on my machine.
+		concurrent_tasks(),
 	);
 }
