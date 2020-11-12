@@ -26,7 +26,10 @@
 
 use crate::http::server_utils::access_control::AccessControl;
 use crate::http::transport::response;
-use crate::types::{jsonrpc, http::HttpConfig};
+use crate::types::{
+	http::{self, HttpConfig},
+	jsonrpc,
+};
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
@@ -52,7 +55,10 @@ impl BackgroundHttp {
 	///
 	/// In addition to `Self`, also returns the local address the server ends up listening on,
 	/// which might be different than the one passed as parameter.
-	pub async fn bind(addr: &SocketAddr, config: HttpConfig) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
+	pub async fn bind(
+		addr: &SocketAddr,
+		config: HttpConfig,
+	) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
 		Self::bind_with_acl(addr, AccessControl::default(), config).await
 	}
 
@@ -143,8 +149,8 @@ async fn process_request(
 		// Validate the ContentType header
 		// to prevent Cross-Origin XHRs with text/plain
 		hyper::Method::POST if is_json(request.headers().get("content-type")) => {
-			let json_body = match body_to_request(request.into_body(), config).await {
-				Ok(b) => b,
+			let json_body = match http::response_to_bytes(request, config).await {
+				Ok(body) => jsonrpc::from_slice(&body).unwrap(),
 				Err(e) => match (e.kind(), e.into_inner()) {
 					(io::ErrorKind::InvalidData, _) => return response::parse_error(),
 					(io::ErrorKind::UnexpectedEof, _) => return response::parse_error(),
@@ -183,61 +189,5 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 			true
 		}
 		_ => false,
-	}
-}
-
-/// Converts a `hyper` body into a structured JSON object.
-///
-/// Enforces a size limit on the body.
-async fn body_to_request(mut body: hyper::Body, config: HttpConfig) -> Result<jsonrpc::Request, io::Error> {
-	let mut json_body = Vec::new();
-	while let Some(chunk) = body.next().await {
-		let chunk = match chunk {
-			Ok(c) => c,
-			Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err.to_string())), // TODO:
-		};
-		json_body.extend_from_slice(&chunk);
-		if json_body.len() >= 16384 {
-			// TODO: some limit
-			return Err(io::Error::new(io::ErrorKind::Other, "request too large"));
-		}
-	}
-
-	Ok(serde_json::from_slice(&json_body)?)
-}
-
-#[cfg(test)]
-mod tests {
-	use super::body_to_request;
-
-	#[test]
-	fn body_to_request_works() {
-		let s = r#"[{"a":"hello"}]"#;
-		let expected: super::jsonrpc::Request = serde_json::from_str(s).unwrap();
-		let req = futures::executor::block_on(async move {
-			let body = hyper::Body::from(s);
-			body_to_request(body).await.unwrap()
-		});
-		assert_eq!(req, expected);
-	}
-
-	#[test]
-	fn body_to_request_size_limit_json() {
-		let huge_body =
-			serde_json::to_vec(&(0..32768).map(|_| serde_json::Value::from("test")).collect::<Vec<_>>()).unwrap();
-
-		futures::executor::block_on(async move {
-			let body = hyper::Body::from(huge_body);
-			assert!(body_to_request(body).await.is_err());
-		});
-	}
-
-	#[test]
-	fn body_to_request_size_limit_garbage() {
-		let huge_body = (0..100_000).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-		futures::executor::block_on(async move {
-			let body = hyper::Body::from(huge_body);
-			assert!(body_to_request(body).await.is_err());
-		});
 	}
 }

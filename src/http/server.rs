@@ -26,9 +26,9 @@
 
 use crate::http::raw::{RawServer, RawServerEvent, RawServerRequestId};
 use crate::http::transport::HttpTransportServer;
+use crate::types::http::HttpConfig;
 use crate::types::jsonrpc::{self, JsonValue};
 use crate::types::server::Error;
-use crate::types::http::HttpConfig;
 
 use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use parking_lot::Mutex;
