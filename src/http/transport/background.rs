@@ -146,13 +146,7 @@ async fn process_request(
 		// Validate the ContentType header
 		// to prevent Cross-Origin XHRs with text/plain
 		hyper::Method::POST if is_json(request.headers().get("content-type")) => {
-			let uri = //if self.rest_api != RestApi::Disabled {
-                Some(request.uri().clone())
-            /*} else {
-                None
-            }*/;
-
-			let json_body = match body_to_request(request.into_body()).await {
+			let request = match body_to_request(request.into_body()).await {
 				Ok(b) => b,
 				Err(e) => match (e.kind(), e.into_inner()) {
 					(io::ErrorKind::InvalidData, _) => return response::parse_error(),
@@ -163,8 +157,8 @@ async fn process_request(
 			};
 
 			let (tx, rx) = oneshot::channel();
-			log::debug!("recv: {}", jsonrpc::to_string(&json_body).unwrap());
-			let user_facing_rq = Request { send_back: tx, request: json_body };
+			log::debug!("recv: {}", request);
+			let user_facing_rq = Request { send_back: tx, request };
 			if fg_process_tx.send(user_facing_rq).await.is_err() {
 				return response::internal_error("JSON requests processing channel has shut down");
 			}
@@ -176,28 +170,6 @@ async fn process_request(
 				Err(_) => return response::internal_error("JSON request send back channel has shut down"),
 			}
 		}
-		/*Method::POST if /*self.rest_api == RestApi::Unsecure &&*/ request.uri().path().split('/').count() > 2 => {
-			RpcHandlerState::ProcessRest {
-				metadata,
-				uri: request.uri().clone(),
-			}
-		}
-		// Just return error for unsupported content type
-		Method::POST => response::unsupported_content_type(),
-		// Don't validate content type on options
-		Method::OPTIONS => response::empty(),
-		// Respond to health API request if there is one configured.
-		Method::GET if self.health_api.as_ref().map(|x| &*x.0) == Some(request.uri().path()) => {
-			RpcHandlerState::ProcessHealth {
-				metadata,
-				method: self
-					.health_api
-					.as_ref()
-					.map(|x| x.1.clone())
-					.expect("Health api is defined since the URI matched."),
-			}
-		}*/
-		// Disallow other methods.
 		_ => response::method_not_allowed(),
 	}
 }
