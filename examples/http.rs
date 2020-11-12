@@ -52,8 +52,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let server = HttpServer::new(url).await.unwrap();
-	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
+	let server = HttpServer::new(url, HttpConfig::default()).await.unwrap();
+	let mut say_hello = server
+		.register_method(
+			"say_
+	hello"
+				.to_string(),
+		)
+		.unwrap();
 
 	server_started_tx.send(()).unwrap();
 	loop {

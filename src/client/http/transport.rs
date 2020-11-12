@@ -6,7 +6,7 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use crate::types::jsonrpc;
+use crate::types::{http::HttpConfig, jsonrpc};
 use futures::StreamExt;
 use thiserror::Error;
 
@@ -20,15 +20,15 @@ pub struct HttpTransportClient {
 	/// HTTP client,
 	client: hyper::Client<hyper::client::HttpConnector>,
 	/// Configurable max request body size
-	max_request_body_size: u32,
+	config: HttpConfig,
 }
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	pub fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
+	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
 		if target.scheme() == "http" {
-			Ok(HttpTransportClient { client: hyper::Client::new(), target, max_request_body_size })
+			Ok(HttpTransportClient { client: hyper::Client::new(), target, config })
 		} else {
 			return Err(Error::Url("URL scheme not supported, expects 'http'".into()));
 		}
@@ -39,7 +39,7 @@ impl HttpTransportClient {
 		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
 		let body = jsonrpc::to_vec(&request).map_err(|e| Error::Serialization(e))?;
 
-		if body.len() > self.max_request_body_size as usize {
+		if body.len() > self.config.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
 		}
 
@@ -73,7 +73,7 @@ impl HttpTransportClient {
 		let body_size = read_content_length(response.headers()).unwrap_or(0);
 		let mut body_fut: hyper::Body = response.into_body();
 
-		if body_size > self.max_request_body_size {
+		if body_size > self.config.max_request_body_size {
 			return Err(Error::RequestTooLarge);
 		}
 
@@ -81,7 +81,7 @@ impl HttpTransportClient {
 
 		while let Some(chunk) = body_fut.next().await {
 			let chunk = chunk.map_err(|e| Error::Http(Box::new(e)))?;
-			if chunk.len() + body.len() > self.max_request_body_size as usize {
+			if chunk.len() + body.len() > self.config.max_request_body_size as usize {
 				return Err(Error::RequestTooLarge);
 			}
 			body.extend_from_slice(&chunk);
@@ -151,19 +151,21 @@ pub enum Error {
 #[cfg(test)]
 mod tests {
 	use super::{read_content_length, Error, HttpTransportClient};
+	use crate::types::http::HttpConfig;
 	use crate::types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err = HttpTransportClient::new("ws://localhost:9933", 1337).unwrap_err();
+		let err = HttpTransportClient::new("ws://localhost:9933", HttpConfig::default()).unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[tokio::test]
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
-		let client = HttpTransportClient::new("http://localhost:9933", eighty_bytes_limit).unwrap();
-		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
+		let client =
+			HttpTransportClient::new("http://localhost:9933", HttpConfig { max_request_body_size: 80 }).unwrap();
+		assert_eq!(client.config.max_request_body_size, eighty_bytes_limit);
 
 		let request = Request::Single(Call::MethodCall(MethodCall {
 			jsonrpc: Version::V2,

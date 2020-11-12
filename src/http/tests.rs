@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::http::HttpServer;
+use crate::types::http::HttpConfig;
 use crate::types::jsonrpc::JsonValue;
 use futures::channel::oneshot::{self, Sender};
 use futures::future::FutureExt;
@@ -10,7 +11,7 @@ use jsonrpsee_test_utils::types::{Id, StatusCode};
 use std::net::SocketAddr;
 
 async fn server(server_started_tx: Sender<SocketAddr>) {
-	let server = HttpServer::new("127.0.0.1:0").await.unwrap();
+	let server = HttpServer::new("127.0.0.1:0", HttpConfig::default()).await.unwrap();
 	let mut hello = server.register_method("say_hello".to_owned()).unwrap();
 	let mut add = server.register_method("add".to_owned()).unwrap();
 	let mut notif = server.register_notification("notif".to_owned(), false).unwrap();

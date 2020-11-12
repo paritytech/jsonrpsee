@@ -17,7 +17,7 @@ fn concurrent_tasks() -> Vec<usize> {
 }
 
 async fn http_server(tx: Sender<SocketAddr>) {
-	let server = HttpServer::new("127.0.0.1:0").await.unwrap();
+	let server = HttpServer::new("127.0.0.1:0", HttpConfig { max_request_body_size: u32::MAX }).await.unwrap();
 	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
 	tx.send(*server.local_addr()).unwrap();
 	loop {

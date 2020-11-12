@@ -150,7 +150,10 @@ async fn process_request(
 		// to prevent Cross-Origin XHRs with text/plain
 		hyper::Method::POST if is_json(request.headers().get("content-type")) => {
 			let json_body = match http::response_to_bytes(request, config).await {
-				Ok(body) => jsonrpc::from_slice(&body).unwrap(),
+				Ok(body) => match jsonrpc::from_slice(&body) {
+					Ok(response) => response,
+					Err(_e) => return response::parse_error(),
+				},
 				Err(e) => match (e.kind(), e.into_inner()) {
 					(io::ErrorKind::InvalidData, _) => return response::parse_error(),
 					(io::ErrorKind::UnexpectedEof, _) => return response::parse_error(),

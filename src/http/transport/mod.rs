@@ -69,7 +69,7 @@ pub struct HttpTransportServer {
 	/// Next identifier to use when inserting an element in `requests`.
 	next_request_id: u64,
 
-	/// The identifier is lineraly increasing and is never leaked on the wire or outside of this
+	/// The identifier is linearly increasing and is never leaked on the wire or outside of this
 	/// module. Therefore there is no risk of hash collision and using a `FnvHashMap` is safe.
 	requests: FnvHashMap<u64, oneshot::Sender<hyper::Response<hyper::Body>>>,
 }
@@ -154,7 +154,7 @@ impl HttpTransportServer {
 	/// You can pass `None` in order to destroy the request object without sending back anything.
 	///
 	/// The implementation blindly sends back the response and doesn't check whether there is any
-	/// correspondance with the request in terms of logic. For example, `respond` will accept
+	/// correspondence with the request in terms of logic. For example, `respond` will accept
 	/// sending back a batch of six responses even if the original request was a single
 	/// notification.
 	///
@@ -202,14 +202,14 @@ impl HttpTransportServer {
 
 #[cfg(test)]
 mod tests {
-	use super::HttpTransportServer;
+	use super::{HttpConfig, HttpTransportServer};
 
 	#[test]
 	fn error_if_port_occupied() {
 		futures::executor::block_on(async move {
 			let addr = "127.0.0.1:0".parse().unwrap();
-			let server1 = HttpTransportServer::new(&addr).await.unwrap();
-			assert!(HttpTransportServer::new(server1.local_addr()).await.is_err());
+			let server1 = HttpTransportServer::new(&addr, HttpConfig::default()).await.unwrap();
+			assert!(HttpTransportServer::new(server1.local_addr(), HttpConfig::default()).await.is_err());
 		});
 	}
 }
