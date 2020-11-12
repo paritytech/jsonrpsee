@@ -26,7 +26,7 @@
 
 use crate::http::server_utils::access_control::AccessControl;
 use crate::http::transport::response;
-use crate::types::jsonrpc;
+use crate::types::{jsonrpc, http::HttpConfig};
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
@@ -52,13 +52,14 @@ impl BackgroundHttp {
 	///
 	/// In addition to `Self`, also returns the local address the server ends up listening on,
 	/// which might be different than the one passed as parameter.
-	pub async fn bind(addr: &SocketAddr) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
-		Self::bind_with_acl(addr, AccessControl::default()).await
+	pub async fn bind(addr: &SocketAddr, config: HttpConfig) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
+		Self::bind_with_acl(addr, AccessControl::default(), config).await
 	}
 
 	pub async fn bind_with_acl(
 		addr: &SocketAddr,
 		access_control: AccessControl,
+		config: HttpConfig,
 	) -> Result<(BackgroundHttp, SocketAddr), Box<dyn error::Error + Send + Sync>> {
 		let (tx, rx) = mpsc::channel(4);
 
@@ -69,7 +70,7 @@ impl BackgroundHttp {
 				Ok::<_, Error>(service_fn(move |req| {
 					let mut tx = tx.clone();
 					let access_control = access_control.clone();
-					async move { Ok::<_, Error>(process_request(req, &mut tx, &access_control).await) }
+					async move { Ok::<_, Error>(process_request(req, &mut tx, &access_control, config).await) }
 				}))
 			}
 		});
@@ -124,6 +125,7 @@ async fn process_request(
 	request: hyper::Request<hyper::Body>,
 	fg_process_tx: &mut mpsc::Sender<Request>,
 	access_control: &AccessControl,
+	config: HttpConfig,
 ) -> hyper::Response<hyper::Body> {
 	// Process access control
 	if access_control.deny_host(&request) {
@@ -136,23 +138,12 @@ async fn process_request(
 		return response::invalid_allow_headers();
 	}
 
-	/*
-	// Read metadata
-	let metadata = self.jsonrpc_handler.extractor.read_metadata(&request);
-	*/
-
 	// Proceed
 	match *request.method() {
 		// Validate the ContentType header
 		// to prevent Cross-Origin XHRs with text/plain
 		hyper::Method::POST if is_json(request.headers().get("content-type")) => {
-			let uri = //if self.rest_api != RestApi::Disabled {
-                Some(request.uri().clone())
-            /*} else {
-                None
-            }*/;
-
-			let json_body = match body_to_request(request.into_body()).await {
+			let json_body = match body_to_request(request.into_body(), config).await {
 				Ok(b) => b,
 				Err(e) => match (e.kind(), e.into_inner()) {
 					(io::ErrorKind::InvalidData, _) => return response::parse_error(),
@@ -176,27 +167,6 @@ async fn process_request(
 				Err(_) => return response::internal_error("JSON request send back channel has shut down"),
 			}
 		}
-		/*Method::POST if /*self.rest_api == RestApi::Unsecure &&*/ request.uri().path().split('/').count() > 2 => {
-			RpcHandlerState::ProcessRest {
-				metadata,
-				uri: request.uri().clone(),
-			}
-		}
-		// Just return error for unsupported content type
-		Method::POST => response::unsupported_content_type(),
-		// Don't validate content type on options
-		Method::OPTIONS => response::empty(),
-		// Respond to health API request if there is one configured.
-		Method::GET if self.health_api.as_ref().map(|x| &*x.0) == Some(request.uri().path()) => {
-			RpcHandlerState::ProcessHealth {
-				metadata,
-				method: self
-					.health_api
-					.as_ref()
-					.map(|x| x.1.clone())
-					.expect("Health api is defined since the URI matched."),
-			}
-		}*/
 		// Disallow other methods.
 		_ => response::method_not_allowed(),
 	}
@@ -219,7 +189,7 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 /// Converts a `hyper` body into a structured JSON object.
 ///
 /// Enforces a size limit on the body.
-async fn body_to_request(mut body: hyper::Body) -> Result<jsonrpc::Request, io::Error> {
+async fn body_to_request(mut body: hyper::Body, config: HttpConfig) -> Result<jsonrpc::Request, io::Error> {
 	let mut json_body = Vec::new();
 	while let Some(chunk) = body.next().await {
 		let chunk = match chunk {

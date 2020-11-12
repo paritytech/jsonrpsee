@@ -29,6 +29,7 @@ mod response;
 
 use crate::http::server_utils::access_control::AccessControl;
 use crate::types::jsonrpc;
+use crate::types::http::HttpConfig;
 
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
@@ -83,7 +84,7 @@ impl HttpTransportServer {
 	// >       starting to listen on a port is an asynchronous operation, but the hyper library
 	// >       hides this to us. In order to be future-proof, this function is async, so that we
 	// >       might switch out to a different library later without breaking the API.
-	pub async fn new(addr: &SocketAddr) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
+	pub async fn new(addr: &SocketAddr, config: HttpConfig) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
 		let (background_thread, local_addr) = background::BackgroundHttp::bind(addr).await?;
 		Ok(HttpTransportServer { background_thread, local_addr, requests: Default::default(), next_request_id: 0 })
 	}
@@ -92,9 +93,9 @@ impl HttpTransportServer {
 	pub async fn bind_with_acl(
 		addr: &SocketAddr,
 		access_control: AccessControl,
+		config: HttpConfig,
 	) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
-		let (background_thread, local_addr) = background::BackgroundHttp::bind_with_acl(addr, access_control).await?;
-
+		let (background_thread, local_addr) = background::BackgroundHttp::bind_with_acl(addr, access_control, config).await?;
 		Ok(HttpTransportServer { background_thread, local_addr, requests: Default::default(), next_request_id: 0 })
 	}
 
