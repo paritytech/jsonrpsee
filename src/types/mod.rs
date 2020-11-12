@@ -6,3 +6,7 @@ pub mod client;
 
 /// Shared types for server implementation.
 pub mod server;
+
+/// Shared types for HTTP
+#[cfg(feature = "http")]
+pub mod http;

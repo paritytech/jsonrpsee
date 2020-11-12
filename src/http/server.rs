@@ -26,6 +26,7 @@
 
 use crate::http::raw::{RawServer, RawServerEvent, RawServerRequestId};
 use crate::http::transport::HttpTransportServer;
+use crate::types::http::HttpConfig;
 use crate::types::jsonrpc::{self, JsonValue};
 use crate::types::server::Error;
 
@@ -111,9 +112,9 @@ enum FrontToBack {
 
 impl Server {
 	/// Initializes a new server based upon this raw server.
-	pub async fn new(url: &str) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
+	pub async fn new(url: &str, config: HttpConfig) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
 		let sockaddr = url.parse()?;
-		let transport_server = HttpTransportServer::new(&sockaddr).await?;
+		let transport_server = HttpTransportServer::new(&sockaddr, config).await?;
 		let local_addr = *transport_server.local_addr();
 
 		// We use an unbounded channel because the only exchanged messages concern registering
