@@ -198,7 +198,7 @@ impl WsTransportClient {
 		request: jsonrpc::Request,
 	) -> Pin<Box<dyn Future<Output = Result<(), WsConnectError>> + Send + 'a>> {
 		Box::pin(async move {
-			log::debug!("send: {}", jsonrpc::to_string(&request).expect("valid Request; qed"));
+			log::debug!("send: {}", request);
 			let request = jsonrpc::to_vec(&request).map_err(WsConnectError::Serialization)?;
 			self.sender.send_binary(request).await?;
 			self.sender.flush().await?;
@@ -214,7 +214,7 @@ impl WsTransportClient {
 			let mut message = Vec::new();
 			self.receiver.receive_data(&mut message).await?;
 			let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
-			log::debug!("recv: {}", jsonrpc::to_string(&response).expect("valid Request; qed"));
+			log::debug!("recv: {}", response);
 			Ok(response)
 		})
 	}

@@ -383,10 +383,10 @@ async fn per_connection_task(
 					}
 				};
 
-				let body = match serde_json::from_slice(socket_packet.as_ref()) {
+				let request = match serde_json::from_slice(socket_packet.as_ref()) {
 					Ok(b) => b,
 					Err(err) => {
-						log::debug!("Deserialization of incoming request failed: {:?}", err);
+						log::warn!("Deserialization of incoming request failed: {:?}", err);
 						let response = serde_json::to_string(&jsonrpc::Response::from(
 							jsonrpc::Error::parse_error(),
 							jsonrpc::Version::V2,
@@ -412,7 +412,7 @@ async fn per_connection_task(
 
 				let request_id = WsRequestId(next_request_id.fetch_add(1, atomic::Ordering::Relaxed));
 				debug_assert_ne!(request_id.0, u64::max_value());
-				log::debug!("recv: {}", jsonrpc::to_string(&body).expect("valid Request; qed"));
+				log::debug!("recv: {}", request);
 
 				// Important note: since the background task sends messages to the front task via
 				// a channel, and the front task sends messages to the background task via a
@@ -425,7 +425,7 @@ async fn per_connection_task(
 				// The channel is normally large enough for this to never happen unless the server
 				// is considerably slowed down or subject to a DoS attack.
 				let result = to_front
-					.send(BackToFront::NewRequest { id: request_id, body, sender: to_connec.clone() })
+					.send(BackToFront::NewRequest { id: request_id, body: request, sender: to_connec.clone() })
 					.now_or_never();
 
 				match result {

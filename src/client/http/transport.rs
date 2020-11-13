@@ -38,6 +38,7 @@ impl HttpTransportClient {
 	async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, Error> {
 		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
 		let body = jsonrpc::to_vec(&request).map_err(|e| Error::Serialization(e))?;
+		log::debug!("send: {}", request);
 
 		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
