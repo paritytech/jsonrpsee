@@ -414,7 +414,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				}
 			}
 			Either::Right(RawServerEvent::Notification(notification)) => {
-				log::debug!("[backend]: received notification: {:?}", notification);
+				log::trace!("[backend]: received notification: {:?}", notification);
 				if let Some((handler, allow_losses)) = registered_notifications.get_mut(notification.method()) {
 					let params: &jsonrpc::Params = notification.params().into();
 					// Note: we just ignore errors. It doesn't make sense logically speaking to

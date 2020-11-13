@@ -26,7 +26,7 @@
 
 use super::{Id, Params, Version};
 
-use alloc::{string::String, vec::Vec};
+use alloc::{fmt, string::String, vec::Vec};
 use serde::{Deserialize, Serialize};
 
 /// Represents jsonrpc request which is a method call.
@@ -108,6 +108,12 @@ pub enum Request {
 	Batch(Vec<Call>),
 }
 
+impl fmt::Display for Request {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", serde_json::to_string(self).expect("Request valid JSON; qed"))
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -115,9 +121,6 @@ mod tests {
 
 	#[test]
 	fn method_call_serialize() {
-		use serde_json;
-		use serde_json::Value;
-
 		let m = MethodCall {
 			jsonrpc: Version::V2,
 			method: "update".to_owned(),
@@ -131,9 +134,6 @@ mod tests {
 
 	#[test]
 	fn notification_serialize() {
-		use serde_json;
-		use serde_json::Value;
-
 		let n = Notification {
 			jsonrpc: Version::V2,
 			method: "update".to_owned(),
@@ -146,9 +146,6 @@ mod tests {
 
 	#[test]
 	fn call_serialize() {
-		use serde_json;
-		use serde_json::Value;
-
 		let n = Call::Notification(Notification {
 			jsonrpc: Version::V2,
 			method: "update".to_owned(),
@@ -161,8 +158,6 @@ mod tests {
 
 	#[test]
 	fn request_serialize_batch() {
-		use serde_json;
-
 		let batch = Request::Batch(vec![
 			Call::MethodCall(MethodCall {
 				jsonrpc: Version::V2,
@@ -216,8 +211,6 @@ mod tests {
 
 	#[test]
 	fn call_deserialize() {
-		use serde_json;
-
 		let s = r#"{"jsonrpc": "2.0", "method": "update", "params": [1]}"#;
 		let deserialized: Call = serde_json::from_str(s).unwrap();
 		assert_eq!(
@@ -280,8 +273,6 @@ mod tests {
 
 	#[test]
 	fn request_deserialize_batch() {
-		use serde_json;
-
 		let s = r#"[{}, {"jsonrpc": "2.0", "method": "update", "params": [1,2], "id": 1},{"jsonrpc": "2.0", "method": "update", "params": [1]}]"#;
 		let deserialized: Request = serde_json::from_str(s).unwrap();
 		assert_eq!(
@@ -305,8 +296,6 @@ mod tests {
 
 	#[test]
 	fn request_invalid_returns_id() {
-		use serde_json;
-
 		let s = r#"{"id":120,"method":"my_method","params":["foo", "bar"],"extra_field":[]}"#;
 		let deserialized: Request = serde_json::from_str(s).unwrap();
 
