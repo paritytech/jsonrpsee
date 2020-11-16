@@ -26,18 +26,17 @@ pub struct HttpTransportClient {
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
 	pub fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
-		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
+		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" {
 			Ok(HttpTransportClient { client: hyper::Client::new(), target, max_request_body_size })
 		} else {
-			return Err(Error::Url("URL scheme not supported, expects 'http'".into()));
+			Err(Error::Url("URL scheme not supported, expects 'http'".into()))
 		}
 	}
 
 	/// Send request.
 	async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, Error> {
-		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
-		let body = jsonrpc::to_vec(&request).map_err(|e| Error::Serialization(e))?;
+		let body = jsonrpc::to_vec(&request).map_err(Error::Serialization)?;
 		log::debug!("send: {}", request);
 
 		if body.len() > self.max_request_body_size as usize {
