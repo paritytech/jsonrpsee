@@ -20,7 +20,6 @@ async fn server(server_started_tx: Sender<SocketAddr>) {
 	loop {
 		let hello_fut = async {
 			let handle = hello.next().await;
-			log::debug!("server respond to hello");
 			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
 		}
 		.fuse();

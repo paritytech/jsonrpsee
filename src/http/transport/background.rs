@@ -149,7 +149,7 @@ async fn process_request(
 		// Validate the ContentType header
 		// to prevent Cross-Origin XHRs with text/plain
 		hyper::Method::POST if is_json(request.headers().get("content-type")) => {
-			let json_body = match http::read_http_body(request, config).await {
+			let request = match http::read_http_body(request, config).await {
 				Ok(body) => match jsonrpc::from_slice(&body) {
 					Ok(response) => response,
 					Err(_e) => return response::parse_error(),
@@ -163,8 +163,8 @@ async fn process_request(
 			};
 
 			let (tx, rx) = oneshot::channel();
-			log::debug!("recv: {}", jsonrpc::to_string(&json_body).unwrap());
-			let user_facing_rq = Request { send_back: tx, request: json_body };
+			log::debug!("recv: {}", request);
+			let user_facing_rq = Request { send_back: tx, request };
 			if fg_process_tx.send(user_facing_rq).await.is_err() {
 				return response::internal_error("JSON requests processing channel has shut down");
 			}

@@ -104,7 +104,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 				}
 			})
 		},
-		// TODO(niklasad1): this doesn't work on my machine.
+		// TODO(niklasad1): This deadlocks when more than 8 tasks are spawned.
 		concurrent_tasks(),
 	);
 }

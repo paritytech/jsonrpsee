@@ -8,7 +8,6 @@
 
 use crate::types::{http::HttpConfig, jsonrpc};
 use futures::StreamExt;
-use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
@@ -26,18 +25,18 @@ pub struct HttpTransportClient {
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
 	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
-		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
+		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" {
 			Ok(HttpTransportClient { client: hyper::Client::new(), target, config })
 		} else {
-			return Err(Error::Url("URL scheme not supported, expects 'http'".into()));
+			Err(Error::Url("URL scheme not supported, expects 'http'".into()))
 		}
 	}
 
 	/// Send request.
 	async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, Error> {
-		log::debug!("send: {}", jsonrpc::to_string(&request).expect("request valid JSON; qed"));
-		let body = jsonrpc::to_vec(&request).map_err(|e| Error::Serialization(e))?;
+		let body = jsonrpc::to_vec(&request).map_err(Error::Serialization)?;
+		log::debug!("send: {}", request);
 
 		if body.len() > self.config.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
@@ -113,7 +112,7 @@ fn read_content_length(header: &hyper::header::HeaderMap) -> Option<u32> {
 }
 
 /// Error that can happen during a request.
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Invalid URL.
 	#[error("Invalid Url: {0}")]
