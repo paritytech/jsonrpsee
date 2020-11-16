@@ -68,6 +68,28 @@ async fn subscription_response_to_request() {
 	assert!(matches!(err, Error::Custom(_)));
 }
 
+#[tokio::test]
+async fn batch_request_works() {
+	let batch = vec![
+		("say_hello".to_string(), Params::None),
+		("say_goodbye".to_string(), Params::Array(vec![0.into(), 1.into(), 2.into()])),
+		("get_swag".to_string(), Params::None),
+	];
+	let response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
+	let server_addr = http_server_with_hardcoded_response(response).await;
+	let uri = format!("http://{}", server_addr);
+	let client = HttpClient::new(&uri, HttpConfig::default()).unwrap();
+	let response = client.batch_request(batch).await.unwrap();
+	assert_eq!(
+		response,
+		vec![
+			JsonValue::from("hello".to_string()),
+			JsonValue::from("goodbye".to_string()),
+			JsonValue::from("here's your swag".to_string())
+		]
+	);
+}
+
 async fn run_request_with_response(response: String) -> Result<JsonValue, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).await;
 	let uri = format!("http://{}", server_addr);

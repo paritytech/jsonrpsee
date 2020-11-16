@@ -1,13 +1,13 @@
 use crate::transport::HttpTransportClient;
+use alloc::collections::VecDeque;
+use core::convert::TryInto;
+use core::sync::atomic::{AtomicU64, Ordering};
 use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
 	error::Error,
 	http::HttpConfig,
 	jsonrpc::{self, JsonValue},
 };
-
-use std::convert::TryInto;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 ///
@@ -83,6 +83,57 @@ impl HttpClient {
 			}
 		}?;
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
+	}
+
+	/// Perform a batch request towards the server.
+	///
+	/// Returns `Ok` if all requests were answered succesfully.
+	/// Returns `Error` if any of the requests fails.
+	//
+	// TODO(niklasad1): maybe simplify generic `requests`, it's quite unreadable.
+	pub async fn batch_request<'a>(
+		&self,
+		requests: impl IntoIterator<Item = (impl Into<String>, impl Into<jsonrpc::Params>)>,
+	) -> Result<Vec<JsonValue>, Error> {
+		let mut calls = Vec::new();
+		let mut ids = VecDeque::new();
+
+		for (method, params) in requests.into_iter() {
+			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
+			calls.push(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
+				jsonrpc: jsonrpc::Version::V2,
+				method: method.into(),
+				params: params.into(),
+				id: jsonrpc::Id::Num(id),
+			}));
+			ids.push_back(id);
+		}
+
+		let batch_request = jsonrpc::Request::Batch(calls);
+		let response = self
+			.transport
+			.send_request_and_wait_for_response(batch_request)
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
+
+		match response {
+			jsonrpc::Response::Single(_) => {
+				Err(Error::Custom("Server replied with single response to a batch request".to_string()))
+			}
+			jsonrpc::Response::Notif(_notif) => {
+				Err(Error::Custom("Server replied with notification to a a batch request".to_string()))
+			}
+			jsonrpc::Response::Batch(rps) => {
+				let mut responses = Vec::with_capacity(ids.len());
+				for rp in rps {
+					let next_id = ids
+						.pop_front()
+						.ok_or_else(|| Error::Custom("Batch request failed: ID not found".to_string()))?;
+					responses.push(Self::process_response(rp, next_id)?);
+				}
+				Ok(responses)
+			}
+		}
 	}
 
 	fn process_response(response: jsonrpc::Output, expected_id: u64) -> Result<JsonValue, Error> {
