@@ -68,9 +68,9 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 
 		pin_mut!(hello_fut, add_fut, notif_fut);
 		select! {
-			say_hello = hello_fut => (),
-			add = add_fut => (),
-			notif = notif_fut => (),
+			_ = hello_fut => (),
+			_ = add_fut => (),
+			_ = notif_fut => (),
 			complete => (),
 		};
 	}
