@@ -6,10 +6,8 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use crate::types::{
-	http::{read_http_body, HttpConfig},
-	jsonrpc,
-};
+use crate::types::{error::GenericTransportError, http::HttpConfig, jsonrpc};
+use crate::utils::http::hyper_helpers;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
@@ -28,7 +26,7 @@ pub struct HttpTransportClient {
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
 	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
-		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e).into()))?;
+		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" {
 			Ok(HttpTransportClient { client: hyper::Client::new(), target, config })
 		} else {
@@ -73,7 +71,7 @@ impl HttpTransportClient {
 	) -> Result<jsonrpc::Response, Error> {
 		let response = self.send_request(request).await?;
 		let (parts, body) = response.into_parts();
-		let body = read_http_body(&parts.headers, body, self.config).await.map_err(|e| Error::Http(Box::new(e)))?;
+		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.config).await?;
 
 		// Note that we don't check the Content-Type of the request. This is deemed
 		// unnecessary, as a parsing error while happen anyway.
@@ -115,8 +113,20 @@ pub enum Error {
 	ParseError(#[source] serde_json::error::Error),
 
 	/// Request body too large.
-	#[error("The request body was to large")]
+	#[error("The request body was too large")]
 	RequestTooLarge,
+}
+
+impl<T> From<GenericTransportError<T>> for Error
+where
+	T: std::error::Error + Send + Sync + 'static,
+{
+	fn from(err: GenericTransportError<T>) -> Self {
+		match err {
+			GenericTransportError::<T>::TooLarge => Self::RequestTooLarge,
+			GenericTransportError::<T>::Inner(e) => Self::Http(Box::new(e)),
+		}
+	}
 }
 
 #[cfg(test)]

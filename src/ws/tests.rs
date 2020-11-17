@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use crate::client::{WsClient, WsSubscription};
+use crate::types::error::Error;
 use crate::types::jsonrpc::{JsonValue, Params};
-use crate::types::server::Error;
 use crate::ws::WsServer;
 
 use std::net::SocketAddr;
@@ -68,9 +68,9 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 
 		pin_mut!(hello_fut, add_fut, notif_fut);
 		select! {
-			say_hello = hello_fut => (),
-			add = add_fut => (),
-			notif = notif_fut => (),
+			_say_hello = hello_fut => (),
+			_add = add_fut => (),
+			_notif = notif_fut => (),
 			complete => (),
 		};
 	}
@@ -236,7 +236,7 @@ async fn register_same_subscribe_unsubscribe_is_err() {
 	let server = WsServer::new("127.0.0.1:0").await.unwrap();
 	assert!(matches!(
 		server.register_subscription("subscribe_hello".to_owned(), "subscribe_hello".to_owned()),
-		Err(Error::AlreadyRegistered(_))
+		Err(Error::MethodAlreadyRegistered(_))
 	));
 }
 

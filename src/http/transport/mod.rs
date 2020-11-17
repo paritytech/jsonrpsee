@@ -25,11 +25,12 @@
 // DEALINGS IN THE SOFTWARE.
 
 mod background;
+#[allow(unused)]
 mod response;
 
-use crate::http::server_utils::access_control::AccessControl;
 use crate::types::http::HttpConfig;
 use crate::types::jsonrpc;
+use crate::utils::http::access_control::AccessControl;
 
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
@@ -89,7 +90,7 @@ impl HttpTransportServer {
 		config: HttpConfig,
 	) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
 		let (background_thread, local_addr) = background::BackgroundHttp::bind(addr, config).await?;
-		Ok(HttpTransportServer { background_thread, local_addr, requests: Default::default(), next_request_id: 0 })
+		Ok(HttpTransportServer { background_thread, local_addr, requests: FnvHashMap::default(), next_request_id: 0 })
 	}
 
 	/// Tries to start an HTTP server that listens on the given address with an access control list.

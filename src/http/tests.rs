@@ -40,9 +40,9 @@ async fn server(server_started_tx: Sender<SocketAddr>) {
 
 		pin_mut!(hello_fut, add_fut, notif_fut);
 		select! {
-			say_hello = hello_fut => (),
-			add = add_fut => (),
-			notif = notif_fut => (),
+			_say_hello = hello_fut => (),
+			_add = add_fut => (),
+			_notif = notif_fut => (),
 			complete => (),
 		};
 	}

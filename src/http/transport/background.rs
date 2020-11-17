@@ -24,16 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::http::server_utils::access_control::AccessControl;
 use crate::http::transport::response;
-use crate::types::{
-	http::{self, HttpConfig},
-	jsonrpc,
-};
+use crate::types::{error::GenericTransportError, http::HttpConfig, jsonrpc};
+use crate::utils::http::{access_control::AccessControl, hyper_helpers};
 use futures::{channel::mpsc, channel::oneshot, prelude::*};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error;
-use std::{error, io, net::SocketAddr, thread};
+use std::{error, net::SocketAddr, thread};
 
 /// Background thread that serves HTTP requests.
 pub(super) struct BackgroundHttp {
@@ -150,17 +147,13 @@ async fn process_request(
 		// to prevent Cross-Origin XHRs with text/plain
 		hyper::Method::POST if is_json(request.headers().get("content-type")) => {
 			let (parts, body) = request.into_parts();
-			let request = match http::read_http_body(&parts.headers, body, config).await {
+			let request = match hyper_helpers::read_response_to_body(&parts.headers, body, config).await {
 				Ok(body) => match jsonrpc::from_slice(&body) {
 					Ok(response) => response,
 					Err(_e) => return response::parse_error(),
 				},
-				Err(e) => match (e.kind(), e.into_inner()) {
-					(io::ErrorKind::InvalidData, _) => return response::parse_error(),
-					(io::ErrorKind::UnexpectedEof, _) => return response::parse_error(),
-					(_, Some(inner)) => return response::internal_error(inner.to_string()),
-					(kind, None) => return response::internal_error(format!("{:?}", kind)),
-				},
+				Err(GenericTransportError::TooLarge) => return response::too_large("The request was too large"),
+				Err(GenericTransportError::Inner(e)) => return response::internal_error(e.to_string()),
 			};
 
 			let (tx, rx) = oneshot::channel();

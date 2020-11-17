@@ -1,5 +1,5 @@
 use crate::client::http::transport::HttpTransportClient;
-use crate::types::client::{Error, Mismatch};
+use crate::types::error::{Error, Mismatch};
 use crate::types::http::HttpConfig;
 use crate::types::jsonrpc::{self, JsonValue};
 use std::sync::atomic::{AtomicU64, Ordering};
