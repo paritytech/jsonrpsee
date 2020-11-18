@@ -39,11 +39,11 @@ pub async fn read_response_to_body(
 	mut body: hyper::Body,
 	config: HttpConfig,
 ) -> Result<Vec<u8>, GenericTransportError<hyper::Error>> {
-	// NOTE(niklasad1): Bigger values than `u64::MAX` will be regarded as zero here and that's very unlikely to occur.
+	// NOTE(niklasad1): Bigger values than `u32::MAX` will be regarded as zero here and that's very unlikely to occur.
 	// Thus, in those causes we rely on the while loop to allocate instead of `pre-allocate`.
 	let body_size = read_header_content_length(&headers).unwrap_or(0);
 
-	if body_size > config.max_request_body_size as u64 {
+	if body_size > config.max_request_body_size {
 		return Err(GenericTransportError::TooLarge);
 	}
 
@@ -60,13 +60,13 @@ pub async fn read_response_to_body(
 	Ok(received_data)
 }
 
-/// Read `content_length` from HTTP Header that fits into `u64`
+/// Read `content_length` from HTTP Header that fits into `u32`
 ///
-/// NOTE: There's no specific hard limit on `content_length` in specification, so bigger values than `u64::MAX` won't be parsed successfully.
-fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u64> {
+/// NOTE: There's no specific hard limit on `content_length` in HTTP specification, thus this method might reject valid `content_length`
+fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u32> {
 	let length = read_header(headers, "content-length")?;
 	// HTTP Content-Length indicates number of bytes in decimal.
-	u64::from_str_radix(length, 10).ok()
+	u32::from_str_radix(length, 10).ok()
 }
 
 /// Extracts string value of a single header in request.
