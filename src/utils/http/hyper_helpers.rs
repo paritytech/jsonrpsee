@@ -74,9 +74,9 @@ fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u32>
 /// Returns `Some(val)` if the header contains exactly one value.
 /// None otherwise.
 pub fn read_header<'a>(headers: &'a hyper::header::HeaderMap, header_name: &str) -> Option<&'a str> {
-	let mut iter = headers.get_all(header_name).iter();
-	let val = iter.next()?;
-	if iter.next().is_none() {
+	let mut values = headers.get_all(header_name).iter();
+	let val = values.next()?;
+	if values.next().is_none() {
 		val.to_str().ok()
 	} else {
 		None
