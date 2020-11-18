@@ -60,19 +60,17 @@ pub async fn read_response_to_body(
 	Ok(received_data)
 }
 
-/// Read `content_length` from HTTP Header that fits into `u32`
+/// Read the `Content-Length` HTTP Header. Must fit into a `u32`; returns `None` otherwise.
 ///
-/// NOTE: There's no specific hard limit on `content_length` in HTTP specification, thus this method might reject valid `content_length`
+/// NOTE: There's no specific hard limit on `Content_length` in HTTP specification.
+/// Thus this method might reject valid `content_length`
 fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u32> {
-	let length = read_header(headers, "content-length")?;
+	let length = read_header_value(headers, "content-length")?;
 	// HTTP Content-Length indicates number of bytes in decimal.
 	u32::from_str_radix(length, 10).ok()
 }
 
-/// Extracts string value of a single header in request.
-///
-/// Returns `Some(val)` if the header contains exactly one value.
-/// None otherwise.
+/// Returns a string value when there is exactly one value for the given header.
 pub fn read_header_value<'a>(headers: &'a hyper::header::HeaderMap, header_name: &str) -> Option<&'a str> {
 	let mut values = headers.get_all(header_name).iter();
 	let val = values.next()?;
@@ -81,6 +79,14 @@ pub fn read_header_value<'a>(headers: &'a hyper::header::HeaderMap, header_name:
 	} else {
 		None
 	}
+}
+
+/// Returns an iterator of all values for a given a header name
+pub fn read_header_values<'a>(
+	headers: &'a hyper::header::HeaderMap,
+	header_name: &str,
+) -> hyper::header::ValueIter<'a, hyper::header::HeaderValue> {
+	headers.get_all(header_name).iter()
 }
 
 #[cfg(test)]

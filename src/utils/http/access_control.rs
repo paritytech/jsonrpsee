@@ -44,14 +44,14 @@ pub struct AccessControl {
 impl AccessControl {
 	/// Validate incoming request by http HOST
 	pub fn deny_host(&self, request: &hyper::Request<hyper::Body>) -> bool {
-		!hosts::is_host_valid(hyper_helpers::read_header(request.headers(), "host"), &self.allow_hosts)
+		!hosts::is_host_valid(hyper_helpers::read_header_value(request.headers(), "host"), &self.allow_hosts)
 	}
 
 	/// Validate incoming request by CORS origin
 	pub fn deny_cors_origin(&self, request: &hyper::Request<hyper::Body>) -> bool {
 		let header = cors::get_cors_allow_origin(
-			hyper_helpers::read_header(request.headers(), "origin"),
-			hyper_helpers::read_header(request.headers(), "host"),
+			hyper_helpers::read_header_value(request.headers(), "origin"),
+			hyper_helpers::read_header_value(request.headers(), "host"),
 			&self.cors_allow_origin,
 		)
 		.map(|origin| {
@@ -70,10 +70,7 @@ impl AccessControl {
 	/// Validate incoming request by CORS header
 	pub fn deny_cors_header(&self, request: &hyper::Request<hyper::Body>) -> bool {
 		let headers = request.headers().keys().map(|name| name.as_str());
-		let requested_headers = request
-			.headers()
-			.get_all("access-control-request-headers")
-			.iter()
+		let requested_headers = hyper_helpers::read_header_values(request.headers(), "access-control-request-headers")
 			.filter_map(|val| val.to_str().ok())
 			.flat_map(|val| val.split(", "))
 			.flat_map(|val| val.split(','));
