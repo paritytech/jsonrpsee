@@ -34,16 +34,16 @@ use futures::StreamExt;
 ///
 /// Returns `Ok(bytes)` if the body was in valid size range.
 /// Returns `Err` if the body was too large or the body couldn't be read.
-//
-// TODO: split into two functions.
 pub async fn read_response_to_body(
 	headers: &hyper::HeaderMap,
 	mut body: hyper::Body,
 	config: HttpConfig,
 ) -> Result<Vec<u8>, GenericTransportError<hyper::Error>> {
-	let body_size = read_http_content_length(&headers).unwrap_or(0);
+	// NOTE(niklasad1): Bigger values than `u64::MAX` will be regarded as zero here and that's very unlikely to occur.
+	// Thus, in those causes we rely on the while loop to allocate instead of `pre-allocate`.
+	let body_size = read_header_content_length(&headers).unwrap_or(0);
 
-	if body_size > config.max_request_body_size {
+	if body_size > config.max_request_body_size as u64 {
 		return Err(GenericTransportError::TooLarge);
 	}
 
@@ -60,31 +60,32 @@ pub async fn read_response_to_body(
 	Ok(received_data)
 }
 
-/// Read `content_length` from HTTP Header.
+/// Read `content_length` from HTTP Header that fits into `u64`
 ///
-/// Returns `Some(val)` if `content_length` contains exactly one value.
-/// None otherwise.
-fn read_http_content_length(headers: &hyper::header::HeaderMap) -> Option<u32> {
-	let values = headers.get_all("content-length");
-	let mut iter = values.iter();
-	let content_length = iter.next()?;
-	if iter.next().is_some() {
-		return None;
-	}
-
+/// NOTE: There's no specific hard limit on `content_length` in specification, so bigger values than `u64::MAX` won't be parsed successfully.
+fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u64> {
+	let length = read_header(headers, "content-length")?;
 	// HTTP Content-Length indicates number of bytes in decimal.
-	let length = content_length.to_str().ok()?;
-	u32::from_str_radix(length, 10).ok()
+	u64::from_str_radix(length, 10).ok()
 }
 
 /// Extracts string value of a single header in request.
-pub fn read_header<'a>(req: &'a hyper::Request<hyper::Body>, header_name: &str) -> Option<&'a str> {
-	req.headers().get(header_name).and_then(|v| v.to_str().ok())
+///
+/// Returns `Some(val)` if the header contains exactly one value.
+/// None otherwise.
+pub fn read_header<'a>(headers: &'a hyper::header::HeaderMap, header_name: &str) -> Option<&'a str> {
+	let mut iter = headers.get_all(header_name).iter();
+	let val = iter.next()?;
+	if iter.next().is_none() {
+		val.to_str().ok()
+	} else {
+		None
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{read_http_content_length, read_response_to_body, HttpConfig};
+	use super::{read_header_content_length, read_response_to_body, HttpConfig};
 	use crate::types::jsonrpc;
 
 	#[tokio::test]
@@ -109,9 +110,16 @@ mod tests {
 	fn read_content_length_works() {
 		let mut headers = hyper::header::HeaderMap::new();
 		headers.insert(hyper::header::CONTENT_LENGTH, "177".parse().unwrap());
-		assert_eq!(read_http_content_length(&headers), Some(177));
+		assert_eq!(read_header_content_length(&headers), Some(177));
 
 		headers.append(hyper::header::CONTENT_LENGTH, "999".parse().unwrap());
-		assert_eq!(read_http_content_length(&headers), None);
+		assert_eq!(read_header_content_length(&headers), None);
+	}
+
+	#[test]
+	fn read_content_length_too_big_value() {
+		let mut headers = hyper::header::HeaderMap::new();
+		headers.insert(hyper::header::CONTENT_LENGTH, "18446744073709551616".parse().unwrap());
+		assert_eq!(read_header_content_length(&headers), None);
 	}
 }

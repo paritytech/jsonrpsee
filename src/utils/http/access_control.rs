@@ -44,14 +44,14 @@ pub struct AccessControl {
 impl AccessControl {
 	/// Validate incoming request by http HOST
 	pub fn deny_host(&self, request: &hyper::Request<hyper::Body>) -> bool {
-		!hosts::is_host_valid(hyper_helpers::read_header(request, "host"), &self.allow_hosts)
+		!hosts::is_host_valid(hyper_helpers::read_header(request.headers(), "host"), &self.allow_hosts)
 	}
 
 	/// Validate incoming request by CORS origin
 	pub fn deny_cors_origin(&self, request: &hyper::Request<hyper::Body>) -> bool {
 		let header = cors::get_cors_allow_origin(
-			hyper_helpers::read_header(request, "origin"),
-			hyper_helpers::read_header(request, "host"),
+			hyper_helpers::read_header(request.headers(), "origin"),
+			hyper_helpers::read_header(request.headers(), "host"),
 			&self.cors_allow_origin,
 		)
 		.map(|origin| {
