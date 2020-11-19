@@ -50,7 +50,7 @@ impl Id {
 		}
 	}
 
-	/// If the `Id` is an String, returns the associated &str. Returns None
+	/// If the `Id` is a String, returns the associated &str. Returns None
 	/// otherwise.
 	pub fn as_str(&self) -> Option<&str> {
 		match self {
