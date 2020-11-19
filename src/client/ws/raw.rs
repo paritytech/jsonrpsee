@@ -68,7 +68,7 @@ use crate::client::ws::{WsConnectError, WsTransportClient};
 use crate::types::jsonrpc;
 
 use alloc::{collections::VecDeque, string::String, vec};
-use core::{fmt, future::Future};
+use core::{convert::TryInto, fmt, future::Future};
 use hashbrown::{hash_map::Entry, HashMap};
 
 /// Wraps around a [`TransportClient`](crate::transport::TransportClient) and analyzes everything
@@ -459,11 +459,11 @@ impl RawClient {
 		// Find the request that this answered.
 		match self.requests.remove(&request_id) {
 			Some(Request::Request) => {
-				self.events_queue.push_back(RawClientEvent::Response { result: response.into(), request_id });
+				self.events_queue.push_back(RawClientEvent::Response { result: response.try_into(), request_id });
 			}
 
 			Some(Request::PendingSubscription) => {
-				let response = match Result::from(response) {
+				let response = match response.try_into() {
 					Ok(r) => r,
 					Err(err) => {
 						self.events_queue

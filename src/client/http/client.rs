@@ -1,7 +1,8 @@
 use crate::client::http::transport::HttpTransportClient;
-use crate::types::client::{Error, Mismatch};
+use crate::types::client::Error;
 use crate::types::jsonrpc::{self, JsonValue};
-use std::collections::VecDeque;
+use std::collections::HashSet;
+use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Default maximum request body size (10 MB).
@@ -95,7 +96,7 @@ impl HttpClient {
 
 	/// Perform a batch request towards the server.
 	///
-	/// Returns `Ok` if all requests were answered succesfully.
+	/// Returns `Ok` if all requests were answered successfully.
 	/// Returns `Error` if any of the requests fails.
 	//
 	// TODO(niklasad1): maybe simplify generic `requests`, it's quite unreadable.
@@ -104,7 +105,9 @@ impl HttpClient {
 		requests: impl IntoIterator<Item = (impl Into<String>, impl Into<jsonrpc::Params>)>,
 	) -> Result<Vec<JsonValue>, Error> {
 		let mut calls = Vec::new();
-		let mut ids = VecDeque::new();
+		// NOTE(niklasad1): If more than `u64::MAX` requests are performed in the `batch` then duplicate IDs are used
+		// which we don't support because ID is used to uniquely identify a given request.
+		let mut ids = HashSet::new();
 
 		for (method, params) in requests.into_iter() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
@@ -114,7 +117,7 @@ impl HttpClient {
 				params: params.into(),
 				id: jsonrpc::Id::Num(id),
 			}));
-			ids.push_back(id);
+			ids.insert(id);
 		}
 
 		let batch_request = jsonrpc::Request::Batch(calls);
@@ -134,10 +137,15 @@ impl HttpClient {
 			jsonrpc::Response::Batch(rps) => {
 				let mut responses = Vec::with_capacity(ids.len());
 				for rp in rps {
-					let next_id = ids
-						.pop_front()
-						.ok_or_else(|| Error::Custom("Batch request failed: ID not found".to_string()))?;
-					responses.push(Self::process_response(rp, next_id)?);
+					let id = match rp.id().as_number() {
+						Some(n) => *n,
+						_ => return Err(Error::InvalidRequestId),
+					};
+					if !ids.remove(&id) {
+						return Err(Error::InvalidRequestId);
+					}
+					let val: JsonValue = rp.try_into().map_err(Error::Request)?;
+					responses.push(val);
 				}
 				Ok(responses)
 			}
@@ -145,20 +153,9 @@ impl HttpClient {
 	}
 
 	fn process_response(response: jsonrpc::Output, expected_id: u64) -> Result<JsonValue, Error> {
-		match response.id() {
-			jsonrpc::Id::Num(n) if n == &expected_id => {
-				let ret: Result<JsonValue, _> = response.into();
-				ret.map_err(Error::Request)
-			}
-			jsonrpc::Id::Num(n) => {
-				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: (*n).into() }))
-			}
-			jsonrpc::Id::Str(s) => {
-				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: s.to_string().into() }))
-			}
-			jsonrpc::Id::Null => {
-				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: JsonValue::Null }))
-			}
+		match response.id().as_number() {
+			Some(n) if n == &expected_id => response.try_into().map_err(Error::Request),
+			_ => Err(Error::InvalidRequestId),
 		}
 	}
 }

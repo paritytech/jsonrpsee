@@ -1,20 +1,4 @@
-use crate::types::jsonrpc::{self, JsonValue};
-use std::fmt;
-
-/// Convenience type for displaying errors.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Mismatch<T> {
-	/// Expected value.
-	pub expected: T,
-	/// Actual value.
-	pub got: T,
-}
-
-impl<T: fmt::Display> fmt::Display for Mismatch<T> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.write_fmt(format_args!("Expected: {}, Got: {}", self.expected, self.got))
-	}
-}
+use crate::types::jsonrpc;
 
 /// Error produced by the client.
 #[derive(Debug, thiserror::Error)]
@@ -36,8 +20,8 @@ pub enum Error {
 	#[error("Parse error: {0}")]
 	ParseError(#[source] jsonrpc::ParseError),
 	/// Invalid id in response to a request.
-	#[error("Invalid ID in response: {0}")]
-	InvalidRequestId(Mismatch<JsonValue>),
+	#[error("Invalid ID in response from the server.")]
+	InvalidRequestId,
 	#[error("Custom error: {0}")]
 	/// Custom error.
 	Custom(String),
