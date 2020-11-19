@@ -8,6 +8,9 @@ use jsonrpsee_types::{
 	http::HttpConfig,
 	jsonrpc::{self, JsonValue},
 };
+// will not compile for WASM/no-std
+use std::collections::HashSet;
+
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 ///
@@ -87,7 +90,7 @@ impl HttpClient {
 
 	/// Perform a batch request towards the server.
 	///
-	/// Returns `Ok` if all requests were answered succesfully.
+	/// Returns `Ok` if all requests were answered successfully.
 	/// Returns `Error` if any of the requests fails.
 	//
 	// TODO(niklasad1): maybe simplify generic `requests`, it's quite unreadable.
@@ -96,7 +99,9 @@ impl HttpClient {
 		requests: impl IntoIterator<Item = (impl Into<String>, impl Into<jsonrpc::Params>)>,
 	) -> Result<Vec<JsonValue>, Error> {
 		let mut calls = Vec::new();
-		let mut ids = VecDeque::new();
+		// NOTE(niklasad1): If more than `u64::MAX` requests are performed in the `batch` then duplicate IDs are used
+		// which we don't support because ID is used to uniquely identify a given request.
+		let mut ids = HashSet::new();
 
 		for (method, params) in requests.into_iter() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
@@ -106,7 +111,7 @@ impl HttpClient {
 				params: params.into(),
 				id: jsonrpc::Id::Num(id),
 			}));
-			ids.push_back(id);
+			ids.insert(id);
 		}
 
 		let batch_request = jsonrpc::Request::Batch(calls);
@@ -126,10 +131,15 @@ impl HttpClient {
 			jsonrpc::Response::Batch(rps) => {
 				let mut responses = Vec::with_capacity(ids.len());
 				for rp in rps {
-					let next_id = ids
-						.pop_front()
-						.ok_or_else(|| Error::Custom("Batch request failed: ID not found".to_string()))?;
-					responses.push(Self::process_response(rp, next_id)?);
+					let id = match rp.id().as_number() {
+						Some(n) => *n,
+						_ => return Err(Error::InvalidRequestId),
+					};
+					if !ids.remove(&id) {
+						return Err(Error::InvalidRequestId);
+					}
+					let val: JsonValue = rp.try_into().map_err(Error::Request)?;
+					responses.push(val);
 				}
 				Ok(responses)
 			}
