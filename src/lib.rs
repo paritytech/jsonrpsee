@@ -54,6 +54,8 @@ pub mod client;
 pub mod http;
 /// Shared types.
 pub mod types;
+/// Utils.
+pub mod utils;
 /// JSONRPC 2.0 WebSocket server.
 #[cfg(feature = "ws")]
 pub mod ws;

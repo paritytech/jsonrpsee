@@ -1,5 +1,5 @@
 use crate::client::{HttpClient, HttpConfig};
-use crate::types::client::Error;
+use crate::types::error::Error;
 use crate::types::jsonrpc::{self, ErrorCode, JsonValue, Params};
 
 use jsonrpsee_test_utils::helpers::*;

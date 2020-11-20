@@ -26,7 +26,7 @@
 
 //! Host header validation.
 
-use crate::http::server_utils::matcher::{Matcher, Pattern};
+use crate::utils::http::matcher::{Matcher, Pattern};
 use std::collections::HashSet;
 use std::net::SocketAddr;
 

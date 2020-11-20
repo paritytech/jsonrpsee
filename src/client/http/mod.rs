@@ -4,5 +4,6 @@ mod transport;
 #[cfg(test)]
 mod tests;
 
-pub use client::{HttpClient, HttpConfig};
+pub use crate::types::http::HttpConfig;
+pub use client::HttpClient;
 pub use transport::HttpTransportClient;

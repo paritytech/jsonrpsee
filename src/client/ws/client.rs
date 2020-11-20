@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::ws::{RawClient, RawClientEvent, RawClientRequestId, WsTransportClient};
-use crate::types::client::Error;
+use crate::types::error::Error;
 use crate::types::jsonrpc::{self, JsonValue};
 
 use futures::{
@@ -123,7 +123,7 @@ impl Client {
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::InternalChannel)
+		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::Internal)
 	}
 
 	/// Perform a request towards the server.
@@ -139,7 +139,11 @@ impl Client {
 		let params = params.into();
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		self.to_back.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx }).await?;
+		self.to_back
+			.clone()
+			.send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })
+			.await
+			.map_err(Error::Internal)?;
 
 		// TODO: send a `ChannelClosed` message if we close the channel unexpectedly
 
@@ -181,7 +185,8 @@ impl Client {
 				params: params.into(),
 				send_back: send_back_tx,
 			})
-			.await?;
+			.await
+			.map_err(Error::Internal)?;
 
 		let notifs_rx = match send_back_rx.await {
 			Ok(Ok(v)) => v,
