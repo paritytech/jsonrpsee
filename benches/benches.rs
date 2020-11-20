@@ -1,7 +1,7 @@
 use async_std::task::block_on;
 use criterion::*;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee::client::{HttpClient, HttpConfig, WsClient};
+use jsonrpsee::client::{HttpClient, HttpConfig, WsClient, WsConfig};
 use jsonrpsee::http::HttpServer;
 use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 use jsonrpsee::ws::WsServer;
@@ -77,7 +77,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
 	async_std::task::spawn(ws_server(tx_addr));
 	let server_addr = block_on(rx_addr).unwrap();
-	let client = Arc::new(block_on(WsClient::new(&format!("ws://{}", server_addr))).unwrap());
+	let client = Arc::new(block_on(WsClient::new(&format!("ws://{}", server_addr), WsConfig::default())).unwrap());
 
 	c.bench_function("synchronous WebSocket round trip", |b| {
 		b.iter(|| {

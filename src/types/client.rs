@@ -32,6 +32,9 @@ pub enum Error {
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	InternalChannel(#[from] futures::channel::mpsc::SendError),
+	/// Frontend/backend channel error.
+	#[error("Internal channel disconnected")]
+	InternalChannelDisconnected,
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] jsonrpc::ParseError),

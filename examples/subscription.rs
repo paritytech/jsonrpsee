@@ -26,9 +26,10 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee::client::{WsClient, WsSubscription};
+use jsonrpsee::client::{WsClient, WsConfig, WsSubscription};
 use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 use jsonrpsee::ws::WsServer;
+use std::num::NonZeroUsize;
 
 const SOCK_ADDR: &str = "127.0.0.1:9966";
 const SERVER_URI: &str = "ws://localhost:9966";
@@ -44,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 
 	server_started_rx.await?;
-	let client = WsClient::new(SERVER_URI).await?;
+	let client = WsClient::new(SERVER_URI, WsConfig::default()).await?;
 	let mut subscribe_hello: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await?;
 

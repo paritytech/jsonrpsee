@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::client::{WsClient, WsSubscription};
+use crate::client::{WsClient, WsConfig, WsSubscription};
 use crate::types::jsonrpc::{JsonValue, Params};
 use crate::types::server::Error;
 use crate::ws::WsServer;
@@ -97,7 +97,7 @@ async fn subscription_works() {
 	server_subscribe_only(server_started_tx);
 	let server_addr = server_started_rx.await.unwrap();
 	let uri = format!("ws://{}", server_addr);
-	let client = WsClient::new(&uri).await.unwrap();
+	let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 	let mut foo_sub: WsSubscription<JsonValue> =
@@ -120,7 +120,7 @@ async fn subscription_several_clients() {
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
 		let uri = format!("ws://{}", server_addr);
-		let client = WsClient::new(&uri).await.unwrap();
+		let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
 		let hello_sub: WsSubscription<JsonValue> =
 			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: WsSubscription<JsonValue> =

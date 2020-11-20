@@ -27,6 +27,9 @@
 use crate::client::ws::{RawClient, RawClientEvent, RawClientRequestId, WsTransportClient};
 use crate::types::client::Error;
 use crate::types::jsonrpc::{self, JsonValue};
+use std::num::NonZeroUsize;
+
+use ring_channel::{ring_channel, RingReceiver, RingSender};
 
 use futures::{
 	channel::{mpsc, oneshot},
@@ -36,6 +39,56 @@ use futures::{
 };
 use std::{collections::HashMap, io, marker::PhantomData};
 
+enum InternalChannelSender<T> {
+	AllowLosses(RingSender<T>),
+	BlockWhenFull(mpsc::Sender<T>),
+}
+
+impl<T> InternalChannelSender<T> {
+	fn send(self, data: T) -> Result<(), Error> {
+		match self {
+			// Fails when the channel is disconnected only.
+			Self::AllowLosses(mut inner) => inner.send(data).map_err(|_| Error::InternalChannelDisconnected),
+			// NOTE: we don't want block here when the queue full
+			// either close the connection or just log an error.
+			Self::BlockWhenFull(mut inner) => {
+				inner.try_send(data).map_err(|e| Error::InternalChannel(e.into_send_error()))
+			}
+		}
+	}
+
+	fn is_closed(self, dummy: T) -> bool {
+		match self {
+			// Send dummy value just to check if the channel is alive.
+			Self::AllowLosses(mut inner) => inner.send(dummy).is_err(),
+			Self::BlockWhenFull(inner) => inner.is_closed(),
+		}
+	}
+}
+
+impl<T> Clone for InternalChannelSender<T> {
+	fn clone(&self) -> Self {
+		match self {
+			Self::AllowLosses(inner) => Self::AllowLosses(inner.clone()),
+			Self::BlockWhenFull(inner) => Self::BlockWhenFull(inner.clone()),
+		}
+	}
+}
+
+enum InternalChannelReceiver<T> {
+	AllowLosses(RingReceiver<T>),
+	BlockWhenFull(mpsc::Receiver<T>),
+}
+
+impl<T> InternalChannelReceiver<T> {
+	async fn next(&mut self) -> Option<T> {
+		match self {
+			Self::AllowLosses(inner) => inner.next().await,
+			Self::BlockWhenFull(inner) => inner.next().await,
+		}
+	}
+}
+
 /// Client that can be cloned.
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background
@@ -44,17 +97,46 @@ use std::{collections::HashMap, io, marker::PhantomData};
 #[derive(Clone)]
 pub struct Client {
 	/// Channel to send requests to the background task.
-	to_back: mpsc::Sender<FrontToBack>,
+	to_back: InternalChannelSender<FrontToBack>,
+	/// Config.
+	config: Config,
+}
+
+#[derive(Copy, Clone, Debug)]
+/// Configuration.
+pub struct Config {
+	/// Backend channel for serving requests and notifications.
+	request_channel_capacity: usize,
+	/// Backend channel for each unique subscription.
+	subscription_channel_capacity: usize,
+	/// Allow losses when the channel gets full
+	allow_subscription_losses: bool,
+	/// Allow losses when the request/notifications channel gets full
+	allow_request_losses: bool,
+	/// Max request body size
+	max_request_body_size: usize,
+}
+
+impl Default for Config {
+	fn default() -> Self {
+		Self {
+			request_channel_capacity: 16,
+			subscription_channel_capacity: 16,
+			allow_subscription_losses: true,
+			allow_request_losses: false,
+			max_request_body_size: 10 * 1024 * 1024,
+		}
+	}
 }
 
 /// Active subscription on a [`Client`].
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
-	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
-	notifs_rx: mpsc::Receiver<JsonValue>,
+	to_back: InternalChannelSender<FrontToBack>,
+	/// Channel from which we receive notifications from the server, as un-decoded `JsonValue`s.
+	notifs_rx: InternalChannelReceiver<JsonValue>,
 	/// Marker in order to pin the `Notif` parameter.
-	marker: PhantomData<mpsc::Receiver<Notif>>,
+	marker: PhantomData<Notif>,
 }
 
 /// Message that the [`Client`] can send to the background task.
@@ -88,7 +170,7 @@ enum FrontToBack {
 		/// When we get a response from the server about that subscription, we send the result on
 		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
 		/// notifications.
-		send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, Error>>,
+		send_back: oneshot::Sender<Result<InternalChannelReceiver<JsonValue>, Error>>,
 	},
 
 	/// When a request or subscription channel is closed, we send this message to the background
@@ -104,14 +186,20 @@ impl Client {
 	/// Initializes a new WebSocket client
 	///
 	/// Fails when the URL is invalid.
-	pub async fn new(target: &str) -> Result<Self, Error> {
+	pub async fn new(target: impl AsRef<str>, config: Config) -> Result<Self, Error> {
 		let transport = WsTransportClient::new(target).await.map_err(|e| Error::TransportError(Box::new(e)))?;
 		let client = RawClient::new(transport);
-		let (to_back, from_front) = mpsc::channel(16);
+
+		let (to_back, from_front) = if config.allow_request_losses {
+			allow_losses_channel(config.request_channel_capacity)
+		} else {
+			blocking_channel(config.request_channel_capacity)
+		};
+
 		async_std::task::spawn(async move {
-			background_task(client, from_front).await;
+			background_task(client, from_front, config).await;
 		});
-		Ok(Client { to_back })
+		Ok(Client { to_back, config })
 	}
 
 	/// Send a notification to the server.
@@ -123,7 +211,7 @@ impl Client {
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::InternalChannel)
+		self.to_back.clone().send(FrontToBack::Notification { method, params })
 	}
 
 	/// Perform a request towards the server.
@@ -139,9 +227,9 @@ impl Client {
 		let params = params.into();
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		self.to_back.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx }).await?;
-
 		// TODO: send a `ChannelClosed` message if we close the channel unexpectedly
+		// -> it is impossible to do without another channel.
+		self.to_back.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })?;
 
 		let json_value = match send_back_rx.await {
 			Ok(Ok(v)) => v,
@@ -173,15 +261,12 @@ impl Client {
 
 		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		self.to_back
-			.clone()
-			.send(FrontToBack::Subscribe {
-				subscribe_method,
-				unsubscribe_method,
-				params: params.into(),
-				send_back: send_back_tx,
-			})
-			.await?;
+		self.to_back.clone().send(FrontToBack::Subscribe {
+			subscribe_method,
+			unsubscribe_method,
+			params: params.into(),
+			send_back: send_back_tx,
+		})?;
 
 		let notifs_rx = match send_back_rx.await {
 			Ok(Ok(v)) => v,
@@ -220,20 +305,20 @@ where
 impl<Notif> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
-		// the channel's buffer will be full, and our unsubscription request will never make it.
+		// the channel's buffer will be full, and our un-subscription request will never make it.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let _ = self.to_back.send(FrontToBack::ChannelClosed).now_or_never();
+		let _ = self.to_back.clone().send(FrontToBack::ChannelClosed);
 	}
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<FrontToBack>) {
+async fn background_task(mut client: RawClient, mut from_front: InternalChannelReceiver<FrontToBack>, config: Config) {
 	// List of subscription requests that have been sent to the server, with the method name to
 	// unsubscribe.
 	let mut pending_subscriptions: HashMap<RawClientRequestId, (oneshot::Sender<_>, _)> = HashMap::new();
 	// List of subscription that are active on the server, with the method name to unsubscribe.
-	let mut active_subscriptions: HashMap<RawClientRequestId, (mpsc::Sender<jsonrpc::JsonValue>, _)> = HashMap::new();
+	let mut active_subscriptions: HashMap<RawClientRequestId, (InternalChannelSender<JsonValue>, _)> = HashMap::new();
 	// List of requests that the server must answer.
 	let mut ongoing_requests: HashMap<RawClientRequestId, oneshot::Sender<Result<_, _>>> = HashMap::new();
 
@@ -298,10 +383,21 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 			Either::Left(Some(FrontToBack::ChannelClosed)) => {
 				// TODO: there's no way to cancel pending subscriptions and requests, otherwise
 				// we should clean them up as well
-				while let Some(rq_id) = active_subscriptions.iter().find(|(_, (v, _))| v.is_closed()).map(|(k, _)| *k) {
-					let (_, unsubscribe) = active_subscriptions.remove(&rq_id).unwrap();
-					client.subscription_by_id(rq_id).unwrap().into_active().unwrap().close(unsubscribe).await.unwrap();
+
+				// TODO(niklasad1): perf use mem::replace trick here instead of Vec.
+				let mut remove = Vec::new();
+
+				for (req_id, (sender, _unsubscribe)) in &active_subscriptions {
+					if sender.clone().is_closed(JsonValue::Null) {
+						remove.push(*req_id);
+					}
 				}
+
+				for req_id in remove {
+					let (_, unsubscribe) = active_subscriptions.remove(&req_id).unwrap();
+					client.subscription_by_id(req_id).unwrap().into_active().unwrap().close(unsubscribe).await.unwrap();
+				}
+				return;
 			}
 
 			// Received a response to a request from the server.
@@ -312,13 +408,17 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 
 			// Receive a response from the server about a subscription.
 			Either::Right(Ok(RawClientEvent::SubscriptionResponse { request_id, result })) => {
-				log::trace!("[backend]: client received response to subscription: {:?}", result);
+				log::info!("[backend]: client received response to subscription: {:?}", result);
 				let (send_back, unsubscribe) = pending_subscriptions.remove(&request_id).unwrap();
 				if let Err(err) = result {
 					let _ = send_back.send(Err(Error::Request(err)));
 				} else {
-					// TODO: what's a good limit here? way more tricky than it looks
-					let (notifs_tx, notifs_rx) = mpsc::channel(4);
+					let (notifs_tx, notifs_rx) = if config.allow_request_losses {
+						allow_losses_channel(config.subscription_channel_capacity)
+					} else {
+						blocking_channel(config.subscription_channel_capacity)
+					};
+
 					if send_back.send(Ok(notifs_rx)).is_ok() {
 						active_subscriptions.insert(request_id, (notifs_tx, unsubscribe));
 					} else {
@@ -337,16 +437,29 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 			Either::Right(Ok(RawClientEvent::SubscriptionNotif { request_id, result })) => {
 				// TODO: unsubscribe if channel is closed
 				let (notifs_tx, _) = active_subscriptions.get_mut(&request_id).unwrap();
-				if notifs_tx.send(result).await.is_err() {
-					let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
-					client
-						.subscription_by_id(request_id)
-						.unwrap()
-						.into_active()
-						.unwrap()
-						.close(unsubscribe)
-						.await
-						.unwrap();
+
+				match notifs_tx.clone().send(result) {
+					Err(Error::InternalChannelDisconnected) => {
+						let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
+						let _ = client
+							.subscription_by_id(request_id)
+							.unwrap()
+							.into_active()
+							.unwrap()
+							.close(unsubscribe)
+							.await;
+					}
+					Err(Error::InternalChannel(e)) if e.is_disconnected() => {
+						let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
+						let _ = client
+							.subscription_by_id(request_id)
+							.unwrap()
+							.into_active()
+							.unwrap()
+							.close(unsubscribe)
+							.await;
+					}
+					_ => (),
 				}
 			}
 
@@ -359,4 +472,14 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 			}
 		}
 	}
+}
+
+fn blocking_channel<T>(capacity: usize) -> (InternalChannelSender<T>, InternalChannelReceiver<T>) {
+	let (tx, rx) = mpsc::channel(capacity);
+	(InternalChannelSender::BlockWhenFull(tx), InternalChannelReceiver::BlockWhenFull(rx))
+}
+
+fn allow_losses_channel<T>(capacity: usize) -> (InternalChannelSender<T>, InternalChannelReceiver<T>) {
+	let (tx, rx) = ring_channel(NonZeroUsize::new(capacity).unwrap());
+	(InternalChannelSender::AllowLosses(tx), InternalChannelReceiver::AllowLosses(rx))
 }
