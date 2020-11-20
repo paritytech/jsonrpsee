@@ -50,7 +50,7 @@ pub struct Server {
 	local_addr: SocketAddr,
 	/// Channel to send requests to the background task.
 	to_back: mpsc::UnboundedSender<FrontToBack>,
-	/// List of methods (for RPC queries and and notifications) that have been
+	/// List of methods (for RPC queries and notifications) that have been
 	/// registered. Serves no purpose except to check for duplicates.
 	registered_methods: Arc<Mutex<HashSet<String>>>,
 	/// Next unique ID used when registering a subscription.
