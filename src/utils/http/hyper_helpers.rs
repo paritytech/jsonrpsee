@@ -39,8 +39,8 @@ pub async fn read_response_to_body(
 	mut body: hyper::Body,
 	config: HttpConfig,
 ) -> Result<Vec<u8>, GenericTransportError<hyper::Error>> {
-	// NOTE(niklasad1): Bigger values than `u32::MAX` will be regarded as zero here and that's very unlikely to occur.
-	// Thus, in those causes we rely on the while loop to allocate instead of `pre-allocate`.
+	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in practise
+	// and for that case we fallback to allocating in the while-loop below instead of pre-allocating.
 	let body_size = read_header_content_length(&headers).unwrap_or(0);
 
 	if body_size > config.max_request_body_size {
