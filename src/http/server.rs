@@ -26,8 +26,9 @@
 
 use crate::http::raw::{RawServer, RawServerEvent, RawServerRequestId};
 use crate::http::transport::HttpTransportServer;
+use crate::types::error::Error;
+use crate::types::http::HttpConfig;
 use crate::types::jsonrpc::{self, JsonValue};
-use crate::types::server::Error;
 
 use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use parking_lot::Mutex;
@@ -49,7 +50,7 @@ pub struct Server {
 	local_addr: SocketAddr,
 	/// Channel to send requests to the background task.
 	to_back: mpsc::UnboundedSender<FrontToBack>,
-	/// List of methods (for RPC queries, subscriptions, and unsubscriptions) that have been
+	/// List of methods (for RPC queries and notifications) that have been
 	/// registered. Serves no purpose except to check for duplicates.
 	registered_methods: Arc<Mutex<HashSet<String>>>,
 	/// Next unique ID used when registering a subscription.
@@ -111,9 +112,9 @@ enum FrontToBack {
 
 impl Server {
 	/// Initializes a new server based upon this raw server.
-	pub async fn new(url: &str) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
-		let sockaddr = url.parse()?;
-		let transport_server = HttpTransportServer::new(&sockaddr).await?;
+	pub async fn new(url: impl AsRef<str>, config: HttpConfig) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
+		let sockaddr = url.as_ref().parse()?;
+		let transport_server = HttpTransportServer::new(&sockaddr, config).await?;
 		let local_addr = *transport_server.local_addr();
 
 		// We use an unbounded channel because the only exchanged messages concern registering
@@ -129,7 +130,7 @@ impl Server {
 		Ok(Server {
 			local_addr,
 			to_back,
-			registered_methods: Arc::new(Mutex::new(Default::default())),
+			registered_methods: Arc::new(Mutex::new(HashSet::new())),
 			next_subscription_unique_id: Arc::new(atomic::AtomicUsize::new(0)),
 		})
 	}
@@ -155,7 +156,7 @@ impl Server {
 		allow_losses: bool,
 	) -> Result<RegisteredNotification, Error> {
 		if !self.registered_methods.lock().insert(method_name.clone()) {
-			return Err(Error::AlreadyRegistered(method_name));
+			return Err(Error::MethodAlreadyRegistered(method_name));
 		}
 
 		log::trace!("[frontend]: register_notification={}", method_name);
@@ -163,7 +164,7 @@ impl Server {
 
 		self.to_back
 			.unbounded_send(FrontToBack::RegisterNotifications { name: method_name, handler: tx, allow_losses })
-			.map_err(|e| Error::InternalChannel(e.into_send_error()))?;
+			.map_err(|e| Error::Internal(e.into_send_error()))?;
 
 		Ok(RegisteredNotification { queries_rx: rx })
 	}
@@ -180,7 +181,7 @@ impl Server {
 	/// Returns an error if the method name was already registered.
 	pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, Error> {
 		if !self.registered_methods.lock().insert(method_name.clone()) {
-			return Err(Error::AlreadyRegistered(method_name));
+			return Err(Error::MethodAlreadyRegistered(method_name));
 		}
 
 		log::trace!("[frontend]: register_method={}", method_name);
@@ -188,7 +189,7 @@ impl Server {
 
 		self.to_back
 			.unbounded_send(FrontToBack::RegisterMethod { name: method_name, handler: tx })
-			.map_err(|e| Error::InternalChannel(e.into_send_error()))?;
+			.map_err(|e| Error::Internal(e.into_send_error()))?;
 
 		Ok(RegisteredMethod { to_back: self.to_back.clone(), queries_rx: rx })
 	}
@@ -230,7 +231,7 @@ impl IncomingRequest {
 		self.to_back
 			.send(FrontToBack::AnswerRequest { request_id: self.request_id, answer: response.into() })
 			.await
-			.map_err(Error::InternalChannel)
+			.map_err(Error::Internal)
 	}
 }
 

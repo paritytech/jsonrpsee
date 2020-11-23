@@ -1,5 +1,5 @@
 use crate::client::{HttpClient, HttpConfig};
-use crate::types::client::Error;
+use crate::types::error::Error;
 use crate::types::jsonrpc::{self, ErrorCode, JsonValue, Params};
 
 use jsonrpsee_test_utils::helpers::*;
@@ -96,9 +96,9 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(
 		response,
 		vec![
-			JsonValue::from("here's your swag".to_string())
 			JsonValue::from("hello".to_string()),
 			JsonValue::from("goodbye".to_string()),
+			JsonValue::from("here's your swag".to_string()),
 		]
 	);
 }

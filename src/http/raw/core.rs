@@ -146,7 +146,7 @@ impl From<HttpTransportServer> for RawServer {
 impl<'a> RawServerRequest<'a> {
 	/// Returns the id of the request.
 	///
-	/// If this request object is dropped, you can retreive it again later by calling
+	/// If this request object is dropped, you can retrieve it again later by calling
 	/// [`request_by_id`](crate::raw::RawServer::request_by_id).
 	pub fn id(&self) -> RawServerRequestId {
 		RawServerRequestId { inner: self.inner.id() }

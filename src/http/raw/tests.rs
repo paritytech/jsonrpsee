@@ -28,13 +28,14 @@
 
 use crate::client::HttpTransportClient;
 use crate::http::{HttpRawServer, HttpRawServerEvent, HttpTransportServer};
+use crate::types::http::HttpConfig;
 use crate::types::jsonrpc::{self, Call, MethodCall, Notification, Params, Request, Version};
 use serde_json::Value;
 
 async fn connection_context() -> (HttpTransportClient, HttpRawServer) {
-	let server = HttpTransportServer::new(&"127.0.0.1:0".parse().unwrap()).await.unwrap();
+	let server = HttpTransportServer::new(&"127.0.0.1:0".parse().unwrap(), HttpConfig::default()).await.unwrap();
 	let uri = format!("http://{}", server.local_addr());
-	let client = HttpTransportClient::new(&uri, 10 * 1024 * 1024).unwrap();
+	let client = HttpTransportClient::new(&uri, HttpConfig::default()).unwrap();
 	(client, server.into())
 }
 
