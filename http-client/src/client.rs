@@ -1,5 +1,4 @@
 use crate::transport::HttpTransportClient;
-use alloc::collections::VecDeque;
 use core::convert::TryInto;
 use core::sync::atomic::{AtomicU64, Ordering};
 use jsonrpc::DeserializeOwned;
@@ -10,7 +9,6 @@ use jsonrpsee_types::{
 };
 // will not compile for WASM/no-std
 use std::collections::HashSet;
-
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 ///
@@ -75,7 +73,14 @@ impl HttpClient {
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		let json_value = match response {
-			jsonrpc::Response::Single(rp) => Self::process_response(rp, id),
+			jsonrpc::Response::Single(rp) => {
+				let (val, received_id) = Self::process_response(rp)?;
+				if id == received_id {
+					Ok(val)
+				} else {
+					Err(Error::InvalidRequestId)
+				}
+			}
 			// Server should not send batch response to a single request.
 			jsonrpc::Response::Batch(_rps) => {
 				Err(Error::Custom("Server replied with batch response to a single request".to_string()))
@@ -146,9 +151,9 @@ impl HttpClient {
 		}
 	}
 
-	fn process_response(response: jsonrpc::Output, expected_id: u64) -> Result<JsonValue, Error> {
-		match response.id() {
-			jsonrpc::Id::Num(n) if n == &expected_id => response.try_into().map_err(Error::Request),
+	fn process_response(response: jsonrpc::Output) -> Result<(JsonValue, u64), Error> {
+		match response.id().as_number().copied() {
+			Some(n) => Ok((response.try_into().map_err(Error::Request)?, n)),
 			_ => Err(Error::InvalidRequestId),
 		}
 	}
