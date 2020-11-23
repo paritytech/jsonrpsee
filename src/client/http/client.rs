@@ -148,7 +148,7 @@ impl HttpClient {
 	}
 
 	fn process_response(response: jsonrpc::Output) -> Result<(JsonValue, u64), Error> {
-		match response.id().as_number().cloned() {
+		match response.id().as_number().copied() {
 			Some(n) => Ok((response.try_into().map_err(Error::Request)?, n)),
 			_ => Err(Error::InvalidRequestId),
 		}
