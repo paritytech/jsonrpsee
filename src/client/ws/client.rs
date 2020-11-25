@@ -34,6 +34,7 @@ use ring_channel::{ring_channel, RingReceiver, RingSender};
 use futures::{
 	channel::{mpsc, oneshot},
 	future::Either,
+	sink::SinkExt,
 	pin_mut,
 	prelude::*,
 };
@@ -45,7 +46,7 @@ enum InternalChannelSender<T> {
 }
 
 impl<T> InternalChannelSender<T> {
-	fn send(self, data: T) -> Result<(), Error> {
+	fn send_non_blocking(self, data: T) -> Result<(), Error> {
 		match self {
 			// Fails when the channel is disconnected only.
 			Self::AllowLosses(mut inner) => inner.send(data).map_err(|_| Error::Internal(SenderError::Disconnected)),
@@ -56,6 +57,19 @@ impl<T> InternalChannelSender<T> {
 			}
 		}
 	}
+
+	async fn send_async(self, data: T) -> Result<(), Error> {
+		match self {
+			// Fails when the channel is disconnected only.
+			Self::AllowLosses(mut inner) => SinkExt::send(&mut inner, data).await.map_err(|_| Error::Internal(SenderError::Disconnected)),
+			// NOTE: may wait forever when the channel is full.
+			Self::BlockWhenFull(mut inner) => {
+				inner.send(data).await.map_err(|e| Error::Internal(e.into()))
+			}
+		}
+	}
+
+
 
 	fn is_closed(self, dummy: T) -> bool {
 		match self {
@@ -211,7 +225,7 @@ impl Client {
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		self.to_back.clone().send(FrontToBack::Notification { method, params })
+		self.to_back.clone().send_non_blocking(FrontToBack::Notification { method, params })
 	}
 
 	/// Perform a request towards the server.
@@ -229,7 +243,7 @@ impl Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		// TODO: send a `ChannelClosed` message if we close the channel unexpectedly
 		// -> it is impossible to do without another channel.
-		self.to_back.clone().send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })?;
+		self.to_back.clone().send_non_blocking(FrontToBack::StartRequest { method, params, send_back: send_back_tx })?;
 
 		let json_value = match send_back_rx.await {
 			Ok(Ok(v)) => v,
@@ -261,7 +275,7 @@ impl Client {
 
 		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		self.to_back.clone().send(FrontToBack::Subscribe {
+		self.to_back.clone().send_non_blocking(FrontToBack::Subscribe {
 			subscribe_method,
 			unsubscribe_method,
 			params: params.into(),
@@ -308,7 +322,7 @@ impl<Notif> Drop for Subscription<Notif> {
 		// the channel's buffer will be full, and our un-subscription request will never make it.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let _ = self.to_back.clone().send(FrontToBack::ChannelClosed);
+		let _ = self.to_back.clone().send_non_blocking(FrontToBack::ChannelClosed);
 	}
 }
 
@@ -438,7 +452,7 @@ async fn background_task(mut client: RawClient, mut from_front: InternalChannelR
 				// TODO: unsubscribe if channel is closed
 				let (notifs_tx, _) = active_subscriptions.get_mut(&request_id).unwrap();
 
-				match notifs_tx.clone().send(result) {
+				match notifs_tx.clone().send_non_blocking(result) {
 					Err(Error::Internal(SenderError::Disconnected)) => {
 						let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
 						let _ = client
@@ -450,7 +464,8 @@ async fn background_task(mut client: RawClient, mut from_front: InternalChannelR
 							.await;
 					}
 					Err(Error::Internal(SenderError::Full)) => {
-						// TODO: err log, close subscription or close connection?!
+						// TODO: close subscription or close connection?!
+						log::error!("Subscription channel is full; ignorning to propogate id: {:?}", request_id);
 					}
 					_ => (),
 				}
@@ -473,6 +488,7 @@ fn blocking_channel<T>(capacity: usize) -> (InternalChannelSender<T>, InternalCh
 }
 
 fn allow_losses_channel<T>(capacity: usize) -> (InternalChannelSender<T>, InternalChannelReceiver<T>) {
+	// TODO: don't assume capacity is non zero.
 	let (tx, rx) = ring_channel(NonZeroUsize::new(capacity).unwrap());
 	(InternalChannelSender::AllowLosses(tx), InternalChannelReceiver::AllowLosses(rx))
 }
