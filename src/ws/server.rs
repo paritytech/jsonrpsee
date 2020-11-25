@@ -24,8 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::types::error::Error;
 use crate::types::jsonrpc::{self, JsonValue};
-use crate::types::server::Error;
 use crate::ws::raw::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};
 use crate::ws::transport::WsTransportServer;
 
@@ -141,8 +141,8 @@ enum FrontToBack {
 
 impl Server {
 	/// Initializes a new server.
-	pub async fn new(url: &str) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
-		let sockaddr = url.parse()?;
+	pub async fn new(url: impl AsRef<str>) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
+		let sockaddr: SocketAddr = url.as_ref().parse()?;
 		let transport_server = WsTransportServer::builder(sockaddr).build().await?;
 		let local_addr = *transport_server.local_addr();
 
@@ -185,7 +185,7 @@ impl Server {
 		allow_losses: bool,
 	) -> Result<RegisteredNotification, Error> {
 		if !self.registered_methods.lock().insert(method_name.clone()) {
-			return Err(Error::AlreadyRegistered(method_name));
+			return Err(Error::MethodAlreadyRegistered(method_name));
 		}
 
 		log::trace!("[frontend]: register_notification={}", method_name);
@@ -193,7 +193,7 @@ impl Server {
 
 		self.to_back
 			.unbounded_send(FrontToBack::RegisterNotifications { name: method_name, handler: tx, allow_losses })
-			.map_err(|e| Error::InternalChannel(e.into_send_error()))?;
+			.map_err(|e| Error::Internal(e.into_send_error().into()))?;
 
 		Ok(RegisteredNotification { queries_rx: rx })
 	}
@@ -210,7 +210,7 @@ impl Server {
 	/// Returns an error if the method name was already registered.
 	pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, Error> {
 		if !self.registered_methods.lock().insert(method_name.clone()) {
-			return Err(Error::AlreadyRegistered(method_name));
+			return Err(Error::MethodAlreadyRegistered(method_name));
 		}
 
 		log::trace!("[frontend]: register_method={}", method_name);
@@ -218,7 +218,7 @@ impl Server {
 
 		self.to_back
 			.unbounded_send(FrontToBack::RegisterMethod { name: method_name, handler: tx })
-			.map_err(|e| Error::InternalChannel(e.into_send_error()))?;
+			.map_err(|e| Error::Internal(e.into_send_error().into()))?;
 
 		Ok(RegisteredMethod { to_back: self.to_back.clone(), queries_rx: rx })
 	}
@@ -241,11 +241,11 @@ impl Server {
 			// This means that if the strings are equal this will be slower than just comparing the
 			// strings.
 			if !registered_methods.insert(subscribe_method_name.clone()) {
-				return Err(Error::AlreadyRegistered(subscribe_method_name));
+				return Err(Error::MethodAlreadyRegistered(subscribe_method_name));
 			}
 			if !registered_methods.insert(unsubscribe_method_name.clone()) {
 				registered_methods.remove(&subscribe_method_name);
-				return Err(Error::AlreadyRegistered(unsubscribe_method_name));
+				return Err(Error::MethodAlreadyRegistered(unsubscribe_method_name));
 			}
 		}
 
@@ -262,7 +262,7 @@ impl Server {
 				subscribe_method: subscribe_method_name,
 				unsubscribe_method: unsubscribe_method_name,
 			})
-			.map_err(|e| Error::InternalChannel(e.into_send_error()))?;
+			.map_err(|e| Error::Internal(e.into_send_error().into()))?;
 
 		Ok(RegisteredSubscription { to_back: self.to_back.clone(), unique_id })
 	}
@@ -299,7 +299,7 @@ impl RegisteredSubscription {
 		self.to_back
 			.send(FrontToBack::SendOutNotif { unique_id: self.unique_id, notification: value })
 			.await
-			.map_err(Error::InternalChannel)
+			.map_err(|e| Error::Internal(e.into()))
 	}
 }
 
@@ -314,7 +314,7 @@ impl IncomingRequest {
 		self.to_back
 			.send(FrontToBack::AnswerRequest { request_id: self.request_id, answer: response.into() })
 			.await
-			.map_err(Error::InternalChannel)
+			.map_err(|e| Error::Internal(e.into()))
 	}
 }
 

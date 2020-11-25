@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::ws::{RawClient, RawClientEvent, RawClientRequestId, WsTransportClient};
-use crate::types::client::Error;
+use crate::types::error::{Error, SenderError};
 use crate::types::jsonrpc::{self, JsonValue};
 use std::num::NonZeroUsize;
 
@@ -48,11 +48,11 @@ impl<T> InternalChannelSender<T> {
 	fn send(self, data: T) -> Result<(), Error> {
 		match self {
 			// Fails when the channel is disconnected only.
-			Self::AllowLosses(mut inner) => inner.send(data).map_err(|_| Error::InternalChannelDisconnected),
+			Self::AllowLosses(mut inner) => inner.send(data).map_err(|_| Error::Internal(SenderError::Disconnected)),
 			// NOTE: we don't want block here when the queue full
 			// either close the connection or just log an error.
 			Self::BlockWhenFull(mut inner) => {
-				inner.try_send(data).map_err(|e| Error::InternalChannel(e.into_send_error()))
+				inner.try_send(data).map_err(|e| Error::Internal(e.into_send_error().into()))
 			}
 		}
 	}
@@ -439,7 +439,7 @@ async fn background_task(mut client: RawClient, mut from_front: InternalChannelR
 				let (notifs_tx, _) = active_subscriptions.get_mut(&request_id).unwrap();
 
 				match notifs_tx.clone().send(result) {
-					Err(Error::InternalChannelDisconnected) => {
+					Err(Error::Internal(SenderError::Disconnected)) => {
 						let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
 						let _ = client
 							.subscription_by_id(request_id)
@@ -449,15 +449,8 @@ async fn background_task(mut client: RawClient, mut from_front: InternalChannelR
 							.close(unsubscribe)
 							.await;
 					}
-					Err(Error::InternalChannel(e)) if e.is_disconnected() => {
-						let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
-						let _ = client
-							.subscription_by_id(request_id)
-							.unwrap()
-							.into_active()
-							.unwrap()
-							.close(unsubscribe)
-							.await;
+					Err(Error::Internal(SenderError::Full)) => {
+						// TODO: err log, close subscription or close connection?!
 					}
 					_ => (),
 				}

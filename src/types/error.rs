@@ -1,4 +1,5 @@
 use crate::types::jsonrpc::{self, JsonValue};
+use futures::channel::mpsc;
 use std::fmt;
 
 /// Convenience type for displaying errors.
@@ -16,32 +17,65 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 	}
 }
 
-/// Error produced by the client.
+/// Convenience wrapper for `Sink` sender error.
+#[derive(Debug, thiserror::Error)]
+pub enum SenderError {
+	/// The channel is disconnected.
+	#[error("Internal channel disconnected")]
+	Disconnected,
+	/// The channel is full.
+	#[error("Internal channel full")]
+	Full,
+}
+
+impl From<mpsc::SendError> for SenderError {
+	fn from(err: mpsc::SendError) -> Self {
+		if err.is_full() {
+			Self::Full
+		} else if err.is_disconnected() {
+			Self::Disconnected
+		} else {
+			unreachable!()
+		}
+	}
+}
+
+/// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-	/// Networking error or error on the low-level protocol layer (e.g. missing field,
-	/// invalid ID, etc.).
+	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	TransportError(#[source] Box<dyn std::error::Error + Send + Sync>),
-	/// Request error.
-	#[error("Server responded to our request with an error: {0:?}")]
+	/// JSON-RPC request error.
+	#[error("JSON-RPC request error: {0:?}")]
 	Request(#[source] jsonrpc::Error),
 	/// Subscription error.
 	#[error("Subscription to subscribe_method: {0} with unsubscribe_method: {1} failed")]
 	Subscription(String, String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
-	InternalChannel(#[from] futures::channel::mpsc::SendError),
-	/// Frontend/backend channel error.
-	#[error("Internal channel disconnected")]
-	InternalChannelDisconnected,
+	Internal(SenderError),
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] jsonrpc::ParseError),
 	/// Invalid id in response to a request.
 	#[error("Invalid ID in response: {0}")]
 	InvalidRequestId(Mismatch<JsonValue>),
+	/// Method was already registered.
+	#[error("Method: {0} already registered")]
+	MethodAlreadyRegistered(String),
 	#[error("Custom error: {0}")]
 	/// Custom error.
 	Custom(String),
+}
+
+/// Generic transport error.
+#[derive(Debug, thiserror::Error)]
+pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
+	/// Request was too large.
+	#[error("The request was too big")]
+	TooLarge,
+	/// Concrete transport error.
+	#[error("Transport error: {0}")]
+	Inner(T),
 }
