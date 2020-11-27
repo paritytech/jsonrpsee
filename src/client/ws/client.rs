@@ -389,7 +389,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					Some((notifs_tx, _)) => notifs_tx,
 				};
 
-				// NOTE: This is non_blocking but doesn't depend on any external handling to finish
+				// NOTE: This is non_blocking but it doesn't depend on any external handling to finish
 				// such as a response from a remote party.
 				match notifs_tx.try_send(result) {
 					Ok(()) => (),
