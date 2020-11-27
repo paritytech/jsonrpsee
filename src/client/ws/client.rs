@@ -217,13 +217,14 @@ impl Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		self.to_back
 			.clone()
-			.try_send(FrontToBack::Subscribe {
+			.send(FrontToBack::Subscribe {
 				subscribe_method,
 				unsubscribe_method,
 				params: params.into(),
 				send_back: send_back_tx,
 			})
-			.map_err(|e| Error::Internal(e.into_send_error().into()))?;
+			.await
+			.map_err(Error::Internal)?;
 
 		let notifs_rx = match send_back_rx.await {
 			Ok(Ok(v)) => v,
@@ -233,7 +234,6 @@ impl Client {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-
 		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData })
 	}
 }
@@ -354,7 +354,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(Error::Request));
 			}
 
-			// Received a response from the server that the subscription is registered.
+			// Received a response from the server that a subscription is registered.
 			Either::Right(Ok(RawClientEvent::SubscriptionResponse { request_id, result })) => {
 				log::trace!("[backend]: client received response to subscription: {:?}", result);
 				let (send_back, unsubscribe) = pending_subscriptions.remove(&request_id).unwrap();
@@ -389,6 +389,8 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					Some((notifs_tx, _)) => notifs_tx,
 				};
 
+				// NOTE: This is non_blocking but doesn't depend on any external handling to finish
+				// such as a response from a remote party.
 				match notifs_tx.try_send(result) {
 					Ok(()) => (),
 					// Channel is either full or disconnected, close it.

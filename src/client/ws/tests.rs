@@ -29,7 +29,6 @@ pub fn server(server_started: Sender<SocketAddr>) {
 				.fuse();
 
 				let timeout = tokio::time::delay_for(Duration::from_millis(200)).fuse();
-
 				futures::pin_mut!(hello_fut, timeout);
 
 				futures::select! {
