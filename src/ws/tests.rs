@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::client::{WsClient, WsSubscription};
+use crate::client::{WsClient, WsConfig, WsSubscription};
 use crate::types::error::Error;
 use crate::types::jsonrpc::{JsonValue, Params};
 use crate::ws::WsServer;
@@ -97,15 +97,15 @@ async fn subscription_works() {
 	server_subscribe_only(server_started_tx);
 	let server_addr = server_started_rx.await.unwrap();
 	let uri = format!("ws://{}", server_addr);
-	let client = WsClient::new(&uri).await.unwrap();
+	let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 	let mut foo_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_foo", Params::None, "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
-		let hello = hello_sub.next().await;
-		let foo = foo_sub.next().await;
+		let hello = hello_sub.next().await.unwrap();
+		let foo = foo_sub.next().await.unwrap();
 		assert_eq!(hello, JsonValue::String("hello from subscription".to_owned()));
 		assert_eq!(foo, JsonValue::Number(1337_u64.into()));
 	}
@@ -120,7 +120,7 @@ async fn subscription_several_clients() {
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
 		let uri = format!("ws://{}", server_addr);
-		let client = WsClient::new(&uri).await.unwrap();
+		let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
 		let hello_sub: WsSubscription<JsonValue> =
 			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: WsSubscription<JsonValue> =
@@ -130,8 +130,8 @@ async fn subscription_several_clients() {
 
 	for _ in 0..10 {
 		for (_client, hello_sub, foo_sub) in &mut clients {
-			let hello = hello_sub.next().await;
-			let foo = foo_sub.next().await;
+			let hello = hello_sub.next().await.unwrap();
+			let foo = foo_sub.next().await.unwrap();
 			assert_eq!(hello, JsonValue::String("hello from subscription".to_owned()));
 			assert_eq!(foo, JsonValue::Number(1337_u64.into()));
 		}
@@ -142,13 +142,13 @@ async fn subscription_several_clients() {
 		drop(client);
 	}
 
-	// make sure nothing weird happend after dropping half the clients (should be `unsubscribed` in the server)
+	// make sure nothing weird happened after dropping half the clients (should be `unsubscribed` in the server)
 	// would be good to know that subscriptions actually were removed but not possible to verify at
 	// this layer.
 	for _ in 0..10 {
 		for (_client, hello_sub, foo_sub) in &mut clients {
-			let hello = hello_sub.next().await;
-			let foo = foo_sub.next().await;
+			let hello = hello_sub.next().await.unwrap();
+			let foo = foo_sub.next().await.unwrap();
 			assert_eq!(hello, JsonValue::String("hello from subscription".to_owned()));
 			assert_eq!(foo, JsonValue::Number(1337_u64.into()));
 		}

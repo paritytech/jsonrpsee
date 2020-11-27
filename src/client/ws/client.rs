@@ -24,15 +24,20 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::client::ws::{RawClient, RawClientEvent, RawClientRequestId, WsTransportClient};
+use crate::client::ws::transport::WsConnectError;
+use crate::client::ws::{RawClient, RawClientError, RawClientEvent, RawClientRequestId, WsTransportClient};
 use crate::types::error::Error;
 use crate::types::jsonrpc::{self, JsonValue};
+// NOTE: this is a sign of a leaky abstraction to expose transport related details
+// Should be removed after https://github.com/paritytech/jsonrpsee/issues/154
+use soketto::connection::Error as SokettoError;
 
 use futures::{
 	channel::{mpsc, oneshot},
 	future::Either,
 	pin_mut,
 	prelude::*,
+	sink::SinkExt,
 };
 use std::{collections::HashMap, io, marker::PhantomData};
 
@@ -45,16 +50,45 @@ use std::{collections::HashMap, io, marker::PhantomData};
 pub struct Client {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
+	/// Config.
+	config: Config,
+}
+
+#[derive(Copy, Clone, Debug)]
+/// Configuration.
+pub struct Config {
+	/// Backend channel for serving requests and notifications.
+	pub request_channel_capacity: usize,
+	/// Backend channel for each unique subscription.
+	pub subscription_channel_capacity: usize,
+	/// Allow losses when the channel gets full
+	pub allow_subscription_losses: bool,
+	/// Allow losses when the request/notifications channel gets full
+	pub allow_request_losses: bool,
+	/// Max request body size
+	pub max_request_body_size: usize,
+}
+
+impl Default for Config {
+	fn default() -> Self {
+		Self {
+			request_channel_capacity: 100,
+			subscription_channel_capacity: 4,
+			allow_subscription_losses: false,
+			allow_request_losses: false,
+			max_request_body_size: 10 * 1024 * 1024,
+		}
+	}
 }
 
 /// Active subscription on a [`Client`].
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
+	/// Channel from which we receive notifications from the server, as un-decoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Marker in order to pin the `Notif` parameter.
-	marker: PhantomData<mpsc::Receiver<Notif>>,
+	marker: PhantomData<Notif>,
 }
 
 /// Message that the [`Client`] can send to the background task.
@@ -104,14 +138,16 @@ impl Client {
 	/// Initializes a new WebSocket client
 	///
 	/// Fails when the URL is invalid.
-	pub async fn new(target: &str) -> Result<Self, Error> {
+	pub async fn new(target: impl AsRef<str>, config: Config) -> Result<Self, Error> {
 		let transport = WsTransportClient::new(target).await.map_err(|e| Error::TransportError(Box::new(e)))?;
 		let client = RawClient::new(transport);
-		let (to_back, from_front) = mpsc::channel(16);
+
+		let (to_back, from_front) = mpsc::channel(config.request_channel_capacity);
+
 		async_std::task::spawn(async move {
-			background_task(client, from_front).await;
+			background_task(client, from_front, config).await;
 		});
-		Ok(Client { to_back })
+		Ok(Client { to_back, config })
 	}
 
 	/// Send a notification to the server.
@@ -123,7 +159,11 @@ impl Client {
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::Internal)
+		self.to_back
+			.clone()
+			.send(FrontToBack::Notification { method, params })
+			.await
+			.map_err(|e| Error::Internal(e.into()))
 	}
 
 	/// Perform a request towards the server.
@@ -143,9 +183,7 @@ impl Client {
 			.clone()
 			.send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })
 			.await
-			.map_err(Error::Internal)?;
-
-		// TODO: send a `ChannelClosed` message if we close the channel unexpectedly
+			.map_err(|e| Error::Internal(e.into()))?;
 
 		let json_value = match send_back_rx.await {
 			Ok(Ok(v)) => v,
@@ -179,14 +217,13 @@ impl Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		self.to_back
 			.clone()
-			.send(FrontToBack::Subscribe {
+			.try_send(FrontToBack::Subscribe {
 				subscribe_method,
 				unsubscribe_method,
 				params: params.into(),
 				send_back: send_back_tx,
 			})
-			.await
-			.map_err(Error::Internal)?;
+			.map_err(|e| Error::Internal(e.into_send_error().into()))?;
 
 		let notifs_rx = match send_back_rx.await {
 			Ok(Ok(v)) => v,
@@ -205,18 +242,19 @@ impl<Notif> Subscription<Notif>
 where
 	Notif: jsonrpc::DeserializeOwned,
 {
-	/// Returns the next notification sent from the server.
+	/// Returns the next notification from the stream
+	/// This may return `None` if finished subscription has been terminated
 	///
 	/// Ignores any malformed packet.
-	pub async fn next(&mut self) -> Notif {
+	pub async fn next(&mut self) -> Option<Notif> {
 		loop {
 			match self.notifs_rx.next().await {
 				Some(n) => {
 					if let Ok(parsed) = jsonrpc::from_value(n) {
-						return parsed;
+						return Some(parsed);
 					}
 				}
-				None => futures::pending!(),
+				None => return None,
 			}
 		}
 	}
@@ -225,20 +263,20 @@ where
 impl<Notif> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
-		// the channel's buffer will be full, and our unsubscription request will never make it.
+		// the channel's buffer will be full, and our un-subscription request will never make it.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let _ = self.to_back.send(FrontToBack::ChannelClosed).now_or_never();
+		let _ = self.to_back.try_send(FrontToBack::ChannelClosed);
 	}
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<FrontToBack>) {
+async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<FrontToBack>, config: Config) {
 	// List of subscription requests that have been sent to the server, with the method name to
 	// unsubscribe.
 	let mut pending_subscriptions: HashMap<RawClientRequestId, (oneshot::Sender<_>, _)> = HashMap::new();
 	// List of subscription that are active on the server, with the method name to unsubscribe.
-	let mut active_subscriptions: HashMap<RawClientRequestId, (mpsc::Sender<jsonrpc::JsonValue>, _)> = HashMap::new();
+	let mut active_subscriptions: HashMap<RawClientRequestId, (mpsc::Sender<JsonValue>, _)> = HashMap::new();
 	// List of requests that the server must answer.
 	let mut ongoing_requests: HashMap<RawClientRequestId, oneshot::Sender<Result<_, _>>> = HashMap::new();
 
@@ -300,9 +338,10 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					}
 				}
 			}
+			// A subscription has been closed (could improved to be used for requests too.)
 			Either::Left(Some(FrontToBack::ChannelClosed)) => {
-				// TODO: there's no way to cancel pending subscriptions and requests, otherwise
-				// we should clean them up as well
+				//TODO: there's no way to cancel pending subscriptions and requests
+				//TODO(niklasad1): using `iter().find()` is wrong, it's guessing (could close down the wrong channel) and inefficient
 				while let Some(rq_id) = active_subscriptions.iter().find(|(_, (v, _))| v.is_closed()).map(|(k, _)| *k) {
 					let (_, unsubscribe) = active_subscriptions.remove(&rq_id).unwrap();
 					client.subscription_by_id(rq_id).unwrap().into_active().unwrap().close(unsubscribe).await.unwrap();
@@ -315,15 +354,16 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 				let _ = ongoing_requests.remove(&request_id).unwrap().send(result.map_err(Error::Request));
 			}
 
-			// Receive a response from the server about a subscription.
+			// Received a response from the server that the subscription is registered.
 			Either::Right(Ok(RawClientEvent::SubscriptionResponse { request_id, result })) => {
 				log::trace!("[backend]: client received response to subscription: {:?}", result);
 				let (send_back, unsubscribe) = pending_subscriptions.remove(&request_id).unwrap();
 				if let Err(err) = result {
 					let _ = send_back.send(Err(Error::Request(err)));
 				} else {
-					// TODO: what's a good limit here? way more tricky than it looks
-					let (notifs_tx, notifs_rx) = mpsc::channel(4);
+					let (notifs_tx, notifs_rx) = mpsc::channel(config.subscription_channel_capacity);
+
+					// Send receiving end of `subscription channel` to the frontend
 					if send_back.send(Ok(notifs_rx)).is_ok() {
 						active_subscriptions.insert(request_id, (notifs_tx, unsubscribe));
 					} else {
@@ -339,28 +379,47 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 				}
 			}
 
+			// Received a response on a subscription.
 			Either::Right(Ok(RawClientEvent::SubscriptionNotif { request_id, result })) => {
-				// TODO: unsubscribe if channel is closed
-				let (notifs_tx, _) = active_subscriptions.get_mut(&request_id).unwrap();
-				if notifs_tx.send(result).await.is_err() {
-					let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
-					client
-						.subscription_by_id(request_id)
-						.unwrap()
-						.into_active()
-						.unwrap()
-						.close(unsubscribe)
-						.await
-						.unwrap();
+				let notifs_tx = match active_subscriptions.get_mut(&request_id) {
+					None => {
+						log::debug!("Invalid subscription response: {:?}", request_id);
+						continue;
+					}
+					Some((notifs_tx, _)) => notifs_tx,
+				};
+
+				match notifs_tx.try_send(result) {
+					Ok(()) => (),
+					// Channel is either full or disconnected, close it.
+					Err(e) => {
+						log::error!("Subscription ID: {:?} failed: {:?}", request_id, e);
+						let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
+						client
+							.subscription_by_id(request_id)
+							.unwrap()
+							.into_active()
+							.unwrap()
+							.close(unsubscribe)
+							.await
+							.unwrap();
+					}
 				}
 			}
 
 			// Request for the server to unsubscribe us has succeeded.
 			Either::Right(Ok(RawClientEvent::Unsubscribed { request_id: _ })) => {}
 
+			Either::Right(Err(RawClientError::Inner(WsConnectError::Ws(SokettoError::UnexpectedOpCode(e))))) => {
+				log::error!(
+					"Client Error: {:?}, <https://github.com/paritytech/jsonrpsee/issues/154>",
+					SokettoError::UnexpectedOpCode(e)
+				);
+			}
 			Either::Right(Err(e)) => {
 				// TODO: https://github.com/paritytech/jsonrpsee/issues/67
-				log::error!("Client Error: {:?}", e);
+				log::error!("Client Error: {:?} terminating connection", e);
+				break;
 			}
 		}
 	}

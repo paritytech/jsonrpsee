@@ -159,8 +159,9 @@ impl WsTransportClient {
 	}
 
 	/// Initializes a new WS client from a URL.
-	pub async fn new(target: &str) -> Result<Self, WsNewDnsError> {
-		let url = url::Url::parse(target).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
+	pub async fn new(target: impl AsRef<str>) -> Result<Self, WsNewDnsError> {
+		let url =
+			url::Url::parse(target.as_ref()).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
 		let mode = match url.scheme() {
 			"ws" => Mode::Plain,
 			"wss" => Mode::Tls,
