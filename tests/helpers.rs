@@ -56,12 +56,11 @@ pub fn websocket_server(server_started: Sender<SocketAddr>) {
 
 				let timeout = tokio::time::delay_for(Duration::from_millis(100)).fuse();
 				futures::pin_mut!(hello_fut, timeout);
-
 				futures::select! {
 					_ = hello_fut => (),
 					_ = timeout => {
-				  sub_hello.send(JsonValue::String("hello from subscription".to_owned())).await.unwrap();
-				  sub_foo.send(JsonValue::Number(1337_u64.into())).await.unwrap();
+						sub_hello.send(JsonValue::String("hello from subscription".to_owned())).await.unwrap();
+						sub_foo.send(JsonValue::Number(1337_u64.into())).await.unwrap();
 					}
 				}
 			}
