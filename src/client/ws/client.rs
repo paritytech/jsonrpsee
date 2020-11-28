@@ -85,7 +85,7 @@ impl Default for Config {
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as un-decoded `JsonValue`s.
+	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
@@ -263,7 +263,7 @@ where
 impl<Notif> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
-		// the channel's buffer will be full, and our un-subscription request will never make it.
+		// the channel's buffer will be full, and our unsubscription request will never make it.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
 		let _ = self.to_back.try_send(FrontToBack::ChannelClosed);
