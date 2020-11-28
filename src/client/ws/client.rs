@@ -85,7 +85,7 @@ impl Default for Config {
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as un-decoded `JsonValue`s.
+	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
