@@ -32,7 +32,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::channel::oneshot;
-use helpers::{http_server, websocket_server};
+use helpers::{http_server, websocket_server, websocket_server_with_wait_period};
 use jsonrpsee::client::{HttpClient, HttpConfig, WsClient, WsConfig, WsSubscription};
 use jsonrpsee::types::jsonrpc::{JsonValue, Params};
 
@@ -174,4 +174,30 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 
 	other_sub.next().await.unwrap();
+}
+
+#[tokio::test]
+async fn ws_more_request_than_buffer_should_not_deadlock() {
+	env_logger::init();
+	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+	let (concurrent_tx, concurrent_rx) = oneshot::channel::<()>();
+	websocket_server_with_wait_period(server_started_tx, concurrent_rx);
+	let server_addr = server_started_rx.await.unwrap();
+
+	let uri = format!("ws://{}", server_addr);
+	let client = WsClient::new(&uri, WsConfig { request_channel_capacity: 2, ..Default::default() }).await.unwrap();
+
+	let mut requests = Vec::new();
+	//NOTE: we use less than 8 because of https://github.com/paritytech/jsonrpsee/issues/168.
+	for _ in 0..6 {
+		let c = client.clone();
+		requests.push(tokio::spawn(async move {
+			let _: JsonValue = c.request("say_hello", Params::None).await.unwrap();
+		}));
+	}
+
+	concurrent_tx.send(()).unwrap();
+	for req in requests {
+		req.await.unwrap();
+	}
 }
