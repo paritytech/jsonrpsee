@@ -351,7 +351,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					}
 				};
 
-				// Unsubscribe if the send notification failed.
+				// Unsubscribe if sending the notification failed.
 				if notifs_tx.send(result).await.is_err() {
 					let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
 					client
