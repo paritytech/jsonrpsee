@@ -348,7 +348,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 							log::error!("Could not dispatch pending request: {:?}", e);
 						}
 					}
-					None => log::error!("Invalid response ID to request received"),
+					None => log::error!("No pending response found for request ID {}", request_id),
 				}
 			}
 
