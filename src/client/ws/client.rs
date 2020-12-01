@@ -53,8 +53,10 @@ pub struct Subscription<Notif> {
 	to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
+	/// Subscription ID,
+	id: RawClientRequestId,
 	/// Marker in order to pin the `Notif` parameter.
-	marker: PhantomData<mpsc::Receiver<Notif>>,
+	marker: PhantomData<Notif>,
 }
 
 /// Message that the [`Client`] can send to the background task.
@@ -88,16 +90,15 @@ enum FrontToBack {
 		/// When we get a response from the server about that subscription, we send the result on
 		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
 		/// notifications.
-		send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, Error>>,
+		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, RawClientRequestId), Error>>,
 	},
 
-	/// When a request or subscription channel is closed, we send this message to the background
-	/// task in order for it to garbage collect closed requests and subscriptions.
-	///
-	/// While this means that closing a request or a subscription is a `O(n)` operation, it is
-	/// expected that the volume of requests and subscriptions is low enough that this isn't
-	/// a problem in practice.
-	ChannelClosed,
+	/// When a subscription channel is closed, we send this message to the background
+	/// task in order for it to garbage collect it.
+	// NOTE: There is not possible to cancel pending subscriptions or pending requests.
+	// Those operations will be blocked until a response is received or
+	// that the background thread has been terminated.
+	SubscriptionClosed(RawClientRequestId),
 }
 
 impl Client {
@@ -145,8 +146,6 @@ impl Client {
 			.await
 			.map_err(Error::Internal)?;
 
-		// TODO: send a `ChannelClosed` message if we close the channel unexpectedly
-
 		let json_value = match send_back_rx.await {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
@@ -188,8 +187,8 @@ impl Client {
 			.await
 			.map_err(Error::Internal)?;
 
-		let notifs_rx = match send_back_rx.await {
-			Ok(Ok(v)) => v,
+		let (notifs_rx, id) = match send_back_rx.await {
+			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
 				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
@@ -197,7 +196,7 @@ impl Client {
 			}
 		};
 
-		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData })
+		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
 }
 
@@ -228,7 +227,7 @@ impl<Notif> Drop for Subscription<Notif> {
 		// the channel's buffer will be full, and our unsubscription request will never make it.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let _ = self.to_back.send(FrontToBack::ChannelClosed).now_or_never();
+		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(self.id)).now_or_never();
 	}
 }
 
@@ -300,12 +299,16 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					}
 				}
 			}
-			Either::Left(Some(FrontToBack::ChannelClosed)) => {
-				// TODO: there's no way to cancel pending subscriptions and requests, otherwise
-				// we should clean them up as well
-				while let Some(rq_id) = active_subscriptions.iter().find(|(_, (v, _))| v.is_closed()).map(|(k, _)| *k) {
-					let (_, unsubscribe) = active_subscriptions.remove(&rq_id).unwrap();
-					client.subscription_by_id(rq_id).unwrap().into_active().unwrap().close(unsubscribe).await.unwrap();
+			Either::Left(Some(FrontToBack::SubscriptionClosed(id))) => {
+				if let Some((_, unsubscribe_method)) = active_subscriptions.remove(&id) {
+					client
+						.subscription_by_id(id)
+						.unwrap()
+						.into_active()
+						.unwrap()
+						.close(unsubscribe_method)
+						.await
+						.unwrap();
 				}
 			}
 
@@ -324,7 +327,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 				} else {
 					// TODO: what's a good limit here? way more tricky than it looks
 					let (notifs_tx, notifs_rx) = mpsc::channel(4);
-					if send_back.send(Ok(notifs_rx)).is_ok() {
+					if send_back.send(Ok((notifs_rx, request_id))).is_ok() {
 						active_subscriptions.insert(request_id, (notifs_tx, unsubscribe));
 					} else {
 						client
@@ -340,8 +343,15 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 			}
 
 			Either::Right(Ok(RawClientEvent::SubscriptionNotif { request_id, result })) => {
-				// TODO: unsubscribe if channel is closed
-				let (notifs_tx, _) = active_subscriptions.get_mut(&request_id).unwrap();
+				let notifs_tx = match active_subscriptions.get_mut(&request_id) {
+					Some((notifs_tx, _)) => notifs_tx,
+					None => {
+						log::error!("Received notification on non-registrered subscription: {:?}", request_id);
+						continue;
+					}
+				};
+
+				// Unsubscribe if the send notification failed.
 				if notifs_tx.send(result).await.is_err() {
 					let (_, unsubscribe) = active_subscriptions.remove(&request_id).unwrap();
 					client
