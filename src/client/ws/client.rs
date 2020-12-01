@@ -157,7 +157,7 @@ impl Client {
 			.clone()
 			.send(FrontToBack::Notification { method, params })
 			.await
-			.map_err(|e| Error::Internal(e.into()))
+			.map_err(Error::Internal)
 	}
 
 	/// Perform a request towards the server.
@@ -177,7 +177,7 @@ impl Client {
 			.clone()
 			.send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })
 			.await
-			.map_err(|e| Error::Internal(e.into()))?;
+			.map_err(Error::Internal)?;
 
 		let json_value = match send_back_rx.await {
 			Ok(Ok(v)) => v,
