@@ -178,7 +178,6 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 
 #[tokio::test]
 async fn ws_more_request_than_buffer_should_not_deadlock() {
-	env_logger::init();
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
 	let (concurrent_tx, concurrent_rx) = oneshot::channel::<()>();
 	websocket_server_with_wait_period(server_started_tx, concurrent_rx);
