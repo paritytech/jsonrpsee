@@ -345,10 +345,10 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 				match ongoing_requests.remove(&request_id) {
 					Some(r) => {
 						if let Err(e) = r.send(result.map_err(Error::Request)) {
-							log::error!("Could not dispatch pending request: {:?}", e);
+							log::error!("Could not dispatch pending request ID: {:?}, error: {:?}", request_id, e);
 						}
 					}
-					None => log::error!("No pending response found for request ID {}", request_id),
+					None => log::error!("No pending response found for request ID {:?}", request_id),
 				}
 			}
 
