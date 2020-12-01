@@ -153,11 +153,7 @@ impl Client {
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		self.to_back
-			.clone()
-			.send(FrontToBack::Notification { method, params })
-			.await
-			.map_err(Error::Internal)
+		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::Internal)
 	}
 
 	/// Perform a request towards the server.
