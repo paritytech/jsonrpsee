@@ -9,4 +9,6 @@ mod ws;
 #[cfg(feature = "http")]
 pub use http::{HttpClient, HttpConfig, HttpTransportClient};
 #[cfg(feature = "ws")]
-pub use ws::{Client as WsClient, RawClient as RawWsClient, Subscription as WsSubscription, WsTransportClient};
+pub use ws::{
+	Client as WsClient, Config as WsConfig, RawClient as RawWsClient, Subscription as WsSubscription, WsTransportClient,
+};
