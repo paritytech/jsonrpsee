@@ -122,10 +122,10 @@ enum FrontToBack {
 	},
 
 	/// When a subscription channel is closed, we send this message to the background
-	/// task in order for it to garbage collect it.
-	// NOTE: There is not possible to cancel pending subscriptions or pending requests.
-	// Those operations will be blocked until a response is received or
-	// that the background thread has been terminated.
+	/// task to mark it ready for garbage collection.
+	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
+	// Such operations will be blocked until a response is received or the background
+	// thread has been terminated.
 	SubscriptionClosed(RawClientRequestId),
 }
 
