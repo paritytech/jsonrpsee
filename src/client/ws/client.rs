@@ -81,6 +81,8 @@ pub struct Subscription<Notif> {
 	to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
+	/// Subscription ID,
+	id: RawClientRequestId,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
 }
@@ -116,16 +118,15 @@ enum FrontToBack {
 		/// When we get a response from the server about that subscription, we send the result on
 		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
 		/// notifications.
-		send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, Error>>,
+		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, RawClientRequestId), Error>>,
 	},
 
-	/// When a request or subscription channel is closed, we send this message to the background
-	/// task in order for it to garbage collect closed requests and subscriptions.
-	///
-	/// While this means that closing a request or a subscription is a `O(n)` operation, it is
-	/// expected that the volume of requests and subscriptions is low enough that this isn't
-	/// a problem in practice.
-	ChannelClosed,
+	/// When a subscription channel is closed, we send this message to the background
+	/// task to mark it ready for garbage collection.
+	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
+	// Such operations will be blocked until a response is received or the background
+	// thread has been terminated.
+	SubscriptionClosed(RawClientRequestId),
 }
 
 impl Client {
@@ -216,15 +217,16 @@ impl Client {
 			.await
 			.map_err(Error::Internal)?;
 
-		let notifs_rx = match send_back_rx.await {
-			Ok(Ok(v)) => v,
+		let (notifs_rx, id) = match send_back_rx.await {
+			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
 				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData })
+
+		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
 }
 
@@ -255,7 +257,7 @@ impl<Notif> Drop for Subscription<Notif> {
 		// the channel's buffer will be full, and our unsubscription request will never make it.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let _ = self.to_back.try_send(FrontToBack::ChannelClosed);
+		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(self.id)).now_or_never();
 	}
 }
 
@@ -327,15 +329,9 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					}
 				}
 			}
-			// A subscription has been closed (could be used for requests too.)
-			Either::Left(Some(FrontToBack::ChannelClosed)) => {
-				//TODO: there's no way to cancel pending subscriptions and requests
-				//TODO: https://github.com/paritytech/jsonrpsee/issues/169
-				while let Some(req_id) = active_subscriptions.iter().find(|(_, (v, _))| v.is_closed()).map(|(k, _)| *k)
-				{
-					let (_, unsubscribe) =
-						active_subscriptions.remove(&req_id).expect("Subscription is active checked above; qed");
-					close_subscription(&mut client, req_id, unsubscribe).await;
+			Either::Left(Some(FrontToBack::SubscriptionClosed(id))) => {
+				if let Some((_, unsubscribe_method)) = active_subscriptions.remove(&id) {
+					close_subscription(&mut client, id, unsubscribe_method).await;
 				}
 			}
 
@@ -362,7 +358,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 					let (notifs_tx, notifs_rx) = mpsc::channel(config.subscription_channel_capacity);
 
 					// Send receiving end of `subscription channel` to the frontend
-					if send_back.send(Ok(notifs_rx)).is_ok() {
+					if send_back.send(Ok((notifs_rx, request_id))).is_ok() {
 						active_subscriptions.insert(request_id, (notifs_tx, unsubscribe));
 					} else {
 						close_subscription(&mut client, request_id, unsubscribe).await;
@@ -373,11 +369,11 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 			// Received a response on a subscription.
 			Either::Right(Ok(RawClientEvent::SubscriptionNotif { request_id, result })) => {
 				let notifs_tx = match active_subscriptions.get_mut(&request_id) {
+					Some((notifs_tx, _)) => notifs_tx,
 					None => {
-						log::debug!("Invalid subscription response: {:?}", request_id);
+						log::error!("Received notification on unknown subscription: {:?}", request_id);
 						continue;
 					}
-					Some((notifs_tx, _)) => notifs_tx,
 				};
 
 				match notifs_tx.try_send(result) {
