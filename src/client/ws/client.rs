@@ -371,7 +371,7 @@ async fn background_task(mut client: RawClient, mut from_front: mpsc::Receiver<F
 				let notifs_tx = match active_subscriptions.get_mut(&request_id) {
 					Some((notifs_tx, _)) => notifs_tx,
 					None => {
-						log::error!("Received notification on non-registrered subscription: {:?}", request_id);
+						log::error!("Received notification on unknown subscription: {:?}", request_id);
 						continue;
 					}
 				};
