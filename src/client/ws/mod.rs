@@ -1,5 +1,6 @@
 pub mod client;
-pub mod raw;
+pub mod jsonrpc_transport;
+pub mod manager;
 pub mod stream;
 pub mod transport;
 
@@ -7,5 +8,4 @@ pub mod transport;
 mod tests;
 
 pub use client::{Client, Config, Subscription};
-pub use raw::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
-pub use transport::{WsConnectError, WsTransportClient};
+pub use transport::{Receiver, Sender, WsConnectError};
