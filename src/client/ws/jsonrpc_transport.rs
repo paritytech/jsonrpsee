@@ -1,7 +1,7 @@
 //! Wrapper module on-top transport.
 //!
 
-use crate::client::ws::transport::{self, WsConnectError};
+use crate::client::ws::transport::WsConnectError;
 use crate::types::jsonrpc;
 
 // Type of request that has been sent out and that is waiting for a response.
@@ -106,28 +106,9 @@ impl Receiver {
 		Self { transport }
 	}
 
-	pub async fn next_response(&mut self) -> Result<Vec<(u64, jsonrpc::Output)>, ()> {
-		let response = self.transport.next_response().await.map_err(|_e| ())?;
-
-		match response {
-			jsonrpc::Response::Single(rp) => {
-				let response = process_response(rp).map_err(|_e| ())?;
-				Ok(vec![response])
-			}
-			jsonrpc::Response::Batch(rps) => {
-				let mut responses = Vec::new();
-				for rp in rps {
-					// TODO: batch requests are not supported https://github.com/paritytech/jsonrpsee/issues/103
-					let response = process_response(rp).map_err(|_e| ())?;
-					responses.push(response);
-				}
-				Ok(responses)
-			}
-			jsonrpc::Response::Notif(notif) => {
-				let sub_id = notif.params.subscription.into_string();
-				todo!("");
-			}
-		}
+	/// Reads the next response, fails if the response ID was not a number.
+	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
+		self.transport.next_response().await
 	}
 }
 

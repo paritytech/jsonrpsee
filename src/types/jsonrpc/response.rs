@@ -32,6 +32,7 @@ use alloc::{
 	vec,
 	vec::Vec,
 };
+use core::convert::TryFrom;
 use serde::{Deserialize, Serialize};
 
 /// JSONRPC response.
@@ -147,9 +148,10 @@ impl Output {
 	}
 }
 
-impl From<Output> for Result<JsonValue, Error> {
-	/// Convert into a result. Will be `Ok` if it is a `Success` and `Err` if `Failure`.
-	fn from(output: Output) -> Result<JsonValue, Error> {
+impl TryFrom<Output> for JsonValue {
+	type Error = Error;
+
+	fn try_from(output: Output) -> Result<JsonValue, Error> {
 		match output {
 			Output::Success(s) => Ok(s.result),
 			Output::Failure(f) => Err(f.error),
@@ -188,7 +190,7 @@ impl From<Success> for Response {
 }
 
 impl SubscriptionId {
-	/// Turns the subcription ID into a string.
+	/// Turns the subscription ID into a string.
 	pub fn into_string(self) -> String {
 		match self {
 			SubscriptionId::Num(n) => n.to_string(),

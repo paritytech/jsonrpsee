@@ -40,6 +40,26 @@ pub enum Id {
 	Str(String),
 }
 
+impl Id {
+	/// If the `Id` is a number, returns the associated number. Returns None
+	/// otherwise.
+	pub fn as_number(&self) -> Option<&u64> {
+		match self {
+			Self::Num(n) => Some(n),
+			_ => None,
+		}
+	}
+
+	/// If the `Id` is a String, returns the associated &str. Returns None
+	/// otherwise.
+	pub fn as_str(&self) -> Option<&str> {
+		match self {
+			Self::Str(s) => Some(s),
+			_ => None,
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

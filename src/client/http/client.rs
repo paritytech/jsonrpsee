@@ -2,6 +2,8 @@ use crate::client::http::transport::HttpTransportClient;
 use crate::types::error::{Error, Mismatch};
 use crate::types::http::HttpConfig;
 use crate::types::jsonrpc::{self, JsonValue};
+
+use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
@@ -78,10 +80,7 @@ impl HttpClient {
 
 	fn process_response(response: jsonrpc::Output, expected_id: u64) -> Result<JsonValue, Error> {
 		match response.id() {
-			jsonrpc::Id::Num(n) if n == &expected_id => {
-				let ret: Result<JsonValue, _> = response.into();
-				ret.map_err(Error::Request)
-			}
+			jsonrpc::Id::Num(n) if n == &expected_id => response.try_into().map_err(Error::Request),
 			jsonrpc::Id::Num(n) => {
 				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: (*n).into() }))
 			}

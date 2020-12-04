@@ -25,22 +25,19 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::ws::jsonrpc_transport;
-use crate::client::ws::transport::WsConnectError;
 use crate::types::error::Error;
 use crate::types::jsonrpc::{self, JsonValue};
 // NOTE: this is a sign of a leaky abstraction to expose transport related details
 // Should be removed after https://github.com/paritytech/jsonrpsee/issues/154
 use crate::client::ws::manager::{RequestManager, RequestStatus};
-use soketto::connection::Error as SokettoError;
 
 use futures::{
 	channel::{mpsc, oneshot},
-	future::Either,
-	pin_mut,
 	prelude::*,
 	sink::SinkExt,
 };
-use std::{collections::HashMap, io, marker::PhantomData};
+use std::convert::TryInto;
+use std::{io, marker::PhantomData};
 
 /// Client that can be cloned.
 ///
@@ -286,7 +283,7 @@ async fn background_task(
 			event = next_frontend => {
 				match event {
 					None => {
-						log::trace!("[backend]: client terminated");
+						log::trace!("[backend]: frontend channel dropped; terminate client");
 						break
 					}
 					Some(FrontToBack::Notification { method, params }) => {
@@ -305,77 +302,127 @@ async fn background_task(
 							}
 						}
 					}
-
-						// User called `subscribe` on the front-end.
+					// User called `subscribe` on the front-end.
 					Some(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back }) => {
 						log::trace!(
 							"[backend]: client prepare to start subscription, subscribe_method={:?} unsubscribe_method:{:?}",
 							subscribe_method,
 							unsubscribe_method
 						);
-						todo!();
-						/*match sender.start_subscription(subscribe_method, params).await {
+						match sender.start_subscription(subscribe_method, params).await {
 							Ok(id) => {
-								manager.insert_pending_subscription(id, send_back, unsubscribe_method);
+								manager.insert_pending_subscription(id, send_back, unsubscribe_method).unwrap();
 							}
 							Err(err) => {
 								log::warn!("[backend]: client start subscription failed: {:?}", err);
 								let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
 							}
-						}*/
+						}
 					}
-					Some(FrontToBack::SubscriptionClosed(_)) => {
-						todo!()
+					Some(FrontToBack::SubscriptionClosed(id)) => {
+						// TODO: we need both subscription_id and request_id here for it work.
+						//manager.remove_subscription(id).unwrap();
 					}
-
-					_ => (),
 				}
 			}
 			event = next_backend => {
 				match event {
-					Some(Ok(responses)) => {
-						log::trace!("[backend] client received response {:?}", responses);
-						for (response_id, response) in responses {
-							handle_response(&mut manager, response_id, response, config.subscription_channel_capacity);
+					None => {
+						log::trace!("[backend]: backend channel dropped; terminate client");
+						break;
+					}
+					Some(Ok(jsonrpc::Response::Single(response))) => {
+						if let Some((unsubscribe, params)) = handle_request(&mut manager, response, config.subscription_channel_capacity) {
+							sender.start_request(unsubscribe, params).await.unwrap();
 						}
 					}
-					_ => (),
-				}
+					Some(Ok(jsonrpc::Response::Batch(responses))) => {
+						for response in responses {
+							if let Some((unsubscribe, params)) = handle_request(&mut manager, response, config.subscription_channel_capacity) {
+								sender.start_request(unsubscribe, params).await.unwrap();
+							}
+						}
+					}
+					Some(Ok(jsonrpc::Response::Notif(notif))) => {
+						// TODO: possible to avoid allocation here if the subscription is a number for example.
+						let sub_id = notif.params.subscription.into_string();
+						let request_id = match manager.get_request_id(&sub_id) {
+							Ok(r) => r,
+							Err(_) => {
+								log::error!("Subscription ID: {:?} not found", sub_id);
+								continue;
+							}
+						};
 
+						match manager.as_active_subscription(&request_id) {
+							Ok(callback) => {
+								callback.try_send(notif.params.result).unwrap();
+							}
+							Err(_) => (),
+						}
+					}
+					Some(Err(e)) => {
+						log::error!("error: {:?}", e);
+						return;
+					}
+				}
 			},
 		}
 	}
 }
 
-fn handle_response(
+fn handle_request(
 	manager: &mut RequestManager,
-	response_id: u64,
 	response: jsonrpc::Output,
 	subscription_capacity: usize,
-) {
+) -> Option<(String, jsonrpc::Params)> {
+	let response_id = match response.id().as_number() {
+		Some(n) => *n,
+		None => {
+			log::error!("Invalid request ID: {:?}", response.id());
+			return None;
+		}
+	};
+
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
 			let callback = manager.try_complete_method_call(&response_id).unwrap();
-			callback.send(Result::from(response).map_err(Error::Request)).unwrap();
+			let response: Result<JsonValue, Error> = response.try_into().map_err(Error::Request);
+			callback.send(response).unwrap();
+			None
 		}
 		RequestStatus::PendingSubscription => {
 			let (callback, unsubscribe_method) = manager.try_complete_pending_subscription(&response_id).unwrap();
+
+			let subscription_id: JsonValue = match response.try_into() {
+				Ok(response) => response,
+				Err(e) => {
+					let _ = callback.send(Err(Error::Request(e)));
+					return None;
+				}
+			};
+
+			// TODO: ugly thing for https://github.com/serde-rs/json/issues/709
+			let sub_id = subscription_id.as_str().unwrap().to_owned();
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(subscription_capacity);
 
 			// Send receiving end of `subscription channel` to the frontend
 			match callback.send(Ok((subscribe_rx, response_id))) {
-				Ok(_) => manager.insert_active_subscription(response_id, subscribe_tx, unsubscribe_method).unwrap(),
-				//TODO: send unsubscribe request.
-				Err(_) => (),
-			};
+				Ok(_) => {
+					manager.insert_active_subscription(response_id, sub_id, subscribe_tx, unsubscribe_method).unwrap();
+					None
+				}
+				Err(_) => {
+					let (_, unsubscribe_method) = manager.remove_subscription(&response_id, &sub_id).unwrap();
+					let params = jsonrpc::Params::Array(vec![subscription_id]);
+					Some((unsubscribe_method, params))
+				}
+			}
 		}
-
-		RequestStatus::Subscription => {
-			let callback = manager.as_subscription(&response_id).unwrap();
-			let json_val = Result::from(response).unwrap();
-			callback.try_send(json_val).unwrap();
+		RequestStatus::Subscription => unreachable!(),
+		RequestStatus::Invalid => {
+			log::error!("Invalid request ID: {:?}", response_id);
+			None
 		}
-
-		RequestStatus::Invalid => {}
 	}
 }
