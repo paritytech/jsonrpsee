@@ -82,6 +82,8 @@ pub struct Subscription<Notif> {
 	to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
+	/// Subscription ID,
+	id: u64,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
 }
@@ -117,16 +119,15 @@ enum FrontToBack {
 		/// When we get a response from the server about that subscription, we send the result on
 		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
 		/// notifications.
-		send_back: oneshot::Sender<Result<mpsc::Receiver<JsonValue>, Error>>,
+		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, u64), Error>>,
 	},
 
-	/// When a request or subscription channel is closed, we send this message to the background
-	/// task in order for it to garbage collect closed requests and subscriptions.
-	///
-	/// While this means that closing a request or a subscription is a `O(n)` operation, it is
-	/// expected that the volume of requests and subscriptions is low enough that this isn't
-	/// a problem in practice.
-	ChannelClosed,
+	/// When a subscription channel is closed, we send this message to the background
+	/// task to mark it ready for garbage collection.
+	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
+	// Such operations will be blocked until a response is received or the background
+	// thread has been terminated.
+	SubscriptionClosed(u64),
 }
 
 impl Client {
@@ -216,15 +217,16 @@ impl Client {
 			.await
 			.map_err(Error::Internal)?;
 
-		let notifs_rx = match send_back_rx.await {
-			Ok(Ok(v)) => v,
+		let (notifs_rx, id) = match send_back_rx.await {
+			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
 				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData })
+
+		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
 }
 
@@ -255,7 +257,7 @@ impl<Notif> Drop for Subscription<Notif> {
 		// the channel's buffer will be full, and our unsubscription request will never make it.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let _ = self.to_back.try_send(FrontToBack::ChannelClosed);
+		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(self.id)).now_or_never();
 	}
 }
 
@@ -305,26 +307,26 @@ async fn background_task(
 					}
 
 						// User called `subscribe` on the front-end.
-				Some(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back }) => {
-					log::trace!(
-						"[backend]: client prepare to start subscription, subscribe_method={:?} unsubscribe_method:{:?}",
-						subscribe_method,
-						unsubscribe_method
-					);
-					todo!();
-					/*match sender.start_subscription(subscribe_method, params).await {
-						Ok(id) => {
-							manager.insert_pending_subscription(id, send_back, unsubscribe_method);
-						}
-						Err(err) => {
-							log::warn!("[backend]: client start subscription failed: {:?}", err);
-							let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
-						}
-					}*/
-				}
-			Some(FrontToBack::ChannelClosed) => {
-				todo!()
-			}
+					Some(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back }) => {
+						log::trace!(
+							"[backend]: client prepare to start subscription, subscribe_method={:?} unsubscribe_method:{:?}",
+							subscribe_method,
+							unsubscribe_method
+						);
+						todo!();
+						/*match sender.start_subscription(subscribe_method, params).await {
+							Ok(id) => {
+								manager.insert_pending_subscription(id, send_back, unsubscribe_method);
+							}
+							Err(err) => {
+								log::warn!("[backend]: client start subscription failed: {:?}", err);
+								let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
+							}
+						}*/
+					}
+					Some(FrontToBack::SubscriptionClosed(_)) => {
+						todo!()
+					}
 
 					_ => (),
 				}
