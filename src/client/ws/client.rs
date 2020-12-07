@@ -80,7 +80,7 @@ pub struct Subscription<Notif> {
 	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Subscription ID,
-	id: u64,
+	id: String,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
 }
@@ -116,7 +116,7 @@ enum FrontToBack {
 		/// When we get a response from the server about that subscription, we send the result on
 		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
 		/// notifications.
-		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, u64), Error>>,
+		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, String), Error>>,
 	},
 
 	/// When a subscription channel is closed, we send this message to the background
@@ -124,7 +124,7 @@ enum FrontToBack {
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
 	// Such operations will be blocked until a response is received or the background
 	// thread has been terminated.
-	SubscriptionClosed(u64),
+	SubscriptionClosed(String),
 }
 
 impl Client {
@@ -254,14 +254,15 @@ impl<Notif> Drop for Subscription<Notif> {
 		// the channel's buffer will be full, and our unsubscription request will never make it.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(self.id)).now_or_never();
+		let id = std::mem::take(&mut self.id);
+		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(id)).now_or_never();
 	}
 }
 
 /// Function being run in the background that processes messages from the frontend.
 async fn background_task(
 	mut sender: jsonrpc_transport::Sender,
-	mut receiver: jsonrpc_transport::Receiver,
+	receiver: jsonrpc_transport::Receiver,
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	config: Config,
 ) {
@@ -319,9 +320,13 @@ async fn background_task(
 							}
 						}
 					}
-					Some(FrontToBack::SubscriptionClosed(id)) => {
-						// TODO: we need both subscription_id and request_id here for it work.
-						//manager.remove_subscription(id).unwrap();
+					Some(FrontToBack::SubscriptionClosed(sub_id)) => {
+						log::debug!("Closing in subscription: {}", sub_id);
+						// NOTE: The subscription may have been closed earlier if
+						// the channel was full or disconnected.
+						if let Ok(request_id) = manager.get_request_id(&sub_id) {
+							manager.remove_active_subscription(&request_id, &sub_id).expect("subscription ID and request ID valid; checked above qed");
+						}
 					}
 				}
 			}
@@ -356,7 +361,10 @@ async fn background_task(
 
 						match manager.as_active_subscription(&request_id) {
 							Ok(callback) => {
-								callback.try_send(notif.params.result).unwrap();
+								if let Err(e) = callback.try_send(notif.params.result) {
+									log::error!("Dropping subscription {} error: {:?}", sub_id, e);
+									manager.remove_active_subscription(&request_id, &sub_id).unwrap();
+								}
 							}
 							Err(_) => (),
 						}
@@ -407,13 +415,13 @@ fn handle_request(
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(subscription_capacity);
 
 			// Send receiving end of `subscription channel` to the frontend
-			match callback.send(Ok((subscribe_rx, response_id))) {
+			match callback.send(Ok((subscribe_rx, sub_id.clone()))) {
 				Ok(_) => {
 					manager.insert_active_subscription(response_id, sub_id, subscribe_tx, unsubscribe_method).unwrap();
 					None
 				}
 				Err(_) => {
-					let (_, unsubscribe_method) = manager.remove_subscription(&response_id, &sub_id).unwrap();
+					let (_, unsubscribe_method) = manager.remove_active_subscription(&response_id, &sub_id).unwrap();
 					let params = jsonrpc::Params::Array(vec![subscription_id]);
 					Some((unsubscribe_method, params))
 				}

@@ -1,27 +1,9 @@
-//! Wrapper module on-top transport.
+//! JSONRPC Transport module.
 //!
+//! Wraps the underlying WebSocket transport with specific JSONRPC details.
 
 use crate::client::ws::transport::WsConnectError;
 use crate::types::jsonrpc;
-
-// Type of request that has been sent out and that is waiting for a response.
-#[derive(Debug, PartialEq, Eq)]
-enum Request {
-	/// A single request expecting a response.
-	Request,
-	/// A potential subscription. As a response, we expect a single subscription id.
-	PendingSubscription,
-	/// The request is stale and was originally used to open a subscription. The subscription ID
-	/// decided by the server is contained as parameter.
-	ActiveSubscription {
-		sub_id: String,
-		/// We sent a subscription closing message to the server.
-		closing: bool,
-	},
-	/// Unsubscribing from an active subscription. The request corresponding to the active
-	/// subscription to unsubscribe from is contained as parameter.
-	Unsubscribe(u64),
-}
 
 pub async fn websocket_context(target: impl AsRef<str>) -> Result<(Sender, Receiver), WsConnectError> {
 	let (sender, receiver) = crate::client::ws::transport::new(target.as_ref()).await.unwrap();
@@ -109,21 +91,5 @@ impl Receiver {
 	/// Reads the next response, fails if the response ID was not a number.
 	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
 		self.transport.next_response().await
-	}
-}
-
-/// Processes the response obtained from the server. Updates the internal state of `self` to
-/// account for it.
-fn process_response(response: jsonrpc::Output) -> Result<(u64, jsonrpc::Output), ()> {
-	match response.id() {
-		jsonrpc::Id::Num(n) => Ok((*n, response)),
-		jsonrpc::Id::Str(s) => {
-			log::warn!("Server responded with an invalid request id: {:?}", s);
-			return Err(());
-		}
-		jsonrpc::Id::Null => {
-			log::warn!("Server responded with a null request id");
-			return Err(());
-		}
 	}
 }
