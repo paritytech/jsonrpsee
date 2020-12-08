@@ -281,98 +281,100 @@ async fn background_task(
 		futures::pin_mut!(next_frontend, next_backend);
 
 		futures::select! {
-			event = next_frontend => {
-				match event {
-					None => {
-						log::trace!("[backend]: frontend channel dropped; terminate client");
-						break
-					}
-					Some(FrontToBack::Notification { method, params }) => {
-						log::trace!("[backend]: client send notification");
-						let _ = sender.send_notification(method, params).await;
-					}
-					Some(FrontToBack::StartRequest { method, params, send_back }) => {
-						log::trace!("[backend]: client prepare to send request={:?}", method);
-						match sender.start_request(method, params).await {
-							Ok(id) => {
-								manager.insert_pending_request(id, send_back).unwrap();
-							}
-							Err(err) => {
-								log::warn!("[backend]: client send request failed: {:?}", err);
-								let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
+			event = next_frontend => match event {
+				None => {
+					log::trace!("[backend]: frontend channel dropped; terminate client");
+					break
+				}
+				Some(FrontToBack::Notification { method, params }) => {
+					log::trace!("[backend]: client send notification");
+					let _ = sender.send_notification(method, params).await;
+				}
+				Some(FrontToBack::StartRequest { method, params, send_back }) => {
+					log::trace!("[backend]: client prepare to send request={:?}", method);
+					match sender.start_request(method, params).await {
+						Ok(id) => {
+							if !manager.insert_pending_request(id, send_back) {
+
 							}
 						}
-					}
-					// User called `subscribe` on the front-end.
-					Some(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back }) => {
-						log::trace!(
-							"[backend]: client prepare to start subscription, subscribe_method={:?} unsubscribe_method:{:?}",
-							subscribe_method,
-							unsubscribe_method
-						);
-						match sender.start_subscription(subscribe_method, params).await {
-							Ok(id) => {
-								manager.insert_pending_subscription(id, send_back, unsubscribe_method).unwrap();
-							}
-							Err(err) => {
-								log::warn!("[backend]: client start subscription failed: {:?}", err);
-								let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
-							}
-						}
-					}
-					Some(FrontToBack::SubscriptionClosed(sub_id)) => {
-						log::debug!("Closing in subscription: {}", sub_id);
-						// NOTE: The subscription may have been closed earlier if
-						// the channel was full or disconnected.
-						if let Ok(request_id) = manager.get_request_id(&sub_id) {
-							manager.remove_active_subscription(&request_id, &sub_id).expect("subscription ID and request ID valid; checked above qed");
+						Err(err) => {
+							log::warn!("[backend]: client send request failed: {:?}", err);
+							let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
 						}
 					}
 				}
-			}
-			event = next_backend => {
-				match event {
-					None => {
-						log::trace!("[backend]: backend channel dropped; terminate client");
-						break;
+				// User called `subscribe` on the front-end.
+				Some(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back }) => {
+					log::trace!(
+						"[backend]: client prepare to start subscription, subscribe_method={:?} unsubscribe_method:{:?}",
+						subscribe_method,
+						unsubscribe_method
+					);
+					match sender.start_subscription(subscribe_method, params).await {
+						Ok(id) => {
+							if !manager.insert_pending_subscription(id, send_back, unsubscribe_method) {
+								log::error!("Duplicate request ID; todo send response to front");
+							}
+						}
+						Err(err) => {
+							log::warn!("[backend]: client start subscription failed: {:?}", err);
+							let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
+						}
 					}
-					Some(Ok(jsonrpc::Response::Single(response))) => {
+				}
+				Some(FrontToBack::SubscriptionClosed(sub_id)) => {
+					log::trace!("Closing in subscription: {}", sub_id);
+					// NOTE: The subscription may have been closed earlier if
+					// the channel was full or disconnected.
+					if let Some(request_id) = manager.get_request_id(&sub_id) {
+						manager.remove_active_subscription(&request_id, &sub_id);
+					}
+				}
+			},
+			event = next_backend => match event {
+				None => {
+					log::trace!("[backend]: backend channel dropped; terminate client");
+					break;
+				}
+				Some(Ok(jsonrpc::Response::Single(response))) => {
+					if let Some((unsubscribe, params)) = handle_request(&mut manager, response, config.subscription_channel_capacity) {
+						sender.start_request(unsubscribe, params).await.unwrap();
+					}
+				}
+				Some(Ok(jsonrpc::Response::Batch(responses))) => {
+					for response in responses {
 						if let Some((unsubscribe, params)) = handle_request(&mut manager, response, config.subscription_channel_capacity) {
 							sender.start_request(unsubscribe, params).await.unwrap();
 						}
 					}
-					Some(Ok(jsonrpc::Response::Batch(responses))) => {
-						for response in responses {
-							if let Some((unsubscribe, params)) = handle_request(&mut manager, response, config.subscription_channel_capacity) {
-								sender.start_request(unsubscribe, params).await.unwrap();
-							}
+				}
+				Some(Ok(jsonrpc::Response::Notif(notif))) => {
+					// TODO: possible to avoid allocation here if the subscription is a number for example.
+					let sub_id = notif.params.subscription.into_string();
+					let request_id = match manager.get_request_id(&sub_id) {
+						Some(r) => r,
+						None => {
+							log::error!("Subscription ID: {:?} not found", sub_id);
+							continue;
 						}
-					}
-					Some(Ok(jsonrpc::Response::Notif(notif))) => {
-						// TODO: possible to avoid allocation here if the subscription is a number for example.
-						let sub_id = notif.params.subscription.into_string();
-						let request_id = match manager.get_request_id(&sub_id) {
-							Ok(r) => r,
-							Err(_) => {
-								log::error!("Subscription ID: {:?} not found", sub_id);
-								continue;
-							}
-						};
+					};
 
-						match manager.as_active_subscription(&request_id) {
-							Ok(callback) => {
-								if let Err(e) = callback.try_send(notif.params.result) {
-									log::error!("Dropping subscription {} error: {:?}", sub_id, e);
-									manager.remove_active_subscription(&request_id, &sub_id).unwrap();
-								}
+					match manager.as_active_subscription_mut(&request_id) {
+						Some(callback) => {
+							if let Err(e) = callback.try_send(notif.params.result) {
+								log::error!("Dropping subscription {} error: {:?}", sub_id, e);
+								manager.remove_active_subscription(&request_id, &sub_id).unwrap();
 							}
-							Err(_) => (),
 						}
+						None => {
+							log::error!("Subscription ID: {:?} not an active subscription", sub_id);
+						},
 					}
-					Some(Err(e)) => {
-						log::error!("error: {:?}", e);
-						return;
-					}
+				}
+				Some(Err(e)) => {
+					log::error!("error: {:?} terminating client", e);
+					return;
 				}
 			},
 		}
@@ -394,13 +396,15 @@ fn handle_request(
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
-			let callback = manager.try_complete_method_call(&response_id).unwrap();
+			let callback = manager.try_complete_method_call(&response_id)?;
 			let response: Result<JsonValue, Error> = response.try_into().map_err(Error::Request);
-			callback.send(response).unwrap();
+			if let Err(e) = callback.send(response) {
+				log::error!("Request response: {:?} could not be sent to frontend; lost", e);
+			}
 			None
 		}
 		RequestStatus::PendingSubscription => {
-			let (callback, unsubscribe_method) = manager.try_complete_pending_subscription(&response_id).unwrap();
+			let (callback, unsubscribe_method) = manager.try_complete_pending_subscription(&response_id)?;
 
 			let subscription_id: JsonValue = match response.try_into() {
 				Ok(response) => response,
@@ -411,17 +415,28 @@ fn handle_request(
 			};
 
 			// TODO: ugly thing for https://github.com/serde-rs/json/issues/709
-			let sub_id = subscription_id.as_str().unwrap().to_owned();
+			let sub_id = match subscription_id.as_str() {
+				Some(sub_id) => sub_id.to_owned(),
+				None => {
+					log::error!("Subscription ID must be String; not supported");
+					return None;
+				}
+			};
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(subscription_capacity);
+
+			if !manager.insert_active_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method) {
+				log::error!("Dropping subscription: {:?} with request ID: {:?}; duplicate", sub_id, response_id);
+				let _ = callback.send(Err(Error::DuplicateRequestId));
+				return None;
+			}
 
 			// Send receiving end of `subscription channel` to the frontend
 			match callback.send(Ok((subscribe_rx, sub_id.clone()))) {
-				Ok(_) => {
-					manager.insert_active_subscription(response_id, sub_id, subscribe_tx, unsubscribe_method).unwrap();
-					None
-				}
-				Err(_) => {
-					let (_, unsubscribe_method) = manager.remove_active_subscription(&response_id, &sub_id).unwrap();
+				Ok(_) => None,
+				Err(_e) => {
+					let (_, unsubscribe_method) = manager
+						.remove_active_subscription(&response_id, &sub_id)
+						.expect("Subscription inserted above; qed");
 					let params = jsonrpc::Params::Array(vec![subscription_id]);
 					Some((unsubscribe_method, params))
 				}

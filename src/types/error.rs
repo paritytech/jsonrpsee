@@ -36,6 +36,9 @@ pub enum Error {
 	/// Invalid id in response to a request.
 	#[error("Invalid ID in response: {0}")]
 	InvalidRequestId(Mismatch<JsonValue>),
+	///..
+	#[error("Duplicate ID in request")]
+	DuplicateRequestId,
 	/// Method was already registered.
 	#[error("Method: {0} already registered")]
 	MethodAlreadyRegistered(String),
