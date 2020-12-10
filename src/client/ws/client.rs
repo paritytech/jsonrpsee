@@ -293,8 +293,8 @@ async fn background_task(
 					log::trace!("[backend]: client prepare to send request={:?}", method);
 					match sender.start_request(method, params).await {
 						Ok(id) => {
-							if !manager.insert_pending_method_call(id, send_back) {
-
+							if let Err(send_back) = manager.insert_pending_method_call(id, send_back) {
+								let _ = send_back.send(Err(Error::DuplicateRequestId));
 							}
 						}
 						Err(err) => {
@@ -312,8 +312,8 @@ async fn background_task(
 					);
 					match sender.start_subscription(subscribe_method, params).await {
 						Ok(id) => {
-							if !manager.insert_pending_subscription(id, send_back, unsubscribe_method) {
-								log::error!("Duplicate request ID; todo send response to front");
+							if let Err(send_back) = manager.insert_pending_subscription(id, send_back, unsubscribe_method) {
+								let _ = send_back.send(Err(Error::DuplicateRequestId));
 							}
 						}
 						Err(err) => {
@@ -425,7 +425,8 @@ fn process_response(
 			};
 
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(subscription_capacity);
-			if manager.insert_active_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method) {
+			if manager.insert_active_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method).is_ok()
+			{
 				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
 					Ok(_) => None,
 					Err(_) => {
