@@ -163,7 +163,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 		assert!(hello_sub.next().await.is_some());
 	}
 
-	// NOTE: this is now un-useable and unregistered.
+	// NOTE: this is now unuseable and unregistered.
 	assert!(hello_sub.next().await.is_none());
 
 	// The client should still be useable => make sure it still works.
