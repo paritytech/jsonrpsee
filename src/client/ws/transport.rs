@@ -168,7 +168,7 @@ pub async fn new(target: impl AsRef<str>) -> Result<(Sender, Receiver), WsNewDns
 		"wss" => Mode::Tls,
 		_ => return Err(WsNewDnsError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
 	};
-	let host = url.host_str().ok_or(WsNewDnsError::Url("No host in URL".into()))?;
+	let host = url.host_str().ok_or_else(|| WsNewDnsError::Url("No host in URL".into()))?;
 	let target = match url.port_or_known_default() {
 		Some(port) => format!("{}:{}", host, port),
 		None => host.to_string(),
@@ -193,7 +193,7 @@ pub async fn new(target: impl AsRef<str>) -> Result<(Sender, Receiver), WsNewDns
 impl Sender {
 	/// Sends out out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub async fn send_request<'a>(&'a mut self, request: jsonrpc::Request) -> Result<(), WsConnectError> {
+	pub async fn send_request(&mut self, request: jsonrpc::Request) -> Result<(), WsConnectError> {
 		log::debug!("send: {}", request);
 		let request = jsonrpc::to_vec(&request).map_err(WsConnectError::Serialization)?;
 		self.inner.send_binary(request).await?;
@@ -204,7 +204,7 @@ impl Sender {
 
 impl Receiver {
 	/// Returns a `Future` resolving when the server sent us something back.
-	pub async fn next_response<'a>(&'a mut self) -> Result<jsonrpc::Response, WsConnectError> {
+	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
 		let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;

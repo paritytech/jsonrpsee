@@ -26,23 +26,21 @@ impl Sender {
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
 	) -> Result<u64, WsConnectError> {
-		loop {
-			let id = self.request_id;
-			self.request_id = id.wrapping_add(1);
+		let id = self.request_id;
+		self.request_id = id.wrapping_add(1);
 
-			let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
-				jsonrpc: jsonrpc::Version::V2,
-				method: method.into(),
-				params: params.into(),
-				id: jsonrpc::Id::Num(id),
-			}));
+		let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
+			jsonrpc: jsonrpc::Version::V2,
+			method: method.into(),
+			params: params.into(),
+			id: jsonrpc::Id::Num(id),
+		}));
 
-			// Note that in case of an error, we "lose" the request id (as in, it will never be
-			// used). This isn't a problem, however.
-			self.transport.send_request(request).await?;
+		// Note that in case of an error, we "lose" the request id (as in, it will never be
+		// used). This isn't a problem, however.
+		self.transport.send_request(request).await?;
 
-			break Ok(id);
-		}
+		Ok(id)
 	}
 
 	/// Sends a notification to the server. The notification doesn't need any response.
