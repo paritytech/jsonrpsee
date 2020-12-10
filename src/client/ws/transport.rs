@@ -28,6 +28,7 @@ use crate::types::jsonrpc;
 
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
+use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
@@ -36,12 +37,14 @@ use thiserror::Error;
 
 type TlsOrPlain = crate::client::ws::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
+/// Sending end of WebSocket transport.
 pub struct Sender {
-	inner: connection::Sender<TlsOrPlain>,
+	inner: connection::Sender<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
+/// Receiving end of WebSocket transport.
 pub struct Receiver {
-	inner: connection::Receiver<TlsOrPlain>,
+	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
 /// Builder for a [`WsTransportClient`].
@@ -258,7 +261,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		};
 
 		// Configure a WebSockets client on top.
-		let mut client = WsRawClient::new(tcp_stream, &self.host, &self.url);
+		let mut client = WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.host, &self.url);
 		if let Some(origin) = self.origin.as_ref() {
 			client.set_origin(origin);
 		}

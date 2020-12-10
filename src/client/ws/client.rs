@@ -381,7 +381,7 @@ async fn background_task(
 
 /// Process a response for the Server.
 ///
-/// Returns Some(method, params) if the client has send back any response
+/// Returns Some(method, params) if the client has to send back any response.
 /// None otherwise.
 fn process_response(
 	manager: &mut RequestManager,

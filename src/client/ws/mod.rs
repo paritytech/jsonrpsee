@@ -8,4 +8,4 @@ pub mod transport;
 mod tests;
 
 pub use client::{Client, Config, Subscription};
-pub use transport::{Receiver, Sender, WsConnectError};
+pub use transport::{Receiver, Sender, WsConnectError, WsTransportClientBuilder};
