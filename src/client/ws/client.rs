@@ -131,7 +131,9 @@ impl Client {
 	///
 	/// Fails when the URL is invalid.
 	pub async fn new(target: impl AsRef<str>, config: Config) -> Result<Self, Error> {
-		let (sender, receiver) = jsonrpc_transport::websocket_context(target.as_ref()).await.unwrap();
+		let (sender, receiver) = jsonrpc_transport::websocket_connection(target.as_ref())
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		let (to_back, from_front) = mpsc::channel(config.request_channel_capacity);
 
