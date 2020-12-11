@@ -32,7 +32,7 @@ async fn method_call_works() {
 }
 
 #[tokio::test]
-async fn notif_doesnt_hang() {
+async fn notif_works() {
 	// this empty string shouldn't be read because the server shouldn't respond to notifications.
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), String::new()).await;
 	let uri = to_ws_uri_string(server.local_addr());
@@ -95,16 +95,6 @@ async fn internal_error_works() {
 }
 
 #[tokio::test]
-async fn close_server_on_pending_request() {
-	let mut server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), r#"{}"#.into()).await;
-	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
-	server.close().await;
-	let response: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;
-	assert!(matches!(response, Err(Error::TransportError(_))));
-}
-
-#[tokio::test]
 async fn subscription_works() {
 	let server = WebSocketTestServer::with_hardcoded_subscription(
 		"127.0.0.1:0".parse().unwrap(),
@@ -120,6 +110,17 @@ async fn subscription_works() {
 		let response: String = sub.next().await.unwrap().into();
 		assert_eq!("hello my friend".to_owned(), response);
 	}
-	// Make sure that subscription has been dropped and `unsubscribe_hello` call succeeded.
-	std::thread::sleep(std::time::Duration::from_secs(1));
+	// TODO: no way to test that the `unsubscribe method` was called here.
+}
+
+#[tokio::test]
+async fn response_with_wrong_id() {
+	env_logger::init();
+	let server =
+		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), internal_error(Id::Num(99_u64)))
+			.await;
+	let uri = to_ws_uri_string(server.local_addr());
+	let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
+	let err: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;
+	assert!(matches!(err, Err(Error::TransportError(e)) if e.to_string().contains("background task closed")));
 }
