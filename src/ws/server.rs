@@ -24,7 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common::{self, JsonValue};
+use crate::types::error::Error;
+use crate::types::jsonrpc::{self, JsonValue};
 use crate::ws::raw::{RawServer, RawServerEvent, RawServerRequestId, RawServerSubscriptionId};
 use crate::ws::transport::WsTransportServer;
 
@@ -32,6 +33,7 @@ use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
 use parking_lot::Mutex;
 use std::{
 	collections::{HashMap, HashSet},
+	convert::TryFrom,
 	error,
 	net::SocketAddr,
 	sync::{atomic, Arc},
@@ -58,7 +60,7 @@ pub struct Server {
 /// Notification method that's been registered.
 pub struct RegisteredNotification {
 	/// Receives notifications that the client sent to us.
-	queries_rx: mpsc::Receiver<common::Params>,
+	queries_rx: mpsc::Receiver<jsonrpc::Params>,
 }
 
 /// Method that's been registered.
@@ -66,7 +68,7 @@ pub struct RegisteredMethod {
 	/// Clone of [`Server::to_back`].
 	to_back: mpsc::UnboundedSender<FrontToBack>,
 	/// Receives requests that the client sent to us.
-	queries_rx: mpsc::Receiver<(RawServerRequestId, common::Params)>,
+	queries_rx: mpsc::Receiver<(RawServerRequestId, jsonrpc::Params)>,
 }
 
 /// Pub-sub subscription that's been registered.
@@ -85,7 +87,7 @@ pub struct IncomingRequest {
 	/// Identifier of the request towards the server.
 	request_id: RawServerRequestId,
 	/// Parameters of the request.
-	params: common::Params,
+	params: jsonrpc::Params,
 }
 
 /// Message that the [`Server`] can send to the background task.
@@ -95,7 +97,7 @@ enum FrontToBack {
 		/// Name of the method.
 		name: String,
 		/// Where to send incoming notifications.
-		handler: mpsc::Sender<common::Params>,
+		handler: mpsc::Sender<jsonrpc::Params>,
 		/// See the documentation of [`Server::register_notifications`].
 		allow_losses: bool,
 	},
@@ -105,7 +107,7 @@ enum FrontToBack {
 		/// Name of the method.
 		name: String,
 		/// Where to send requests.
-		handler: mpsc::Sender<(RawServerRequestId, common::Params)>,
+		handler: mpsc::Sender<(RawServerRequestId, jsonrpc::Params)>,
 	},
 
 	/// Send a response to a request that a client made.
@@ -113,7 +115,7 @@ enum FrontToBack {
 		/// Request to answer.
 		request_id: RawServerRequestId,
 		/// Response to send back.
-		answer: Result<JsonValue, common::Error>,
+		answer: Result<JsonValue, jsonrpc::Error>,
 	},
 
 	/// Registers a subscription. The server will then handle subscription requests of that
@@ -139,8 +141,8 @@ enum FrontToBack {
 
 impl Server {
 	/// Initializes a new server.
-	pub async fn new(url: &str) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
-		let sockaddr = url.parse()?;
+	pub async fn new(url: impl AsRef<str>) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
+		let sockaddr: SocketAddr = url.as_ref().parse()?;
 		let transport_server = WsTransportServer::builder(sockaddr).build().await?;
 		let local_addr = *transport_server.local_addr();
 
@@ -177,19 +179,21 @@ impl Server {
 	/// to process notifications.
 	///
 	/// Returns an error if the method name was already registered.
-	pub fn register_notification(&self, method_name: String, allow_losses: bool) -> Result<RegisteredNotification, ()> {
-		log::debug!("[frontend]: register_notification={}", method_name);
+	pub fn register_notification(
+		&self,
+		method_name: String,
+		allow_losses: bool,
+	) -> Result<RegisteredNotification, Error> {
 		if !self.registered_methods.lock().insert(method_name.clone()) {
-			return Err(());
+			return Err(Error::MethodAlreadyRegistered(method_name));
 		}
 
+		log::trace!("[frontend]: register_notification={}", method_name);
 		let (tx, rx) = mpsc::channel(32);
 
-		let _ = self.to_back.unbounded_send(FrontToBack::RegisterNotifications {
-			name: method_name,
-			handler: tx,
-			allow_losses,
-		});
+		self.to_back
+			.unbounded_send(FrontToBack::RegisterNotifications { name: method_name, handler: tx, allow_losses })
+			.map_err(|e| Error::Internal(e.into_send_error()))?;
 
 		Ok(RegisteredNotification { queries_rx: rx })
 	}
@@ -204,15 +208,17 @@ impl Server {
 	/// server automatically returns an "internal error" to the client.
 	///
 	/// Returns an error if the method name was already registered.
-	pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, ()> {
-		log::debug!("[frontend]: register_method={}", method_name);
+	pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, Error> {
 		if !self.registered_methods.lock().insert(method_name.clone()) {
-			return Err(());
+			return Err(Error::MethodAlreadyRegistered(method_name));
 		}
 
+		log::trace!("[frontend]: register_method={}", method_name);
 		let (tx, rx) = mpsc::channel(32);
 
-		let _ = self.to_back.unbounded_send(FrontToBack::RegisterMethod { name: method_name, handler: tx });
+		self.to_back
+			.unbounded_send(FrontToBack::RegisterMethod { name: method_name, handler: tx })
+			.map_err(|e| Error::Internal(e.into_send_error()))?;
 
 		Ok(RegisteredMethod { to_back: self.to_back.clone(), queries_rx: rx })
 	}
@@ -227,23 +233,27 @@ impl Server {
 		&self,
 		subscribe_method_name: String,
 		unsubscribe_method_name: String,
-	) -> Result<RegisteredSubscription, ()> {
-		log::debug!(
+	) -> Result<RegisteredSubscription, Error> {
+		{
+			let mut registered_methods = self.registered_methods.lock();
+
+			// NOTE: We optimise for the case where neither method is registered.
+			// This means that if the strings are equal this will be slower than just comparing the
+			// strings.
+			if !registered_methods.insert(subscribe_method_name.clone()) {
+				return Err(Error::MethodAlreadyRegistered(subscribe_method_name));
+			}
+			if !registered_methods.insert(unsubscribe_method_name.clone()) {
+				registered_methods.remove(&subscribe_method_name);
+				return Err(Error::MethodAlreadyRegistered(unsubscribe_method_name));
+			}
+		}
+
+		log::trace!(
 			"[frontend]: server register subscription: subscribe_method={}, unsubscribe_method={}",
 			subscribe_method_name,
 			unsubscribe_method_name
 		);
-		{
-			let mut registered_methods = self.registered_methods.lock();
-			if registered_methods.contains(&subscribe_method_name)
-				|| registered_methods.contains(&unsubscribe_method_name)
-			{
-				return Err(());
-			}
-			registered_methods.insert(subscribe_method_name.clone());
-			registered_methods.insert(unsubscribe_method_name.clone());
-		}
-
 		let unique_id = self.next_subscription_unique_id.fetch_add(1, atomic::Ordering::Relaxed);
 
 		self.to_back
@@ -252,7 +262,7 @@ impl Server {
 				subscribe_method: subscribe_method_name,
 				unsubscribe_method: unsubscribe_method_name,
 			})
-			.map_err(|_| ())?;
+			.map_err(|e| Error::Internal(e.into_send_error()))?;
 
 		Ok(RegisteredSubscription { to_back: self.to_back.clone(), unique_id })
 	}
@@ -260,7 +270,7 @@ impl Server {
 
 impl RegisteredNotification {
 	/// Returns the next notification.
-	pub async fn next(&mut self) -> common::Params {
+	pub async fn next(&mut self) -> jsonrpc::Params {
 		loop {
 			match self.queries_rx.next().await {
 				Some(v) => break v,
@@ -284,26 +294,27 @@ impl RegisteredMethod {
 }
 
 impl RegisteredSubscription {
-	/// Sends out a value to all the registered clients.
-	// TODO: return `Result<(), ()>`
-	pub async fn send(&mut self, value: JsonValue) {
-		let _ = self.to_back.send(FrontToBack::SendOutNotif { unique_id: self.unique_id, notification: value }).await;
+	/// Sends out a value to all the subscribing clients.
+	pub async fn send(&mut self, value: JsonValue) -> Result<(), Error> {
+		self.to_back
+			.send(FrontToBack::SendOutNotif { unique_id: self.unique_id, notification: value })
+			.await
+			.map_err(Error::Internal)
 	}
 }
 
 impl IncomingRequest {
 	/// Returns the parameters of the request.
-	pub fn params(&self) -> &common::Params {
+	pub fn params(&self) -> &jsonrpc::Params {
 		&self.params
 	}
 
 	/// Respond to the request.
-	// TODO: return `Result<(), ()>`
-	pub async fn respond(mut self, response: impl Into<Result<JsonValue, common::Error>>) {
-		let _ = self
-			.to_back
+	pub async fn respond(mut self, response: impl Into<Result<JsonValue, jsonrpc::Error>>) -> Result<(), Error> {
+		self.to_back
 			.send(FrontToBack::AnswerRequest { request_id: self.request_id, answer: response.into() })
-			.await;
+			.await
+			.map_err(Error::Internal)
 	}
 }
 
@@ -341,14 +352,20 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 		};
 
 		match outcome {
-			Either::Left(None) => return,
+			Either::Left(None) => {
+				log::trace!("[backend]: background_task terminated");
+				return;
+			}
 			Either::Left(Some(FrontToBack::AnswerRequest { request_id, answer })) => {
+				log::trace!("[backend]: answer_request: {:?} id: {:?}", answer, request_id);
 				server.request_by_id(&request_id).unwrap().respond(answer);
 			}
 			Either::Left(Some(FrontToBack::RegisterNotifications { name, handler, allow_losses })) => {
+				log::trace!("[backend]: register_notification: {:?}", name);
 				registered_notifications.insert(name, (handler, allow_losses));
 			}
 			Either::Left(Some(FrontToBack::RegisterMethod { name, handler })) => {
+				log::trace!("[backend]: register_method: {:?}", name);
 				registered_methods.insert(name, handler);
 			}
 			Either::Left(Some(FrontToBack::RegisterSubscription {
@@ -356,8 +373,8 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				subscribe_method,
 				unsubscribe_method,
 			})) => {
-				log::debug!(
-					"[backend]: server register subscription=id={:?}, subscribe_method:{}, unsubscribe_method={}",
+				log::trace!(
+					"[backend]: register subscription=id={:?}, subscribe_method:{}, unsubscribe_method={}",
 					unique_id,
 					subscribe_method,
 					unsubscribe_method
@@ -377,7 +394,7 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				subscribed_clients.insert(unique_id, Vec::new());
 			}
 			Either::Left(Some(FrontToBack::SendOutNotif { unique_id, notification })) => {
-				log::debug!("[backend]: server preparing response to subscription={:?}", unique_id);
+				log::trace!("[backend]: preparing response to subscription={:?}", unique_id);
 				debug_assert!(subscribed_clients.contains_key(&unique_id));
 				if let Some(clients) = subscribed_clients.get(&unique_id) {
 					log::trace!(
@@ -397,9 +414,9 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				}
 			}
 			Either::Right(RawServerEvent::Notification(notification)) => {
-				log::debug!("[backend]: server received notification: {:?}", notification);
+				log::trace!("[backend]: received notification: {:?}", notification);
 				if let Some((handler, allow_losses)) = registered_notifications.get_mut(notification.method()) {
-					let params: &common::Params = notification.params().into();
+					let params: &jsonrpc::Params = notification.params().into();
 					// Note: we just ignore errors. It doesn't make sense logically speaking to
 					// unregister the notification here.
 					if *allow_losses {
@@ -410,17 +427,17 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 				}
 			}
 			Either::Right(RawServerEvent::Request(request)) => {
-				log::debug!("[backend]: server received request: {:?}", request);
 				if let Some(handler) = registered_methods.get_mut(request.method()) {
-					let params: &common::Params = request.params().into();
-					log::debug!("server called handler");
+					log::trace!("[backend]: received request: {:?}", request);
+					let params: &jsonrpc::Params = request.params().into();
 					match handler.send((request.id(), params.clone())).now_or_never() {
 						Some(Ok(())) => {}
 						Some(Err(_)) | None => {
-							request.respond(Err(From::from(common::ErrorCode::ServerError(0))));
+							request.respond(Err(From::from(jsonrpc::ErrorCode::ServerError(0))));
 						}
 					}
 				} else if let Some(sub_unique_id) = subscribe_methods.get(request.method()) {
+					log::trace!("[backend]: received subscription: {:?}", request);
 					if let Ok(sub_id) = request.into_subscription() {
 						debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
 						if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
@@ -432,37 +449,39 @@ async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedR
 						active_subscriptions.insert(sub_id, *sub_unique_id);
 					}
 				} else if let Some(sub_unique_id) = unsubscribe_methods.get(request.method()) {
-					if let Ok(sub_id) = RawServerSubscriptionId::from_wire_message(&JsonValue::Null) {
-						// FIXME: from request params
-						debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
-						if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
-							// TODO: we don't actually check whether the unsubscribe comes from the right
-							//       clients, but since this the ID is randomly-generated, it should be
-							//       fine
-							if let Some(client_pos) = clients.iter().position(|c| *c == sub_id) {
-								clients.remove(client_pos);
-							}
+					log::trace!("[backend]: received unsubscription: {:?}", request);
+					match RawServerSubscriptionId::try_from(request.params()) {
+						Ok(sub_id) => {
+							debug_assert!(subscribed_clients.contains_key(&sub_unique_id));
+							if let Some(clients) = subscribed_clients.get_mut(&sub_unique_id) {
+								// TODO: we don't actually check whether the unsubscribe comes from the right
+								//       clients, but since this the ID is randomly-generated, it should be
+								//       fine
+								if let Some(client_pos) = clients.iter().position(|c| *c == sub_id) {
+									clients.remove(client_pos);
+								}
 
-							if let Some(s_u_id) = active_subscriptions.remove(&sub_id) {
-								debug_assert_eq!(s_u_id, *sub_unique_id);
+								if let Some(s_u_id) = active_subscriptions.remove(&sub_id) {
+									debug_assert_eq!(s_u_id, *sub_unique_id);
+								}
 							}
 						}
+						Err(_) => log::error!("Unsubscription of method=\"{}\" failed; The subscription ID must passed as the first argument of Array or \"subscription\" name of Object, got={:?}", request.method(), request.params()),
 					}
 				} else {
 					// TODO: we assert that the request is valid because the parsing succeeded but
 					// not registered.
-					request.respond(Err(From::from(common::ErrorCode::MethodNotFound)));
+					request.respond(Err(From::from(jsonrpc::ErrorCode::MethodNotFound)));
 				}
 			}
 			Either::Right(RawServerEvent::SubscriptionsReady(_)) => {
 				// We don't really care whether subscriptions are now ready.
 			}
 			Either::Right(RawServerEvent::SubscriptionsClosed(subscriptions)) => {
-				log::debug!("[backend]: server close subscriptions: {:?}", subscriptions);
+				log::trace!("[backend]: close subscriptions: {:?}", subscriptions);
 				// Remove all the subscriptions from `active_subscriptions` and
 				// `subscribed_clients`.
 				for sub_id in subscriptions {
-					debug_assert!(active_subscriptions.contains_key(&sub_id));
 					if let Some(unique_id) = active_subscriptions.remove(&sub_id) {
 						debug_assert!(subscribed_clients.contains_key(&unique_id));
 						if let Some(clients) = subscribed_clients.get_mut(&unique_id) {

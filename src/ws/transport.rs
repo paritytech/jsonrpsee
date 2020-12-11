@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common;
+use crate::types::jsonrpc;
 
 use async_std::net::{TcpListener, TcpStream};
 use futures::{channel::mpsc, prelude::*};
@@ -49,7 +49,7 @@ pub enum TransportServerEvent<T> {
 		/// Identifier of the request within the state of the [`TransportServer`].
 		id: T,
 		/// Body of the request.
-		request: common::Request,
+		request: jsonrpc::Request,
 	},
 
 	/// A request has been cancelled, most likely because the client has closed the connection.
@@ -97,7 +97,7 @@ pub struct WsTransportServer {
 
 /// Message sent from a per-connection task to the main frontend.
 enum BackToFront {
-	NewRequest { id: WsRequestId, body: common::Request, sender: mpsc::Sender<FrontToBack> },
+	NewRequest { id: WsRequestId, body: jsonrpc::Request, sender: mpsc::Sender<FrontToBack> },
 }
 
 /// Message sent from the main frontend to a per-connection task.
@@ -182,13 +182,13 @@ impl WsTransportServer {
 
 				match next {
 					Event::NewConnection(connec) => {
-						log::debug!("new connection with id: {:?}", self.next_request_id);
+						log::trace!("{:?}: new connection", self.next_request_id);
 						self.connections_tasks.push(
 							per_connection_task(connec, self.next_request_id.clone(), self.to_front.clone()).boxed(),
 						);
 					}
 					Event::Event(BackToFront::NewRequest { id, body, sender }) => {
-						log::debug!("new request with id: {:?}", id);
+						log::trace!("{:?}: new request", self.next_request_id);
 						let _was_in = self.to_connections.insert(id.clone(), sender);
 						debug_assert!(_was_in.is_none());
 						return TransportServerEvent::Request { id, request: body };
@@ -206,7 +206,7 @@ impl WsTransportServer {
 							//
 							// The `ws::raw::tests::request_work` is emperic proof of it.
 							if was_in.is_some() {
-								log::debug!("closed connection with id: {:?}", rq_id);
+								log::trace!("{:?}: closed connection", self.next_request_id);
 								self.pending_events.push(TransportServerEvent::Closed(rq_id));
 							}
 						}
@@ -234,7 +234,7 @@ impl WsTransportServer {
 	pub fn finish<'a>(
 		&'a mut self,
 		request_id: &'a WsRequestId,
-		response: Option<&'a common::Response>,
+		response: Option<&'a jsonrpc::Response>,
 	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
 		Box::pin(async move {
 			if let Some(mut sender) = self.to_connections.remove(request_id) {
@@ -269,7 +269,7 @@ impl WsTransportServer {
 	pub fn send<'a>(
 		&'a mut self,
 		request_id: &'a WsRequestId,
-		response: &'a common::Response,
+		response: &'a jsonrpc::Response,
 	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
 		Box::pin(async move {
 			if let Some(sender) = self.to_connections.get_mut(request_id) {
@@ -370,26 +370,26 @@ async fn per_connection_task(
 			future::Either::Left((socket_packet, _)) => {
 				let socket_packet = match socket_packet {
 					Some(Ok(pq)) => {
-						log::debug!("received text data from WebSocket: {:?}", pq);
+						log::trace!("{:?}: received data from WebSocket: {:?}", next_request_id, pq);
 						pq
 					}
 					Some(Err(err)) => {
-						log::error!("failed to receive data from WebSocket: {:?}", err);
+						log::error!("{:?}: failed to receive data from WebSocket: {:?}", next_request_id, err);
 						return pending_requests;
 					}
 					None => {
-						log::error!("failed to receive data from Websocket channel closed");
+						log::error!("{:?}: failed to receive data from Websocket channel closed", next_request_id);
 						return pending_requests;
 					}
 				};
 
-				let body = match serde_json::from_slice(socket_packet.as_ref()) {
+				let request = match serde_json::from_slice(socket_packet.as_ref()) {
 					Ok(b) => b,
 					Err(err) => {
-						log::debug!("Deserialization of incoming request failed: {:?}", err);
-						let response = serde_json::to_string(&crate::common::Response::from(
-							crate::common::Error::parse_error(),
-							crate::common::Version::V2,
+						log::warn!("Deserialization of incoming request failed: {:?}", err);
+						let response = serde_json::to_string(&jsonrpc::Response::from(
+							jsonrpc::Error::parse_error(),
+							jsonrpc::Version::V2,
 						))
 						.expect("valid JSON; qed");
 
@@ -399,7 +399,8 @@ async fn per_connection_task(
 							// deserialization failed and the client is not alive
 							Err(e) => {
 								log::warn!(
-									"Failed to send: {:?} over WebSocket transport with error: {:?}",
+									"{:?}: Failed to send: {:?} over WebSocket transport with error: {:?}",
+									next_request_id,
 									response,
 									e
 								);
@@ -411,6 +412,7 @@ async fn per_connection_task(
 
 				let request_id = WsRequestId(next_request_id.fetch_add(1, atomic::Ordering::Relaxed));
 				debug_assert_ne!(request_id.0, u64::max_value());
+				log::debug!("recv: {}", request);
 
 				// Important note: since the background task sends messages to the front task via
 				// a channel, and the front task sends messages to the background task via a
@@ -423,7 +425,7 @@ async fn per_connection_task(
 				// The channel is normally large enough for this to never happen unless the server
 				// is considerably slowed down or subject to a DoS attack.
 				let result = to_front
-					.send(BackToFront::NewRequest { id: request_id, body, sender: to_connec.clone() })
+					.send(BackToFront::NewRequest { id: request_id, body: request, sender: to_connec.clone() })
 					.now_or_never();
 
 				match result {
@@ -432,7 +434,7 @@ async fn per_connection_task(
 					// The channel is down or full.
 					Some(Err(e)) => {
 						log::error!(
-							"send request={:?} to frontend failed because of {:?}, terminating the connection",
+							"{:?}: send request to frontend failed because of {:?}, terminating the connection",
 							request_id,
 							e,
 						);
@@ -442,7 +444,7 @@ async fn per_connection_task(
 					// TODO(niklasad1): verify if this is possible to happen "in practice".
 					None => {
 						log::error!(
-							"send request={:?} to frontend failed future not ready, terminating the connection",
+							"{:?}: send request to frontend failed future not ready, terminating the connection",
 							request_id,
 						);
 						return pending_requests;
@@ -452,14 +454,14 @@ async fn per_connection_task(
 
 			// Received data to send on the connection.
 			future::Either::Right((Some(FrontToBack::Send(to_send)), _)) => {
-				log::trace!("transmit: {:?}", to_send);
+				log::debug!("send: {}", to_send);
 				if let Err(err) = sender.send_text(&to_send).await {
 					log::warn!("failed to send: {:?} over WebSocket transport with error: {:?}", to_send, err);
 					return pending_requests;
 				}
 			}
 
-			// Received data to send on the connection.
+			// Request finished.
 			future::Either::Right((Some(FrontToBack::Finished(rq_id)), _)) => {
 				log::trace!("finished request_id={:?}", rq_id);
 				let pos = pending_requests.iter().position(|r| *r == rq_id).unwrap();

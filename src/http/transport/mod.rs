@@ -25,10 +25,12 @@
 // DEALINGS IN THE SOFTWARE.
 
 mod background;
+#[allow(unused)]
 mod response;
 
-use crate::common;
-use crate::http::server_utils::access_control::AccessControl;
+use crate::types::http::HttpConfig;
+use crate::types::jsonrpc;
+use crate::utils::http::access_control::AccessControl;
 
 use fnv::FnvHashMap;
 use futures::{channel::oneshot, prelude::*};
@@ -48,7 +50,7 @@ pub enum TransportServerEvent<T> {
 		/// Identifier of the request within the state of the [`TransportServer`].
 		id: T,
 		/// Body of the request.
-		request: common::Request,
+		request: jsonrpc::Request,
 	},
 
 	/// A request has been cancelled, most likely because the client has closed the connection.
@@ -68,7 +70,7 @@ pub struct HttpTransportServer {
 	/// Next identifier to use when inserting an element in `requests`.
 	next_request_id: u64,
 
-	/// The identifier is lineraly increasing and is never leaked on the wire or outside of this
+	/// The identifier is linearly increasing and is never leaked on the wire or outside of this
 	/// module. Therefore there is no risk of hash collision and using a `FnvHashMap` is safe.
 	requests: FnvHashMap<u64, oneshot::Sender<hyper::Response<hyper::Body>>>,
 }
@@ -83,21 +85,22 @@ impl HttpTransportServer {
 	// >       starting to listen on a port is an asynchronous operation, but the hyper library
 	// >       hides this to us. In order to be future-proof, this function is async, so that we
 	// >       might switch out to a different library later without breaking the API.
-	pub async fn new(addr: &SocketAddr) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
-		let (background_thread, local_addr) = background::BackgroundHttp::bind(addr).await?;
-
-		log::debug!(target: "jsonrpc-http-server", "Starting jsonrpc http server at address={:?}, local_addr={:?}", addr, local_addr);
-
-		Ok(HttpTransportServer { background_thread, local_addr, requests: Default::default(), next_request_id: 0 })
+	pub async fn new(
+		addr: &SocketAddr,
+		config: HttpConfig,
+	) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
+		let (background_thread, local_addr) = background::BackgroundHttp::bind(addr, config).await?;
+		Ok(HttpTransportServer { background_thread, local_addr, requests: FnvHashMap::default(), next_request_id: 0 })
 	}
 
 	/// Tries to start an HTTP server that listens on the given address with an access control list.
 	pub async fn bind_with_acl(
 		addr: &SocketAddr,
 		access_control: AccessControl,
+		config: HttpConfig,
 	) -> Result<HttpTransportServer, Box<dyn error::Error + Send + Sync>> {
-		let (background_thread, local_addr) = background::BackgroundHttp::bind_with_acl(addr, access_control).await?;
-
+		let (background_thread, local_addr) =
+			background::BackgroundHttp::bind_with_acl(addr, access_control, config).await?;
 		Ok(HttpTransportServer { background_thread, local_addr, requests: Default::default(), next_request_id: 0 })
 	}
 
@@ -118,7 +121,6 @@ impl HttpTransportServer {
 			let request = match self.background_thread.next().await {
 				Ok(r) => r,
 				Err(_) => loop {
-					log::debug!("http transport server inf loop?!");
 					futures::pending!()
 				},
 			};
@@ -144,10 +146,7 @@ impl HttpTransportServer {
 				self.requests.shrink_to_fit();
 			}
 
-			let request = TransportServerEvent::Request { id: request_id, request: request.request };
-
-			log::debug!(target: "jsonrpc-http-transport-server", "received request: {:?}", request);
-			request
+			TransportServerEvent::Request { id: request_id, request: request.request }
 		})
 	}
 
@@ -156,7 +155,7 @@ impl HttpTransportServer {
 	/// You can pass `None` in order to destroy the request object without sending back anything.
 	///
 	/// The implementation blindly sends back the response and doesn't check whether there is any
-	/// correspondance with the request in terms of logic. For example, `respond` will accept
+	/// correspondence with the request in terms of logic. For example, `respond` will accept
 	/// sending back a batch of six responses even if the original request was a single
 	/// notification.
 	///
@@ -169,7 +168,7 @@ impl HttpTransportServer {
 	pub fn finish<'a>(
 		&'a mut self,
 		request_id: &'a RequestId,
-		response: Option<&'a common::Response>,
+		response: Option<&'a jsonrpc::Response>,
 	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
 		Box::pin(async move {
 			let send_back = match self.requests.remove(request_id) {
@@ -200,51 +199,18 @@ impl HttpTransportServer {
 			Ok(())
 		})
 	}
-
-	/// Returns true if this implementation supports sending back data on this request without
-	/// closing it.
-	///
-	/// Returns an error if the request id is invalid.
-	/// > **Note**: Not supported by HTTP
-	//
-	// TODO: this method is useless remove or create abstraction.
-	pub fn supports_resuming(&self, id: &u64) -> Result<bool, ()> {
-		if self.requests.contains_key(id) {
-			Ok(false)
-		} else {
-			Err(())
-		}
-	}
-
-	/// Sends back some data on the request and keeps the request alive.
-	///
-	/// You can continue sending data on that same request later.
-	///
-	/// Returns an error if the request identifier is incorrect, or if the implementation doesn't
-	/// support that operation (see [`supports_resuming`](TransportServer::supports_resuming)).
-	///
-	/// > **Note**: Not supported by HTTP.
-	//
-	// TODO: this method is useless remove or create abstraction.
-	pub fn send<'a>(
-		&'a mut self,
-		_: &'a RequestId,
-		_: &'a common::Response,
-	) -> Pin<Box<dyn Future<Output = Result<(), ()>> + Send + 'a>> {
-		Box::pin(async move { Err(()) })
-	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::HttpTransportServer;
+	use super::{HttpConfig, HttpTransportServer};
 
 	#[test]
 	fn error_if_port_occupied() {
 		futures::executor::block_on(async move {
 			let addr = "127.0.0.1:0".parse().unwrap();
-			let server1 = HttpTransportServer::new(&addr).await.unwrap();
-			assert!(HttpTransportServer::new(server1.local_addr()).await.is_err());
+			let server1 = HttpTransportServer::new(&addr, HttpConfig::default()).await.unwrap();
+			assert!(HttpTransportServer::new(server1.local_addr(), HttpConfig::default()).await.is_err());
 		});
 	}
 }

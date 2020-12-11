@@ -31,9 +31,6 @@ mod transport;
 #[cfg(test)]
 mod tests;
 
-pub use raw::{
-	Notification as WsRawNotification, RawServer as RawWsServer, RawServerEvent as RawWsServerEvent,
-	TypedResponder as WsTypedResponder,
-};
+pub use raw::{RawServer as RawWsServer, RawServerEvent as RawWsServerEvent, TypedResponder as WsTypedResponder};
 pub use server::{RegisteredMethod, RegisteredNotification, Server as WsServer};
 pub use transport::WsTransportServer;

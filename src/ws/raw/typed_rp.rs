@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::types::jsonrpc;
 use crate::ws::raw::RawServerRequest;
 use core::marker::PhantomData;
 
@@ -51,14 +52,14 @@ where
 	}
 
 	/// Returns an erroneous response.
-	pub fn err(self, err: crate::common::Error) {
+	pub fn err(self, err: jsonrpc::Error) {
 		self.respond(Err::<T, _>(err))
 	}
 
 	/// Returns a response.
-	pub fn respond(self, response: Result<impl Into<T>, crate::common::Error>) {
+	pub fn respond(self, response: Result<impl Into<T>, jsonrpc::Error>) {
 		let response = match response {
-			Ok(v) => crate::common::to_value(v.into()).map_err(|_| crate::common::Error::internal_error()),
+			Ok(v) => jsonrpc::to_value(v.into()).map_err(|_| jsonrpc::Error::internal_error()),
 			Err(err) => Err(err),
 		};
 

@@ -24,13 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common::{self, JsonValue};
-use crate::ws::raw::{batches, Notification, Params};
+use crate::types::jsonrpc::wrapped::{batches, Notification, Params};
+use crate::types::jsonrpc::{self, JsonValue};
 use crate::ws::transport::{TransportServerEvent, WsRequestId as RequestId, WsTransportServer};
 
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
 use core::{fmt, hash::Hash, num::NonZeroUsize};
 use hashbrown::{hash_map::Entry, HashMap};
+use std::convert::TryFrom;
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
@@ -273,7 +274,7 @@ impl<'a> RawServerRequest<'a> {
 
 	/// Returns the id that the client sent out.
 	// TODO: can return None, which is wrong
-	pub fn request_id(&self) -> &common::Id {
+	pub fn request_id(&self) -> &jsonrpc::Id {
 		self.inner.request_id()
 	}
 
@@ -282,7 +283,7 @@ impl<'a> RawServerRequest<'a> {
 		self.inner.method()
 	}
 
-	/// Returns the parameters of the request, as a `common::Params`.
+	/// Returns the parameters of the request, as a `jsonrpc::Params`.
 	pub fn params(&self) -> Params {
 		self.inner.params()
 	}
@@ -303,7 +304,7 @@ impl<'a> RawServerRequest<'a> {
 	/// >           method](crate::transport::TransportServer::finish) on the
 	/// >           [`TransportServer`](crate::transport::TransportServer) trait.
 	///
-	pub fn respond(self, response: Result<common::JsonValue, common::Error>) {
+	pub fn respond(self, response: Result<JsonValue, jsonrpc::Error>) {
 		self.inner.set_response(response);
 		//unimplemented!();
 		// TODO: actually send out response?
@@ -399,6 +400,22 @@ impl RawServerSubscriptionId {
 	}
 }
 
+// Try to parse a subscription ID from `Params` where we try both index 0 of an array or `subscription`
+// in a `Map`.
+impl<'a> TryFrom<Params<'a>> for RawServerSubscriptionId {
+	type Error = ();
+
+	fn try_from(params: Params) -> Result<Self, Self::Error> {
+		if let Ok(other_id) = params.get(0) {
+			Self::from_wire_message(&other_id)
+		} else if let Ok(other_id) = params.get("subscription") {
+			Self::from_wire_message(&other_id)
+		} else {
+			Err(())
+		}
+	}
+}
+
 impl<'a> ServerSubscription<'a> {
 	/// Returns the id of the subscription.
 	///
@@ -417,15 +434,15 @@ impl<'a> ServerSubscription<'a> {
 			return; // TODO: notify user with error
 		}
 
-		let output = common::SubscriptionNotif {
-			jsonrpc: common::Version::V2,
+		let output = jsonrpc::SubscriptionNotif {
+			jsonrpc: jsonrpc::Version::V2,
 			method: subscription_state.method.clone(),
-			params: common::SubscriptionNotifParams {
-				subscription: common::SubscriptionId::Str(bs58::encode(&self.id).into_string()),
+			params: jsonrpc::SubscriptionNotifParams {
+				subscription: jsonrpc::SubscriptionId::Str(bs58::encode(&self.id).into_string()),
 				result: message.into(),
 			},
 		};
-		let response = common::Response::Notif(output);
+		let response = jsonrpc::Response::Notif(output);
 
 		let _ = self.server.raw.send(&subscription_state.raw_id, &response).await; // TODO: error handling?
 	}

@@ -27,28 +27,29 @@
 #![cfg(test)]
 
 use crate::client::HttpTransportClient;
-use crate::common::{self, Call, MethodCall, Notification, Params, Request, Version};
 use crate::http::{HttpRawServer, HttpRawServerEvent, HttpTransportServer};
+use crate::types::http::HttpConfig;
+use crate::types::jsonrpc::{self, Call, MethodCall, Notification, Params, Request, Version};
 use serde_json::Value;
 
 async fn connection_context() -> (HttpTransportClient, HttpRawServer) {
-	let server = HttpTransportServer::new(&"127.0.0.1:0".parse().unwrap()).await.unwrap();
+	let server = HttpTransportServer::new(&"127.0.0.1:0".parse().unwrap(), HttpConfig::default()).await.unwrap();
 	let uri = format!("http://{}", server.local_addr());
-	let client = HttpTransportClient::new(&uri);
+	let client = HttpTransportClient::new(&uri, HttpConfig::default()).unwrap();
 	(client, server.into())
 }
 
 #[tokio::test]
 async fn request_work() {
-	let (mut client, mut server) = connection_context().await;
+	let (client, mut server) = connection_context().await;
 	tokio::spawn(async move {
 		let call = Call::MethodCall(MethodCall {
 			jsonrpc: Version::V2,
 			method: "hello_world".to_owned(),
 			params: Params::Array(vec![Value::from(1), Value::from(2)]),
-			id: common::Id::Num(3),
+			id: jsonrpc::Id::Num(3),
 		});
-		client.send_request(Request::Single(call)).await.unwrap();
+		client.send_request_and_wait_for_response(Request::Single(call)).await.unwrap();
 	});
 
 	match server.next_event().await {
@@ -58,7 +59,7 @@ async fn request_work() {
 			let p2: i32 = r.params().get(1).unwrap();
 			assert_eq!(p1, 1);
 			assert_eq!(p2, 2);
-			assert_eq!(r.request_id(), &common::Id::Num(3));
+			assert_eq!(r.request_id(), &jsonrpc::Id::Num(3));
 		}
 		e @ _ => panic!("Invalid server event: {:?} expected Request", e),
 	}
@@ -66,14 +67,14 @@ async fn request_work() {
 
 #[tokio::test]
 async fn notification_work() {
-	let (mut client, mut server) = connection_context().await;
+	let (client, mut server) = connection_context().await;
 	tokio::spawn(async move {
 		let n = Notification {
 			jsonrpc: Version::V2,
 			method: "hello_world".to_owned(),
 			params: Params::Array(vec![Value::from("lo"), Value::from(2)]),
 		};
-		client.send_request(Request::Single(Call::Notification(n))).await.unwrap();
+		client.send_request_and_wait_for_response(Request::Single(Call::Notification(n))).await.unwrap();
 	});
 
 	match server.next_event().await {

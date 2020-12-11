@@ -65,7 +65,7 @@
 //!
 
 use crate::client::ws::{WsConnectError, WsTransportClient};
-use crate::common;
+use crate::types::jsonrpc;
 
 use alloc::{collections::VecDeque, string::String, vec};
 use core::{fmt, future::Future};
@@ -141,7 +141,7 @@ pub enum RawClientEvent {
 		/// has returned.
 		request_id: RawClientRequestId,
 		/// The response itself.
-		result: Result<common::JsonValue, common::Error>,
+		result: Result<jsonrpc::JsonValue, jsonrpc::Error>,
 	},
 
 	/// A subscription request has received a response.
@@ -151,7 +151,7 @@ pub enum RawClientEvent {
 		request_id: RawClientRequestId,
 		/// On success, we are now actively subscribed.
 		/// [`SubscriptionNotif`](RawClientEvent::SubscriptionNotif) events will now be generated.
-		result: Result<(), common::Error>,
+		result: Result<(), jsonrpc::Error>,
 	},
 
 	/// Notification about something we are subscribed to.
@@ -160,7 +160,7 @@ pub enum RawClientEvent {
 		/// [`RawClient::start_subscription`] has returned.
 		request_id: RawClientRequestId,
 		/// Opaque data that the server wants to communicate to us.
-		result: common::JsonValue,
+		result: jsonrpc::JsonValue,
 	},
 
 	/// Finished closing a subscription.
@@ -203,7 +203,7 @@ pub enum RawClientError {
 	/// Error in the raw client.
 	Inner(WsConnectError),
 	/// RawServer returned an error for our request.
-	RequestError(common::Error),
+	RequestError(jsonrpc::Error),
 	/// RawServer has sent back a subscription ID that has already been used by an earlier
 	/// subscription.
 	DuplicateSubscriptionId,
@@ -246,326 +246,277 @@ impl RawClient {
 }
 
 impl RawClient {
-    /// Sends a notification to the server. The notification doesn't need any response.
-    ///
-    /// This asynchronous function finishes when the notification has finished being sent.
-    pub async fn send_notification(
-        &mut self,
-        method: impl Into<String>,
-        params: impl Into<common::Params>,
-    ) -> Result<(), WsConnectError> {
-        let request = common::Request::Single(common::Call::Notification(common::Notification {
-            jsonrpc: common::Version::V2,
-            method: method.into(),
-            params: params.into(),
-        }));
+	/// Sends a notification to the server. The notification doesn't need any response.
+	///
+	/// This asynchronous function finishes when the notification has finished being sent.
+	pub async fn send_notification(
+		&mut self,
+		method: impl Into<String>,
+		params: impl Into<jsonrpc::Params>,
+	) -> Result<(), WsConnectError> {
+		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
+			jsonrpc: jsonrpc::Version::V2,
+			method: method.into(),
+			params: params.into(),
+		}));
 
-        self.inner.send_request(request).await?;
-        Ok(())
-    }
+		self.inner.send_request(request).await?;
+		Ok(())
+	}
 
-    /// Starts a request.
-    ///
-    /// This asynchronous function finishes when the request has been sent to the server. The
-    /// request is added to the [`RawClient`]. You must then call [`next_event`](RawClient::next_event)
-    /// until you get a response.
-    pub async fn start_request(
-        &mut self,
-        method: impl Into<String>,
-        params: impl Into<common::Params>,
-    ) -> Result<RawClientRequestId, WsConnectError> {
-        self.start_impl(method, params, Request::Request).await
-    }
+	/// Starts a request.
+	///
+	/// This asynchronous function finishes when the request has been sent to the server. The
+	/// request is added to the [`RawClient`]. You must then call [`next_event`](RawClient::next_event)
+	/// until you get a response.
+	pub async fn start_request(
+		&mut self,
+		method: impl Into<String>,
+		params: impl Into<jsonrpc::Params>,
+	) -> Result<RawClientRequestId, WsConnectError> {
+		self.start_impl(method, params, Request::Request).await
+	}
 
-    /// Starts a request.
-    ///
-    /// This asynchronous function finishes when the request has been sent to the server. The
-    /// request is added to the [`RawClient`]. You must then call [`next_event`](RawClient::next_event)
-    /// until you get a response.
-    pub async fn start_subscription(
-        &mut self,
-        method: impl Into<String>,
-        params: impl Into<common::Params>,
-    ) -> Result<RawClientRequestId, WsConnectError> {
-        self.start_impl(method, params, Request::PendingSubscription)
-            .await
-    }
+	/// Starts a request.
+	///
+	/// This asynchronous function finishes when the request has been sent to the server. The
+	/// request is added to the [`RawClient`]. You must then call [`next_event`](RawClient::next_event)
+	/// until you get a response.
+	pub async fn start_subscription(
+		&mut self,
+		method: impl Into<String>,
+		params: impl Into<jsonrpc::Params>,
+	) -> Result<RawClientRequestId, WsConnectError> {
+		self.start_impl(method, params, Request::PendingSubscription).await
+	}
 
-    /// Inner implementation for starting either a request or a subscription.
-    async fn start_impl(
-        &mut self,
-        method: impl Into<String>,
-        params: impl Into<common::Params>,
-        ty: Request,
-    ) -> Result<RawClientRequestId, WsConnectError> {
-        loop {
-            let id = self.next_request_id;
-            self.next_request_id.0 = self.next_request_id.0.wrapping_add(1);
+	/// Inner implementation for starting either a request or a subscription.
+	async fn start_impl(
+		&mut self,
+		method: impl Into<String>,
+		params: impl Into<jsonrpc::Params>,
+		ty: Request,
+	) -> Result<RawClientRequestId, WsConnectError> {
+		loop {
+			let id = self.next_request_id;
+			self.next_request_id.0 = self.next_request_id.0.wrapping_add(1);
 
-            let entry = match self.requests.entry(id) {
-                Entry::Occupied(_) => continue,
-                Entry::Vacant(e) => e,
-            };
+			let entry = match self.requests.entry(id) {
+				Entry::Occupied(_) => continue,
+				Entry::Vacant(e) => e,
+			};
 
-            let request = common::Request::Single(common::Call::MethodCall(common::MethodCall {
-                jsonrpc: common::Version::V2,
-                method: method.into(),
-                params: params.into(),
-                id: common::Id::Num(id.0),
-            }));
+			let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
+				jsonrpc: jsonrpc::Version::V2,
+				method: method.into(),
+				params: params.into(),
+				id: jsonrpc::Id::Num(id.0),
+			}));
 
-            // Note that in case of an error, we "lose" the request id (as in, it will never be
-            // used). This isn't a problem, however.
-            self.inner.send_request(request).await?;
+			// Note that in case of an error, we "lose" the request id (as in, it will never be
+			// used). This isn't a problem, however.
+			self.inner.send_request(request).await?;
 
-            entry.insert(ty);
-            break Ok(id);
-        }
-    }
+			entry.insert(ty);
+			break Ok(id);
+		}
+	}
 
-    /// Waits until the client receives a message from the server.
-    ///
-    /// If this function returns an `Err`, it indicates a connectivity issue with the server or a
-    /// low-level protocol error, and not a request that has failed to be answered.
-    pub async fn next_event(&mut self) -> Result<RawClientEvent, RawClientError> {
-        loop {
-            if let Some(event) = self.events_queue.pop_front() {
-                return Ok(event);
-            }
+	/// Waits until the client receives a message from the server.
+	///
+	/// If this function returns an `Err`, it indicates a connectivity issue with the server or a
+	/// low-level protocol error, and not a request that has failed to be answered.
+	pub async fn next_event(&mut self) -> Result<RawClientEvent, RawClientError> {
+		loop {
+			if let Some(event) = self.events_queue.pop_front() {
+				return Ok(event);
+			}
 
-            self.event_step().await?;
-        }
-    }
+			self.event_step().await?;
+		}
+	}
 
-    /// Returns a `Future` that resolves when the server sends back a response for the given
-    /// request.
-    ///
-    /// Returns `None` if the request identifier is invalid, or if the request is a subscription.
-    ///
-    /// > **Note**: While this function is waiting, all the other responses and pubsub events
-    /// >           returned by the server will be buffered up to a certain limit. Once this
-    /// >           limit is reached, server notifications will be discarded. If you want to be
-    /// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
-    /// >           instead.
-    pub fn request_by_id<'a>(
-        &'a mut self,
-        rq_id: RawClientRequestId,
-    ) -> Option<impl Future<Output = Result<common::JsonValue, RawClientError>> + 'a> {
-        // First, let's check whether the request ID is valid.
-        if let Some(rq) = self.requests.get(&rq_id) {
-            if *rq != Request::Request {
-                return None;
-            }
-        } else {
-            return None;
-        }
+	/// Returns a `Future` that resolves when the server sends back a response for the given
+	/// request.
+	///
+	/// Returns `None` if the request identifier is invalid, or if the request is a subscription.
+	///
+	/// > **Note**: While this function is waiting, all the other responses and pubsub events
+	/// >           returned by the server will be buffered up to a certain limit. Once this
+	/// >           limit is reached, server notifications will be discarded. If you want to be
+	/// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
+	/// >           instead.
+	pub fn request_by_id<'a>(
+		&'a mut self,
+		rq_id: RawClientRequestId,
+	) -> Option<impl Future<Output = Result<jsonrpc::JsonValue, RawClientError>> + 'a> {
+		// First, let's check whether the request ID is valid.
+		if let Some(rq) = self.requests.get(&rq_id) {
+			if *rq != Request::Request {
+				return None;
+			}
+		} else {
+			return None;
+		}
 
-        Some(async move {
-            let mut events_queue_loopkup = 0;
+		Some(async move {
+			let mut events_queue_loopkup = 0;
 
-            loop {
-                while events_queue_loopkup < self.events_queue.len() {
-                    match &self.events_queue[events_queue_loopkup] {
-                        RawClientEvent::Response { request_id, .. } if *request_id == rq_id => {
-                            return match self.events_queue.remove(events_queue_loopkup) {
-                                Some(RawClientEvent::Response { result, .. }) => {
-                                    result.map_err(RawClientError::RequestError)
-                                }
-                                _ => unreachable!(),
-                            }
-                        }
-                        _ => {}
-                    }
+			loop {
+				while events_queue_loopkup < self.events_queue.len() {
+					match &self.events_queue[events_queue_loopkup] {
+						RawClientEvent::Response { request_id, .. } if *request_id == rq_id => {
+							return match self.events_queue.remove(events_queue_loopkup) {
+								Some(RawClientEvent::Response { result, .. }) => {
+									result.map_err(RawClientError::RequestError)
+								}
+								_ => unreachable!(),
+							}
+						}
+						_ => {}
+					}
 
-                    events_queue_loopkup += 1;
-                }
+					events_queue_loopkup += 1;
+				}
 
-                self.event_step().await?;
-            }
-        })
-    }
+				self.event_step().await?;
+			}
+		})
+	}
 
-    /// Returns a [`RawClientSubscription`] object representing a certain active or pending
-    /// subscription.
-    ///
-    /// Returns `None` if the identifier is invalid, or if it is not a subscription.
-    pub fn subscription_by_id(
-        &mut self,
-        rq_id: RawClientRequestId,
-    ) -> Option<RawClientSubscription> {
-        match self.requests.get(&rq_id)? {
-            Request::PendingSubscription => {
-                debug_assert!(!self.subscriptions.values().any(|i| *i == rq_id));
-                Some(RawClientSubscription::Pending(
-                    RawClientPendingSubscription {
-                        client: self,
-                        id: rq_id,
-                    },
-                ))
-            }
+	/// Returns a [`RawClientSubscription`] object representing a certain active or pending
+	/// subscription.
+	///
+	/// Returns `None` if the identifier is invalid, or if it is not a subscription.
+	pub fn subscription_by_id(&mut self, rq_id: RawClientRequestId) -> Option<RawClientSubscription> {
+		match self.requests.get(&rq_id)? {
+			Request::PendingSubscription => {
+				debug_assert!(!self.subscriptions.values().any(|i| *i == rq_id));
+				Some(RawClientSubscription::Pending(RawClientPendingSubscription { client: self, id: rq_id }))
+			}
 
-            Request::ActiveSubscription { sub_id, .. } => {
-                debug_assert_eq!(self.subscriptions.get(sub_id), Some(&rq_id));
-                Some(RawClientSubscription::Active(RawClientActiveSubscription {
-                    client: self,
-                    id: rq_id,
-                }))
-            }
+			Request::ActiveSubscription { sub_id, .. } => {
+				debug_assert_eq!(self.subscriptions.get(sub_id), Some(&rq_id));
+				Some(RawClientSubscription::Active(RawClientActiveSubscription { client: self, id: rq_id }))
+			}
 
-            _ => None,
-        }
-    }
+			_ => None,
+		}
+	}
 
-    /// Waits for one server message and processes it by updating the state of `self`.
-    ///
-    /// If the events queue is full (see [`RawClient::events_queue_max_size`]), then responses to
-    /// requests will still be pushed to the queue, but notifications will be discarded.
-    ///
-    /// Check the content of [`events_queue`](RawClient::events_queue) afterwards for events to
-    /// dispatch to the user.
-    async fn event_step(&mut self) -> Result<(), RawClientError> {
-        let result = self
-            .inner
-            .next_response()
-            .await
-            .map_err(RawClientError::Inner)?;
+	/// Waits for one server message and processes it by updating the state of `self`.
+	///
+	/// If the events queue is full (see [`RawClient::events_queue_max_size`]), then responses to
+	/// requests will still be pushed to the queue, but notifications will be discarded.
+	///
+	/// Check the content of [`events_queue`](RawClient::events_queue) afterwards for events to
+	/// dispatch to the user.
+	async fn event_step(&mut self) -> Result<(), RawClientError> {
+		let result = self.inner.next_response().await.map_err(RawClientError::Inner)?;
 
-        match result {
-            common::Response::Single(rp) => self.process_response(rp)?,
-            common::Response::Batch(rps) => {
-                for rp in rps {
-                    // TODO: if an error happens, we throw away the entire batch
-                    self.process_response(rp)?;
-                }
-            }
-            common::Response::Notif(notif) => {
-                let sub_id = notif.params.subscription.into_string();
-                if let Some(request_id) = self.subscriptions.get(&sub_id) {
-                    if self.events_queue.len() < self.events_queue_max_size {
-                        self.events_queue
-                            .push_back(RawClientEvent::SubscriptionNotif {
-                                request_id: *request_id,
-                                result: notif.params.result,
-                            });
-                    }
-                } else {
-                    log::warn!(
-                        "Server sent subscription notif with an invalid id: {:?}",
-                        sub_id
-                    );
-                    return Err(RawClientError::UnknownSubscriptionId);
-                }
-            }
-        }
+		match result {
+			jsonrpc::Response::Single(rp) => self.process_response(rp)?,
+			jsonrpc::Response::Batch(rps) => {
+				for rp in rps {
+					// TODO: if an error happens, we throw away the entire batch
+					self.process_response(rp)?;
+				}
+			}
+			jsonrpc::Response::Notif(notif) => {
+				let sub_id = notif.params.subscription.into_string();
+				if let Some(request_id) = self.subscriptions.get(&sub_id) {
+					if self.events_queue.len() < self.events_queue_max_size {
+						self.events_queue.push_back(RawClientEvent::SubscriptionNotif {
+							request_id: *request_id,
+							result: notif.params.result,
+						});
+					}
+				} else {
+					log::warn!("Server sent subscription notif with an invalid id: {:?}", sub_id);
+					return Err(RawClientError::UnknownSubscriptionId);
+				}
+			}
+		}
 
-        Ok(())
-    }
+		Ok(())
+	}
 
-    /// Processes the response obtained from the server. Updates the internal state of `self` to
-    /// account for it.
-    fn process_response(&mut self, response: common::Output) -> Result<(), RawClientError> {
-        log::debug!("Received response: {:?}", response);
-        let request_id = match response.id() {
-            common::Id::Num(n) => RawClientRequestId(*n),
-            common::Id::Str(s) => {
-                log::warn!("Server responded with an invalid request id: {:?}", s);
-                return Err(RawClientError::UnknownRequestId);
-            }
-            common::Id::Null => {
-                log::warn!("Server responded with a null request id");
-                return Err(RawClientError::NullRequestId);
-            }
-        };
+	/// Processes the response obtained from the server. Updates the internal state of `self` to
+	/// account for it.
+	fn process_response(&mut self, response: jsonrpc::Output) -> Result<(), RawClientError> {
+		let request_id = match response.id() {
+			jsonrpc::Id::Num(n) => RawClientRequestId(*n),
+			jsonrpc::Id::Str(s) => {
+				log::warn!("Server responded with an invalid request id: {:?}", s);
+				return Err(RawClientError::UnknownRequestId);
+			}
+			jsonrpc::Id::Null => {
+				log::warn!("Server responded with a null request id");
+				return Err(RawClientError::NullRequestId);
+			}
+		};
 
-        // Find the request that this answered.
-        match self.requests.remove(&request_id) {
-            Some(Request::Request) => {
-                self.events_queue.push_back(RawClientEvent::Response {
-                    result: response.into(),
-                    request_id,
-                });
-            }
+		// Find the request that this answered.
+		match self.requests.remove(&request_id) {
+			Some(Request::Request) => {
+				self.events_queue.push_back(RawClientEvent::Response { result: response.into(), request_id });
+			}
 
-            Some(Request::PendingSubscription) => {
-                let response = match Result::from(response) {
-                    Ok(r) => r,
-                    Err(err) => {
-                        self.events_queue
-                            .push_back(RawClientEvent::SubscriptionResponse {
-                                result: Err(err),
-                                request_id,
-                            });
-                        return Ok(());
-                    }
-                };
+			Some(Request::PendingSubscription) => {
+				let response = match Result::from(response) {
+					Ok(r) => r,
+					Err(err) => {
+						self.events_queue
+							.push_back(RawClientEvent::SubscriptionResponse { result: Err(err), request_id });
+						return Ok(());
+					}
+				};
 
-                let sub_id = match common::from_value::<common::SubscriptionId>(response) {
-                    Ok(id) => id.into_string(),
-                    Err(err) => {
-                        log::warn!("Failed to parse string subscription id: {:?}", err);
-                        return Err(RawClientError::SubscriptionIdParseError);
-                    }
-                };
+				let sub_id = match jsonrpc::from_value::<jsonrpc::SubscriptionId>(response) {
+					Ok(id) => id.into_string(),
+					Err(err) => {
+						log::warn!("Failed to parse string subscription id: {:?}", err);
+						return Err(RawClientError::SubscriptionIdParseError);
+					}
+				};
 
-                match self.subscriptions.entry(sub_id.clone()) {
-                    Entry::Vacant(e) => e.insert(request_id),
-                    Entry::Occupied(e) => {
-                        log::warn!("Duplicate subscription id sent by server: {:?}", e.key());
-                        return Err(RawClientError::DuplicateSubscriptionId);
-                    }
-                };
+				match self.subscriptions.entry(sub_id.clone()) {
+					Entry::Vacant(e) => e.insert(request_id),
+					Entry::Occupied(e) => {
+						log::warn!("Duplicate subscription id sent by server: {:?}", e.key());
+						return Err(RawClientError::DuplicateSubscriptionId);
+					}
+				};
 
-                self.requests.insert(
-                    request_id,
-                    Request::ActiveSubscription {
-                        sub_id,
-                        closing: false,
-                    },
-                );
-                self.events_queue
-                    .push_back(RawClientEvent::SubscriptionResponse {
-                        result: Ok(()),
-                        request_id,
-                    });
-            }
+				self.requests.insert(request_id, Request::ActiveSubscription { sub_id, closing: false });
+				self.events_queue.push_back(RawClientEvent::SubscriptionResponse { result: Ok(()), request_id });
+			}
 
-            Some(Request::Unsubscribe(active_sub_rq_id)) => {
-                match self.requests.remove(&active_sub_rq_id) {
-                    Some(Request::ActiveSubscription { sub_id, .. }) => {
-                        if self.subscriptions.remove(&sub_id).is_some() {
-                            self.events_queue.push_back(RawClientEvent::Unsubscribed {
-                                request_id: active_sub_rq_id,
-                            });
-                        } else {
-                            debug_assert!(false);
-                        }
-                    }
-                    _ => debug_assert!(false),
-                }
-            }
+			Some(Request::Unsubscribe(active_sub_rq_id)) => match self.requests.remove(&active_sub_rq_id) {
+				Some(Request::ActiveSubscription { sub_id, .. }) => {
+					if self.subscriptions.remove(&sub_id).is_some() {
+						self.events_queue.push_back(RawClientEvent::Unsubscribed { request_id: active_sub_rq_id });
+					} else {
+						debug_assert!(false);
+					}
+				}
+				_ => debug_assert!(false),
+			},
 
-            Some(v @ Request::ActiveSubscription { .. }) => {
-                // The request was removed above and should not be removed permantely.
-                // That's why it is inserted back.
-                self.requests.insert(request_id, v);
-                log::warn!(
-                    "Server responded with an invalid request id: {:?}",
-                    request_id
-                );
-                return Err(RawClientError::UnknownRequestId);
-            }
+			Some(v @ Request::ActiveSubscription { .. }) => {
+				self.requests.insert(request_id, v);
+				log::warn!("Server responsed with an invalid request id: {:?}", request_id);
+				return Err(RawClientError::UnknownRequestId);
+			}
 
-            None => {
-                log::warn!(
-                    "Server responded with an invalid request id: {:?}",
-                    request_id
-                );
-                return Err(RawClientError::UnknownRequestId);
-            }
-        };
+			None => {
+				log::warn!("Server responsed with an invalid request id: {:?}", request_id);
+				return Err(RawClientError::UnknownRequestId);
+			}
+		};
 
-        Ok(())
-    }
+		Ok(())
+	}
 }
 
 impl fmt::Debug for RawClient {
@@ -644,7 +595,7 @@ impl<'a> RawClientActiveSubscription<'a> {
 	/// >           limit is reached, server notifications will be discarded. If you want to be
 	/// >           sure to catch all notifications, use [`next_event`](RawClient::next_event)
 	/// >           instead.
-	pub async fn next_notification(&mut self) -> Result<common::JsonValue, RawClientError> {
+	pub async fn next_notification(&mut self) -> Result<jsonrpc::JsonValue, RawClientError> {
 		let mut events_queue_loopkup = 0;
 
 		loop {
@@ -692,7 +643,7 @@ impl<'a> RawClientActiveSubscription<'a> {
 			_ => panic!(),
 		};
 
-		let params = common::Params::Array(vec![sub_id.clone().into()]);
+		let params = jsonrpc::Params::Array(vec![sub_id.clone().into()]);
 		self.client
 			.start_impl(method_name, params, Request::Unsubscribe(self.id))
 			.await

@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::http::raw::RawServerRequest;
+use crate::types::jsonrpc;
 use core::marker::PhantomData;
 
 /// Allows responding to a server request in a more elegant and strongly-typed fashion.
@@ -51,14 +52,14 @@ where
 	}
 
 	/// Returns an erroneous response.
-	pub fn err(self, err: crate::common::Error) {
+	pub fn err(self, err: jsonrpc::Error) {
 		self.respond(Err::<T, _>(err))
 	}
 
 	/// Returns a response.
-	pub fn respond(self, response: Result<impl Into<T>, crate::common::Error>) {
+	pub fn respond(self, response: Result<impl Into<T>, jsonrpc::Error>) {
 		let response = match response {
-			Ok(v) => crate::common::to_value(v.into()).map_err(|_| crate::common::Error::internal_error()),
+			Ok(v) => jsonrpc::to_value(v.into()).map_err(|_| jsonrpc::Error::internal_error()),
 			Err(err) => Err(err),
 		};
 

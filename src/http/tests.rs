@@ -1,7 +1,8 @@
 #![cfg(test)]
 
-use crate::common::JsonValue;
 use crate::http::HttpServer;
+use crate::types::http::HttpConfig;
+use crate::types::jsonrpc::JsonValue;
 use futures::channel::oneshot::{self, Sender};
 use futures::future::FutureExt;
 use futures::{pin_mut, select};
@@ -10,7 +11,7 @@ use jsonrpsee_test_utils::types::{Id, StatusCode};
 use std::net::SocketAddr;
 
 async fn server(server_started_tx: Sender<SocketAddr>) {
-	let server = HttpServer::new("127.0.0.1:0").await.unwrap();
+	let server = HttpServer::new("127.0.0.1:0", HttpConfig::default()).await.unwrap();
 	let mut hello = server.register_method("say_hello".to_owned()).unwrap();
 	let mut add = server.register_method("add".to_owned()).unwrap();
 	let mut notif = server.register_notification("notif".to_owned(), false).unwrap();
@@ -19,8 +20,7 @@ async fn server(server_started_tx: Sender<SocketAddr>) {
 	loop {
 		let hello_fut = async {
 			let handle = hello.next().await;
-			log::debug!("server respond to hello");
-			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await;
+			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
 		}
 		.fuse();
 
@@ -28,7 +28,7 @@ async fn server(server_started_tx: Sender<SocketAddr>) {
 			let handle = add.next().await;
 			let params: Vec<u64> = handle.params().clone().parse().unwrap();
 			let sum: u64 = params.iter().sum();
-			handle.respond(Ok(JsonValue::Number(sum.into()))).await;
+			handle.respond(Ok(JsonValue::Number(sum.into()))).await.unwrap();
 		}
 		.fuse();
 
@@ -40,9 +40,9 @@ async fn server(server_started_tx: Sender<SocketAddr>) {
 
 		pin_mut!(hello_fut, add_fut, notif_fut);
 		select! {
-			say_hello = hello_fut => (),
-			add = add_fut => (),
-			notif = notif_fut => (),
+			_ = hello_fut => (),
+			_ = add_fut => (),
+			_ = notif_fut => (),
 			complete => (),
 		};
 	}

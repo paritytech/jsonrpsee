@@ -24,16 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common;
+use crate::types::jsonrpc;
 
 use alloc::string::String;
 use core::fmt;
 
 /// Access to the parameters of a request.
-#[derive(Copy, Clone)]
+#[derive(Copy, Debug, Clone)]
 pub struct Params<'a> {
 	/// Raw parameters of the request.
-	params: &'a common::Params,
+	params: &'a jsonrpc::Params,
 }
 
 /// Key referring to a potential parameter of a request.
@@ -45,8 +45,8 @@ pub enum ParamKey<'a> {
 }
 
 impl<'a> Params<'a> {
-	/// Wraps around a `&common::Params` and provides utility functions for the user.
-	pub(crate) fn from(params: &'a common::Params) -> Params<'a> {
+	/// Wraps around a `&jsonrpc::Params` and provides utility functions for the user.
+	pub(crate) fn from(params: &'a jsonrpc::Params) -> Params<'a> {
 		Params { params }
 	}
 
@@ -62,13 +62,13 @@ impl<'a> Params<'a> {
 	}
 
 	/// Returns a parameter of the request by name.
-	pub fn get_raw<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a common::JsonValue> {
+	pub fn get_raw<'k>(self, param: impl Into<ParamKey<'k>>) -> Option<&'a jsonrpc::JsonValue> {
 		match (self.params, param.into()) {
-			(common::Params::None, _) => None,
-			(common::Params::Map(map), ParamKey::String(key)) => map.get(key),
-			(common::Params::Map(_), ParamKey::Index(_)) => None,
-			(common::Params::Array(_), ParamKey::String(_)) => None,
-			(common::Params::Array(array), ParamKey::Index(index)) => {
+			(jsonrpc::Params::None, _) => None,
+			(jsonrpc::Params::Map(map), ParamKey::String(key)) => map.get(key),
+			(jsonrpc::Params::Map(_), ParamKey::Index(_)) => None,
+			(jsonrpc::Params::Array(_), ParamKey::String(_)) => None,
+			(jsonrpc::Params::Array(array), ParamKey::Index(index)) => {
 				if index < array.len() {
 					Some(&array[index])
 				} else {
@@ -80,32 +80,26 @@ impl<'a> Params<'a> {
 }
 
 impl<'a> IntoIterator for Params<'a> {
-	type Item = (ParamKey<'a>, &'a common::JsonValue);
+	type Item = Entry<'a>;
 	type IntoIter = Iter<'a>;
 
 	fn into_iter(self) -> Self::IntoIter {
 		Iter(match self.params {
-			common::Params::None => IterInner::Empty,
-			common::Params::Array(arr) => IterInner::Array(arr.iter()),
-			common::Params::Map(map) => IterInner::Map(map.iter()),
+			jsonrpc::Params::None => IterInner::Empty,
+			jsonrpc::Params::Array(arr) => IterInner::Array(arr.iter()),
+			jsonrpc::Params::Map(map) => IterInner::Map(map.iter()),
 		})
 	}
 }
 
-impl<'a> fmt::Debug for Params<'a> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_map().entries(self.into_iter()).finish()
-	}
-}
-
-impl<'a> AsRef<common::Params> for Params<'a> {
-	fn as_ref(&self) -> &common::Params {
+impl<'a> AsRef<jsonrpc::Params> for Params<'a> {
+	fn as_ref(&self) -> &jsonrpc::Params {
 		self.params
 	}
 }
 
-impl<'a> From<Params<'a>> for &'a common::Params {
-	fn from(params: Params<'a>) -> &'a common::Params {
+impl<'a> From<Params<'a>> for &'a jsonrpc::Params {
+	fn from(params: Params<'a>) -> &'a jsonrpc::Params {
 		params.params
 	}
 }
@@ -146,14 +140,20 @@ enum IterInner<'a> {
 	Array(std::slice::Iter<'a, serde_json::Value>),
 }
 
+#[derive(Debug)]
+pub enum Entry<'a> {
+	Value(&'a jsonrpc::JsonValue),
+	KeyValue(ParamKey<'a>, &'a jsonrpc::JsonValue),
+}
+
 impl<'a> Iterator for Iter<'a> {
-	type Item = (ParamKey<'a>, &'a common::JsonValue);
+	type Item = Entry<'a>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		match &mut self.0 {
 			IterInner::Empty => None,
-			IterInner::Map(iter) => iter.next().map(|(k, v)| (ParamKey::String(&k[..]), v)),
-			IterInner::Array(iter) => iter.next().map(|v| (ParamKey::String(""), v)),
+			IterInner::Map(iter) => iter.next().map(|(k, v)| Entry::KeyValue(ParamKey::String(&k[..]), v)),
+			IterInner::Array(iter) => iter.next().map(|v| Entry::Value(v)),
 		}
 	}
 

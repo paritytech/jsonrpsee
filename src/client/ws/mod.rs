@@ -6,6 +6,6 @@ pub mod transport;
 #[cfg(test)]
 mod tests;
 
-pub use client::{Client, RequestError, Subscription};
-pub use raw::{RawClient, RawClientEvent, RawClientRequestId};
+pub use client::{Client, Config, Subscription};
+pub use raw::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
 pub use transport::{WsConnectError, WsTransportClient};

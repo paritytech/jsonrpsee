@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::common;
+use crate::types::jsonrpc;
 
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
@@ -159,8 +159,9 @@ impl WsTransportClient {
 	}
 
 	/// Initializes a new WS client from a URL.
-	pub async fn new(target: &str) -> Result<Self, WsNewDnsError> {
-		let url = url::Url::parse(target).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
+	pub async fn new(target: impl AsRef<str>) -> Result<Self, WsNewDnsError> {
+		let url =
+			url::Url::parse(target.as_ref()).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
 		let mode = match url.scheme() {
 			"ws" => Mode::Plain,
 			"wss" => Mode::Tls,
@@ -195,12 +196,12 @@ impl WsTransportClient {
 	/// successfully sent.
 	pub fn send_request<'a>(
 		&'a mut self,
-		request: common::Request,
+		request: jsonrpc::Request,
 	) -> Pin<Box<dyn Future<Output = Result<(), WsConnectError>> + Send + 'a>> {
 		Box::pin(async move {
-			log::debug!("send request: {:?}", request);
-			let request = common::to_string(&request).map_err(WsConnectError::Serialization)?;
-			self.sender.send_text(request).await?;
+			log::debug!("send: {}", request);
+			let request = jsonrpc::to_vec(&request).map_err(WsConnectError::Serialization)?;
+			self.sender.send_binary(request).await?;
 			self.sender.flush().await?;
 			Ok(())
 		})
@@ -209,12 +210,12 @@ impl WsTransportClient {
 	/// Returns a `Future` resolving when the server sent us something back.
 	pub fn next_response<'a>(
 		&'a mut self,
-	) -> Pin<Box<dyn Future<Output = Result<common::Response, WsConnectError>> + Send + 'a>> {
+	) -> Pin<Box<dyn Future<Output = Result<jsonrpc::Response, WsConnectError>> + Send + 'a>> {
 		Box::pin(async move {
 			let mut message = Vec::new();
 			self.receiver.receive_data(&mut message).await?;
-			log::debug!("received response: {:?}", message);
-			let response = common::from_slice(&message).map_err(WsConnectError::ParseError)?;
+			let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
+			log::debug!("recv: {}", response);
 			Ok(response)
 		})
 	}

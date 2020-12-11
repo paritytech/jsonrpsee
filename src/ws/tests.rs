@@ -1,37 +1,16 @@
 #![cfg(test)]
 
-use crate::client::{WsClient, WsSubscription};
-use crate::common::Params;
+use crate::types::error::Error;
+use crate::types::jsonrpc::JsonValue;
 use crate::ws::WsServer;
+
+use std::net::SocketAddr;
+
 use futures::channel::oneshot::{self, Sender};
 use futures::future::FutureExt;
 use futures::{pin_mut, select};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestClient};
-use serde_json::Value as JsonValue;
-use std::net::SocketAddr;
-
-/// Spawns a dummy `JSONRPC v2 WebSocket` that just send subscriptions to `subscribe_hello` and
-/// `subscribe_foo`.
-//
-// TODO: not sure why `tokio::spawn` doesn't works for this.
-pub fn server_subscribe_only(server_started: Sender<SocketAddr>) {
-	std::thread::spawn(move || {
-		use async_std::task::block_on;
-		let server = block_on(WsServer::new("127.0.0.1:0")).unwrap();
-		let mut hello =
-			server.register_subscription("subscribe_hello".to_owned(), "unsubscribe_hello".to_owned()).unwrap();
-		let mut foo = server.register_subscription("subscribe_foo".to_owned(), "unsubscribe_foo".to_owned()).unwrap();
-		server_started.send(*server.local_addr()).unwrap();
-
-		loop {
-			block_on(hello.send(JsonValue::String("hello from subscription".to_owned())));
-			std::thread::sleep(std::time::Duration::from_millis(100));
-			block_on(foo.send(JsonValue::Number(1337_u64.into())));
-			std::thread::sleep(std::time::Duration::from_millis(100));
-		}
-	});
-}
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods "say_hello" and "add", one hardcoded notification "notif"
@@ -46,7 +25,7 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 		let hello_fut = async {
 			let handle = hello.next().await;
 			log::debug!("server respond to hello");
-			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await;
+			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
 		}
 		.fuse();
 
@@ -54,7 +33,7 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 			let handle = add.next().await;
 			let params: Vec<u64> = handle.params().clone().parse().unwrap();
 			let sum: u64 = params.iter().sum();
-			handle.respond(Ok(JsonValue::Number(sum.into()))).await;
+			handle.respond(Ok(JsonValue::Number(sum.into()))).await.unwrap();
 		}
 		.fuse();
 
@@ -66,9 +45,9 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 
 		pin_mut!(hello_fut, add_fut, notif_fut);
 		select! {
-			say_hello = hello_fut => (),
-			add = add_fut => (),
-			notif = notif_fut => (),
+			_ = hello_fut => (),
+			_ = add_fut => (),
+			_ = notif_fut => (),
 			complete => (),
 		};
 	}
@@ -87,72 +66,6 @@ async fn single_method_call_works() {
 		assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(i)));
 	}
 }
-
-// TODO: technically more of a integration test because the "real" client is used.
-#[tokio::test]
-async fn subscription_works() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	server_subscribe_only(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
-	let uri = format!("ws://{}", server_addr);
-	let client = WsClient::new(&uri).await.unwrap();
-	let mut hello_sub: WsSubscription<JsonValue> =
-		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
-	let mut foo_sub: WsSubscription<JsonValue> =
-		client.subscribe("subscribe_foo", Params::None, "unsubscribe_foo").await.unwrap();
-
-	for _ in 0..10 {
-		let hello = hello_sub.next().await;
-		let foo = foo_sub.next().await;
-		assert_eq!(hello, JsonValue::String("hello from subscription".to_owned()));
-		assert_eq!(foo, JsonValue::Number(1337_u64.into()));
-	}
-}
-
-#[tokio::test]
-async fn subscription_several_clients() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	server_subscribe_only(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
-
-	let mut clients = Vec::with_capacity(10);
-	for _ in 0..10 {
-		let uri = format!("ws://{}", server_addr);
-		let client = WsClient::new(&uri).await.unwrap();
-		let hello_sub: WsSubscription<JsonValue> =
-			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
-		let foo_sub: WsSubscription<JsonValue> =
-			client.subscribe("subscribe_foo", Params::None, "unsubscribe_foo").await.unwrap();
-		clients.push((client, hello_sub, foo_sub))
-	}
-
-	for _ in 0..10 {
-		for (_client, hello_sub, foo_sub) in &mut clients {
-			let hello = hello_sub.next().await;
-			let foo = foo_sub.next().await;
-			assert_eq!(hello, JsonValue::String("hello from subscription".to_owned()));
-			assert_eq!(foo, JsonValue::Number(1337_u64.into()));
-		}
-	}
-
-	for i in 0..5 {
-		let (client, _, _) = clients.remove(i);
-		drop(client);
-	}
-
-	// make sure nothing weird happend after dropping half the clients (should be `unsubscribed` in the server)
-	// would be good to know that subscriptions actually were removed but not possible to verify at
-	// this layer.
-	for _ in 0..10 {
-		for (_client, hello_sub, foo_sub) in &mut clients {
-			let hello = hello_sub.next().await;
-			let foo = foo_sub.next().await;
-			assert_eq!(hello, JsonValue::String("hello from subscription".to_owned()));
-			assert_eq!(foo, JsonValue::Number(1337_u64.into()));
-		}
-	}
-}
-
 #[tokio::test]
 async fn single_method_call_with_params_works() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
@@ -227,6 +140,15 @@ async fn register_methods_works() {
 		server.register_method("subscribe_hello_again".to_owned()).is_ok(),
 		"Failed register_subscription should not have side-effects"
 	);
+}
+
+#[tokio::test]
+async fn register_same_subscribe_unsubscribe_is_err() {
+	let server = WsServer::new("127.0.0.1:0").await.unwrap();
+	assert!(matches!(
+		server.register_subscription("subscribe_hello".to_owned(), "subscribe_hello".to_owned()),
+		Err(Error::MethodAlreadyRegistered(_))
+	));
 }
 
 #[tokio::test]

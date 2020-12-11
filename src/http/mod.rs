@@ -26,14 +26,12 @@
 
 mod raw;
 mod server;
-#[allow(unused)]
-mod server_utils;
 mod transport;
 
 #[cfg(test)]
 mod tests;
 
-pub use raw::Notification as HttpRawNotification;
+pub use crate::types::http::HttpConfig;
 pub use raw::RawServer as HttpRawServer;
 pub use raw::RawServerEvent as HttpRawServerEvent;
 pub use raw::TypedResponder as HttpTypedResponder;
