@@ -131,7 +131,7 @@ impl Client {
 	///
 	/// Fails when the URL is invalid.
 	pub async fn new(remote_addr: impl AsRef<str>, config: Config) -> Result<Self, Error> {
-		let (sender, receiver) = jsonrpc_transport::websocket_connection(target.as_ref())
+		let (sender, receiver) = jsonrpc_transport::websocket_connection(remote_addr.as_ref())
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
