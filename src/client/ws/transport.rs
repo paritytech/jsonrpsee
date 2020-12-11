@@ -161,7 +161,7 @@ pub fn builder<'a>(
 }
 
 /// Creates a new WebSocket connection from URL, represented as a Sender and Receiver pair.
-pub async fn websocket_connection(target: impl AsRef<str>) -> Result<(Sender, Receiver), WsNewDnsError> {
+pub async fn websocket_connection(remote_addr: impl AsRef<str>) -> Result<(Sender, Receiver), WsNewDnsError> {
 	let url = url::Url::parse(target.as_ref()).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
 	let mode = match url.scheme() {
 		"ws" => Mode::Plain,
