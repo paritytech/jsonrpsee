@@ -64,6 +64,24 @@ pub fn internal_error(id: Id) -> String {
 	)
 }
 
+/// Hardcoded server response when a client initiates a new subscription.
+///
+/// NOTE: works only for one subscription because the subscription ID is hardcoded.
+pub fn server_subscription_id_response(id: Id) -> String {
+	format!(
+		r#"{{"jsonrpc":"2.0","result":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","id":{}}}"#,
+		serde_json::to_string(&id).unwrap()
+	)
+}
+
+/// Server response to a hardcoded pending subscription
+pub fn server_subscription_response(result: Value) -> String {
+	format!(
+		r#"{{"jsonrpc":"2.0","method":"bar","params":{{"subscription":"D3wwzU6vvoUUYehv4qoFzq42DZnLoAETeFzeyk8swH4o","result":{}}}}}"#,
+		serde_json::to_string(&result).unwrap()
+	)
+}
+
 pub async fn http_request(body: Body, uri: Uri) -> Result<HttpResponse, String> {
 	let client = hyper::Client::new();
 	let r = hyper::Request::post(uri)
