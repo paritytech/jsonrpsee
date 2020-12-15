@@ -26,7 +26,7 @@ thiserror = "1.0.22"
 
 # used for tests and HTTP/hyper
 # the features are used only for tests but enabled because `dev-depedencies` are leaked into dependencies.
-tokio = { version = "0.2.23", features = ["stream", "rt-threaded", "macros"], optional = true }
+tokio = { version = "0.2.24", features = ["stream", "rt-threaded", "macros"], optional = true }
 
 # HTTP-related dependencies
 hyper = { version = "0.13.9", features = ["stream"], optional = true }

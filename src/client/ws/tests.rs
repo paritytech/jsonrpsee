@@ -114,7 +114,6 @@ async fn subscription_works() {
 
 #[tokio::test]
 async fn response_with_wrong_id() {
-	env_logger::init();
 	let server =
 		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), internal_error(Id::Num(99_u64)))
 			.await;
