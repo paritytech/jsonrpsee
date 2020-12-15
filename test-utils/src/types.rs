@@ -79,8 +79,8 @@ impl WebSocketTestClient {
 pub enum ServerMode {
 	// Send out a hardcoded response on every connection.
 	Response(String),
-	// Send out a subscription ID and continuously send out data on the subscription.
-	Subscription((String, String)),
+	// Send out a subscription ID on a request and continuously send out data on the subscription.
+	Subscription { subscription_id: String, subscription_response: String },
 }
 
 /// JSONRPC v2 dummy WebSocket server that sends a hardcoded response.
@@ -105,17 +105,13 @@ impl WebSocketTestServer {
 	// NOTE: ignores the actual subscription and unsubscription method.
 	pub async fn with_hardcoded_subscription(
 		sockaddr: SocketAddr,
-		subscription_id_response: String,
+		subscription_id: String,
 		subscription_response: String,
 	) -> Self {
 		let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
 		let (tx, rx) = mpsc::channel::<()>(4);
-		tokio::spawn(server_backend(
-			listener,
-			rx,
-			ServerMode::Subscription((subscription_id_response, subscription_response)),
-		));
+		tokio::spawn(server_backend(listener, rx, ServerMode::Subscription { subscription_id, subscription_response }));
 
 		Self { local_addr, exit: tx }
 	}
@@ -192,8 +188,8 @@ async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mu
 
 		futures::select! {
 			_ = time_out => {
-				if let ServerMode::Subscription((_, r)) = &mode {
-					if let Err(e) = sender.send_text(&r).await {
+				if let ServerMode::Subscription { subscription_response, .. } = &mode {
+					if let Err(e) = sender.send_text(&subscription_response).await {
 						log::warn!("send response to subscription: {:?}", e);
 					}
 				}
@@ -208,8 +204,8 @@ async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mu
 								log::warn!("send response to request error: {:?}", e);
 							}
 						}
-						ServerMode::Subscription((sub_id, _)) => {
-							if let Err(e) = sender.send_text(&sub_id).await {
+						ServerMode::Subscription { subscription_id, .. } => {
+							if let Err(e) = sender.send_text(&subscription_id).await {
 								log::warn!("send subscription id error: {:?}", e);
 							}
 						}

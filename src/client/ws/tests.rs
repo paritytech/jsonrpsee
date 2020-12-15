@@ -110,7 +110,6 @@ async fn subscription_works() {
 		let response: String = sub.next().await.unwrap().into();
 		assert_eq!("hello my friend".to_owned(), response);
 	}
-	// TODO: no way to test that the `unsubscribe method` was called here.
 }
 
 #[tokio::test]
