@@ -81,15 +81,7 @@ impl HttpClient {
 	fn process_response(response: jsonrpc::Output, expected_id: u64) -> Result<JsonValue, Error> {
 		match response.id() {
 			jsonrpc::Id::Num(n) if n == &expected_id => response.try_into().map_err(Error::Request),
-			jsonrpc::Id::Num(n) => {
-				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: (*n).into() }))
-			}
-			jsonrpc::Id::Str(s) => {
-				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: s.to_string().into() }))
-			}
-			jsonrpc::Id::Null => {
-				Err(Error::InvalidRequestId(Mismatch { expected: expected_id.into(), got: JsonValue::Null }))
-			}
+			_ => Err(Error::InvalidRequestId),
 		}
 	}
 }

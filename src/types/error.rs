@@ -33,9 +33,12 @@ pub enum Error {
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] jsonrpc::ParseError),
-	/// Invalid id in response to a request.
-	#[error("Invalid ID in response: {0}")]
-	InvalidRequestId(Mismatch<JsonValue>),
+	/// Invalid subscription ID in.
+	#[error("Invalid subscription ID")]
+	InvalidSubscriptionId,
+	/// Invalid ID in request.
+	#[error("Invalid Request ID.")]
+	InvalidRequestId,
 	/// A request with the same request ID has already been registered.
 	#[error("Duplicate ID in request")]
 	DuplicateRequestId,
