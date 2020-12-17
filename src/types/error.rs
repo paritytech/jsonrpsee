@@ -25,7 +25,7 @@ pub enum Error {
 	#[error("JSON-RPC request error: {0:?}")]
 	Request(#[source] jsonrpc::Error),
 	/// Subscription error.
-	#[error("Subscription to subscribe_method: {0} with unsubscribe_method: {1} failed")]
+	#[error("Subscription failed, subscribe_method: {0} unsubscribe_method: {1}")]
 	Subscription(String, String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
@@ -33,17 +33,17 @@ pub enum Error {
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] jsonrpc::ParseError),
-	/// Invalid subscription ID in.
+	/// Invalid subscription ID.
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionId,
-	/// Invalid ID in request.
-	#[error("Invalid Request ID.")]
+	/// Invalid request ID.
+	#[error("Invalid request ID")]
 	InvalidRequestId,
 	/// A request with the same request ID has already been registered.
-	#[error("Duplicate ID in request")]
+	#[error("A request with the same request ID has already been registered")]
 	DuplicateRequestId,
 	/// Method was already registered.
-	#[error("Method: {0} already registered")]
+	#[error("Method: {0} was already registered")]
 	MethodAlreadyRegistered(String),
 	#[error("Custom error: {0}")]
 	/// Custom error.
