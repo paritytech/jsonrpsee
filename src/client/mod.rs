@@ -10,5 +10,6 @@ mod ws;
 pub use http::{HttpClient, HttpConfig, HttpTransportClient};
 #[cfg(feature = "ws")]
 pub use ws::{
-	Client as WsClient, Config as WsConfig, RawClient as RawWsClient, Subscription as WsSubscription, WsTransportClient,
+	jsonrpc_transport as ws_jsonrpc_transport, transport as ws_transport, Client as WsClient, Config as WsConfig,
+	Subscription as WsSubscription,
 };

@@ -25,7 +25,7 @@ async fn notification_works() {
 #[tokio::test]
 async fn response_with_wrong_id() {
 	let err = run_request_with_response(ok_response("hello".into(), Id::Num(99))).await.unwrap_err();
-	assert!(matches!(err, Error::InvalidRequestId(_mismatch)));
+	assert!(matches!(err, Error::InvalidRequestId));
 }
 
 #[tokio::test]

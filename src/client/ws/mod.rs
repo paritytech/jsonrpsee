@@ -1,11 +1,15 @@
+/// Client.
 pub mod client;
-pub mod raw;
+/// JSONRPC WebSocket transport.
+pub mod jsonrpc_transport;
+/// Request manager.
+pub mod manager;
+/// Stream.
 pub mod stream;
+/// WebSocket transport.
 pub mod transport;
 
 #[cfg(test)]
 mod tests;
 
 pub use client::{Client, Config, Subscription};
-pub use raw::{RawClient, RawClientError, RawClientEvent, RawClientRequestId};
-pub use transport::{WsConnectError, WsTransportClient};

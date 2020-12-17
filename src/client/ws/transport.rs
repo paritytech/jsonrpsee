@@ -28,20 +28,23 @@ use crate::types::jsonrpc;
 
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
+use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
-use std::{borrow::Cow, fmt, io, net::SocketAddr, pin::Pin, time::Duration};
+use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
 use thiserror::Error;
 
 type TlsOrPlain = crate::client::ws::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
-/// Implementation of a raw client for WebSockets requests.
-pub struct WsTransportClient {
-	/// Sending half of a TCP/IP connection wrapped around a WebSocket encoder.
-	sender: connection::Sender<TlsOrPlain>,
-	/// Receiving half of a TCP/IP connection wrapped around a WebSocket decoder.
-	receiver: connection::Receiver<TlsOrPlain>,
+/// Sending end of WebSocket transport.
+pub struct Sender {
+	inner: connection::Sender<BufReader<BufWriter<TlsOrPlain>>>,
+}
+
+/// Receiving end of WebSocket transport.
+pub struct Receiver {
+	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
 /// Builder for a [`WsTransportClient`].
@@ -139,91 +142,75 @@ pub enum WsConnectError {
 	ParseError(#[source] serde_json::error::Error),
 }
 
-impl WsTransportClient {
-	/// Creates a new [`WsTransportClientBuilder`] containing the given address and hostname.
-	pub fn builder<'a>(
-		target: SocketAddr,
-		host: impl Into<Cow<'a, str>>,
-		dns_name: impl Into<Cow<'a, str>>,
-		mode: Mode,
-	) -> WsTransportClientBuilder<'a> {
-		WsTransportClientBuilder {
-			target,
-			host: host.into(),
-			dns_name: dns_name.into(),
-			mode,
-			url: From::from("/"),
-			timeout: Duration::from_secs(10),
-			origin: None,
-		}
-	}
-
-	/// Initializes a new WS client from a URL.
-	pub async fn new(target: impl AsRef<str>) -> Result<Self, WsNewDnsError> {
-		let url =
-			url::Url::parse(target.as_ref()).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
-		let mode = match url.scheme() {
-			"ws" => Mode::Plain,
-			"wss" => Mode::Tls,
-			_ => return Err(WsNewDnsError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
-		};
-		let host = url.host_str().ok_or(WsNewDnsError::Url("No host in URL".into()))?;
-		let target = match url.port_or_known_default() {
-			Some(port) => format!("{}:{}", host, port),
-			None => host.to_string(),
-		};
-
-		let mut error = None;
-
-		for url in target.to_socket_addrs().await.map_err(WsNewDnsError::ResolutionFailed)? {
-			match Self::builder(url, &target, host, mode).build().await {
-				Ok(ws_raw_client) => return Ok(ws_raw_client),
-				Err(err) => error = Some(err),
-			}
-		}
-
-		if let Some(error) = error {
-			Err(WsNewDnsError::Connect(error))
-		} else {
-			Err(WsNewDnsError::NoAddressFound)
-		}
+/// Creates a new [`WsTransportClientBuilder`] containing the given address and hostname.
+pub fn builder<'a>(
+	target: SocketAddr,
+	host: impl Into<Cow<'a, str>>,
+	dns_name: impl Into<Cow<'a, str>>,
+	mode: Mode,
+) -> WsTransportClientBuilder<'a> {
+	WsTransportClientBuilder {
+		target,
+		host: host.into(),
+		dns_name: dns_name.into(),
+		mode,
+		url: From::from("/"),
+		timeout: Duration::from_secs(10),
+		origin: None,
 	}
 }
 
-// former transport client impl,
-impl WsTransportClient {
+/// Creates a new WebSocket connection from URL, represented as a Sender and Receiver pair.
+pub async fn websocket_connection(remote_addr: impl AsRef<str>) -> Result<(Sender, Receiver), WsNewDnsError> {
+	let url =
+		url::Url::parse(remote_addr.as_ref()).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
+	let mode = match url.scheme() {
+		"ws" => Mode::Plain,
+		"wss" => Mode::Tls,
+		_ => return Err(WsNewDnsError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
+	};
+	let host = url.host_str().ok_or_else(|| WsNewDnsError::Url("No host in URL".into()))?;
+	let target = match url.port_or_known_default() {
+		Some(port) => format!("{}:{}", host, port),
+		None => host.to_string(),
+	};
+
+	let mut error = None;
+
+	for url in target.to_socket_addrs().await.map_err(WsNewDnsError::ResolutionFailed)? {
+		match builder(url, &target, host, mode).build().await {
+			Ok(ws_raw_client) => return Ok(ws_raw_client),
+			Err(err) => error = Some(err),
+		}
+	}
+
+	if let Some(error) = error {
+		Err(WsNewDnsError::Connect(error))
+	} else {
+		Err(WsNewDnsError::NoAddressFound)
+	}
+}
+
+impl Sender {
 	/// Sends out out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub fn send_request<'a>(
-		&'a mut self,
-		request: jsonrpc::Request,
-	) -> Pin<Box<dyn Future<Output = Result<(), WsConnectError>> + Send + 'a>> {
-		Box::pin(async move {
-			log::debug!("send: {}", request);
-			let request = jsonrpc::to_vec(&request).map_err(WsConnectError::Serialization)?;
-			self.sender.send_binary(request).await?;
-			self.sender.flush().await?;
-			Ok(())
-		})
-	}
-
-	/// Returns a `Future` resolving when the server sent us something back.
-	pub fn next_response<'a>(
-		&'a mut self,
-	) -> Pin<Box<dyn Future<Output = Result<jsonrpc::Response, WsConnectError>> + Send + 'a>> {
-		Box::pin(async move {
-			let mut message = Vec::new();
-			self.receiver.receive_data(&mut message).await?;
-			let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
-			log::debug!("recv: {}", response);
-			Ok(response)
-		})
+	pub async fn send_request(&mut self, request: jsonrpc::Request) -> Result<(), WsConnectError> {
+		log::debug!("send: {}", request);
+		let request = jsonrpc::to_vec(&request).map_err(WsConnectError::Serialization)?;
+		self.inner.send_binary(request).await?;
+		self.inner.flush().await?;
+		Ok(())
 	}
 }
 
-impl fmt::Debug for WsTransportClient {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_tuple("WsTransportClient").finish()
+impl Receiver {
+	/// Returns a `Future` resolving when the server sent us something back.
+	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
+		let mut message = Vec::new();
+		self.inner.receive_data(&mut message).await?;
+		let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
+		log::debug!("recv: {}", response);
+		Ok(response)
 	}
 }
 
@@ -254,7 +241,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	}
 
 	/// Try establish the connection.
-	pub async fn build(self) -> Result<WsTransportClient, WsNewError> {
+	pub async fn build(self) -> Result<(Sender, Receiver), WsNewError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
 			let socket = TcpStream::connect(self.target);
@@ -275,7 +262,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		};
 
 		// Configure a WebSockets client on top.
-		let mut client = WsRawClient::new(tcp_stream, &self.host, &self.url);
+		let mut client = WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.host, &self.url);
 		if let Some(origin) = self.origin.as_ref() {
 			client.set_origin(origin);
 		}
@@ -291,7 +278,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 		// If the handshake succeeded, return.
 		let (sender, receiver) = client.into_builder().finish();
-		Ok(WsTransportClient { sender, receiver })
+		Ok((Sender { inner: sender }, Receiver { inner: receiver }))
 	}
 }
 
