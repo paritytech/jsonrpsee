@@ -298,7 +298,7 @@ async fn background_task(
 					log::trace!("[backend]: client prepare to send request={:?}", method);
 					match sender.start_request(method, params).await {
 						Ok(id) => {
-							if let Err(send_back) = manager.insert_pending_method_call(id, send_back) {
+							if let Err(send_back) = manager.insert_pending_call(id, send_back) {
 								let _ = send_back.send(Err(Error::DuplicateRequestId));
 							}
 						}
@@ -333,7 +333,7 @@ async fn background_task(
 					// NOTE: The subscription may have been closed earlier if
 					// the channel was full or disconnected.
 					if let Some(request_id) = manager.get_request_id_by_subscription_id(&sub_id) {
-						manager.remove_active_subscription(request_id, sub_id.clone());
+						manager.remove_subscription(request_id, sub_id.clone());
 					}
 				}
 			},
@@ -383,11 +383,11 @@ async fn background_task(
 						}
 					};
 
-					match manager.as_active_subscription_mut(&request_id) {
+					match manager.as_subscription_mut(&request_id) {
 						Some(send_back_sink) => {
 							if let Err(e) = send_back_sink.try_send(notif.params.result) {
 								log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
-								manager.remove_active_subscription(request_id, sub_id).expect("subscription is active; checked above");
+								manager.remove_subscription(request_id, sub_id).expect("subscription is active; checked above");
 							}
 						}
 						None => {
@@ -420,7 +420,7 @@ fn process_response(
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
-			let send_back_oneshot = match manager.complete_pending_method_call(response_id) {
+			let send_back_oneshot = match manager.complete_pending_call(response_id) {
 				Some(send_back) => send_back,
 				None => return Err(Error::InvalidRequestId),
 			};
@@ -457,14 +457,12 @@ fn process_response(
 			};
 
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(subscription_capacity);
-			if manager.insert_active_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method).is_ok()
-			{
+			if manager.insert_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method).is_ok() {
 				match send_back_oneshot.send(Ok((subscribe_rx, sub_id))) {
 					Ok(_) => Ok(None),
 					Err(Ok((_val, sub_id))) => {
-						let (_, unsubscribe_method) = manager
-							.remove_active_subscription(response_id, sub_id)
-							.expect("Subscription inserted above; qed");
+						let (_, unsubscribe_method) =
+							manager.remove_subscription(response_id, sub_id).expect("Subscription inserted above; qed");
 						let params = jsonrpc::Params::Array(vec![json_sub_id]);
 						Ok(Some((unsubscribe_method, params)))
 					}
