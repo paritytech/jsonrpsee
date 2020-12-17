@@ -333,7 +333,12 @@ async fn background_task(
 					// NOTE: The subscription may have been closed earlier if
 					// the channel was full or disconnected.
 					if let Some(request_id) = manager.get_request_id_by_subscription_id(&sub_id) {
-						manager.remove_subscription(request_id, sub_id.clone());
+						if let Some((_sink, unsubscribe_method)) = manager.remove_subscription(request_id, sub_id.clone()) {
+							if let Ok(json_sub_id) = jsonrpc::to_value(sub_id) {
+								let params = jsonrpc::Params::Array(vec![json_sub_id]);
+								let _ = sender.start_request(unsubscribe_method, params).await;
+							}
+						}
 					}
 				}
 			},
@@ -421,7 +426,8 @@ fn process_response(
 			let response = response.try_into().map_err(Error::Request);
 			match send_back_oneshot.send(response) {
 				Err(Err(e)) => Err(e),
-				_ => Ok(None),
+				Err(Ok(_)) => Err(Error::Custom("Frontend channel closed".into())),
+				Ok(_) => Ok(None),
 			}
 		}
 		RequestStatus::PendingSubscription => {
@@ -432,6 +438,7 @@ fn process_response(
 				Err(e) => {
 					return match send_back_oneshot.send(Err(Error::Request(e))) {
 						Err(Err(e)) => Err(e),
+						Err(Ok(_)) => unreachable!("Error sent above; qed"),
 						_ => Ok(None),
 					};
 				}
@@ -442,6 +449,7 @@ fn process_response(
 				Err(_) => {
 					return match send_back_oneshot.send(Err(Error::InvalidSubscriptionId)) {
 						Err(Err(e)) => Err(e),
+						Err(Ok(_)) => unreachable!("Error sent above; qed"),
 						_ => Ok(None),
 					}
 				}
@@ -449,19 +457,19 @@ fn process_response(
 
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(subscription_capacity);
 			if manager.insert_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method).is_ok() {
-				match send_back_oneshot.send(Ok((subscribe_rx, sub_id))) {
+				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
 					Ok(_) => Ok(None),
-					Err(Ok((_val, sub_id))) => {
+					Err(_) => {
 						let (_, unsubscribe_method) =
 							manager.remove_subscription(response_id, sub_id).expect("Subscription inserted above; qed");
 						let params = jsonrpc::Params::Array(vec![json_sub_id]);
 						Ok(Some((unsubscribe_method, params)))
 					}
-					Err(Err(e)) => Err(e),
 				}
 			} else {
 				match send_back_oneshot.send(Err(Error::InvalidSubscriptionId)) {
 					Err(Err(e)) => Err(e),
+					Err(Ok(_)) => unreachable!("Error sent above; qed"),
 					_ => Ok(None),
 				}
 			}
