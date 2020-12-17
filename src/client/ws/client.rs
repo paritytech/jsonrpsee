@@ -283,19 +283,19 @@ async fn background_task(
 
 		futures::select! {
 			event = next_frontend => match event {
-				// User dropped its sender side of the channel.
+				// User dropped the sender side of the channel.
 				None => {
 					log::trace!("[backend]: frontend channel dropped; terminate client");
 					break
 				}
 				// User called `notification` on the front-end
 				Some(FrontToBack::Notification { method, params }) => {
-					log::trace!("[backend]: client send notification");
+					log::trace!("[backend]: client prepares to send notification");
 					let _ = sender.send_notification(method, params).await;
 				}
 				// User called `request` on the front-end
 				Some(FrontToBack::StartRequest { method, params, send_back }) => {
-					log::trace!("[backend]: client prepare to send request={:?}", method);
+					log::trace!("[backend]: client prepares to send request={:?}", method);
 					match sender.start_request(method, params).await {
 						Ok(id) => {
 							if let Err(send_back) = manager.insert_pending_call(id, send_back) {
@@ -303,7 +303,7 @@ async fn background_task(
 							}
 						}
 						Err(err) => {
-							log::warn!("[backend]: client send request failed: {:?}", err);
+							log::warn!("[backend]: client request failed: {:?}", err);
 							let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
 						}
 					}
@@ -311,7 +311,7 @@ async fn background_task(
 				// User called `subscribe` on the front-end.
 				Some(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back }) => {
 					log::trace!(
-						"[backend]: client prepare to start subscription, subscribe_method={:?} unsubscribe_method:{:?}",
+						"[backend]: client prepares to start subscription, subscribe_method={:?} unsubscribe_method:{:?}",
 						subscribe_method,
 						unsubscribe_method
 					);
@@ -322,7 +322,7 @@ async fn background_task(
 							}
 						}
 						Err(err) => {
-							log::warn!("[backend]: client start subscription failed: {:?}", err);
+							log::warn!("[backend]: client subscription failed: {:?}", err);
 							let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
 						}
 					}
@@ -413,29 +413,20 @@ fn process_response(
 	response: jsonrpc::Output,
 	subscription_capacity: usize,
 ) -> Result<Option<(String, jsonrpc::Params)>, Error> {
-	let response_id = match response.id().as_number() {
-		Some(n) => *n,
-		None => return Err(Error::InvalidRequestId),
-	};
+	let response_id = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
-			let send_back_oneshot = match manager.complete_pending_call(response_id) {
-				Some(send_back) => send_back,
-				None => return Err(Error::InvalidRequestId),
-			};
-			let response: Result<JsonValue, Error> = response.try_into().map_err(Error::Request);
+			let send_back_oneshot = manager.complete_pending_call(response_id).ok_or(Error::InvalidRequestId)?;
+			let response = response.try_into().map_err(Error::Request);
 			match send_back_oneshot.send(response) {
 				Err(Err(e)) => Err(e),
 				_ => Ok(None),
 			}
 		}
 		RequestStatus::PendingSubscription => {
-			let (send_back_oneshot, unsubscribe_method) = match manager.complete_pending_subscription(response_id) {
-				Some(pending) => pending,
-				None => return Err(Error::InvalidRequestId),
-			};
-
+			let (send_back_oneshot, unsubscribe_method) =
+				manager.complete_pending_subscription(response_id).ok_or(Error::InvalidRequestId)?;
 			let json_sub_id: JsonValue = match response.try_into() {
 				Ok(response) => response,
 				Err(e) => {
