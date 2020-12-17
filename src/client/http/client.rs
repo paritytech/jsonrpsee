@@ -1,5 +1,5 @@
 use crate::client::http::transport::HttpTransportClient;
-use crate::types::error::{Error, Mismatch};
+use crate::types::error::Error;
 use crate::types::http::HttpConfig;
 use crate::types::jsonrpc::{self, JsonValue};
 

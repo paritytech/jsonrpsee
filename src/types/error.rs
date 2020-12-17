@@ -1,4 +1,4 @@
-use crate::types::jsonrpc::{self, JsonValue};
+use crate::types::jsonrpc;
 use std::fmt;
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
