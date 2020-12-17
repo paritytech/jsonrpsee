@@ -38,7 +38,7 @@ type RequestId = u64;
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
 	/// List of requests that are waiting for a response from the server.
-	// NOTE: `FnvHashMap` is used here because `RequestId` is known to be short key (u64).
+	// NOTE: `FnvHashMap` is used here because `RequestId` is known to be a short key (u64).
 	requests: FnvHashMap<RequestId, Kind>,
 	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all requests.
 	subscriptions: HashMap<SubscriptionId, RequestId>,
