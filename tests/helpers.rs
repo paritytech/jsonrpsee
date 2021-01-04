@@ -36,7 +36,7 @@ use futures::future::FutureExt;
 
 pub fn websocket_server(server_started: Sender<SocketAddr>) {
 	std::thread::spawn(move || {
-		let mut rt = tokio::runtime::Runtime::new().unwrap();
+		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		let server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
 		let mut sub_hello =
@@ -54,7 +54,7 @@ pub fn websocket_server(server_started: Sender<SocketAddr>) {
 				}
 				.fuse();
 
-				let timeout = tokio::time::delay_for(Duration::from_millis(100)).fuse();
+				let timeout = tokio::time::sleep(Duration::from_millis(100)).fuse();
 				futures::pin_mut!(hello_fut, timeout);
 				futures::select! {
 					_ = hello_fut => (),
@@ -70,7 +70,7 @@ pub fn websocket_server(server_started: Sender<SocketAddr>) {
 
 pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>, wait: Receiver<()>) {
 	std::thread::spawn(move || {
-		let mut rt = tokio::runtime::Runtime::new().unwrap();
+		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		let server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
 		let mut respond = server.register_method("say_hello".to_owned()).unwrap();
@@ -88,7 +88,7 @@ pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>, wai
 
 pub fn http_server(server_started: Sender<SocketAddr>) {
 	std::thread::spawn(move || {
-		let mut rt = tokio::runtime::Runtime::new().unwrap();
+		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		let server = rt.block_on(HttpServer::new("127.0.0.1:0", HttpConfig::default())).unwrap();
 		server_started.send(*server.local_addr()).unwrap();

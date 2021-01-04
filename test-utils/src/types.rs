@@ -9,7 +9,7 @@ use soketto::handshake::{server::Response, Server};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio_util::compat::{Compat, Tokio02AsyncReadCompatExt};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 pub use hyper::{Body, HeaderMap, StatusCode, Uri};
 
@@ -183,7 +183,7 @@ async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mu
 	loop {
 		let next_ws = ws_stream.next().fuse();
 		let next_exit = exit.next().fuse();
-		let time_out = tokio::time::delay_for(Duration::from_secs(1)).fuse();
+		let time_out = tokio::time::sleep(Duration::from_secs(1)).fuse();
 		futures::pin_mut!(time_out, next_exit, next_ws);
 
 		futures::select! {

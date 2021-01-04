@@ -83,7 +83,7 @@ impl BackgroundHttp {
 
 		// Because hyper can only be polled through tokio, we spawn it in a background thread.
 		thread::Builder::new().name("jsonrpsee-hyper-server".to_string()).spawn(move || {
-			let mut runtime = match tokio::runtime::Builder::new().basic_scheduler().enable_all().build() {
+			let runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
 				Ok(r) => r,
 				Err(err) => {
 					log::error!("Failed to initialize tokio runtime in HTTP JSON-RPC server: {}", err);
