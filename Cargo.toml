@@ -29,7 +29,7 @@ thiserror = "1.0.22"
 tokio = { version = "1.0", features = ["net", "rt-multi-thread", "macros"], optional = true }
 
 # HTTP-related dependencies
-hyper = { version = "0.14", features = ["stream", "client", "server", "http1", "http2","http1", "http2", "tcp"], optional = true }
+hyper = { version = "0.14", features = ["stream", "client", "server", "http1", "http2", "tcp"], optional = true }
 unicase = { version = "2.6.0", optional = true }
 
 # WS-related dependencies
