@@ -15,11 +15,9 @@ log = "0.4"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-# `macros feature` is only used for tests but enabled globally because `dev-dependencies`
-# are leaked.
-tokio = { version = "1.0", features = ["net", "rt-multi-thread", "macros"] }
 unicase = "2.6"
 url = "2.2"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
+tokio = { version = "1.0", features = ["net", "rt-multi-thread", "macros"] }
