@@ -11,8 +11,6 @@ script:
   - cargo build --verbose --all-features
   - cargo test --verbose --all-features
   - cargo build --verbose --no-default-features
-  - cargo build --verbose --features "http"
-  - cargo build --verbose --features "ws"
   - cargo check --benches --all-features
   # TODO: add this back when the documentation has been updated.
   - RUSTDOCFLAGS="--warn broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
