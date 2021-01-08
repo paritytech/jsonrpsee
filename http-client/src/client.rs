@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 ///
-/// WARNING: The async methods must be executed on [Tokio 0.2](https://docs.rs/tokio/0.2.22/tokio).
+/// WARNING: The async methods must be executed on [Tokio 1.0](https://docs.rs/tokio/1.0.1/tokio/index.html).
 pub struct HttpClient {
 	/// HTTP transport client.
 	transport: HttpTransportClient,
@@ -29,7 +29,7 @@ impl HttpClient {
 
 	/// Send a notification to the server.
 	///
-	/// WARNING: This method must be executed on [Tokio 0.2](https://docs.rs/tokio/0.2.22/tokio).
+	/// WARNING: This method must be executed on [Tokio 1.0](https://docs.rs/tokio/1.0.1/tokio/index.html).
 	pub async fn notification(
 		&self,
 		method: impl Into<String>,
@@ -46,7 +46,7 @@ impl HttpClient {
 
 	/// Perform a request towards the server.
 	///
-	/// WARNING: This method must be executed on [Tokio 0.2](https://docs.rs/tokio/0.2.22/tokio).
+	/// WARNING: This method must be executed on [Tokio 1.0](https://docs.rs/tokio/1.0.1/tokio/index.html).
 	pub async fn request(
 		&self,
 		method: impl Into<String>,
