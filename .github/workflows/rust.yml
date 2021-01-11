@@ -40,7 +40,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -A warnings
+          args: -- -A clippy::mutable_key_type
 
   check-code:
     name: Check
@@ -99,11 +99,11 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --workspace --verbose
+      # - name: Cargo build
+      #   uses: actions-rs/cargo@v1
+      #   with:
+      #     command: build
+      #     args: --workspace
 
       - name: Cargo test
         uses: actions-rs/cargo@v1
