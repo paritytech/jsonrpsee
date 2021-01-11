@@ -7,7 +7,7 @@ jobs:
     name: Lints
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Sources
+      - name: Checkout sources
         uses: actions/checkout@v2
 
       - name: Install Rust stable toolchain
@@ -28,7 +28,7 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Sources
+      - name: Checkout sources
         uses: actions/checkout@v2
 
       - name: Install Rust stable toolchain
@@ -44,40 +44,40 @@ jobs:
           command: check
           args: --benches --tests --all-features
 
-    tests:
-      name: Run tests
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout Sources
-          uses: actions/checkout@v2
+  tests:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
 
-        - name: Install Rust stable toolchain
-          uses: actions-rs/toolchain@v1
-          with:
-            profile: minimal
-            toolchain: stable
-            override: true
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
 
-        - name: Cargo test
-          uses: actions-rs/cargo@v1
-          with:
-            command: test
+      - name: Cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
 
-    bench:
-      name: Run benchmarks
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout Sources
-          uses: actions/checkout@v2
+  bench:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Sources
+        uses: actions/checkout@v2
 
-        - name: Install Rust stable toolchain
-          uses: actions-rs/toolchain@v1
-          with:
-            profile: minimal
-            toolchain: stable
-            override: true
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
 
-        - name: Cargo bench
-          uses: actions-rs/cargo@v1
-          with:
-            command: bench
+      - name: Cargo bench
+        uses: actions-rs/cargo@v1
+        with:
+          command: bench
