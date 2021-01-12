@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - master
+      - v2
 
 jobs:
   check-style:
@@ -109,31 +109,3 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-
-  bench:
-    name: Run benchmarks
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Sources
-        uses: actions/checkout@v2
-
-      - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Cache Dependencies & Build Outputs
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cargo bench
-        uses: actions-rs/cargo@v1
-        with:
-          command: bench
