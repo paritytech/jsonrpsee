@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - v2
+      - master
 
 jobs:
   check-style:
