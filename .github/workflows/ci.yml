@@ -19,7 +19,7 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-          components: rustfmt, clippy
+          components: clippy, rustfmt
 
       - name: Cache Dependencies & Build Outputs
         uses: actions/cache@v2
