@@ -24,39 +24,45 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use async_std::task;
-use futures::channel::oneshot::{self, Sender};
-use jsonrpsee::client::{HttpClient, HttpConfig};
-use jsonrpsee::http::HttpServer;
-use jsonrpsee::types::jsonrpc::{JsonValue, Params};
+use crate::raw::RawServerRequest;
+use core::marker::PhantomData;
+use jsonrpsee_types::jsonrpc;
 
-const SOCK_ADDR: &str = "127.0.0.1:9933";
-const SERVER_URI: &str = "http://localhost:9933";
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-	env_logger::init();
-
-	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-	let _server = task::spawn(async move {
-		run_server(server_started_tx, SOCK_ADDR).await;
-	});
-
-	server_started_rx.await?;
-
-	let client = HttpClient::new(SERVER_URI, HttpConfig::default())?;
-	let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
-	println!("r: {:?}", response);
-
-	Ok(())
+/// Allows responding to a server request in a more elegant and strongly-typed fashion.
+pub struct TypedResponder<'a, T> {
+	/// The request to answer.
+	rq: RawServerRequest<'a>,
+	/// Marker that pins the type of the response.
+	response_ty: PhantomData<T>,
 }
 
-async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let server = HttpServer::new(url, HttpConfig::default()).await.unwrap();
-	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
-	server_started_tx.send(()).unwrap();
-	loop {
-		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
+impl<'a, T> From<RawServerRequest<'a>> for TypedResponder<'a, T> {
+	fn from(rq: RawServerRequest<'a>) -> TypedResponder<'a, T> {
+		TypedResponder { rq, response_ty: PhantomData }
+	}
+}
+
+impl<'a, T> TypedResponder<'a, T>
+where
+	T: serde::Serialize,
+{
+	/// Returns a successful response.
+	pub fn ok(self, response: impl Into<T>) {
+		self.respond(Ok(response))
+	}
+
+	/// Returns an erroneous response.
+	pub fn err(self, err: jsonrpc::Error) {
+		self.respond(Err::<T, _>(err))
+	}
+
+	/// Returns a response.
+	pub fn respond(self, response: Result<impl Into<T>, jsonrpc::Error>) {
+		let response = match response {
+			Ok(v) => jsonrpc::to_value(v.into()).map_err(|_| jsonrpc::Error::internal_error()),
+			Err(err) => Err(err),
+		};
+
+		self.rq.respond(response)
 	}
 }

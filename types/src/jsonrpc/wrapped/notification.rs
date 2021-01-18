@@ -24,39 +24,41 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use async_std::task;
-use futures::channel::oneshot::{self, Sender};
-use jsonrpsee::client::{HttpClient, HttpConfig};
-use jsonrpsee::http::HttpServer;
-use jsonrpsee::types::jsonrpc::{JsonValue, Params};
+use crate::jsonrpc::{self, wrapped::Params};
+use core::fmt;
 
-const SOCK_ADDR: &str = "127.0.0.1:9933";
-const SERVER_URI: &str = "http://localhost:9933";
+/// Notification received on a server.
+///
+/// Wraps around a `jsonrpc::Notification`.
+#[derive(PartialEq)]
+pub struct Notification(jsonrpc::Notification);
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-	env_logger::init();
-
-	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-	let _server = task::spawn(async move {
-		run_server(server_started_tx, SOCK_ADDR).await;
-	});
-
-	server_started_rx.await?;
-
-	let client = HttpClient::new(SERVER_URI, HttpConfig::default())?;
-	let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
-	println!("r: {:?}", response);
-
-	Ok(())
+impl From<jsonrpc::Notification> for Notification {
+	fn from(notif: jsonrpc::Notification) -> Notification {
+		Notification(notif)
+	}
 }
 
-async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let server = HttpServer::new(url, HttpConfig::default()).await.unwrap();
-	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
-	server_started_tx.send(()).unwrap();
-	loop {
-		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
+impl From<Notification> for jsonrpc::Notification {
+	fn from(notif: Notification) -> jsonrpc::Notification {
+		notif.0
+	}
+}
+
+impl Notification {
+	/// Returns the method of this notification.
+	pub fn method(&self) -> &str {
+		&self.0.method
+	}
+
+	/// Returns the parameters of the notification.
+	pub fn params(&self) -> Params {
+		Params::from(&self.0.params)
+	}
+}
+
+impl fmt::Debug for Notification {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Notification").field("method", &self.method()).field("params", &self.params()).finish()
 	}
 }

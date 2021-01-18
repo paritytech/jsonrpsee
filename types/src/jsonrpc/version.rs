@@ -24,39 +24,53 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use async_std::task;
-use futures::channel::oneshot::{self, Sender};
-use jsonrpsee::client::{HttpClient, HttpConfig};
-use jsonrpsee::http::HttpServer;
-use jsonrpsee::types::jsonrpc::{JsonValue, Params};
+use core::fmt;
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-const SOCK_ADDR: &str = "127.0.0.1:9933";
-const SERVER_URI: &str = "http://localhost:9933";
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-	env_logger::init();
-
-	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-	let _server = task::spawn(async move {
-		run_server(server_started_tx, SOCK_ADDR).await;
-	});
-
-	server_started_rx.await?;
-
-	let client = HttpClient::new(SERVER_URI, HttpConfig::default())?;
-	let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
-	println!("r: {:?}", response);
-
-	Ok(())
+/// Protocol version.
+#[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
+pub enum Version {
+	/// JSONRPC 2.0
+	V2,
 }
 
-async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let server = HttpServer::new(url, HttpConfig::default()).await.unwrap();
-	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
-	server_started_tx.send(()).unwrap();
-	loop {
-		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
+impl Serialize for Version {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		match *self {
+			Version::V2 => serializer.serialize_str("2.0"),
+		}
+	}
+}
+
+impl<'a> Deserialize<'a> for Version {
+	fn deserialize<D>(deserializer: D) -> Result<Version, D::Error>
+	where
+		D: Deserializer<'a>,
+	{
+		deserializer.deserialize_identifier(VersionVisitor)
+	}
+}
+
+struct VersionVisitor;
+
+impl<'a> Visitor<'a> for VersionVisitor {
+	type Value = Version;
+
+	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+		formatter.write_str("a string")
+	}
+
+	fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+	where
+		E: de::Error,
+	{
+		match value {
+			"2.0" => Ok(Version::V2),
+			_ => Err(de::Error::custom("invalid version")),
+		}
 	}
 }
