@@ -1,9 +1,8 @@
 name: Benchmarks
 
-on: [pull_request]
-# on:
-#   schedule:
-#   - cron: "0 0 * * *"
+on:
+  schedule:
+  - cron: "0 0 * * *"
 
 jobs:
   bench:
