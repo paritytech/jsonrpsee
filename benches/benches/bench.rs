@@ -44,7 +44,7 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 	let server_addr = block_on(rx_addr).unwrap();
 	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr), HttpConfig::default()).unwrap());
 
-	c.bench_function("synchronous http round trip", |b| {
+	c.bench_function("synchronous_http_round_trip", |b| {
 		b.iter(|| {
 			rt.block_on(async {
 				let _: JsonValue = black_box(client.request("say_hello", Params::None).await.unwrap());
@@ -53,7 +53,7 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 	});
 
 	c.bench_function_over_inputs(
-		"concurrent http round trip",
+		"concurrent_http_round_trip",
 		move |b: &mut Bencher, size: &usize| {
 			b.iter(|| {
 				let mut tasks = Vec::new();
@@ -80,7 +80,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 	let server_addr = block_on(rx_addr).unwrap();
 	let client = Arc::new(block_on(WsClient::new(&format!("ws://{}", server_addr), WsConfig::default())).unwrap());
 
-	c.bench_function("synchronous WebSocket round trip", |b| {
+	c.bench_function("synchronous_WebSocket_round_trip", |b| {
 		b.iter(|| {
 			rt.block_on(async {
 				let _: JsonValue = black_box(client.request("say_hello", Params::None).await.unwrap());
@@ -89,7 +89,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 	});
 
 	c.bench_function_over_inputs(
-		"concurrent WebSocket round trip",
+		"concurrent_WebSocket_round_trip",
 		move |b: &mut Bencher, size: &usize| {
 			b.iter(|| {
 				let mut tasks = Vec::new();
