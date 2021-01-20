@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1611165556084,
+  "lastUpdate": 1611166396377,
   "repoUrl": "https://github.com/paritytech/jsonrpsee",
   "entries": {
     "Benchmark": [
@@ -187,6 +187,98 @@ window.BENCHMARK_DATA = {
             "name": "concurrent_WebSocket_round_trip/8",
             "value": 2116362,
             "range": "± 823326",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "paritytech",
+            "username": "paritytech"
+          },
+          "committer": {
+            "name": "paritytech",
+            "username": "paritytech"
+          },
+          "id": "e032dc3885ad414b985ac1ad625c725a5a27dc1a",
+          "message": "[ci]: fix benchmark workflow",
+          "timestamp": "2021-01-18T09:37:20Z",
+          "url": "https://github.com/paritytech/jsonrpsee/pull/190/commits/e032dc3885ad414b985ac1ad625c725a5a27dc1a"
+        },
+        "date": 1611166395785,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "synchronous_http_round_trip",
+            "value": 167930,
+            "range": "± 13011",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_http_round_trip/0",
+            "value": 5,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_http_round_trip/1",
+            "value": 170856,
+            "range": "± 4730",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_http_round_trip/2",
+            "value": 166736,
+            "range": "± 3145",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_http_round_trip/4",
+            "value": 222910,
+            "range": "± 6564",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_http_round_trip/8",
+            "value": 365403,
+            "range": "± 5521",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "synchronous_WebSocket_round_trip",
+            "value": 928709,
+            "range": "± 846221",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_WebSocket_round_trip/0",
+            "value": 5,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_WebSocket_round_trip/1",
+            "value": 913449,
+            "range": "± 535363",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_WebSocket_round_trip/2",
+            "value": 1355129,
+            "range": "± 4405953",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_WebSocket_round_trip/4",
+            "value": 1738628,
+            "range": "± 2269087",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "concurrent_WebSocket_round_trip/8",
+            "value": 2775213,
+            "range": "± 1050408",
             "unit": "ns/iter"
           }
         ]
