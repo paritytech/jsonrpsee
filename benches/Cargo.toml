@@ -6,6 +6,9 @@ description = "Benchmarks for jsonrpsee"
 edition = "2018"
 license = "MIT"
 
+[lib]
+bench = false
+
 [dev-dependencies]
 async-std = "1.8"
 criterion = "0.3"
