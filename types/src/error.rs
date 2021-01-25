@@ -45,8 +45,11 @@ pub enum Error {
 	/// Method was already registered.
 	#[error("Method: {0} was already registered")]
 	MethodAlreadyRegistered(String),
-	#[error("Custom error: {0}")]
+	/// Websocket request timeout
+	#[error("Websocket request timeout")]
+	WsRequestTimeout,
 	/// Custom error.
+	#[error("Custom error: {0}")]
 	Custom(String),
 }
 
