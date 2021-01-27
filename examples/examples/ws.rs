@@ -26,9 +26,9 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee::client::{WsClient, WsConfig};
-use jsonrpsee::types::jsonrpc::{JsonValue, Params};
-use jsonrpsee::ws::WsServer;
+use jsonrpsee_types::jsonrpc::{JsonValue, Params};
+use jsonrpsee_ws_client::{WsClient, WsConfig};
+use jsonrpsee_ws_server::WsServer;
 
 const SOCK_ADDR: &str = "127.0.0.1:9944";
 const SERVER_URI: &str = "ws://localhost:9944";

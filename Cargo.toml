@@ -1,5 +1,6 @@
 [workspace]
 members = [
+	"examples",
 	"benches",
 	"http-client",
 	"http-server",
