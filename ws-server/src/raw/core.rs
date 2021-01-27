@@ -33,7 +33,7 @@ use jsonrpsee_types::{
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
 use core::convert::TryFrom;
 use core::{fmt, hash::Hash, num::NonZeroUsize};
-use hashbrown::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::Entry, HashMap};
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
