@@ -91,7 +91,7 @@ pub struct BatchesRequest<'a, T> {
 
 /// Identifier of a request within a [`BatchesState`].
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct BatchesElemId {
+pub struct BatchesRequestId {
 	/// Id of the batch within `BatchesState::batches`.
 	batch_id: usize,
 	/// Id of the request within the batch.
@@ -201,7 +201,7 @@ impl<T> BatchesState<T> {
 	///
 	/// Returns `None` if the request ID is invalid or if the request has already been answered in
 	/// the past.
-	pub fn request_by_id(&mut self, id: BatchesElemId) -> Option<BatchesRequest<T>> {
+	pub fn request_by_id(&mut self, id: BatchesRequestId) -> Option<BatchesRequest<T>> {
 		if let Some(Some((batch, user_param))) = self.batches.get_mut(id.batch_id) {
 			Some(BatchesRequest { batch_id: id.batch_id, request: batch.request_by_id(id.request_id)?, user_param })
 		} else {
@@ -234,8 +234,8 @@ impl<'a, T> BatchesRequest<'a, T> {
 	/// Returns the id of the request within the [`BatchesState`].
 	///
 	/// > **Note**: This is NOT the request id that the client passed.
-	pub fn id(&self) -> BatchesElemId {
-		BatchesElemId { batch_id: self.batch_id, request_id: self.request.id() }
+	pub fn id(&self) -> BatchesRequestId {
+		BatchesRequestId { batch_id: self.batch_id, request_id: self.request.id() }
 	}
 
 	/// Returns the user parameter passed when calling [`inject`](BatchesState::inject).

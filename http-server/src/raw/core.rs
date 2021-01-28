@@ -51,7 +51,7 @@ pub struct RawServer {
 /// Identifier of a request within a `RawServer`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct RawServerRequestId {
-	inner: batches::BatchesElemId,
+	inner: batches::BatchesRequestId,
 }
 
 /// Identifier of a subscription within a [`RawServer`](crate::server::RawServer).
