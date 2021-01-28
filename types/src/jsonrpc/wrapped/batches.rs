@@ -178,10 +178,12 @@ impl<T> BatchesState<T> {
 	/// Injects a newly-received batch into the list. You must then call
 	/// [`next_event`](BatchesState::next_event) in order to process it.
 	pub fn inject(&mut self, request: jsonrpc::Request, user_param: T) {
-		let batch_id = self.vacant.pop().unwrap_or_else(|| self.batches.len());
 		let batch = batch::BatchState::from_request(request);
 
-		self.batches.insert(batch_id, Some((batch, user_param)));
+		match self.vacant.pop() {
+			Some(id) => self.batches[id] = Some((batch, user_param)),
+			None => self.batches.push(Some((batch, user_param))),
+		}
 	}
 
 	/// Returns a list of all user data associated to active batches.
