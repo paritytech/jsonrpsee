@@ -35,15 +35,15 @@ use futures::channel::oneshot;
 use helpers::{http_server, websocket_server, websocket_server_with_wait_period};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 use jsonrpsee_types::jsonrpc::{JsonValue, Params};
-use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
+use jsonrpsee_ws_client::{client::ChannelCapacities, WsClient, WsConfig, WsSubscription};
 
 #[tokio::test]
 async fn ws_subscription_works() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
 	websocket_server(server_started_tx);
 	let server_addr = server_started_rx.await.unwrap();
-	let uri = format!("ws://{}", server_addr);
-	let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
+	let config = WsConfig::default_settings_with_url(&format!("ws://{}", server_addr));
+	let client = WsClient::new(config).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 	let mut foo_sub: WsSubscription<JsonValue> =
@@ -62,8 +62,8 @@ async fn ws_method_call_works() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
 	websocket_server(server_started_tx);
 	let server_addr = server_started_rx.await.unwrap();
-	let uri = format!("ws://{}", server_addr);
-	let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
+	let config = WsConfig::default_settings_with_url(&format!("ws://{}", server_addr));
+	let client = WsClient::new(config).await.unwrap();
 	let response: JsonValue = client.request("say_hello", Params::None).await.unwrap();
 	assert_eq!(response, JsonValue::String("hello".into()));
 }
@@ -87,8 +87,8 @@ async fn ws_subscription_several_clients() {
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
-		let uri = format!("ws://{}", server_addr);
-		let client = WsClient::new(&uri, WsConfig::default()).await.unwrap();
+		let config = WsConfig::default_settings_with_url(&format!("ws://{}", server_addr));
+		let client = WsClient::new(config).await.unwrap();
 		let hello_sub: WsSubscription<JsonValue> =
 			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: WsSubscription<JsonValue> =
@@ -105,11 +105,10 @@ async fn ws_subscription_several_clients_with_drop() {
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
-		let uri = format!("ws://{}", server_addr);
-		let client =
-			WsClient::new(&uri, WsConfig { subscription_channel_capacity: u32::MAX as usize, ..Default::default() })
-				.await
-				.unwrap();
+		let mut config = WsConfig::default_settings_with_url(&format!("ws://{}", server_addr));
+		config.channel_capacities = ChannelCapacities { subscription: u32::MAX as usize, ..Default::default() };
+
+		let client = WsClient::new(config).await.unwrap();
 		let hello_sub: WsSubscription<JsonValue> =
 			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: WsSubscription<JsonValue> =
@@ -150,9 +149,9 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	websocket_server(server_started_tx);
 	let server_addr = server_started_rx.await.unwrap();
 
-	let uri = format!("ws://{}", server_addr);
-	let client =
-		WsClient::new(&uri, WsConfig { subscription_channel_capacity: 4, ..Default::default() }).await.unwrap();
+	let mut config = WsConfig::default_settings_with_url(&format!("ws://{}", server_addr));
+	config.channel_capacities = ChannelCapacities { subscription: 4, ..Default::default() };
+	let client = WsClient::new(config).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 
@@ -184,8 +183,9 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 	websocket_server_with_wait_period(server_started_tx, concurrent_rx);
 	let server_addr = server_started_rx.await.unwrap();
 
-	let uri = format!("ws://{}", server_addr);
-	let client = WsClient::new(&uri, WsConfig { request_channel_capacity: 2, ..Default::default() }).await.unwrap();
+	let mut config = WsConfig::default_settings_with_url(&format!("ws://{}", server_addr));
+	config.channel_capacities = ChannelCapacities { subscription: 2, ..Default::default() };
+	let client = WsClient::new(config).await.unwrap();
 
 	let mut requests = Vec::new();
 	//NOTE: we use less than 8 because of https://github.com/paritytech/jsonrpsee/issues/168.

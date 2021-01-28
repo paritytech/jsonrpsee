@@ -35,8 +35,8 @@ use jsonrpsee_types::{
 	error::Error,
 	jsonrpc::{self, JsonValue, SubscriptionId},
 };
-use std::convert::TryInto;
 use std::time::Duration;
+use std::{borrow::Cow, convert::TryInto};
 use std::{io, marker::PhantomData};
 
 /// Client that can be cloned.
@@ -50,26 +50,52 @@ pub struct WsClient {
 	/// Config.
 	config: WsConfig,
 }
-/// Configuration.
+
+/// Message passing channel capacities
 #[derive(Copy, Clone, Debug)]
-pub struct WsConfig {
+pub struct ChannelCapacities {
 	/// Backend channel for serving requests and notifications.
-	pub request_channel_capacity: usize,
+	pub request: usize,
 	/// Backend channel for each unique subscription.
-	pub subscription_channel_capacity: usize,
+	pub subscription: usize,
+}
+
+impl Default for ChannelCapacities {
+	fn default() -> Self {
+		Self { request: 100, subscription: 4 }
+	}
+}
+
+/// Configuration.
+#[derive(Clone, Debug)]
+pub struct WsConfig {
+	/// URL to connect to.
+	pub url: String,
+	/// Message passing channel capacities.
+	pub channel_capacities: ChannelCapacities,
 	/// Max request body size
 	pub max_request_body_size: usize,
 	/// Request timeout
 	pub request_timeout: Option<Duration>,
+	/// Connection timeout
+	pub connection_timeout: Duration,
+	/// `Origin` header to pass during the HTTP handshake. If `None`, no
+	/// `Origin` header is passed.
+	pub origin: Option<Cow<'static, str>>,
+	/// Url to send during the HTTP handshake.
+	pub handshake_url: Cow<'static, str>,
 }
 
-impl Default for WsConfig {
-	fn default() -> Self {
+impl WsConfig {
+	pub fn default_settings_with_url(url: &str) -> Self {
 		Self {
-			request_channel_capacity: 100,
-			subscription_channel_capacity: 4,
+			url: url.to_string(),
+			channel_capacities: ChannelCapacities::default(),
 			max_request_body_size: 10 * 1024 * 1024,
 			request_timeout: None,
+			connection_timeout: Duration::from_secs(10),
+			origin: None,
+			handshake_url: From::from("/"),
 		}
 	}
 }
@@ -132,15 +158,16 @@ impl WsClient {
 	/// Initializes a new WebSocket client
 	///
 	/// Fails when the URL is invalid.
-	pub async fn new(remote_addr: impl AsRef<str>, config: WsConfig) -> Result<Self, Error> {
-		let (sender, receiver) = jsonrpc_transport::websocket_connection(remote_addr.as_ref(), config)
+	pub async fn new(config: WsConfig) -> Result<WsClient, Error> {
+		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let (to_back, from_front) = mpsc::channel(config.request_channel_capacity);
+		let channel_capacities = config.channel_capacities;
+		let (to_back, from_front) = mpsc::channel(channel_capacities.request);
 
 		async_std::task::spawn(async move {
-			background_task(sender, receiver, from_front, config).await;
+			background_task(sender, receiver, from_front, channel_capacities).await;
 		});
 		Ok(Self { to_back, config })
 	}
@@ -278,7 +305,7 @@ async fn background_task(
 	mut sender: jsonrpc_transport::Sender,
 	receiver: jsonrpc_transport::Receiver,
 	mut frontend: mpsc::Receiver<FrontToBack>,
-	config: WsConfig,
+	channel_capacities: ChannelCapacities,
 ) {
 	let mut manager = RequestManager::new();
 
@@ -361,7 +388,7 @@ async fn background_task(
 					break;
 				}
 				Some(Ok(jsonrpc::Response::Single(response))) => {
-					match process_response(&mut manager, response, config.subscription_channel_capacity) {
+					match process_response(&mut manager, response, channel_capacities.subscription) {
 						Ok(Some((unsubscribe, params))) => {
 							if let Err(e) = sender.start_request(unsubscribe, params).await {
 								log::error!("Failed to send unsubscription response: {:?}", e);
@@ -377,7 +404,7 @@ async fn background_task(
 				Some(Ok(jsonrpc::Response::Batch(responses))) => {
 					// if any request fails, throw away entire batch.
 					for response in responses {
-						match process_response(&mut manager, response, config.subscription_channel_capacity) {
+						match process_response(&mut manager, response, channel_capacities.subscription) {
 							Ok(Some((unsubscribe, params))) => {
 								if let Err(e) = sender.start_request(unsubscribe, params).await {
 									log::error!("Failed to send unsubscription response: {:?}", e);
