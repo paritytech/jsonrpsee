@@ -42,7 +42,6 @@ use std::{io, marker::PhantomData};
 /// Client that can be cloned.
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background task running in parallel.
-/// >           task running in parallel.
 #[derive(Clone)]
 pub struct WsClient {
 	/// Channel to send requests to the background task.
