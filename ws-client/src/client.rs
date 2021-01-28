@@ -31,11 +31,14 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
 	error::Error,
 	jsonrpc::{self, JsonValue, SubscriptionId},
+	traits::Client,
 };
 use std::convert::TryInto;
+use std::pin::Pin;
 use std::time::Duration;
 use std::{io, marker::PhantomData};
 
@@ -146,100 +149,107 @@ impl WsClient {
 		});
 		Ok(Self { to_back, config })
 	}
+}
+
+impl Client for WsClient {
+	type Error = Error;
+	// TODO(niklasad1): this is hack I was too lazy to deal with generic WsSubscription<T>;
+	// I think we could expose the concrete type in the trait instead.
+	type Subscription = WsSubscription<JsonValue>;
 
 	/// Send a notification to the server.
-	pub async fn notification(
-		&self,
+	fn notification<'a>(
+		&'a self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
-	) -> Result<(), Error> {
+	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::Internal)
+		Box::pin(async move {
+			self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::Internal)
+		})
 	}
 
 	/// Perform a request towards the server.
-	pub async fn request<Ret>(
-		&self,
+	fn request<'a, T: DeserializeOwned>(
+		&'a self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
-	) -> Result<Ret, Error>
-	where
-		Ret: jsonrpc::DeserializeOwned,
-	{
+	) -> Pin<Box<dyn Future<Output = Result<T, Self::Error>> + Send + 'a>> {
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		self.to_back
-			.clone()
-			.send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })
-			.await
-			.map_err(Error::Internal)?;
 
-		let send_back_rx_out = if let Some(duration) = self.config.request_timeout {
-			let timeout = async_std::task::sleep(duration);
-			futures::pin_mut!(send_back_rx, timeout);
-			match future::select(send_back_rx, timeout).await {
-				future::Either::Left((send_back_rx_out, _)) => send_back_rx_out,
-				future::Either::Right((_, _)) => return Err(Error::WsRequestTimeout),
-			}
-		} else {
-			send_back_rx.await
-		};
+		Box::pin(async move {
+			self.to_back
+				.clone()
+				.send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })
+				.await
+				.map_err(Error::Internal)?;
 
-		let json_value = match send_back_rx_out {
-			Ok(Ok(v)) => v,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => {
-				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(Error::TransportError(Box::new(err)));
-			}
-		};
-		jsonrpc::from_value(json_value).map_err(Error::ParseError)
+			let send_back_rx_out = if let Some(duration) = self.config.request_timeout {
+				let timeout = async_std::task::sleep(duration);
+				futures::pin_mut!(send_back_rx, timeout);
+				match future::select(send_back_rx, timeout).await {
+					future::Either::Left((send_back_rx_out, _)) => send_back_rx_out,
+					future::Either::Right((_, _)) => return Err(Error::WsRequestTimeout),
+				}
+			} else {
+				send_back_rx.await
+			};
+
+			let json_value = match send_back_rx_out {
+				Ok(Ok(v)) => v,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => {
+					let err = io::Error::new(io::ErrorKind::Other, "background task closed");
+					return Err(Error::TransportError(Box::new(err)));
+				}
+			};
+			jsonrpc::from_value(json_value).map_err(Error::ParseError)
+		})
 	}
 
 	/// Send a subscription request to the server.
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	pub async fn subscribe<Notif>(
-		&self,
+	fn subscribe<'a>(
+		&'a self,
 		subscribe_method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
 		unsubscribe_method: impl Into<String>,
-	) -> Result<WsSubscription<Notif>, Error> {
+	) -> Pin<Box<dyn Future<Output = Result<Self::Subscription, Self::Error>> + Send + 'a>> {
 		let subscribe_method = subscribe_method.into();
 		let unsubscribe_method = unsubscribe_method.into();
+		let params = params.into();
 
-		if subscribe_method == unsubscribe_method {
-			return Err(Error::Subscription(subscribe_method, unsubscribe_method));
-		}
-
-		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
-		let (send_back_tx, send_back_rx) = oneshot::channel();
-		self.to_back
-			.clone()
-			.send(FrontToBack::Subscribe {
-				subscribe_method,
-				unsubscribe_method,
-				params: params.into(),
-				send_back: send_back_tx,
-			})
-			.await
-			.map_err(Error::Internal)?;
-
-		let (notifs_rx, id) = match send_back_rx.await {
-			Ok(Ok(val)) => val,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => {
-				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(Error::TransportError(Box::new(err)));
+		Box::pin(async move {
+			if subscribe_method == unsubscribe_method {
+				return Err(Error::Subscription(subscribe_method, unsubscribe_method));
 			}
-		};
 
-		Ok(WsSubscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
+			log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
+			let (send_back_tx, send_back_rx) = oneshot::channel();
+			self.to_back
+				.clone()
+				.send(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back: send_back_tx })
+				.await
+				.map_err(Error::Internal)?;
+
+			let (notifs_rx, id) = match send_back_rx.await {
+				Ok(Ok(val)) => val,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => {
+					let err = io::Error::new(io::ErrorKind::Other, "background task closed");
+					return Err(Error::TransportError(Box::new(err)));
+				}
+			};
+
+			Ok(WsSubscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
+		})
 	}
 }
 

@@ -13,3 +13,6 @@ pub mod error;
 
 /// Shared types for HTTP
 pub mod http;
+
+/// Traits
+pub mod traits;
