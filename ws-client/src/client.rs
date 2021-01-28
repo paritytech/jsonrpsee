@@ -36,6 +36,7 @@ use jsonrpsee_types::{
 	jsonrpc::{self, JsonValue, SubscriptionId},
 };
 use std::convert::TryInto;
+use std::time::Duration;
 use std::{io, marker::PhantomData};
 
 /// Client that can be cloned.
@@ -59,6 +60,8 @@ pub struct WsConfig {
 	pub subscription_channel_capacity: usize,
 	/// Max request body size
 	pub max_request_body_size: usize,
+	/// Request timeout
+	pub request_timeout: Option<Duration>,
 }
 
 impl Default for WsConfig {
@@ -67,6 +70,7 @@ impl Default for WsConfig {
 			request_channel_capacity: 100,
 			subscription_channel_capacity: 4,
 			max_request_body_size: 10 * 1024 * 1024,
+			request_timeout: None,
 		}
 	}
 }
@@ -174,7 +178,18 @@ impl WsClient {
 			.await
 			.map_err(Error::Internal)?;
 
-		let json_value = match send_back_rx.await {
+		let send_back_rx_out = if let Some(duration) = self.config.request_timeout {
+			let timeout = async_std::task::sleep(duration);
+			futures::pin_mut!(send_back_rx, timeout);
+			match future::select(send_back_rx, timeout).await {
+				future::Either::Left((send_back_rx_out, _)) => send_back_rx_out,
+				future::Either::Right((_, _)) => return Err(Error::WsRequestTimeout),
+			}
+		} else {
+			send_back_rx.await
+		};
+
+		let json_value = match send_back_rx_out {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
