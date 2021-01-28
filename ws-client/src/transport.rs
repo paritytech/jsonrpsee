@@ -63,6 +63,8 @@ pub struct WsTransportClientBuilder<'a> {
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header is passed.
 	origin: Option<Cow<'a, str>>,
+	/// Max payload size
+	max_payload_size: usize,
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -147,6 +149,7 @@ pub fn builder<'a>(
 	host: impl Into<Cow<'a, str>>,
 	dns_name: impl Into<Cow<'a, str>>,
 	mode: Mode,
+	max_payload_size: usize,
 ) -> WsTransportClientBuilder<'a> {
 	WsTransportClientBuilder {
 		target,
@@ -156,11 +159,15 @@ pub fn builder<'a>(
 		url: From::from("/"),
 		timeout: Duration::from_secs(10),
 		origin: None,
+		max_payload_size,
 	}
 }
 
 /// Creates a new WebSocket connection from URL, represented as a Sender and Receiver pair.
-pub async fn websocket_connection(remote_addr: impl AsRef<str>) -> Result<(Sender, Receiver), WsNewDnsError> {
+pub async fn websocket_connection(
+	remote_addr: impl AsRef<str>,
+	max_payload_size: usize,
+) -> Result<(Sender, Receiver), WsNewDnsError> {
 	let url =
 		url::Url::parse(remote_addr.as_ref()).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
 	let mode = match url.scheme() {
@@ -177,7 +184,7 @@ pub async fn websocket_connection(remote_addr: impl AsRef<str>) -> Result<(Sende
 	let mut error = None;
 
 	for url in target.to_socket_addrs().await.map_err(WsNewDnsError::ResolutionFailed)? {
-		match builder(url, &target, host, mode).build().await {
+		match builder(url, &target, host, mode, max_payload_size).build().await {
 			Ok(ws_raw_client) => return Ok(ws_raw_client),
 			Err(err) => error = Some(err),
 		}
@@ -276,7 +283,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 		}
 
 		// If the handshake succeeded, return.
-		let (sender, receiver) = client.into_builder().finish();
+		let mut builder = client.into_builder();
+		builder.set_max_message_size(self.max_payload_size);
+		let (sender, receiver) = builder.finish();
 		Ok((Sender { inner: sender }, Receiver { inner: receiver }))
 	}
 }

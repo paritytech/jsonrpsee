@@ -50,9 +50,8 @@ pub struct WsClient {
 	/// Config.
 	config: WsConfig,
 }
-
-#[derive(Copy, Clone, Debug)]
 /// Configuration.
+#[derive(Copy, Clone, Debug)]
 pub struct WsConfig {
 	/// Backend channel for serving requests and notifications.
 	pub request_channel_capacity: usize,
@@ -131,9 +130,10 @@ impl WsClient {
 	///
 	/// Fails when the URL is invalid.
 	pub async fn new(remote_addr: impl AsRef<str>, config: WsConfig) -> Result<Self, Error> {
-		let (sender, receiver) = jsonrpc_transport::websocket_connection(remote_addr.as_ref())
-			.await
-			.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let (sender, receiver) =
+			jsonrpc_transport::websocket_connection(remote_addr.as_ref(), config.max_request_body_size)
+				.await
+				.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		let (to_back, from_front) = mpsc::channel(config.request_channel_capacity);
 
