@@ -47,7 +47,7 @@ pub struct Receiver {
 	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
-/// Builder for a WebSocket transport [`Sender`] and ['Receiver] pair.
+/// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 pub struct WsTransportClientBuilder<'a> {
 	/// IP address to try to connect to.
 	target: SocketAddr,
