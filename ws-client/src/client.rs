@@ -42,8 +42,7 @@ use std::{io, marker::PhantomData};
 /// Client that can be cloned.
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background
-/// >           task running in parallel. If this is not desirable, you are encouraged to use the
-/// >           [`RawClient`] struct instead.
+/// >           task running in parallel.
 #[derive(Clone)]
 pub struct WsClient {
 	/// Channel to send requests to the background task.
@@ -75,7 +74,7 @@ impl Default for WsConfig {
 	}
 }
 
-/// Active subscription on a [`Client`].
+/// Active subscription on a [`WsClient`].
 pub struct WsSubscription<Notif> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
@@ -134,10 +133,9 @@ impl WsClient {
 	///
 	/// Fails when the URL is invalid.
 	pub async fn new(remote_addr: impl AsRef<str>, config: WsConfig) -> Result<Self, Error> {
-		let (sender, receiver) =
-			jsonrpc_transport::websocket_connection(remote_addr.as_ref(), config.max_request_body_size)
-				.await
-				.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let (sender, receiver) = jsonrpc_transport::websocket_connection(remote_addr.as_ref(), config)
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		let (to_back, from_front) = mpsc::channel(config.request_channel_capacity);
 

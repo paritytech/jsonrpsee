@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::WsConfig;
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
@@ -46,7 +47,7 @@ pub struct Receiver {
 	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
-/// Builder for a [`WsTransportClient`].
+/// Builder for a WebSocket transport [`Sender`] and ['Receiver] pair.
 pub struct WsTransportClientBuilder<'a> {
 	/// IP address to try to connect to.
 	target: SocketAddr,
@@ -64,7 +65,7 @@ pub struct WsTransportClientBuilder<'a> {
 	/// `Origin` header is passed.
 	origin: Option<Cow<'a, str>>,
 	/// Max payload size
-	max_payload_size: usize,
+	config: WsConfig,
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -143,13 +144,13 @@ pub enum WsConnectError {
 	ParseError(#[source] serde_json::error::Error),
 }
 
-/// Creates a new [`WsTransportClientBuilder`] containing the given address and hostname.
+/// Creates a new [`WsTransportClientBuilder`].
 pub fn builder<'a>(
 	target: SocketAddr,
 	host: impl Into<Cow<'a, str>>,
 	dns_name: impl Into<Cow<'a, str>>,
 	mode: Mode,
-	max_payload_size: usize,
+	config: WsConfig,
 ) -> WsTransportClientBuilder<'a> {
 	WsTransportClientBuilder {
 		target,
@@ -159,14 +160,15 @@ pub fn builder<'a>(
 		url: From::from("/"),
 		timeout: Duration::from_secs(10),
 		origin: None,
-		max_payload_size,
+		config,
 	}
 }
 
-/// Creates a new WebSocket connection from URL, represented as a Sender and Receiver pair.
+/// Creates a new WebSocket connection from URL and basic configuration, represented as a Sender and Receiver pair.
+/// For more fine-grained settings see [`WsTransportClientBuilder`]
 pub async fn websocket_connection(
 	remote_addr: impl AsRef<str>,
-	max_payload_size: usize,
+	max_payload_size: WsConfig,
 ) -> Result<(Sender, Receiver), WsNewDnsError> {
 	let url =
 		url::Url::parse(remote_addr.as_ref()).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
@@ -284,7 +286,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 		// If the handshake succeeded, return.
 		let mut builder = client.into_builder();
-		builder.set_max_message_size(self.max_payload_size);
+		builder.set_max_message_size(self.config.max_request_body_size);
 		let (sender, receiver) = builder.finish();
 		Ok((Sender { inner: sender }, Receiver { inner: receiver }))
 	}

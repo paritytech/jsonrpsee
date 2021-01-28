@@ -1,4 +1,4 @@
-/// Client.
+/// WebSocket Client.
 pub mod client;
 /// JSONRPC WebSocket transport.
 pub mod jsonrpc_transport;
