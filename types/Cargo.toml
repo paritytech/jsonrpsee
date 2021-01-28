@@ -7,8 +7,6 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-hashbrown = "0.9"
-fnv = "1.0"
 futures = "0.3"
 thiserror = "1.0"
 serde = { version = "1.0", default-features = false, features = ["derive"] }

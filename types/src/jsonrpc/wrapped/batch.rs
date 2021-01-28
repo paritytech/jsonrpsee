@@ -47,7 +47,7 @@ use smallvec::SmallVec;
 /// - Construct a [`BatchState`] from a raw request.
 /// - Extract one by one the requests and notifications by calling [`next`](BatchState::next). This
 /// moves requests from the batch to the list of requests that are yet to be answered.
-/// - Answer these requests by calling [`set_response`](BatchElem::set_response).
+/// - Answer these requests by calling [`set_response`](BatchRequest::set_response).
 /// - Once all the requests have been answered, call
 /// [`into_response`](BatchState::into_response) and send back the response.
 /// - Once [`next`](BatchState::next) returns `None` and the response has been extracted, you can
@@ -83,11 +83,11 @@ pub enum BatchInc<'a> {
 	/// Request is a notification.
 	Notification(Notification),
 	/// Request is a method call.
-	Request(BatchElem<'a>),
+	Request(BatchRequest<'a>),
 }
 
 /// References to a request within the batch that must be answered.
-pub struct BatchElem<'a> {
+pub struct BatchRequest<'a> {
 	/// Index within the `BatchState::requests` list.
 	index: usize,
 	/// Reference to the actual element. Must always be `Some` for the lifetime of this object.
@@ -143,12 +143,12 @@ impl BatchState {
 	///
 	/// Returns `None` if the request ID is invalid or if the request has already been answered in
 	/// the past.
-	pub fn request_by_id(&mut self, id: usize) -> Option<BatchElem> {
+	pub fn request_by_id(&mut self, id: usize) -> Option<BatchRequest> {
 		if let Some(elem) = self.requests.get_mut(id) {
 			if elem.is_none() {
 				return None;
 			}
-			Some(BatchElem { elem, index: id, responses: &mut self.responses })
+			Some(BatchRequest { elem, index: id, responses: &mut self.responses })
 		} else {
 			None
 		}
@@ -165,7 +165,7 @@ impl BatchState {
 			ToYield::Request(n) => {
 				let request_id = self.requests.len();
 				self.requests.push(Some(n));
-				Some(BatchInc::Request(BatchElem {
+				Some(BatchInc::Request(BatchRequest {
 					index: request_id,
 					elem: &mut self.requests[request_id],
 					responses: &mut self.responses,
@@ -218,7 +218,7 @@ impl fmt::Debug for BatchState {
 	}
 }
 
-impl<'a> BatchElem<'a> {
+impl<'a> BatchRequest<'a> {
 	/// Returns the id of the request within the [`BatchState`].
 	///
 	/// > **Note**: This is NOT the request id that the client passed.
@@ -253,9 +253,9 @@ impl<'a> BatchElem<'a> {
 	}
 }
 
-impl<'a> fmt::Debug for BatchElem<'a> {
+impl<'a> fmt::Debug for BatchRequest<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("BatchElem").field("method", &self.method()).field("params", &self.params()).finish()
+		f.debug_struct("BatchRequest").field("method", &self.method()).field("params", &self.params()).finish()
 	}
 }
 

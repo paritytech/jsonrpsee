@@ -33,7 +33,7 @@ use jsonrpsee_types::{
 use alloc::{borrow::ToOwned as _, string::String, vec, vec::Vec};
 use core::convert::TryFrom;
 use core::{fmt, hash::Hash, num::NonZeroUsize};
-use hashbrown::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::Entry, HashMap};
 
 /// Wraps around a "raw server" and adds capabilities.
 ///
@@ -67,7 +67,7 @@ pub struct RawServer {
 /// Identifier of a request within a `RawServer`.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct RawServerRequestId {
-	inner: batches::BatchesElemId,
+	inner: batches::BatchesRequestId,
 }
 
 /// Identifier of a subscription within a [`RawServer`](crate::server::RawServer).
@@ -96,7 +96,7 @@ pub enum RawServerEvent<'a> {
 /// Request received by a [`RawServer`](crate::raw::RawServer).
 pub struct RawServerRequest<'a> {
 	/// Reference to the request within `self.batches`.
-	inner: batches::BatchesElem<'a, Option<RequestId>>,
+	inner: batches::BatchesRequest<'a, Option<RequestId>>,
 
 	/// Reference to the corresponding field in `RawServer`.
 	raw: &'a mut WsTransportServer,
