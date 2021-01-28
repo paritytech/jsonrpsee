@@ -133,12 +133,16 @@ impl<T> BatchesState<T> {
 					None => continue,
 				};
 
-				let is_ready_to_respond = batch.is_ready_to_respond();
 				match batch.next() {
-					None if is_ready_to_respond => WhatCanWeDo::ReadyToRespond,
-					None => continue,
+					None => {
+						if batch.is_ready_to_respond() {
+							WhatCanWeDo::ReadyToRespond
+						} else {
+							continue;
+						}
+					}
 					Some(batch::BatchInc::Notification(n)) => WhatCanWeDo::Notification(n),
-					Some(batch::BatchInc::Request(inner)) => WhatCanWeDo::Request(inner.id()),
+					Some(batch::BatchInc::Request(request)) => WhatCanWeDo::Request(request.id()),
 				}
 			};
 
