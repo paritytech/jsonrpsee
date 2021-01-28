@@ -74,7 +74,7 @@ pub enum RawServerEvent<'a> {
 /// Request received by a [`RawServer`](crate::raw::RawServer).
 pub struct RawServerRequest<'a> {
 	/// Reference to the request within `self.batches`.
-	inner: batches::BatchesElem<'a, Option<RequestId>>,
+	inner: batches::BatchesRequest<'a, Option<RequestId>>,
 
 	/// Reference to the corresponding field in `RawServer`.
 	raw: &'a mut HttpTransportServer,

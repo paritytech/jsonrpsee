@@ -68,7 +68,7 @@ pub enum BatchesEvent<'a, T> {
 	},
 
 	/// A request has been extracted from a batch.
-	Request(BatchesElem<'a, T>),
+	Request(BatchesRequest<'a, T>),
 
 	/// A batch has gotten all its requests answered and a response is ready to be sent out.
 	ReadyToSend {
@@ -80,11 +80,11 @@ pub enum BatchesEvent<'a, T> {
 }
 
 /// Request within the batches.
-pub struct BatchesElem<'a, T> {
+pub struct BatchesRequest<'a, T> {
 	/// Id of the batch that contains this element.
 	batch_id: usize,
 	/// Inner reference to a request within a batch.
-	inner: batch::BatchElem<'a>,
+	request: batch::BatchRequest<'a>,
 	/// User parameter passed when calling `inject`.
 	user_param: &'a mut T,
 }
@@ -93,9 +93,9 @@ pub struct BatchesElem<'a, T> {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct BatchesElemId {
 	/// Id of the batch within `BatchesState::batches`.
-	outer: usize,
+	batch_id: usize,
 	/// Id of the request within the batch.
-	inner: usize,
+	request_id: usize,
 }
 
 /// Minimal capacity for the `batches` container.
@@ -149,8 +149,7 @@ impl<T> BatchesState<T> {
 					self.vacant.push(batch_id);
 					let (batch, user_param) = entry.take().expect("entry is checked for `None`s above; qed");
 
-					let response =
-						batch.into_response().unwrap_or_else(|_| panic!("is_ready_to_respond returned true; qed"));
+					let response = batch.into_response().expect("is_ready_to_respond returned true; qed");
 					if let Some(response) = response {
 						return Some(BatchesEvent::ReadyToSend { response, user_param });
 					}
@@ -163,9 +162,9 @@ impl<T> BatchesState<T> {
 				WhatCanWeDo::Request(id) => {
 					let (batch, user_param) = entry.as_mut().expect("entry is checked for `None`s above; qed");
 
-					return Some(BatchesEvent::Request(BatchesElem {
+					return Some(BatchesEvent::Request(BatchesRequest {
 						batch_id,
-						inner: batch.request_by_id(id).unwrap(),
+						request: batch.request_by_id(id).unwrap(),
 						user_param,
 					}));
 				}
@@ -175,8 +174,8 @@ impl<T> BatchesState<T> {
 		None
 	}
 
-	/// Injects a newly-received batch into the list. You must then call
-	/// [`next_event`](BatchesState::next_event) in order to process it.
+	/// Injects a newly received batch into the list. You must then call
+	/// [`next_event`] in order to process it.
 	pub fn inject(&mut self, request: jsonrpc::Request, user_param: T) {
 		let batch = batch::BatchState::from_request(request);
 
@@ -188,10 +187,7 @@ impl<T> BatchesState<T> {
 
 	/// Returns a list of all user data associated to active batches.
 	pub fn batches<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> + 'a {
-		self.batches.iter_mut().filter_map(|entry| match entry {
-			Some((_, user_param)) => Some(user_param),
-			None => None,
-		})
+		self.batches.iter_mut().filter_map(|entry| entry.as_mut().map(|(_, user_param)| user_param))
 	}
 
 	/// Returns a request previously returned by [`next_event`](crate::raw::RawServer::next_event)
@@ -201,9 +197,9 @@ impl<T> BatchesState<T> {
 	///
 	/// Returns `None` if the request ID is invalid or if the request has already been answered in
 	/// the past.
-	pub fn request_by_id(&mut self, id: BatchesElemId) -> Option<BatchesElem<T>> {
-		if let Some(Some((batch, user_param))) = self.batches.get_mut(id.outer) {
-			Some(BatchesElem { batch_id: id.outer, inner: batch.request_by_id(id.inner)?, user_param })
+	pub fn request_by_id(&mut self, id: BatchesElemId) -> Option<BatchesRequest<T>> {
+		if let Some(Some((batch, user_param))) = self.batches.get_mut(id.batch_id) {
+			Some(BatchesRequest { batch_id: id.batch_id, request: batch.request_by_id(id.request_id)?, user_param })
 		} else {
 			None
 		}
@@ -230,12 +226,12 @@ where
 	}
 }
 
-impl<'a, T> BatchesElem<'a, T> {
+impl<'a, T> BatchesRequest<'a, T> {
 	/// Returns the id of the request within the [`BatchesState`].
 	///
 	/// > **Note**: This is NOT the request id that the client passed.
 	pub fn id(&self) -> BatchesElemId {
-		BatchesElemId { outer: self.batch_id, inner: self.inner.id() }
+		BatchesElemId { batch_id: self.batch_id, request_id: self.request.id() }
 	}
 
 	/// Returns the user parameter passed when calling [`inject`](BatchesState::inject).
@@ -245,17 +241,17 @@ impl<'a, T> BatchesElem<'a, T> {
 
 	/// Returns the id that the client sent out.
 	pub fn request_id(&self) -> &jsonrpc::Id {
-		self.inner.request_id()
+		self.request.request_id()
 	}
 
 	/// Returns the method of this request.
 	pub fn method(&self) -> &str {
-		self.inner.method()
+		self.request.method()
 	}
 
 	/// Returns the parameters of the request, as a `jsonrpc::Params`.
 	pub fn params(&self) -> Params {
-		self.inner.params()
+		self.request.params()
 	}
 
 	/// Responds to the request. This destroys the request object, meaning you can no longer
@@ -264,16 +260,16 @@ impl<'a, T> BatchesElem<'a, T> {
 	/// A [`ReadyToSend`](BatchesEvent::ReadyToSend) event containing this response might be
 	/// generated the next time you call [`next_event`](BatchesState::next_event).
 	pub fn set_response(self, response: Result<jsonrpc::JsonValue, jsonrpc::Error>) {
-		self.inner.set_response(response)
+		self.request.set_response(response)
 	}
 }
 
-impl<'a, T> fmt::Debug for BatchesElem<'a, T>
+impl<'a, T> fmt::Debug for BatchesRequest<'a, T>
 where
 	T: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_struct("BatchesElem")
+		f.debug_struct("BatchesRequest")
 			.field("id", &self.id())
 			.field("user_param", &self.user_param)
 			.field("request_id", &self.request_id())
