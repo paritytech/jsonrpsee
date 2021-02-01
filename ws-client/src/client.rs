@@ -151,7 +151,7 @@ impl WsClient {
 	/// Initializes a new WebSocket client
 	///
 	/// Fails when the URL is invalid.
-	pub async fn new<'a>(config: WsConfig<'a>) -> Result<WsClient, Error> {
+	pub async fn new(config: WsConfig<'_>) -> Result<WsClient, Error> {
 		let max_capacity_per_subscription = config.max_subscription_capacity;
 		let request_timeout = config.request_timeout;
 		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
