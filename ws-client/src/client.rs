@@ -46,32 +46,15 @@ use std::{io, marker::PhantomData};
 pub struct WsClient {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
-	/// Config.
-	config: WsConfig,
-}
-
-/// Message passing channel capacities
-#[derive(Copy, Clone, Debug)]
-pub struct ChannelCapacities {
-	/// Backend channel for serving requests and notifications.
-	pub request: usize,
-	/// Backend channel for each unique subscription.
-	pub subscription: usize,
-}
-
-impl Default for ChannelCapacities {
-	fn default() -> Self {
-		Self { request: 100, subscription: 4 }
-	}
+	/// Request timeout
+	request_timeout: Option<Duration>,
 }
 
 /// Configuration.
 #[derive(Clone, Debug)]
-pub struct WsConfig {
+pub struct WsConfig<'a> {
 	/// URL to connect to.
-	pub url: String,
-	/// Message passing channel capacities.
-	pub channel_capacities: ChannelCapacities,
+	pub url: &'a str,
 	/// Max request body size
 	pub max_request_body_size: usize,
 	/// Request timeout
@@ -80,21 +63,32 @@ pub struct WsConfig {
 	pub connection_timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header is passed.
-	pub origin: Option<Cow<'static, str>>,
+	pub origin: Option<Cow<'a, str>>,
 	/// Url to send during the HTTP handshake.
-	pub handshake_url: Cow<'static, str>,
+	pub handshake_url: Cow<'a, str>,
+	/// Max concurrent request capacity that client supports.
+	// TODO(niklasad1): clarify that the size is the size of initial mpsc::channel
+	// which may be increased if the sender is cloned.
+	pub max_concurrent_requests_capacity: usize,
+	/// Max concurrent capacity for each subscription that client supports.
+	/// If this limit is exceeded the subscription will be dropped.
+	// TODO(niklasad1): clarify that the size is the size of initial mpsc::channel
+	// which may be increased if the sender is cloned.
+	pub max_subscription_capacity: usize,
 }
 
-impl WsConfig {
-	pub fn default_settings_with_url(url: &str) -> Self {
+impl<'a> WsConfig<'a> {
+	/// Default `WebSocket` configuration with a specified URL to connect to.
+	pub fn with_url(url: &'a str) -> Self {
 		Self {
-			url: url.to_string(),
-			channel_capacities: ChannelCapacities::default(),
+			url,
 			max_request_body_size: 10 * 1024 * 1024,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
 			origin: None,
 			handshake_url: From::from("/"),
+			max_concurrent_requests_capacity: 100,
+			max_subscription_capacity: 4,
 		}
 	}
 }
@@ -157,18 +151,19 @@ impl WsClient {
 	/// Initializes a new WebSocket client
 	///
 	/// Fails when the URL is invalid.
-	pub async fn new(config: WsConfig) -> Result<WsClient, Error> {
+	pub async fn new<'a>(config: WsConfig<'a>) -> Result<WsClient, Error> {
 		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let channel_capacities = config.channel_capacities;
-		let (to_back, from_front) = mpsc::channel(channel_capacities.request);
+		let max_capacity_per_subscription = config.max_subscription_capacity;
+		let request_timeout = config.request_timeout;
+		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
 
 		async_std::task::spawn(async move {
-			background_task(sender, receiver, from_front, channel_capacities).await;
+			background_task(sender, receiver, from_front, max_capacity_per_subscription).await;
 		});
-		Ok(Self { to_back, config })
+		Ok(Self { to_back, request_timeout })
 	}
 
 	/// Send a notification to the server.
@@ -202,7 +197,7 @@ impl WsClient {
 			.await
 			.map_err(Error::Internal)?;
 
-		let send_back_rx_out = if let Some(duration) = self.config.request_timeout {
+		let send_back_rx_out = if let Some(duration) = self.request_timeout {
 			let timeout = async_std::task::sleep(duration);
 			futures::pin_mut!(send_back_rx, timeout);
 			match future::select(send_back_rx, timeout).await {
@@ -304,7 +299,7 @@ async fn background_task(
 	mut sender: jsonrpc_transport::Sender,
 	receiver: jsonrpc_transport::Receiver,
 	mut frontend: mpsc::Receiver<FrontToBack>,
-	channel_capacities: ChannelCapacities,
+	max_capacity_per_subscription: usize,
 ) {
 	let mut manager = RequestManager::new();
 
@@ -387,7 +382,7 @@ async fn background_task(
 					break;
 				}
 				Some(Ok(jsonrpc::Response::Single(response))) => {
-					match process_response(&mut manager, response, channel_capacities.subscription) {
+					match process_response(&mut manager, response, max_capacity_per_subscription) {
 						Ok(Some((unsubscribe, params))) => {
 							if let Err(e) = sender.start_request(unsubscribe, params).await {
 								log::error!("Failed to send unsubscription response: {:?}", e);
@@ -403,7 +398,7 @@ async fn background_task(
 				Some(Ok(jsonrpc::Response::Batch(responses))) => {
 					// if any request fails, throw away entire batch.
 					for response in responses {
-						match process_response(&mut manager, response, channel_capacities.subscription) {
+						match process_response(&mut manager, response, max_capacity_per_subscription) {
 							Ok(Some((unsubscribe, params))) => {
 								if let Err(e) = sender.start_request(unsubscribe, params).await {
 									log::error!("Failed to send unsubscription response: {:?}", e);
@@ -455,7 +450,7 @@ async fn background_task(
 fn process_response(
 	manager: &mut RequestManager,
 	response: jsonrpc::Output,
-	subscription_capacity: usize,
+	max_capacity_per_subscription: usize,
 ) -> Result<Option<(String, jsonrpc::Params)>, Error> {
 	let response_id = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
 
@@ -494,7 +489,7 @@ fn process_response(
 				}
 			};
 
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(subscription_capacity);
+			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
 			if manager.insert_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method).is_ok() {
 				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
 					Ok(_) => Ok(None),

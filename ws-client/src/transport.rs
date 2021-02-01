@@ -145,7 +145,7 @@ pub enum WsConnectError {
 }
 
 /// Creates a new WebSocket connection based on [`WsConfig`](crate::WsConfig) represented as a Sender and Receiver pair.
-pub async fn websocket_connection(config: WsConfig) -> Result<(Sender, Receiver), WsNewDnsError> {
+pub async fn websocket_connection<'a>(config: WsConfig<'a>) -> Result<(Sender, Receiver), WsNewDnsError> {
 	let url = url::Url::parse(&config.url).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
 	let mode = match url.scheme() {
 		"ws" => Mode::Plain,

@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 
 	server_started_rx.await?;
-	let config = WsConfig::default_settings_with_url(SERVER_URI);
+	let config = WsConfig::with_url(SERVER_URI);
 	let client = WsClient::new(config).await?;
 	let mut subscribe_hello: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await?;

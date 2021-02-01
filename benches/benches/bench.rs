@@ -79,7 +79,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 	async_std::task::spawn(ws_server(tx_addr));
 	let server_addr = block_on(rx_addr).unwrap();
 	let url = format!("ws://{}", server_addr);
-	let config = WsConfig::default_settings_with_url(&url);
+	let config = WsConfig::with_url(&url);
 	let client = Arc::new(block_on(WsClient::new(config)).unwrap());
 
 	c.bench_function("synchronous_websocket_round_trip", |b| {
