@@ -7,7 +7,7 @@ use crate::WsConfig;
 use jsonrpsee_types::jsonrpc;
 
 /// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
-pub async fn websocket_connection<'a>(config: WsConfig<'a>) -> Result<(Sender, Receiver), WsHandshakeError> {
+pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
 	let (sender, receiver) = transport::websocket_connection(config).await?;
 	Ok((Sender::new(sender), Receiver::new(receiver)))
 }
