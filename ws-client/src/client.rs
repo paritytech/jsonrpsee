@@ -67,13 +67,16 @@ pub struct WsConfig<'a> {
 	/// Url to send during the HTTP handshake.
 	pub handshake_url: Cow<'a, str>,
 	/// Max concurrent request capacity.
-	// TODO(niklasad1): clarify that the size is the size of initial mpsc::channel
-	// which may be increased if the sender is cloned.
+	///
+	/// **Note**: The actual capacity is `num_senders + max_concurrent_requests_capacity`
+	/// because it is passed to [`futures::mpsc::channel`](futures::channel::mpsc::channel)
+	/// and the capacity may increase because the sender is cloned when new
+	/// requests, notifications and subscriptions are created.
 	pub max_concurrent_requests_capacity: usize,
-	/// Max concurrent capacity for each subscription.
-	/// If this limit is exceeded the subscription will be dropped.
-	// TODO(niklasad1): clarify that the size is the size of initial mpsc::channel
-	// which may be increased if the sender is cloned.
+	/// Max concurrent capacity for each subscription which might be dropped if the capacity is exceeded.
+	///
+	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
+	/// because it is passed to [`futures::mpsc::channel`](futures::channel::mpsc::channel).
 	pub max_subscription_capacity: usize,
 }
 
@@ -87,7 +90,7 @@ impl<'a> WsConfig<'a> {
 			connection_timeout: Duration::from_secs(10),
 			origin: None,
 			handshake_url: From::from("/"),
-			max_concurrent_requests_capacity: 100,
+			max_concurrent_requests_capacity: 10 * std::mem::size_of::<FrontToBack>(),
 			max_subscription_capacity: 4,
 		}
 	}
