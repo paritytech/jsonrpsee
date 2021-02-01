@@ -66,11 +66,11 @@ pub struct WsConfig<'a> {
 	pub origin: Option<Cow<'a, str>>,
 	/// Url to send during the HTTP handshake.
 	pub handshake_url: Cow<'a, str>,
-	/// Max concurrent request capacity that client supports.
+	/// Max concurrent request capacity.
 	// TODO(niklasad1): clarify that the size is the size of initial mpsc::channel
 	// which may be increased if the sender is cloned.
 	pub max_concurrent_requests_capacity: usize,
-	/// Max concurrent capacity for each subscription that client supports.
+	/// Max concurrent capacity for each subscription.
 	/// If this limit is exceeded the subscription will be dropped.
 	// TODO(niklasad1): clarify that the size is the size of initial mpsc::channel
 	// which may be increased if the sender is cloned.
@@ -152,13 +152,12 @@ impl WsClient {
 	///
 	/// Fails when the URL is invalid.
 	pub async fn new<'a>(config: WsConfig<'a>) -> Result<WsClient, Error> {
-		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
-			.await
-			.map_err(|e| Error::TransportError(Box::new(e)))?;
-
 		let max_capacity_per_subscription = config.max_subscription_capacity;
 		let request_timeout = config.request_timeout;
 		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
+
+		let (sender, receiver) =
+			jsonrpc_transport::websocket_connection(config).await.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
 			background_task(sender, receiver, from_front, max_capacity_per_subscription).await;
