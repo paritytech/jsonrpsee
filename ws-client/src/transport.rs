@@ -106,7 +106,7 @@ pub enum WsNewError {
 
 /// Error that can happen during the initial handshake.
 #[derive(Debug, Error)]
-pub enum WsNewDnsError {
+pub enum WsHandshakeError {
 	/// Invalid URL.
 	#[error("Invalid url: {}", 0)]
 	Url(Cow<'static, str>),
@@ -145,14 +145,14 @@ pub enum WsConnectError {
 }
 
 /// Creates a new WebSocket connection based on [`WsConfig`](crate::WsConfig) represented as a Sender and Receiver pair.
-pub async fn websocket_connection<'a>(config: WsConfig<'a>) -> Result<(Sender, Receiver), WsNewDnsError> {
-	let url = url::Url::parse(&config.url).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
+pub async fn websocket_connection<'a>(config: WsConfig<'a>) -> Result<(Sender, Receiver), WsHandshakeError> {
+	let url = url::Url::parse(&config.url).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
 	let mode = match url.scheme() {
 		"ws" => Mode::Plain,
 		"wss" => Mode::Tls,
-		_ => return Err(WsNewDnsError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
+		_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
 	};
-	let host = url.host_str().ok_or_else(|| WsNewDnsError::Url("No host in URL".into()))?;
+	let host = url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
 	let target = match url.port_or_known_default() {
 		Some(port) => format!("{}:{}", host, port),
 		None => host.to_string(),
@@ -160,7 +160,7 @@ pub async fn websocket_connection<'a>(config: WsConfig<'a>) -> Result<(Sender, R
 
 	let mut error = None;
 
-	for sockaddr in target.to_socket_addrs().await.map_err(WsNewDnsError::ResolutionFailed)? {
+	for sockaddr in target.to_socket_addrs().await.map_err(WsHandshakeError::ResolutionFailed)? {
 		let builder = WsTransportClientBuilder {
 			target: sockaddr,
 			host: host.into(),
@@ -179,9 +179,9 @@ pub async fn websocket_connection<'a>(config: WsConfig<'a>) -> Result<(Sender, R
 	}
 
 	if let Some(error) = error {
-		Err(WsNewDnsError::Connect(error))
+		Err(WsHandshakeError::Connect(error))
 	} else {
-		Err(WsNewDnsError::NoAddressFound)
+		Err(WsHandshakeError::NoAddressFound)
 	}
 }
 
@@ -228,7 +228,6 @@ impl<'a> WsTransportClientBuilder<'a> {
 	/// Sets the timeout to use when establishing the TCP connection.
 	///
 	/// The default timeout is 10 seconds.
-	// TODO: design decision: should the timeout not be handled by the user?
 	pub fn with_timeout(mut self, timeout: Duration) -> Self {
 		self.timeout = timeout;
 		self
@@ -296,9 +295,9 @@ impl From<soketto::handshake::Error> for WsNewError {
 	}
 }
 
-impl From<WsNewError> for WsNewDnsError {
-	fn from(err: WsNewError) -> WsNewDnsError {
-		WsNewDnsError::Connect(err)
+impl From<WsNewError> for WsHandshakeError {
+	fn from(err: WsNewError) -> WsHandshakeError {
+		WsHandshakeError::Connect(err)
 	}
 }
 
