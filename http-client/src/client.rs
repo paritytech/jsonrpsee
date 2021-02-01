@@ -1,5 +1,5 @@
 use crate::transport::HttpTransportClient;
-use futures::prelude::*;
+use async_trait::async_trait;
 use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
 	error::Error,
@@ -9,7 +9,6 @@ use jsonrpsee_types::{
 };
 
 use std::convert::TryInto;
-use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
@@ -32,31 +31,32 @@ impl HttpClient {
 	}
 }
 
+#[async_trait]
 impl Client for HttpClient {
 	type Error = Error;
 	type Subscription = ();
 
-	fn notification<'a>(
-		&'a self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>> {
+	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Self::Error>
+	where
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+	{
 		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
 			jsonrpc: jsonrpc::Version::V2,
 			method: method.into(),
 			params: params.into(),
 		}));
 
-		Box::pin(async move {
-			self.transport.send_notification(request).await.map_err(|e| Error::TransportError(Box::new(e)))
-		})
+		self.transport.send_notification(request).await.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
-	fn request<'a, T: DeserializeOwned>(
-		&'a self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Pin<Box<dyn Future<Output = Result<T, Self::Error>> + Send + 'a>> {
+	/// Perform a request towards the server.
+	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Self::Error>
+	where
+		T: DeserializeOwned,
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
 		let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
@@ -66,35 +66,38 @@ impl Client for HttpClient {
 			id: jsonrpc::Id::Num(id),
 		}));
 
-		Box::pin(async move {
-			let response = self
-				.transport
-				.send_request_and_wait_for_response(request)
-				.await
-				.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let response = self
+			.transport
+			.send_request_and_wait_for_response(request)
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-			let json_value = match response {
-				jsonrpc::Response::Single(rp) => process_response(rp, id),
-				// Server should not send batch response to a single request.
-				jsonrpc::Response::Batch(_rps) => {
-					Err(Error::Custom("Server replied with batch response to a single request".to_string()))
-				}
-				// Server should not reply to a Notification.
-				jsonrpc::Response::Notif(_notif) => {
-					Err(Error::Custom(format!("Server replied with notification response to request ID: {}", id)))
-				}
-			}?;
-			jsonrpc::from_value(json_value).map_err(Error::ParseError)
-		})
+		let json_value = match response {
+			jsonrpc::Response::Single(rp) => process_response(rp, id),
+			// Server should not send batch response to a single request.
+			jsonrpc::Response::Batch(_rps) => {
+				Err(Error::Custom("Server replied with batch response to a single request".to_string()))
+			}
+			// Server should not reply to a Notification.
+			jsonrpc::Response::Notif(_notif) => {
+				Err(Error::Custom(format!("Server replied with notification response to request ID: {}", id)))
+			}
+		}?;
+		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	fn subscribe<'a>(
-		&'a self,
-		_subscribe_method: impl Into<String>,
-		_params: impl Into<jsonrpc::Params>,
-		_unsubscribe_method: impl Into<String>,
-	) -> Pin<Box<dyn Future<Output = Result<Self::Subscription, Self::Error>> + Send + 'a>> {
-		Box::pin(async { Err(Error::Custom("Subscription not supported on HTTP transport".into())) })
+	async fn subscribe<SM, UM, P>(
+		&self,
+		_subscribe_method: SM,
+		_params: P,
+		_unsubscribe_method: UM,
+	) -> Result<Self::Subscription, Self::Error>
+	where
+		SM: Into<String> + Send,
+		UM: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+	{
+		Err(Error::Custom("Subscription not supported on HTTP transport".into()))
 	}
 }
 

@@ -1,28 +1,28 @@
 use crate::jsonrpc::{DeserializeOwned, Params};
 use alloc::string::String;
-use core::{fmt, pin::Pin};
-use futures::prelude::*;
-
+use async_trait::async_trait;
+use core::fmt;
 /// Basic `JSONRPC` client that can make requests and notifications.
+
+#[async_trait]
 pub trait Client {
 	/// Error.
 	type Error: fmt::Display;
 	/// Subscription.
 	type Subscription;
 
-	/// Send a method call request.
-	fn request<'a, T: DeserializeOwned>(
-		&'a self,
-		method: impl Into<String>,
-		params: impl Into<Params>,
-	) -> Pin<Box<dyn Future<Output = Result<T, Self::Error>> + Send + 'a>>;
-
 	/// Send a notification request.
-	fn notification<'a>(
-		&'a self,
-		method: impl Into<String>,
-		params: impl Into<Params>,
-	) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + 'a>>;
+	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Self::Error>
+	where
+		M: Into<String> + Send,
+		P: Into<Params> + Send;
+
+	/// Send a method call request.
+	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Self::Error>
+	where
+		T: DeserializeOwned,
+		M: Into<String> + Send,
+		P: Into<Params> + Send;
 
 	/// Send a subscription request to the server.
 	///
@@ -30,10 +30,14 @@ pub trait Client {
 	/// server. The `unsubscribe_method` is used to close the subscription.
 	//
 	// TODO: ideally this should be a subtrait but let's have it to simplify macro stuff for now.
-	fn subscribe<'a>(
-		&'a self,
-		subscribe_method: impl Into<String>,
-		params: impl Into<Params>,
-		unsubscribe_method: impl Into<String>,
-	) -> Pin<Box<dyn Future<Output = Result<Self::Subscription, Self::Error>> + Send + 'a>>;
+	async fn subscribe<SM, UM, P>(
+		&self,
+		subscribe_method: SM,
+		params: P,
+		unsubscribe_method: UM,
+	) -> Result<Self::Subscription, Self::Error>
+	where
+		SM: Into<String> + Send,
+		UM: Into<String> + Send,
+		P: Into<Params> + Send;
 }
