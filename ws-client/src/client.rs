@@ -90,7 +90,7 @@ impl<'a> WsConfig<'a> {
 			connection_timeout: Duration::from_secs(10),
 			origin: None,
 			handshake_url: From::from("/"),
-			max_concurrent_requests_capacity: 10 * std::mem::size_of::<FrontToBack>(),
+			max_concurrent_requests_capacity: 256,
 			max_subscription_capacity: 4,
 		}
 	}
