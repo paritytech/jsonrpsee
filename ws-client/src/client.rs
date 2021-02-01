@@ -62,7 +62,7 @@ pub struct WsConfig<'a> {
 	/// Connection timeout
 	pub connection_timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
-	/// `Origin` header is passed.
+	/// `Origin` header was passed.
 	pub origin: Option<Cow<'a, str>>,
 	/// Url to send during the HTTP handshake.
 	pub handshake_url: Cow<'a, str>,
