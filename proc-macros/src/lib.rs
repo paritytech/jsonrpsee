@@ -90,7 +90,6 @@ fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenS
 
 	Ok(quote_spanned!(api.name.span() =>
 		// TODO: order between type_params and const_params is undecided
-		// TODO: don't work for generics needs impl<T> for Foo<#(, #lifetimes_org)* #(, #type_params_org)* #(, #const_params_org)*>.
 		impl #impl_generics_org #enum_name {
 			#(#client_functions)*
 		}
