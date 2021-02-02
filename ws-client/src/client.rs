@@ -69,19 +69,22 @@ pub struct WsConfig<'a> {
 	/// Max concurrent request capacity.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_concurrent_requests_capacity`
-	/// because it is passed to [`futures::mpsc::channel`](futures::channel::mpsc::channel)
+	/// because it is passed to [`futures::channel::mpsc::channel`]
 	/// and the capacity may increase because the sender is cloned when new
 	/// requests, notifications and subscriptions are created.
 	pub max_concurrent_requests_capacity: usize,
-	/// Max concurrent capacity for each subscription which might be dropped if the capacity is exceeded.
+	/// Max concurrent capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
+	///
+	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`] frequently enough
+	/// such that the buffer capacity doesn't exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
-	/// because it is passed to [`futures::mpsc::channel`](futures::channel::mpsc::channel).
+	/// because it is passed to [`futures::channel::mpsc::channel`].
 	pub max_subscription_capacity: usize,
 }
 
 impl<'a> WsConfig<'a> {
-	/// Default `WebSocket` configuration with a specified URL to connect to.
+	/// Default WebSocket configuration with a specified URL to connect to.
 	pub fn with_url(url: &'a str) -> Self {
 		Self {
 			url,
