@@ -34,6 +34,7 @@ use futures::{
 };
 use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
+	client::{FrontToBack, Subscription},
 	error::Error,
 	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::Client,
@@ -79,60 +80,6 @@ impl Default for WsConfig {
 	}
 }
 
-/// Active subscription on a [`Client`].
-pub struct WsSubscription<Notif> {
-	/// Channel to send requests to the background task.
-	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
-	notifs_rx: mpsc::Receiver<JsonValue>,
-	/// Subscription ID,
-	id: SubscriptionId,
-	/// Marker in order to pin the `Notif` parameter.
-	marker: PhantomData<Notif>,
-}
-
-/// Message that the [`Client`] can send to the background task.
-enum FrontToBack {
-	/// Send a one-shot notification to the server. The server doesn't give back any feedback.
-	Notification {
-		/// Method for the notification.
-		method: String,
-		/// Parameters to send to the server.
-		params: jsonrpc::Params,
-	},
-
-	/// Send a request to the server.
-	StartRequest {
-		/// Method for the request.
-		method: String,
-		/// Parameters of the request.
-		params: jsonrpc::Params,
-		/// One-shot channel where to send back the outcome of that request.
-		send_back: oneshot::Sender<Result<JsonValue, Error>>,
-	},
-
-	/// Send a subscription request to the server.
-	Subscribe {
-		/// Method for the subscription request.
-		subscribe_method: String,
-		/// Parameters to send for the subscription.
-		params: jsonrpc::Params,
-		/// Method to use to later unsubscription. Used if the channel unexpectedly closes.
-		unsubscribe_method: String,
-		/// When we get a response from the server about that subscription, we send the result on
-		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
-		/// notifications.
-		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
-	},
-
-	/// When a subscription channel is closed, we send this message to the background
-	/// task to mark it ready for garbage collection.
-	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
-	// Such operations will be blocked until a response is received or the background
-	// thread has been terminated.
-	SubscriptionClosed(SubscriptionId),
-}
-
 impl WsClient {
 	/// Initializes a new WebSocket client
 	///
@@ -154,9 +101,6 @@ impl WsClient {
 #[async_trait]
 impl Client for WsClient {
 	type Error = Error;
-	// TODO(niklasad1): this is hack I was too lazy to deal with generic WsSubscription<T>;
-	// I think we could expose the concrete type in the trait instead.
-	type Subscription = WsSubscription<JsonValue>;
 
 	/// Send a notification to the server.
 	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Self::Error>
@@ -214,16 +158,17 @@ impl Client for WsClient {
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	async fn subscribe<SM, UM, P>(
+	async fn subscribe<SM, UM, P, N>(
 		&self,
 		subscribe_method: SM,
 		params: P,
 		unsubscribe_method: UM,
-	) -> Result<Self::Subscription, Self::Error>
+	) -> Result<Subscription<N>, Self::Error>
 	where
 		SM: Into<String> + Send,
 		UM: Into<String> + Send,
 		P: Into<jsonrpc::Params> + Send,
+		N: DeserializeOwned,
 	{
 		let subscribe_method = subscribe_method.into();
 		let unsubscribe_method = unsubscribe_method.into();
@@ -250,39 +195,7 @@ impl Client for WsClient {
 			}
 		};
 
-		Ok(WsSubscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
-	}
-}
-
-impl<Notif> WsSubscription<Notif>
-where
-	Notif: jsonrpc::DeserializeOwned,
-{
-	/// Returns the next notification from the stream
-	/// This may return `None` if the subscription has been terminated, may happen if the channel becomes full or dropped.
-	///
-	/// Ignores any malformed packet.
-	pub async fn next(&mut self) -> Option<Notif> {
-		loop {
-			match self.notifs_rx.next().await {
-				Some(n) => match jsonrpc::from_value(n) {
-					Ok(parsed) => return Some(parsed),
-					Err(e) => log::error!("Subscription response error: {:?}", e),
-				},
-				None => return None,
-			}
-		}
-	}
-}
-
-impl<Notif> Drop for WsSubscription<Notif> {
-	fn drop(&mut self) {
-		// We can't actually guarantee that this goes through. If the background task is busy, then
-		// the channel's buffer will be full, and our unsubscription request will never make it.
-		// However, when a notification arrives, the background task will realize that the channel
-		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let id = std::mem::replace(&mut self.id, SubscriptionId::Num(0));
-		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(id)).now_or_never();
+		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
 }
 

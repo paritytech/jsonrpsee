@@ -14,5 +14,8 @@ pub mod error;
 /// Shared types for HTTP
 pub mod http;
 
+/// Shared client types.
+pub mod client;
+
 /// Traits
 pub mod traits;
