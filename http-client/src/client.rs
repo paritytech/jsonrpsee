@@ -34,9 +34,9 @@ impl HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	type Error = Error;
+	//type Error = Error;
 
-	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Self::Error>
+	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
 	where
 		M: Into<String> + Send,
 		P: Into<jsonrpc::Params> + Send,
@@ -51,7 +51,7 @@ impl Client for HttpClient {
 	}
 
 	/// Perform a request towards the server.
-	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Self::Error>
+	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
 	where
 		T: DeserializeOwned,
 		M: Into<String> + Send,
@@ -91,7 +91,7 @@ impl Client for HttpClient {
 		_subscribe_method: SM,
 		_params: P,
 		_unsubscribe_method: UM,
-	) -> Result<Subscription<N>, Self::Error>
+	) -> Result<Subscription<N>, Error>
 	where
 		SM: Into<String> + Send,
 		UM: Into<String> + Send,

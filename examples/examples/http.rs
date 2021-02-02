@@ -28,10 +28,13 @@ use async_std::task;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 use jsonrpsee_http_server::HttpServer;
-use jsonrpsee_types::{
-	jsonrpc::{JsonValue, Params},
-	traits::Client,
-};
+use jsonrpsee_types::jsonrpc::JsonValue;
+
+jsonrpsee_proc_macros::rpc_client_api! {
+	Health {
+		fn say_hello(foo: String, bar: i32) -> String;
+	}
+}
 
 const SOCK_ADDR: &str = "127.0.0.1:9933";
 const SERVER_URI: &str = "http://localhost:9933";
@@ -48,7 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	server_started_rx.await?;
 
 	let client = HttpClient::new(SERVER_URI, HttpConfig::default())?;
-	let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
+	let response = Health::say_hello(&client, "hello", 5).await;
 	println!("r: {:?}", response);
 
 	Ok(())

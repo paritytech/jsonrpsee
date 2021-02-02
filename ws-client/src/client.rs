@@ -100,10 +100,10 @@ impl WsClient {
 
 #[async_trait]
 impl Client for WsClient {
-	type Error = Error;
+	//type Error = Error;
 
 	/// Send a notification to the server.
-	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Self::Error>
+	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
 	where
 		M: Into<String> + Send,
 		P: Into<jsonrpc::Params> + Send,
@@ -115,7 +115,7 @@ impl Client for WsClient {
 	}
 
 	/// Perform a request towards the server.
-	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Self::Error>
+	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
 	where
 		T: DeserializeOwned,
 		M: Into<String> + Send,
@@ -163,7 +163,7 @@ impl Client for WsClient {
 		subscribe_method: SM,
 		params: P,
 		unsubscribe_method: UM,
-	) -> Result<Subscription<N>, Self::Error>
+	) -> Result<Subscription<N>, Error>
 	where
 		SM: Into<String> + Send,
 		UM: Into<String> + Send,

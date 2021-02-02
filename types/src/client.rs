@@ -71,7 +71,7 @@ where
 			match self.notifs_rx.next().await {
 				Some(n) => match jsonrpc::from_value(n) {
 					Ok(parsed) => return Some(parsed),
-					Err(e) => log::error!("Subscription response error: {:?}", e),
+					Err(e) => log::info!("Subscription response error: {:?}", e),
 				},
 				None => return None,
 			}

@@ -1,4 +1,5 @@
 use crate::client::Subscription;
+use crate::error::Error;
 use crate::jsonrpc::{DeserializeOwned, Params};
 use alloc::string::String;
 use async_trait::async_trait;
@@ -8,16 +9,16 @@ use core::fmt;
 #[async_trait]
 pub trait Client {
 	/// Error.
-	type Error: fmt::Display;
+	//type Error: fmt::Display;
 
 	/// Send a notification request.
-	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Self::Error>
+	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
 	where
 		M: Into<String> + Send,
 		P: Into<Params> + Send;
 
 	/// Send a method call request.
-	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Self::Error>
+	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
 	where
 		T: DeserializeOwned,
 		M: Into<String> + Send,
@@ -34,7 +35,7 @@ pub trait Client {
 		subscribe_method: SM,
 		params: P,
 		unsubscribe_method: UM,
-	) -> Result<Subscription<N>, Self::Error>
+	) -> Result<Subscription<N>, Error>
 	where
 		SM: Into<String> + Send,
 		UM: Into<String> + Send,
