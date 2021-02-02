@@ -67,7 +67,8 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 	//let debug_variants = build_debug_variants(&api)?;
 
 	Ok(quote_spanned!(api.name.span()=>
-		#visibility struct #enum_name #tweaked_generics;
+		// TODO: doesn't work for generics.
+		#visibility struct #enum_name #tweaked_generics(core::marker::PhantomData<()>);
 
 		#client_impl_block
 
@@ -81,17 +82,17 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
 	let enum_name = &api.name;
 
-	let (impl_generics_org, _, where_clause_org) = api.generics.split_for_impl();
+	let (impl_generics_org, type_generics, where_clause_org) = api.generics.split_for_impl();
 	let lifetimes_org = api.generics.lifetimes();
 	let type_params_org = api.generics.type_params();
 	let const_params_org = api.generics.const_params();
 
+	//let is_generic = api.generics.type_params().count() > 0 || api.generics.type_params().count()
 	let client_functions = build_client_functions(&api)?;
 
 	Ok(quote_spanned!(api.name.span() =>
 		// TODO: order between type_params and const_params is undecided
-		// TODO: don't work for generics needs impl<T> for Foo<#(, #lifetimes_org)* #(, #type_params_org)* #(, #const_params_org)*>.
-		impl #impl_generics_org #enum_name {
+		impl #impl_generics_org #enum_name #type_generics #where_clause_org {
 			#(#client_functions)*
 		}
 	))

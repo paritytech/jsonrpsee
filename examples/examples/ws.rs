@@ -26,7 +26,10 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::jsonrpc::JsonValue;
+use jsonrpsee_types::{
+	error::Error,
+	jsonrpc::JsonValue,
+};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use jsonrpsee_ws_server::WsServer;
 
@@ -38,13 +41,10 @@ jsonrpsee_proc_macros::rpc_client_api! {
 		fn say_hello(foo: String, bar: i32) -> String;
 	}
 
-	/* Generics DOES NOT WORK, yeeet.
-
-	Performance<T> {
-		fn am_i_fast(n: usize) -> T;
-		fn slow<S>() -> S;
+	// TODO: doesn't work...
+	Performance<N, B> {
+		fn slow(n: N) -> B;
 	}
-	*/
 }
 
 #[async_std::main]
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	server_started_rx.await?;
 	let client = WsClient::new(SERVER_URI, WsConfig::default()).await?;
-	let response = Health::say_hello(&client, "hello", 5).await;
+	let response = Health::say_hello(&client, "bar".to_string(), 99).await;
 	println!("r: {:?}", response);
 
 	Ok(())
