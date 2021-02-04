@@ -103,9 +103,8 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 	}
 
 	Ok(quote_spanned!(api.name.span()=>
-		#[allow(unused)]
 		#visibility enum #enum_name #tweaked_generics {
-			 #(#variants,)* Foo { #(#ret_variants,)* }
+			 #(#variants,)* #[allow(unused)] ReturnType { #(#ret_variants,)* }
 		}
 
 		#client_impl_block
@@ -173,11 +172,11 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name.to_string(),
-					jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
+					jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span =>
-				jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
+				jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
 			));
 		}
 
@@ -213,8 +212,19 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
 			// TODO: what if there's a conflict between `client` and a param name?
-			// Doesn't support type params in function signature `async fn #f_name<T>()`
-			#visibility async fn #f_name(client: &impl jsonrpsee_types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, jsonrpsee_types::error::Error>
+			// TODO(niklasad1): generic type params for individual methods doesn't work
+			// because how the enum is generates, so for now type params must be declared on the enum 
+			// such as
+			// ```no run
+			//  Bar<T> {
+			//	   fn notif();
+			//		 fn generic_notif(t: T);
+			//		 // don't work
+			//     fn generic_notif2<U>(t: U);
+			//  }
+			//```
+
+			#visibility async fn #f_name (client: &impl jsonrpsee_types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, jsonrpsee_types::error::Error>
 			where
 				#ret_ty: jsonrpsee_types::jsonrpc::DeserializeOwned
 				#(, #params_tys: jsonrpsee_types::jsonrpc::Serialize)*

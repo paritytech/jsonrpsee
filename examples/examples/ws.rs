@@ -26,7 +26,7 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::{error::Error, jsonrpc::JsonValue};
+use jsonrpsee_types::jsonrpc::JsonValue;
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use jsonrpsee_ws_server::WsServer;
 
@@ -37,13 +37,12 @@ jsonrpsee_proc_macros::rpc_client_api! {
 	Health {
 		fn say_hello(foo: String, bar: i32) -> String;
 		fn say_goodbye(g: i32) -> String;
-		fn notif(n: u8);
+		fn notif(n: i64);
 	}
 
 	Performance<N, B> {
-		fn say_hello(n: N) -> B;
-		// don't work.
-		// fn bar<T>(x: T) -> B;
+		#[rpc(method = "say_hello")]
+		fn generic_hello(n: N) -> B;
 	}
 }
 
@@ -58,8 +57,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	server_started_rx.await?;
 	let client = WsClient::new(SERVER_URI, WsConfig::default()).await?;
-	let response = Performance::<u32, String>::say_hello(&client, 1_000_u32).await;
-	println!("r: {:?}", response);
+	let response = Performance::<u32, String>::generic_hello(&client, 1_000_u32).await;
+	println!("method call slow: {:?}", response);
+
+	let response = Health::say_hello(&client, "am_i_health_now", 1_000_i32).await;
+	println!("method say_hello: {:?}", response);
 
 	Ok(())
 }

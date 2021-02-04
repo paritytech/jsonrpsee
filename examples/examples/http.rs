@@ -32,9 +32,6 @@ use jsonrpsee_types::jsonrpc::JsonValue;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	Health {
-		fn say_hello(foo: String, bar: i32) -> String;
-
-		// doesn't work
 		#[rpc(method = "goodbye")]
 		fn g(n: u32) -> String;
 	}
