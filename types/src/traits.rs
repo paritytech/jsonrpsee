@@ -5,7 +5,7 @@ use alloc::string::String;
 use async_trait::async_trait;
 use core::fmt;
 
-/// Basic `JSONRPC` client that can make requests and notifications.
+/// Basic `JSONRPC` client that can make requests, notifications and subscriptions.
 #[async_trait]
 pub trait Client {
 	/// Error.
