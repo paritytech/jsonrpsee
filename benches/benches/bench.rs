@@ -81,7 +81,9 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
 	async_std::task::spawn(ws_server(tx_addr));
 	let server_addr = block_on(rx_addr).unwrap();
-	let client = Arc::new(block_on(WsClient::new(&format!("ws://{}", server_addr), WsConfig::default())).unwrap());
+	let url = format!("ws://{}", server_addr);
+	let config = WsConfig::with_url(&url);
+	let client = Arc::new(block_on(WsClient::new(config)).unwrap());
 
 	c.bench_function("synchronous_websocket_round_trip", |b| {
 		b.iter(|| {

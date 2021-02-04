@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::WsConfig;
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
@@ -46,7 +47,7 @@ pub struct Receiver {
 	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
-/// Builder for a [`WsTransportClient`].
+/// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 pub struct WsTransportClientBuilder<'a> {
 	/// IP address to try to connect to.
 	target: SocketAddr,
@@ -57,12 +58,14 @@ pub struct WsTransportClientBuilder<'a> {
 	/// Stream mode, either plain TCP or TLS.
 	mode: Mode,
 	/// Url to send during the HTTP handshake.
-	url: Cow<'a, str>,
+	handshake_url: Cow<'a, str>,
 	/// Timeout for the connection.
 	timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header is passed.
 	origin: Option<Cow<'a, str>>,
+	/// Max payload size
+	max_request_body_size: usize,
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -103,7 +106,7 @@ pub enum WsNewError {
 
 /// Error that can happen during the initial handshake.
 #[derive(Debug, Error)]
-pub enum WsNewDnsError {
+pub enum WsHandshakeError {
 	/// Invalid URL.
 	#[error("Invalid url: {}", 0)]
 	Url(Cow<'static, str>),
@@ -141,34 +144,15 @@ pub enum WsConnectError {
 	ParseError(#[source] serde_json::error::Error),
 }
 
-/// Creates a new [`WsTransportClientBuilder`] containing the given address and hostname.
-pub fn builder<'a>(
-	target: SocketAddr,
-	host: impl Into<Cow<'a, str>>,
-	dns_name: impl Into<Cow<'a, str>>,
-	mode: Mode,
-) -> WsTransportClientBuilder<'a> {
-	WsTransportClientBuilder {
-		target,
-		host: host.into(),
-		dns_name: dns_name.into(),
-		mode,
-		url: From::from("/"),
-		timeout: Duration::from_secs(10),
-		origin: None,
-	}
-}
-
-/// Creates a new WebSocket connection from URL, represented as a Sender and Receiver pair.
-pub async fn websocket_connection(remote_addr: impl AsRef<str>) -> Result<(Sender, Receiver), WsNewDnsError> {
-	let url =
-		url::Url::parse(remote_addr.as_ref()).map_err(|e| WsNewDnsError::Url(format!("Invalid URL: {}", e).into()))?;
+/// Creates a new WebSocket connection based on [`WsConfig`](crate::WsConfig) represented as a Sender and Receiver pair.
+pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
+	let url = url::Url::parse(&config.url).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
 	let mode = match url.scheme() {
 		"ws" => Mode::Plain,
 		"wss" => Mode::Tls,
-		_ => return Err(WsNewDnsError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
+		_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
 	};
-	let host = url.host_str().ok_or_else(|| WsNewDnsError::Url("No host in URL".into()))?;
+	let host = url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
 	let target = match url.port_or_known_default() {
 		Some(port) => format!("{}:{}", host, port),
 		None => host.to_string(),
@@ -176,17 +160,28 @@ pub async fn websocket_connection(remote_addr: impl AsRef<str>) -> Result<(Sende
 
 	let mut error = None;
 
-	for url in target.to_socket_addrs().await.map_err(WsNewDnsError::ResolutionFailed)? {
-		match builder(url, &target, host, mode).build().await {
-			Ok(ws_raw_client) => return Ok(ws_raw_client),
+	for sockaddr in target.to_socket_addrs().await.map_err(WsHandshakeError::ResolutionFailed)? {
+		let builder = WsTransportClientBuilder {
+			target: sockaddr,
+			host: host.into(),
+			dns_name: target.as_str().into(),
+			mode,
+			handshake_url: config.handshake_url.clone(),
+			timeout: config.connection_timeout,
+			origin: None,
+			max_request_body_size: config.max_request_body_size,
+		};
+
+		match builder.build().await {
+			Ok(ws) => return Ok(ws),
 			Err(err) => error = Some(err),
-		}
+		};
 	}
 
 	if let Some(error) = error {
-		Err(WsNewDnsError::Connect(error))
+		Err(WsHandshakeError::Connect(error))
 	} else {
-		Err(WsNewDnsError::NoAddressFound)
+		Err(WsHandshakeError::NoAddressFound)
 	}
 }
 
@@ -217,8 +212,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 	/// Sets the URL to pass during the HTTP handshake.
 	///
 	/// The default URL is `/`.
-	pub fn with_url(mut self, url: impl Into<Cow<'a, str>>) -> Self {
-		self.url = url.into();
+	pub fn with_handshake_url(mut self, url: impl Into<Cow<'a, str>>) -> Self {
+		self.handshake_url = url.into();
 		self
 	}
 
@@ -233,7 +228,6 @@ impl<'a> WsTransportClientBuilder<'a> {
 	/// Sets the timeout to use when establishing the TCP connection.
 	///
 	/// The default timeout is 10 seconds.
-	// TODO: design decision: should the timeout not be handled by the user?
 	pub fn with_timeout(mut self, timeout: Duration) -> Self {
 		self.timeout = timeout;
 		self
@@ -261,7 +255,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		};
 
 		// Configure a WebSockets client on top.
-		let mut client = WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.host, &self.url);
+		let mut client = WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.host, &self.handshake_url);
 		if let Some(origin) = self.origin.as_ref() {
 			client.set_origin(origin);
 		}
@@ -276,7 +270,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 		}
 
 		// If the handshake succeeded, return.
-		let (sender, receiver) = client.into_builder().finish();
+		let mut builder = client.into_builder();
+		builder.set_max_message_size(self.max_request_body_size);
+		let (sender, receiver) = builder.finish();
 		Ok((Sender { inner: sender }, Receiver { inner: receiver }))
 	}
 }
@@ -299,9 +295,9 @@ impl From<soketto::handshake::Error> for WsNewError {
 	}
 }
 
-impl From<WsNewError> for WsNewDnsError {
-	fn from(err: WsNewError) -> WsNewDnsError {
-		WsNewDnsError::Connect(err)
+impl From<WsNewError> for WsHandshakeError {
+	fn from(err: WsNewError) -> WsHandshakeError {
+		WsHandshakeError::Connect(err)
 	}
 }
 

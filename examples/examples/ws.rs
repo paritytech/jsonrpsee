@@ -56,7 +56,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 
 	server_started_rx.await?;
-	let client = WsClient::new(SERVER_URI, WsConfig::default()).await?;
+	let config = WsConfig::with_url(SERVER_URI);
+	let client = WsClient::new(config).await?;
+
 	let response = Performance::<u32, String>::generic_hello(&client, 1_000_u32).await;
 	println!("method call slow: {:?}", response);
 
