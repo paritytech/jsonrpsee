@@ -33,6 +33,10 @@ use jsonrpsee_types::jsonrpc::JsonValue;
 jsonrpsee_proc_macros::rpc_client_api! {
 	Health {
 		fn say_hello(foo: String, bar: i32) -> String;
+
+		// doesn't work
+		#[rpc(method = "goodbye")]
+		fn g(n: u32) -> String;
 	}
 }
 
@@ -51,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	server_started_rx.await?;
 
 	let client = HttpClient::new(SERVER_URI, HttpConfig::default())?;
-	let response = Health::say_hello(&client, "hello", 5).await;
+	let response = Health::g(&client, 5_u32).await;
 	println!("r: {:?}", response);
 
 	Ok(())

@@ -26,10 +26,7 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::{
-	error::Error,
-	jsonrpc::JsonValue,
-};
+use jsonrpsee_types::{error::Error, jsonrpc::JsonValue};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use jsonrpsee_ws_server::WsServer;
 
@@ -39,11 +36,14 @@ const SERVER_URI: &str = "ws://localhost:9944";
 jsonrpsee_proc_macros::rpc_client_api! {
 	Health {
 		fn say_hello(foo: String, bar: i32) -> String;
+		fn say_goodbye(g: i32) -> String;
+		fn notif(n: u8);
 	}
 
-	// TODO: doesn't work...
 	Performance<N, B> {
-		fn slow(n: N) -> B;
+		fn say_hello(n: N) -> B;
+		// don't work.
+		// fn bar<T>(x: T) -> B;
 	}
 }
 
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	server_started_rx.await?;
 	let client = WsClient::new(SERVER_URI, WsConfig::default()).await?;
-	let response = Health::say_hello(&client, "bar".to_string(), 99).await;
+	let response = Performance::<u32, String>::say_hello(&client, 1_000_u32).await;
 	println!("r: {:?}", response);
 
 	Ok(())

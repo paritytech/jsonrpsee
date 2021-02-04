@@ -28,7 +28,7 @@ extern crate proc_macro;
 
 use inflector::Inflector as _;
 use proc_macro::TokenStream;
-use quote::{quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned};
 use std::collections::HashSet;
 use syn::spanned::Spanned as _;
 
@@ -61,14 +61,52 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 	let enum_name = &api.name;
 	let visibility = &api.visibility;
 	// TODO: make sure there's no conflict here
-	let mut tweaked_generics = api.generics.clone();
+	let tweaked_generics = api.generics.clone();
+	let mut non_used_type_params = HashSet::new();
+
+	let mut variants = Vec::new();
+	for function in &api.definitions {
+		let variant_name = snake_case_to_camel_case(&function.signature.ident);
+		if let syn::ReturnType::Type(_, ty) = &function.signature.output {
+			non_used_type_params.insert(ty);
+		};
+
+		let mut params_list = Vec::new();
+
+		for input in function.signature.inputs.iter() {
+			let (ty, pat_span, param_variant_name) = match input {
+				syn::FnArg::Receiver(_) => {
+					return Err(syn::Error::new(
+						input.span(),
+						"Having `self` is not allowed in RPC queries definitions",
+					));
+				}
+				syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => (ty, pat.span(), param_variant_name(&pat)?),
+			};
+			params_list.push(quote_spanned!(pat_span=> #param_variant_name: #ty));
+		}
+
+		variants.push(quote_spanned!(function.signature.ident.span()=>
+			#variant_name {
+				#(#params_list,)*
+			}
+		));
+	}
 
 	let client_impl_block = build_client_impl(&api)?;
 	//let debug_variants = build_debug_variants(&api)?;
 
+	let mut ret_variants = Vec::new();
+	for (idx, ty) in non_used_type_params.into_iter().enumerate() {
+		let varname = format_ident!("_{}", idx);
+		ret_variants.push(quote_spanned!(ty.span()=> #varname : #ty));
+	}
+
 	Ok(quote_spanned!(api.name.span()=>
-		// TODO: doesn't work for generics.
-		#visibility struct #enum_name #tweaked_generics(core::marker::PhantomData<()>);
+		#[allow(unused)]
+		#visibility enum #enum_name #tweaked_generics {
+			 #(#variants,)* Foo { #(#ret_variants,)* }
+		}
 
 		#client_impl_block
 
@@ -83,11 +121,6 @@ fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenS
 	let enum_name = &api.name;
 
 	let (impl_generics_org, type_generics, where_clause_org) = api.generics.split_for_impl();
-	let lifetimes_org = api.generics.lifetimes();
-	let type_params_org = api.generics.type_params();
-	let const_params_org = api.generics.const_params();
-
-	//let is_generic = api.generics.type_params().count() > 0 || api.generics.type_params().count()
 	let client_functions = build_client_functions(&api)?;
 
 	Ok(quote_spanned!(api.name.span() =>
@@ -180,6 +213,7 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
 			// TODO: what if there's a conflict between `client` and a param name?
+			// Doesn't support type params in function signature `async fn #f_name<T>()`
 			#visibility async fn #f_name(client: &impl jsonrpsee_types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, jsonrpsee_types::error::Error>
 			where
 				#ret_ty: jsonrpsee_types::jsonrpc::DeserializeOwned
