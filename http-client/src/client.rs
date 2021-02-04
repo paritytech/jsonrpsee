@@ -34,7 +34,7 @@ impl HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	//type Error = Error;
+	type Error = Error;
 
 	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
 	where

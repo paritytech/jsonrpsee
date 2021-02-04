@@ -9,7 +9,7 @@ use core::fmt;
 #[async_trait]
 pub trait Client {
 	/// Error.
-	//type Error: fmt::Display;
+	type Error: fmt::Display;
 
 	/// Send a notification request.
 	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
