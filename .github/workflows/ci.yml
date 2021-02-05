@@ -64,17 +64,17 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cargo check no-default-features
+      - name: Cargo check all targets
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --benches --tests
+          args: --all-targets
 
-      - name: Cargo check all-features
+      - name: Cargo check HTTP client with tokio02
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --benches --tests --all-features
+          args: --manifest-path http-client/Cargo.toml --no-default-features --features tokio02
 
   tests:
     name: Run tests
