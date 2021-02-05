@@ -26,10 +26,13 @@
 
 //! HTTP Server utilities for the `jsonrpsee` library
 
+#[cfg(any(feature = "tokio1", feature = "tokio02"))]
 pub mod access_control;
+#[cfg(any(feature = "tokio1", feature = "tokio02"))]
+pub mod hyper_helpers;
+
 pub mod cors;
 pub mod hosts;
-pub mod hyper_helpers;
 
 mod matcher;
 
