@@ -21,8 +21,8 @@ url = "2.2"
 
 [features]
 default = ["tokio1"]
-tokio1 = ["hyper14", "jsonrpsee-utils/tokio1"]
-tokio02 = ["hyper13", "jsonrpsee-utils/tokio02"]
+tokio1 = ["hyper14", "jsonrpsee-utils/hyper14"]
+tokio02 = ["hyper13", "jsonrpsee-utils/hyper13"]
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }

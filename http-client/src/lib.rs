@@ -1,10 +1,13 @@
-#[cfg(not(any(feature = "tokio1", feature = "tokio02")))]
-compile_error!("Either feature \"tokio1\" or \"tokio02\" must be enabled for this crate.");
+#[cfg(all(feature = "tokio1", feature = "tokio02"))]
+compile_error!("feature \"tokio1\" and \"tokio02\" are mutably exclusive");
 
-#[cfg(feature = "tokio1")]
+#[cfg(not(any(feature = "tokio1", feature = "tokio02")))]
+compile_error!("feature \"tokio1\" or \"tokio02\" must be enabled for this crate");
+
+#[cfg(all(feature = "tokio1", not(feature = "tokio02")))]
 extern crate hyper14 as hyper;
 
-#[cfg(feature = "tokio02")]
+#[cfg(all(feature = "tokio02", not(feature = "tokio1")))]
 extern crate hyper13 as hyper;
 
 mod client;
