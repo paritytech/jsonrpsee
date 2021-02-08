@@ -15,16 +15,14 @@ pub trait Client {
 	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
 	where
 		M: Into<String> + Send,
-		P: Into<Params> + Send,
-		Self: Sized;
+		P: Into<Params> + Send;
 
 	/// Send a method call request.
 	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
 	where
 		T: DeserializeOwned,
 		M: Into<String> + Send,
-		P: Into<Params> + Send,
-		Self: Sized;
+		P: Into<Params> + Send;
 
 	/// Send a subscription request to the server.
 	///
@@ -42,6 +40,5 @@ pub trait Client {
 		SM: Into<String> + Send,
 		UM: Into<String> + Send,
 		P: Into<Params> + Send,
-		N: DeserializeOwned,
-		Self: Sized;
+		N: DeserializeOwned;
 }
