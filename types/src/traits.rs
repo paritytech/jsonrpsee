@@ -3,14 +3,10 @@ use crate::error::Error;
 use crate::jsonrpc::{DeserializeOwned, Params};
 use alloc::string::String;
 use async_trait::async_trait;
-use core::fmt;
 
 /// Basic `JSONRPC` client that can make requests, notifications and subscriptions.
 #[async_trait]
 pub trait Client {
-	/// Error.
-	type Error: fmt::Display;
-
 	/// Send a notification request.
 	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
 	where

@@ -124,8 +124,6 @@ impl WsClient {
 
 #[async_trait]
 impl Client for WsClient {
-	type Error = Error;
-
 	/// Send a notification to the server.
 	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
 	where
