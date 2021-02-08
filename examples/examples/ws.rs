@@ -26,25 +26,12 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::jsonrpc::JsonValue;
+use jsonrpsee_types::jsonrpc::{JsonValue, Params};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use jsonrpsee_ws_server::WsServer;
 
 const SOCK_ADDR: &str = "127.0.0.1:9944";
 const SERVER_URI: &str = "ws://localhost:9944";
-
-jsonrpsee_proc_macros::rpc_client_api! {
-	Health {
-		fn say_hello(foo: String, bar: i32) -> String;
-		fn say_goodbye(g: i32) -> String;
-		fn notif(n: i64);
-	}
-
-	Performance<N, B> {
-		#[rpc(method = "say_hello")]
-		fn generic_hello(n: N) -> B;
-	}
-}
 
 #[async_std::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -58,12 +45,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	server_started_rx.await?;
 	let config = WsConfig::with_url(SERVER_URI);
 	let client = WsClient::new(config).await?;
-
-	let response = Performance::<u32, String>::generic_hello(&client, 1_000_u32).await;
-	println!("method call slow: {:?}", response);
-
-	let response = Health::say_hello(&client, "am_i_health_now", 1_000_i32).await;
-	println!("method say_hello: {:?}", response);
+	let response: JsonValue = client.request("say_hello", Params::None).await?;
+	println!("r: {:?}", response);
 
 	Ok(())
 }

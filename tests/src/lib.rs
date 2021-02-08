@@ -27,6 +27,7 @@
 #![cfg(test)]
 
 mod helpers;
+mod proc_macros;
 
 use std::net::SocketAddr;
 use std::time::Duration;
