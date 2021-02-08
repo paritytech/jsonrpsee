@@ -28,7 +28,7 @@ use async_std::task;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee_types::{
 	jsonrpc::{JsonValue, Params},
-	traits::Client
+	traits::Client,
 };
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use jsonrpsee_ws_server::WsServer;
