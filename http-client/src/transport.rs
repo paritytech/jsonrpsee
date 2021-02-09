@@ -6,15 +6,41 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use jsonrpsee_types::{error::GenericTransportError, http::HttpConfig, jsonrpc};
+use async_trait::async_trait;
+use futures::{channel::mpsc, channel::oneshot, prelude::*};
+use jsonrpsee_types::{
+	error::GenericTransportError,
+	http::HttpConfig,
+	jsonrpc::{self, Error as JsonRpcError},
+	traits::{TransportReceiver, TransportSender},
+};
 use jsonrpsee_utils::http::hyper_helpers;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
-/// HTTP Transport Client.
-#[derive(Debug, Clone)]
-pub struct HttpTransportClient {
+pub fn http_transport(target: impl AsRef<str>, config: HttpConfig) -> Result<(Sender, Receiver), Error> {
+	let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
+	let (to_back, from_send) = mpsc::channel::<()>(4);
+	let (to_recv, from_back) = mpsc::channel::<()>(4);
+	let sender = Sender { to_back, target, client: hyper::Client::new(), config };
+	background_thread(to_recv, from_send);
+	let receiver = Receiver { responses: from_back };
+	Ok((sender, receiver))
+}
+
+/// Message transmitted from the foreground task to the background.
+struct FrontToBack {
+	/// Request that the background task should perform.
+	request: hyper::Request<hyper::Body>,
+	/// Channel to send back to the response.
+	send_back: oneshot::Sender<Result<hyper::Response<hyper::Body>, hyper::Error>>,
+}
+
+/// HTTP Transport Sender.
+pub struct Sender {
+	/// to back
+	to_back: mpsc::Sender<()>,
 	/// Target to connect to.
 	target: url::Url,
 	/// HTTP client,
@@ -23,61 +49,23 @@ pub struct HttpTransportClient {
 	config: HttpConfig,
 }
 
-impl HttpTransportClient {
-	/// Initializes a new HTTP client.
-	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
-		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
-		if target.scheme() == "http" {
-			Ok(HttpTransportClient { client: hyper::Client::new(), target, config })
-		} else {
-			Err(Error::Url("URL scheme not supported, expects 'http'".into()))
-		}
+/// HTTP Transport Receiver.
+pub struct Receiver {
+	/// Receives responses in any order.
+	responses: mpsc::Receiver<()>,
+}
+
+#[async_trait]
+impl TransportSender for Sender {
+	async fn send(&mut self, _request: jsonrpc::Request) -> Result<(), JsonRpcError> {
+		todo!();
 	}
+}
 
-	/// Send request.
-	async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, Error> {
-		let body = jsonrpc::to_vec(&request).map_err(Error::Serialization)?;
-		log::debug!("send: {}", request);
-
-		if body.len() > self.config.max_request_body_size as usize {
-			return Err(Error::RequestTooLarge);
-		}
-
-		let req = hyper::Request::post(self.target.as_str())
-			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
-			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
-			.body(From::from(body))
-			.expect("URI and request headers are valid; qed");
-
-		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
-
-		if response.status().is_success() {
-			Ok(response)
-		} else {
-			Err(Error::RequestFailure { status_code: response.status().into() })
-		}
-	}
-
-	/// Send notification.
-	pub async fn send_notification(&self, request: jsonrpc::Request) -> Result<(), Error> {
-		let _response = self.send_request(request).await?;
-		Ok(())
-	}
-
-	/// Send request and wait for response.
-	pub async fn send_request_and_wait_for_response(
-		&self,
-		request: jsonrpc::Request,
-	) -> Result<jsonrpc::Response, Error> {
-		let response = self.send_request(request).await?;
-		let (parts, body) = response.into_parts();
-		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.config).await?;
-
-		// Note that we don't check the Content-Type of the request. This is deemed
-		// unnecessary, as a parsing error while happen anyway.
-		let response: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::ParseError)?;
-		log::debug!("recv: {}", jsonrpc::to_string(&response).expect("request valid JSON; qed"));
-		Ok(response)
+#[async_trait]
+impl TransportReceiver for Receiver {
+	async fn receive(&mut self) -> Result<jsonrpc::Response, JsonRpcError> {
+		todo!();
 	}
 }
 
@@ -129,12 +117,41 @@ where
 	}
 }
 
+/// Function that runs in a background thread.
+fn background_thread(mut from_send: mpsc::Sender<()>, mut to_receiver: mpsc::Receiver<()>) {
+	std::thread::spawn(move || {
+		let mut runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+			Ok(r) => r,
+			Err(err) => {
+				// Ideally, we would try to initialize the tokio runtime in the main thread then move
+				// it here. That however isn't possible. If we fail to initialize the runtime, the only
+				// thing we can do is print an error and shut down the background thread.
+				// Initialization failures should be almost non-existant anyway, so this isn't a big
+				// deal.
+				log::error!("Failed to initialize tokio runtime: {:?}", err);
+				return;
+			}
+		};
+
+		// Running until the channel has been closed, and all requests have been completed.
+		runtime.block_on(async move {
+			// Collection of futures that process ongoing requests.
+			//let mut pending_requests = stream::FuturesUnordered::new();
+
+			loop {
+				// recv from channel.
+			}
+		});
+	});
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{Error, HttpTransportClient};
 	use jsonrpsee_types::{
 		http::HttpConfig,
 		jsonrpc::{Call, Id, MethodCall, Params, Request, Version},
+		traits::TransportSender,
 	};
 
 	#[test]
@@ -158,7 +175,7 @@ mod tests {
 		}));
 		let bytes = serde_json::to_vec(&request).unwrap();
 		assert_eq!(bytes.len(), 81);
-		let response = client.send_request(request).await.unwrap_err();
-		assert!(matches!(response, Error::RequestTooLarge));
+		let response = client.send(request).await.unwrap_err();
+		//assert!(matches!(response, Error::RequestTooLarge));
 	}
 }

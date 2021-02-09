@@ -1,8 +1,10 @@
 use crate::transport::HttpTransportClient;
+use async_trait::async_trait;
 use jsonrpsee_types::{
 	error::Error,
 	http::HttpConfig,
 	jsonrpc::{self, JsonValue},
+	traits::{TransportReceiver, TransportSender},
 };
 
 use std::convert::TryInto;
@@ -31,7 +33,7 @@ impl HttpClient {
 	///
 	/// WARNING: This method must be executed on [Tokio 1.0](https://docs.rs/tokio/1.0.1/tokio).
 	pub async fn notification(
-		&self,
+		&mut self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
 	) -> Result<(), Error> {
@@ -48,7 +50,7 @@ impl HttpClient {
 	///
 	/// WARNING: This method must be executed on [Tokio 1.0](https://docs.rs/tokio/1.0.1/tokio).
 	pub async fn request(
-		&self,
+		&mut self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
 	) -> Result<JsonValue, Error> {

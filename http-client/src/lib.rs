@@ -1,9 +1,9 @@
-mod client;
-mod transport;
+//mod client;
+pub mod transport;
 
 #[cfg(test)]
 mod tests;
 
-pub use client::HttpClient;
+//pub use client::HttpClient;
 pub use jsonrpsee_types::http::HttpConfig;
-pub use transport::HttpTransportClient;
+//pub use transport::HttpTransportClient;

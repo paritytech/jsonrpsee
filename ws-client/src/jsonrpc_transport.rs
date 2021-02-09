@@ -4,7 +4,10 @@
 
 use crate::transport::{self, WsConnectError, WsHandshakeError};
 use crate::WsConfig;
-use jsonrpsee_types::jsonrpc;
+use jsonrpsee_types::{
+	jsonrpc::{self, Error},
+	traits::{TransportReceiver, TransportSender},
+};
 
 /// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
 pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
@@ -30,7 +33,7 @@ impl Sender {
 		&mut self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
-	) -> Result<u64, WsConnectError> {
+	) -> Result<u64, Error> {
 		let id = self.request_id;
 		self.request_id = id.wrapping_add(1);
 
@@ -43,7 +46,7 @@ impl Sender {
 
 		// Note that in case of an error, we "lose" the request id.
 		// This isn't a problem, however.
-		self.transport.send_request(request).await?;
+		self.transport.send(request).await.unwrap();
 
 		Ok(id)
 	}
@@ -55,14 +58,14 @@ impl Sender {
 		&mut self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
-	) -> Result<(), WsConnectError> {
+	) -> Result<(), Error> {
 		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
 			jsonrpc: jsonrpc::Version::V2,
 			method: method.into(),
 			params: params.into(),
 		}));
 
-		self.transport.send_request(request).await
+		self.transport.send(request).await
 	}
 
 	/// Sends a request to the server but it doesn't wait for a response.
@@ -73,7 +76,7 @@ impl Sender {
 		&mut self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
-	) -> Result<u64, WsConnectError> {
+	) -> Result<u64, Error> {
 		self.start_impl(method, params).await
 	}
 
@@ -86,7 +89,8 @@ impl Sender {
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
 	) -> Result<u64, WsConnectError> {
-		self.start_impl(method, params).await
+		let r = self.start_impl(method, params).await.unwrap();
+		Ok(r)
 	}
 }
 
@@ -103,6 +107,7 @@ impl Receiver {
 
 	/// Reads the next response, fails if the response ID was not a number.
 	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
-		self.transport.next_response().await
+		let r = self.transport.receive().await.unwrap();
+		Ok(r)
 	}
 }

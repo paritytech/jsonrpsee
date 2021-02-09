@@ -13,3 +13,12 @@ pub mod error;
 
 /// Shared types for HTTP
 pub mod http;
+
+/// traits.
+pub mod traits;
+
+/// core client
+pub mod client;
+
+/// request manager
+pub mod manager;

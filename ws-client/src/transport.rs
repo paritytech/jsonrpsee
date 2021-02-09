@@ -27,9 +27,11 @@
 use crate::WsConfig;
 use async_std::net::{TcpStream, ToSocketAddrs};
 use async_tls::client::TlsStream;
+use async_trait::async_trait;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
-use jsonrpsee_types::jsonrpc;
+use jsonrpsee_types::jsonrpc::{self, Error};
+use jsonrpsee_types::traits::{TransportReceiver, TransportSender};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
@@ -185,24 +187,26 @@ pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Recei
 	}
 }
 
-impl Sender {
+#[async_trait]
+impl TransportSender for Sender {
 	/// Sends out out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub async fn send_request(&mut self, request: jsonrpc::Request) -> Result<(), WsConnectError> {
+	async fn send(&mut self, request: jsonrpc::Request) -> Result<(), Error> {
 		log::debug!("send: {}", request);
-		let request = jsonrpc::to_vec(&request).map_err(WsConnectError::Serialization)?;
-		self.inner.send_binary(request).await?;
-		self.inner.flush().await?;
+		let request = jsonrpc::to_vec(&request).map_err(WsConnectError::Serialization).unwrap();
+		self.inner.send_binary(request).await.unwrap();
+		self.inner.flush().await.unwrap();
 		Ok(())
 	}
 }
 
-impl Receiver {
+#[async_trait]
+impl TransportReceiver for Receiver {
 	/// Returns a `Future` resolving when the server sent us something back.
-	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
+	async fn receive(&mut self) -> Result<jsonrpc::Response, Error> {
 		let mut message = Vec::new();
-		self.inner.receive_data(&mut message).await?;
-		let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
+		self.inner.receive_data(&mut message).await.unwrap();
+		let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError).unwrap();
 		log::debug!("recv: {}", response);
 		Ok(response)
 	}
