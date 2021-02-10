@@ -74,7 +74,7 @@ impl HttpTransportClient {
 			return Err(Error::RequestTooLarge.into());
 		}
 
-		let mut buffer = Vec::new();
+		let mut buffer = Vec::with_capacity(length);
 		let reader = response.take_body().into_reader();
 		let mut take = reader.take(self.config.max_request_body_size as u64);
 		take.read_to_end(&mut buffer).await.map_err(|e| Error::Http(Box::new(e)))?;
