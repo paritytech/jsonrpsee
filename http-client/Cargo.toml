@@ -23,3 +23,5 @@ tokio = { version = "1.0", features = ["net", "rt-multi-thread", "macros"] }
 
 [features]
 default = ["surf/curl-client"]
+curl-client = ["surf/curl-client"]
+hyper-client = ["surf/hyper-client"]
