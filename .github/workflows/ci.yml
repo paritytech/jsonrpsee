@@ -20,7 +20,6 @@ jobs:
           toolchain: stable
           override: true
           components: clippy, rustfmt
-          target: wasm32-unknown-unknown
 
       - name: Cache Dependencies & Build Outputs
         uses: actions/cache@v2.1.4
@@ -55,6 +54,7 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+          target: wasm32-unknown-unknown
 
       - name: Cache Dependencies & Build Outputs
         uses: actions/cache@v2.1.4
