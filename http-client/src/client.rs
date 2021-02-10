@@ -1,4 +1,5 @@
 use crate::transport::HttpTransportClient;
+use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
 	error::Error,
 	http::HttpConfig,
@@ -47,11 +48,14 @@ impl HttpClient {
 	/// Perform a request towards the server.
 	///
 	/// WARNING: This method must be executed on [Tokio 1.0](https://docs.rs/tokio/1.0.1/tokio).
-	pub async fn request(
+	pub async fn request<Ret>(
 		&self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
-	) -> Result<JsonValue, Error> {
+	) -> Result<Ret, Error>
+	where
+		Ret: DeserializeOwned,
+	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
 		let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
@@ -67,7 +71,7 @@ impl HttpClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		match response {
+		let json_value = match response {
 			jsonrpc::Response::Single(rp) => Self::process_response(rp, id),
 			// Server should not send batch response to a single request.
 			jsonrpc::Response::Batch(_rps) => {
@@ -77,7 +81,8 @@ impl HttpClient {
 			jsonrpc::Response::Notif(_notif) => {
 				Err(Error::Custom(format!("Server replied with notification response to request ID: {}", id)))
 			}
-		}
+		}?;
+		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
 
 	fn process_response(response: jsonrpc::Output, expected_id: u64) -> Result<JsonValue, Error> {
