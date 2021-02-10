@@ -41,7 +41,7 @@ impl HttpClient {
 	}
 
 	/// Perform a request towards the server.
-	pub async fn request<Ret>(
+	pub async fn request(
 		&self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
