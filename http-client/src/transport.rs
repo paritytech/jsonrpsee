@@ -6,8 +6,9 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+use anyhow::anyhow;
 use futures::prelude::*;
-use jsonrpsee_types::{error::GenericTransportError, http::HttpConfig, jsonrpc};
+use jsonrpsee_types::{http::HttpConfig, jsonrpc};
 use surf::http::{mime::JSON, Url};
 use thiserror::Error;
 
@@ -28,7 +29,7 @@ impl HttpTransportClient {
 	/// Initializes a new HTTP client.
 	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
 		let target = Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
-		if target.scheme() == "http" {
+		if target.scheme() == "http" || target.scheme() == "https" {
 			Ok(HttpTransportClient { client: surf::Client::new(), target, config })
 		} else {
 			Err(Error::Url("URL scheme not supported, expects 'http'".into()))
@@ -47,7 +48,7 @@ impl HttpTransportClient {
 		let request =
 			surf::post(&self.target).body(body).header("accept", CONTENT_TYPE_JSON).content_type(JSON).build();
 
-		let response = self.client.send(request).await.unwrap();
+		let response = self.client.send(request).await.map_err(|e| Error::Http(e.into_inner()))?;
 		if response.status().is_success() {
 			Ok(response)
 		} else {
@@ -66,7 +67,7 @@ impl HttpTransportClient {
 		&self,
 		request: jsonrpc::Request,
 	) -> Result<jsonrpc::Response, Error> {
-		let mut response = self.send_request(request).await.map_err(|e| Error::Http(Box::new(e)))?;
+		let mut response = self.send_request(request).await.map_err(|e| Error::Http(anyhow!(e)))?;
 
 		let length = response.len().unwrap_or(0);
 
@@ -77,7 +78,7 @@ impl HttpTransportClient {
 		let mut buffer = Vec::with_capacity(length);
 		let reader = response.take_body().into_reader();
 		let mut take = reader.take(self.config.max_request_body_size as u64);
-		take.read_to_end(&mut buffer).await.map_err(|e| Error::Http(Box::new(e)))?;
+		take.read_to_end(&mut buffer).await.map_err(|e| Error::Http(anyhow!(e)))?;
 
 		let response: jsonrpc::Response = jsonrpc::from_slice(&buffer).map_err(Error::ParseError)?;
 		// Note that we don't check the Content-Type of the request. This is deemed
@@ -105,7 +106,7 @@ pub enum Error {
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
 	#[error("Error while performing the HTTP request")]
-	Http(Box<dyn std::error::Error + Send + Sync>),
+	Http(#[source] anyhow::Error),
 
 	/// Server returned a non-success status code.
 	#[error("Server returned an error status code: {:?}", status_code)]
@@ -121,18 +122,6 @@ pub enum Error {
 	/// Request body too large.
 	#[error("The request body was too large")]
 	RequestTooLarge,
-}
-
-impl<T> From<GenericTransportError<T>> for Error
-where
-	T: std::error::Error + Send + Sync + 'static,
-{
-	fn from(err: GenericTransportError<T>) -> Self {
-		match err {
-			GenericTransportError::<T>::TooLarge => Self::RequestTooLarge,
-			GenericTransportError::<T>::Inner(e) => Self::Http(Box::new(e)),
-		}
-	}
 }
 
 #[cfg(test)]
@@ -166,5 +155,18 @@ mod tests {
 		assert_eq!(bytes.len(), 81);
 		let response = client.send_request(request).await.unwrap_err();
 		assert!(matches!(response, Error::RequestTooLarge));
+	}
+
+	#[tokio::test]
+	async fn https_works() {
+		let client = HttpTransportClient::new("https://kusama-rpc.polkadot.io/", HttpConfig::default()).unwrap();
+		let request = Request::Single(Call::MethodCall(MethodCall {
+			jsonrpc: Version::V2,
+			method: "system_chain".to_string(),
+			params: Params::None,
+			id: Id::Num(1),
+		}));
+		let response: String = client.send_request(request).await.unwrap().body_string().await.unwrap();
+		assert!(response.contains("Kusama"));
 	}
 }

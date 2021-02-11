@@ -7,6 +7,7 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
+anyhow = "1.0"
 futures = "0.3"
 surf = { version = "2.1", default-features = false, optional = true }
 jsonrpsee-types = { path = "../types", version = "0.1" }
