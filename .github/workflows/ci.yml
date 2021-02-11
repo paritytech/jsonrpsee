@@ -22,7 +22,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Cache Dependencies & Build Outputs
-        uses: actions/cache@v2
+        uses: actions/cache@v2.1.4
         with:
           path: |
             ~/.cargo/registry
@@ -54,9 +54,10 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
+          target: wasm32-unknown-unknown
 
       - name: Cache Dependencies & Build Outputs
-        uses: actions/cache@v2
+        uses: actions/cache@v2.1.4
         with:
           path: |
             ~/.cargo/registry
@@ -70,11 +71,17 @@ jobs:
           command: check
           args: --benches --tests
 
-      - name: Cargo check all-features
+      - name: Cargo check HTTP client with hyper
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --benches --tests --all-features
+          args: --manifest-path http-client/Cargo.toml --no-default-features --features hyper-client
+
+      - name: Cargo check HTTP client for WASM.
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --manifest-path http-client/Cargo.toml --no-default-features --features wasm-client --target wasm32-unknown-unknown
 
   tests:
     name: Run tests
@@ -91,7 +98,7 @@ jobs:
           override: true
 
       - name: Cache Dependencies & Build Outputs
-        uses: actions/cache@v2
+        uses: actions/cache@v2.1.4
         with:
           path: |
             ~/.cargo/registry
