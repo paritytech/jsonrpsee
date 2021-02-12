@@ -8,7 +8,8 @@ license = "MIT"
 
 [dependencies]
 futures = "0.3"
-hyper = { version = "0.14", features = ["stream", "client", "server", "http1", "http2", "tcp"] }
+hyper = { version = "0.14", features = ["stream", "client", "http1", "http2", "tcp"] }
+hyper-tls = { version = "0.5", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.1" }
 jsonrpsee-utils = { path = "../utils", version = "0.1" }
 log = "0.4"
@@ -21,3 +22,7 @@ url = "2.2"
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
 tokio = { version = "1.0", features = ["net", "rt-multi-thread", "macros"] }
+
+[features]
+default = ["tls"]
+tls = ["hyper-tls"]

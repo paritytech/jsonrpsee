@@ -207,3 +207,17 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 		req.await.unwrap();
 	}
 }
+
+#[tokio::test]
+async fn https_works() {
+	let client = HttpClient::new("https://kusama-rpc.polkadot.io", HttpConfig::default()).unwrap();
+	let response: String = client.request("system_chain", Params::None).await.unwrap();
+	assert_eq!(&response, "Kusama");
+}
+
+#[tokio::test]
+async fn wss_works() {
+	let client = WsClient::new(WsConfig::with_url("wss://kusama-rpc.polkadot.io")).await.unwrap();
+	let response: String = client.request("system_chain", Params::None).await.unwrap();
+	assert_eq!(&response, "Kusama");
+}

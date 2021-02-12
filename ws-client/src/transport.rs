@@ -163,8 +163,8 @@ pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Recei
 	for sockaddr in target.to_socket_addrs().await.map_err(WsHandshakeError::ResolutionFailed)? {
 		let builder = WsTransportClientBuilder {
 			target: sockaddr,
-			host: host.into(),
-			dns_name: target.as_str().into(),
+			host: target.as_str().into(),
+			dns_name: host.into(),
 			mode,
 			handshake_url: config.handshake_url.clone(),
 			timeout: config.connection_timeout,
