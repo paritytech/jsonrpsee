@@ -54,7 +54,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-          target: wasm32-unknown-unknown
 
       - name: Cache Dependencies & Build Outputs
         uses: actions/cache@v2.1.4
@@ -71,17 +70,11 @@ jobs:
           command: check
           args: --benches --tests
 
-      - name: Cargo check HTTP client with hyper
+      - name: Cargo check all-features
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --manifest-path http-client/Cargo.toml --no-default-features --features hyper-client
-
-      - name: Cargo check HTTP client for WASM.
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --manifest-path http-client/Cargo.toml --no-default-features --features wasm-client --target wasm32-unknown-unknown
+          args: --benches --tests --all-features
 
   tests:
     name: Run tests
