@@ -8,7 +8,7 @@ license = "MIT"
 
 [dependencies]
 futures = "0.3"
-hyper = { version = "0.14", default-features = true, features = ["client", "http1", "http2"] }
+hyper = { version = "0.14", default-features = false, features = ["client", "http1", "http2"] }
 hyper-rustls = { version = "0.22", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.1" }
 jsonrpsee-utils = { path = "../utils", version = "0.1" }
