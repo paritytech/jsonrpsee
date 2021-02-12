@@ -8,8 +8,8 @@ license = "MIT"
 
 [dependencies]
 futures = "0.3"
-hyper = { version = "0.14", features = ["stream", "client", "http1", "http2", "tcp"] }
-hyper-tls = { version = "0.5", optional = true }
+hyper = { version = "0.14", default-features = true, features = ["client", "http1", "http2"] }
+hyper-rustls = { version = "0.22", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.1" }
 jsonrpsee-utils = { path = "../utils", version = "0.1" }
 log = "0.4"
@@ -25,4 +25,4 @@ tokio = { version = "1.0", features = ["net", "rt-multi-thread", "macros"] }
 
 [features]
 default = ["tls"]
-tls = ["hyper-tls"]
+tls = ["hyper-rustls"]
