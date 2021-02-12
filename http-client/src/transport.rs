@@ -80,7 +80,6 @@ impl HttpTransportClient {
 			.expect("URI and request headers are valid; qed");
 
 		let response = self.client.request(req).await?;
-
 		if response.status().is_success() {
 			Ok(response)
 		} else {
