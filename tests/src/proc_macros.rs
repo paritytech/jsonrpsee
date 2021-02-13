@@ -48,6 +48,17 @@ jsonrpsee_proc_macros::rpc_client_api! {
 	}
 }
 
+jsonrpsee_proc_macros::rpc_client_api! {
+	ManyReturnTypes<A, B, C, D, E> {
+		#[rpc(method = "say_hello")]
+		fn a() -> A;
+		fn b() -> B;
+		fn c() -> C;
+		fn d() -> D;
+		fn e() -> E;
+	}
+}
+
 #[tokio::test]
 async fn proc_macros_generic_ws_client_api() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();

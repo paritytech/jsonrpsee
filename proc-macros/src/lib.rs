@@ -60,8 +60,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
 	let enum_name = &api.name;
 	let visibility = &api.visibility;
-	// TODO: make sure there's no conflict here
-	let tweaked_generics = api.generics.clone();
+	let generics = api.generics.clone();
 	let mut non_used_type_params = HashSet::new();
 
 	let mut variants = Vec::new();
@@ -94,22 +93,35 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 	}
 
 	let client_impl_block = build_client_impl(&api)?;
+	// TODO(niklasad1): do we want debug impl here?
 	//let debug_variants = build_debug_variants(&api)?;
 
 	let mut ret_variants = Vec::new();
 	for (idx, ty) in non_used_type_params.into_iter().enumerate() {
+		// NOTE: variant names are converted from `snake_case` to `CamelCase`
+		// It's impossible to have collisions between `_0, _1, ... _N`
+		// Because variant name `_0`, `__0` becomes `0` in `CamelCase`
+		// then `0` is not a valid identifier in Rust syntax and the error message is hard to understand.
+		// Perhaps document this in macro when it's ready.
 		let varname = format_ident!("_{}", idx);
-		ret_variants.push(quote_spanned!(ty.span()=> #varname : #ty));
+		ret_variants.push(quote_spanned!(ty.span()=> #varname (#ty)));
 	}
 
 	Ok(quote_spanned!(api.name.span()=>
-		#visibility enum #enum_name #tweaked_generics {
-			 #(#variants,)* #[allow(unused)] ReturnType { #(#ret_variants,)* }
+		#visibility enum #enum_name #generics {
+			 #(#variants,)* #(#[allow(unused)] #ret_variants,)*
 		}
 
 		#client_impl_block
 
-		//TODO: debug impl.
+		// TODO(niklasad1): do we want debug impl here?
+		/*impl #generics core::fmt::Debug  for #enum_name #generics {
+			fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+				match self {
+					#(#debug_variants,)* _ => f.debug_struct("ReturnType").finish()
+				}
+			}
+		}*/
 	))
 }
 
@@ -123,7 +135,6 @@ fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenS
 	let client_functions = build_client_functions(&api)?;
 
 	Ok(quote_spanned!(api.name.span() =>
-		// TODO: order between type_params and const_params is undecided
 		impl #impl_generics_org #enum_name #type_generics #where_clause_org {
 			#(#client_functions)*
 		}
