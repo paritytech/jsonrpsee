@@ -4,37 +4,41 @@ use crate::jsonrpc::{DeserializeOwned, Params};
 use alloc::string::String;
 use async_trait::async_trait;
 
-/// Basic `JSONRPC` client that can make requests, notifications and subscriptions.
+/// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
 #[async_trait]
 pub trait Client {
-	/// Send a notification request.
+	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
 	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
 	where
 		M: Into<String> + Send,
 		P: Into<Params> + Send;
 
-	/// Send a method call request.
+	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
 	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
 	where
 		T: DeserializeOwned,
 		M: Into<String> + Send,
 		P: Into<Params> + Send;
 
-	/// Send a subscription request to the server.
+	/// Send a subscription request to the server, technically not part of the [JSON-RPC specification](https://www.jsonrpc.org/specification)
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
-	/// server. The `unsubscribe_method` is used to close the subscription.
-	//
+	/// server.
+	///
+	/// The `unsubscribe_method` is used to close the subscription.
+	///
+	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`](crate::client::Subscription) for further documentation.
+	///
 	// TODO: ideally this should be a subtrait but let's have it to simplify macro stuff for now.
-	async fn subscribe<SM, UM, P, N>(
+	async fn subscribe<SM, UM, P, Notif>(
 		&self,
 		subscribe_method: SM,
 		params: P,
 		unsubscribe_method: UM,
-	) -> Result<Subscription<N>, Error>
+	) -> Result<Subscription<Notif>, Error>
 	where
 		SM: Into<String> + Send,
 		UM: Into<String> + Send,
 		P: Into<Params> + Send,
-		N: DeserializeOwned;
+		Notif: DeserializeOwned;
 }

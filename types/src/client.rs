@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 
-/// Active subscription on a [`Client`].
+/// Active subscription on a Client.
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	pub to_back: mpsc::Sender<FrontToBack>,
@@ -16,7 +16,7 @@ pub struct Subscription<Notif> {
 	pub marker: PhantomData<Notif>,
 }
 
-/// Message that the [`Client`] can send to the background task.
+/// Message that the Client can send to the background task.
 pub enum FrontToBack {
 	/// Send a one-shot notification to the server. The server doesn't give back any feedback.
 	Notification {
