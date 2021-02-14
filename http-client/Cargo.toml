@@ -8,7 +8,7 @@ license = "MIT"
 
 [dependencies]
 futures = "0.3"
-hyper14 = { package = "hyper", version = "0.14", features = ["stream", "client", "server", "http1", "http2", "tcp"], optional = true }
+hyper14 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2", "tcp"], optional = true }
 hyper13 = { package = "hyper", version = "0.13", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.1" }
 jsonrpsee-utils = { path = "../utils", version = "0.1", default-features = false, optional = true }
