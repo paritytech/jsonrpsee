@@ -1,8 +1,8 @@
 #[cfg(all(feature = "tokio1", feature = "tokio02"))]
-compile_error!("feature \"tokio1\" and \"tokio02\" are mutably exclusive");
+compile_error!("feature `tokio1` and `tokio02` are mutably exclusive");
 
 #[cfg(not(any(feature = "tokio1", feature = "tokio02")))]
-compile_error!("feature \"tokio1\" or \"tokio02\" must be enabled for this crate");
+compile_error!("feature `tokio1` or `tokio02` must be enabled for this crate");
 
 #[cfg(all(feature = "tokio1", not(feature = "tokio02")))]
 extern crate hyper14 as hyper;
