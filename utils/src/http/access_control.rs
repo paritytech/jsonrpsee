@@ -29,7 +29,7 @@
 use crate::http::cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
 use crate::http::hosts::{AllowHosts, Host};
 use crate::http::{cors, hosts, hyper_helpers};
-use hyper::{self, header};
+use hyper::header;
 
 /// Define access on control on http layer
 #[derive(Clone)]
