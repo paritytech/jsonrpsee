@@ -22,7 +22,7 @@ pub enum HyperClient {
 	/// Plain mode (`http://` URL).
 	Http(Client<HttpConnector>),
 	/// HTTPs mode (`https://` URL).
-	#[cfg(feature = "tls")]
+	#[cfg(any(feature = "tokio1-tls", feature = "tokio02-tls"))]
 	Https(Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>),
 }
 
@@ -51,7 +51,7 @@ impl HttpTransportClient {
 	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
-			let client = if cfg!(feature = "tls") {
+			let client = if cfg!(feature = "tokio1-tls") || cfg!(feature = "tokio2-tls") {
 				let connector = hyper_rustls::HttpsConnector::with_native_roots();
 				let client = hyper::Client::builder().build::<_, hyper::Body>(connector);
 				HyperClient::Https(client)
