@@ -4,6 +4,15 @@ compile_error!("feature `tokio1` and `tokio02` are mutably exclusive");
 #[cfg(not(any(feature = "tokio1", feature = "tokio02")))]
 compile_error!("feature `tokio1` or `tokio02` must be enabled for this crate");
 
+#[cfg(all(feature = "tokio1-tls", feature = "tokio02-tls"))]
+compile_error!("feature `tokio1-tls` and `tokio02-tls` are mutably exclusive");
+
+#[cfg(all(feature = "tokio1", feature = "tokio02-tls"))]
+compile_error!("feature `tokio1` and `tokio02-tls` are incompatible");
+
+#[cfg(all(feature = "tokio02", feature = "tokio1-tls"))]
+compile_error!("feature `tokio02` and `tokio1-tls` are incompatible");
+
 #[cfg(all(feature = "tokio1", not(feature = "tokio02")))]
 extern crate hyper14 as hyper;
 
@@ -15,7 +24,6 @@ extern crate hyper14_rustls as hyper_rustls;
 
 #[cfg(all(feature = "tokio02-tls", not(feature = "tokio1")))]
 extern crate hyper13_rustls as hyper_rustls;
-
 
 mod client;
 mod transport;

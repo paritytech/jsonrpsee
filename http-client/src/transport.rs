@@ -6,42 +6,27 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use hyper::{
-	client::{Client, HttpConnector},
-	Body, Request, Response,
-};
+use hyper::client::{Client, HttpConnector};
 use jsonrpsee_types::{error::GenericTransportError, http::HttpConfig, jsonrpc};
 use jsonrpsee_utils::http::hyper_helpers;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
-/// Wrapper enum around [`hyper::Client`] to support `HTTP` or `HTTPS` connector.
-#[derive(Clone, Debug)]
-pub enum HyperClient {
-	/// Plain mode (`http://` URL).
-	Http(Client<HttpConnector>),
-	/// HTTPs mode (`https://` URL).
-	#[cfg(any(feature = "tokio1-tls", feature = "tokio02-tls"))]
-	Https(Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>),
-}
+#[cfg(any(feature = "tokio1-tls", feature = "tokio02-tls"))]
+type HyperClient = Client<hyper_rustls::HttpsConnector<HttpConnector>>;
 
-impl HyperClient {
-	async fn request(&self, req: Request<Body>) -> Result<Response<Body>, Error> {
-		match self {
-			Self::Http(inner) => inner.request(req).await.map_err(|e| Error::Http(Box::new(e))),
-			Self::Https(inner) => inner.request(req).await.map_err(|e| Error::Http(Box::new(e))),
-		}
-	}
-}
+#[cfg(not(any(feature = "tokio1-tls", feature = "tokio02-tls")))]
+type HyperClient = Client<HttpConnector>;
 
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
 pub struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
-	/// HTTP client,
+	/// HTTP client with HTTP connector
 	client: HyperClient,
+	/// HTTP client with HTTP connector
 	/// Configurable max request body size
 	config: HttpConfig,
 }
@@ -51,13 +36,17 @@ impl HttpTransportClient {
 	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
-			let client = if cfg!(feature = "tokio1-tls") || cfg!(feature = "tokio2-tls") {
-				let connector = hyper_rustls::HttpsConnector::with_native_roots();
-				let client = hyper::Client::builder().build::<_, hyper::Body>(connector);
-				HyperClient::Https(client)
-			} else {
-				HyperClient::Http(hyper::Client::new())
-			};
+			// NOTE: we are forced to the conditional compilation uglyness
+			// because `Client::new` and `Client::builder().build(connector)` returns different types.
+			// Let us pray for mutabally features: https://github.com/rust-lang/cargo/issues/2980
+			#[cfg(feature = "tokio1-tls")]
+			let connector = hyper_rustls::HttpsConnector::with_native_roots();
+			#[cfg(feature = "tokio02-tls")]
+			let connector = hyper_rustls::HttpsConnector::new();
+			#[cfg(any(feature = "tokio1-tls", feature = "tokio02-tls"))]
+			let client = Client::builder().build::<_, hyper::Body>(connector);
+			#[cfg(not(any(feature = "tokio1-tls", feature = "tokio02-tls")))]
+			let client = Client::new();
 			Ok(HttpTransportClient { client, target, config })
 		} else {
 			Err(Error::Url("URL scheme not supported, expects 'http or https'".into()))
@@ -79,7 +68,7 @@ impl HttpTransportClient {
 			.body(From::from(body))
 			.expect("URI and request headers are valid; qed");
 
-		let response = self.client.request(req).await?;
+		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
 		if response.status().is_success() {
 			Ok(response)
 		} else {
