@@ -24,7 +24,7 @@ type HyperClient = Client<HttpConnector>;
 pub struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
-	/// HTTP client with HTTP connector
+	/// HTTP client
 	client: HyperClient,
 	/// HTTP client with HTTP connector
 	/// Configurable max request body size
