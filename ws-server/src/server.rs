@@ -30,6 +30,7 @@ use serde::Serialize;
 use serde_json::value::RawValue;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::sync::Arc;
+use parking_lot::RwLock;
 use thiserror::Error;
 use tokio::{net::TcpListener, sync::mpsc};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
@@ -37,9 +38,11 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use crate::types::{JsonRpcRequest, JsonRpcResponse, TwoPointZero};
 
+type ConnectionId = usize;
+
 type Methods = FxHashMap<
 	&'static str,
-	Box<dyn Send + Sync + Fn(Option<&RawValue>, &str, &mpsc::UnboundedSender<String>) -> anyhow::Result<()>>,
+	Box<dyn Send + Sync + Fn(Option<&RawValue>, &str, &mpsc::UnboundedSender<String>, ConnectionId) -> anyhow::Result<()>>,
 >;
 
 #[derive(Default)]
@@ -57,6 +60,26 @@ pub enum RpcError {
 	Unknown,
 }
 
+#[derive(Clone)]
+pub struct SubsciptionSink {
+	subscribers: Arc<RwLock<Vec<(ConnectionId, mpsc::UnboundedSender<String>)>>>,
+}
+
+impl SubsciptionSink {
+	pub fn send<T>(&mut self, response: &T) -> anyhow::Result<()>
+	where
+		T: Serialize,
+	{
+		let msg = serde_json::to_string(response)?;
+
+		for (_, sender) in self.subscribers.read().iter() {
+			sender.send(msg.clone());
+		}
+
+		Ok(())
+	}
+}
+
 impl Server {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F)
 	where
@@ -65,7 +88,7 @@ impl Server {
 	{
 		self.methods.insert(
 			method_name,
-			Box::new(move |id, params, tx| {
+			Box::new(move |id, params, tx, _| {
 				let result = callback(params)?;
 
 				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result })?;
@@ -76,14 +99,32 @@ impl Server {
 	}
 
 	// TODO: This needs to return the sink channel, and use it to push new messages out.
-	pub fn register_subscription(
+	pub fn register_subscription<T>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) {
-		self.methods.insert(subscribe_method_name, Box::new(move |id, params, tx| Ok(())));
+	) -> SubsciptionSink {
+		// let (sender, mut rx) = mpsc::unbounded_channel::<String>();
+		let subscribers = Arc::new(RwLock::new(Vec::new()));
 
-		self.methods.insert(unsubscribe_method_name, Box::new(move |id, params, tx| Ok(())));
+		{
+			let subscribers = subscribers.clone();
+			self.methods.insert(subscribe_method_name, Box::new(move |id, params, tx, conn| {
+				subscribers.write();
+				Ok(())
+			}));
+		}
+
+		{
+			let subscribers = subscribers.clone();
+			self.methods.insert(unsubscribe_method_name, Box::new(move |id, params, tx, conn| {
+				subscribers.write();
+				Ok(())
+			}));
+		}
+		SubsciptionSink {
+			subscribers
+		}
 	}
 
 	/// Build the server
@@ -91,6 +132,7 @@ impl Server {
 		let addr = addr.as_ref();
 		let mut incoming = TcpListenerStream::new(TcpListener::bind(addr).await?);
 		let methods = Arc::new(self.methods);
+		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
 			if let Ok(socket) = socket {
@@ -98,7 +140,9 @@ impl Server {
 
 				let methods = methods.clone();
 
-				tokio::spawn(async move { background_task(socket, methods).await });
+				tokio::spawn(async move { background_task(socket, methods, id).await });
+
+				id += 1;
 			}
 		}
 
@@ -106,7 +150,7 @@ impl Server {
 	}
 }
 
-async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>) -> anyhow::Result<()> {
+async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, id: ConnectionId) -> anyhow::Result<()> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
@@ -126,6 +170,7 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>) -
 	tokio::spawn(async move {
 		while let Some(response) = rx.recv().await {
 			let _ = sender.send_binary_mut(response.into_bytes()).await;
+			// let _ = sender.send_text(response.as_str()).await;
 			let _ = sender.flush().await;
 		}
 	});
@@ -141,7 +186,7 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>) -
 
 		if let Ok(req) = req {
 			if let Some(method) = methods.get(&*req.method) {
-				(method)(req.id, req.params.get(), &tx)?;
+				(method)(req.id, req.params.get(), &tx, id)?;
 			}
 		}
 	}

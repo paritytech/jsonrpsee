@@ -9,7 +9,8 @@ use jsonrpsee_ws_server::WsServer;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-criterion_group!(benches, http_requests, websocket_requests);
+criterion_group!(benches, websocket_requests);
+// criterion_group!(benches, http_requests, websocket_requests);
 criterion_main!(benches);
 
 fn concurrent_tasks() -> Vec<usize> {
