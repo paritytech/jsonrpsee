@@ -4,7 +4,7 @@
 //!
 //! `jsonrpsee-http-client` is [JSON RPC](https://www.jsonrpc.org/specification) HTTP client library that's is built for `async/await`.
 //!
-//! It is tightly-coupled to [`tokio`](xxhttps://docs.rs/tokio) because [`hyper`](https://docs.rs/hyper) is used as transport client,
+//! It is tightly-coupled to [`tokio`](https://docs.rs/tokio) because [`hyper`](https://docs.rs/hyper) is used as transport client,
 //! which is not compatible with other async runtimes such as
 //! [`async-std`](https://docs.rs/async-std/), [`smol`](https://docs.rs/smol) and similar.
 //!

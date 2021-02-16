@@ -53,7 +53,7 @@ pub struct RequestManager {
 impl RequestManager {
 	/// Create an empty `RequestManager`.
 	pub fn new() -> Self {
-		Self { requests: FnvHashMap::default(), subscriptions: HashMap::new() }
+		Self::default()
 	}
 
 	/// Tries to insert a new pending call.
