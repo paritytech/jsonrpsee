@@ -54,7 +54,6 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-          target: wasm32-unknown-unknown
 
       - name: Cache Dependencies & Build Outputs
         uses: actions/cache@v2.1.4
@@ -65,23 +64,17 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cargo check no-default-features
+      - name: Cargo check all targets
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --benches --tests
+          args: --all-targets
 
-      - name: Cargo check HTTP client with hyper
+      - name: Cargo check HTTP client with tokio02
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --manifest-path http-client/Cargo.toml --no-default-features --features hyper-client
-
-      - name: Cargo check HTTP client for WASM.
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --manifest-path http-client/Cargo.toml --no-default-features --features wasm-client --target wasm32-unknown-unknown
+          args: --manifest-path http-client/Cargo.toml --no-default-features --features tokio02
 
   tests:
     name: Run tests
