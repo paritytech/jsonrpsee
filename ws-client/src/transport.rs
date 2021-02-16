@@ -37,6 +37,15 @@ use thiserror::Error;
 
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
+#[derive(Clone)]
+pub struct Host(String);
+
+impl Host {
+	pub fn as_str(&self) -> &str {
+		self.0.as_str()
+	}
+}
+
 /// Sending end of WebSocket transport.
 pub struct Sender {
 	inner: connection::Sender<BufReader<BufWriter<TlsOrPlain>>>,
@@ -49,12 +58,10 @@ pub struct Receiver {
 
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 pub struct WsTransportClientBuilder<'a> {
-	/// IP address to try to connect to.
-	target: SocketAddr,
-	/// Host to send during the WS handshake.
-	host: Cow<'a, str>,
-	/// DNS host name.
-	dns_name: Cow<'a, str>,
+	/// Socket address to try to connect to.
+	sockaddr: SocketAddr,
+	/// Host.
+	host: Host,
 	/// Stream mode, either plain TCP or TLS.
 	mode: Mode,
 	/// Url to send during the HTTP handshake.
@@ -69,7 +76,7 @@ pub struct WsTransportClientBuilder<'a> {
 }
 
 /// Stream mode, either plain TCP or TLS.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Mode {
 	/// Plain mode (`ws://` URL).
 	Plain,
@@ -144,27 +151,30 @@ pub enum WsConnectError {
 	ParseError(#[source] serde_json::error::Error),
 }
 
-/// Creates a new WebSocket connection based on [`WsConfig`](crate::WsConfig) represented as a Sender and Receiver pair.
-pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
+/// Perform checks on the `WsConfig` that doesn't require any heavy operations.
+fn validate_ws_offline_settings(config: &WsConfig<'_>) -> Result<(Host, Mode, String), WsHandshakeError> {
 	let url = url::Url::parse(&config.url).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
 	let mode = match url.scheme() {
 		"ws" => Mode::Plain,
 		"wss" => Mode::Tls,
 		_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
 	};
-	let host = url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
-	let target = match url.port_or_known_default() {
-		Some(port) => format!("{}:{}", host, port),
-		None => host.to_string(),
-	};
+	let host = Host(url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?.into());
+	let port_number =
+		url.port_or_known_default().ok_or_else(|| WsHandshakeError::Url("No port number found".into()))?;
+	let host_with_port = format!("{}:{}", host.as_str(), port_number);
+	Ok((host, mode, host_with_port))
+}
 
+/// Creates a new WebSocket connection based on [`WsConfig`](crate::WsConfig) represented as a Sender and Receiver pair.
+pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
+	let (host, mode, host_with_port) = validate_ws_offline_settings(&config)?;
 	let mut error = None;
 
-	for sockaddr in target.to_socket_addrs().await.map_err(WsHandshakeError::ResolutionFailed)? {
+	for sockaddr in host_with_port.to_socket_addrs().await.map_err(WsHandshakeError::ResolutionFailed)? {
 		let builder = WsTransportClientBuilder {
-			target: sockaddr,
-			host: target.as_str().into(),
-			dns_name: host.into(),
+			sockaddr,
+			host: host.clone(),
 			mode,
 			handshake_url: config.handshake_url.clone(),
 			timeout: config.connection_timeout,
@@ -237,7 +247,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	pub async fn build(self) -> Result<(Sender, Receiver), WsNewError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
-			let socket = TcpStream::connect(self.target);
+			let socket = TcpStream::connect(self.sockaddr);
 			let timeout = async_std::task::sleep(self.timeout);
 			futures::pin_mut!(socket, timeout);
 			match future::select(socket, timeout).await {
@@ -245,7 +255,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 					Mode::Plain => TlsOrPlain::Plain(socket?),
 					Mode::Tls => {
 						let connector = async_tls::TlsConnector::default();
-						let dns_name = webpki::DNSNameRef::try_from_ascii_str(&self.dns_name)?;
+						let dns_name = webpki::DNSNameRef::try_from_ascii_str(self.host.as_str())?;
 						let tls_stream = connector.connect(&dns_name.to_owned(), socket?).await?;
 						TlsOrPlain::Tls(tls_stream)
 					}
@@ -254,8 +264,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 			}
 		};
 
-		// Configure a WebSockets client on top.
-		let mut client = WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.host, &self.handshake_url);
+		let mut client =
+			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), self.host.as_str(), &self.handshake_url);
 		if let Some(origin) = self.origin.as_ref() {
 			client.set_origin(origin);
 		}
@@ -304,5 +314,51 @@ impl From<WsNewError> for WsHandshakeError {
 impl From<soketto::connection::Error> for WsConnectError {
 	fn from(err: soketto::connection::Error) -> Self {
 		WsConnectError::Ws(err)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{validate_ws_offline_settings, Mode, WsConfig};
+
+	#[test]
+	fn ws_works() {
+		let ws_config = WsConfig::with_url("ws://127.0.0.1:9933");
+		let (host, mode, host_with_port) = validate_ws_offline_settings(&ws_config).unwrap();
+		assert_eq!("127.0.0.1", host.as_str());
+		assert_eq!(mode, Mode::Plain);
+		assert_eq!(&host_with_port, "127.0.0.1:9933");
+	}
+
+	#[test]
+	fn wss_works() {
+		let ws_config = WsConfig::with_url("wss://kusama-rpc.polkadot.io:443");
+		let (host, mode, host_with_port) = validate_ws_offline_settings(&ws_config).unwrap();
+		assert_eq!("kusama-rpc.polkadot.io", host.as_str());
+		assert_eq!(mode, Mode::Tls);
+		assert_eq!(&host_with_port, "kusama-rpc.polkadot.io:443");
+	}
+
+	#[test]
+	fn faulty_url_scheme() {
+		let ws_config = WsConfig::with_url("http://kusama-rpc.polkadot.io:443");
+		assert!(matches!(validate_ws_offline_settings(&ws_config), Err(super::WsHandshakeError::Url(_))));
+	}
+
+	#[test]
+	fn faulty_port() {
+		let ws_config = WsConfig::with_url("ws://127.0.0.1:-43");
+		assert!(matches!(validate_ws_offline_settings(&ws_config), Err(super::WsHandshakeError::Url(_))));
+		let ws_config = WsConfig::with_url("ws://127.0.0.1:99999");
+		assert!(matches!(validate_ws_offline_settings(&ws_config), Err(super::WsHandshakeError::Url(_))));
+	}
+
+	#[test]
+	fn default_port_works() {
+		let ws_config = WsConfig::with_url("ws://127.0.0.1");
+		let (host, mode, host_with_port) = validate_ws_offline_settings(&ws_config).unwrap();
+		assert_eq!("127.0.0.1", host.as_str());
+		assert_eq!(mode, Mode::Plain);
+		assert_eq!(&host_with_port, "127.0.0.1:80");
 	}
 }
