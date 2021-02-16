@@ -14,6 +14,7 @@ pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Recei
 
 /// JSONRPC WebSocket sender.
 /// It's a wrapper over `WebSocket sender` with additional `JSONRPC request_id`.
+#[derive(Debug)]
 pub struct Sender {
 	request_id: u64,
 	transport: transport::Sender,
@@ -91,6 +92,7 @@ impl Sender {
 }
 
 /// JSONRPC WebSocket receiver.
+#[derive(Debug)]
 pub struct Receiver {
 	transport: transport::Receiver,
 }

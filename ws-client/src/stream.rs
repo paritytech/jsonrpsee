@@ -33,6 +33,7 @@ use futures::{
 use pin_project::pin_project;
 use std::{io::Error as IoError, pin::Pin, task::Context, task::Poll};
 
+/// Stream to represent either a unencrypted or encrypted socket stream.
 #[pin_project(project = EitherStreamProj)]
 #[derive(Debug, Copy, Clone)]
 pub enum EitherStream<S, T> {
@@ -47,7 +48,7 @@ where
 	S: AsyncRead,
 	T: AsyncRead,
 {
-	fn poll_read(self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]) -> Poll<Result<usize, IoError>> {
+	fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize, IoError>> {
 		match self.project() {
 			EitherStreamProj::Plain(s) => AsyncRead::poll_read(s, cx, buf),
 			EitherStreamProj::Tls(t) => AsyncRead::poll_read(t, cx, buf),
@@ -56,8 +57,8 @@ where
 
 	fn poll_read_vectored(
 		self: Pin<&mut Self>,
-		cx: &mut Context,
-		bufs: &mut [IoSliceMut],
+		cx: &mut Context<'_>,
+		bufs: &mut [IoSliceMut<'_>],
 	) -> Poll<Result<usize, IoError>> {
 		match self.project() {
 			EitherStreamProj::Plain(s) => AsyncRead::poll_read_vectored(s, cx, bufs),
@@ -71,28 +72,32 @@ where
 	S: AsyncWrite,
 	T: AsyncWrite,
 {
-	fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<Result<usize, IoError>> {
+	fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, IoError>> {
 		match self.project() {
 			EitherStreamProj::Plain(s) => AsyncWrite::poll_write(s, cx, buf),
 			EitherStreamProj::Tls(t) => AsyncWrite::poll_write(t, cx, buf),
 		}
 	}
 
-	fn poll_write_vectored(self: Pin<&mut Self>, cx: &mut Context, bufs: &[IoSlice]) -> Poll<Result<usize, IoError>> {
+	fn poll_write_vectored(
+		self: Pin<&mut Self>,
+		cx: &mut Context<'_>,
+		bufs: &[IoSlice<'_>],
+	) -> Poll<Result<usize, IoError>> {
 		match self.project() {
 			EitherStreamProj::Plain(s) => AsyncWrite::poll_write_vectored(s, cx, bufs),
 			EitherStreamProj::Tls(t) => AsyncWrite::poll_write_vectored(t, cx, bufs),
 		}
 	}
 
-	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), IoError>> {
+	fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
 		match self.project() {
 			EitherStreamProj::Plain(s) => AsyncWrite::poll_flush(s, cx),
 			EitherStreamProj::Tls(t) => AsyncWrite::poll_flush(t, cx),
 		}
 	}
 
-	fn poll_close(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), IoError>> {
+	fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), IoError>> {
 		match self.project() {
 			EitherStreamProj::Plain(s) => AsyncWrite::poll_close(s, cx),
 			EitherStreamProj::Tls(t) => AsyncWrite::poll_close(t, cx),

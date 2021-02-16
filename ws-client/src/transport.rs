@@ -38,16 +38,19 @@ use thiserror::Error;
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
 /// Sending end of WebSocket transport.
+#[derive(Debug)]
 pub struct Sender {
 	inner: connection::Sender<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
 /// Receiving end of WebSocket transport.
+#[derive(Debug)]
 pub struct Receiver {
 	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
+#[derive(Debug)]
 pub struct WsTransportClientBuilder<'a> {
 	/// IP address to try to connect to.
 	target: SocketAddr,

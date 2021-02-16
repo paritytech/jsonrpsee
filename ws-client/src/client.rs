@@ -42,7 +42,7 @@ use std::{io, marker::PhantomData};
 /// Client that can be cloned.
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background task running in parallel.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WsClient {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
@@ -98,7 +98,7 @@ impl<'a> WsConfig<'a> {
 		}
 	}
 }
-
+#[derive(Debug)]
 /// Active subscription on a [`WsClient`].
 pub struct WsSubscription<Notif> {
 	/// Channel to send requests to the background task.
@@ -111,7 +111,8 @@ pub struct WsSubscription<Notif> {
 	marker: PhantomData<Notif>,
 }
 
-/// Message that the [`Client`] can send to the background task.
+#[derive(Debug)]
+/// Message that the [`WsClient`] can send to the background task.
 enum FrontToBack {
 	/// Send a one-shot notification to the server. The server doesn't give back any feedback.
 	Notification {
