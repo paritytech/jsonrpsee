@@ -99,10 +99,13 @@ impl HttpClient {
 	/// Returns `Error` if any of the requests fails.
 	//
 	// TODO(niklasad1): maybe simplify generic `requests`, it's quite unreadable.
-	pub async fn batch_request<'a>(
+	pub async fn batch_request<'a, T>(
 		&self,
 		requests: impl IntoIterator<Item = (impl Into<String>, impl Into<jsonrpc::Params>)>,
-	) -> Result<Vec<JsonValue>, Error> {
+	) -> Result<Vec<T>, Error>
+	where
+		T: DeserializeOwned,
+	{
 		let mut calls = Vec::new();
 		// NOTE(niklasad1): If more than `u64::MAX` requests are performed in the `batch` then duplicate IDs are used
 		// which we don't support because ID is used to uniquely identify a given request.
@@ -143,7 +146,8 @@ impl HttpClient {
 					if !ids.remove(&id) {
 						return Err(Error::InvalidRequestId);
 					}
-					let val: JsonValue = rp.try_into().map_err(Error::Request)?;
+					let json_val: JsonValue = rp.try_into().map_err(Error::Request)?;
+					let val = jsonrpc::from_value(json_val).map_err(Error::ParseError)?;
 					responses.push(val);
 				}
 				Ok(responses)
