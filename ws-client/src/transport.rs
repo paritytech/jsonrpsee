@@ -115,10 +115,6 @@ pub enum WsNewError {
 	/// Timeout while trying to connect.
 	#[error("Timeout when trying to connect")]
 	Timeout,
-
-	/// Couldn't find connect to any IP address for this hostname.
-	#[error("Couldn't find any IP address for this hostname")]
-	NoAddressFound,
 }
 
 /// Error that can happen during the initial handshake.
@@ -216,50 +212,58 @@ impl<'a> WsTransportClientBuilder<'a> {
 	}
 
 	/// Try establish the connection.
-	pub async fn build(self) -> Result<(Sender, Receiver), WsNewError> {
-		for sockaddr in self.sockaddrs {
-			// Try establish the TCP connection.
-			let tcp_stream = {
-				let socket = TcpStream::connect(sockaddr);
-				let timeout = async_std::task::sleep(self.timeout);
-				futures::pin_mut!(socket, timeout);
-				match future::select(socket, timeout).await {
-					future::Either::Left((socket, _)) => match self.mode {
-						Mode::Plain => TlsOrPlain::Plain(socket?),
-						Mode::Tls => {
-							let connector = async_tls::TlsConnector::default();
-							let dns_name = webpki::DNSNameRef::try_from_ascii_str(self.host.as_str())?;
-							let tls_stream = connector.connect(&dns_name.to_owned(), socket?).await?;
-							TlsOrPlain::Tls(tls_stream)
-						}
-					},
-					future::Either::Right((_, _)) => return Err(WsNewError::Timeout),
-				}
-			};
-
-			let mut client =
-				WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), self.host.as_str(), &self.handshake_url);
-			if let Some(origin) = self.origin.as_ref() {
-				client.set_origin(origin);
-			}
-
-			// Perform the initial handshake.
-			match client.handshake().await? {
-				ServerResponse::Accepted { .. } => {}
-				ServerResponse::Rejected { status_code } | ServerResponse::Redirect { status_code, .. } => {
-					// TODO: HTTP redirects also lead here
-					return Err(WsNewError::Rejected { status_code });
+	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
+		for sockaddr in &self.sockaddrs {
+			match self.try_connect(*sockaddr).await {
+				Ok(res) => return Ok(res),
+				Err(e) => {
+					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
 				}
 			}
-
-			// If the handshake succeeded, return.
-			let mut builder = client.into_builder();
-			builder.set_max_message_size(self.max_request_body_size);
-			let (sender, receiver) = builder.finish();
-			return Ok((Sender { inner: sender }, Receiver { inner: receiver }));
 		}
-		// TODO: refactor `error types`.
-		Err(WsNewError::NoAddressFound)
+		Err(WsHandshakeError::NoAddressFound)
+	}
+
+	async fn try_connect(&self, sockaddr: SocketAddr) -> Result<(Sender, Receiver), WsNewError> {
+		// Try establish the TCP connection.
+		let tcp_stream = {
+			let socket = TcpStream::connect(sockaddr);
+			let timeout = async_std::task::sleep(self.timeout);
+			futures::pin_mut!(socket, timeout);
+			match future::select(socket, timeout).await {
+				future::Either::Left((socket, _)) => match self.mode {
+					Mode::Plain => TlsOrPlain::Plain(socket?),
+					Mode::Tls => {
+						let connector = async_tls::TlsConnector::default();
+						let dns_name = webpki::DNSNameRef::try_from_ascii_str(self.host.as_str())?;
+						let tls_stream = connector.connect(&dns_name.to_owned(), socket?).await?;
+						TlsOrPlain::Tls(tls_stream)
+					}
+				},
+				future::Either::Right((_, _)) => return Err(WsNewError::Timeout),
+			}
+		};
+
+		let mut client =
+			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), self.host.as_str(), &self.handshake_url);
+		if let Some(origin) = self.origin.as_ref() {
+			client.set_origin(origin);
+		}
+
+		// Perform the initial handshake.
+		match client.handshake().await? {
+			ServerResponse::Accepted { .. } => {}
+			ServerResponse::Rejected { status_code } | ServerResponse::Redirect { status_code, .. } => {
+				// TODO: HTTP redirects also lead here
+				return Err(WsNewError::Rejected { status_code });
+			}
+		}
+
+		// If the handshake succeeded, return.
+		let mut builder = client.into_builder();
+		builder.set_max_message_size(self.max_request_body_size);
+		let (sender, receiver) = builder.finish();
+		Ok((Sender { inner: sender }, Receiver { inner: receiver }))
 	}
 }
 
