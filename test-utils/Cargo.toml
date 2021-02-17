@@ -1,17 +1,19 @@
 [package]
 name = "jsonrpsee-test-utils"
 version = "0.1.0"
-authors = ["Niklas <niklasadolfsson1@gmail.com>"]
+authors = ["Parity Technologies <admin@parity.io>"]
 license = "MIT"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-futures = "0.3.8"
-hyper = "0.13.9"
-serde = { version = "1.0.117", default-features = false, features = ["derive"] }
-serde_json = "1.0.59"
-soketto = "0.4.2"
-tokio = { version = "0.2.23", features = ["dns", "stream", "tcp", "rt-threaded", "macros"] }
-tokio-util = { version = "0.3.1", features = ["compat"] }
+async-std = "1.8"
+futures = "0.3"
+hyper = { version = "0.14", features = ["full"] }
+log = "0.4"
+serde = { version = "1", default-features = false, features = ["derive"] }
+serde_json = "1"
+soketto = "0.4"
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "time"] }
+tokio-util = { version = "0.6", features = ["compat"] }
