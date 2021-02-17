@@ -43,6 +43,7 @@ use thiserror::Error;
 
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
+/// String representation of the host (domain or IP address) of an URL.
 #[derive(Clone, Debug)]
 pub struct Host(String);
 
