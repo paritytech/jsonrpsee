@@ -99,9 +99,9 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(
 		response,
 		vec![
-			JsonValue::from("here's your swag".to_string())
+			JsonValue::from("here's your swag".to_string()),
 			JsonValue::from("hello".to_string()),
-			JsonValue::from("goodbye".to_string()),
+			JsonValue::from("goodbye".to_string())
 		]
 	);
 }
