@@ -25,18 +25,20 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::io::{BufReader, BufWriter};
+use jsonrpsee_types::jsonrpc::SubscriptionId;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::sync::Arc;
-use parking_lot::RwLock;
+use std::collections::hash_map::Entry;
+use parking_lot::Mutex;
 use thiserror::Error;
 use tokio::{net::TcpListener, sync::mpsc};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::types::{JsonRpcRequest, JsonRpcResponse, TwoPointZero};
+use crate::types::{JsonRpcRequest, JsonRpcResponse, JsonRpcNotification, JsonRpcNotificationParams, TwoPointZero};
 
 type ConnectionId = usize;
 
@@ -62,18 +64,27 @@ pub enum RpcError {
 
 #[derive(Clone)]
 pub struct SubsciptionSink {
-	subscribers: Arc<RwLock<Vec<(ConnectionId, mpsc::UnboundedSender<String>)>>>,
+	method: &'static str,
+	subscribers: Arc<Mutex<FxHashMap<ConnectionId, FxHashMap<String, mpsc::UnboundedSender<String>>>>>,
 }
 
 impl SubsciptionSink {
-	pub fn send<T>(&mut self, response: &T) -> anyhow::Result<()>
+	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
 	{
-		let msg = serde_json::to_string(response)?;
+		for (sub_id, sender) in self.subscribers.lock().values().flat_map(|v| v.iter()) {
+			let msg = serde_json::to_string(&JsonRpcNotification {
+				jsonrpc: TwoPointZero,
+				id: None,
+				method: self.method,
+				params: JsonRpcNotificationParams {
+					subscription: sub_id,
+					result,
+				}
+			})?;
 
-		for (_, sender) in self.subscribers.read().iter() {
-			sender.send(msg.clone());
+			sender.send(msg);
 		}
 
 		Ok(())
@@ -105,24 +116,56 @@ impl Server {
 		unsubscribe_method_name: &'static str,
 	) -> SubsciptionSink {
 		// let (sender, mut rx) = mpsc::unbounded_channel::<String>();
-		let subscribers = Arc::new(RwLock::new(Vec::new()));
+		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
 
 		{
 			let subscribers = subscribers.clone();
-			self.methods.insert(subscribe_method_name, Box::new(move |id, params, tx, conn| {
-				subscribers.write();
-				Ok(())
+			self.methods.insert(subscribe_method_name, Box::new(move |id, _, tx, conn| {
+				let sub_id = {
+					let mut lock = subscribers.lock();
+					let subs = lock.entry(conn).or_insert(FxHashMap::default()); // .insert(conn, tx.clone());
+
+					let sub_id_raw: [u8; 32] = rand::random();
+					let sub_id = bs58::encode(&sub_id_raw).into_string();
+
+					subs.insert(sub_id.clone(), tx.clone());
+
+					sub_id
+				};
+
+				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: SubscriptionId::Str(sub_id) })?;
+
+				tx.send(json).map_err(Into::into)
 			}));
 		}
 
 		{
 			let subscribers = subscribers.clone();
 			self.methods.insert(unsubscribe_method_name, Box::new(move |id, params, tx, conn| {
-				subscribers.write();
-				Ok(())
+				let [sub_id]: [&str; 1] = serde_json::from_str(params)?;
+
+				{
+					let mut lock = subscribers.lock();
+
+					if let Entry::Occupied(mut map) = lock.entry(conn) {
+						map.get_mut().remove(sub_id);
+
+						if map.get().len() == 0 {
+							map.remove_entry();
+						}
+					}
+				}
+
+				subscribers.lock().remove(&conn);
+
+				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: SubscriptionId::Num(0) })?;
+
+				tx.send(json).map_err(Into::into)
 			}));
 		}
+
 		SubsciptionSink {
+			method: subscribe_method_name,
 			subscribers
 		}
 	}

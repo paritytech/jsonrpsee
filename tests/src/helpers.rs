@@ -71,10 +71,12 @@ pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>, wai
 
 		server.register_method("say_hello", |_| Ok("hello"));
 
-		rt.block_on(server.start("127.0.0.1:8888"));
-
 		server_started.send("127.0.0.1:8888".parse().unwrap()).unwrap();
 
+		rt.block_on(async move {
+			wait.await.unwrap();
+			server.start("127.0.0.1:8888").await.unwrap();
+		});
 	});
 }
 
