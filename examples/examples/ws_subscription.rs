@@ -26,15 +26,15 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
+use jsonrpsee_client::Subscription;
 use jsonrpsee_types::jsonrpc::{JsonValue, Params};
-use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
 use jsonrpsee_ws_server::WsServer;
 
 const SOCK_ADDR: &str = "127.0.0.1:9966";
 const SERVER_URI: &str = "ws://localhost:9966";
 const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	env_logger::init();
 
@@ -44,9 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 
 	server_started_rx.await?;
-	let config = WsConfig::with_url(SERVER_URI);
-	let client = WsClient::new(config).await?;
-	let mut subscribe_hello: WsSubscription<JsonValue> =
+	let client = jsonrpsee_client::ws(SERVER_URI).await;
+	let mut subscribe_hello: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await?;
 
 	let mut i = 0;

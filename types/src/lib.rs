@@ -16,9 +16,3 @@ pub mod http;
 
 /// traits.
 pub mod traits;
-
-/// core client
-pub mod client;
-
-/// request manager
-pub mod manager;

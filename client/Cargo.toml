@@ -1,0 +1,30 @@
+[package]
+name = "jsonrpsee-client"
+version = "0.1.0"
+authors = ["Niklas Adolfsson <niklasadolfsson1@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+async-std = "1"
+async-tls = "0.11"
+futures = "0.3"
+hyper = { version = "0.14", features = ["client", "http1", "http2", "tcp"] }
+jsonrpsee-types = { path = "../types", version = "0.1" }
+jsonrpsee-utils = { path = "../utils", version = "0.1", default-features = false }
+log = "0.4"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+unicase = "2.6"
+url = "2.2"
+soketto = "0.4"
+webpki = "0.21"
+pin-project = "1"
+
+[dev-dependencies]
+env_logger = "0.8"
+jsonrpsee-test-utils = { path = "../test-utils" }

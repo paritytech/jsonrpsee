@@ -26,9 +26,8 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_http_client::{transport, HttpConfig};
 use jsonrpsee_http_server::HttpServer;
-use jsonrpsee_types::client::Client;
+use jsonrpsee_types::http::HttpConfig;
 use jsonrpsee_types::jsonrpc::{JsonValue, Params};
 
 const SOCK_ADDR: &str = "127.0.0.1:9933";
@@ -45,8 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	server_started_rx.await?;
 
-	let (sender, receiver) = transport::http_transport(SERVER_URI, HttpConfig::default()).unwrap();
-	let mut client = Client::new(sender, receiver);
+	let mut client = jsonrpsee_client::http(SERVER_URI);
 	let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
 	println!("r: {:?}", response);
 

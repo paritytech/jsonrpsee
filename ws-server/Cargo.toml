@@ -22,5 +22,5 @@ thiserror = "1"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
-jsonrpsee-ws-client = { path = "../ws-client" }
+jsonrpsee-client = { path = "../client" }
 tokio = { version = "1", features = ["full"] }

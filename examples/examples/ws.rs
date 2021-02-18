@@ -26,15 +26,13 @@
 
 use async_std::task;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::client::Client;
 use jsonrpsee_types::jsonrpc::{JsonValue, Params};
-use jsonrpsee_ws_client::{transport, WsClient, WsConfig};
 use jsonrpsee_ws_server::WsServer;
 
 const SOCK_ADDR: &str = "127.0.0.1:9944";
 const SERVER_URI: &str = "ws://localhost:9944";
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	env_logger::init();
 
@@ -44,11 +42,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 
 	server_started_rx.await?;
-	let config = WsConfig::with_url(SERVER_URI);
-	let (sender, receiver) = transport::websocket_connection(config).await.unwrap();
-	let client = Client::new(sender, receiver);
+	let client = jsonrpsee_client::ws(SERVER_URI).await;
 
-	let response: JsonValue = client.request("say_hello", Params::None).await?;
+	let response: String = client.request("say_hello", Params::None).await?;
 	println!("r: {:?}", response);
 
 	Ok(())

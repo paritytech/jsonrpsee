@@ -1,30 +1,22 @@
-//! JSONRPC WebSocket Transport module.
-//!
-//! Wraps the underlying WebSocket transport with specific JSONRPC details.
+use jsonrpsee_types::jsonrpc::{self, Error};
+use jsonrpsee_types::traits::TransportSender;
 
-use crate::transport::{self, WsConnectError, WsHandshakeError};
-use crate::WsConfig;
-use jsonrpsee_types::{
-	jsonrpc::{self, Error},
-	traits::{TransportReceiver, TransportSender},
-};
-
-/// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
-pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
-	let (sender, receiver) = transport::websocket_connection(config).await?;
-	Ok((Sender::new(sender), Receiver::new(receiver)))
-}
-
-/// JSONRPC WebSocket sender.
-/// It's a wrapper over `WebSocket sender` with additional `JSONRPC request_id`.
-pub struct Sender {
+/// JSONRPC Sender.
+/// It's a wrapper over [`TransportSender`] with additional `JSONRPC request_id`.
+pub struct Sender<S> {
 	request_id: u64,
-	transport: transport::Sender,
+	transport: S,
 }
 
-impl Sender {
+impl<S: TransportSender> From<S> for Sender<S> {
+	fn from(sender: S) -> Self {
+		Self::new(sender)
+	}
+}
+
+impl<S: TransportSender> Sender<S> {
 	/// Creates a new JSONRPC sender.
-	pub fn new(transport: transport::Sender) -> Self {
+	pub fn new(transport: S) -> Self {
 		Self { transport, request_id: 0 }
 	}
 
@@ -88,26 +80,8 @@ impl Sender {
 		&mut self,
 		method: impl Into<String>,
 		params: impl Into<jsonrpc::Params>,
-	) -> Result<u64, WsConnectError> {
+	) -> Result<u64, Error> {
 		let r = self.start_impl(method, params).await.unwrap();
-		Ok(r)
-	}
-}
-
-/// JSONRPC WebSocket receiver.
-pub struct Receiver {
-	transport: transport::Receiver,
-}
-
-impl Receiver {
-	/// Create a new JSONRPC WebSocket receiver.
-	pub fn new(transport: transport::Receiver) -> Self {
-		Self { transport }
-	}
-
-	/// Reads the next response, fails if the response ID was not a number.
-	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
-		let r = self.transport.receive().await.unwrap();
 		Ok(r)
 	}
 }
