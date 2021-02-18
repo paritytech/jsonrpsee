@@ -63,7 +63,7 @@ pub struct Receiver {
 	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
-/// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
+/// Builder for a WebSocket transport [`Sender`] and [`Receiver`] pair.
 pub struct WsTransportClientBuilder<'a> {
 	/// Socket addresses to try to connect to.
 	sockaddrs: Vec<SocketAddr>,
@@ -280,7 +280,8 @@ impl<'a> TryFrom<WsConfig<'a>> for WsTransportClientBuilder<'a> {
 			_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
 		};
 		let host = url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?.into();
-		let sockaddrs: Vec<SocketAddr> = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
+		// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
+		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
 		Ok(Self {
 			sockaddrs,
 			host: Host(host),
