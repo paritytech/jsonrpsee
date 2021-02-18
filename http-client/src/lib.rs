@@ -15,8 +15,8 @@
 //!
 //! `jsonrpsee-http-client` uses the following [feature flags]:
 //!
-//! - `tokio1`: Enable to work with [`tokio 1.0`](https://docs.rs/tokio/1.2.0/tokio/) (mutual exclusive to `tokio02`)
-//! - `tokio0.2`: Enable to work with [`tokio 0.2`](https://docs.rs/tokio/0.2.25/tokio/index.html) (mutual exclusive to `tokio1`)
+//! - `tokio1`: Enable to use the library with [`tokio 1.0`](https://docs.rs/tokio/1.2.0/tokio/) (mutually exclusive with `tokio02`)
+//! - `tokio0.2`: Enable to use the library with [`tokio 0.2`](https://docs.rs/tokio/0.2.25/tokio/index.html) (mutually exclusive with `tokio1`)
 //!
 //! [feature flags]: https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-section
 
