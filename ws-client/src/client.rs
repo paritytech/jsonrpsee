@@ -272,6 +272,29 @@ impl WsClient {
 
 		Ok(WsSubscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
+
+	/// Perform a batch request towards the server.
+	///
+	/// Returns `Ok` if all requests were answered successfully.
+	/// Returns `Error` if any of the requests fails.
+	//
+	// TODO(niklasad1): maybe simplify generic `requests`, it's quite unreadable.
+	pub async fn batch_request<'a, T>(
+		&self,
+		requests: impl IntoIterator<Item = (impl Into<String>, impl Into<jsonrpc::Params>)>,
+	) -> Result<Vec<T>, Error>
+	where
+		T: jsonrpc::DeserializeOwned,
+	{
+		//let mut calls = Vec::new();
+		// NOTE(niklasad1): If more than `u64::MAX` requests are performed in the `batch` then duplicate IDs are used
+		// which we don't support because ID is used to uniquely identify a given request.
+		//let mut ids = std::collections::HashSet::new();
+
+		for (method, params) in requests.into_iter() {}
+
+		todo!();
+	}
 }
 
 impl<Notif> WsSubscription<Notif>
