@@ -34,7 +34,10 @@ use std::time::Duration;
 use futures::channel::oneshot;
 use helpers::{http_server, websocket_server, websocket_server_with_wait_period};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
-use jsonrpsee_types::jsonrpc::{JsonValue, Params};
+use jsonrpsee_types::{
+	error::Error,
+	jsonrpc::{JsonValue, Params},
+};
 use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
 
 #[tokio::test]
@@ -206,4 +209,24 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 	for req in requests {
 		req.await.unwrap();
 	}
+}
+
+#[tokio::test]
+async fn wss_works() {
+	let client = WsClient::new(WsConfig::with_url("wss://kusama-rpc.polkadot.io")).await.unwrap();
+	let response: String = client.request("system_chain", Params::None).await.unwrap();
+	assert_eq!(&response, "Kusama");
+}
+
+#[tokio::test]
+async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
+	let err = WsClient::new(WsConfig::with_url("wss://♥♥♥♥♥♥∀∂")).await;
+	assert!(matches!(err, Err(Error::TransportError(_))));
+}
+
+#[tokio::test]
+async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
+	let client = HttpClient::new("http://♥♥♥♥♥♥∀∂", HttpConfig::default()).unwrap();
+	let err: Result<(), Error> = client.request("system_chain", Params::None).await;
+	assert!(matches!(err, Err(Error::TransportError(_))));
 }
