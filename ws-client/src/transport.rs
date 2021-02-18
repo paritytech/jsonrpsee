@@ -32,13 +32,7 @@ use futures::prelude::*;
 use jsonrpsee_types::jsonrpc;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
-use std::{
-	borrow::Cow,
-	convert::{TryFrom, TryInto},
-	io,
-	net::SocketAddr,
-	time::Duration,
-};
+use std::{borrow::Cow, convert::TryFrom, io, net::SocketAddr, time::Duration};
 use thiserror::Error;
 
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
@@ -156,12 +150,6 @@ pub enum WsConnectError {
 	/// Failed to parse the JSON returned by the server into a JSON-RPC response.
 	#[error("error while parsing the response body")]
 	ParseError(#[source] serde_json::error::Error),
-}
-
-/// Creates a new WebSocket connection based on [`WsConfig`](crate::WsConfig) represented as a Sender and Receiver pair.
-pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
-	let builder: WsTransportClientBuilder<'_> = config.try_into()?;
-	builder.build().await.map_err(Into::into)
 }
 
 impl Sender {
