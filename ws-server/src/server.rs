@@ -26,26 +26,26 @@
 
 use futures::io::{BufReader, BufWriter};
 use jsonrpsee_types::jsonrpc::SubscriptionId;
+use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::sync::Arc;
-use std::collections::hash_map::Entry;
-use parking_lot::Mutex;
 use thiserror::Error;
 use tokio::{net::TcpListener, sync::mpsc};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::types::{JsonRpcRequest, JsonRpcResponse, JsonRpcNotification, JsonRpcNotificationParams, TwoPointZero};
+use crate::types::{JsonRpcNotification, JsonRpcNotificationParams, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
 
 type ConnectionId = usize;
 
-type Methods = FxHashMap<
-	&'static str,
-	Box<dyn Send + Sync + Fn(Option<&RawValue>, &str, &mpsc::UnboundedSender<String>, ConnectionId) -> anyhow::Result<()>>,
->;
+type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
+type RpcId<'a> = Option<&'a RawValue>;
+type RpcParams<'a> = &'a str;
+type Methods =
+	FxHashMap<&'static str, Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>>;
 
 #[derive(Default)]
 pub struct Server {
@@ -77,10 +77,7 @@ impl SubsciptionSink {
 			let msg = serde_json::to_string(&JsonRpcNotification {
 				jsonrpc: TwoPointZero,
 				method: self.method,
-				params: JsonRpcNotificationParams {
-					subscription: *sub_id,
-					result,
-				}
+				params: JsonRpcNotificationParams { subscription: *sub_id, result },
 			})?;
 
 			sender.send(msg)?;
@@ -117,40 +114,47 @@ impl Server {
 
 		{
 			let subscribers = subscribers.clone();
-			self.methods.insert(subscribe_method_name, Box::new(move |id, _, tx, conn| {
-				let sub_id = {
-					const JS_NUM_MASK: u64 = !0 >> 11;
+			self.methods.insert(
+				subscribe_method_name,
+				Box::new(move |id, _, tx, conn| {
+					let sub_id = {
+						const JS_NUM_MASK: u64 = !0 >> 11;
 
-					let sub_id = rand::random::<u64>() & JS_NUM_MASK;
+						let sub_id = rand::random::<u64>() & JS_NUM_MASK;
 
-					subscribers.lock().insert((conn, sub_id), tx.clone());
+						subscribers.lock().insert((conn, sub_id), tx.clone());
 
-					sub_id
-				};
+						sub_id
+					};
 
-				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: sub_id })?;
+					let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: sub_id })?;
 
-				tx.send(json).map_err(Into::into)
-			}));
+					tx.send(json).map_err(Into::into)
+				}),
+			);
 		}
 
 		{
 			let subscribers = subscribers.clone();
-			self.methods.insert(unsubscribe_method_name, Box::new(move |id, params, tx, conn| {
-				let [sub_id]: [u64; 1] = serde_json::from_str(params)?;
+			self.methods.insert(
+				unsubscribe_method_name,
+				Box::new(move |id, params, tx, conn| {
+					let [sub_id]: [u64; 1] = serde_json::from_str(params)?;
 
-				subscribers.lock().remove(&(conn, sub_id));
+					subscribers.lock().remove(&(conn, sub_id));
 
-				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: SubscriptionId::Num(0) })?;
+					let json = serde_json::to_string(&JsonRpcResponse {
+						jsonrpc: TwoPointZero,
+						id,
+						result: SubscriptionId::Num(0),
+					})?;
 
-				tx.send(json).map_err(Into::into)
-			}));
+					tx.send(json).map_err(Into::into)
+				}),
+			);
 		}
 
-		SubsciptionSink {
-			method: subscribe_method_name,
-			subscribers
-		}
+		SubsciptionSink { method: subscribe_method_name, subscribers }
 	}
 
 	/// Build the server

@@ -1,9 +1,9 @@
-use std::fmt;
-use serde::{Serialize, Deserialize};
-use serde::de::{self, Visitor, Deserializer, Unexpected};
-use serde::ser::Serializer;
-use serde_json::value::RawValue;
 use beef::lean::Cow;
+use serde::de::{self, Deserializer, Unexpected, Visitor};
+use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
+use std::fmt;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -38,7 +38,7 @@ pub struct JsonRpcNotificationParams<T: Serialize> {
 pub struct JsonRpcResponse<'a, T> {
 	pub jsonrpc: TwoPointZero,
 	pub id: Option<&'a RawValue>,
-	pub result: T
+	pub result: T,
 }
 
 #[derive(Debug, Default)]
