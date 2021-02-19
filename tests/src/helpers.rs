@@ -39,10 +39,8 @@ pub fn websocket_server(server_started: Sender<SocketAddr>) {
 
 		// let server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
 		let mut server = WsServer::default();
-		let mut sub_hello =
-			server.register_subscription::<&'static str>("subscribe_hello", "unsubscribe_hello");
-		let mut sub_foo =
-			server.register_subscription::<u64>("subscribe_foo", "unsubscribe_foo");
+		let mut sub_hello = server.register_subscription::<&'static str>("subscribe_hello", "unsubscribe_hello");
+		let mut sub_foo = server.register_subscription::<u64>("subscribe_foo", "unsubscribe_foo");
 
 		server.register_method("say_hello", |_| Ok("hello"));
 
