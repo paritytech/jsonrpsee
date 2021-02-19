@@ -32,7 +32,6 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::channel::oneshot::{Receiver, Sender};
-use futures::future::FutureExt;
 
 pub fn websocket_server(server_started: Sender<SocketAddr>) {
 	std::thread::spawn(move || {

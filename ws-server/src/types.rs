@@ -23,14 +23,14 @@ pub struct JsonRpcRequest<'a> {
 #[derive(Serialize, Debug)]
 pub struct JsonRpcNotification<'a, T: Serialize> {
 	pub jsonrpc: TwoPointZero,
-	pub id: Option<&'a RawValue>,
+	// pub id: Option<&'a RawValue>,
 	pub method: &'a str,
 	pub params: T,
 }
 
 #[derive(Serialize, Debug)]
-pub struct JsonRpcNotificationParams<'a, T: Serialize> {
-	pub subscription: &'a str,
+pub struct JsonRpcNotificationParams<T: Serialize> {
+	pub subscription: u64,
 	pub result: T,
 }
 

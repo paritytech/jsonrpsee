@@ -65,7 +65,7 @@ pub enum RpcError {
 #[derive(Clone)]
 pub struct SubsciptionSink {
 	method: &'static str,
-	subscribers: Arc<Mutex<FxHashMap<ConnectionId, FxHashMap<String, mpsc::UnboundedSender<String>>>>>,
+	subscribers: Arc<Mutex<FxHashMap<(ConnectionId, u64), mpsc::UnboundedSender<String>>>>,
 }
 
 impl SubsciptionSink {
@@ -73,18 +73,17 @@ impl SubsciptionSink {
 	where
 		T: Serialize,
 	{
-		for (sub_id, sender) in self.subscribers.lock().values().flat_map(|v| v.iter()) {
+		for ((_, sub_id), sender) in self.subscribers.lock().iter() {
 			let msg = serde_json::to_string(&JsonRpcNotification {
 				jsonrpc: TwoPointZero,
-				id: None,
 				method: self.method,
 				params: JsonRpcNotificationParams {
-					subscription: sub_id,
+					subscription: *sub_id,
 					result,
 				}
 			})?;
 
-			sender.send(msg);
+			sender.send(msg)?;
 		}
 
 		Ok(())
@@ -109,31 +108,27 @@ impl Server {
 		);
 	}
 
-	// TODO: This needs to return the sink channel, and use it to push new messages out.
 	pub fn register_subscription<T>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 	) -> SubsciptionSink {
-		// let (sender, mut rx) = mpsc::unbounded_channel::<String>();
 		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
 
 		{
 			let subscribers = subscribers.clone();
 			self.methods.insert(subscribe_method_name, Box::new(move |id, _, tx, conn| {
 				let sub_id = {
-					let mut lock = subscribers.lock();
-					let subs = lock.entry(conn).or_insert(FxHashMap::default()); // .insert(conn, tx.clone());
+					const JS_NUM_MASK: u64 = !0 >> 11;
 
-					let sub_id_raw: [u8; 32] = rand::random();
-					let sub_id = bs58::encode(&sub_id_raw).into_string();
+					let sub_id = rand::random::<u64>() & JS_NUM_MASK;
 
-					subs.insert(sub_id.clone(), tx.clone());
+					subscribers.lock().insert((conn, sub_id), tx.clone());
 
 					sub_id
 				};
 
-				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: SubscriptionId::Str(sub_id) })?;
+				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: sub_id })?;
 
 				tx.send(json).map_err(Into::into)
 			}));
@@ -142,21 +137,9 @@ impl Server {
 		{
 			let subscribers = subscribers.clone();
 			self.methods.insert(unsubscribe_method_name, Box::new(move |id, params, tx, conn| {
-				let [sub_id]: [&str; 1] = serde_json::from_str(params)?;
+				let [sub_id]: [u64; 1] = serde_json::from_str(params)?;
 
-				{
-					let mut lock = subscribers.lock();
-
-					if let Entry::Occupied(mut map) = lock.entry(conn) {
-						map.get_mut().remove(sub_id);
-
-						if map.get().len() == 0 {
-							map.remove_entry();
-						}
-					}
-				}
-
-				subscribers.lock().remove(&conn);
+				subscribers.lock().remove(&(conn, sub_id));
 
 				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: SubscriptionId::Num(0) })?;
 
@@ -213,7 +196,6 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 	tokio::spawn(async move {
 		while let Some(response) = rx.recv().await {
 			let _ = sender.send_binary_mut(response.into_bytes()).await;
-			// let _ = sender.send_text(response.as_str()).await;
 			let _ = sender.flush().await;
 		}
 	});
