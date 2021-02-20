@@ -16,4 +16,5 @@ jsonrpsee-types = { path = "../types", version = "0.1" }
 jsonrpsee-client = { path = "../client", version = "0.1" }
 jsonrpsee-ws-server = { path = "../ws-server", version = "0.1" }
 jsonrpsee-http-server = { path = "../http-server", version = "0.1" }
+jsonrpsee-test-utils = { path = "../test-utils", version = "0.1" }
 tokio = { version = "1", features = ["full"] }

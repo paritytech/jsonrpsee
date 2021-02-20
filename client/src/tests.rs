@@ -26,6 +26,8 @@ async fn http_notification_works() {
 }
 
 #[tokio::test]
+// https://github.com/tokio-rs/tokio/issues/3493
+#[ignore]
 async fn http_response_with_wrong_id() {
 	let err = http_run_request_with_response(ok_response("hello".into(), Id::Num(99))).await.unwrap_err();
 	assert!(matches!(err, Error::InvalidRequestId));
@@ -163,6 +165,8 @@ async fn ws_subscription_works() {
 }
 
 #[tokio::test]
+// https://github.com/tokio-rs/tokio/issues/3493
+#[ignore]
 async fn ws_response_with_wrong_id() {
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),

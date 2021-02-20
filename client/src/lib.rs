@@ -104,7 +104,7 @@ impl Client {
 		R: TransportReceiver + Send + 'static,
 	{
 		let (to_back, from_front) = mpsc::channel(100_000);
-		background_task(sender, receiver, from_front, 100_000);
+		tokio::spawn(background_task(sender, receiver, from_front, 100_000));
 		Client { to_back }
 	}
 
