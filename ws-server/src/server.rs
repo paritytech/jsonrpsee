@@ -134,7 +134,7 @@ fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
 	}) {
 		Ok(json) => json,
 		Err(err) => {
-			log::error!("Error serailizing error message: {:?}", err);
+			log::error!("Error serializing error message: {:?}", err);
 
 			return;
 		}
