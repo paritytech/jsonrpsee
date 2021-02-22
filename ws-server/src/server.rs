@@ -32,8 +32,9 @@ use serde::Serialize;
 use serde_json::value::RawValue;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::sync::Arc;
+use std::net::SocketAddr;
 use thiserror::Error;
-use tokio::{net::TcpListener, sync::mpsc};
+use tokio::{net::{ToSocketAddrs, TcpListener}, sync::mpsc};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
@@ -47,9 +48,9 @@ type RpcParams<'a> = &'a str;
 type Methods =
 	FxHashMap<&'static str, Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>>;
 
-#[derive(Default)]
 pub struct Server {
 	methods: Methods,
+	listener: TcpListener,
 }
 
 trait RpcResult {
@@ -88,6 +89,15 @@ impl SubsciptionSink {
 }
 
 impl Server {
+	pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {
+		let listener = TcpListener::bind(addr).await?;
+
+		Ok(Server {
+			listener,
+			methods: Default::default(),
+		})
+	}
+
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F)
 	where
 		R: Serialize,
@@ -157,10 +167,12 @@ impl Server {
 		SubsciptionSink { method: subscribe_method_name, subscribers }
 	}
 
-	/// Build the server
-	pub async fn start(self, addr: impl AsRef<str>) -> anyhow::Result<()> {
-		let addr = addr.as_ref();
-		let mut incoming = TcpListenerStream::new(TcpListener::bind(addr).await?);
+	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
+		self.listener.local_addr().map_err(Into::into)
+	}
+
+	pub async fn start(self) {
+		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.methods);
 		let mut id = 0;
 
@@ -175,8 +187,6 @@ impl Server {
 				id += 1;
 			}
 		}
-
-		Ok(())
 	}
 }
 

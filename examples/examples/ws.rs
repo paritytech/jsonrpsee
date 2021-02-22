@@ -52,11 +52,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let mut server = WsServer::default();
+	let mut server = WsServer::new(url).await.unwrap();
 
 	server.register_method("say_hello", |_| Ok("lo"));
 
 	server_started_tx.send(()).unwrap();
 
-	server.start(url).await.unwrap();
+	server.start().await;
 }

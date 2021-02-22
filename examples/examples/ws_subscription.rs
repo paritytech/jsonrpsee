@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let mut server = WsServer::default();
+	let mut server = WsServer::new(url).await.unwrap();
 
 	let mut subscription = server.register_subscription::<&str>("subscribe_hello", "unsubscribe_hello");
 
@@ -71,5 +71,5 @@ async fn run_server(server_started_tx: Sender<()>, url: &str) {
 
 	server_started_tx.send(()).unwrap();
 
-	server.start(url).await.unwrap();
+	server.start().await;
 }
