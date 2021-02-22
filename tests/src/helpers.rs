@@ -31,7 +31,7 @@ use jsonrpsee_ws_server::WsServer;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::channel::oneshot::{Receiver, Sender};
+use futures::channel::oneshot::Sender;
 
 pub fn websocket_server(server_started: Sender<SocketAddr>) {
 	std::thread::spawn(move || {
@@ -58,7 +58,7 @@ pub fn websocket_server(server_started: Sender<SocketAddr>) {
 	});
 }
 
-pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>, wait: Receiver<()>) {
+pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>) {
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -67,7 +67,6 @@ pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>, wai
 		server.register_method("say_hello", |_| Ok("hello"));
 
 		rt.block_on(async move {
-			wait.await.unwrap();
 			server_started.send(server.local_addr().unwrap()).unwrap();
 
 			server.start().await
