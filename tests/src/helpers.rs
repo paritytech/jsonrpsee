@@ -65,10 +65,10 @@ pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>, wai
 		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
 
 		server.register_method("say_hello", |_| Ok("hello"));
-		server_started.send(server.local_addr().unwrap()).unwrap();
 
 		rt.block_on(async move {
 			wait.await.unwrap();
+			server_started.send(server.local_addr().unwrap()).unwrap();
 
 			server.start().await
 		});

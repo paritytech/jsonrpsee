@@ -31,10 +31,13 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use std::sync::Arc;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use thiserror::Error;
-use tokio::{net::{ToSocketAddrs, TcpListener}, sync::mpsc};
+use tokio::{
+	net::{TcpListener, ToSocketAddrs},
+	sync::mpsc,
+};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
@@ -92,10 +95,7 @@ impl Server {
 	pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {
 		let listener = TcpListener::bind(addr).await?;
 
-		Ok(Server {
-			listener,
-			methods: Default::default(),
-		})
+		Ok(Server { listener, methods: Default::default() })
 	}
 
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F)

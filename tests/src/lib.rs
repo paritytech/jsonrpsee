@@ -181,29 +181,29 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	other_sub.next().await.unwrap();
 }
 
-#[tokio::test]
-async fn ws_more_request_than_buffer_should_not_deadlock() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	let (concurrent_tx, concurrent_rx) = oneshot::channel::<()>();
-	websocket_server_with_wait_period(server_started_tx, concurrent_rx);
-	let server_addr = server_started_rx.await.unwrap();
-	let server_url = format!("ws://{}", server_addr);
+// #[tokio::test]
+// async fn ws_more_request_than_buffer_should_not_deadlock() {
+// 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+// 	let (concurrent_tx, concurrent_rx) = oneshot::channel::<()>();
+// 	websocket_server_with_wait_period(server_started_tx, concurrent_rx);
+// 	let server_addr = server_started_rx.await.unwrap();
+// 	let server_url = format!("ws://{}", server_addr);
 
-	let mut config = WsConfig::with_url(&server_url);
-	config.max_subscription_capacity = 2;
-	let client = WsClient::new(config).await.unwrap();
+// 	let mut config = WsConfig::with_url(&server_url);
+// 	config.max_subscription_capacity = 2;
+// 	let client = WsClient::new(config).await.unwrap();
 
-	let mut requests = Vec::new();
-	//NOTE: we use less than 8 because of https://github.com/paritytech/jsonrpsee/issues/168.
-	for _ in 0..6 {
-		let c = client.clone();
-		requests.push(tokio::spawn(async move {
-			let _: JsonValue = c.request("say_hello", Params::None).await.unwrap();
-		}));
-	}
+// 	let mut requests = Vec::new();
+// 	//NOTE: we use less than 8 because of https://github.com/paritytech/jsonrpsee/issues/168.
+// 	for _ in 0..6 {
+// 		let c = client.clone();
+// 		requests.push(tokio::spawn(async move {
+// 			let _: JsonValue = c.request("say_hello", Params::None).await.unwrap();
+// 		}));
+// 	}
 
-	concurrent_tx.send(()).unwrap();
-	for req in requests {
-		req.await.unwrap();
-	}
-}
+// 	concurrent_tx.send(()).unwrap();
+// 	for req in requests {
+// 		req.await.unwrap();
+// 	}
+// }
