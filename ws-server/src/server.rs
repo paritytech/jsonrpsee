@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::io::{BufReader, BufWriter};
-use jsonrpsee_types::jsonrpc::SubscriptionId;
+use jsonrpsee_types::{error::Error, jsonrpc::SubscriptionId};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -41,14 +41,16 @@ use tokio::{
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::types::{JsonRpcNotification, JsonRpcNotificationParams, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
+use crate::types::{JsonRpcError, JsonRpcErrorParams};
+use crate::types::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
+use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};
 
 type ConnectionId = usize;
 
 type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
 type RpcId<'a> = Option<&'a RawValue>;
-type Methods =
-	FxHashMap<&'static str, Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>>;
+type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
+type Methods = FxHashMap<&'static str, Method>;
 
 pub struct Server {
 	methods: Methods,
@@ -109,6 +111,40 @@ impl<'a> RpcParams<'a> {
 	}
 }
 
+fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
+	let json = match serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result }) {
+		Ok(json) => json,
+		Err(err) => {
+			log::error!("Error serializing response: {:?}", err);
+
+			return send_error(id, tx, -32603, "Internal error");
+		}
+	};
+
+	if let Err(err) = tx.send(json) {
+		log::error!("Error sending response to the client: {:?}", err)
+	}
+}
+
+fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
+	let json = match serde_json::to_string(&JsonRpcError {
+		jsonrpc: TwoPointZero,
+		error: JsonRpcErrorParams { code, message },
+		id: id,
+	}) {
+		Ok(json) => json,
+		Err(err) => {
+			log::error!("Error serailizing error message: {:?}", err);
+
+			return;
+		}
+	};
+
+	if let Err(err) = tx.send(json) {
+		log::error!("Error sending response to the client: {:?}", err)
+	}
+}
+
 impl Server {
 	pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {
 		let listener = TcpListener::bind(addr).await?;
@@ -116,33 +152,43 @@ impl Server {
 		Ok(Server { listener, methods: Default::default() })
 	}
 
-	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F)
+	fn insert_method(&mut self, name: &'static str, method: Method) -> Result<(), Error> {
+		if self.methods.get(name).is_some() {
+			return Err(Error::MethodAlreadyRegistered(name.into()));
+		}
+
+		self.methods.insert(name, method);
+
+		Ok(())
+	}
+
+	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
 		F: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static,
 	{
-		self.methods.insert(
+		self.insert_method(
 			method_name,
 			Box::new(move |id, params, tx, _| {
 				let result = callback(params)?;
 
-				let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result })?;
+				send_response(id, tx, result);
 
-				tx.send(json).map_err(Into::into)
+				Ok(())
 			}),
-		);
+		)
 	}
 
 	pub fn register_subscription(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> SubscriptionSink {
+	) -> Result<SubscriptionSink, Error> {
 		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
 
 		{
 			let subscribers = subscribers.clone();
-			self.methods.insert(
+			self.insert_method(
 				subscribe_method_name,
 				Box::new(move |id, _, tx, conn| {
 					let sub_id = {
@@ -155,16 +201,16 @@ impl Server {
 						sub_id
 					};
 
-					let json = serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result: sub_id })?;
+					send_response(id, tx, sub_id);
 
-					tx.send(json).map_err(Into::into)
+					Ok(())
 				}),
-			);
+			)?;
 		}
 
 		{
 			let subscribers = subscribers.clone();
-			self.methods.insert(
+			let result = self.insert_method(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
 					let [sub_id]: [u64; 1] = params.parse()?;
@@ -180,9 +226,18 @@ impl Server {
 					tx.send(json).map_err(Into::into)
 				}),
 			);
+
+			match result {
+				Ok(()) => (),
+				Err(err) => {
+					// Remove subscribe method if unsubscribe has failed
+					self.methods.remove(subscribe_method_name);
+					return Err(err);
+				}
+			}
 		}
 
-		SubscriptionSink { method: subscribe_method_name, subscribers }
+		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
 	}
 
 	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
@@ -239,13 +294,23 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 
 		receiver.receive_data(&mut data).await?;
 
-		let req: Result<JsonRpcRequest, _> = serde_json::from_slice(&data);
+		match serde_json::from_slice::<JsonRpcRequest>(&data) {
+			Ok(req) => {
+				let params = RpcParams(req.params.map(|params| params.get()));
 
-		if let Ok(req) = req {
-			let params = RpcParams(req.params.map(|params| params.get()));
+				if let Some(method) = methods.get(&*req.method) {
+					(method)(req.id, params, &tx, id)?;
+				} else {
+					send_error(req.id, &tx, -32601, "Method not found");
+				}
+			}
+			Err(_) => {
+				let (id, code, msg) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
+					Ok(req) => (req.id, -32600, "Invalid request"),
+					Err(_) => (None, -32700, "Parse error"),
+				};
 
-			if let Some(method) = methods.get(&*req.method) {
-				(method)(req.id, params, &tx, id)?;
+				send_error(id, &tx, code, msg);
 			}
 		}
 	}

@@ -38,10 +38,10 @@ pub fn websocket_server(server_started: Sender<SocketAddr>) {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
-		let mut sub_hello = server.register_subscription("subscribe_hello", "unsubscribe_hello");
-		let mut sub_foo = server.register_subscription("subscribe_foo", "unsubscribe_foo");
+		let mut sub_hello = server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
+		let mut sub_foo = server.register_subscription("subscribe_foo", "unsubscribe_foo").unwrap();
 
-		server.register_method("say_hello", |_| Ok("hello"));
+		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
 		server_started.send(server.local_addr().unwrap()).unwrap();
 
@@ -64,7 +64,7 @@ pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>) {
 
 		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
 
-		server.register_method("say_hello", |_| Ok("hello"));
+		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
 		rt.block_on(async move {
 			server_started.send(server.local_addr().unwrap()).unwrap();

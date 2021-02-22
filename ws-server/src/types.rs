@@ -20,6 +20,12 @@ pub struct JsonRpcRequest<'a> {
 	pub params: Option<&'a RawValue>,
 }
 
+#[derive(Deserialize, Debug)]
+pub struct JsonRpcInvalidRequest<'a> {
+	#[serde(borrow)]
+	pub id: Option<&'a RawValue>,
+}
+
 #[derive(Serialize, Debug)]
 pub struct JsonRpcNotification<'a> {
 	pub jsonrpc: TwoPointZero,
@@ -38,6 +44,19 @@ pub struct JsonRpcResponse<'a, T> {
 	pub jsonrpc: TwoPointZero,
 	pub result: T,
 	pub id: Option<&'a RawValue>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct JsonRpcError<'a> {
+	pub jsonrpc: TwoPointZero,
+	pub error: JsonRpcErrorParams<'a>,
+	pub id: Option<&'a RawValue>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct JsonRpcErrorParams<'a> {
+	pub code: i32,
+	pub message: &'a str,
 }
 
 #[derive(Debug, Default)]

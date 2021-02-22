@@ -30,9 +30,9 @@ async fn http_server(tx: Sender<SocketAddr>) {
 async fn ws_server(tx: Sender<SocketAddr>) {
 	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
 
-	tx.send(server.local_addr().unwrap());
+	tx.send(server.local_addr().unwrap()).unwrap();
 
-	server.register_method("say_hello", |_| Ok("lo"));
+	server.register_method("say_hello", |_| Ok("lo")).unwrap();
 
 	server.start().await;
 }
