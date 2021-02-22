@@ -193,7 +193,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut config = WsConfig::with_url(&server_url);
-	config.max_request_channel_capacity = 2;
+	config.max_concurrent_requests_capacity = 2;
 	let client = WsClient::new(config).await.unwrap();
 
 	let mut requests = Vec::new();
