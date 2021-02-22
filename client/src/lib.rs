@@ -1,7 +1,7 @@
 mod background_task;
 mod jsonrpc_sender;
 mod manager;
-mod transport;
+pub mod transport;
 
 #[cfg(test)]
 mod tests;
@@ -15,8 +15,6 @@ use core::convert::TryInto;
 use core::marker::PhantomData;
 use futures::{
 	channel::{mpsc, oneshot},
-	future::Either,
-	pin_mut,
 	prelude::*,
 };
 use std::io;
@@ -103,8 +101,8 @@ impl Client {
 		S: TransportSender + Send + 'static,
 		R: TransportReceiver + Send + 'static,
 	{
-		let (to_back, from_front) = mpsc::channel(100_000);
-		tokio::spawn(background_task(sender, receiver, from_front, 100_000));
+		let (to_back, from_front) = mpsc::channel(4);
+		tokio::spawn(background_task(sender, receiver, from_front, 4));
 		Client { to_back }
 	}
 

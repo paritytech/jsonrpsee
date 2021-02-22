@@ -25,4 +25,3 @@ unicase = "2"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
-jsonrpsee-client = { path = "../client" }

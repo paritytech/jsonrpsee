@@ -1,15 +1,14 @@
-use async_std::task::block_on;
 use criterion::*;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_http_client::{HttpClient, HttpConfig};
 use jsonrpsee_http_server::HttpServer;
-use jsonrpsee_types::jsonrpc::{JsonValue, Params};
-use jsonrpsee_ws_client::{WsClient, WsConfig};
+use jsonrpsee_types::{
+	http::HttpConfig,
+	jsonrpc::{JsonValue, Params},
+};
 use jsonrpsee_ws_server::WsServer;
 use std::net::SocketAddr;
-use std::sync::Arc;
 
-criterion_group!(benches, http_requests, websocket_requests);
+criterion_group!(benches, /*http_requests,*/ websocket_requests);
 criterion_main!(benches);
 
 fn concurrent_tasks() -> Vec<usize> {
@@ -38,11 +37,11 @@ async fn ws_server(tx: Sender<SocketAddr>) {
 }
 
 pub fn http_requests(c: &mut criterion::Criterion) {
-	let rt = tokio::runtime::Runtime::new().unwrap();
+	let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
-	async_std::task::spawn(http_server(tx_addr));
-	let server_addr = block_on(rx_addr).unwrap();
-	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr), HttpConfig::default()).unwrap());
+	rt.spawn(http_server(tx_addr));
+	let server_addr = rt.block_on(rx_addr).unwrap();
+	let client = jsonrpsee_client::http(&format!("http://{}", server_addr));
 
 	c.bench_function("synchronous_http_round_trip", |b| {
 		b.iter(|| {
@@ -74,13 +73,14 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 }
 
 pub fn websocket_requests(c: &mut criterion::Criterion) {
-	let rt = tokio::runtime::Runtime::new().unwrap();
+	env_logger::try_init();
+
+	let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
-	async_std::task::spawn(ws_server(tx_addr));
-	let server_addr = block_on(rx_addr).unwrap();
+	rt.spawn(ws_server(tx_addr));
+	let server_addr = rt.block_on(rx_addr).unwrap();
 	let url = format!("ws://{}", server_addr);
-	let config = WsConfig::with_url(&url);
-	let client = Arc::new(block_on(WsClient::new(config)).unwrap());
+	let client = rt.block_on(jsonrpsee_client::ws(&url));
 
 	c.bench_function("synchronous_websocket_round_trip", |b| {
 		b.iter(|| {
@@ -90,24 +90,24 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 		})
 	});
 
-	c.bench_function_over_inputs(
-		"concurrent_websocket_round_trip",
-		move |b: &mut Bencher, size: &usize| {
-			b.iter(|| {
-				let mut tasks = Vec::new();
-				for _ in 0..*size {
-					let client_rc = client.clone();
-					let task = rt.spawn(async move {
-						let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
-					});
-					tasks.push(task);
-				}
-				for task in tasks {
-					rt.block_on(task).unwrap();
-				}
-			})
-		},
-		// TODO(niklasad1): This deadlocks when more than 8 tasks are spawned.
-		concurrent_tasks(),
-	);
+	// c.bench_function_over_inputs(
+	//     "concurrent_websocket_round_trip",
+	//     move |b: &mut Bencher, size: &usize| {
+	//         b.iter(|| {
+	//             let mut tasks = Vec::new();
+	//             for _ in 0..*size {
+	//                 let client_rc = client.clone();
+	//                 let task = rt.spawn(async move {
+	//                     let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
+	//                 });
+	//                 tasks.push(task);
+	//             }
+	//             for task in tasks {
+	//                 rt.block_on(task).unwrap();
+	//             }
+	//         })
+	//     },
+	//     // TODO(niklasad1): This deadlocks when more than 8 tasks are spawned.
+	//     concurrent_tasks(),
+	// );
 }

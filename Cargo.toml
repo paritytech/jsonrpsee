@@ -1,7 +1,7 @@
 [workspace]
 members = [
 	"examples",
-	# "benches",
+  "benches",
 	"client",
 	"http-server",
 	"test-utils",
