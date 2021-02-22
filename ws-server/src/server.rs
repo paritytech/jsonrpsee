@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::io::{BufReader, BufWriter};
-use jsonrpsee_types::{error::Error, jsonrpc::SubscriptionId};
+use jsonrpsee_types::error::Error;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
@@ -46,6 +46,7 @@ use crate::types::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPo
 use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};
 
 type ConnectionId = usize;
+type SubscriptionId = u64;
 
 type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
 type RpcId<'a> = Option<&'a RawValue>;
@@ -72,7 +73,7 @@ pub enum RpcError {
 #[derive(Clone)]
 pub struct SubscriptionSink {
 	method: &'static str,
-	subscribers: Arc<Mutex<FxHashMap<(ConnectionId, u64), mpsc::UnboundedSender<String>>>>,
+	subscribers: Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>,
 }
 
 impl SubscriptionSink {
@@ -82,14 +83,25 @@ impl SubscriptionSink {
 	{
 		let result = to_raw_value(result)?;
 
-		for ((_, sub_id), sender) in self.subscribers.lock().iter() {
+		let mut errored = Vec::new();
+		let mut subs = self.subscribers.lock();
+
+		for ((conn_id, sub_id), sender) in subs.iter() {
 			let msg = serde_json::to_string(&JsonRpcNotification {
 				jsonrpc: TwoPointZero,
 				method: self.method,
 				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
 			})?;
 
-			sender.send(msg)?;
+			// Log broken connections
+			if sender.send(msg).is_err() {
+				errored.push((*conn_id, *sub_id));
+			}
+		}
+
+		// Remove broken connections
+		for entry in errored {
+			subs.remove(&entry);
 		}
 
 		Ok(())
@@ -100,6 +112,7 @@ impl SubscriptionSink {
 pub struct RpcParams<'a>(Option<&'a str>);
 
 impl<'a> RpcParams<'a> {
+	/// Attempt to parse all parameters as array or map into type T
 	pub fn parse<T>(self) -> Result<T, RpcError>
 	where
 		T: Deserialize<'a>,
@@ -109,8 +122,17 @@ impl<'a> RpcParams<'a> {
 			Some(params) => serde_json::from_str(params).map_err(|_| RpcError::InvalidParams),
 		}
 	}
+
+	/// Attempt to parse only the first parameter from an array into type T
+	pub fn one<T>(self) -> Result<T, RpcError>
+	where
+		T: Deserialize<'a>,
+	{
+		self.parse::<[T; 1]>().map(|[res]| res)
+	}
 }
 
+// Private helper for sending JSON-RPC responses to the client
 fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
 	let json = match serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result }) {
 		Ok(json) => json,
@@ -126,6 +148,7 @@ fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
 	}
 }
 
+// Private helper for sending JSON-RPC errors to the client
 fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
 	let json = match serde_json::to_string(&JsonRpcError {
 		jsonrpc: TwoPointZero,
@@ -192,9 +215,9 @@ impl Server {
 				subscribe_method_name,
 				Box::new(move |id, _, tx, conn| {
 					let sub_id = {
-						const JS_NUM_MASK: u64 = !0 >> 11;
+						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 
-						let sub_id = rand::random::<u64>() & JS_NUM_MASK;
+						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
 						subscribers.lock().insert((conn, sub_id), tx.clone());
 
@@ -213,17 +236,13 @@ impl Server {
 			let result = self.insert_method(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					let [sub_id]: [u64; 1] = params.parse()?;
+					let sub_id = params.one()?;
 
 					subscribers.lock().remove(&(conn, sub_id));
 
-					let json = serde_json::to_string(&JsonRpcResponse {
-						jsonrpc: TwoPointZero,
-						id,
-						result: SubscriptionId::Num(0),
-					})?;
+					send_response(id, tx, "Unsubscribed");
 
-					tx.send(json).map_err(Into::into)
+					Ok(())
 				}),
 			);
 
