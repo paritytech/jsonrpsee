@@ -203,8 +203,6 @@ impl Receiver {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
 
-		println!("{:?}", std::str::from_utf8(&message));
-
 		let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
 		log::debug!("recv: {}", response);
 		Ok(response)

@@ -9,8 +9,7 @@ use jsonrpsee_ws_server::WsServer;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-criterion_group!(benches, websocket_requests);
-// criterion_group!(benches, http_requests, websocket_requests);
+criterion_group!(benches, http_requests, websocket_requests);
 criterion_main!(benches);
 
 fn concurrent_tasks() -> Vec<usize> {
@@ -28,12 +27,14 @@ async fn http_server(tx: Sender<SocketAddr>) {
 	}
 }
 
-async fn ws_server() {
-	let mut server = WsServer::default();
+async fn ws_server(tx: Sender<SocketAddr>) {
+	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
+
+	tx.send(server.local_addr().unwrap());
 
 	server.register_method("say_hello", |_| Ok("lo"));
 
-	server.start("127.0.0.1:8888").await.unwrap();
+	server.start().await;
 }
 
 pub fn http_requests(c: &mut criterion::Criterion) {
@@ -74,10 +75,11 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 
 pub fn websocket_requests(c: &mut criterion::Criterion) {
 	let rt = tokio::runtime::Runtime::new().unwrap();
-	// let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
-	rt.spawn(ws_server());
-	// let server_addr = block_on(rx_addr).unwrap();
-	let config = WsConfig::with_url("ws://127.0.0.1:8888");
+	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
+	rt.spawn(ws_server(tx_addr));
+	let server_addr = block_on(rx_addr).unwrap();
+	let url = format!("ws://{}", server_addr);
+	let config = WsConfig::with_url(&url);
 	let client = Arc::new(block_on(WsClient::new(config)).unwrap());
 
 	c.bench_function("synchronous_websocket_round_trip", |b| {
