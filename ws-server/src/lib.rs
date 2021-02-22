@@ -32,6 +32,4 @@ mod types;
 // #[cfg(test)]
 // mod tests;
 
-// pub use server::{RegisteredMethod, RegisteredNotification, Server as WsServer};
-pub use server::Server as WsServer;
-// pub use transport::WsTransportServer;
+pub use server::{Server as WsServer, SubsciptionSink};

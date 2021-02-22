@@ -29,7 +29,7 @@ use jsonrpsee_types::jsonrpc::SubscriptionId;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use serde_json::value::RawValue;
+use serde_json::value::{to_raw_value, RawValue};
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -77,11 +77,13 @@ impl SubsciptionSink {
 	where
 		T: Serialize,
 	{
+		let result = to_raw_value(result)?;
+
 		for ((_, sub_id), sender) in self.subscribers.lock().iter() {
 			let msg = serde_json::to_string(&JsonRpcNotification {
 				jsonrpc: TwoPointZero,
 				method: self.method,
-				params: JsonRpcNotificationParams { subscription: *sub_id, result },
+				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
 			})?;
 
 			sender.send(msg)?;
