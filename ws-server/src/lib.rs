@@ -29,7 +29,7 @@ extern crate alloc;
 mod server;
 mod types;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
-pub use server::{Server as WsServer, SubsciptionSink};
+pub use server::{Server as WsServer, SubscriptionSink};

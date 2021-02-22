@@ -17,7 +17,7 @@ pub struct JsonRpcRequest<'a> {
 	pub method: Cow<'a, str>,
 
 	#[serde(borrow)]
-	pub params: &'a RawValue,
+	pub params: Option<&'a RawValue>,
 }
 
 #[derive(Serialize, Debug)]
@@ -36,8 +36,8 @@ pub struct JsonRpcNotificationParams<'a> {
 #[derive(Serialize, Debug)]
 pub struct JsonRpcResponse<'a, T> {
 	pub jsonrpc: TwoPointZero,
-	pub id: Option<&'a RawValue>,
 	pub result: T,
+	pub id: Option<&'a RawValue>,
 }
 
 #[derive(Debug, Default)]

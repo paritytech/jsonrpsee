@@ -28,7 +28,7 @@ use futures::io::{BufReader, BufWriter};
 use jsonrpsee_types::jsonrpc::SubscriptionId;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::value::{to_raw_value, RawValue};
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::net::SocketAddr;
@@ -47,7 +47,6 @@ type ConnectionId = usize;
 
 type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
 type RpcId<'a> = Option<&'a RawValue>;
-type RpcParams<'a> = &'a str;
 type Methods =
 	FxHashMap<&'static str, Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>>;
 
@@ -64,15 +63,17 @@ trait RpcResult {
 pub enum RpcError {
 	#[error("unknown rpc error")]
 	Unknown,
+	#[error("invalid params")]
+	InvalidParams,
 }
 
 #[derive(Clone)]
-pub struct SubsciptionSink {
+pub struct SubscriptionSink {
 	method: &'static str,
 	subscribers: Arc<Mutex<FxHashMap<(ConnectionId, u64), mpsc::UnboundedSender<String>>>>,
 }
 
-impl SubsciptionSink {
+impl SubscriptionSink {
 	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
@@ -93,6 +94,21 @@ impl SubsciptionSink {
 	}
 }
 
+#[derive(Clone, Copy)]
+pub struct RpcParams<'a>(Option<&'a str>);
+
+impl<'a> RpcParams<'a> {
+	pub fn parse<T>(self) -> Result<T, RpcError>
+	where
+		T: Deserialize<'a>,
+	{
+		match self.0 {
+			None => Err(RpcError::InvalidParams),
+			Some(params) => serde_json::from_str(params).map_err(|_| RpcError::InvalidParams),
+		}
+	}
+}
+
 impl Server {
 	pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {
 		let listener = TcpListener::bind(addr).await?;
@@ -103,7 +119,7 @@ impl Server {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F)
 	where
 		R: Serialize,
-		F: Fn(&str) -> Result<R, RpcError> + Send + Sync + 'static, // TODO: figure out correct lifetime here
+		F: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static,
 	{
 		self.methods.insert(
 			method_name,
@@ -117,11 +133,11 @@ impl Server {
 		);
 	}
 
-	pub fn register_subscription<T>(
+	pub fn register_subscription(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> SubsciptionSink {
+	) -> SubscriptionSink {
 		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
 
 		{
@@ -151,7 +167,7 @@ impl Server {
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					let [sub_id]: [u64; 1] = serde_json::from_str(params)?;
+					let [sub_id]: [u64; 1] = params.parse()?;
 
 					subscribers.lock().remove(&(conn, sub_id));
 
@@ -166,7 +182,7 @@ impl Server {
 			);
 		}
 
-		SubsciptionSink { method: subscribe_method_name, subscribers }
+		SubscriptionSink { method: subscribe_method_name, subscribers }
 	}
 
 	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
@@ -226,8 +242,10 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 		let req: Result<JsonRpcRequest, _> = serde_json::from_slice(&data);
 
 		if let Ok(req) = req {
+			let params = RpcParams(req.params.map(|params| params.get()));
+
 			if let Some(method) = methods.get(&*req.method) {
-				(method)(req.id, req.params.get(), &tx, id)?;
+				(method)(req.id, params, &tx, id)?;
 			}
 		}
 	}
