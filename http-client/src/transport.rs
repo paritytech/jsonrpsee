@@ -48,7 +48,7 @@ impl HttpTransportClient {
 			let client = Client::new();
 			Ok(HttpTransportClient { client, target, config })
 		} else {
-			Err(Error::Url("URL scheme not supported, expects 'http or https'".into()))
+			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
 		}
 	}
 
