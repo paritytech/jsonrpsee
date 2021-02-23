@@ -7,10 +7,10 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-async-std = { version = "1.8.0", features = ["attributes"] }
+async-std = { version = "1", features = ["attributes"] }
 bs58 = "0.4"
 fnv = "1"
-futures = "0.3"
+futures = "^0.3.13"
 jsonrpsee-types = { path = "../types", version = "0.1" }
 log = "0.4"
 parking_lot = "0.11"

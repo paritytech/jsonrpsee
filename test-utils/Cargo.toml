@@ -8,8 +8,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-std = "1.8"
-futures = "0.3"
+async-std = "1"
+futures = "^0.3.13"
 hyper = { version = "0.14", features = ["full"] }
 log = "0.4"
 serde = { version = "1", default-features = false, features = ["derive"] }

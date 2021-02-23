@@ -9,7 +9,7 @@ use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
 
 #[tokio::test]
 async fn http_method_call_works() {
-	let _ = env_logger::try_init();
+	//let _ = env_logger::try_init();
 	let result = http_run_request_with_response(ok_response("hello".into(), Id::Num(0))).await.unwrap();
 	assert_eq!(JsonValue::String("hello".into()), result);
 }
@@ -26,8 +26,6 @@ async fn http_notification_works() {
 }
 
 #[tokio::test]
-// https://github.com/tokio-rs/tokio/issues/3493
-#[ignore]
 async fn http_response_with_wrong_id() {
 	let err = http_run_request_with_response(ok_response("hello".into(), Id::Num(99))).await.unwrap_err();
 	assert!(matches!(err, Error::InvalidRequestId));
@@ -165,9 +163,8 @@ async fn ws_subscription_works() {
 }
 
 #[tokio::test]
-// https://github.com/tokio-rs/tokio/issues/3493
-#[ignore]
 async fn ws_response_with_wrong_id() {
+	env_logger::try_init();
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
 		ok_response("hello".into(), Id::Num(99)),

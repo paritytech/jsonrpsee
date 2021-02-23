@@ -10,7 +10,7 @@ edition = "2018"
 async-trait = "0.1"
 async-std = "1"
 async-tls = "0.11"
-futures = "0.3"
+futures = "^0.3.13"
 hyper = { version = "0.14", features = ["client", "http1", "http2", "tcp"] }
 jsonrpsee-types = { path = "../types", version = "0.1" }
 jsonrpsee-utils = { path = "../utils", version = "0.1", default-features = false }

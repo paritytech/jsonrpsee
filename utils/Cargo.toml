@@ -7,7 +7,7 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-futures = "0.3"
+futures = "^0.3.13"
 globset = "0.4"
 hyper = { version = "0.14", default-features = false, features = ["stream"] }
 jsonrpsee-types = { path = "../types", version = "0.1" }

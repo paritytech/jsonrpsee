@@ -10,7 +10,7 @@ license = "MIT"
 async-trait = "0.1"
 async-std = "1"
 log = "0.4"
-futures = "0.3"
+futures = "^0.3.13"
 thiserror = "1.0"
 tokio = "1"
 serde = { version = "1.0", default-features = false, features = ["derive"] }

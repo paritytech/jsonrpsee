@@ -7,8 +7,8 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-async-std = "1.8"
-futures = "0.3"
+async-std = "1"
+futures = "^0.3.13"
 fnv = "1"
 hyper = { version = "0.14", features = ["stream", "client", "server", "http1", "http2", "tcp"] }
 jsonrpsee-types = { path = "../types", version = "0.1" }
