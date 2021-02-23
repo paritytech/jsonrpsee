@@ -37,7 +37,7 @@ impl HttpTransportClient {
 		if target.scheme() == "http" || target.scheme() == "https" {
 			// NOTE: we are forced to the conditional compilation uglyness
 			// because `Client::new` and `Client::builder().build(connector)` return different types.
-			// Let us pray for mutabally features: https://github.com/rust-lang/cargo/issues/2980
+			// Let us pray for mutually exclusive features: https://github.com/rust-lang/cargo/issues/2980
 			#[cfg(feature = "tokio1-tls")]
 			let connector = hyper_rustls::HttpsConnector::with_native_roots();
 			#[cfg(feature = "tokio02-tls")]
