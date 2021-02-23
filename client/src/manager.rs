@@ -13,12 +13,14 @@ use jsonrpsee_types::{
 };
 use std::collections::hash_map::{Entry, HashMap};
 
+#[derive(Debug)]
 enum Kind {
 	PendingMethodCall(PendingCallOneshot),
 	PendingSubscription((PendingSubscriptionOneshot, UnsubscribeMethod)),
 	Subscription((SubscriptionSink, UnsubscribeMethod)),
 }
 
+#[derive(Debug)]
 /// Indicates the status of a given request/response.
 pub enum RequestStatus {
 	/// The method call is waiting for a response,
@@ -38,6 +40,7 @@ type UnsubscribeMethod = String;
 type RequestId = u64;
 
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
+#[derive(Debug)]
 pub struct RequestManager {
 	/// List of requests that are waiting for a response from the server.
 	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short key (u64).

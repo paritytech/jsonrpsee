@@ -7,7 +7,7 @@
 // the JSON-RPC request id to a value that might have already been used.
 
 use async_trait::async_trait;
-use futures::{channel::mpsc, channel::oneshot, prelude::*};
+use futures::{channel::mpsc, prelude::*};
 use jsonrpsee_types::{
 	error::GenericTransportError,
 	http::HttpConfig,
@@ -22,7 +22,7 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 
 pub fn http_transport(target: impl AsRef<str>, config: HttpConfig) -> Result<(Sender, Receiver), Error> {
 	let url = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
-	let (tx, rx) = mpsc::channel(4);
+	let (tx, rx) = mpsc::unbounded();
 	let sender = Sender { to_back: tx, url, client: hyper::Client::new(), config };
 	let receiver = Receiver { responses: rx };
 	Ok((sender, receiver))
@@ -31,7 +31,7 @@ pub fn http_transport(target: impl AsRef<str>, config: HttpConfig) -> Result<(Se
 /// HTTP Transport Sender.
 pub struct Sender {
 	/// to back
-	to_back: mpsc::Sender<HyperResult>,
+	to_back: mpsc::UnboundedSender<HyperResult>,
 	/// Target to connect to.
 	url: url::Url,
 	/// HTTP client,
@@ -43,7 +43,7 @@ pub struct Sender {
 /// HTTP Transport Receiver.
 pub struct Receiver {
 	/// Receives responses in any order.
-	responses: mpsc::Receiver<HyperResult>,
+	responses: mpsc::UnboundedReceiver<HyperResult>,
 }
 
 #[async_trait]

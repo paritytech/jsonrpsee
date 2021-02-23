@@ -21,13 +21,25 @@ use std::io;
 
 pub fn http(url: &str) -> Client {
 	let (sender, receiver) = transport::http::http_transport(url, Default::default()).unwrap();
-	Client::new(sender, receiver)
+	Client::new(sender, receiver, Config::default())
 }
 
 pub async fn ws(url: &str) -> Client {
 	let builder: transport::ws::WsTransportClientBuilder = transport::ws::WsConfig::with_url(url).try_into().unwrap();
 	let (sender, receiver) = builder.build().await.unwrap();
-	Client::new(sender, receiver)
+	Client::new(sender, receiver, Config::default())
+}
+
+/// Client config.
+pub struct Config {
+	pub max_concurrent_requests_capacity: usize,
+	pub max_subscription_capacity: usize,
+}
+
+impl Default for Config {
+	fn default() -> Self {
+		Self { max_concurrent_requests_capacity: 256, max_subscription_capacity: 4 }
+	}
 }
 
 /// Client that can be cloned.
@@ -96,14 +108,14 @@ pub enum FrontToBack {
 
 impl Client {
 	/// Initializes a new client.
-	pub fn new<S, R>(sender: S, receiver: R) -> Client
+	pub fn new<S, R>(sender: S, receiver: R, config: Config) -> Client
 	where
 		S: TransportSender + Send + 'static,
 		R: TransportReceiver + Send + 'static,
 	{
-		let (to_back, from_front) = mpsc::channel(4);
+		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
 		tokio::spawn(async move {
-			background_task(sender, receiver, from_front, 4).await;
+			background_task(sender, receiver, from_front, config.max_subscription_capacity).await;
 			println!("background task finished");
 		});
 		Client { to_back }
@@ -140,6 +152,7 @@ impl Client {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
+		log::debug!("request finished: {:?}", json_value);
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
 

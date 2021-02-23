@@ -49,8 +49,8 @@ pub async fn background_task<S, R>(
 				Some(FrontToBack::StartRequest { method, params, send_back }) => {
 					log::trace!("[backend]: client prepares to send request={:?}", method);
 					match sender.start_request(method, params).await {
-						Ok(_) => {
-							if let Err(send_back) = manager.insert_pending_call(0, send_back) {
+						Ok(id) => {
+							if let Err(send_back) = manager.insert_pending_call(id, send_back) {
 								let _ = send_back.send(Err(Error::DuplicateRequestId));
 							}
 						}

@@ -34,10 +34,7 @@ use std::time::Duration;
 
 use futures::channel::oneshot;
 use helpers::{http_server, websocket_server, websocket_server_with_wait_period};
-use jsonrpsee_client::{
-	transport::{http::*, ws::*},
-	Subscription,
-};
+use jsonrpsee_client::{transport::ws::*, Subscription};
 use jsonrpsee_types::{
 	error::Error,
 	jsonrpc::{JsonValue, Params},
@@ -148,17 +145,18 @@ async fn ws_subscription_several_clients_with_drop() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
 	websocket_server(server_started_tx);
 	let server_addr = server_started_rx.await.unwrap();
 	let server_url = format!("ws://{}", server_addr);
 
-	let config = WsConfig::with_url(&server_url);
-	let builder: WsTransportClientBuilder = config.try_into().unwrap();
+	let transport_config = WsConfig::with_url(&server_url);
+	let builder: WsTransportClientBuilder = transport_config.try_into().unwrap();
 	let (sender, receiver) = builder.build().await.unwrap();
-	let client = jsonrpsee_client::Client::new(sender, receiver);
+	let mut client_config = jsonrpsee_client::Config::default();
+	client_config.max_subscription_capacity = 4;
+	let client = jsonrpsee_client::Client::new(sender, receiver, client_config);
 	let mut hello_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 
@@ -183,9 +181,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	other_sub.next().await.unwrap();
 }
 
-// Useless test.
 #[tokio::test]
-#[ignore]
 async fn ws_more_request_than_buffer_should_not_deadlock() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
 	let (concurrent_tx, concurrent_rx) = oneshot::channel::<()>();
@@ -193,10 +189,12 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 	let server_addr = server_started_rx.await.unwrap();
 	let server_url = format!("ws://{}", server_addr);
 
-	let config = WsConfig::with_url(&server_url);
-	let builder: WsTransportClientBuilder = config.try_into().unwrap();
+	let transport_config = WsConfig::with_url(&server_url);
+	let builder: WsTransportClientBuilder = transport_config.try_into().unwrap();
 	let (sender, receiver) = builder.build().await.unwrap();
-	let client = jsonrpsee_client::Client::new(sender, receiver);
+	let mut client_config = jsonrpsee_client::Config::default();
+	client_config.max_concurrent_requests_capacity = 2;
+	let client = jsonrpsee_client::Client::new(sender, receiver, client_config);
 
 	let mut requests = Vec::new();
 	//NOTE: we use less than 8 because of https://github.com/paritytech/jsonrpsee/issues/168.
