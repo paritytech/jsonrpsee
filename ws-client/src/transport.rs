@@ -169,6 +169,7 @@ impl Receiver {
 	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
+
 		let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
 		log::debug!("recv: {}", response);
 		Ok(response)

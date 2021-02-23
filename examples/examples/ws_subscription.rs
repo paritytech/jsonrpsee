@@ -24,17 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use async_std::task;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee_types::jsonrpc::{JsonValue, Params};
 use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
 use jsonrpsee_ws_server::WsServer;
+use tokio::task;
 
 const SOCK_ADDR: &str = "127.0.0.1:9966";
 const SERVER_URI: &str = "ws://localhost:9966";
 const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	env_logger::init();
 
@@ -60,13 +60,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let server = WsServer::new(url).await.unwrap();
-	let mut subscription =
-		server.register_subscription("subscribe_hello".to_string(), "unsubscribe_hello".to_string()).unwrap();
+	let mut server = WsServer::new(url).await.unwrap();
+
+	let mut subscription = server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
+
+	std::thread::spawn(move || loop {
+		subscription.send(&"hello my friend").unwrap();
+		std::thread::sleep(std::time::Duration::from_secs(1));
+	});
 
 	server_started_tx.send(()).unwrap();
-	loop {
-		subscription.send(JsonValue::String("hello my friend".to_owned())).await.unwrap();
-		std::thread::sleep(std::time::Duration::from_secs(1));
-	}
+
+	server.start().await;
 }

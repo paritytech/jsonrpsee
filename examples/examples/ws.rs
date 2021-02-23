@@ -24,16 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use async_std::task;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee_types::jsonrpc::{JsonValue, Params};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use jsonrpsee_ws_server::WsServer;
+use tokio::task;
 
 const SOCK_ADDR: &str = "127.0.0.1:9944";
 const SERVER_URI: &str = "ws://localhost:9944";
 
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	env_logger::init();
 
@@ -52,12 +52,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let server = WsServer::new(url).await.unwrap();
-	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
+	let mut server = WsServer::new(url).await.unwrap();
+
+	server.register_method("say_hello", |_| Ok("lo")).unwrap();
 
 	server_started_tx.send(()).unwrap();
-	loop {
-		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
-	}
+
+	server.start().await;
 }
