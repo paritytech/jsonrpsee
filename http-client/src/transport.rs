@@ -36,7 +36,7 @@ impl HttpTransportClient {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
 			// NOTE: we are forced to the conditional compilation uglyness
-			// because `Client::new` and `Client::builder().build(connector)` returns different types.
+			// because `Client::new` and `Client::builder().build(connector)` return different types.
 			// Let us pray for mutabally features: https://github.com/rust-lang/cargo/issues/2980
 			#[cfg(feature = "tokio1-tls")]
 			let connector = hyper_rustls::HttpsConnector::with_native_roots();
