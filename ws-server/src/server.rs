@@ -108,6 +108,7 @@ impl SubscriptionSink {
 	}
 }
 
+/// Parameters sent with the RPC request
 #[derive(Clone, Copy)]
 pub struct RpcParams<'a>(Option<&'a str>);
 
@@ -169,6 +170,7 @@ fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
 }
 
 impl Server {
+	/// Create a new WebSocket RPC server, bound to the `addr`
 	pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {
 		let listener = TcpListener::bind(addr).await?;
 
@@ -185,6 +187,7 @@ impl Server {
 		Ok(())
 	}
 
+	/// Register a new RPC method, which responds with a given callback.
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
@@ -202,6 +205,7 @@ impl Server {
 		)
 	}
 
+	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
 	pub fn register_subscription(
 		&mut self,
 		subscribe_method_name: &'static str,
@@ -259,10 +263,12 @@ impl Server {
 		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
 	}
 
+	/// Returns socket address to which the server is bound
 	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
 		self.listener.local_addr().map_err(Into::into)
 	}
 
+	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.methods);
