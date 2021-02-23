@@ -31,9 +31,11 @@ use jsonrpsee_ws_server::WsServer;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::channel::oneshot::Sender;
+use futures::channel::oneshot;
 
-pub fn websocket_server(server_started: Sender<SocketAddr>) {
+pub async fn websocket_server_with_subscription() -> SocketAddr {
+	let (server_started_tx, server_started_rx) = oneshot::channel();
+
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -43,7 +45,7 @@ pub fn websocket_server(server_started: Sender<SocketAddr>) {
 
 		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
-		server_started.send(server.local_addr().unwrap()).unwrap();
+		server_started_tx.send(server.local_addr().unwrap()).unwrap();
 
 		rt.spawn(server.start());
 
@@ -56,9 +58,13 @@ pub fn websocket_server(server_started: Sender<SocketAddr>) {
 			}
 		});
 	});
+
+	server_started_rx.await.unwrap()
 }
 
-pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>) {
+pub async fn websocket_server() -> SocketAddr {
+	let (server_started_tx, server_started_rx) = oneshot::channel();
+
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -67,19 +73,23 @@ pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>) {
 		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
 		rt.block_on(async move {
-			server_started.send(server.local_addr().unwrap()).unwrap();
+			server_started_tx.send(server.local_addr().unwrap()).unwrap();
 
 			server.start().await
 		});
 	});
+
+	server_started_rx.await.unwrap()
 }
 
-pub fn http_server(server_started: Sender<SocketAddr>) {
+pub async fn http_server() -> SocketAddr {
+	let (server_started_tx, server_started_rx) = oneshot::channel();
+
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		let server = rt.block_on(HttpServer::new("127.0.0.1:0", HttpConfig::default())).unwrap();
-		server_started.send(*server.local_addr()).unwrap();
+		server_started_tx.send(*server.local_addr()).unwrap();
 		let mut call = server.register_method("say_hello".to_owned()).unwrap();
 
 		rt.block_on(async move {
@@ -89,4 +99,6 @@ pub fn http_server(server_started: Sender<SocketAddr>) {
 			}
 		});
 	});
+
+	server_started_rx.await.unwrap()
 }
