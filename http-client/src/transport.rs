@@ -26,7 +26,6 @@ pub struct HttpTransportClient {
 	target: url::Url,
 	/// HTTP client
 	client: HyperClient,
-	/// HTTP client with HTTP connector
 	/// Configurable max request body size
 	config: HttpConfig,
 }
