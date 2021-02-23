@@ -9,7 +9,6 @@ use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
 
 #[tokio::test]
 async fn http_method_call_works() {
-	//let _ = env_logger::try_init();
 	let result = http_run_request_with_response(ok_response("hello".into(), Id::Num(0))).await.unwrap();
 	assert_eq!(JsonValue::String("hello".into()), result);
 }
@@ -28,7 +27,7 @@ async fn http_notification_works() {
 #[tokio::test]
 async fn http_response_with_wrong_id() {
 	let err = http_run_request_with_response(ok_response("hello".into(), Id::Num(99))).await.unwrap_err();
-	assert!(matches!(err, Error::InvalidRequestId));
+	assert!(matches!(err, Error::TransportError(e) if e.to_string().contains("background task closed")));
 }
 
 #[tokio::test]
@@ -73,8 +72,7 @@ async fn ws_method_call_works() {
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
 		ok_response("hello".into(), Id::Num(0_u64)),
-	)
-	.await;
+	);
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	let response: String = client.request("say_hello", jsonrpc::Params::None).await.unwrap();
@@ -84,7 +82,7 @@ async fn ws_method_call_works() {
 #[tokio::test]
 async fn ws_notif_works() {
 	// this empty string shouldn't be read because the server shouldn't respond to notifications.
-	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), String::new()).await;
+	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), String::new());
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	assert!(client.notification("notif", jsonrpc::Params::None).await.is_ok());
@@ -93,8 +91,7 @@ async fn ws_notif_works() {
 #[tokio::test]
 async fn ws_method_not_found_works() {
 	let server =
-		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), method_not_found(Id::Num(0_u64)))
-			.await;
+		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), method_not_found(Id::Num(0_u64)));
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	let response: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;
@@ -104,7 +101,7 @@ async fn ws_method_not_found_works() {
 #[tokio::test]
 async fn ws_parse_error_works() {
 	let server =
-		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), parse_error(Id::Num(0_u64))).await;
+		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), parse_error(Id::Num(0_u64)));
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	let response: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;
@@ -114,8 +111,7 @@ async fn ws_parse_error_works() {
 #[tokio::test]
 async fn ws_invalid_request_works() {
 	let server =
-		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), invalid_request(Id::Num(0_u64)))
-			.await;
+		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), invalid_request(Id::Num(0_u64)));
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	let response: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;
@@ -125,8 +121,7 @@ async fn ws_invalid_request_works() {
 #[tokio::test]
 async fn ws_invalid_params_works() {
 	let server =
-		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), invalid_params(Id::Num(0_u64)))
-			.await;
+		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), invalid_params(Id::Num(0_u64)));
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	let response: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;
@@ -136,8 +131,7 @@ async fn ws_invalid_params_works() {
 #[tokio::test]
 async fn ws_internal_error_works() {
 	let server =
-		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), internal_error(Id::Num(0_u64)))
-			.await;
+		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), internal_error(Id::Num(0_u64)));
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	let response: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;
@@ -150,8 +144,7 @@ async fn ws_subscription_works() {
 		"127.0.0.1:0".parse().unwrap(),
 		server_subscription_id_response(Id::Num(0)),
 		server_subscription_response(jsonrpc::JsonValue::String("hello my friend".to_owned())),
-	)
-	.await;
+	);
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	{
@@ -162,14 +155,19 @@ async fn ws_subscription_works() {
 	}
 }
 
+// TODO(niklasad1): This test fails sometimes when the a task on `tokio` is supposed to be dropped but doesn't sometimes.
+// It appears similar to https://github.com/tokio-rs/tokio/issues/3493 rarely but should be fixed on futures 0.3.13.
+//
+// So I suspect there's some bug in tokio that prevents that task to dropped when there are tasks in the queue of something
+// but I haven't debugged it properly quite hard with the raw pointers/generator stuff in tokio/futures.
+//
+// To workaround this I changed the `WebSocketServer` to use `async-std` instead and I haven't seen any deadlocks yet.
 #[tokio::test]
 async fn ws_response_with_wrong_id() {
-	env_logger::try_init();
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
 		ok_response("hello".into(), Id::Num(99)),
-	)
-	.await;
+	);
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = crate::ws(&uri).await;
 	let err: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;

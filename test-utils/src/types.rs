@@ -1,4 +1,5 @@
-use futures::channel::mpsc::{self, Receiver, Sender};
+use async_std::net::TcpListener;
+use futures::channel::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use futures::future::FutureExt;
 use futures::io::{BufReader, BufWriter};
 use futures::sink::SinkExt;
@@ -86,16 +87,16 @@ pub enum ServerMode {
 /// JSONRPC v2 dummy WebSocket server that sends a hardcoded response.
 pub struct WebSocketTestServer {
 	local_addr: SocketAddr,
-	exit: Sender<()>,
+	exit: UnboundedSender<()>,
 }
 
 impl WebSocketTestServer {
 	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every connection.
-	pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
-		let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
+	pub fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
+		let listener = async_std::task::block_on(TcpListener::bind(sockaddr)).unwrap();
 		let local_addr = listener.local_addr().unwrap();
-		let (tx, rx) = mpsc::channel::<()>(4);
-		tokio::spawn(server_backend(listener, rx, ServerMode::Response(response)));
+		let (tx, rx) = mpsc::unbounded();
+		async_std::task::spawn(server_backend(listener, rx, ServerMode::Response(response)));
 
 		Self { local_addr, exit: tx }
 	}
@@ -103,15 +104,19 @@ impl WebSocketTestServer {
 	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription response.
 	//
 	// NOTE: ignores the actual subscription and unsubscription method.
-	pub async fn with_hardcoded_subscription(
+	pub fn with_hardcoded_subscription(
 		sockaddr: SocketAddr,
 		subscription_id: String,
 		subscription_response: String,
 	) -> Self {
-		let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
+		let listener = async_std::task::block_on(TcpListener::bind(sockaddr)).unwrap();
 		let local_addr = listener.local_addr().unwrap();
-		let (tx, rx) = mpsc::channel::<()>(4);
-		tokio::spawn(server_backend(listener, rx, ServerMode::Subscription { subscription_id, subscription_response }));
+		let (tx, rx) = mpsc::unbounded();
+		async_std::task::spawn(server_backend(
+			listener,
+			rx,
+			ServerMode::Subscription { subscription_id, subscription_response },
+		));
 
 		Self { local_addr, exit: tx }
 	}
@@ -125,7 +130,7 @@ impl WebSocketTestServer {
 	}
 }
 
-async fn server_backend(listener: async_std::net::TcpListener, mut exit: Receiver<()>, mode: ServerMode) {
+async fn server_backend(listener: async_std::net::TcpListener, mut exit: UnboundedReceiver<()>, mode: ServerMode) {
 	let mut connections = Vec::new();
 
 	loop {
@@ -137,8 +142,8 @@ async fn server_backend(listener: async_std::net::TcpListener, mut exit: Receive
 			_ = exit_fut => break,
 			conn = conn_fut => {
 				if let Ok((stream, _)) = conn {
-					let (tx, rx) = mpsc::channel::<()>(4);
-					let handle = tokio::spawn(connection_task(stream, mode.clone(), rx));
+					let (tx, rx) = mpsc::unbounded();
+					let handle = async_std::task::spawn(connection_task(stream, mode.clone(), rx));
 					connections.push((handle, tx));
 				}
 			}
@@ -150,11 +155,11 @@ async fn server_backend(listener: async_std::net::TcpListener, mut exit: Receive
 		// If the actual connection was never established i.e., returned early
 		// It will most likely be caught on the client-side but just to be explicit.
 		exit.send(()).await.expect("WebSocket connection was never established");
-		handle.await.unwrap();
+		handle.await;
 	}
 }
 
-async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mut exit: Receiver<()>) {
+async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mut exit: UnboundedReceiver<()>) {
 	let mut server = Server::new(socket);
 
 	let websocket_key = match server.receive_request().await {
@@ -183,7 +188,7 @@ async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mu
 	loop {
 		let next_ws = ws_stream.next().fuse();
 		let next_exit = exit.next().fuse();
-		let time_out = tokio::time::sleep(Duration::from_secs(1)).fuse();
+		let time_out = async_std::task::sleep(Duration::from_secs(1)).fuse();
 		futures::pin_mut!(time_out, next_exit, next_ws);
 
 		futures::select! {

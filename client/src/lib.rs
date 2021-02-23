@@ -102,7 +102,10 @@ impl Client {
 		R: TransportReceiver + Send + 'static,
 	{
 		let (to_back, from_front) = mpsc::channel(4);
-		tokio::spawn(background_task(sender, receiver, from_front, 4));
+		tokio::spawn(async move {
+			background_task(sender, receiver, from_front, 4).await;
+			println!("background task finished");
+		});
 		Client { to_back }
 	}
 

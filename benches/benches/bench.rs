@@ -51,30 +51,28 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 		})
 	});
 
-	c.bench_function_over_inputs(
-		"concurrent_http_round_trip",
-		move |b: &mut Bencher, size: &usize| {
-			b.iter(|| {
-				let mut tasks = Vec::new();
-				for _ in 0..*size {
-					let client_rc = client.clone();
-					let task = rt.spawn(async move {
-						let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
-					});
-					tasks.push(task);
-				}
-				for task in tasks {
-					rt.block_on(task).unwrap();
-				}
-			})
-		},
-		concurrent_tasks(),
-	);
+	// c.bench_function_over_inputs(
+	//     "concurrent_http_round_trip",
+	//     move |b: &mut Bencher, size: &usize| {
+	//         b.iter(|| {
+	//             let mut tasks = Vec::new();
+	//             for _ in 0..*size {
+	//                 let client_rc = client.clone();
+	//                 let task = rt.spawn(async move {
+	//                     let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
+	//                 });
+	//                 tasks.push(task);
+	//             }
+	//             for task in tasks {
+	//                 rt.block_on(task).unwrap();
+	//             }
+	//         })
+	//     },
+	//     concurrent_tasks(),
+	// );
 }
 
 pub fn websocket_requests(c: &mut criterion::Criterion) {
-	env_logger::try_init();
-
 	let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
 	rt.spawn(ws_server(tx_addr));
