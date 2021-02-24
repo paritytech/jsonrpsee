@@ -88,24 +88,23 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 		})
 	});
 
-	// c.bench_function_over_inputs(
-	//     "concurrent_websocket_round_trip",
-	//     move |b: &mut Bencher, size: &usize| {
-	//         b.iter(|| {
-	//             let mut tasks = Vec::new();
-	//             for _ in 0..*size {
-	//                 let client_rc = client.clone();
-	//                 let task = rt.spawn(async move {
-	//                     let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
-	//                 });
-	//                 tasks.push(task);
-	//             }
-	//             for task in tasks {
-	//                 rt.block_on(task).unwrap();
-	//             }
-	//         })
-	//     },
-	//     // TODO(niklasad1): This deadlocks when more than 8 tasks are spawned.
-	//     concurrent_tasks(),
-	// );
+	c.bench_function_over_inputs(
+	    "concurrent_websocket_round_trip",
+	    move |b: &mut Bencher, size: &usize| {
+	        b.iter(|| {
+	            let mut tasks = Vec::new();
+	            for _ in 0..*size {
+	                let client_rc = client.clone();
+	                let task = rt.spawn(async move {
+	                    let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
+	                });
+	                tasks.push(task);
+	            }
+	            for task in tasks {
+	                rt.block_on(task).unwrap();
+	            }
+	        })
+	    },
+	    concurrent_tasks(),
+	);
 }
