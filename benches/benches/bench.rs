@@ -27,13 +27,13 @@ async fn http_server(tx: Sender<SocketAddr>) {
 }
 
 async fn ws_server(tx: Sender<SocketAddr>) {
-	let server = WsServer::new("127.0.0.1:0").await.unwrap();
-	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
-	tx.send(*server.local_addr()).unwrap();
-	loop {
-		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
-	}
+	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
+
+	tx.send(server.local_addr().unwrap()).unwrap();
+
+	server.register_method("say_hello", |_| Ok("lo")).unwrap();
+
+	server.start().await;
 }
 
 pub fn http_requests(c: &mut criterion::Criterion) {

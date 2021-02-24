@@ -7,7 +7,9 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-async-std = { version = "1", features = ["attributes"] }
+anyhow = "1.0.34"
+async-std = { version = "1.8.0", features = ["attributes"] }
+beef = "0.5"
 bs58 = "0.4"
 fnv = "1"
 futures = "^0.3.13"
@@ -15,9 +17,13 @@ jsonrpsee-types = { path = "../types", version = "0.1" }
 log = "0.4"
 parking_lot = "0.11"
 rand = "0.8"
+rustc-hash = "1.1.0"
 serde = { version = "1", default-features = false, features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 soketto = "0.4"
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros"] }
+tokio-stream = { version = "0.1.1", features = ["net"] }
+tokio-util = { version = "0.6", features = ["compat"] }
 thiserror = "1"
 
 [dev-dependencies]

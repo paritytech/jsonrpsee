@@ -226,7 +226,10 @@ impl TransportReceiver for Receiver {
 	/// Returns a `Future` resolving when the server sent us something back.
 	async fn receive(&mut self) -> Result<jsonrpc::Response, Error> {
 		let mut message = Vec::new();
+		// TODO: error types
 		self.inner.receive_data(&mut message).await.unwrap();
+
+		// TODO: error types
 		let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError).unwrap();
 		log::debug!("recv: {}", response);
 		Ok(response)
