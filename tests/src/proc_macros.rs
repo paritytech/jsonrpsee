@@ -11,7 +11,7 @@ jsonrpsee_proc_macros::rpc_client_api! {
 }
 
 jsonrpsee_proc_macros::rpc_client_api! {
-	Test2<B, T> {
+	pub(crate) Test2<B, T> {
 		#[rpc(method = "say_hello")]
 		fn foo(b: B) -> T;
 	}

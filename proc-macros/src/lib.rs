@@ -146,8 +146,6 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 	}
 
 	let client_impl_block = build_client_impl(&api)?;
-	// TODO(niklasad1): do we want debug impl here?
-	//let debug_variants = build_debug_variants(&api)?;
 
 	let mut ret_variants = Vec::new();
 	for (idx, ty) in non_used_type_params.into_iter().enumerate() {
@@ -166,15 +164,6 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 		}
 
 		#client_impl_block
-
-		// TODO(niklasad1): do we want debug impl here?
-		/*impl #generics core::fmt::Debug  for #enum_name #generics {
-			fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-				match self {
-					#(#debug_variants,)* _ => f.debug_struct("ReturnType").finish()
-				}
-			}
-		}*/
 	))
 }
 
@@ -286,21 +275,6 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 	}
 
 	Ok(client_functions)
-}
-
-// TODO: better docs
-fn build_debug_variants(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
-	let enum_name = &api.name;
-	let mut debug_variants = Vec::new();
-	for function in &api.definitions {
-		let variant_name = snake_case_to_camel_case(&function.signature.ident);
-		debug_variants.push(quote_spanned!(function.signature.ident.span()=>
-			#enum_name::#variant_name { /* TODO: params */ .. } => {
-				f.debug_struct(stringify!(#enum_name))/* TODO: params */.finish()
-			}
-		));
-	}
-	Ok(debug_variants)
 }
 
 /// Turns a snake case function name into an UpperCamelCase name suitable to be an enum variant.
