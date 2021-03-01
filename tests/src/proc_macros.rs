@@ -1,8 +1,6 @@
 use crate::helpers;
-use futures::channel::oneshot;
 use jsonrpsee_http_client::*;
 use jsonrpsee_ws_client::*;
-use std::net::SocketAddr;
 
 jsonrpsee_proc_macros::rpc_client_api! {
 	Test<T> {
