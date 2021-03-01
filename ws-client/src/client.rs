@@ -37,7 +37,7 @@ use jsonrpsee_types::{
 	client::{FrontToBack, Subscription},
 	error::Error,
 	jsonrpc::{self, JsonValue, SubscriptionId},
-	traits::Client,
+	traits::{Client, SubscriptionClient},
 };
 use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
@@ -175,7 +175,10 @@ impl Client for WsClient {
 		};
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
+}
 
+#[async_trait]
+impl SubscriptionClient for WsClient {
 	/// Send a subscription request to the server.
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
@@ -216,7 +219,6 @@ impl Client for WsClient {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-
 		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
 }

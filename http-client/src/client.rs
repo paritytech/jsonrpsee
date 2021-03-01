@@ -2,7 +2,6 @@ use crate::transport::HttpTransportClient;
 use async_trait::async_trait;
 use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
-	client::Subscription,
 	error::Error,
 	http::HttpConfig,
 	jsonrpc::{self, JsonValue},
@@ -82,21 +81,6 @@ impl Client for HttpClient {
 			}
 		}?;
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
-	}
-
-	async fn subscribe<SM, UM, P, N>(
-		&self,
-		_subscribe_method: SM,
-		_params: P,
-		_unsubscribe_method: UM,
-	) -> Result<Subscription<N>, Error>
-	where
-		SM: Into<String> + Send,
-		UM: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
-		N: DeserializeOwned,
-	{
-		Err(Error::Custom("Subscription not supported on HTTP transport".into()))
 	}
 }
 

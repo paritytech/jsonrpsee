@@ -4,7 +4,7 @@ use crate::jsonrpc::{DeserializeOwned, Params};
 use alloc::string::String;
 use async_trait::async_trait;
 
-/// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
+/// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
 #[async_trait]
 pub trait Client {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
@@ -19,7 +19,11 @@ pub trait Client {
 		T: DeserializeOwned,
 		M: Into<String> + Send,
 		P: Into<Params> + Send;
+}
 
+/// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
+#[async_trait]
+pub trait SubscriptionClient: Client {
 	/// Send a subscription request to the server, technically not part of the [JSON-RPC specification](https://www.jsonrpc.org/specification)
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
@@ -28,8 +32,6 @@ pub trait Client {
 	/// The `unsubscribe_method` is used to close the subscription.
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`](crate::client::Subscription) for further documentation.
-	///
-	// TODO: ideally this should be a subtrait but let's have it to simplify macro stuff for now.
 	async fn subscribe<SM, UM, P, Notif>(
 		&self,
 		subscribe_method: SM,

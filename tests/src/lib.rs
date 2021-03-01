@@ -37,7 +37,7 @@ use helpers::{http_server, websocket_server, websocket_server_with_wait_period};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 use jsonrpsee_types::{
 	jsonrpc::{JsonValue, Params},
-	traits::Client,
+	traits::{Client, SubscriptionClient},
 };
 use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
 

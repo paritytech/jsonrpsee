@@ -3,7 +3,11 @@
 use crate::{WsClient, WsConfig, WsSubscription};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
-use jsonrpsee_types::{error::Error, jsonrpc, traits::Client};
+use jsonrpsee_types::{
+	error::Error,
+	jsonrpc,
+	traits::{Client, SubscriptionClient},
+};
 
 fn assert_error_response(response: Result<jsonrpc::JsonValue, Error>, code: jsonrpc::ErrorCode, message: String) {
 	let expected = jsonrpc::Error { code, message, data: None };
