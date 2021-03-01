@@ -31,67 +31,65 @@ use jsonrpsee_ws_server::WsServer;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::channel::oneshot::{Receiver, Sender};
-use futures::future::FutureExt;
+use futures::channel::oneshot;
 
-pub fn websocket_server(server_started: Sender<SocketAddr>) {
+pub async fn websocket_server_with_subscription() -> SocketAddr {
+	let (server_started_tx, server_started_rx) = oneshot::channel();
+
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
-		let server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
-		let mut sub_hello =
-			server.register_subscription("subscribe_hello".to_owned(), "unsubscribe_hello".to_owned()).unwrap();
-		let mut sub_foo =
-			server.register_subscription("subscribe_foo".to_owned(), "unsubscribe_foo".to_owned()).unwrap();
-		let mut call = server.register_method("say_hello".to_owned()).unwrap();
-		server_started.send(*server.local_addr()).unwrap();
+		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
+		let mut sub_hello = server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
+		let mut sub_foo = server.register_subscription("subscribe_foo", "unsubscribe_foo").unwrap();
+
+		server.register_method("say_hello", |_| Ok("hello")).unwrap();
+
+		server_started_tx.send(server.local_addr().unwrap()).unwrap();
+
+		rt.spawn(server.start());
 
 		rt.block_on(async move {
 			loop {
-				let hello_fut = async {
-					let handle = call.next().await;
-					handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
-				}
-				.fuse();
+				tokio::time::sleep(Duration::from_millis(100)).await;
 
-				let timeout = tokio::time::sleep(Duration::from_millis(100)).fuse();
-				futures::pin_mut!(hello_fut, timeout);
-				futures::select! {
-					_ = hello_fut => (),
-					_ = timeout => {
-						sub_hello.send(JsonValue::String("hello from subscription".to_owned())).await.unwrap();
-						sub_foo.send(JsonValue::Number(1337_u64.into())).await.unwrap();
-					}
-				}
+				sub_hello.send(&"hello from subscription").unwrap();
+				sub_foo.send(&1337_u64).unwrap();
 			}
 		});
 	});
+
+	server_started_rx.await.unwrap()
 }
 
-pub fn websocket_server_with_wait_period(server_started: Sender<SocketAddr>, wait: Receiver<()>) {
+pub async fn websocket_server() -> SocketAddr {
+	let (server_started_tx, server_started_rx) = oneshot::channel();
+
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
-		let server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
-		let mut respond = server.register_method("say_hello".to_owned()).unwrap();
-		server_started.send(*server.local_addr()).unwrap();
+		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
+
+		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
 		rt.block_on(async move {
-			wait.await.unwrap();
-			loop {
-				let handle = respond.next().await;
-				handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
-			}
+			server_started_tx.send(server.local_addr().unwrap()).unwrap();
+
+			server.start().await
 		});
 	});
+
+	server_started_rx.await.unwrap()
 }
 
-pub fn http_server(server_started: Sender<SocketAddr>) {
+pub async fn http_server() -> SocketAddr {
+	let (server_started_tx, server_started_rx) = oneshot::channel();
+
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		let server = rt.block_on(HttpServer::new("127.0.0.1:0", HttpConfig::default())).unwrap();
-		server_started.send(*server.local_addr()).unwrap();
+		server_started_tx.send(*server.local_addr()).unwrap();
 		let mut call = server.register_method("say_hello".to_owned()).unwrap();
 
 		rt.block_on(async move {
@@ -101,4 +99,6 @@ pub fn http_server(server_started: Sender<SocketAddr>) {
 			}
 		});
 	});
+
+	server_started_rx.await.unwrap()
 }

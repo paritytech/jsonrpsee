@@ -58,6 +58,13 @@ pub struct WsClient {
 #[derive(Clone, Debug)]
 pub struct WsConfig<'a> {
 	/// URL to connect to.
+	///
+	/// If the port number is missing from the URL, the default port number is used.
+	///
+	///
+	/// `ws://host` - port 80 is used
+	///
+	/// `wss://host` - port 443 is used
 	pub url: &'a str,
 	/// Max request body size
 	pub max_request_body_size: usize,

@@ -61,9 +61,7 @@ jsonrpsee_proc_macros::rpc_client_api! {
 
 #[tokio::test]
 async fn proc_macros_generic_ws_client_api() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	helpers::websocket_server(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = helpers::websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClient::new(WsConfig::with_url(&server_url)).await.unwrap();
 
@@ -74,9 +72,7 @@ async fn proc_macros_generic_ws_client_api() {
 
 #[tokio::test]
 async fn proc_macros_generic_http_client_api() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	helpers::http_server(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = helpers::http_server().await;
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClient::new(&server_url, HttpConfig::default()).unwrap();
 
