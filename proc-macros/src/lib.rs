@@ -34,7 +34,60 @@ use syn::spanned::Spanned as _;
 
 mod api_def;
 
-/// Generates client RPC API.
+/// Wraps around one or more API definitions and generates an enum.
+///
+/// The format within this macro must be:
+///
+/// ```ignore
+/// jsonrpsee_proc_macros::rpc_client_api! {
+///     Foo { ... }
+///     pub(crate) Bar { ... }
+/// }
+/// ```
+///
+/// The `Foo` and `Bar` are identifiers, optionally prefixed with a visibility modifier
+/// (e.g. `pub`).
+///
+/// The content of the blocks is the same as the content of a trait definition, except that
+/// default implementations for methods are forbidden.
+///
+/// For each identifier (such as `Foo` and `Bar` in the example above), this macro will generate
+/// an enum where each variant corresponds to a function of the definition. Function names are
+/// turned into PascalCase to conform to the Rust style guide.
+///
+/// Additionally, each generated enum has one method per function definition that lets you perform
+/// the method has a client.
+///
+// TODO(niklasad1): Generic type params for individual methods doesn't work
+// because how the enum is generated, so for now type params must be declared on the entire enum.
+// The reason is that all type params on the enum is bound as a separate variant but
+// not generic params i.e, either params or return type.
+// To handle that properly, all generic types has to be collected and applied to the enum, see example:
+//
+// ```rust
+// jsonrpsee_rpc_client_api! {
+//     Api {
+//       // Doesn't work.
+//       fn generic_notif<T>(t: T);
+// }
+// ```
+//
+// Expands to which doesn't compile:
+// ```rust
+// enum Api {
+//    GenericNotif {
+//        t: T,
+//    },
+// }
+// ```
+// The code should be expanded to (to compile):
+// ```rust
+// enum Api<T> {
+//    GenericNotif {
+//        t: T,
+//    },
+// }
+// ```
 #[proc_macro]
 pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 	// Start by parsing the input into what we expect.
@@ -98,7 +151,7 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 
 	let mut ret_variants = Vec::new();
 	for (idx, ty) in non_used_type_params.into_iter().enumerate() {
-		// NOTE: variant names are converted from `snake_case` to `CamelCase`
+		// NOTE(niklasad1): variant names are converted from `snake_case` to `CamelCase`
 		// It's impossible to have collisions between `_0, _1, ... _N`
 		// Because variant name `_0`, `__0` becomes `0` in `CamelCase`
 		// then `0` is not a valid identifier in Rust syntax and the error message is hard to understand.
@@ -222,19 +275,6 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-			// TODO: what if there's a conflict between `client` and a param name?
-			// TODO(niklasad1): generic type params for individual methods doesn't work
-			// because how the enum is generates, so for now type params must be declared on the enum 
-			// such as
-			// ```no run
-			//  Bar<T> {
-			//	   fn notif();
-			//		 fn generic_notif(t: T);
-			//		 // don't work
-			//     fn generic_notif2<U>(t: U);
-			//  }
-			//```
-
 			#visibility async fn #f_name (client: &impl jsonrpsee_types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, jsonrpsee_types::error::Error>
 			where
 				#ret_ty: jsonrpsee_types::jsonrpc::DeserializeOwned
