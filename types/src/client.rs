@@ -63,7 +63,7 @@ where
 	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream
-	/// This may return `None` if the subscription has been terminated, may happen if the channel becomes full or dropped.
+	/// This may return `None` if the subscription has been terminated, may happen if the channel becomes full or  is dropped.
 	///
 	/// Ignores any malformed packet.
 	pub async fn next(&mut self) -> Option<Notif> {
