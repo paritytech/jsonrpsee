@@ -1,8 +1,8 @@
 [package]
 name = "jsonrpsee-proc-macros"
 description = "JSON-RPC crate"
-version = "1.0.0"
-authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
+version = "0.2.0"
+authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
 edition = "2018"
 

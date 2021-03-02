@@ -27,6 +27,7 @@
 #![cfg(test)]
 
 mod helpers;
+mod proc_macros;
 
 use std::time::Duration;
 
@@ -35,6 +36,7 @@ use jsonrpsee_http_client::{HttpClient, HttpConfig};
 use jsonrpsee_types::{
 	error::Error,
 	jsonrpc::{JsonValue, Params},
+	traits::{Client, SubscriptionClient},
 };
 use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
 

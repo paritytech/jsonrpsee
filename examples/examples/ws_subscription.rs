@@ -25,7 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::jsonrpc::{JsonValue, Params};
+use jsonrpsee_types::{
+	jsonrpc::{JsonValue, Params},
+	traits::SubscriptionClient,
+};
 use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
 use jsonrpsee_ws_server::WsServer;
 use tokio::task;

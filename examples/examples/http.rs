@@ -28,7 +28,10 @@ use async_std::task;
 use futures::channel::oneshot::{self, Sender};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 use jsonrpsee_http_server::HttpServer;
-use jsonrpsee_types::jsonrpc::{JsonValue, Params};
+use jsonrpsee_types::{
+	jsonrpc::{JsonValue, Params},
+	traits::Client,
+};
 
 const SOCK_ADDR: &str = "127.0.0.1:9933";
 const SERVER_URI: &str = "http://localhost:9933";

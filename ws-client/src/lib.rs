@@ -12,4 +12,5 @@ pub mod transport;
 #[cfg(test)]
 mod tests;
 
-pub use client::{WsClient, WsConfig, WsSubscription};
+pub use client::{WsClient, WsConfig};
+pub use jsonrpsee_types::client::Subscription as WsSubscription;

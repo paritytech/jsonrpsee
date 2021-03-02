@@ -50,7 +50,7 @@ impl WebSocketTestClient {
 				let (tx, rx) = client.into_builder().finish();
 				Ok(Self { tx, rx })
 			}
-			r @ _ => Err(format!("WebSocketHandshake failed: {:?}", r).into()),
+			r => Err(format!("WebSocketHandshake failed: {:?}", r).into()),
 		}
 	}
 
