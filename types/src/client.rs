@@ -8,7 +8,7 @@ use futures::prelude::*;
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	pub to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
+	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
 	pub notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Subscription ID,
 	pub id: SubscriptionId,
