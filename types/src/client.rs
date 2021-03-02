@@ -32,7 +32,7 @@ pub enum FrontToBack {
 		method: String,
 		/// Parameters of the request.
 		params: Params,
-		/// One-shot channel where to send back the outcome of that request.
+		/// One-shot channel over which we send back the result of this request.
 		send_back: oneshot::Sender<Result<JsonValue, Error>>,
 	},
 
