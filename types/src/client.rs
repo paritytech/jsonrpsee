@@ -42,7 +42,7 @@ pub enum FrontToBack {
 		subscribe_method: String,
 		/// Parameters to send for the subscription.
 		params: Params,
-		/// Method to use to later unsubscription. Used if the channel unexpectedly closes.
+		/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
 		unsubscribe_method: String,
 		/// When we get a response from the server about that subscription, we send the result on
 		/// this channel. If the subscription succeeds, we return a [Receiver](futures::channel::mpsc::Receiver) that will receive
