@@ -64,7 +64,7 @@ where
 {
 	/// Returns the next notification from the stream
 	/// This may return `None` if the subscription has been terminated,
-	/// may happen if the channel becomes full or dropped.
+	/// may happen if the channel becomes full or is dropped.
 	///
 	/// Ignores any malformed packet.
 	pub async fn next(&mut self) -> Option<Notif> {
@@ -72,7 +72,7 @@ where
 			match self.notifs_rx.next().await {
 				Some(n) => match jsonrpc::from_value(n) {
 					Ok(parsed) => return Some(parsed),
-					Err(e) => log::info!("Subscription response error: {:?}", e),
+					Err(e) => log::debug!("Subscription response error: {:?}", e),
 				},
 				None => return None,
 			}
