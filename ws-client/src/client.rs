@@ -268,7 +268,7 @@ async fn background_task(
 					log::trace!("[backend]: client prepares to send request={:?}", method);
 					match sender.start_request(method, params).await {
 						Ok(id) => {
-							if let Err(send_back) = manager.insert_pending_call(id, send_back) {
+							if let Err(Some(send_back)) = manager.insert_pending_call(id, Some(send_back)) {
 								let _ = send_back.send(Err(Error::DuplicateRequestId));
 							}
 						}
@@ -306,7 +306,9 @@ async fn background_task(
 						if let Some((_sink, unsubscribe_method)) = manager.remove_subscription(request_id, sub_id.clone()) {
 							if let Ok(json_sub_id) = jsonrpc::to_value(sub_id) {
 								let params = jsonrpc::Params::Array(vec![json_sub_id]);
-								let _ = sender.start_request(unsubscribe_method, params).await;
+								if let Ok(id) = sender.start_request(unsubscribe_method, params).await {
+										let _ = manager.insert_pending_call(id, None);
+								}
 							}
 						}
 					}
@@ -320,8 +322,13 @@ async fn background_task(
 				Some(Ok(jsonrpc::Response::Single(response))) => {
 					match process_response(&mut manager, response, max_capacity_per_subscription) {
 						Ok(Some((unsubscribe, params))) => {
-							if let Err(e) = sender.start_request(unsubscribe, params).await {
-								log::error!("Failed to send unsubscription response: {:?}", e);
+							match sender.start_request(unsubscribe, params).await {
+								Ok(id) => {
+									if let Err(e) = manager.insert_pending_call(id, None) {
+										log::error!("Error: {:?}", e);
+									}
+								}
+								Err(e) => log::error!("Failed to send unsubscription request: {:?}", e),
 							}
 						}
 						Ok(None) => (),
@@ -331,22 +338,9 @@ async fn background_task(
 						}
 					}
 				}
-				Some(Ok(jsonrpc::Response::Batch(responses))) => {
-					// if any request fails, throw away entire batch.
-					for response in responses {
-						match process_response(&mut manager, response, max_capacity_per_subscription) {
-							Ok(Some((unsubscribe, params))) => {
-								if let Err(e) = sender.start_request(unsubscribe, params).await {
-									log::error!("Failed to send unsubscription response: {:?}", e);
-								}
-							}
-							Ok(None) => (),
-							Err(e) => {
-								log::error!("Error: {:?} terminating client", e);
-								return;
-							}
-						}
-					}
+				Some(Ok(jsonrpc::Response::Batch(_responses))) => {
+					log::error!("Received batch response but not supported");
+					return;
 				}
 				Some(Ok(jsonrpc::Response::Notif(notif))) => {
 					let sub_id = notif.params.subscription;
@@ -381,7 +375,8 @@ async fn background_task(
 
 /// Process a response from the server.
 ///
-/// Returns `Ok(_)` if the response was successful or if the error could be handled.
+/// Returns `Ok(None)` if the response was successful
+/// Returns `Ok(Some(_))` if the response got an error but could be handled.
 /// Returns `Err(_)` if the response couldn't be handled.
 fn process_response(
 	manager: &mut RequestManager,
@@ -394,10 +389,11 @@ fn process_response(
 		RequestStatus::PendingMethodCall => {
 			let send_back_oneshot = manager.complete_pending_call(response_id).ok_or(Error::InvalidRequestId)?;
 			let response = response.try_into().map_err(Error::Request);
-			match send_back_oneshot.send(response) {
-				Err(Err(e)) => Err(e),
-				Err(Ok(_)) => Err(Error::Custom("Frontend channel closed".into())),
-				Ok(_) => Ok(None),
+			match send_back_oneshot.map(|tx| tx.send(response)) {
+				Some(Err(Err(e))) => Err(e),
+				Some(Err(Ok(_))) => Err(Error::Custom("Frontend channel closed".into())),
+				Some(Ok(_)) => Ok(None),
+				None => Ok(None),
 			}
 		}
 		RequestStatus::PendingSubscription => {

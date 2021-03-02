@@ -14,12 +14,14 @@ use jsonrpsee_types::{
 };
 use std::collections::hash_map::{Entry, HashMap};
 
+#[derive(Debug)]
 enum Kind {
 	PendingMethodCall(PendingCallOneshot),
 	PendingSubscription((PendingSubscriptionOneshot, UnsubscribeMethod)),
 	Subscription((SubscriptionSink, UnsubscribeMethod)),
 }
 
+#[derive(Debug)]
 /// Indicates the status of a given request/response.
 pub enum RequestStatus {
 	/// The method call is waiting for a response,
@@ -32,12 +34,13 @@ pub enum RequestStatus {
 	Invalid,
 }
 
-type PendingCallOneshot = oneshot::Sender<Result<JsonValue, Error>>;
+type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
 type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>;
 type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
 type RequestId = u64;
 
+#[derive(Debug)]
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
 	/// List of requests that are waiting for a response from the server.
@@ -202,7 +205,7 @@ mod tests {
 		let (request_tx, _) = oneshot::channel::<Result<JsonValue, Error>>();
 
 		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_call(0, request_tx).is_ok());
+		assert!(manager.insert_pending_call(0, Some(request_tx)).is_ok());
 		assert!(manager.complete_pending_call(0).is_some());
 	}
 
@@ -229,8 +232,8 @@ mod tests {
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
 
 		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_call(0, request_tx1).is_ok());
-		assert!(manager.insert_pending_call(0, request_tx2).is_err());
+		assert!(manager.insert_pending_call(0, Some(request_tx1)).is_ok());
+		assert!(manager.insert_pending_call(0, Some(request_tx2)).is_err());
 		assert!(manager.insert_pending_subscription(0, pending_sub_tx, "beef".to_string()).is_err());
 		assert!(manager.insert_subscription(0, SubscriptionId::Num(137), sub_tx, "bibimbap".to_string()).is_err());
 
@@ -248,7 +251,7 @@ mod tests {
 
 		let mut manager = RequestManager::new();
 		assert!(manager.insert_pending_subscription(99, pending_sub_tx1, "beef".to_string()).is_ok());
-		assert!(manager.insert_pending_call(99, request_tx).is_err());
+		assert!(manager.insert_pending_call(99, Some(request_tx)).is_err());
 		assert!(manager.insert_pending_subscription(99, pending_sub_tx2, "vegan".to_string()).is_err());
 
 		assert!(manager.insert_subscription(99, SubscriptionId::Num(0), sub_tx, "bibimbap".to_string()).is_err());
@@ -270,7 +273,7 @@ mod tests {
 		assert!(manager.insert_subscription(3, SubscriptionId::Num(0), sub_tx1, "bibimbap".to_string()).is_ok());
 		assert!(manager.insert_subscription(3, SubscriptionId::Num(1), sub_tx2, "bibimbap".to_string()).is_err());
 		assert!(manager.insert_pending_subscription(3, pending_sub_tx, "beef".to_string()).is_err());
-		assert!(manager.insert_pending_call(3, request_tx).is_err());
+		assert!(manager.insert_pending_call(3, Some(request_tx)).is_err());
 
 		assert!(manager.remove_subscription(3, SubscriptionId::Num(7)).is_none());
 		assert!(manager.complete_pending_call(3).is_none());
