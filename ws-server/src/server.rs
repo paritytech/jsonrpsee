@@ -41,7 +41,7 @@ use tokio::{
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::types::{ConnectionId, RpcSender, RpcId, RpcMethod, Methods};
+use crate::types::{ConnectionId, Methods, RpcId, RpcMethod, RpcSender};
 use crate::types::{JsonRpcError, JsonRpcErrorParams};
 use crate::types::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
 use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};

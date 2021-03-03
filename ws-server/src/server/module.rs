@@ -7,17 +7,12 @@ pub struct RpcModule {
 impl RpcModule {
 	/// Instantiate a new `RpcModule`.
 	pub fn new() -> Self {
-		RpcModule {
-			methods: Methods::default()
-		}
+		RpcModule { methods: Methods::default() }
 	}
 
 	/// Add context for this module, turning it into an `RpcContextModule`.
 	pub fn with_context<Context>(self, ctx: Context) -> RpcContextModule<Context> {
-		RpcContextModule {
-			ctx: Arc::new(ctx),
-			module: self,
-		}
+		RpcContextModule { ctx: Arc::new(ctx), module: self }
 	}
 
 	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
@@ -131,10 +126,7 @@ pub struct RpcContextModule<Context> {
 impl<Context> RpcContextModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		RpcContextModule {
-			ctx: Arc::new(ctx),
-			module: RpcModule::new(),
-		}
+		RpcContextModule { ctx: Arc::new(ctx), module: RpcModule::new() }
 	}
 
 	/// Register a new RPC method, which responds with a given callback.
