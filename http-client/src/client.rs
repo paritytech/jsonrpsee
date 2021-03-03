@@ -1,10 +1,7 @@
 use crate::transport::HttpTransportClient;
+use async_trait::async_trait;
 use jsonrpc::DeserializeOwned;
-use jsonrpsee_types::{
-	error::Error,
-	http::HttpConfig,
-	jsonrpc::{self, JsonValue},
-};
+use jsonrpsee_types::{error::Error, http::HttpConfig, jsonrpc, traits::Client};
 
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -26,13 +23,15 @@ impl HttpClient {
 		let transport = HttpTransportClient::new(target, config).map_err(|e| Error::TransportError(Box::new(e)))?;
 		Ok(Self { transport, request_id: AtomicU64::new(0) })
 	}
+}
 
-	/// Send a notification to the server.
-	pub async fn notification(
-		&self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<(), Error> {
+#[async_trait]
+impl Client for HttpClient {
+	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
+	where
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+	{
 		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
 			jsonrpc: jsonrpc::Version::V2,
 			method: method.into(),
@@ -43,13 +42,11 @@ impl HttpClient {
 	}
 
 	/// Perform a request towards the server.
-	pub async fn request<Ret>(
-		&self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<Ret, Error>
+	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
 	where
-		Ret: DeserializeOwned,
+		T: DeserializeOwned,
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
@@ -67,7 +64,10 @@ impl HttpClient {
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		let json_value = match response {
-			jsonrpc::Response::Single(rp) => Self::process_response(rp, id),
+			jsonrpc::Response::Single(response) => match response.id() {
+				jsonrpc::Id::Num(n) if n == &id => response.try_into().map_err(Error::Request),
+				_ => Err(Error::InvalidRequestId),
+			},
 			// Server should not send batch response to a single request.
 			jsonrpc::Response::Batch(_rps) => {
 				Err(Error::Custom("Server replied with batch response to a single request".to_string()))
@@ -78,12 +78,5 @@ impl HttpClient {
 			}
 		}?;
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
-	}
-
-	fn process_response(response: jsonrpc::Output, expected_id: u64) -> Result<JsonValue, Error> {
-		match response.id() {
-			jsonrpc::Id::Num(n) if n == &expected_id => response.try_into().map_err(Error::Request),
-			_ => Err(Error::InvalidRequestId),
-		}
 	}
 }

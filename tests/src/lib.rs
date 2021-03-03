@@ -27,21 +27,22 @@
 #![cfg(test)]
 
 mod helpers;
+mod proc_macros;
 
-use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::channel::oneshot;
-use helpers::{http_server, websocket_server, websocket_server_with_wait_period};
+use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
-use jsonrpsee_types::jsonrpc::{JsonValue, Params};
+use jsonrpsee_types::{
+	error::Error,
+	jsonrpc::{JsonValue, Params},
+	traits::{Client, SubscriptionClient},
+};
 use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
 
 #[tokio::test]
 async fn ws_subscription_works() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	websocket_server(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let config = WsConfig::with_url(&server_url);
 	let client = WsClient::new(config).await.unwrap();
@@ -60,9 +61,7 @@ async fn ws_subscription_works() {
 
 #[tokio::test]
 async fn ws_method_call_works() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	websocket_server(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let config = WsConfig::with_url(&server_url);
 	let client = WsClient::new(config).await.unwrap();
@@ -72,9 +71,7 @@ async fn ws_method_call_works() {
 
 #[tokio::test]
 async fn http_method_call_works() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	http_server(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClient::new(&uri, HttpConfig::default()).unwrap();
 	let response: JsonValue = client.request("say_hello", Params::None).await.unwrap();
@@ -83,9 +80,7 @@ async fn http_method_call_works() {
 
 #[tokio::test]
 async fn ws_subscription_several_clients() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	websocket_server(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut clients = Vec::with_capacity(10);
@@ -102,9 +97,7 @@ async fn ws_subscription_several_clients() {
 
 #[tokio::test]
 async fn ws_subscription_several_clients_with_drop() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	websocket_server(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut clients = Vec::with_capacity(10);
@@ -149,9 +142,7 @@ async fn ws_subscription_several_clients_with_drop() {
 
 #[tokio::test]
 async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	websocket_server(server_started_tx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut config = WsConfig::with_url(&server_url);
@@ -183,18 +174,15 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 
 #[tokio::test]
 async fn ws_more_request_than_buffer_should_not_deadlock() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	let (concurrent_tx, concurrent_rx) = oneshot::channel::<()>();
-	websocket_server_with_wait_period(server_started_tx, concurrent_rx);
-	let server_addr = server_started_rx.await.unwrap();
+	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut config = WsConfig::with_url(&server_url);
-	config.max_subscription_capacity = 2;
+	config.max_concurrent_requests_capacity = 2;
 	let client = WsClient::new(config).await.unwrap();
 
 	let mut requests = Vec::new();
-	//NOTE: we use less than 8 because of https://github.com/paritytech/jsonrpsee/issues/168.
+
 	for _ in 0..6 {
 		let c = client.clone();
 		requests.push(tokio::spawn(async move {
@@ -202,8 +190,27 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 		}));
 	}
 
-	concurrent_tx.send(()).unwrap();
 	for req in requests {
 		req.await.unwrap();
 	}
+}
+
+#[tokio::test]
+async fn wss_works() {
+	let client = WsClient::new(WsConfig::with_url("wss://kusama-rpc.polkadot.io")).await.unwrap();
+	let response: String = client.request("system_chain", Params::None).await.unwrap();
+	assert_eq!(&response, "Kusama");
+}
+
+#[tokio::test]
+async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
+	let err = WsClient::new(WsConfig::with_url("wss://♥♥♥♥♥♥∀∂")).await;
+	assert!(matches!(err, Err(Error::TransportError(_))));
+}
+
+#[tokio::test]
+async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
+	let client = HttpClient::new("http://♥♥♥♥♥♥∀∂", HttpConfig::default()).unwrap();
+	let err: Result<(), Error> = client.request("system_chain", Params::None).await;
+	assert!(matches!(err, Err(Error::TransportError(_))));
 }

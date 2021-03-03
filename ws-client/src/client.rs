@@ -26,14 +26,18 @@
 
 use crate::jsonrpc_transport;
 use crate::manager::{RequestManager, RequestStatus};
+use async_trait::async_trait;
 use futures::{
 	channel::{mpsc, oneshot},
 	prelude::*,
 	sink::SinkExt,
 };
+use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
+	client::{FrontToBack, Subscription},
 	error::Error,
 	jsonrpc::{self, JsonValue, SubscriptionId},
+	traits::{Client, SubscriptionClient},
 };
 use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
@@ -54,6 +58,13 @@ pub struct WsClient {
 #[derive(Clone, Debug)]
 pub struct WsConfig<'a> {
 	/// URL to connect to.
+	///
+	/// If the port number is missing from the URL, the default port number is used.
+	///
+	///
+	/// `ws://host` - port 80 is used
+	///
+	/// `wss://host` - port 443 is used
 	pub url: &'a str,
 	/// Max request body size
 	pub max_request_body_size: usize,
@@ -75,7 +86,7 @@ pub struct WsConfig<'a> {
 	pub max_concurrent_requests_capacity: usize,
 	/// Max concurrent capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
 	///
-	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`] frequently enough
+	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`](jsonrpsee_types::client::Subscription) frequently enough
 	/// such that the buffer capacity doesn't exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
@@ -98,61 +109,6 @@ impl<'a> WsConfig<'a> {
 		}
 	}
 }
-#[derive(Debug)]
-/// Active subscription on a [`WsClient`].
-pub struct WsSubscription<Notif> {
-	/// Channel to send requests to the background task.
-	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
-	notifs_rx: mpsc::Receiver<JsonValue>,
-	/// Subscription ID,
-	id: SubscriptionId,
-	/// Marker in order to pin the `Notif` parameter.
-	marker: PhantomData<Notif>,
-}
-
-#[derive(Debug)]
-/// Message that the [`WsClient`] can send to the background task.
-enum FrontToBack {
-	/// Send a one-shot notification to the server. The server doesn't give back any feedback.
-	Notification {
-		/// Method for the notification.
-		method: String,
-		/// Parameters to send to the server.
-		params: jsonrpc::Params,
-	},
-
-	/// Send a request to the server.
-	StartRequest {
-		/// Method for the request.
-		method: String,
-		/// Parameters of the request.
-		params: jsonrpc::Params,
-		/// One-shot channel where to send back the outcome of that request.
-		send_back: oneshot::Sender<Result<JsonValue, Error>>,
-	},
-
-	/// Send a subscription request to the server.
-	Subscribe {
-		/// Method for the subscription request.
-		subscribe_method: String,
-		/// Parameters to send for the subscription.
-		params: jsonrpc::Params,
-		/// Method to use to later unsubscription. Used if the channel unexpectedly closes.
-		unsubscribe_method: String,
-		/// When we get a response from the server about that subscription, we send the result on
-		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
-		/// notifications.
-		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
-	},
-
-	/// When a subscription channel is closed, we send this message to the background
-	/// task to mark it ready for garbage collection.
-	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
-	// Such operations will be blocked until a response is received or the background
-	// thread has been terminated.
-	SubscriptionClosed(SubscriptionId),
-}
 
 impl WsClient {
 	/// Initializes a new WebSocket client
@@ -171,13 +127,16 @@ impl WsClient {
 		});
 		Ok(Self { to_back, request_timeout })
 	}
+}
 
+#[async_trait]
+impl Client for WsClient {
 	/// Send a notification to the server.
-	pub async fn notification(
-		&self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<(), Error> {
+	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
+	where
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+	{
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
@@ -185,18 +144,17 @@ impl WsClient {
 	}
 
 	/// Perform a request towards the server.
-	pub async fn request<Ret>(
-		&self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<Ret, Error>
+	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
 	where
-		Ret: jsonrpc::DeserializeOwned,
+		T: DeserializeOwned,
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
 	{
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
+
 		self.to_back
 			.clone()
 			.send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })
@@ -224,19 +182,29 @@ impl WsClient {
 		};
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
+}
 
+#[async_trait]
+impl SubscriptionClient for WsClient {
 	/// Send a subscription request to the server.
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	pub async fn subscribe<Notif>(
+	async fn subscribe<SM, UM, P, N>(
 		&self,
-		subscribe_method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-		unsubscribe_method: impl Into<String>,
-	) -> Result<WsSubscription<Notif>, Error> {
+		subscribe_method: SM,
+		params: P,
+		unsubscribe_method: UM,
+	) -> Result<Subscription<N>, Error>
+	where
+		SM: Into<String> + Send,
+		UM: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+		N: DeserializeOwned,
+	{
 		let subscribe_method = subscribe_method.into();
 		let unsubscribe_method = unsubscribe_method.into();
+		let params = params.into();
 
 		if subscribe_method == unsubscribe_method {
 			return Err(Error::Subscription(subscribe_method, unsubscribe_method));
@@ -246,12 +214,7 @@ impl WsClient {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		self.to_back
 			.clone()
-			.send(FrontToBack::Subscribe {
-				subscribe_method,
-				unsubscribe_method,
-				params: params.into(),
-				send_back: send_back_tx,
-			})
+			.send(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back: send_back_tx })
 			.await
 			.map_err(Error::Internal)?;
 
@@ -263,40 +226,7 @@ impl WsClient {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-
-		Ok(WsSubscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
-	}
-}
-
-impl<Notif> WsSubscription<Notif>
-where
-	Notif: jsonrpc::DeserializeOwned,
-{
-	/// Returns the next notification from the stream
-	/// This may return `None` if the subscription has been terminated, may happen if the channel becomes full or dropped.
-	///
-	/// Ignores any malformed packet.
-	pub async fn next(&mut self) -> Option<Notif> {
-		loop {
-			match self.notifs_rx.next().await {
-				Some(n) => match jsonrpc::from_value(n) {
-					Ok(parsed) => return Some(parsed),
-					Err(e) => log::error!("Subscription response error: {:?}", e),
-				},
-				None => return None,
-			}
-		}
-	}
-}
-
-impl<Notif> Drop for WsSubscription<Notif> {
-	fn drop(&mut self) {
-		// We can't actually guarantee that this goes through. If the background task is busy, then
-		// the channel's buffer will be full, and our unsubscription request will never make it.
-		// However, when a notification arrives, the background task will realize that the channel
-		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let id = std::mem::replace(&mut self.id, SubscriptionId::Num(0));
-		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(id)).now_or_never();
+		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
 }
 

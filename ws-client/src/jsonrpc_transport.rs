@@ -2,13 +2,15 @@
 //!
 //! Wraps the underlying WebSocket transport with specific JSONRPC details.
 
-use crate::transport::{self, WsConnectError, WsHandshakeError};
+use crate::transport::{self, WsConnectError, WsHandshakeError, WsTransportClientBuilder};
 use crate::WsConfig;
+use core::convert::TryInto;
 use jsonrpsee_types::jsonrpc;
 
 /// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
 pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
-	let (sender, receiver) = transport::websocket_connection(config).await?;
+	let builder: WsTransportClientBuilder<'_> = config.try_into()?;
+	let (sender, receiver) = builder.build().await?;
 	Ok((Sender::new(sender), Receiver::new(receiver)))
 }
 
