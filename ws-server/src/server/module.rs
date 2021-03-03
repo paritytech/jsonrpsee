@@ -1,17 +1,26 @@
 use super::*;
 
-pub struct Module {
+pub struct RpcModule {
 	methods: Methods,
 }
 
-impl Module {
+impl RpcModule {
+	/// Instantiate a new `RpcModule`.
 	pub fn new() -> Self {
-		Module {
+		RpcModule {
 			methods: Methods::default()
 		}
 	}
 
-	fn verify_method_name(&mut self, name: &'static str) -> Result<(), Error> {
+	/// Add context for this module, turning it into an `RpcContextModule`.
+	pub fn with_context<Context>(self, ctx: Context) -> RpcContextModule<Context> {
+		RpcContextModule {
+			ctx: Arc::new(ctx),
+			module: self,
+		}
+	}
+
+	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
 		if self.methods.get(name).is_some() {
 			return Err(Error::MethodAlreadyRegistered(name.into()));
 		}
@@ -101,7 +110,7 @@ impl Module {
 		self.methods
 	}
 
-	pub(crate) fn merge(&mut self, other: Module) -> Result<(), Error> {
+	pub(crate) fn merge(&mut self, other: RpcModule) -> Result<(), Error> {
 		for name in other.methods.keys() {
 			self.verify_method_name(name)?;
 		}
@@ -111,5 +120,50 @@ impl Module {
 		}
 
 		Ok(())
+	}
+}
+
+pub struct RpcContextModule<Context> {
+	ctx: Arc<Context>,
+	module: RpcModule,
+}
+
+impl<Context> RpcContextModule<Context> {
+	/// Create a new module with a given shared `Context`.
+	pub fn new(ctx: Context) -> Self {
+		RpcContextModule {
+			ctx: Arc::new(ctx),
+			module: RpcModule::new(),
+		}
+	}
+
+	/// Register a new RPC method, which responds with a given callback.
+	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	where
+		Context: Send + Sync + 'static,
+		R: Serialize,
+		F: Fn(RpcParams, &Context) -> Result<R, RpcError> + Send + Sync + 'static,
+	{
+		self.module.verify_method_name(method_name)?;
+
+		let ctx = self.ctx.clone();
+
+		self.module.methods.insert(
+			method_name,
+			Box::new(move |id, params, tx, _| {
+				let result = callback(params, &*ctx)?;
+
+				send_response(id, tx, result);
+
+				Ok(())
+			}),
+		);
+
+		Ok(())
+	}
+
+	/// Convert this `RpcContextModule` into a regular `RpcModule` that can be registered on the `Server`.
+	pub fn into_module(self) -> RpcModule {
+		self.module
 	}
 }

@@ -48,7 +48,7 @@ use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};
 
 mod module;
 
-pub use module::Module;
+pub use module::RpcModule;
 
 type SubscriptionId = u64;
 
@@ -164,7 +164,7 @@ fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
 }
 
 pub struct Server {
-	root: Module,
+	root: RpcModule,
 	listener: TcpListener,
 }
 
@@ -173,7 +173,7 @@ impl Server {
 	pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {
 		let listener = TcpListener::bind(addr).await?;
 
-		Ok(Server { listener, root: Module::new() })
+		Ok(Server { listener, root: RpcModule::new() })
 	}
 
 	/// Register a new RPC method, which responds with a given callback.
@@ -195,7 +195,7 @@ impl Server {
 	}
 
 	/// Register all methods from a module on this server.
-	pub fn register_module(&mut self, module: Module) -> Result<(), Error> {
+	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
 		self.root.merge(module)
 	}
 
