@@ -41,7 +41,7 @@ use tokio::{
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::types::{ConnectionId, Methods, RpcId, RpcMethod, RpcSender};
+use crate::types::{ConnectionId, Methods, RpcId, RpcSender};
 use crate::types::{JsonRpcError, JsonRpcErrorParams};
 use crate::types::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
 use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};
@@ -207,7 +207,7 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
-		let methods = Arc::new(self.root.into_map());
+		let methods = Arc::new(self.root.into_methods());
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {

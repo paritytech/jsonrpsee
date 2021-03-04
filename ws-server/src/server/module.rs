@@ -1,4 +1,10 @@
-use super::*;
+use crate::server::{send_response, Methods, RpcError, RpcParams, SubscriptionId, SubscriptionSink};
+use crate::types::RpcMethod;
+use jsonrpsee_types::error::Error;
+use parking_lot::Mutex;
+use rustc_hash::FxHashMap;
+use serde::Serialize;
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct RpcModule {
@@ -53,7 +59,7 @@ impl RpcModule {
 		unsubscribe_method_name: &'static str,
 	) -> Result<SubscriptionSink, Error> {
 		if subscribe_method_name == unsubscribe_method_name {
-			return Err(Error::MethodAlreadyRegistered(subscribe_method_name.into()));
+			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
 
 		self.verify_method_name(subscribe_method_name)?;
@@ -102,7 +108,7 @@ impl RpcModule {
 		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
 	}
 
-	pub(crate) fn into_map(self) -> Methods {
+	pub(crate) fn into_methods(self) -> Methods {
 		self.methods
 	}
 

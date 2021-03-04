@@ -45,6 +45,9 @@ pub enum Error {
 	/// Method was already registered.
 	#[error("Method: {0} was already registered")]
 	MethodAlreadyRegistered(String),
+	/// Subscribe and unsubscribe method names are the same.
+	#[error("Cannot use the same method name for subcribe and unsubscribe, used: {0}")]
+	SubscriptionNameConflict(String),
 	/// Websocket request timeout
 	#[error("Websocket request timeout")]
 	WsRequestTimeout,

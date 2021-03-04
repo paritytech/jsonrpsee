@@ -125,7 +125,7 @@ async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
 	assert!(matches!(
 		server.register_subscription("subscribe_hello", "subscribe_hello"),
-		Err(Error::MethodAlreadyRegistered(_))
+		Err(Error::SubscriptionNameConflict(_))
 	));
 }
 
