@@ -33,6 +33,7 @@ use futures::{
 use pin_project::pin_project;
 use std::{io::Error as IoError, pin::Pin, task::Context, task::Poll};
 
+/// Stream to represent either a unencrypted or encrypted socket stream.
 #[pin_project(project = EitherStreamProj)]
 #[derive(Debug, Copy, Clone)]
 pub enum EitherStream<S, T> {

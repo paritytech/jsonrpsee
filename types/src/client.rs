@@ -17,6 +17,7 @@ pub struct Subscription<Notif> {
 }
 
 /// Message that the Client can send to the background task.
+#[derive(Debug)]
 pub enum FrontToBack {
 	/// Send a one-shot notification to the server. The server doesn't give back any feedback.
 	Notification {

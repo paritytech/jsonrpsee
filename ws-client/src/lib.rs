@@ -1,3 +1,9 @@
+#![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
+
+//! # jsonrpsee-ws-client
+//!
+//! `jsonrpsee-ws-client` is a [JSON RPC](https://www.jsonrpc.org/specification) WebSocket client library that's is built for `async/await`.
+
 /// WebSocket Client.
 pub mod client;
 /// JSONRPC WebSocket transport.

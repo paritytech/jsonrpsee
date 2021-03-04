@@ -42,22 +42,26 @@ type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 pub struct Host(String);
 
 impl Host {
+	/// Extracts a string slice from the inner String.
 	pub fn as_str(&self) -> &str {
 		self.0.as_str()
 	}
 }
 
 /// Sending end of WebSocket transport.
+#[derive(Debug)]
 pub struct Sender {
 	inner: connection::Sender<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
 /// Receiving end of WebSocket transport.
+#[derive(Debug)]
 pub struct Receiver {
 	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
 }
 
-/// Builder for a WebSocket transport [`Sender`] and [`Receiver`] pair.
+/// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
+#[derive(Debug)]
 pub struct WsTransportClientBuilder<'a> {
 	/// Socket addresses to try to connect to.
 	sockaddrs: Vec<SocketAddr>,
