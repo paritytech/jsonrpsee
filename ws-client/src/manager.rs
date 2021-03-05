@@ -38,17 +38,24 @@ type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
 type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>;
 type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
-type RequestId = u64;
+type RequestId = u8;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
-	next_request_id: u64,
+	/// Free list, 0 indicates a free slot and 1 an occupied slot.
+	free_list: [u8; 256],
 	/// List of requests that are waiting for a response from the server.
 	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short key (u64).
 	requests: FnvHashMap<RequestId, Kind>,
 	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all requests.
 	subscriptions: HashMap<SubscriptionId, RequestId>,
+}
+
+impl Default for RequestManager {
+	fn default() -> Self {
+		Self { free_list: [0_u8; 256], requests: FnvHashMap::default(), subscriptions: HashMap::default() }
+	}
 }
 
 impl RequestManager {
@@ -57,30 +64,30 @@ impl RequestManager {
 		Self::default()
 	}
 
-	/// Get the next request ID.
-	/// This is optimized for that the number of concurrent requests are small
-	/// O(n) in worst case
-	// TODO(niklasad1): we could have a free-list or something but it will allocate lots of memory (u64::MAX)
-	// and seems only a problem in theory.
-	pub fn next_request_id(&mut self) -> Option<u64> {
-		let mut cand = self.next_request_id;
-		let mut attempts = 0;
-		loop {
-			if !self.requests.contains_key(&cand) {
-				return Some(cand);
-			}
-			if attempts == u64::MAX {
-				return None;
-			}
-			attempts += 1;
-			cand = cand.wrapping_add(1);
+	/// Mark a used RequestID as free again.
+	pub fn reclaim_request_id(&mut self, request_id: RequestId) {
+		self.free_list[request_id as usize] = 0;
+	}
+
+	/// Get the next available request ID.
+	// NOTE(niklasad1): O(n) but free_list is a small array should be fine.
+	pub fn next_request_id(&mut self) -> Option<u8> {
+		if let Some(idx) = self.free_list.iter().position(|&id| id == 0) {
+			self.free_list[idx] = 1;
+			return Some(idx as u8);
+		} else {
+			None
 		}
 	}
 
 	/// Tries to insert a new pending call.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
-	pub fn insert_pending_call(&mut self, id: u64, send_back: PendingCallOneshot) -> Result<(), PendingCallOneshot> {
+	pub fn insert_pending_call(
+		&mut self,
+		id: RequestId,
+		send_back: PendingCallOneshot,
+	) -> Result<(), PendingCallOneshot> {
 		if let Entry::Vacant(v) = self.requests.entry(id) {
 			v.insert(Kind::PendingMethodCall(send_back));
 			Ok(())
@@ -302,5 +309,14 @@ mod tests {
 		assert!(manager.complete_pending_subscription(3).is_none());
 		assert!(manager.remove_subscription(3, SubscriptionId::Num(1)).is_none());
 		assert!(manager.remove_subscription(3, SubscriptionId::Num(0)).is_some());
+	}
+
+	#[test]
+	fn next_request_id_works() {
+		let mut manager = RequestManager::new();
+		for id in 0_u8..10 {
+			assert_eq!(id, manager.next_request_id().unwrap());
+		}
+		assert_eq!(&manager.free_list[..10], &[1_u8; 10]);
 	}
 }

@@ -31,59 +31,81 @@ impl Sender {
 		Self { transport }
 	}
 
-	/// Start sending a request.
+	/// Sends a request to the server but it doesn’t wait for a response.
+	/// Instead, you have keep the request ID and use the Receiver to get the response.
+	///
+	/// Returns Ok() if the request was successfully sent otherwise Err(_).
 	pub async fn start_request(
 		&mut self,
 		request: RequestMessage,
 		request_manager: &mut RequestManager,
-	) -> Result<(), ()> {
-		let id = request_manager.next_request_id().ok_or(())?;
+	) -> Result<(), Error> {
+		let id = match request_manager.next_request_id() {
+			Some(id) => id,
+			None => {
+				request.send_back.map(|tx| tx.send(Err(Error::InvalidRequestId)));
+				return Err(Error::InvalidRequestId);
+			}
+		};
 		let req = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 			jsonrpc: jsonrpc::Version::V2,
 			method: request.method,
 			params: request.params,
-			id: jsonrpc::Id::Num(id),
+			id: jsonrpc::Id::Num(id as u64),
 		}));
-		if let Err(e) = self.transport.send_request(req).await {
-			let _ = request.send_back.map(|tx| tx.send(Err(Error::TransportError(Box::new(e)))));
-			return Err(());
+		match self.transport.send_request(req).await {
+			Ok(_) => {
+				request_manager.insert_pending_call(id, request.send_back).expect("ID unused checked above; qed");
+				Ok(())
+			}
+			Err(e) => {
+				let str_err = e.to_string();
+				let _ = request.send_back.map(|tx| tx.send(Err(Error::TransportError(Box::new(e)))));
+				Err(Error::Custom(str_err))
+			}
 		}
-		request_manager.insert_pending_call(id, request.send_back).expect("ID unused checked above; qed");
-		Ok(())
 	}
 
 	/// Sends a notification to the server. The notification doesn't need any response.
 	///
 	/// Returns `Ok(())` if the notification was successfully sent otherwise `Err(_)`.
-	pub async fn send_notification(&mut self, notif: NotificationMessage) -> Result<(), WsConnectError> {
+	pub async fn send_notification(&mut self, notif: NotificationMessage) -> Result<(), Error> {
 		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
 			jsonrpc: jsonrpc::Version::V2,
 			method: notif.method,
 			params: notif.params,
 		}));
 
-		self.transport.send_request(request).await
+		self.transport.send_request(request).await.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
 	/// Sends a request to the server to start a new subscription but it doesn't wait for a response.
 	/// Instead, you have keep the request ID and use the [`Receiver`] to get the response.
 	///
-	/// Returns `Ok(request_id)` if the request was successfully sent otherwise `Err(_)`.
+	/// Returns `Ok()` if the request was successfully sent otherwise `Err(_)`.
 	pub async fn start_subscription(
 		&mut self,
 		subscription: SubscriptionMessage,
 		request_manager: &mut RequestManager,
-	) -> Result<(), ()> {
-		let id = request_manager.next_request_id().unwrap();
+	) -> Result<(), Error> {
+		let id = match request_manager.next_request_id() {
+			Some(id) => id,
+			None => {
+				let _ = subscription.send_back.send(Err(Error::InvalidRequestId));
+				return Err(Error::InvalidRequestId);
+			}
+		};
+
 		let req = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 			jsonrpc: jsonrpc::Version::V2,
 			method: subscription.subscribe_method,
 			params: subscription.params,
-			id: jsonrpc::Id::Num(id),
+			id: jsonrpc::Id::Num(id as u64),
 		}));
 		if let Err(e) = self.transport.send_request(req).await {
+			let str_err = e.to_string();
 			let _ = subscription.send_back.send(Err(Error::TransportError(Box::new(e))));
-			return Err(());
+			return Err(Error::Custom(str_err));
 		}
 		request_manager
 			.insert_pending_subscription(id, subscription.send_back, subscription.unsubscribe_method)

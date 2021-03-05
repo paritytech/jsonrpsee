@@ -271,7 +271,9 @@ async fn background_task(
 			// User called `notification` on the front-end
 			Either::Left((Some(FrontToBack::Notification(notif)), _)) => {
 				log::trace!("[backend]: client prepares to send notification: {:?}", notif);
-				let _ = sender.send_notification(notif).await;
+				if let Err(e) = sender.send_notification(notif).await {
+					log::warn!("[backend]: client notif failed: {:?}", e);
+				}
 			}
 
 			// User called `request` on the front-end
@@ -301,7 +303,7 @@ async fn background_task(
 								params: jsonrpc::Params::Array(vec![json_sub_id]),
 								send_back: None,
 							};
-							let _ = sender.start_request(request, &mut manager).await;
+							send_unsubscribe_request(&mut sender, &mut manager, request).await;
 						}
 					}
 				}
@@ -309,12 +311,8 @@ async fn background_task(
 			Either::Right((Some(Ok(jsonrpc::Response::Single(response))), _)) => {
 				match process_response(&mut manager, response, max_capacity_per_subscription) {
 					Ok(Some((unsubscribe, params))) => {
-						let _ = sender
-							.start_request(
-								RequestMessage { method: unsubscribe, params, send_back: None },
-								&mut manager,
-							)
-							.await;
+						let request = RequestMessage { method: unsubscribe, params, send_back: None };
+						send_unsubscribe_request(&mut sender, &mut manager, request).await;
 					}
 					Ok(None) => (),
 					Err(e) => {
@@ -344,6 +342,7 @@ async fn background_task(
 							manager
 								.remove_subscription(request_id, sub_id)
 								.expect("subscription is active; checked above");
+							manager.reclaim_request_id(request_id);
 						}
 					}
 					None => {
@@ -373,11 +372,13 @@ fn process_response(
 	response: jsonrpc::Output,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<(String, jsonrpc::Params)>, Error> {
-	let response_id = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
+	let response_id: u64 = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
+	let response_id: u8 = response_id.try_into().map_err(|_| Error::InvalidRequestId)?;
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back_oneshot = manager.complete_pending_call(response_id).ok_or(Error::InvalidRequestId)?;
+			manager.reclaim_request_id(response_id);
 			let response = response.try_into().map_err(Error::Request);
 			match send_back_oneshot.map(|tx| tx.send(response)) {
 				Some(Err(Err(e))) => Err(e),
@@ -418,6 +419,7 @@ fn process_response(
 					Err(_) => {
 						let (_, unsubscribe_method) =
 							manager.remove_subscription(response_id, sub_id).expect("Subscription inserted above; qed");
+						manager.reclaim_request_id(response_id);
 						let params = jsonrpc::Params::Array(vec![json_sub_id]);
 						Ok(Some((unsubscribe_method, params)))
 					}
@@ -431,5 +433,15 @@ fn process_response(
 			}
 		}
 		RequestStatus::Subscription | RequestStatus::Invalid => Err(Error::InvalidRequestId),
+	}
+}
+
+async fn send_unsubscribe_request(
+	sender: &mut jsonrpc_transport::Sender,
+	manager: &mut RequestManager,
+	request: RequestMessage,
+) {
+	if let Err(e) = sender.start_request(request, manager).await {
+		log::error!("send unsubscribe request failed: {:?}", e);
 	}
 }

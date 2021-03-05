@@ -98,6 +98,7 @@ async fn internal_error_works() {
 
 #[tokio::test]
 async fn subscription_works() {
+	let _ = env_logger::try_init();
 	let server = WebSocketTestServer::with_hardcoded_subscription(
 		"127.0.0.1:0".parse().unwrap(),
 		server_subscription_id_response(Id::Num(0)),
