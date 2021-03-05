@@ -40,7 +40,7 @@ type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
 type RequestId = u64;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
 	next_request_id: u64,
@@ -52,8 +52,9 @@ pub struct RequestManager {
 }
 
 impl RequestManager {
+	/// Create an empty `RequestManager`.
 	pub fn new() -> Self {
-		Self { requests: FnvHashMap::default(), subscriptions: HashMap::new(), next_request_id: 0 }
+		Self::default()
 	}
 
 	/// Get the next request ID.
