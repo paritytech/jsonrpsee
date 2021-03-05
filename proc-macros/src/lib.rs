@@ -160,7 +160,7 @@ fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStr
 
 	Ok(quote_spanned!(api.name.span()=>
 		#visibility enum #enum_name #generics {
-			 #(#variants,)* #(#[allow(unused)] #ret_variants,)*
+			 #(#[allow(unused)] #variants,)* #(#[allow(unused)] #ret_variants,)*
 		}
 
 		#client_impl_block
