@@ -43,6 +43,7 @@ type RequestId = u64;
 #[derive(Debug)]
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
+	next_request_id: u64,
 	/// List of requests that are waiting for a response from the server.
 	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short key (u64).
 	requests: FnvHashMap<RequestId, Kind>,
@@ -52,7 +53,27 @@ pub struct RequestManager {
 
 impl RequestManager {
 	pub fn new() -> Self {
-		Self { requests: FnvHashMap::default(), subscriptions: HashMap::new() }
+		Self { requests: FnvHashMap::default(), subscriptions: HashMap::new(), next_request_id: 0 }
+	}
+
+	/// Get the next request ID.
+	/// This is optimized for that the number of concurrent requests are small
+	/// O(n) in worst case
+	// TODO(niklasad1): we could have a free-list or something but it will allocate lots of memory (u64::MAX)
+	// and seems only a problem in theory.
+	pub fn next_request_id(&mut self) -> Option<u64> {
+		let mut cand = self.next_request_id;
+		let mut attempts = 0;
+		loop {
+			if !self.requests.contains_key(&cand) {
+				return Some(cand);
+			}
+			if attempts == u64::MAX {
+				return None;
+			}
+			attempts += 1;
+			cand = cand.wrapping_add(1);
+		}
 	}
 
 	/// Tries to insert a new pending call.
