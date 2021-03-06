@@ -92,7 +92,7 @@ pub struct WsConfig<'a> {
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
 	/// because it is passed to [`futures::channel::mpsc::channel`].
-	pub max_subscription_capacity: usize,
+	pub max_notifs_per_subscription_capacity: usize,
 }
 
 impl<'a> WsConfig<'a> {
@@ -106,7 +106,7 @@ impl<'a> WsConfig<'a> {
 			origin: None,
 			handshake_url: From::from("/"),
 			max_concurrent_requests_capacity: 256,
-			max_subscription_capacity: 4,
+			max_notifs_per_subscription_capacity: 4,
 		}
 	}
 }
@@ -116,7 +116,7 @@ impl WsClient {
 	///
 	/// Fails when the URL is invalid.
 	pub async fn new(config: WsConfig<'_>) -> Result<WsClient, Error> {
-		let max_capacity_per_subscription = config.max_subscription_capacity;
+		let max_capacity_per_subscription = config.max_notifs_per_subscription_capacity;
 		let request_timeout = config.request_timeout;
 		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
 
@@ -245,7 +245,7 @@ async fn background_task(
 	mut sender: jsonrpc_transport::Sender,
 	receiver: jsonrpc_transport::Receiver,
 	mut frontend: mpsc::Receiver<FrontToBack>,
-	max_capacity_per_subscription: usize,
+	max_notifs_per_subscription: usize,
 ) {
 	let mut manager = RequestManager::new();
 
@@ -309,10 +309,9 @@ async fn background_task(
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Single(response))), _)) => {
-				match process_response(&mut manager, response, max_capacity_per_subscription) {
-					Ok(Some((unsubscribe, params))) => {
-						let request = RequestMessage { method: unsubscribe, params, send_back: None };
-						send_unsubscribe_request(&mut sender, &mut manager, request).await;
+				match process_response(&mut manager, response, max_notifs_per_subscription) {
+					Ok(Some(unsub_request)) => {
+						send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
 					}
 					Ok(None) => (),
 					Err(e) => {
@@ -371,7 +370,7 @@ fn process_response(
 	manager: &mut RequestManager,
 	response: jsonrpc::Output,
 	max_capacity_per_subscription: usize,
-) -> Result<Option<(String, jsonrpc::Params)>, Error> {
+) -> Result<Option<RequestMessage>, Error> {
 	let response_id: u64 = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
 	let response_id: u8 = response_id.try_into().map_err(|_| Error::InvalidRequestId)?;
 
@@ -421,7 +420,7 @@ fn process_response(
 							manager.remove_subscription(response_id, sub_id).expect("Subscription inserted above; qed");
 						manager.reclaim_request_id(response_id);
 						let params = jsonrpc::Params::Array(vec![json_sub_id]);
-						Ok(Some((unsubscribe_method, params)))
+						Ok(Some(RequestMessage { method: unsubscribe_method, params, send_back: None }))
 					}
 				}
 			} else {
