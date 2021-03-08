@@ -48,6 +48,9 @@ pub enum Error {
 	/// Websocket request timeout
 	#[error("Websocket request timeout")]
 	WsRequestTimeout,
+	/// Configured max memory capacity exceeded.
+	#[error("Configured max memory capacity exceeded")]
+	MaxMemoryExceeded,
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),

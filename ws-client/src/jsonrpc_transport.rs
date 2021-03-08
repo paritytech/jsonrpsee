@@ -41,10 +41,11 @@ impl Sender {
 		request_manager: &mut RequestManager,
 	) -> Result<(), Error> {
 		let id = match request_manager.next_request_id() {
-			Some(id) => id,
-			None => {
-				request.send_back.map(|tx| tx.send(Err(Error::InvalidRequestId)));
-				return Err(Error::InvalidRequestId);
+			Ok(id) => id,
+			Err(err) => {
+				let str_err = err.to_string();
+				request.send_back.map(|tx| tx.send(Err(err)));
+				return Err(Error::Custom(str_err));
 			}
 		};
 		let req = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
@@ -89,10 +90,11 @@ impl Sender {
 		request_manager: &mut RequestManager,
 	) -> Result<(), Error> {
 		let id = match request_manager.next_request_id() {
-			Some(id) => id,
-			None => {
-				let _ = subscription.send_back.send(Err(Error::InvalidRequestId));
-				return Err(Error::InvalidRequestId);
+			Ok(id) => id,
+			Err(err) => {
+				let str_err = err.to_string();
+				let _ = subscription.send_back.send(Err(err));
+				return Err(Error::Custom(str_err));
 			}
 		};
 

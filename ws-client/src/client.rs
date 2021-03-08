@@ -120,8 +120,9 @@ impl WsClient {
 		let request_timeout = config.request_timeout;
 		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
 
-		let (sender, receiver) =
-			jsonrpc_transport::websocket_connection(config).await.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
 			background_task(sender, receiver, from_front, max_capacity_per_subscription).await;
@@ -247,7 +248,8 @@ async fn background_task(
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	max_notifs_per_subscription: usize,
 ) {
-	let mut manager = RequestManager::new();
+	// TODO: https://github.com/paritytech/jsonrpsee/issues/229
+	let mut manager = RequestManager::default();
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.next_response().await;
@@ -372,7 +374,6 @@ fn process_response(
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
 	let response_id: u64 = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
-	let response_id: u8 = response_id.try_into().map_err(|_| Error::InvalidRequestId)?;
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
