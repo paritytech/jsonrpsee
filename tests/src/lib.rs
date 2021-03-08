@@ -126,7 +126,7 @@ async fn ws_subscription_several_clients_with_drop() {
 		let (client, hello_sub, foo_sub) = clients.remove(i);
 		drop(hello_sub);
 		drop(foo_sub);
-		// Send this request to make sure the client's background thread hasn't
+		// Send this request to make sure that the client's background thread hasn't
 		// been canceled.
 		let _r: String = client.request("say_hello", Params::None).await.unwrap();
 		drop(client);
