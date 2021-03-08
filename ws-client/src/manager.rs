@@ -46,7 +46,7 @@ pub struct RequestManager {
 	/// Free list, 0 indicates a free slot and 1 an occupied slot.
 	free_list: [u8; 256],
 	/// List of requests that are waiting for a response from the server.
-	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short key (u64).
+	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short key.
 	requests: FnvHashMap<RequestId, Kind>,
 	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all requests.
 	subscriptions: HashMap<SubscriptionId, RequestId>,
@@ -314,9 +314,11 @@ mod tests {
 	#[test]
 	fn next_request_id_works() {
 		let mut manager = RequestManager::new();
-		for id in 0_u8..10 {
+		for id in 0_u8..=255 {
 			assert_eq!(id, manager.next_request_id().unwrap());
 		}
-		assert_eq!(&manager.free_list[..10], &[1_u8; 10]);
+		assert_eq!(&manager.free_list[..], &[1_u8; 256]);
+		manager.reclaim_request_id(255);
+		assert_eq!(255, manager.next_request_id().unwrap());
 	}
 }
