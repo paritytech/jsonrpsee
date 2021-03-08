@@ -306,7 +306,9 @@ async fn background_task(
 						if let Some((_sink, unsubscribe_method)) = manager.remove_subscription(request_id, sub_id.clone()) {
 							if let Ok(json_sub_id) = jsonrpc::to_value(sub_id) {
 								let params = jsonrpc::Params::Array(vec![json_sub_id]);
-								let _ = sender.start_request(unsubscribe_method, params).await;
+								if let Ok(id) = sender.start_request(unsubscribe_method, params).await {
+									manager.insert_pending_unsubscribe(id);
+								}
 							}
 						}
 					}
@@ -443,6 +445,10 @@ fn process_response(
 					_ => Ok(None),
 				}
 			}
+		}
+		RequestStatus::PendingUnsubscribe => {
+			manager.complete_pending_unsubscribe(response_id).ok_or(Error::InvalidRequestId)?;
+			Ok(None)
 		}
 		RequestStatus::Subscription | RequestStatus::Invalid => Err(Error::InvalidRequestId),
 	}

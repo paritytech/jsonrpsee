@@ -19,17 +19,20 @@ enum Kind {
 	PendingMethodCall(PendingCallOneshot),
 	PendingSubscription((PendingSubscriptionOneshot, UnsubscribeMethod)),
 	Subscription((SubscriptionSink, UnsubscribeMethod)),
+	PendingUnsubscribe,
 }
 
 #[derive(Debug)]
 /// Indicates the status of a given request/response.
 pub enum RequestStatus {
-	/// The method call is waiting for a response,
+	/// The method call is waiting for a response.
 	PendingMethodCall,
 	/// The subscription is waiting for a response to become an active subscription.
 	PendingSubscription,
 	/// An active subscription.
 	Subscription,
+	/// The unsubscribe method call is waiting for a response.
+	PendingUnsubscribe,
 	/// Invalid request ID.
 	Invalid,
 }
@@ -59,7 +62,11 @@ impl RequestManager {
 	/// Tries to insert a new pending call.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
-	pub fn insert_pending_call(&mut self, id: u64, send_back: PendingCallOneshot) -> Result<(), PendingCallOneshot> {
+	pub fn insert_pending_call(
+		&mut self,
+		id: RequestId,
+		send_back: PendingCallOneshot,
+	) -> Result<(), PendingCallOneshot> {
 		if let Entry::Vacant(v) = self.requests.entry(id) {
 			v.insert(Kind::PendingMethodCall(send_back));
 			Ok(())
@@ -82,6 +89,18 @@ impl RequestManager {
 			Ok(())
 		} else {
 			Err(send_back)
+		}
+	}
+
+	/// Tries to insert a new pending unsubscription.
+	///
+	/// Returns `Some` if the pending unsubscribe was inserted otherwise `None`.
+	pub fn insert_pending_unsubscribe(&mut self, id: RequestId) -> Option<()> {
+		if let Entry::Vacant(v) = self.requests.entry(id) {
+			v.insert(Kind::PendingUnsubscribe);
+			Some(())
+		} else {
+			None
 		}
 	}
 
@@ -120,6 +139,23 @@ impl RequestManager {
 					Some(send_back)
 				} else {
 					unreachable!("Pending subscription is Pending subscription checked above; qed");
+				}
+			}
+			_ => None,
+		}
+	}
+
+	/// Tries to complete a pending unsubscribe.
+	///
+	/// Returns `Some` if the unsubscribe was completed otherwise `None`.
+	pub fn complete_pending_unsubscribe(&mut self, request_id: RequestId) -> Option<()> {
+		match self.requests.entry(request_id) {
+			Entry::Occupied(request) if matches!(request.get(), Kind::PendingUnsubscribe) => {
+				let (_req_id, kind) = request.remove_entry();
+				if let Kind::PendingUnsubscribe = kind {
+					Some(())
+				} else {
+					unreachable!("Pending unsubscribe is Pending unsubscribe checked above; qed");
 				}
 			}
 			_ => None,
@@ -173,6 +209,7 @@ impl RequestManager {
 			Kind::PendingMethodCall(_) => RequestStatus::PendingMethodCall,
 			Kind::PendingSubscription(_) => RequestStatus::PendingSubscription,
 			Kind::Subscription(_) => RequestStatus::Subscription,
+			Kind::PendingUnsubscribe => RequestStatus::PendingUnsubscribe,
 		})
 	}
 
