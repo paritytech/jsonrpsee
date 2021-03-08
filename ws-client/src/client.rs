@@ -79,11 +79,6 @@ pub struct WsConfig<'a> {
 	/// Url to send during the HTTP handshake.
 	pub handshake_url: Cow<'a, str>,
 	/// Max concurrent request capacity.
-	///
-	/// **Note**: The actual capacity is `num_senders + max_concurrent_requests_capacity`
-	/// because it is passed to [`futures::channel::mpsc::channel`]
-	/// and the capacity may increase because the sender is cloned when new
-	/// requests, notifications and subscriptions are created.
 	pub max_concurrent_requests_capacity: usize,
 	/// Max concurrent capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
 	///
@@ -117,6 +112,7 @@ impl WsClient {
 	/// Fails when the URL is invalid.
 	pub async fn new(config: WsConfig<'_>) -> Result<WsClient, Error> {
 		let max_capacity_per_subscription = config.max_notifs_per_subscription_capacity;
+		let max_concurrent_requests = config.max_concurrent_requests_capacity;
 		let request_timeout = config.request_timeout;
 		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
 
@@ -125,7 +121,7 @@ impl WsClient {
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
-			background_task(sender, receiver, from_front, max_capacity_per_subscription).await;
+			background_task(sender, receiver, from_front, max_capacity_per_subscription, max_concurrent_requests).await;
 		});
 		Ok(Self { to_back, request_timeout })
 	}
@@ -247,9 +243,9 @@ async fn background_task(
 	receiver: jsonrpc_transport::Receiver,
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	max_notifs_per_subscription: usize,
+	max_concurrent_requests: usize,
 ) {
-	// TODO: https://github.com/paritytech/jsonrpsee/issues/229
-	let mut manager = RequestManager::default();
+	let mut manager = RequestManager::new(max_concurrent_requests as u64);
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.next_response().await;

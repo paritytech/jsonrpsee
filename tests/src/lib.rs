@@ -190,13 +190,11 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 
 	for _ in 0..6 {
 		let c = client.clone();
-		requests.push(tokio::spawn(async move {
-			let _: JsonValue = c.request("say_hello", Params::None).await.unwrap();
-		}));
+		requests.push(tokio::spawn(async move { c.request::<String, _, _>("say_hello", Params::None).await }));
 	}
 
 	for req in requests {
-		req.await.unwrap();
+		let _ = req.await.unwrap();
 	}
 }
 
