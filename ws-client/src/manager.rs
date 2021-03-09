@@ -12,7 +12,10 @@ use jsonrpsee_types::{
 	error::Error,
 	jsonrpc::{JsonValue, SubscriptionId},
 };
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::{
+	hash_map::{Entry, HashMap},
+	VecDeque,
+};
 
 #[derive(Debug)]
 enum Kind {
@@ -34,32 +37,52 @@ pub enum RequestStatus {
 	Invalid,
 }
 
-type PendingCallOneshot = oneshot::Sender<Result<JsonValue, Error>>;
+type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
 type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>;
 type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
 type RequestId = u64;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
+	/// Vacant requestIDs.
+	free_slots: VecDeque<RequestId>,
 	/// List of requests that are waiting for a response from the server.
-	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short key (u64).
+	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short key.
 	requests: FnvHashMap<RequestId, Kind>,
 	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all requests.
 	subscriptions: HashMap<SubscriptionId, RequestId>,
 }
 
 impl RequestManager {
-	/// Create an empty `RequestManager`.
-	pub fn new() -> Self {
-		Self::default()
+	/// Create a new `RequestManager` with specified capacity.
+	pub fn new(slot_capacity: usize) -> Self {
+		Self {
+			free_slots: (0..slot_capacity as u64).collect(),
+			requests: FnvHashMap::default(),
+			subscriptions: HashMap::new(),
+		}
+	}
+
+	/// Mark a used RequestID as free again.
+	pub fn reclaim_request_id(&mut self, request_id: RequestId) {
+		self.free_slots.push_back(request_id);
+	}
+
+	/// Get the next available request ID.
+	pub fn next_request_id(&mut self) -> Result<RequestId, Error> {
+		self.free_slots.pop_front().ok_or(Error::MaxSlotsExceeded)
 	}
 
 	/// Tries to insert a new pending call.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
-	pub fn insert_pending_call(&mut self, id: u64, send_back: PendingCallOneshot) -> Result<(), PendingCallOneshot> {
+	pub fn insert_pending_call(
+		&mut self,
+		id: RequestId,
+		send_back: PendingCallOneshot,
+	) -> Result<(), PendingCallOneshot> {
 		if let Entry::Vacant(v) = self.requests.entry(id) {
 			v.insert(Kind::PendingMethodCall(send_back));
 			Ok(())
@@ -200,13 +223,14 @@ mod tests {
 	use super::{Error, RequestManager};
 	use futures::channel::{mpsc, oneshot};
 	use jsonrpsee_types::jsonrpc::{JsonValue, SubscriptionId};
+	const TEST_LIMIT: usize = 10;
 
 	#[test]
 	fn insert_remove_pending_request_works() {
 		let (request_tx, _) = oneshot::channel::<Result<JsonValue, Error>>();
 
-		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_call(0, request_tx).is_ok());
+		let mut manager = RequestManager::new(TEST_LIMIT);
+		assert!(manager.insert_pending_call(0, Some(request_tx)).is_ok());
 		assert!(manager.complete_pending_call(0).is_some());
 	}
 
@@ -214,7 +238,7 @@ mod tests {
 	fn insert_remove_subscription_works() {
 		let (pending_sub_tx, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
-		let mut manager = RequestManager::new();
+		let mut manager = RequestManager::new(TEST_LIMIT);
 		assert!(manager.insert_pending_subscription(1, pending_sub_tx, "unsubscribe_method".into()).is_ok());
 		let (_send_back_oneshot, unsubscribe_method) = manager.complete_pending_subscription(1).unwrap();
 		assert!(manager
@@ -232,9 +256,9 @@ mod tests {
 		let (pending_sub_tx, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
 
-		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_call(0, request_tx1).is_ok());
-		assert!(manager.insert_pending_call(0, request_tx2).is_err());
+		let mut manager = RequestManager::new(TEST_LIMIT);
+		assert!(manager.insert_pending_call(0, Some(request_tx1)).is_ok());
+		assert!(manager.insert_pending_call(0, Some(request_tx2)).is_err());
 		assert!(manager.insert_pending_subscription(0, pending_sub_tx, "beef".to_string()).is_err());
 		assert!(manager.insert_subscription(0, SubscriptionId::Num(137), sub_tx, "bibimbap".to_string()).is_err());
 
@@ -250,9 +274,9 @@ mod tests {
 		let (pending_sub_tx2, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
 
-		let mut manager = RequestManager::new();
+		let mut manager = RequestManager::new(TEST_LIMIT);
 		assert!(manager.insert_pending_subscription(99, pending_sub_tx1, "beef".to_string()).is_ok());
-		assert!(manager.insert_pending_call(99, request_tx).is_err());
+		assert!(manager.insert_pending_call(99, Some(request_tx)).is_err());
 		assert!(manager.insert_pending_subscription(99, pending_sub_tx2, "vegan".to_string()).is_err());
 
 		assert!(manager.insert_subscription(99, SubscriptionId::Num(0), sub_tx, "bibimbap".to_string()).is_err());
@@ -269,17 +293,28 @@ mod tests {
 		let (sub_tx1, _) = mpsc::channel::<JsonValue>(1);
 		let (sub_tx2, _) = mpsc::channel::<JsonValue>(1);
 
-		let mut manager = RequestManager::new();
+		let mut manager = RequestManager::new(TEST_LIMIT);
 
 		assert!(manager.insert_subscription(3, SubscriptionId::Num(0), sub_tx1, "bibimbap".to_string()).is_ok());
 		assert!(manager.insert_subscription(3, SubscriptionId::Num(1), sub_tx2, "bibimbap".to_string()).is_err());
 		assert!(manager.insert_pending_subscription(3, pending_sub_tx, "beef".to_string()).is_err());
-		assert!(manager.insert_pending_call(3, request_tx).is_err());
+		assert!(manager.insert_pending_call(3, Some(request_tx)).is_err());
 
 		assert!(manager.remove_subscription(3, SubscriptionId::Num(7)).is_none());
 		assert!(manager.complete_pending_call(3).is_none());
 		assert!(manager.complete_pending_subscription(3).is_none());
 		assert!(manager.remove_subscription(3, SubscriptionId::Num(1)).is_none());
 		assert!(manager.remove_subscription(3, SubscriptionId::Num(0)).is_some());
+	}
+
+	#[test]
+	fn request_manager_limit_works() {
+		let mut manager = RequestManager::new(TEST_LIMIT);
+		for id in 0..TEST_LIMIT {
+			assert_eq!(id as u64, manager.next_request_id().unwrap());
+		}
+		assert!(matches!(manager.next_request_id().unwrap_err(), Error::MaxSlotsExceeded));
+		manager.reclaim_request_id(5);
+		assert_eq!(5, manager.next_request_id().unwrap());
 	}
 }

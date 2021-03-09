@@ -16,41 +16,50 @@ pub struct Subscription<Notif> {
 	pub marker: PhantomData<Notif>,
 }
 
+/// Notification message.
+#[derive(Debug)]
+pub struct NotificationMessage {
+	/// Method for the notification.
+	pub method: String,
+	/// Parameters to send to the server.
+	pub params: Params,
+}
+
+/// Request message.
+#[derive(Debug)]
+pub struct RequestMessage {
+	/// Method for the request.
+	pub method: String,
+	/// Parameters of the request.
+	pub params: Params,
+	/// One-shot channel over which we send back the result of this request.
+	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
+}
+
+/// Subscription message.
+#[derive(Debug)]
+pub struct SubscriptionMessage {
+	/// Method for the subscription request.
+	pub subscribe_method: String,
+	/// Parameters to send for the subscription.
+	pub params: Params,
+	/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
+	pub unsubscribe_method: String,
+	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
+	/// When we get a response from the server about that subscription, we send the result over
+	/// this channel.
+	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
+}
+
 /// Message that the Client can send to the background task.
 #[derive(Debug)]
 pub enum FrontToBack {
-	/// Send a one-shot notification to the server. The server doesn't give back any feedback.
-	Notification {
-		/// Method for the notification.
-		method: String,
-		/// Parameters to send to the server.
-		params: Params,
-	},
-
+	/// Send a notification to the server.
+	Notification(NotificationMessage),
 	/// Send a request to the server.
-	StartRequest {
-		/// Method for the request.
-		method: String,
-		/// Parameters of the request.
-		params: Params,
-		/// One-shot channel over which we send back the result of this request.
-		send_back: oneshot::Sender<Result<JsonValue, Error>>,
-	},
-
+	StartRequest(RequestMessage),
 	/// Send a subscription request to the server.
-	Subscribe {
-		/// Method for the subscription request.
-		subscribe_method: String,
-		/// Parameters to send for the subscription.
-		params: Params,
-		/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
-		unsubscribe_method: String,
-		/// When we get a response from the server about that subscription, we send the result on
-		/// this channel. If the subscription succeeds, we return a [Receiver](futures::channel::mpsc::Receiver) that will receive
-		/// notifications.
-		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
-	},
-
+	Subscribe(SubscriptionMessage),
 	/// When a subscription channel is closed, we send this message to the background
 	/// task to mark it ready for garbage collection.
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.

@@ -48,6 +48,9 @@ pub enum Error {
 	/// Websocket request timeout
 	#[error("Websocket request timeout")]
 	WsRequestTimeout,
+	/// Configured max number of request slots exceeded.
+	#[error("Configured max number of request slots exceeded")]
+	MaxSlotsExceeded,
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),

@@ -2,9 +2,14 @@
 //!
 //! Wraps the underlying WebSocket transport with specific JSONRPC details.
 
-use crate::transport::{self, WsConnectError, WsHandshakeError, WsTransportClientBuilder};
 use crate::WsConfig;
+use crate::{
+	manager::RequestManager,
+	transport::{self, WsConnectError, WsHandshakeError, WsTransportClientBuilder},
+};
 use core::convert::TryInto;
+use jsonrpsee_types::client::{NotificationMessage, RequestMessage, SubscriptionMessage};
+use jsonrpsee_types::error::Error;
 use jsonrpsee_types::jsonrpc;
 
 /// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
@@ -15,81 +20,99 @@ pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Recei
 }
 
 /// JSONRPC WebSocket sender.
-/// It's a wrapper over `WebSocket sender` with additional `JSONRPC request_id`.
 #[derive(Debug)]
 pub struct Sender {
-	request_id: u64,
 	transport: transport::Sender,
 }
 
 impl Sender {
 	/// Creates a new JSONRPC sender.
 	pub fn new(transport: transport::Sender) -> Self {
-		Self { transport, request_id: 0 }
+		Self { transport }
 	}
 
-	/// Inner implementation for starting either a request or a subscription.
-	async fn start_impl(
+	/// Sends a request to the server but it doesn’t wait for a response.
+	/// Instead, you have keep the request ID and use the Receiver to get the response.
+	///
+	/// Returns Ok() if the request was successfully sent otherwise Err(_).
+	pub async fn start_request(
 		&mut self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<u64, WsConnectError> {
-		let id = self.request_id;
-		self.request_id = id.wrapping_add(1);
-
-		let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
+		request: RequestMessage,
+		request_manager: &mut RequestManager,
+	) -> Result<(), Error> {
+		let id = match request_manager.next_request_id() {
+			Ok(id) => id,
+			Err(err) => {
+				let str_err = err.to_string();
+				request.send_back.map(|tx| tx.send(Err(err)));
+				return Err(Error::Custom(str_err));
+			}
+		};
+		let req = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 			jsonrpc: jsonrpc::Version::V2,
-			method: method.into(),
-			params: params.into(),
-			id: jsonrpc::Id::Num(id),
+			method: request.method,
+			params: request.params,
+			id: jsonrpc::Id::Num(id as u64),
 		}));
-
-		// Note that in case of an error, we "lose" the request id.
-		// This isn't a problem, however.
-		self.transport.send_request(request).await?;
-
-		Ok(id)
+		match self.transport.send_request(req).await {
+			Ok(_) => {
+				request_manager.insert_pending_call(id, request.send_back).expect("ID unused checked above; qed");
+				Ok(())
+			}
+			Err(e) => {
+				let str_err = e.to_string();
+				let _ = request.send_back.map(|tx| tx.send(Err(Error::TransportError(Box::new(e)))));
+				Err(Error::Custom(str_err))
+			}
+		}
 	}
 
 	/// Sends a notification to the server. The notification doesn't need any response.
 	///
 	/// Returns `Ok(())` if the notification was successfully sent otherwise `Err(_)`.
-	pub async fn send_notification(
-		&mut self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<(), WsConnectError> {
+	pub async fn send_notification(&mut self, notif: NotificationMessage) -> Result<(), Error> {
 		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
 			jsonrpc: jsonrpc::Version::V2,
-			method: method.into(),
-			params: params.into(),
+			method: notif.method,
+			params: notif.params,
 		}));
 
-		self.transport.send_request(request).await
-	}
-
-	/// Sends a request to the server but it doesn't wait for a response.
-	/// Instead, you have keep the request ID and use the [`Receiver`] to get the response.
-	///
-	/// Returns `Ok(request_id)` if the request was successfully sent otherwise `Err(_)`.
-	pub async fn start_request(
-		&mut self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<u64, WsConnectError> {
-		self.start_impl(method, params).await
+		self.transport.send_request(request).await.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
 	/// Sends a request to the server to start a new subscription but it doesn't wait for a response.
 	/// Instead, you have keep the request ID and use the [`Receiver`] to get the response.
 	///
-	/// Returns `Ok(request_id)` if the request was successfully sent otherwise `Err(_)`.
+	/// Returns `Ok()` if the request was successfully sent otherwise `Err(_)`.
 	pub async fn start_subscription(
 		&mut self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<u64, WsConnectError> {
-		self.start_impl(method, params).await
+		subscription: SubscriptionMessage,
+		request_manager: &mut RequestManager,
+	) -> Result<(), Error> {
+		let id = match request_manager.next_request_id() {
+			Ok(id) => id,
+			Err(err) => {
+				let str_err = err.to_string();
+				let _ = subscription.send_back.send(Err(err));
+				return Err(Error::Custom(str_err));
+			}
+		};
+
+		let req = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
+			jsonrpc: jsonrpc::Version::V2,
+			method: subscription.subscribe_method,
+			params: subscription.params,
+			id: jsonrpc::Id::Num(id as u64),
+		}));
+		if let Err(e) = self.transport.send_request(req).await {
+			let str_err = e.to_string();
+			let _ = subscription.send_back.send(Err(Error::TransportError(Box::new(e))));
+			return Err(Error::Custom(str_err));
+		}
+		request_manager
+			.insert_pending_subscription(id, subscription.send_back, subscription.unsubscribe_method)
+			.expect("Request ID unused checked above; qed");
+		Ok(())
 	}
 }
 
