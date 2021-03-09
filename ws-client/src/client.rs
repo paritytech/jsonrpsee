@@ -26,6 +26,7 @@
 
 use crate::jsonrpc_transport;
 use crate::manager::{RequestManager, RequestStatus};
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use futures::{
 	channel::{mpsc, oneshot},
@@ -40,9 +41,38 @@ use jsonrpsee_types::{
 	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::{Client, SubscriptionClient},
 };
+use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
-use std::{io, marker::PhantomData};
+
+/// Error message sent by the background thread if it terminates.
+#[derive(Debug)]
+enum ErrorFromBack {
+	/// Error message is already read.
+	Read(String),
+	/// Error message is unread.
+	Unread(oneshot::Receiver<Error>),
+}
+
+impl ErrorFromBack {
+	async fn step(self) -> (Self, String) {
+		match self {
+			Self::Unread(rx) => {
+				let msg = match rx.await {
+					Ok(msg) => msg.to_string(),
+					// This is a bug.
+					Err(_) => {
+						log::error!("Could not found error from backend");
+						String::new()
+					}
+				};
+				(Self::Read(msg.clone()), msg)
+			}
+			Self::Read(msg) => (Self::Read(msg.clone()), msg),
+		}
+	}
+}
 
 /// Client that can be cloned.
 ///
@@ -51,6 +81,8 @@ use std::{io, marker::PhantomData};
 pub struct WsClient {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
+	/// If the background thread terminates the error is sent to this channel.
+	error: Arc<Mutex<ErrorFromBack>>,
 	/// Request timeout
 	request_timeout: Option<Duration>,
 }
@@ -115,15 +147,33 @@ impl WsClient {
 		let max_concurrent_requests = config.max_concurrent_requests;
 		let request_timeout = config.request_timeout;
 		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests);
+		let (err_tx, err_rx) = oneshot::channel();
 
 		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
-			background_task(sender, receiver, from_front, max_capacity_per_subscription, max_concurrent_requests).await;
+			background_task(
+				sender,
+				receiver,
+				from_front,
+				err_tx,
+				max_capacity_per_subscription,
+				max_concurrent_requests,
+			)
+			.await;
 		});
-		Ok(Self { to_back, request_timeout })
+		Ok(Self { to_back, request_timeout, error: Arc::new(Mutex::new(ErrorFromBack::Unread(err_rx))) })
+	}
+
+	// Reads error message from the backend thread.
+	async fn read_error_from_backend(&self) -> Error {
+		let mut err = self.error.lock().await;
+		let cur_state = std::mem::replace(&mut *err, ErrorFromBack::Read(String::new()));
+		let (next_state, err_str) = cur_state.step().await;
+		*err = next_state;
+		Error::Custom(err_str)
 	}
 }
 
@@ -138,11 +188,10 @@ impl Client for WsClient {
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		self.to_back
-			.clone()
-			.send(FrontToBack::Notification(NotificationMessage { method, params }))
-			.await
-			.map_err(Error::Internal)
+		match self.to_back.clone().send(FrontToBack::Notification(NotificationMessage { method, params })).await {
+			Ok(()) => Ok(()),
+			Err(_) => Err(self.read_error_from_backend().await),
+		}
 	}
 
 	/// Perform a request towards the server.
@@ -157,11 +206,15 @@ impl Client for WsClient {
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
-		self.to_back
+		if self
+			.to_back
 			.clone()
 			.send(FrontToBack::StartRequest(RequestMessage { method, params, send_back: Some(send_back_tx) }))
 			.await
-			.map_err(Error::Internal)?;
+			.is_err()
+		{
+			return Err(self.read_error_from_backend().await);
+		}
 
 		let send_back_rx_out = if let Some(duration) = self.request_timeout {
 			let timeout = async_std::task::sleep(duration);
@@ -177,10 +230,7 @@ impl Client for WsClient {
 		let json_value = match send_back_rx_out {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => {
-				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(Error::TransportError(Box::new(err)));
-			}
+			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
@@ -214,7 +264,8 @@ impl SubscriptionClient for WsClient {
 
 		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		self.to_back
+		if self
+			.to_back
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				subscribe_method,
@@ -223,15 +274,15 @@ impl SubscriptionClient for WsClient {
 				send_back: send_back_tx,
 			}))
 			.await
-			.map_err(Error::Internal)?;
+			.is_err()
+		{
+			return Err(self.read_error_from_backend().await);
+		}
 
 		let (notifs_rx, id) = match send_back_rx.await {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => {
-				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(Error::TransportError(Box::new(err)));
-			}
+			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
@@ -242,6 +293,7 @@ async fn background_task(
 	mut sender: jsonrpc_transport::Sender,
 	receiver: jsonrpc_transport::Receiver,
 	mut frontend: mpsc::Receiver<FrontToBack>,
+	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 	max_concurrent_requests: usize,
 ) {
@@ -261,9 +313,10 @@ async fn background_task(
 
 		match future::select(next_frontend, next_backend).await {
 			// User dropped the sender side of the channel.
+			// There is nothing to do just terminate.
 			Either::Left((None, _)) => {
-				log::trace!("[backend]: frontend channel dropped; terminate client");
-				break;
+				log::trace!("[backend]: frontend dropped; terminate client");
+				return;
 			}
 
 			// User called `notification` on the front-end
@@ -312,15 +365,14 @@ async fn background_task(
 						send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
 					}
 					Ok(None) => (),
-					Err(e) => {
-						log::error!("Error: {:?} terminating client", e);
+					Err(err) => {
+						let _ = front_error.send(err);
 						return;
 					}
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Batch(_responses))), _)) => {
-				log::error!("Received batch response but not supported");
-				return;
+				log::warn!("Ignore batch response not supported, #103");
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
 				let sub_id = notif.params.subscription;
@@ -349,11 +401,13 @@ async fn background_task(
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
+				let _ = front_error.send(Error::TransportError(Box::new(e)));
 				return;
 			}
 			Either::Right((None, _)) => {
-				log::error!("[backend]: backend dropped; terminate client");
-				break;
+				log::error!("[backend]: WebSocket receiver dropped; terminate client");
+				let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
+				return;
 			}
 		}
 	}

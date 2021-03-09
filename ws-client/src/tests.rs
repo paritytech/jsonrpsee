@@ -116,11 +116,14 @@ async fn subscription_works() {
 
 #[tokio::test]
 async fn response_with_wrong_id() {
-	let server =
-		WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), internal_error(Id::Num(99_u64)))
-			.await;
+	env_logger::init();
+	let server = WebSocketTestServer::with_hardcoded_response(
+		"127.0.0.1:0".parse().unwrap(),
+		ok_response(jsonrpc::JsonValue::String("foo".into()), Id::Num(99_u64)),
+	)
+	.await;
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClient::new(WsConfig::with_url(&uri)).await.unwrap();
-	let err: Result<jsonrpc::JsonValue, Error> = client.request("say_hello", jsonrpc::Params::None).await;
-	assert!(matches!(err, Err(Error::TransportError(e)) if e.to_string().contains("background task closed")));
+	let err: Result<String, Error> = client.request("say_hello", jsonrpc::Params::None).await;
+	assert!(matches!(err, Err(Error::Custom(e)) if e.to_string().contains("Invalid request ID")));
 }
