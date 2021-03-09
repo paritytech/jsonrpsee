@@ -103,7 +103,7 @@ async fn ws_subscription_several_clients_with_drop() {
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
 		let mut config = WsConfig::with_url(&server_url);
-		config.max_notifs_per_subscription_capacity = u32::MAX as usize;
+		config.max_notifs_per_subscription = u32::MAX as usize;
 
 		let client = WsClient::new(config).await.unwrap();
 		let hello_sub: WsSubscription<String> =
@@ -151,7 +151,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut config = WsConfig::with_url(&server_url);
-	config.max_notifs_per_subscription_capacity = 4;
+	config.max_notifs_per_subscription = 4;
 	let client = WsClient::new(config).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
@@ -183,7 +183,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut config = WsConfig::with_url(&server_url);
-	config.max_concurrent_requests_capacity = 2;
+	config.max_concurrent_requests = 2;
 	let client = WsClient::new(config).await.unwrap();
 
 	let mut requests = Vec::new();

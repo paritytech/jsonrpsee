@@ -78,16 +78,16 @@ pub struct WsConfig<'a> {
 	pub origin: Option<Cow<'a, str>>,
 	/// Url to send during the HTTP handshake.
 	pub handshake_url: Cow<'a, str>,
-	/// Max concurrent request capacity.
-	pub max_concurrent_requests_capacity: usize,
-	/// Max concurrent capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
+	/// Max concurrent request.
+	pub max_concurrent_requests: usize,
+	/// Max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
 	///
 	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`](jsonrpsee_types::client::Subscription) frequently enough
 	/// such that the buffer capacity doesn't exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
 	/// because it is passed to [`futures::channel::mpsc::channel`].
-	pub max_notifs_per_subscription_capacity: usize,
+	pub max_notifs_per_subscription: usize,
 }
 
 impl<'a> WsConfig<'a> {
@@ -100,8 +100,8 @@ impl<'a> WsConfig<'a> {
 			connection_timeout: Duration::from_secs(10),
 			origin: None,
 			handshake_url: From::from("/"),
-			max_concurrent_requests_capacity: 256,
-			max_notifs_per_subscription_capacity: 4,
+			max_concurrent_requests: 256,
+			max_notifs_per_subscription: 4,
 		}
 	}
 }
@@ -111,10 +111,10 @@ impl WsClient {
 	///
 	/// Fails when the URL is invalid.
 	pub async fn new(config: WsConfig<'_>) -> Result<WsClient, Error> {
-		let max_capacity_per_subscription = config.max_notifs_per_subscription_capacity;
-		let max_concurrent_requests = config.max_concurrent_requests_capacity;
+		let max_capacity_per_subscription = config.max_notifs_per_subscription;
+		let max_concurrent_requests = config.max_concurrent_requests;
 		let request_timeout = config.request_timeout;
-		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
+		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests);
 
 		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
 			.await
