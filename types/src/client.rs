@@ -16,7 +16,7 @@ pub struct Subscription<Notif> {
 	pub marker: PhantomData<Notif>,
 }
 
-/// Notification.
+/// Notification message.
 #[derive(Debug)]
 pub struct NotificationMessage {
 	/// Method for the notification.
@@ -25,7 +25,7 @@ pub struct NotificationMessage {
 	pub params: Params,
 }
 
-/// Request
+/// Request message.
 #[derive(Debug)]
 pub struct RequestMessage {
 	/// Method for the request.
@@ -36,7 +36,7 @@ pub struct RequestMessage {
 	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
 }
 
-/// Subscribe.
+/// Subscribe message.
 #[derive(Debug)]
 pub struct SubscriptionMessage {
 	/// Method for the subscription request.
@@ -54,7 +54,7 @@ pub struct SubscriptionMessage {
 /// Message that the Client can send to the background task.
 #[derive(Debug)]
 pub enum FrontToBack {
-	/// Send a one-shot notification to the server. The server doesn't give back any feedback.
+	/// Send a notification to the server.
 	Notification(NotificationMessage),
 	/// Send a request to the server.
 	StartRequest(RequestMessage),
