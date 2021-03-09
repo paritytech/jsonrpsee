@@ -43,9 +43,6 @@ type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
 type RequestId = u64;
 
-/// Default max number of requests that are allowed in the `RequestManager`
-const REQUEST_MANAGER_DEFAULT_MAX_SIZE: u64 = 65535;
-
 #[derive(Debug)]
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
@@ -58,16 +55,14 @@ pub struct RequestManager {
 	subscriptions: HashMap<SubscriptionId, RequestId>,
 }
 
-impl Default for RequestManager {
-	fn default() -> Self {
-		Self::new(REQUEST_MANAGER_DEFAULT_MAX_SIZE)
-	}
-}
-
 impl RequestManager {
 	/// Create a new `RequestManager` with specified capacity.
-	pub fn new(slot_capacity: RequestId) -> Self {
-		Self { free_slots: (0..slot_capacity).collect(), ..Default::default() }
+	pub fn new(slot_capacity: usize) -> Self {
+		Self {
+			free_slots: (0..slot_capacity as u64).collect(),
+			requests: FnvHashMap::default(),
+			subscriptions: HashMap::new(),
+		}
 	}
 
 	/// Mark a used RequestID as free again.
@@ -228,12 +223,13 @@ mod tests {
 	use super::{Error, RequestManager};
 	use futures::channel::{mpsc, oneshot};
 	use jsonrpsee_types::jsonrpc::{JsonValue, SubscriptionId};
+	const TEST_LIMIT: usize = 10;
 
 	#[test]
 	fn insert_remove_pending_request_works() {
 		let (request_tx, _) = oneshot::channel::<Result<JsonValue, Error>>();
 
-		let mut manager = RequestManager::default();
+		let mut manager = RequestManager::new(TEST_LIMIT);
 		assert!(manager.insert_pending_call(0, Some(request_tx)).is_ok());
 		assert!(manager.complete_pending_call(0).is_some());
 	}
@@ -242,7 +238,7 @@ mod tests {
 	fn insert_remove_subscription_works() {
 		let (pending_sub_tx, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
-		let mut manager = RequestManager::default();
+		let mut manager = RequestManager::new(TEST_LIMIT);
 		assert!(manager.insert_pending_subscription(1, pending_sub_tx, "unsubscribe_method".into()).is_ok());
 		let (_send_back_oneshot, unsubscribe_method) = manager.complete_pending_subscription(1).unwrap();
 		assert!(manager
@@ -260,7 +256,7 @@ mod tests {
 		let (pending_sub_tx, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
 
-		let mut manager = RequestManager::default();
+		let mut manager = RequestManager::new(TEST_LIMIT);
 		assert!(manager.insert_pending_call(0, Some(request_tx1)).is_ok());
 		assert!(manager.insert_pending_call(0, Some(request_tx2)).is_err());
 		assert!(manager.insert_pending_subscription(0, pending_sub_tx, "beef".to_string()).is_err());
@@ -278,7 +274,7 @@ mod tests {
 		let (pending_sub_tx2, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
 
-		let mut manager = RequestManager::default();
+		let mut manager = RequestManager::new(TEST_LIMIT);
 		assert!(manager.insert_pending_subscription(99, pending_sub_tx1, "beef".to_string()).is_ok());
 		assert!(manager.insert_pending_call(99, Some(request_tx)).is_err());
 		assert!(manager.insert_pending_subscription(99, pending_sub_tx2, "vegan".to_string()).is_err());
@@ -297,7 +293,7 @@ mod tests {
 		let (sub_tx1, _) = mpsc::channel::<JsonValue>(1);
 		let (sub_tx2, _) = mpsc::channel::<JsonValue>(1);
 
-		let mut manager = RequestManager::default();
+		let mut manager = RequestManager::new(TEST_LIMIT);
 
 		assert!(manager.insert_subscription(3, SubscriptionId::Num(0), sub_tx1, "bibimbap".to_string()).is_ok());
 		assert!(manager.insert_subscription(3, SubscriptionId::Num(1), sub_tx2, "bibimbap".to_string()).is_err());
@@ -313,10 +309,9 @@ mod tests {
 
 	#[test]
 	fn request_manager_limit_works() {
-		let limit = 10;
-		let mut manager = RequestManager::new(limit);
-		for id in 0..limit {
-			assert_eq!(id, manager.next_request_id().unwrap());
+		let mut manager = RequestManager::new(TEST_LIMIT);
+		for id in 0..TEST_LIMIT {
+			assert_eq!(id as u64, manager.next_request_id().unwrap());
 		}
 		assert!(matches!(manager.next_request_id().unwrap_err(), Error::MaxMemoryExceeded));
 		manager.reclaim_request_id(5);

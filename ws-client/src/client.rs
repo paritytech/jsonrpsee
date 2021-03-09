@@ -245,7 +245,7 @@ async fn background_task(
 	max_notifs_per_subscription: usize,
 	max_concurrent_requests: usize,
 ) {
-	let mut manager = RequestManager::new(max_concurrent_requests as u64);
+	let mut manager = RequestManager::new(max_concurrent_requests);
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.next_response().await;
