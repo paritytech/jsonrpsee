@@ -45,9 +45,9 @@ pub struct SubscriptionMessage {
 	pub params: Params,
 	/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
 	pub unsubscribe_method: String,
-	/// When we get a response from the server about that subscription, we send the result on
-	/// this channel. If the subscription succeeds, we return a [Receiver](futures::channel::mpsc::Receiver) that will receive
-	/// notifications.
+	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
+	/// When we get a response from the server about that subscription, we send the result over
+	/// this channel. 
 	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
 }
 
