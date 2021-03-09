@@ -293,17 +293,17 @@ async fn background_task(
 				log::trace!("Closing subscription: {:?}", sub_id);
 				// NOTE: The subscription may have been closed earlier if
 				// the channel was full or disconnected.
-				if let Some(request_id) = manager.get_request_id_by_subscription_id(&sub_id) {
-					if let Some((_sink, unsubscribe_method)) = manager.remove_subscription(request_id, sub_id.clone()) {
-						if let Ok(json_sub_id) = jsonrpc::to_value(sub_id) {
-							let request = RequestMessage {
-								method: unsubscribe_method,
-								params: jsonrpc::Params::Array(vec![json_sub_id]),
-								send_back: None,
-							};
-							send_unsubscribe_request(&mut sender, &mut manager, request).await;
-						}
-					}
+				if let Some((_, unsub_method)) = manager
+					.get_request_id_by_subscription_id(&sub_id)
+					.and_then(|req_id| manager.remove_subscription(req_id, sub_id.clone()))
+				{
+					let json_sub_id = jsonrpc::to_value(sub_id).expect("SubscriptionID to JSON is infallible; qed");
+					let request = RequestMessage {
+						method: unsub_method,
+						params: jsonrpc::Params::Array(vec![json_sub_id]),
+						send_back: None,
+					};
+					send_unsubscribe_request(&mut sender, &mut manager, request).await;
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Single(response))), _)) => {
