@@ -72,7 +72,7 @@ impl RequestManager {
 
 	/// Get the next available request ID.
 	pub fn next_request_id(&mut self) -> Result<RequestId, Error> {
-		self.free_slots.pop_front().ok_or(Error::MaxMemoryExceeded)
+		self.free_slots.pop_front().ok_or(Error::MaxSlotsExceeded)
 	}
 
 	/// Tries to insert a new pending call.
@@ -313,7 +313,7 @@ mod tests {
 		for id in 0..TEST_LIMIT {
 			assert_eq!(id as u64, manager.next_request_id().unwrap());
 		}
-		assert!(matches!(manager.next_request_id().unwrap_err(), Error::MaxMemoryExceeded));
+		assert!(matches!(manager.next_request_id().unwrap_err(), Error::MaxSlotsExceeded));
 		manager.reclaim_request_id(5);
 		assert_eq!(5, manager.next_request_id().unwrap());
 	}
