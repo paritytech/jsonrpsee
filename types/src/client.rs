@@ -36,7 +36,7 @@ pub struct RequestMessage {
 	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
 }
 
-/// Subscribe message.
+/// Subscription message.
 #[derive(Debug)]
 pub struct SubscriptionMessage {
 	/// Method for the subscription request.
@@ -47,7 +47,7 @@ pub struct SubscriptionMessage {
 	pub unsubscribe_method: String,
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
-	/// this channel. 
+	/// this channel.
 	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
 }
 
