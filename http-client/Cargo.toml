@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-http-client"
-version = "0.2.0-alpha"
+version = "0.2.0-alpha.2"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "HTTP client for JSON-RPC"
 edition = "2018"
@@ -11,8 +11,8 @@ async-trait = "0.1"
 futures = "0.3"
 hyper14 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2", "tcp"], optional = true }
 hyper13 = { package = "hyper", version = "0.13", optional = true }
-jsonrpsee-types = { path = "../types", version = "0.2.0-alpha" }
-jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha", default-features = false, optional = true }
+jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.2" }
+jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.2", default-features = false, optional = true }
 log = "0.4"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
