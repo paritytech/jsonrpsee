@@ -290,7 +290,7 @@ async fn background_task(
 			}
 			// User dropped a subscription.
 			Either::Left((Some(FrontToBack::SubscriptionClosed(sub_id)), _)) => {
-				log::trace!("Closing in subscription: {:?}", sub_id);
+				log::trace!("Closing subscription: {:?}", sub_id);
 				// NOTE: The subscription may have been closed earlier if
 				// the channel was full or disconnected.
 				if let Some(request_id) = manager.get_request_id_by_subscription_id(&sub_id) {
