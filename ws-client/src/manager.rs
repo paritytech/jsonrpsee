@@ -43,6 +43,9 @@ type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
 type RequestId = u64;
 
+/// Default max number of requests that are allowed in the `RequestManager`
+const REQUEST_MANAGER_DEFAULT_MAX_SIZE: u64 = 65535;
+
 #[derive(Debug)]
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
@@ -57,7 +60,7 @@ pub struct RequestManager {
 
 impl Default for RequestManager {
 	fn default() -> Self {
-		Self { free_slots: (0..65535).collect(), requests: FnvHashMap::default(), subscriptions: HashMap::default() }
+		Self::new(REQUEST_MANAGER_DEFAULT_MAX_SIZE)
 	}
 }
 
@@ -306,5 +309,17 @@ mod tests {
 		assert!(manager.complete_pending_subscription(3).is_none());
 		assert!(manager.remove_subscription(3, SubscriptionId::Num(1)).is_none());
 		assert!(manager.remove_subscription(3, SubscriptionId::Num(0)).is_some());
+	}
+
+	#[test]
+	fn request_manager_limit_works() {
+		let limit = 10;
+		let mut manager = RequestManager::new(limit);
+		for id in 0..limit {
+			assert_eq!(id, manager.next_request_id().unwrap());
+		}
+		assert!(matches!(manager.next_request_id().unwrap_err(), Error::MaxMemoryExceeded));
+		manager.reclaim_request_id(5);
+		assert_eq!(5, manager.next_request_id().unwrap());
 	}
 }
