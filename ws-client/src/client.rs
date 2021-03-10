@@ -378,7 +378,8 @@ fn process_response(
 			let response = response.try_into().map_err(Error::Request);
 			match send_back_oneshot.map(|tx| tx.send(response)) {
 				Some(Err(Err(e))) => Err(e),
-				Some(Err(Ok(_))) => Err(Error::Custom("Frontend channel closed".into())),
+				// ignore error on channel close
+				Some(Err(Ok(_))) => Ok(None),
 				Some(Ok(_)) => Ok(None),
 				None => Ok(None),
 			}
