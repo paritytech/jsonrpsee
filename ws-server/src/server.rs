@@ -48,7 +48,7 @@ use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};
 
 mod module;
 
-pub use module::RpcModule;
+pub use module::{RpcContextModule, RpcModule};
 
 type SubscriptionId = u64;
 
