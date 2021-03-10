@@ -41,10 +41,10 @@ use jsonrpsee_types::{
 	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::{Client, SubscriptionClient},
 };
+use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{borrow::Cow, convert::TryInto};
 
 /// Error message sent by the background thread if it terminates.
 #[derive(Debug)]
@@ -87,12 +87,12 @@ pub struct WsClient {
 	// NOTE(niklasad1): This is a Mutex because the `Client` is Clone.
 	error: Arc<Mutex<ErrorFromBack>>,
 	/// Request timeout
-	request_timeout: Option<Duration>,
+	config: WsConfig,
 }
 
 /// Configuration.
 #[derive(Clone, Debug)]
-pub struct WsConfig<'a> {
+pub struct WsConfig {
 	/// URL to connect to.
 	///
 	/// If the port number is missing from the URL, the default port number is used.
@@ -101,7 +101,7 @@ pub struct WsConfig<'a> {
 	/// `ws://host` - port 80 is used
 	///
 	/// `wss://host` - port 443 is used
-	pub url: &'a str,
+	pub url: String,
 	/// Max request body size
 	pub max_request_body_size: usize,
 	/// Request timeout
@@ -110,9 +110,9 @@ pub struct WsConfig<'a> {
 	pub connection_timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header was passed.
-	pub origin: Option<Cow<'a, str>>,
+	pub origin: Option<String>,
 	/// Url to send during the HTTP handshake.
-	pub handshake_url: Cow<'a, str>,
+	pub handshake_url: String,
 	/// Max concurrent request.
 	pub max_concurrent_requests: usize,
 	/// Max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
@@ -125,16 +125,16 @@ pub struct WsConfig<'a> {
 	pub max_notifs_per_subscription: usize,
 }
 
-impl<'a> WsConfig<'a> {
+impl WsConfig {
 	/// Default WebSocket configuration with a specified URL to connect to.
-	pub fn with_url(url: &'a str) -> Self {
+	pub fn with_url(url: impl Into<String>) -> Self {
 		Self {
-			url,
+			url: url.into(),
 			max_request_body_size: 10 * 1024 * 1024,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
 			origin: None,
-			handshake_url: From::from("/"),
+			handshake_url: "/".into(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 4,
 		}
@@ -145,10 +145,7 @@ impl WsClient {
 	/// Initializes a new WebSocket client
 	///
 	/// Fails when the URL is invalid.
-	pub async fn new(config: WsConfig<'_>) -> Result<WsClient, Error> {
-		let max_capacity_per_subscription = config.max_notifs_per_subscription;
-		let max_concurrent_requests = config.max_concurrent_requests;
-		let request_timeout = config.request_timeout;
+	pub async fn new(config: WsConfig) -> Result<WsClient, Error> {
 		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 
@@ -156,18 +153,20 @@ impl WsClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
+		let c = config.clone();
 		async_std::task::spawn(async move {
-			background_task(
-				sender,
-				receiver,
-				from_front,
-				err_tx,
-				max_capacity_per_subscription,
-				max_concurrent_requests,
-			)
-			.await;
+			background_task(sender, receiver, from_front, err_tx, c).await;
 		});
-		Ok(Self { to_back, request_timeout, error: Arc::new(Mutex::new(ErrorFromBack::Unread(err_rx))) })
+		Ok(Self { to_back, config, error: Arc::new(Mutex::new(ErrorFromBack::Unread(err_rx))) })
+	}
+
+	/// Restart the client.
+	//
+	// NOTE: naive way to restart.
+	pub async fn restart(mut self) -> Result<WsClient, Error> {
+		// Close background thread (may already be gone)
+		let _ = self.to_back.close();
+		Self::new(self.config).await
 	}
 
 	// Reads error message from the backend thread.
@@ -219,7 +218,7 @@ impl Client for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let send_back_rx_out = if let Some(duration) = self.request_timeout {
+		let send_back_rx_out = if let Some(duration) = self.config.request_timeout {
 			let timeout = async_std::task::sleep(duration);
 			futures::pin_mut!(send_back_rx, timeout);
 			match future::select(send_back_rx, timeout).await {
@@ -297,10 +296,10 @@ async fn background_task(
 	receiver: jsonrpc_transport::Receiver,
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
-	max_notifs_per_subscription: usize,
-	max_concurrent_requests: usize,
+	config: WsConfig,
 ) {
-	let mut manager = RequestManager::new(max_concurrent_requests);
+	log::debug!("start background thread");
+	let mut manager = RequestManager::new(config.max_concurrent_requests);
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.next_response().await;
@@ -318,7 +317,8 @@ async fn background_task(
 			// User dropped the sender side of the channel.
 			// There is nothing to do just terminate.
 			Either::Left((None, _)) => {
-				log::trace!("[backend]: frontend dropped; terminate client");
+				log::debug!("[backend]: frontend dropped; terminate client");
+				let _ = front_error.send(Error::Custom("Frontend dropped".into()));
 				return;
 			}
 
@@ -363,7 +363,7 @@ async fn background_task(
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Single(response))), _)) => {
-				match process_response(&mut manager, response, max_notifs_per_subscription) {
+				match process_response(&mut manager, response, config.max_notifs_per_subscription) {
 					Ok(Some(unsub_request)) => {
 						send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
 					}

@@ -62,7 +62,7 @@ pub struct Receiver {
 
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 #[derive(Debug)]
-pub struct WsTransportClientBuilder<'a> {
+pub struct WsTransportClientBuilder {
 	/// Socket addresses to try to connect to.
 	sockaddrs: Vec<SocketAddr>,
 	/// Host.
@@ -70,12 +70,12 @@ pub struct WsTransportClientBuilder<'a> {
 	/// Stream mode, either plain TCP or TLS.
 	mode: Mode,
 	/// Url to send during the HTTP handshake.
-	handshake_url: Cow<'a, str>,
+	handshake_url: String,
 	/// Timeout for the connection.
 	timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header is passed.
-	origin: Option<Cow<'a, str>>,
+	origin: Option<String>,
 	/// Max payload size
 	max_request_body_size: usize,
 }
@@ -180,11 +180,11 @@ impl Receiver {
 	}
 }
 
-impl<'a> WsTransportClientBuilder<'a> {
+impl WsTransportClientBuilder {
 	/// Sets the URL to pass during the HTTP handshake.
 	///
 	/// The default URL is `/`.
-	pub fn with_handshake_url(mut self, url: impl Into<Cow<'a, str>>) -> Self {
+	pub fn with_handshake_url(mut self, url: impl Into<String>) -> Self {
 		self.handshake_url = url.into();
 		self
 	}
@@ -192,7 +192,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	/// Sets the `Origin` header to pass during the HTTP handshake.
 	///
 	/// By default, no `Origin` header is sent.
-	pub fn with_origin_header(mut self, origin: impl Into<Cow<'a, str>>) -> Self {
+	pub fn with_origin_header(mut self, origin: impl Into<String>) -> Self {
 		self.origin = Some(origin.into());
 		self
 	}
@@ -261,10 +261,10 @@ impl<'a> WsTransportClientBuilder<'a> {
 	}
 }
 
-impl<'a> TryFrom<WsConfig<'a>> for WsTransportClientBuilder<'a> {
+impl TryFrom<WsConfig> for WsTransportClientBuilder {
 	type Error = WsHandshakeError;
 
-	fn try_from(config: WsConfig<'a>) -> Result<Self, Self::Error> {
+	fn try_from(config: WsConfig) -> Result<Self, Self::Error> {
 		let url =
 			url::Url::parse(&config.url).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
 		let mode = match url.scheme() {

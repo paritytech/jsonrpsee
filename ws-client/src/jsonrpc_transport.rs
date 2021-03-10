@@ -13,8 +13,8 @@ use jsonrpsee_types::error::Error;
 use jsonrpsee_types::jsonrpc;
 
 /// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
-pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
-	let builder: WsTransportClientBuilder<'_> = config.try_into()?;
+pub async fn websocket_connection(config: WsConfig) -> Result<(Sender, Receiver), WsHandshakeError> {
+	let builder: WsTransportClientBuilder = config.try_into()?;
 	let (sender, receiver) = builder.build().await?;
 	Ok((Sender::new(sender), Receiver::new(receiver)))
 }

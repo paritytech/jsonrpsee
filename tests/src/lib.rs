@@ -217,3 +217,14 @@ async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
 	let err: Result<(), Error> = client.request("system_chain", Params::None).await;
 	assert!(matches!(err, Err(Error::TransportError(_))));
 }
+
+#[tokio::test]
+async fn ws_client_restart_works() {
+	let server_addr = websocket_server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let config = WsConfig::with_url(&server_url);
+	let client = WsClient::new(config).await.unwrap();
+	assert_eq!("hello", client.request::<String, _, _>("say_hello", Params::None).await.unwrap());
+	let restarted_client = client.restart().await.unwrap();
+	assert_eq!("hello", restarted_client.request::<String, _, _>("say_hello", Params::None).await.unwrap());
+}
