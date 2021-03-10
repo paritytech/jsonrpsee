@@ -56,20 +56,22 @@ enum ErrorFromBack {
 }
 
 impl ErrorFromBack {
-	async fn step(self) -> (Self, String) {
+	async fn read_error(self) -> (Self, Error) {
 		match self {
 			Self::Unread(rx) => {
 				let msg = match rx.await {
 					Ok(msg) => msg.to_string(),
-					// This is a bug.
+					// This should never happen because the receiving end is still alive.
+					// Would be a bug in the logic of the background task.
 					Err(_) => {
 						log::error!("Could not found error from backend");
 						String::new()
 					}
 				};
-				(Self::Read(msg.clone()), msg)
+				let err = Error::RestartNeeded(msg.clone());
+				(Self::Read(msg), err)
 			}
-			Self::Read(msg) => (Self::Read(msg.clone()), msg),
+			Self::Read(msg) => (Self::Read(msg.clone()), Error::RestartNeeded(msg)),
 		}
 	}
 }
@@ -82,6 +84,7 @@ pub struct WsClient {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
+	// NOTE(niklasad1): This is a Mutex because the `Client` is Clone.
 	error: Arc<Mutex<ErrorFromBack>>,
 	/// Request timeout
 	request_timeout: Option<Duration>,
@@ -169,11 +172,11 @@ impl WsClient {
 
 	// Reads error message from the backend thread.
 	async fn read_error_from_backend(&self) -> Error {
-		let mut err = self.error.lock().await;
-		let cur_state = std::mem::replace(&mut *err, ErrorFromBack::Read(String::new()));
-		let (next_state, err_str) = cur_state.step().await;
-		*err = next_state;
-		Error::Custom(err_str)
+		let mut err_lock = self.error.lock().await;
+		let from_back = std::mem::replace(&mut *err_lock, ErrorFromBack::Read(String::new()));
+		let (next_state, err) = from_back.read_error().await;
+		*err_lock = next_state;
+		err
 	}
 }
 
