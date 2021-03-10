@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::jsonrpc_transport::{self, Sender};
+use crate::jsonrpc_transport;
 use crate::manager::{RequestManager, RequestStatus};
 use async_trait::async_trait;
 use futures::{
