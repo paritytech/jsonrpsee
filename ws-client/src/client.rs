@@ -121,9 +121,31 @@ impl WsClient {
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
-			background_task(sender, receiver, from_front, max_capacity_per_subscription, max_concurrent_requests).await;
+			let result =
+				background_task(sender, receiver, from_front, max_capacity_per_subscription, max_concurrent_requests)
+					.await;
+			panic!("terminating client: {:?}", result)
 		});
 		Ok(Self { to_back, request_timeout })
+	}
+
+	/// Initializes a new WebSocket client and returns the background task
+	///
+	/// Fails when the URL is invalid.
+	pub async fn new_and_background(config: WsConfig<'_>) -> Result<(WsClient, impl futures::Future), Error> {
+		let max_capacity_per_subscription = config.max_notifs_per_subscription;
+		let max_concurrent_requests = config.max_concurrent_requests;
+		let request_timeout = config.request_timeout;
+		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests);
+
+		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
+
+		Ok((
+			Self { to_back, request_timeout },
+			background_task(sender, receiver, from_front, max_capacity_per_subscription, max_concurrent_requests),
+		))
 	}
 }
 
@@ -156,6 +178,7 @@ impl Client for WsClient {
 		let params = params.into();
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
+		let send_back_rx = send_back_rx.fuse();
 
 		self.to_back
 			.clone()
@@ -224,6 +247,7 @@ impl SubscriptionClient for WsClient {
 			}))
 			.await
 			.map_err(Error::Internal)?;
+		let send_back_rx = send_back_rx.fuse();
 
 		let (notifs_rx, id) = match send_back_rx.await {
 			Ok(Ok(val)) => val,
@@ -233,6 +257,8 @@ impl SubscriptionClient for WsClient {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
+		let notifs_rx = notifs_rx.fuse();
+
 		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
 }
@@ -241,10 +267,12 @@ impl SubscriptionClient for WsClient {
 async fn background_task(
 	mut sender: jsonrpc_transport::Sender,
 	receiver: jsonrpc_transport::Receiver,
-	mut frontend: mpsc::Receiver<FrontToBack>,
+	frontend: mpsc::Receiver<FrontToBack>,
 	max_notifs_per_subscription: usize,
 	max_concurrent_requests: usize,
-) {
+) -> Result<(), Error> {
+	let mut frontend = frontend.fuse();
+
 	let mut manager = RequestManager::new(max_concurrent_requests);
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
@@ -263,7 +291,7 @@ async fn background_task(
 			// User dropped the sender side of the channel.
 			Either::Left((None, _)) => {
 				log::trace!("[backend]: frontend channel dropped; terminate client");
-				break;
+				return Err(Error::FrontendDropped);
 			}
 
 			// User called `notification` on the front-end
@@ -307,20 +335,12 @@ async fn background_task(
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Single(response))), _)) => {
-				match process_response(&mut manager, response, max_notifs_per_subscription) {
-					Ok(Some(unsub_request)) => {
-						send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
-					}
-					Ok(None) => (),
-					Err(e) => {
-						log::error!("Error: {:?} terminating client", e);
-						return;
-					}
+				if let Some(unsub_request) = process_response(&mut manager, response, max_notifs_per_subscription)? {
+					send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Batch(_responses))), _)) => {
-				log::error!("Received batch response but not supported");
-				return;
+				return Err(Error::Custom("Received batch response but not supported".to_string()));
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
 				let sub_id = notif.params.subscription;
@@ -349,11 +369,11 @@ async fn background_task(
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
-				return;
+				return Err(Error::Custom("Disconnected from remote".to_string()));
 			}
 			Either::Right((None, _)) => {
 				log::error!("[backend]: backend dropped; terminate client");
-				break;
+				return Err(Error::BackendDropped);
 			}
 		}
 	}

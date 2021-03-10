@@ -51,6 +51,12 @@ pub enum Error {
 	/// Configured max number of request slots exceeded.
 	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,
+	/// Frontend dropped, terminate.
+	#[error("Frontend dropped, terminate")]
+	FrontendDropped,
+	/// Backend dropped, terminate.
+	#[error("Backend dropped, terminate")]
+	BackendDropped,
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),

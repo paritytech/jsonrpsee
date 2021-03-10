@@ -3,13 +3,14 @@ use crate::jsonrpc::{self, DeserializeOwned, JsonValue, Params, SubscriptionId};
 use core::marker::PhantomData;
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
+use futures::stream::Fuse;
 
 /// Active subscription on a Client.
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	pub to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
-	pub notifs_rx: mpsc::Receiver<JsonValue>,
+	pub notifs_rx: Fuse<mpsc::Receiver<JsonValue>>,
 	/// Subscription ID,
 	pub id: SubscriptionId,
 	/// Marker in order to pin the `Notif` parameter.
