@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::jsonrpc_transport;
+use crate::jsonrpc_transport::{self, Sender};
 use crate::manager::{RequestManager, RequestStatus};
 use async_trait::async_trait;
 use futures::{
@@ -373,16 +373,16 @@ fn process_response(
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
-			let send_back_oneshot = manager.complete_pending_call(response_id).ok_or(Error::InvalidRequestId)?;
+			let send_back_oneshot = match manager.complete_pending_call(response_id) {
+				Some(Some(send)) => send,
+				Some(None) => return Ok(None),
+				None => return Err(Error::InvalidRequestId),
+			};
+
 			manager.reclaim_request_id(response_id);
 			let response = response.try_into().map_err(Error::Request);
-			match send_back_oneshot.map(|tx| tx.send(response)) {
-				Some(Err(Err(e))) => Err(e),
-				// ignore error on channel close
-				Some(Err(Ok(_))) => Ok(None),
-				Some(Ok(_)) => Ok(None),
-				None => Ok(None),
-			}
+			let _ = send_back_oneshot.send(response);
+			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
 			let (send_back_oneshot, unsubscribe_method) =
@@ -390,22 +390,16 @@ fn process_response(
 			let json_sub_id: JsonValue = match response.try_into() {
 				Ok(response) => response,
 				Err(e) => {
-					return match send_back_oneshot.send(Err(Error::Request(e))) {
-						Err(Err(e)) => Err(e),
-						Err(Ok(_)) => unreachable!("Error sent above; qed"),
-						_ => Ok(None),
-					};
+					let _ = send_back_oneshot.send(Err(Error::Request(e)));
+					return Ok(None);
 				}
 			};
 
 			let sub_id: SubscriptionId = match jsonrpc::from_value(json_sub_id.clone()) {
 				Ok(sub_id) => sub_id,
 				Err(_) => {
-					return match send_back_oneshot.send(Err(Error::InvalidSubscriptionId)) {
-						Err(Err(e)) => Err(e),
-						Err(Ok(_)) => unreachable!("Error sent above; qed"),
-						_ => Ok(None),
-					}
+					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
+					return Ok(None);
 				}
 			};
 
@@ -422,11 +416,8 @@ fn process_response(
 					}
 				}
 			} else {
-				match send_back_oneshot.send(Err(Error::InvalidSubscriptionId)) {
-					Err(Err(e)) => Err(e),
-					Err(Ok(_)) => unreachable!("Error sent above; qed"),
-					_ => Ok(None),
-				}
+				let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
+				Ok(None)
 			}
 		}
 		RequestStatus::Subscription | RequestStatus::Invalid => Err(Error::InvalidRequestId),
