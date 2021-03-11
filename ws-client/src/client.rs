@@ -42,7 +42,6 @@ use jsonrpsee_types::{
 	traits::{Client, SubscriptionClient},
 };
 use std::marker::PhantomData;
-use std::sync::Arc;
 use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
 
@@ -87,7 +86,7 @@ pub struct WsClient {
 	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
-	error: Arc<Mutex<ErrorFromBack>>,
+	error: Mutex<ErrorFromBack>,
 	/// Request timeout
 	request_timeout: Option<Duration>,
 }
@@ -169,7 +168,7 @@ impl WsClient {
 			)
 			.await;
 		});
-		Ok(Self { to_back, request_timeout, error: Arc::new(Mutex::new(ErrorFromBack::Unread(err_rx))) })
+		Ok(Self { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)) })
 	}
 
 	// Reads the error message from the backend thread.
