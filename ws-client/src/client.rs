@@ -35,7 +35,7 @@ use futures::{
 };
 use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
-	client::{FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
+	client::{BatchMessage, FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
 	error::Error,
 	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::{Client, SubscriptionClient},
@@ -139,14 +139,25 @@ impl WsClient {
 	where
 		T: jsonrpc::DeserializeOwned,
 	{
-		//let mut calls = Vec::new();
-		// NOTE(niklasad1): If more than `u64::MAX` requests are performed in the `batch` then duplicate IDs are used
-		// which we don't support because ID is used to uniquely identify a given request.
-		//let mut ids = std::collections::HashSet::new();
+		let (send_back_tx, send_back_rx) = oneshot::channel();
+		let requests: Vec<(String, jsonrpc::Params)> =
+			requests.into_iter().map(|(r, p)| (r.into(), p.into())).collect();
+		log::trace!("[frontend]: send batch request: {:?}", requests);
+		self.to_back
+			.clone()
+			.send(FrontToBack::Batch(BatchMessage { requests, send_back: send_back_tx }))
+			.await
+			.map_err(Error::Internal)?;
 
-		for (method, params) in requests.into_iter() {}
-
-		todo!();
+		let json_value = match send_back_rx.await {
+			Ok(Ok(v)) => v,
+			Ok(Err(err)) => return Err(err),
+			Err(_) => {
+				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
+				return Err(Error::TransportError(Box::new(err)));
+			}
+		};
+		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
 }
 
@@ -289,6 +300,13 @@ async fn background_task(
 				break;
 			}
 
+			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
+				log::trace!("[backend]: client prepares to send batch request: {:?}", batch);
+				if let Err(e) = sender.start_batch_request(batch, &mut manager).await {
+					log::warn!("[backend]: client batch request failed: {:?}", e);
+				}
+			}
+
 			// User called `notification` on the front-end
 			Either::Left((Some(FrontToBack::Notification(notif)), _)) => {
 				log::trace!("[backend]: client prepares to send notification: {:?}", notif);
@@ -341,8 +359,8 @@ async fn background_task(
 					}
 				}
 			}
-			Either::Right((Some(Ok(jsonrpc::Response::Batch(_responses))), _)) => {
-				log::error!("Received batch response but not supported");
+			Either::Right((Some(Ok(jsonrpc::Response::Batch(batch))), _)) => {
+				log::debug!("batch: {:?}", batch);
 				return;
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {

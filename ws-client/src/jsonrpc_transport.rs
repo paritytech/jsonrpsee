@@ -8,9 +8,9 @@ use crate::{
 	transport::{self, WsConnectError, WsHandshakeError, WsTransportClientBuilder},
 };
 use core::convert::TryInto;
-use jsonrpsee_types::client::{NotificationMessage, RequestMessage, SubscriptionMessage};
+use jsonrpsee_types::client::{BatchMessage, NotificationMessage, RequestMessage, SubscriptionMessage};
 use jsonrpsee_types::error::Error;
-use jsonrpsee_types::jsonrpc;
+use jsonrpsee_types::jsonrpc::{self, Params, Request};
 
 /// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
 pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
@@ -29,6 +29,45 @@ impl Sender {
 	/// Creates a new JSONRPC sender.
 	pub fn new(transport: transport::Sender) -> Self {
 		Self { transport }
+	}
+
+	/// Send a batch request.
+	pub async fn start_batch_request(
+		&mut self,
+		batch: BatchMessage,
+		request_manager: &mut RequestManager,
+	) -> Result<(), Error> {
+		let mut calls = Vec::with_capacity(batch.requests.len());
+		let mut ids = Vec::with_capacity(batch.requests.len());
+
+		for (method, params) in batch.requests {
+			let id = request_manager.next_request_id()?;
+			ids.push(id);
+			calls.push(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
+				jsonrpc: jsonrpc::Version::V2,
+				method: method.into(),
+				params: params.into(),
+				id: jsonrpc::Id::Num(id),
+			}));
+		}
+		let res =
+			self.transport.send_request(Request::Batch(calls)).await.map_err(|e| Error::TransportError(Box::new(e)));
+
+		match res {
+			Ok(_) => {
+				for id in ids {
+					// TODO: separate lookup table for batch?!.
+					request_manager.insert_pending_call(id, None).expect("ID valid checked above; qed");
+				}
+				Ok(())
+			}
+			Err(e) => {
+				for id in ids {
+					request_manager.reclaim_request_id(id);
+				}
+				Err(e)
+			}
+		}
 	}
 
 	/// Sends a request to the server but it doesn’t wait for a response.
