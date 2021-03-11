@@ -78,7 +78,7 @@ impl ErrorFromBack {
 
 /// WebSocket client that works by maintaining a background task running in parallel.
 ///
-/// It's possible that background thread gets terminated which makes the client unusable.
+/// It's possible that the background thread gets terminated that makes the client unusable.
 /// An error `Error::RestartNeeded` is returned if that occurs and you have to manually
 /// handle that such as dropping client.
 #[derive(Debug)]
