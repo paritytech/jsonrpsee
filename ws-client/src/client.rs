@@ -46,7 +46,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
 
-/// Error message sent by the background thread if it terminates.
+/// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
+/// the underlying channel once and then stores the result in String.
+/// It is possible that the error is read more than once if several calls are made
+/// when the background thread has been terminated.
 #[derive(Debug)]
 enum ErrorFromBack {
 	/// Error message is already read.
@@ -63,10 +66,7 @@ impl ErrorFromBack {
 					Ok(msg) => msg.to_string(),
 					// This should never happen because the receiving end is still alive.
 					// Would be a bug in the logic of the background task.
-					Err(_) => {
-						log::error!("Could not found error from backend");
-						String::new()
-					}
+					Err(_) => "Error reason could not be found".to_string(),
 				};
 				let err = Error::RestartNeeded(msg.clone());
 				(Self::Read(msg), err)
@@ -76,15 +76,17 @@ impl ErrorFromBack {
 	}
 }
 
-/// Client that can be cloned.
+/// WebSocket client that works by maintaining a background task running in parallel.
 ///
-/// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background task running in parallel.
-#[derive(Clone, Debug)]
+/// It's possible that background thread gets terminated which makes the client unusable.
+/// An error `Error::RestartNeeded` is returned if that occurs and you have to manually
+/// handle that such as dropping client.
+#[derive(Debug)]
 pub struct WsClient {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
-	// NOTE(niklasad1): This is a Mutex because the `Client` is Clone.
+	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Arc<Mutex<ErrorFromBack>>,
 	/// Request timeout
 	request_timeout: Option<Duration>,
@@ -170,7 +172,7 @@ impl WsClient {
 		Ok(Self { to_back, request_timeout, error: Arc::new(Mutex::new(ErrorFromBack::Unread(err_rx))) })
 	}
 
-	// Reads error message from the backend thread.
+	// Reads the error message from the backend thread.
 	async fn read_error_from_backend(&self) -> Error {
 		let mut err_lock = self.error.lock().await;
 		let from_back = std::mem::replace(&mut *err_lock, ErrorFromBack::Read(String::new()));
