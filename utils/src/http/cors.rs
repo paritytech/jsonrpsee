@@ -195,7 +195,6 @@ impl<T> AllowCors<T> {
 	}
 }
 
-
 impl<T> From<AllowCors<T>> for Option<T> {
 	fn from(cors: AllowCors<T>) -> Option<T> {
 		use self::AllowCors::*;
