@@ -103,15 +103,21 @@ pub struct AccessControlBuilder {
 	continue_on_invalid_cors: bool,
 }
 
-impl AccessControlBuilder {
-	pub fn new() -> Self {
-		AccessControlBuilder {
+impl Default for AccessControlBuilder {
+	fn default() -> Self {
+		Self {
 			allow_hosts: AllowHosts::Any,
 			cors_allow_origin: None,
 			cors_max_age: None,
 			cors_allow_headers: AccessControlAllowHeaders::Any,
 			continue_on_invalid_cors: false,
 		}
+	}
+}
+
+impl AccessControlBuilder {
+	pub fn new() -> Self {
+		Self::default()
 	}
 
 	pub fn allow_host(mut self, host: Host) -> Self {
