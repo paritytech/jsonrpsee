@@ -26,13 +26,10 @@
 
 extern crate alloc;
 
-mod raw;
 mod server;
-mod transport;
+mod types;
 
 #[cfg(test)]
 mod tests;
 
-pub use raw::{RawServer as RawWsServer, RawServerEvent as RawWsServerEvent, TypedResponder as WsTypedResponder};
-pub use server::{RegisteredMethod, RegisteredNotification, Server as WsServer};
-pub use transport::WsTransportServer;
+pub use server::{RpcContextModule, RpcModule, Server as WsServer, SubscriptionSink};

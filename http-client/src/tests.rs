@@ -3,6 +3,7 @@ use jsonrpsee_types::{
 	error::Error,
 	http::HttpConfig,
 	jsonrpc::{self, ErrorCode, JsonValue, Params},
+	traits::Client,
 };
 
 use jsonrpsee_test_utils::helpers::*;

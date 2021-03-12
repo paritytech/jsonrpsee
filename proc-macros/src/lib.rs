@@ -28,7 +28,7 @@ extern crate proc_macro;
 
 use inflector::Inflector as _;
 use proc_macro::TokenStream;
-use quote::{quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned};
 use std::collections::HashSet;
 use syn::spanned::Spanned as _;
 
@@ -39,7 +39,7 @@ mod api_def;
 /// The format within this macro must be:
 ///
 /// ```ignore
-/// rpc_api!{
+/// jsonrpsee_proc_macros::rpc_client_api! {
 ///     Foo { ... }
 ///     pub(crate) Bar { ... }
 /// }
@@ -55,20 +55,41 @@ mod api_def;
 /// an enum where each variant corresponds to a function of the definition. Function names are
 /// turned into PascalCase to conform to the Rust style guide.
 ///
-/// Each generated enum has a `next_request` method whose signature is:
-///
-/// ```ignore
-/// async fn next_request(server: &'a mut jsonrpsee::raw::RawServer<R, I>) -> Result<Foo<'a, R, I>, std::io::Error>;
-/// ```
-///
-/// This method lets you grab the next request incoming from a server, and parse it to match of
-/// the function definitions. Invalid requests are automatically handled.
-///
 /// Additionally, each generated enum has one method per function definition that lets you perform
 /// the method has a client.
 ///
+// TODO(niklasad1): Generic type params for individual methods doesn't work
+// because how the enum is generated, so for now type params must be declared on the entire enum.
+// The reason is that all type params on the enum is bound as a separate variant but
+// not generic params i.e, either params or return type.
+// To handle that properly, all generic types has to be collected and applied to the enum, see example:
+//
+// ```rust
+// jsonrpsee_rpc_client_api! {
+//     Api {
+//       // Doesn't work.
+//       fn generic_notif<T>(t: T);
+// }
+// ```
+//
+// Expands to which doesn't compile:
+// ```rust
+// enum Api {
+//    GenericNotif {
+//        t: T,
+//    },
+// }
+// ```
+// The code should be expanded to (to compile):
+// ```rust
+// enum Api<T> {
+//    GenericNotif {
+//        t: T,
+//    },
+// }
+// ```
 #[proc_macro]
-pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
+pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 	// Start by parsing the input into what we expect.
 	let defs: api_def::ApiDefinitions = match syn::parse(input_token_stream) {
 		Ok(d) => d,
@@ -77,7 +98,7 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
 
 	let mut out = Vec::with_capacity(defs.apis.len());
 	for api in defs.apis {
-		match build_api(api) {
+		match build_client_api(api) {
 			Ok(a) => out.push(a),
 			Err(err) => return err.to_compile_error().into(),
 		};
@@ -89,37 +110,21 @@ pub fn rpc_api(input_token_stream: TokenStream) -> TokenStream {
 }
 
 /// Generates the macro output token stream corresponding to a single API.
-fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
+fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
 	let enum_name = &api.name;
-
-	// TODO: make sure there's no conflict here
-	let mut tweaked_generics = api.generics.clone();
-	tweaked_generics
-		.params
-		.insert(0, From::from(syn::LifetimeDef::new(syn::parse_str::<syn::Lifetime>("'a").unwrap())));
-	tweaked_generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("R").unwrap())));
-	tweaked_generics.params.push(From::from(syn::TypeParam::from(syn::parse_str::<syn::Ident>("I").unwrap())));
-	let (impl_generics, ty_generics, where_clause) = tweaked_generics.split_for_impl();
-	let generics = api
-		.generics
-		.params
-		.iter()
-		.filter_map(|gp| if let syn::GenericParam::Type(tp) = gp { Some(tp.ident.clone()) } else { None })
-		.collect::<HashSet<_>>();
-
 	let visibility = &api.visibility;
+	let generics = api.generics.clone();
+	let mut non_used_type_params = HashSet::new();
 
 	let mut variants = Vec::new();
-	let mut tmp_variants = Vec::new();
 	for function in &api.definitions {
-		let function_is_notification = function.is_void_ret_type();
 		let variant_name = snake_case_to_camel_case(&function.signature.ident);
-		let ret = match &function.signature.output {
-			syn::ReturnType::Default => quote! {()},
-			syn::ReturnType::Type(_, ty) => quote_spanned!(ty.span()=> #ty),
+		if let syn::ReturnType::Type(_, ty) = &function.signature.output {
+			non_used_type_params.insert(ty);
 		};
 
 		let mut params_list = Vec::new();
+
 		for input in function.signature.inputs.iter() {
 			let (ty, pat_span, param_variant_name) = match input {
 				syn::FnArg::Receiver(_) => {
@@ -130,214 +135,35 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 				}
 				syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => (ty, pat.span(), param_variant_name(&pat)?),
 			};
-
 			params_list.push(quote_spanned!(pat_span=> #param_variant_name: #ty));
 		}
 
-		if !function_is_notification {
-			if params_list.is_empty() {
-				tmp_variants.push(quote_spanned!(function.signature.ident.span()=> #variant_name));
-			} else {
-				tmp_variants.push(quote_spanned!(function.signature.ident.span()=>
-					#variant_name {
-						#(#params_list,)*
-					}
-				));
+		variants.push(quote_spanned!(function.signature.ident.span()=>
+			#variant_name {
+				#(#params_list,)*
 			}
-		}
-
-		if function_is_notification {
-			variants.push(quote_spanned!(function.signature.ident.span()=>
-				#variant_name {
-					#(#params_list,)*
-				}
-			));
-		} else {
-			variants.push(quote_spanned!(function.signature.ident.span()=>
-				#variant_name {
-					respond: jsonrpsee::raw::server::TypedResponder<'a, R, I, #ret>,
-					#(#params_list,)*
-				}
-			));
-		}
+		));
 	}
 
-	let next_request = {
-		let mut notifications_blocks = Vec::new();
-		let mut function_blocks = Vec::new();
-		let mut tmp_to_rq = Vec::new();
-
-		struct GenericParams {
-			generics: HashSet<syn::Ident>,
-			types: HashSet<syn::Ident>,
-		}
-		impl<'ast> syn::visit::Visit<'ast> for GenericParams {
-			fn visit_ident(&mut self, ident: &'ast syn::Ident) {
-				if self.generics.contains(ident) {
-					self.types.insert(ident.clone());
-				}
-			}
-		}
-
-		let mut generic_params = GenericParams { generics, types: HashSet::new() };
-
-		for function in &api.definitions {
-			let function_is_notification = function.is_void_ret_type();
-			let variant_name = snake_case_to_camel_case(&function.signature.ident);
-			let rpc_method_name =
-				function.attributes.method.clone().unwrap_or_else(|| function.signature.ident.to_string());
-
-			let mut params_builders = Vec::new();
-			let mut params_names_list = Vec::new();
-
-			for input in function.signature.inputs.iter() {
-				let (ty, param_variant_name, rpc_param_name) = match input {
-					syn::FnArg::Receiver(_) => {
-						return Err(syn::Error::new(
-							input.span(),
-							"Having `self` is not allowed in RPC queries definitions",
-						));
-					}
-					syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => {
-						(ty, param_variant_name(&pat)?, rpc_param_name(&pat, &attrs)?)
-					}
-				};
-
-				syn::visit::visit_type(&mut generic_params, &ty);
-
-				params_names_list.push(quote_spanned!(function.signature.span()=> #param_variant_name));
-				if !function_is_notification {
-					params_builders.push(quote_spanned!(function.signature.span()=>
-						let #param_variant_name: #ty = {
-							match request.params().get(#rpc_param_name) {
-								Ok(v) => v,
-								Err(_) => {
-									// TODO: message
-									request.respond(Err(jsonrpsee::common::Error::invalid_params(#rpc_param_name)));
-									continue;
-								}
-							}
-						};
-					));
-				} else {
-					params_builders.push(quote_spanned!(function.signature.span()=>
-						let #param_variant_name: #ty = {
-							match request.params().get(#rpc_param_name) {
-								Ok(v) => v,
-								Err(_) => {
-									// TODO: log this?
-									continue;
-								}
-							}
-						};
-					));
-				}
-			}
-
-			if function_is_notification {
-				notifications_blocks.push(quote_spanned!(function.signature.span()=>
-					if method == #rpc_method_name {
-						let request = n;
-						#(#params_builders)*
-						return Ok(#enum_name::#variant_name { #(#params_names_list),* });
-					}
-				));
-			} else {
-				function_blocks.push(quote_spanned!(function.signature.span()=>
-					if request_outcome.is_none() && method == #rpc_method_name {
-						let request = server.request_by_id(&request_id).unwrap();
-						#(#params_builders)*
-						request_outcome = Some(Tmp::#variant_name { #(#params_names_list),* });
-					}
-				));
-
-				tmp_to_rq.push(quote_spanned!(function.signature.span()=>
-					Some(Tmp::#variant_name { #(#params_names_list),* }) => {
-						let request = server.request_by_id(&request_id).unwrap();
-						let respond = jsonrpsee::raw::server::TypedResponder::from(request);
-						return Ok(#enum_name::#variant_name { respond #(, #params_names_list)* });
-					},
-				));
-			}
-		}
-
-		let params_tys = generic_params.types.iter();
-
-		let tmp_generics = if generic_params.types.is_empty() {
-			quote!()
-		} else {
-			quote_spanned!(api.name.span()=>
-				<#(#params_tys,)*>
-			)
-		};
-
-		let on_request = quote_spanned!(api.name.span()=> {
-			#[allow(unused)]    // The enum might be empty
-			enum Tmp #tmp_generics {
-				#(#tmp_variants,)*
-			}
-
-			let request_id = r.id();
-			let method = r.method().to_owned();
-
-			let mut request_outcome: Option<Tmp #tmp_generics> = None;
-
-			#(#function_blocks)*
-
-			match request_outcome {
-				#(#tmp_to_rq)*
-				None => server.request_by_id(&request_id).unwrap().respond(Err(jsonrpsee::common::Error::method_not_found())),
-			}
-		});
-
-		let on_notification = quote_spanned!(api.name.span()=> {
-			let method = n.method().to_owned();
-			#(#notifications_blocks)*
-			// TODO: we received an unknown notification; log this?
-		});
-
-		let params_tys = generic_params.types.iter();
-
-		quote_spanned!(api.name.span()=>
-			#visibility async fn next_request(server: &'a mut jsonrpsee::raw::RawServer<R, I>) -> core::result::Result<#enum_name #ty_generics, std::io::Error>
-				where
-					R: jsonrpsee::transport::TransportServer<RequestId = I>,
-					I: Clone + PartialEq + Eq + std::hash::Hash + Send + Sync
-					#(, #params_tys: jsonrpsee::common::DeserializeOwned)*
-			{
-				loop {
-					match server.next_event().await {
-						jsonrpsee::raw::RawServerEvent::Notification(n) => #on_notification,
-						jsonrpsee::raw::RawServerEvent::SubscriptionsClosed(_) => unimplemented!(),       // TODO:
-						jsonrpsee::raw::RawServerEvent::SubscriptionsReady(_) => unimplemented!(),       // TODO:
-						jsonrpsee::raw::RawServerEvent::Request(r) => #on_request,
-					}
-				}
-			}
-		)
-	};
-
 	let client_impl_block = build_client_impl(&api)?;
-	let debug_variants = build_debug_variants(&api)?;
+
+	let mut ret_variants = Vec::new();
+	for (idx, ty) in non_used_type_params.into_iter().enumerate() {
+		// NOTE(niklasad1): variant names are converted from `snake_case` to `CamelCase`
+		// It's impossible to have collisions between `_0, _1, ... _N`
+		// Because variant name `_0`, `__0` becomes `0` in `CamelCase`
+		// then `0` is not a valid identifier in Rust syntax and the error message is hard to understand.
+		// Perhaps document this in macro when it's ready.
+		let varname = format_ident!("_{}", idx);
+		ret_variants.push(quote_spanned!(ty.span()=> #varname (#ty)));
+	}
 
 	Ok(quote_spanned!(api.name.span()=>
-		#visibility enum #enum_name #tweaked_generics {
-			#(#variants),*
-		}
-
-		impl #impl_generics #enum_name #ty_generics #where_clause {
-			#next_request
+		#visibility enum #enum_name #generics {
+			 #(#[allow(unused)] #variants,)* #(#[allow(unused)] #ret_variants,)*
 		}
 
 		#client_impl_block
-
-		impl #impl_generics std::fmt::Debug for #enum_name #ty_generics #where_clause {
-			fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-				match self {
-					#(#debug_variants,)*
-				}
-			}
-		}
 	))
 }
 
@@ -347,18 +173,11 @@ fn build_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, sy
 fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
 	let enum_name = &api.name;
 
-	let (impl_generics_org, _, where_clause_org) = api.generics.split_for_impl();
-	let lifetimes_org = api.generics.lifetimes();
-	let type_params_org = api.generics.type_params();
-	let const_params_org = api.generics.const_params();
-
+	let (impl_generics_org, type_generics, where_clause_org) = api.generics.split_for_impl();
 	let client_functions = build_client_functions(&api)?;
 
-	Ok(quote_spanned!(api.name.span()=>
-		// TODO: order between type_params and const_params is undecided
-		impl #impl_generics_org #enum_name<'static #(, #lifetimes_org)* #(, #type_params_org)* #(, #const_params_org)*, (), ()>
-			#where_clause_org
-		{
+	Ok(quote_spanned!(api.name.span() =>
+		impl #impl_generics_org #enum_name #type_generics #where_clause_org {
 			#(#client_functions)*
 		}
 	))
@@ -406,27 +225,27 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name.to_string(),
-					jsonrpsee::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
+					jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
 				);
 			));
-			params_to_array.push(quote_spanned!(pat_span=>
-				jsonrpsee::common::to_value(#generated_param_name.into()).unwrap()        // TODO: don't unwrap
+			params_to_array.push(quote_spanned!(pat_span =>
+				jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
 			));
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote! {jsonrpsee::common::Params::None}
+			quote! {jsonrpsee_types::jsonrpc::Params::None}
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=>
-				jsonrpsee::common::Params::Array(vec![
+				jsonrpsee_types::jsonrpc::Params::Array(vec![
 					#(#params_to_array),*
 				])
 			)
 		} else {
 			let params_list_len = params_list.len();
 			quote_spanned!(function.signature.span()=>
-				jsonrpsee::common::Params::Map({
-					let mut map = jsonrpsee::common::JsonMap::with_capacity(#params_list_len);
+				jsonrpsee_types::jsonrpc::Params::Map({
+					let mut map = jsonrpsee_types::jsonrpc::JsonMap::with_capacity(#params_list_len);
 					#(#params_to_json)*
 					map
 				})
@@ -436,48 +255,26 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 		let is_notification = function.is_void_ret_type();
 		let function_body = if is_notification {
 			quote_spanned!(function.signature.span()=>
-				client.send_notification(#rpc_method_name, #params_building).await
-					.map_err(jsonrpsee::raw::client::RawClientError::Inner)?;
-				Ok(())
+				client.notification(#rpc_method_name, #params_building).await
 			)
 		} else {
 			quote_spanned!(function.signature.span()=>
-				let rq_id = client.start_request(#rpc_method_name, #params_building).await
-					.map_err(jsonrpsee::raw::client::RawClientError::Inner)?;
-				let data = client.request_by_id(rq_id).unwrap().await?;     // TODO: don't unwrap?
-				Ok(jsonrpsee::common::from_value(data).unwrap())     // TODO: don't unwrap
+				client.request(#rpc_method_name, #params_building).await
 			)
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-            // TODO: what if there's a conflict between `client` and a param name?
-            #visibility async fn #f_name<C: jsonrpsee::transport::TransportClient>(client: &mut jsonrpsee::raw::RawClient<C> #(, #params_list)*)
-                -> core::result::Result<#ret_ty, jsonrpsee::raw::client::RawClientError<<C as jsonrpsee::transport::TransportClient>::Error>>
-            where
-                #ret_ty: jsonrpsee::common::DeserializeOwned
-                #(, #params_tys: jsonrpsee::common::Serialize)*
-            {
-                #function_body
-            }
-        ));
-	}
-
-	Ok(client_functions)
-}
-
-// TODO: better docs
-fn build_debug_variants(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
-	let enum_name = &api.name;
-	let mut debug_variants = Vec::new();
-	for function in &api.definitions {
-		let variant_name = snake_case_to_camel_case(&function.signature.ident);
-		debug_variants.push(quote_spanned!(function.signature.ident.span()=>
-			#enum_name::#variant_name { /* TODO: params */ .. } => {
-				f.debug_struct(stringify!(#enum_name))/* TODO: params */.finish()
+			#visibility async fn #f_name (client: &impl jsonrpsee_types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, jsonrpsee_types::error::Error>
+			where
+				#ret_ty: jsonrpsee_types::jsonrpc::DeserializeOwned
+				#(, #params_tys: jsonrpsee_types::jsonrpc::Serialize)*
+			{
+				#function_body
 			}
 		));
 	}
-	Ok(debug_variants)
+
+	Ok(client_functions)
 }
 
 /// Turns a snake case function name into an UpperCamelCase name suitable to be an enum variant.

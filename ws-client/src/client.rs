@@ -26,14 +26,19 @@
 
 use crate::jsonrpc_transport;
 use crate::manager::{RequestManager, RequestStatus};
+use async_trait::async_trait;
 use futures::{
 	channel::{mpsc, oneshot},
+	future::Either,
 	prelude::*,
 	sink::SinkExt,
 };
+use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
+	client::{FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
 	error::Error,
 	jsonrpc::{self, JsonValue, SubscriptionId},
+	traits::{Client, SubscriptionClient},
 };
 use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
@@ -42,7 +47,7 @@ use std::{io, marker::PhantomData};
 /// Client that can be cloned.
 ///
 /// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background task running in parallel.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WsClient {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
@@ -54,6 +59,13 @@ pub struct WsClient {
 #[derive(Clone, Debug)]
 pub struct WsConfig<'a> {
 	/// URL to connect to.
+	///
+	/// If the port number is missing from the URL, the default port number is used.
+	///
+	///
+	/// `ws://host` - port 80 is used
+	///
+	/// `wss://host` - port 443 is used
 	pub url: &'a str,
 	/// Max request body size
 	pub max_request_body_size: usize,
@@ -66,21 +78,16 @@ pub struct WsConfig<'a> {
 	pub origin: Option<Cow<'a, str>>,
 	/// Url to send during the HTTP handshake.
 	pub handshake_url: Cow<'a, str>,
-	/// Max concurrent request capacity.
+	/// Max concurrent request.
+	pub max_concurrent_requests: usize,
+	/// Max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
 	///
-	/// **Note**: The actual capacity is `num_senders + max_concurrent_requests_capacity`
-	/// because it is passed to [`futures::channel::mpsc::channel`]
-	/// and the capacity may increase because the sender is cloned when new
-	/// requests, notifications and subscriptions are created.
-	pub max_concurrent_requests_capacity: usize,
-	/// Max concurrent capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
-	///
-	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`] frequently enough
+	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`](jsonrpsee_types::client::Subscription) frequently enough
 	/// such that the buffer capacity doesn't exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
 	/// because it is passed to [`futures::channel::mpsc::channel`].
-	pub max_subscription_capacity: usize,
+	pub max_notifs_per_subscription: usize,
 }
 
 impl<'a> WsConfig<'a> {
@@ -93,64 +100,10 @@ impl<'a> WsConfig<'a> {
 			connection_timeout: Duration::from_secs(10),
 			origin: None,
 			handshake_url: From::from("/"),
-			max_concurrent_requests_capacity: 256,
-			max_subscription_capacity: 4,
+			max_concurrent_requests: 256,
+			max_notifs_per_subscription: 4,
 		}
 	}
-}
-
-/// Active subscription on a [`WsClient`].
-pub struct WsSubscription<Notif> {
-	/// Channel to send requests to the background task.
-	to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as undecoded `JsonValue`s.
-	notifs_rx: mpsc::Receiver<JsonValue>,
-	/// Subscription ID,
-	id: SubscriptionId,
-	/// Marker in order to pin the `Notif` parameter.
-	marker: PhantomData<Notif>,
-}
-
-/// Message that the [`Client`] can send to the background task.
-enum FrontToBack {
-	/// Send a one-shot notification to the server. The server doesn't give back any feedback.
-	Notification {
-		/// Method for the notification.
-		method: String,
-		/// Parameters to send to the server.
-		params: jsonrpc::Params,
-	},
-
-	/// Send a request to the server.
-	StartRequest {
-		/// Method for the request.
-		method: String,
-		/// Parameters of the request.
-		params: jsonrpc::Params,
-		/// One-shot channel where to send back the outcome of that request.
-		send_back: oneshot::Sender<Result<JsonValue, Error>>,
-	},
-
-	/// Send a subscription request to the server.
-	Subscribe {
-		/// Method for the subscription request.
-		subscribe_method: String,
-		/// Parameters to send for the subscription.
-		params: jsonrpc::Params,
-		/// Method to use to later unsubscription. Used if the channel unexpectedly closes.
-		unsubscribe_method: String,
-		/// When we get a response from the server about that subscription, we send the result on
-		/// this channel. If the subscription succeeds, we return a `Receiver` that will receive
-		/// notifications.
-		send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
-	},
-
-	/// When a subscription channel is closed, we send this message to the background
-	/// task to mark it ready for garbage collection.
-	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
-	// Such operations will be blocked until a response is received or the background
-	// thread has been terminated.
-	SubscriptionClosed(SubscriptionId),
 }
 
 impl WsClient {
@@ -158,47 +111,55 @@ impl WsClient {
 	///
 	/// Fails when the URL is invalid.
 	pub async fn new(config: WsConfig<'_>) -> Result<WsClient, Error> {
-		let max_capacity_per_subscription = config.max_subscription_capacity;
+		let max_capacity_per_subscription = config.max_notifs_per_subscription;
+		let max_concurrent_requests = config.max_concurrent_requests;
 		let request_timeout = config.request_timeout;
-		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests_capacity);
+		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests);
 
-		let (sender, receiver) =
-			jsonrpc_transport::websocket_connection(config).await.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
-			background_task(sender, receiver, from_front, max_capacity_per_subscription).await;
+			background_task(sender, receiver, from_front, max_capacity_per_subscription, max_concurrent_requests).await;
 		});
 		Ok(Self { to_back, request_timeout })
 	}
+}
 
+#[async_trait]
+impl Client for WsClient {
 	/// Send a notification to the server.
-	pub async fn notification(
-		&self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<(), Error> {
+	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
+	where
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+	{
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		self.to_back.clone().send(FrontToBack::Notification { method, params }).await.map_err(Error::Internal)
+		self.to_back
+			.clone()
+			.send(FrontToBack::Notification(NotificationMessage { method, params }))
+			.await
+			.map_err(Error::Internal)
 	}
 
 	/// Perform a request towards the server.
-	pub async fn request<Ret>(
-		&self,
-		method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-	) -> Result<Ret, Error>
+	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
 	where
-		Ret: jsonrpc::DeserializeOwned,
+		T: DeserializeOwned,
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
 	{
 		let method = method.into();
 		let params = params.into();
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
+
 		self.to_back
 			.clone()
-			.send(FrontToBack::StartRequest { method, params, send_back: send_back_tx })
+			.send(FrontToBack::StartRequest(RequestMessage { method, params, send_back: Some(send_back_tx) }))
 			.await
 			.map_err(Error::Internal)?;
 
@@ -223,19 +184,29 @@ impl WsClient {
 		};
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
+}
 
+#[async_trait]
+impl SubscriptionClient for WsClient {
 	/// Send a subscription request to the server.
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	pub async fn subscribe<Notif>(
+	async fn subscribe<SM, UM, P, N>(
 		&self,
-		subscribe_method: impl Into<String>,
-		params: impl Into<jsonrpc::Params>,
-		unsubscribe_method: impl Into<String>,
-	) -> Result<WsSubscription<Notif>, Error> {
+		subscribe_method: SM,
+		params: P,
+		unsubscribe_method: UM,
+	) -> Result<Subscription<N>, Error>
+	where
+		SM: Into<String> + Send,
+		UM: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+		N: DeserializeOwned,
+	{
 		let subscribe_method = subscribe_method.into();
 		let unsubscribe_method = unsubscribe_method.into();
+		let params = params.into();
 
 		if subscribe_method == unsubscribe_method {
 			return Err(Error::Subscription(subscribe_method, unsubscribe_method));
@@ -245,12 +216,12 @@ impl WsClient {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		self.to_back
 			.clone()
-			.send(FrontToBack::Subscribe {
+			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				subscribe_method,
 				unsubscribe_method,
-				params: params.into(),
+				params,
 				send_back: send_back_tx,
-			})
+			}))
 			.await
 			.map_err(Error::Internal)?;
 
@@ -262,40 +233,7 @@ impl WsClient {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-
-		Ok(WsSubscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
-	}
-}
-
-impl<Notif> WsSubscription<Notif>
-where
-	Notif: jsonrpc::DeserializeOwned,
-{
-	/// Returns the next notification from the stream
-	/// This may return `None` if the subscription has been terminated, may happen if the channel becomes full or dropped.
-	///
-	/// Ignores any malformed packet.
-	pub async fn next(&mut self) -> Option<Notif> {
-		loop {
-			match self.notifs_rx.next().await {
-				Some(n) => match jsonrpc::from_value(n) {
-					Ok(parsed) => return Some(parsed),
-					Err(e) => log::error!("Subscription response error: {:?}", e),
-				},
-				None => return None,
-			}
-		}
-	}
-}
-
-impl<Notif> Drop for WsSubscription<Notif> {
-	fn drop(&mut self) {
-		// We can't actually guarantee that this goes through. If the background task is busy, then
-		// the channel's buffer will be full, and our unsubscription request will never make it.
-		// However, when a notification arrives, the background task will realize that the channel
-		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let id = std::mem::replace(&mut self.id, SubscriptionId::Num(0));
-		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(id)).now_or_never();
+		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
 }
 
@@ -304,9 +242,10 @@ async fn background_task(
 	mut sender: jsonrpc_transport::Sender,
 	receiver: jsonrpc_transport::Receiver,
 	mut frontend: mpsc::Receiver<FrontToBack>,
-	max_capacity_per_subscription: usize,
+	max_notifs_per_subscription: usize,
+	max_concurrent_requests: usize,
 ) {
-	let mut manager = RequestManager::new();
+	let mut manager = RequestManager::new(max_concurrent_requests);
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.next_response().await;
@@ -320,153 +259,128 @@ async fn background_task(
 		let next_backend = backend_event.next();
 		futures::pin_mut!(next_frontend, next_backend);
 
-		futures::select! {
-			event = next_frontend => match event {
-				// User dropped the sender side of the channel.
-				None => {
-					log::trace!("[backend]: frontend channel dropped; terminate client");
-					break
-				}
-				// User called `notification` on the front-end
-				Some(FrontToBack::Notification { method, params }) => {
-					log::trace!("[backend]: client prepares to send notification");
-					let _ = sender.send_notification(method, params).await;
-				}
-				// User called `request` on the front-end
-				Some(FrontToBack::StartRequest { method, params, send_back }) => {
-					log::trace!("[backend]: client prepares to send request={:?}", method);
-					match sender.start_request(method, params).await {
-						Ok(id) => {
-							if let Err(send_back) = manager.insert_pending_call(id, send_back) {
-								let _ = send_back.send(Err(Error::DuplicateRequestId));
-							}
-						}
-						Err(err) => {
-							log::warn!("[backend]: client request failed: {:?}", err);
-							let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
-						}
-					}
-				}
-				// User called `subscribe` on the front-end.
-				Some(FrontToBack::Subscribe { subscribe_method, unsubscribe_method, params, send_back }) => {
-					log::trace!(
-						"[backend]: client prepares to start subscription, subscribe_method={:?} unsubscribe_method:{:?}",
-						subscribe_method,
-						unsubscribe_method
-					);
-					match sender.start_subscription(subscribe_method, params).await {
-						Ok(id) => {
-							if let Err(send_back) = manager.insert_pending_subscription(id, send_back, unsubscribe_method) {
-								let _ = send_back.send(Err(Error::DuplicateRequestId));
-							}
-						}
-						Err(err) => {
-							log::warn!("[backend]: client subscription failed: {:?}", err);
-							let _ = send_back.send(Err(Error::TransportError(Box::new(err))));
-						}
-					}
-				}
-				// User dropped a subscription.
-				Some(FrontToBack::SubscriptionClosed(sub_id)) => {
-					log::trace!("Closing in subscription: {:?}", sub_id);
-					// NOTE: The subscription may have been closed earlier if
-					// the channel was full or disconnected.
-					if let Some(request_id) = manager.get_request_id_by_subscription_id(&sub_id) {
-						if let Some((_sink, unsubscribe_method)) = manager.remove_subscription(request_id, sub_id.clone()) {
-							if let Ok(json_sub_id) = jsonrpc::to_value(sub_id) {
-								let params = jsonrpc::Params::Array(vec![json_sub_id]);
-								let _ = sender.start_request(unsubscribe_method, params).await;
-							}
-						}
-					}
-				}
-			},
-			event = next_backend => match event {
-				None => {
-					log::trace!("[backend]: backend channel dropped; terminate client");
-					break;
-				}
-				Some(Ok(jsonrpc::Response::Single(response))) => {
-					match process_response(&mut manager, response, max_capacity_per_subscription) {
-						Ok(Some((unsubscribe, params))) => {
-							if let Err(e) = sender.start_request(unsubscribe, params).await {
-								log::error!("Failed to send unsubscription response: {:?}", e);
-							}
-						}
-						Ok(None) => (),
-						Err(e) => {
-							log::error!("Error: {:?} terminating client", e);
-							return;
-						}
-					}
-				}
-				Some(Ok(jsonrpc::Response::Batch(responses))) => {
-					// if any request fails, throw away entire batch.
-					for response in responses {
-						match process_response(&mut manager, response, max_capacity_per_subscription) {
-							Ok(Some((unsubscribe, params))) => {
-								if let Err(e) = sender.start_request(unsubscribe, params).await {
-									log::error!("Failed to send unsubscription response: {:?}", e);
-								}
-							}
-							Ok(None) => (),
-							Err(e) => {
-								log::error!("Error: {:?} terminating client", e);
-								return;
-							}
-						}
-					}
-				}
-				Some(Ok(jsonrpc::Response::Notif(notif))) => {
-					let sub_id = notif.params.subscription;
-					let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
-						Some(r) => r,
-						None => {
-							log::error!("Subscription ID: {:?} not found", sub_id);
-							continue;
-						}
-					};
+		match future::select(next_frontend, next_backend).await {
+			// User dropped the sender side of the channel.
+			Either::Left((None, _)) => {
+				log::trace!("[backend]: frontend channel dropped; terminate client");
+				break;
+			}
 
-					match manager.as_subscription_mut(&request_id) {
-						Some(send_back_sink) => {
-							if let Err(e) = send_back_sink.try_send(notif.params.result) {
-								log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
-								manager.remove_subscription(request_id, sub_id).expect("subscription is active; checked above");
-							}
-						}
-						None => {
-							log::error!("Subscription ID: {:?} not an active subscription", sub_id);
-						},
+			// User called `notification` on the front-end
+			Either::Left((Some(FrontToBack::Notification(notif)), _)) => {
+				log::trace!("[backend]: client prepares to send notification: {:?}", notif);
+				if let Err(e) = sender.send_notification(notif).await {
+					log::warn!("[backend]: client notif failed: {:?}", e);
+				}
+			}
+
+			// User called `request` on the front-end
+			Either::Left((Some(FrontToBack::StartRequest(request)), _)) => {
+				log::trace!("[backend]: client prepares to send request={:?}", request);
+				if let Err(e) = sender.start_request(request, &mut manager).await {
+					log::warn!("[backend]: client request failed: {:?}", e);
+				}
+			}
+			// User called `subscribe` on the front-end.
+			Either::Left((Some(FrontToBack::Subscribe(subscribe)), _)) => {
+				log::trace!("[backend]: client prepares to start subscription: {:?}", subscribe);
+				if let Err(e) = sender.start_subscription(subscribe, &mut manager).await {
+					log::warn!("[backend]: client subscription failed: {:?}", e);
+				}
+			}
+			// User dropped a subscription.
+			Either::Left((Some(FrontToBack::SubscriptionClosed(sub_id)), _)) => {
+				log::trace!("Closing subscription: {:?}", sub_id);
+				// NOTE: The subscription may have been closed earlier if
+				// the channel was full or disconnected.
+				if let Some((_, unsub_method)) = manager
+					.get_request_id_by_subscription_id(&sub_id)
+					.and_then(|req_id| manager.remove_subscription(req_id, sub_id.clone()))
+				{
+					let json_sub_id = jsonrpc::to_value(sub_id).expect("SubscriptionID to JSON is infallible; qed");
+					let request = RequestMessage {
+						method: unsub_method,
+						params: jsonrpc::Params::Array(vec![json_sub_id]),
+						send_back: None,
+					};
+					send_unsubscribe_request(&mut sender, &mut manager, request).await;
+				}
+			}
+			Either::Right((Some(Ok(jsonrpc::Response::Single(response))), _)) => {
+				match process_response(&mut manager, response, max_notifs_per_subscription) {
+					Ok(Some(unsub_request)) => {
+						send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
+					}
+					Ok(None) => (),
+					Err(e) => {
+						log::error!("Error: {:?} terminating client", e);
+						return;
 					}
 				}
-				Some(Err(e)) => {
-					log::error!("Error: {:?} terminating client", e);
-					return;
+			}
+			Either::Right((Some(Ok(jsonrpc::Response::Batch(_responses))), _)) => {
+				log::error!("Received batch response but not supported");
+				return;
+			}
+			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
+				let sub_id = notif.params.subscription;
+				let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
+					Some(r) => r,
+					None => {
+						log::error!("Subscription ID: {:?} not found", sub_id);
+						continue;
+					}
+				};
+
+				match manager.as_subscription_mut(&request_id) {
+					Some(send_back_sink) => {
+						if let Err(e) = send_back_sink.try_send(notif.params.result) {
+							log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
+							manager
+								.remove_subscription(request_id, sub_id)
+								.expect("subscription is active; checked above");
+							manager.reclaim_request_id(request_id);
+						}
+					}
+					None => {
+						log::error!("Subscription ID: {:?} not an active subscription", sub_id);
+					}
 				}
-			},
+			}
+			Either::Right((Some(Err(e)), _)) => {
+				log::error!("Error: {:?} terminating client", e);
+				return;
+			}
+			Either::Right((None, _)) => {
+				log::error!("[backend]: backend dropped; terminate client");
+				break;
+			}
 		}
 	}
 }
 
 /// Process a response from the server.
 ///
-/// Returns `Ok(_)` if the response was successful or if the error could be handled.
+/// Returns `Ok(None)` if the response was successful
+/// Returns `Ok(Some(_))` if the response got an error but could be handled.
 /// Returns `Err(_)` if the response couldn't be handled.
 fn process_response(
 	manager: &mut RequestManager,
 	response: jsonrpc::Output,
 	max_capacity_per_subscription: usize,
-) -> Result<Option<(String, jsonrpc::Params)>, Error> {
-	let response_id = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
+) -> Result<Option<RequestMessage>, Error> {
+	let response_id: u64 = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
 
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back_oneshot = manager.complete_pending_call(response_id).ok_or(Error::InvalidRequestId)?;
+			manager.reclaim_request_id(response_id);
 			let response = response.try_into().map_err(Error::Request);
-			match send_back_oneshot.send(response) {
-				Err(Err(e)) => Err(e),
-				Err(Ok(_)) => Err(Error::Custom("Frontend channel closed".into())),
-				Ok(_) => Ok(None),
+			match send_back_oneshot.map(|tx| tx.send(response)) {
+				Some(Err(Err(e))) => Err(e),
+				Some(Err(Ok(_))) => Err(Error::Custom("Frontend channel closed".into())),
+				Some(Ok(_)) => Ok(None),
+				None => Ok(None),
 			}
 		}
 		RequestStatus::PendingSubscription => {
@@ -501,8 +415,9 @@ fn process_response(
 					Err(_) => {
 						let (_, unsubscribe_method) =
 							manager.remove_subscription(response_id, sub_id).expect("Subscription inserted above; qed");
+						manager.reclaim_request_id(response_id);
 						let params = jsonrpc::Params::Array(vec![json_sub_id]);
-						Ok(Some((unsubscribe_method, params)))
+						Ok(Some(RequestMessage { method: unsubscribe_method, params, send_back: None }))
 					}
 				}
 			} else {
@@ -514,5 +429,15 @@ fn process_response(
 			}
 		}
 		RequestStatus::Subscription | RequestStatus::Invalid => Err(Error::InvalidRequestId),
+	}
+}
+
+async fn send_unsubscribe_request(
+	sender: &mut jsonrpc_transport::Sender,
+	manager: &mut RequestManager,
+	request: RequestMessage,
+) {
+	if let Err(e) = sender.start_request(request, manager).await {
+		log::error!("send unsubscribe request failed: {:?}", e);
 	}
 }

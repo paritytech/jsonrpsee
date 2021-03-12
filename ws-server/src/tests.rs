@@ -2,52 +2,33 @@
 
 use crate::WsServer;
 use futures::channel::oneshot::{self, Sender};
-use futures::future::FutureExt;
-use futures::{pin_mut, select};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestClient};
 use jsonrpsee_types::{error::Error, jsonrpc::JsonValue};
 use std::net::SocketAddr;
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
-/// It has two hardcoded methods "say_hello" and "add", one hardcoded notification "notif"
+/// It has two hardcoded methods: "say_hello" and "add"
 pub async fn server(server_started: Sender<SocketAddr>) {
-	let server = WsServer::new("127.0.0.1:0").await.unwrap();
-	let mut hello = server.register_method("say_hello".to_owned()).unwrap();
-	let mut add = server.register_method("add".to_owned()).unwrap();
-	let mut notif = server.register_notification("notif".to_owned(), false).unwrap();
-	server_started.send(*server.local_addr()).unwrap();
+	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
 
-	loop {
-		let hello_fut = async {
-			let handle = hello.next().await;
+	server
+		.register_method("say_hello", |_| {
 			log::debug!("server respond to hello");
-			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
-		}
-		.fuse();
+			Ok("hello")
+		})
+		.unwrap();
+	server
+		.register_method("add", |params| {
+			let params: Vec<u64> = params.parse()?;
+			let sum: u64 = params.into_iter().sum();
 
-		let add_fut = async {
-			let handle = add.next().await;
-			let params: Vec<u64> = handle.params().clone().parse().unwrap();
-			let sum: u64 = params.iter().sum();
-			handle.respond(Ok(JsonValue::Number(sum.into()))).await.unwrap();
-		}
-		.fuse();
+			Ok(sum)
+		})
+		.unwrap();
+	server_started.send(server.local_addr().unwrap()).unwrap();
 
-		let notif_fut = async {
-			let params = notif.next().await;
-			println!("received notification: say_hello params[{:?}]", params);
-		}
-		.fuse();
-
-		pin_mut!(hello_fut, add_fut, notif_fut);
-		select! {
-			_ = hello_fut => (),
-			_ = add_fut => (),
-			_ = notif_fut => (),
-			complete => (),
-		};
-	}
+	server.start().await;
 }
 
 #[tokio::test]
@@ -60,9 +41,11 @@ async fn single_method_call_works() {
 	for i in 0..10 {
 		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
 		let response = client.send_request_text(req).await.unwrap();
+
 		assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(i)));
 	}
 }
+
 #[tokio::test]
 async fn single_method_call_with_params_works() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
@@ -126,25 +109,23 @@ async fn invalid_request_object() {
 
 #[tokio::test]
 async fn register_methods_works() {
-	let server = WsServer::new("127.0.0.1:0").await.unwrap();
-	assert!(server.register_method("say_hello".to_owned()).is_ok());
-	assert!(server.register_method("say_hello".to_owned()).is_err());
-	assert!(server.register_notification("notif".to_owned(), false).is_ok());
-	assert!(server.register_notification("notif".to_owned(), false).is_err());
-	assert!(server.register_subscription("subscribe_hello".to_owned(), "unsubscribe_hello".to_owned()).is_ok());
-	assert!(server.register_subscription("subscribe_hello_again".to_owned(), "notif".to_owned()).is_err());
+	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
+	assert!(server.register_method("say_hello", |_| Ok("lo")).is_ok());
+	assert!(server.register_method("say_hello", |_| Ok("lo")).is_err());
+	assert!(server.register_subscription("subscribe_hello", "unsubscribe_hello").is_ok());
+	assert!(server.register_subscription("subscribe_hello_again", "unsubscribe_hello").is_err());
 	assert!(
-		server.register_method("subscribe_hello_again".to_owned()).is_ok(),
+		server.register_method("subscribe_hello_again", |_| Ok("lo")).is_ok(),
 		"Failed register_subscription should not have side-effects"
 	);
 }
 
 #[tokio::test]
 async fn register_same_subscribe_unsubscribe_is_err() {
-	let server = WsServer::new("127.0.0.1:0").await.unwrap();
+	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
 	assert!(matches!(
-		server.register_subscription("subscribe_hello".to_owned(), "subscribe_hello".to_owned()),
-		Err(Error::MethodAlreadyRegistered(_))
+		server.register_subscription("subscribe_hello", "subscribe_hello"),
+		Err(Error::SubscriptionNameConflict(_))
 	));
 }
 
