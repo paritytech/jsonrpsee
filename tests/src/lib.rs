@@ -29,6 +29,7 @@
 mod helpers;
 mod proc_macros;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
@@ -184,7 +185,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 
 	let mut config = WsConfig::with_url(&server_url);
 	config.max_concurrent_requests = 2;
-	let client = WsClient::new(config).await.unwrap();
+	let client = Arc::new(WsClient::new(config).await.unwrap());
 
 	let mut requests = Vec::new();
 
@@ -196,6 +197,13 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 	for req in requests {
 		let _ = req.await.unwrap();
 	}
+}
+
+#[tokio::test]
+async fn https_works() {
+	let client = HttpClient::new("https://kusama-rpc.polkadot.io", HttpConfig::default()).unwrap();
+	let response: String = client.request("system_chain", Params::None).await.unwrap();
+	assert_eq!(&response, "Kusama");
 }
 
 #[tokio::test]

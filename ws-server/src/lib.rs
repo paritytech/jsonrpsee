@@ -32,4 +32,4 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use server::{Server as WsServer, SubscriptionSink};
+pub use server::{RpcContextModule, RpcModule, Server as WsServer, SubscriptionSink};

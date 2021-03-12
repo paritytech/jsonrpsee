@@ -1,9 +1,22 @@
+use crate::server::{RpcError, RpcParams};
 use beef::lean::Cow;
+use rustc_hash::FxHashMap;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::fmt;
+use tokio::sync::mpsc;
+
+pub type ConnectionId = usize;
+pub type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
+pub type RpcId<'a> = Option<&'a RawValue>;
+pub type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
+pub type Methods = FxHashMap<&'static str, Method>;
+
+pub trait RpcMethod<R>: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static {}
+
+impl<R, T> RpcMethod<R> for T where T: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static {}
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]

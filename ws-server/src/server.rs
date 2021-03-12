@@ -41,22 +41,16 @@ use tokio::{
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
+use crate::types::{ConnectionId, Methods, RpcId, RpcSender};
 use crate::types::{JsonRpcError, JsonRpcErrorParams};
 use crate::types::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
 use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};
 
-type ConnectionId = usize;
+mod module;
+
+pub use module::{RpcContextModule, RpcModule};
+
 type SubscriptionId = u64;
-
-type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
-type RpcId<'a> = Option<&'a RawValue>;
-type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
-type Methods = FxHashMap<&'static str, Method>;
-
-pub struct Server {
-	methods: Methods,
-	listener: TcpListener,
-}
 
 trait RpcResult {
 	fn to_json(self, id: Option<&RawValue>) -> anyhow::Result<String>;
@@ -68,6 +62,31 @@ pub enum RpcError {
 	Unknown,
 	#[error("invalid params")]
 	InvalidParams,
+}
+
+/// Parameters sent with the RPC request
+#[derive(Clone, Copy)]
+pub struct RpcParams<'a>(Option<&'a str>);
+
+impl<'a> RpcParams<'a> {
+	/// Attempt to parse all parameters as array or map into type T
+	pub fn parse<T>(self) -> Result<T, RpcError>
+	where
+		T: Deserialize<'a>,
+	{
+		match self.0 {
+			None => Err(RpcError::InvalidParams),
+			Some(params) => serde_json::from_str(params).map_err(|_| RpcError::InvalidParams),
+		}
+	}
+
+	/// Attempt to parse only the first parameter from an array into type T
+	pub fn one<T>(self) -> Result<T, RpcError>
+	where
+		T: Deserialize<'a>,
+	{
+		self.parse::<[T; 1]>().map(|[res]| res)
+	}
 }
 
 #[derive(Clone)]
@@ -108,31 +127,6 @@ impl SubscriptionSink {
 	}
 }
 
-/// Parameters sent with the RPC request
-#[derive(Clone, Copy)]
-pub struct RpcParams<'a>(Option<&'a str>);
-
-impl<'a> RpcParams<'a> {
-	/// Attempt to parse all parameters as array or map into type T
-	pub fn parse<T>(self) -> Result<T, RpcError>
-	where
-		T: Deserialize<'a>,
-	{
-		match self.0 {
-			None => Err(RpcError::InvalidParams),
-			Some(params) => serde_json::from_str(params).map_err(|_| RpcError::InvalidParams),
-		}
-	}
-
-	/// Attempt to parse only the first parameter from an array into type T
-	pub fn one<T>(self) -> Result<T, RpcError>
-	where
-		T: Deserialize<'a>,
-	{
-		self.parse::<[T; 1]>().map(|[res]| res)
-	}
-}
-
 // Private helper for sending JSON-RPC responses to the client
 fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
 	let json = match serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result }) {
@@ -169,22 +163,17 @@ fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
 	}
 }
 
+pub struct Server {
+	root: RpcModule,
+	listener: TcpListener,
+}
+
 impl Server {
-	/// Create a new WebSocket RPC server, bound to the `addr`
+	/// Create a new WebSocket RPC server, bound to the `addr`.
 	pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {
 		let listener = TcpListener::bind(addr).await?;
 
-		Ok(Server { listener, methods: Default::default() })
-	}
-
-	fn insert_method(&mut self, name: &'static str, method: Method) -> Result<(), Error> {
-		if self.methods.get(name).is_some() {
-			return Err(Error::MethodAlreadyRegistered(name.into()));
-		}
-
-		self.methods.insert(name, method);
-
-		Ok(())
+		Ok(Server { listener, root: RpcModule::new() })
 	}
 
 	/// Register a new RPC method, which responds with a given callback.
@@ -193,16 +182,7 @@ impl Server {
 		R: Serialize,
 		F: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static,
 	{
-		self.insert_method(
-			method_name,
-			Box::new(move |id, params, tx, _| {
-				let result = callback(params)?;
-
-				send_response(id, tx, result);
-
-				Ok(())
-			}),
-		)
+		self.root.register_method(method_name, callback)
 	}
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
@@ -211,59 +191,15 @@ impl Server {
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 	) -> Result<SubscriptionSink, Error> {
-		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
-
-		{
-			let subscribers = subscribers.clone();
-			self.insert_method(
-				subscribe_method_name,
-				Box::new(move |id, _, tx, conn| {
-					let sub_id = {
-						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
-
-						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
-
-						subscribers.lock().insert((conn, sub_id), tx.clone());
-
-						sub_id
-					};
-
-					send_response(id, tx, sub_id);
-
-					Ok(())
-				}),
-			)?;
-		}
-
-		{
-			let subscribers = subscribers.clone();
-			let result = self.insert_method(
-				unsubscribe_method_name,
-				Box::new(move |id, params, tx, conn| {
-					let sub_id = params.one()?;
-
-					subscribers.lock().remove(&(conn, sub_id));
-
-					send_response(id, tx, "Unsubscribed");
-
-					Ok(())
-				}),
-			);
-
-			match result {
-				Ok(()) => (),
-				Err(err) => {
-					// Remove subscribe method if unsubscribe has failed
-					self.methods.remove(subscribe_method_name);
-					return Err(err);
-				}
-			}
-		}
-
-		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
+		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name)
 	}
 
-	/// Returns socket address to which the server is bound
+	/// Register all methods from a module on this server.
+	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
+		self.root.merge(module)
+	}
+
+	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
 		self.listener.local_addr().map_err(Into::into)
 	}
@@ -271,7 +207,7 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
-		let methods = Arc::new(self.methods);
+		let methods = Arc::new(self.root.into_methods());
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {

@@ -6,6 +6,8 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+use hyper::client::{Client, HttpConnector};
+use hyper_rustls::HttpsConnector;
 use jsonrpsee_types::{error::GenericTransportError, http::HttpConfig, jsonrpc};
 use jsonrpsee_utils::http::hyper_helpers;
 use thiserror::Error;
@@ -17,8 +19,8 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 pub struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
-	/// HTTP client,
-	client: hyper::Client<hyper::client::HttpConnector>,
+	/// HTTP client
+	client: Client<HttpsConnector<HttpConnector>>,
 	/// Configurable max request body size
 	config: HttpConfig,
 }
@@ -27,10 +29,15 @@ impl HttpTransportClient {
 	/// Initializes a new HTTP client.
 	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
-		if target.scheme() == "http" {
-			Ok(HttpTransportClient { client: hyper::Client::new(), target, config })
+		if target.scheme() == "http" || target.scheme() == "https" {
+			#[cfg(feature = "tokio1")]
+			let connector = HttpsConnector::with_native_roots();
+			#[cfg(feature = "tokio02")]
+			let connector = HttpsConnector::new();
+			let client = Client::builder().build::<_, hyper::Body>(connector);
+			Ok(HttpTransportClient { client, target, config })
 		} else {
-			Err(Error::Url("URL scheme not supported, expects 'http'".into()))
+			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
 		}
 	}
 
@@ -50,7 +57,6 @@ impl HttpTransportClient {
 			.expect("URI and request headers are valid; qed");
 
 		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
-
 		if response.status().is_success() {
 			Ok(response)
 		} else {

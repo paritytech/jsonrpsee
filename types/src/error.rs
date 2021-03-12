@@ -30,6 +30,9 @@ pub enum Error {
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	Internal(#[source] futures::channel::mpsc::SendError),
+	/// The background task has been terminated.
+	#[error("The background task been terminated because: {0}; restart required")]
+	RestartNeeded(String),
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] jsonrpc::ParseError),
@@ -45,6 +48,9 @@ pub enum Error {
 	/// Method was already registered.
 	#[error("Method: {0} was already registered")]
 	MethodAlreadyRegistered(String),
+	/// Subscribe and unsubscribe method names are the same.
+	#[error("Cannot use the same method name for subcribe and unsubscribe, used: {0}")]
+	SubscriptionNameConflict(String),
 	/// Websocket request timeout
 	#[error("Websocket request timeout")]
 	WsRequestTimeout,

@@ -28,9 +28,13 @@ compile_error!("feature `tokio1` or `tokio02` must be enabled for this crate");
 
 #[cfg(all(feature = "tokio1", not(feature = "tokio02")))]
 extern crate hyper14 as hyper;
+#[cfg(all(feature = "tokio1", not(feature = "tokio02")))]
+extern crate hyper14_rustls as hyper_rustls;
 
 #[cfg(all(feature = "tokio02", not(feature = "tokio1")))]
 extern crate hyper13 as hyper;
+#[cfg(all(feature = "tokio02", not(feature = "tokio1")))]
+extern crate hyper13_rustls as hyper_rustls;
 
 extern crate alloc;
 
