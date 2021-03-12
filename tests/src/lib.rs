@@ -205,6 +205,7 @@ async fn https_works() {
 	assert_eq!(&response, "Kusama");
 }
 
+#[tokio::test]
 async fn wss_works() {
 	let client = WsClient::new(WsConfig::with_url("wss://kusama-rpc.polkadot.io")).await.unwrap();
 	let response: String = client.request("system_chain", Params::None).await.unwrap();
