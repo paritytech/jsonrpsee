@@ -1,3 +1,6 @@
+// Not all proc macros are used let's suppress it for now.
+#![allow(dead_code)]
+
 use crate::helpers;
 use jsonrpsee_http_client::*;
 use jsonrpsee_ws_client::*;

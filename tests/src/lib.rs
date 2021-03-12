@@ -29,6 +29,7 @@
 mod helpers;
 mod proc_macros;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
@@ -184,7 +185,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 
 	let mut config = WsConfig::with_url(&server_url);
 	config.max_concurrent_requests = 2;
-	let client = WsClient::new(config).await.unwrap();
+	let client = Arc::new(WsClient::new(config).await.unwrap());
 
 	let mut requests = Vec::new();
 
