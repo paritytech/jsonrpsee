@@ -9,6 +9,8 @@ license = "MIT"
 [dependencies]
 async-trait = "0.1"
 futures = "0.3"
+hyper13-rustls = { package = "hyper-rustls", version = "0.21", optional = true }
+hyper14-rustls = { package = "hyper-rustls", version = "0.22", optional = true }
 hyper14 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2", "tcp"], optional = true }
 hyper13 = { package = "hyper", version = "0.13", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.2" }
@@ -22,8 +24,8 @@ url = "2.2"
 
 [features]
 default = ["tokio1"]
-tokio1 = ["hyper14", "jsonrpsee-utils/hyper14"]
-tokio02 = ["hyper13", "jsonrpsee-utils/hyper13"]
+tokio1 = ["hyper14", "hyper14-rustls", "jsonrpsee-utils/hyper14"]
+tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper13"]
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
