@@ -13,19 +13,13 @@ use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
-#[cfg(any(feature = "tokio1-tls", feature = "tokio02-tls"))]
-type HyperClient = Client<hyper_rustls::HttpsConnector<HttpConnector>>;
-
-#[cfg(not(any(feature = "tokio1-tls", feature = "tokio02-tls")))]
-type HyperClient = Client<HttpConnector>;
-
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
 pub struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
 	/// HTTP client
-	client: HyperClient,
+	client: hyper::Client<hyper_rustls::HttpsConnector<HttpConnector>>,
 	/// Configurable max request body size
 	config: HttpConfig,
 }
@@ -35,17 +29,11 @@ impl HttpTransportClient {
 	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
-			// NOTE: we are forced to the conditional compilation uglyness
-			// because `Client::new` and `Client::builder().build(connector)` return different types.
-			// Let us pray for mutually exclusive features: https://github.com/rust-lang/cargo/issues/2980
-			#[cfg(feature = "tokio1-tls")]
+			#[cfg(feature = "tokio1")]
 			let connector = hyper_rustls::HttpsConnector::with_native_roots();
-			#[cfg(feature = "tokio02-tls")]
+			#[cfg(feature = "tokio02")]
 			let connector = hyper_rustls::HttpsConnector::new();
-			#[cfg(any(feature = "tokio1-tls", feature = "tokio02-tls"))]
 			let client = Client::builder().build::<_, hyper::Body>(connector);
-			#[cfg(not(any(feature = "tokio1-tls", feature = "tokio02-tls")))]
-			let client = Client::new();
 			Ok(HttpTransportClient { client, target, config })
 		} else {
 			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))

@@ -23,11 +23,9 @@ unicase = "2.6"
 url = "2.2"
 
 [features]
-default = ["tokio1", "tokio1-tls"]
-tokio1 = ["hyper14", "jsonrpsee-utils/hyper14"]
-tokio02 = ["hyper13", "jsonrpsee-utils/hyper13"]
-tokio1-tls = ["hyper14-rustls"]
-tokio02-tls = ["hyper13-rustls"]
+default = ["tokio1"]
+tokio1 = ["hyper14", "hyper14-rustls", "jsonrpsee-utils/hyper14"]
+tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper13"]
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
