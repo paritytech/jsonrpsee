@@ -24,9 +24,8 @@ type HyperClient = Client<HttpConnector>;
 pub struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
-	/// HTTP client with HTTP connector
+	/// HTTP client
 	client: HyperClient,
-	/// HTTP client with HTTP connector
 	/// Configurable max request body size
 	config: HttpConfig,
 }
@@ -37,8 +36,8 @@ impl HttpTransportClient {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
 			// NOTE: we are forced to the conditional compilation uglyness
-			// because `Client::new` and `Client::builder().build(connector)` returns different types.
-			// Let us pray for mutabally features: https://github.com/rust-lang/cargo/issues/2980
+			// because `Client::new` and `Client::builder().build(connector)` return different types.
+			// Let us pray for mutually exclusive features: https://github.com/rust-lang/cargo/issues/2980
 			#[cfg(feature = "tokio1-tls")]
 			let connector = hyper_rustls::HttpsConnector::with_native_roots();
 			#[cfg(feature = "tokio02-tls")]
@@ -49,7 +48,7 @@ impl HttpTransportClient {
 			let client = Client::new();
 			Ok(HttpTransportClient { client, target, config })
 		} else {
-			Err(Error::Url("URL scheme not supported, expects 'http or https'".into()))
+			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
 		}
 	}
 
