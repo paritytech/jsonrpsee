@@ -7,6 +7,7 @@
 // the JSON-RPC request id to a value that might have already been used.
 
 use hyper::client::{Client, HttpConnector};
+use hyper_rustls::HttpsConnector;
 use jsonrpsee_types::{error::GenericTransportError, http::HttpConfig, jsonrpc};
 use jsonrpsee_utils::http::hyper_helpers;
 use thiserror::Error;
@@ -19,7 +20,7 @@ pub struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
 	/// HTTP client
-	client: hyper::Client<hyper_rustls::HttpsConnector<HttpConnector>>,
+	client: Client<HttpsConnector<HttpConnector>>,
 	/// Configurable max request body size
 	config: HttpConfig,
 }
@@ -30,9 +31,9 @@ impl HttpTransportClient {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
 			#[cfg(feature = "tokio1")]
-			let connector = hyper_rustls::HttpsConnector::with_native_roots();
+			let connector = HttpsConnector::with_native_roots();
 			#[cfg(feature = "tokio02")]
-			let connector = hyper_rustls::HttpsConnector::new();
+			let connector = HttpsConnector::new();
 			let client = Client::builder().build::<_, hyper::Body>(connector);
 			Ok(HttpTransportClient { client, target, config })
 		} else {
