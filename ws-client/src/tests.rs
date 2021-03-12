@@ -135,20 +135,10 @@ async fn batch_request_works() {
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
 	let response = run_batch_request_with_response(batch_request, server_response).await.unwrap();
-	assert_eq!(
-		response,
-		vec![
-			JsonValue::from("hello".to_string()),
-			JsonValue::from("goodbye".to_string()),
-			JsonValue::from("here's your swag".to_string())
-		]
-	);
+	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
-async fn run_batch_request_with_response(
-	batch: Vec<(String, Params)>,
-	response: String,
-) -> Result<Vec<JsonValue>, Error> {
+async fn run_batch_request_with_response(batch: Vec<(String, Params)>, response: String) -> Result<Vec<String>, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response).await;
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClient::new(WsConfig::with_url(&uri)).await.unwrap();
