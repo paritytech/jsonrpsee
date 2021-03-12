@@ -65,7 +65,7 @@ impl ErrorFromBack {
 					Ok(msg) => msg.to_string(),
 					// This should never happen because the receiving end is still alive.
 					// Would be a bug in the logic of the background task.
-					Err(_) => "Error reason could not be found".to_string(),
+					Err(_) => "Error reason could not be found. This is a bug. Please open an issue.".to_string(),
 				};
 				let err = Error::RestartNeeded(msg.clone());
 				(Self::Read(msg), err)
