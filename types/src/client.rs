@@ -31,7 +31,7 @@ pub struct BatchMessage {
 	/// Requests in the batch
 	pub requests: Vec<(String, Params)>,
 	/// One-shot channel over which we send back the result of this request.
-	pub send_back: oneshot::Sender<Result<JsonValue, Error>>,
+	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
 }
 
 /// Request message.

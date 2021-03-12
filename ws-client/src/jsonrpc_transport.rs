@@ -10,7 +10,8 @@ use crate::{
 use core::convert::TryInto;
 use jsonrpsee_types::client::{BatchMessage, NotificationMessage, RequestMessage, SubscriptionMessage};
 use jsonrpsee_types::error::Error;
-use jsonrpsee_types::jsonrpc::{self, Params, Request};
+use jsonrpsee_types::jsonrpc::{self, Request};
+use std::collections::BTreeSet;
 
 /// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
 pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
@@ -50,15 +51,16 @@ impl Sender {
 				id: jsonrpc::Id::Num(id),
 			}));
 		}
+
+		let batch_ids: BTreeSet<u64> = ids.iter().cloned().collect();
 		let res =
 			self.transport.send_request(Request::Batch(calls)).await.map_err(|e| Error::TransportError(Box::new(e)));
 
 		match res {
 			Ok(_) => {
-				for id in ids {
-					// TODO: separate lookup table for batch?!.
-					request_manager.insert_pending_call(id, None).expect("ID valid checked above; qed");
-				}
+				request_manager
+					.insert_pending_batch(batch_ids, Some(batch.send_back))
+					.expect("ID valid checked above; qed");
 				Ok(())
 			}
 			Err(e) => {

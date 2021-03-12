@@ -40,8 +40,8 @@ use jsonrpsee_types::{
 	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::{Client, SubscriptionClient},
 };
-use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
+use std::{collections::BTreeSet, time::Duration};
 use std::{io, marker::PhantomData};
 
 /// Client that can be cloned.
@@ -149,7 +149,7 @@ impl WsClient {
 			.await
 			.map_err(Error::Internal)?;
 
-		let json_value = match send_back_rx.await {
+		let json_values = match send_back_rx.await {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => {
@@ -157,7 +157,10 @@ impl WsClient {
 				return Err(Error::TransportError(Box::new(err)));
 			}
 		};
-		jsonrpc::from_value(json_value).map_err(Error::ParseError)
+
+		let values: Result<_, _> =
+			json_values.into_iter().map(|val| jsonrpc::from_value(val).map_err(Error::ParseError)).collect();
+		Ok(values?)
 	}
 }
 
@@ -360,8 +363,39 @@ async fn background_task(
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Batch(batch))), _)) => {
-				log::debug!("batch: {:?}", batch);
-				return;
+				let mut err = None;
+				let mut ids = BTreeSet::new();
+				let mut responses: Vec<_> = Vec::new();
+
+				for rp in batch {
+					let id = match rp.id().as_number().copied() {
+						Some(id) => id,
+						None => {
+							err = Some(Error::InvalidRequestId);
+							break;
+						}
+					};
+					let rp: Result<JsonValue, Error> = rp.try_into().map_err(Error::Request);
+					let rp = match rp {
+						Ok(rp) => rp,
+						Err(e) => {
+							err = Some(e);
+							break;
+						}
+					};
+					ids.insert(id);
+					responses.push(rp);
+				}
+
+				let send_back = match manager.complete_pending_batch(ids) {
+					Some(Some(send_back)) => send_back,
+					_ => continue,
+				};
+
+				let _ = match err {
+					Some(err) => send_back.send(Err(err)),
+					None => send_back.send(Ok(responses)),
+				};
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
 				let sub_id = notif.params.subscription;

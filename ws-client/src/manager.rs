@@ -14,7 +14,7 @@ use jsonrpsee_types::{
 };
 use std::collections::{
 	hash_map::{Entry, HashMap},
-	VecDeque,
+	BTreeSet, VecDeque,
 };
 
 #[derive(Debug)]
@@ -38,6 +38,7 @@ pub enum RequestStatus {
 }
 
 type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
+type PendingBatchOneshot = Option<oneshot::Sender<Result<Vec<JsonValue>, Error>>>;
 type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>;
 type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
@@ -53,6 +54,8 @@ pub struct RequestManager {
 	requests: FnvHashMap<RequestId, Kind>,
 	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all requests.
 	subscriptions: HashMap<SubscriptionId, RequestId>,
+	/// Pending batch requests
+	batches: FnvHashMap<BTreeSet<RequestId>, PendingBatchOneshot>,
 }
 
 impl RequestManager {
@@ -62,6 +65,7 @@ impl RequestManager {
 			free_slots: (0..slot_capacity as u64).collect(),
 			requests: FnvHashMap::default(),
 			subscriptions: HashMap::new(),
+			batches: FnvHashMap::default(),
 		}
 	}
 
@@ -91,6 +95,20 @@ impl RequestManager {
 		}
 	}
 
+	/// Tries to insert a new batch request
+	///
+	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
+	pub fn insert_pending_batch(
+		&mut self,
+		batch: BTreeSet<RequestId>,
+		send_back: PendingBatchOneshot,
+	) -> Result<(), PendingBatchOneshot> {
+		for id in &batch {
+			self.insert_pending_call(*id, None).expect("valid IDs; qed");
+		}
+		self.batches.insert(batch, send_back);
+		Ok(())
+	}
 	/// Tries to insert a new pending subscription.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
@@ -144,6 +162,22 @@ impl RequestManager {
 				} else {
 					unreachable!("Pending subscription is Pending subscription checked above; qed");
 				}
+			}
+			_ => None,
+		}
+	}
+
+	/// Tries to complete a pending batch request
+	///
+	/// Returns `Some` if the subscription was completed otherwise `None`.
+	pub fn complete_pending_batch(&mut self, batch: BTreeSet<RequestId>) -> Option<PendingBatchOneshot> {
+		match self.batches.entry(batch) {
+			Entry::Occupied(request) => {
+				let (batch, send_back) = request.remove_entry();
+				for req_id in batch {
+					let _ = self.complete_pending_call(req_id);
+				}
+				Some(send_back)
 			}
 			_ => None,
 		}
