@@ -38,7 +38,7 @@ use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
 	client::{BatchMessage, FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
 	error::Error,
-	jsonrpc::{self, SubscriptionId},
+	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::{Client, SubscriptionClient},
 };
 use std::{borrow::Cow, convert::TryInto};

@@ -5,7 +5,7 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
 use jsonrpsee_types::{
 	error::Error,
-	jsonrpc::{self, JsonValue, Params},
+	jsonrpc::{self, Params},
 	traits::{Client, SubscriptionClient},
 };
 
