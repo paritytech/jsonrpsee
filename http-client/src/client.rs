@@ -1,10 +1,9 @@
 use crate::transport::HttpTransportClient;
 use async_trait::async_trait;
 use jsonrpc::DeserializeOwned;
-use jsonrpsee_types::{error::Error, http::HttpConfig, jsonrpc, traits::Client, jsonrpc::JsonValue};
+use jsonrpsee_types::{error::Error, http::HttpConfig, jsonrpc, jsonrpc::JsonValue, traits::Client};
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::collections::HashSet;
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug)]
@@ -38,9 +37,8 @@ impl HttpClient {
 		T: DeserializeOwned,
 	{
 		let mut calls = Vec::new();
-		// NOTE(niklasad1): If more than `u64::MAX` requests are performed in the `batch` then duplicate IDs are used
-		// which we don't support because ID is used to uniquely identify a given request.
-		let mut ids = HashSet::new();
+		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
+		let mut ids = Vec::new();
 
 		for (method, params) in requests.into_iter() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
@@ -50,7 +48,7 @@ impl HttpClient {
 				params: params.into(),
 				id: jsonrpc::Id::Num(id),
 			}));
-			ids.insert(id);
+			ids.push(id);
 		}
 
 		let batch_request = jsonrpc::Request::Batch(calls);
@@ -65,23 +63,27 @@ impl HttpClient {
 				Err(Error::Custom("Server replied with single response to a batch request".to_string()))
 			}
 			jsonrpc::Response::Notif(_notif) => {
-				Err(Error::Custom("Server replied with notification to a a batch request".to_string()))
+				Err(Error::Custom("Server replied with notification to with a batch request".to_string()))
 			}
 			jsonrpc::Response::Batch(rps) => {
-				let mut responses = Vec::with_capacity(ids.len());
+				// TODO: placeholder maybe better with Option
+				let mut json_responses = vec![JsonValue::Number(0.into()); ids.len()];
 				for rp in rps {
 					let id = match rp.id().as_number() {
 						Some(n) => *n,
 						_ => return Err(Error::InvalidRequestId),
 					};
-					if !ids.remove(&id) {
-						return Err(Error::InvalidRequestId);
-					}
+					// NOTE(niklasad1): O(n), meeh
+					let pos = match ids.iter().position(|i| i == &id) {
+						Some(id) => id,
+						None => return Err(Error::InvalidRequestId),
+					};
 					let json_val: JsonValue = rp.try_into().map_err(Error::Request)?;
-					let val = jsonrpc::from_value(json_val).map_err(Error::ParseError)?;
-					responses.push(val);
+					json_responses[pos] = json_val;
 				}
-				Ok(responses)
+				let responses: Result<_, _> =
+					json_responses.into_iter().map(|val| jsonrpc::from_value(val).map_err(Error::ParseError)).collect();
+				Ok(responses?)
 			}
 		}
 	}

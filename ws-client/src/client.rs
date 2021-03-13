@@ -38,7 +38,7 @@ use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
 	client::{BatchMessage, FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
 	error::Error,
-	jsonrpc::{self, JsonValue, SubscriptionId},
+	jsonrpc::{self, SubscriptionId},
 	traits::{Client, SubscriptionClient},
 };
 use std::{borrow::Cow, convert::TryInto};
@@ -421,8 +421,8 @@ async fn background_task(
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Batch(batch))), _)) => {
 				let mut err = None;
-				let mut ids = BTreeSet::new();
-				let mut responses: Vec<_> = Vec::new();
+				let mut digest = BTreeSet::new();
+				let mut rps_unordered: Vec<_> = Vec::new();
 
 				for rp in batch {
 					let id = match rp.id().as_number().copied() {
@@ -440,18 +440,30 @@ async fn background_task(
 							break;
 						}
 					};
-					ids.insert(id);
-					responses.push(rp);
+					digest.insert(id);
+					rps_unordered.push((id, rp));
 				}
 
-				let send_back = match manager.complete_pending_batch(ids) {
-					Some(Some(send_back)) => send_back,
+				let (batch_ordered, send_back) = match manager.complete_pending_batch(digest) {
+					Some((batch, send_back)) => (batch, send_back),
 					_ => continue,
 				};
 
 				let _ = match err {
 					Some(err) => send_back.send(Err(err)),
-					None => send_back.send(Ok(responses)),
+					None => {
+						let mut ordered_responses = Vec::new();
+
+						for id in batch_ordered {
+							let pos = match rps_unordered.iter().position(|(i, _)| *i == id) {
+								Some(pos) => pos,
+								None => unreachable!("all requestIDs should be ok checked above"),
+							};
+							let (_, rp) = rps_unordered[pos].clone();
+							ordered_responses.push(rp);
+						}
+						send_back.send(Ok(ordered_responses))
+					}
 				};
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
