@@ -1,7 +1,7 @@
 use crate::transport::HttpTransportClient;
 use async_trait::async_trait;
 use jsonrpc::DeserializeOwned;
-use jsonrpsee_types::{error::Error, http::HttpConfig, jsonrpc, jsonrpc::JsonValue, traits::Client};
+use jsonrpsee_types::{error::Error, http::HttpConfig, jsonrpc, traits::Client};
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -67,7 +67,7 @@ impl HttpClient {
 			}
 			jsonrpc::Response::Batch(rps) => {
 				// NOTE: `JsonValue` is a placeholder and will be replaced in the loop below.
-				let mut json_responses = vec![JsonValue::Number(0.into()); ids.len()];
+				let mut json_responses = vec![jsonrpc::JsonValue::Number(0.into()); ids.len()];
 				for rp in rps {
 					let id = match rp.id().as_number() {
 						Some(n) => *n,
@@ -78,7 +78,7 @@ impl HttpClient {
 						Some(id) => id,
 						None => return Err(Error::InvalidRequestId),
 					};
-					let json_val: JsonValue = rp.try_into().map_err(Error::Request)?;
+					let json_val: jsonrpc::JsonValue = rp.try_into().map_err(Error::Request)?;
 					json_responses[pos] = json_val;
 				}
 				let responses: Result<_, _> =

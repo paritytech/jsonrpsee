@@ -36,8 +36,6 @@ extern crate hyper13 as hyper;
 #[cfg(all(feature = "tokio02", not(feature = "tokio1")))]
 extern crate hyper13_rustls as hyper_rustls;
 
-extern crate alloc;
-
 mod client;
 mod transport;
 

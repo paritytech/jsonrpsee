@@ -434,8 +434,8 @@ async fn background_task(
 					let rp: Result<JsonValue, Error> = rp.try_into().map_err(Error::Request);
 					let rp = match rp {
 						Ok(rp) => rp,
-						Err(e) => {
-							let _ = front_error.send(Error::InvalidRequestId);
+						Err(err) => {
+							let _ = front_error.send(err);
 							return;
 						}
 					};
