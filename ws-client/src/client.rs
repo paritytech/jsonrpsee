@@ -420,7 +420,6 @@ async fn background_task(
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Batch(batch))), _)) => {
-				let mut err = None;
 				let mut digest = BTreeSet::new();
 				let mut rps_unordered: Vec<_> = Vec::new();
 
@@ -428,16 +427,16 @@ async fn background_task(
 					let id = match rp.id().as_number().copied() {
 						Some(id) => id,
 						None => {
-							err = Some(Error::InvalidRequestId);
-							break;
+							let _ = front_error.send(Error::InvalidRequestId);
+							return;
 						}
 					};
 					let rp: Result<JsonValue, Error> = rp.try_into().map_err(Error::Request);
 					let rp = match rp {
 						Ok(rp) => rp,
 						Err(e) => {
-							err = Some(e);
-							break;
+							let _ = front_error.send(Error::InvalidRequestId);
+							return;
 						}
 					};
 					digest.insert(id);
@@ -446,25 +445,24 @@ async fn background_task(
 
 				let (batch_ordered, send_back) = match manager.complete_pending_batch(digest) {
 					Some((batch, send_back)) => (batch, send_back),
-					_ => continue,
-				};
-
-				let _ = match err {
-					Some(err) => send_back.send(Err(err)),
 					None => {
-						let mut ordered_responses = Vec::new();
-
-						for id in batch_ordered {
-							let pos = match rps_unordered.iter().position(|(i, _)| *i == id) {
-								Some(pos) => pos,
-								None => unreachable!("all requestIDs should be ok checked above"),
-							};
-							let (_, rp) = rps_unordered[pos].clone();
-							ordered_responses.push(rp);
-						}
-						send_back.send(Ok(ordered_responses))
+						log::warn!("Received unknown batch response");
+						continue;
 					}
 				};
+
+				let mut ordered_responses = Vec::new();
+				for id in batch_ordered {
+					// NOTE(niklasad1): O(n)
+					let pos = match rps_unordered.iter().position(|(i, _)| *i == id) {
+						Some(pos) => pos,
+						None => unreachable!("All request ID's valid checked by RequestManager above; qed"),
+					};
+					// Dummy value should never be.
+					let (_, rp) = std::mem::replace(&mut rps_unordered[pos], (0, JsonValue::Number(0.into())));
+					ordered_responses.push(rp);
+				}
+				let _ = send_back.send(Ok(ordered_responses));
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
 				let sub_id = notif.params.subscription;

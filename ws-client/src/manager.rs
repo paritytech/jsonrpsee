@@ -56,7 +56,7 @@ pub struct RequestManager {
 	subscriptions: HashMap<SubscriptionId, RequestId>,
 	/// Pending batch requests
 	// NOTE: BTreeSet to get sorted order of requestIDs.
-	batches: FnvHashMap<BTreeSet<RequestId>, (Vec<RequestId>, PendingBatchOneshot)>,
+	batches: HashMap<BTreeSet<RequestId>, (Vec<RequestId>, PendingBatchOneshot)>,
 }
 
 impl RequestManager {
@@ -66,7 +66,7 @@ impl RequestManager {
 			free_slots: (0..slot_capacity as u64).collect(),
 			requests: FnvHashMap::default(),
 			subscriptions: HashMap::new(),
-			batches: FnvHashMap::default(),
+			batches: HashMap::default(),
 		}
 	}
 
@@ -186,7 +186,7 @@ impl RequestManager {
 			Entry::Occupied(request) => {
 				let (_digest, (batch, send_back)) = request.remove_entry();
 				for req_id in &batch {
-					let _ = self.complete_pending_call(*req_id);
+					self.complete_pending_call(*req_id).expect("Valid batch all calls must be registered; qed");
 				}
 				Some((batch, send_back))
 			}

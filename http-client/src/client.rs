@@ -66,14 +66,14 @@ impl HttpClient {
 				Err(Error::Custom("Server replied with notification to with a batch request".to_string()))
 			}
 			jsonrpc::Response::Batch(rps) => {
-				// TODO: placeholder maybe better with Option
+				// NOTE: `JsonValue` is a placeholder and will be replaced in the loop below.
 				let mut json_responses = vec![JsonValue::Number(0.into()); ids.len()];
 				for rp in rps {
 					let id = match rp.id().as_number() {
 						Some(n) => *n,
 						_ => return Err(Error::InvalidRequestId),
 					};
-					// NOTE(niklasad1): O(n), meeh
+					// NOTE(niklasad1): O(n)
 					let pos = match ids.iter().position(|i| i == &id) {
 						Some(id) => id,
 						None => return Err(Error::InvalidRequestId),
@@ -85,13 +85,6 @@ impl HttpClient {
 					json_responses.into_iter().map(|val| jsonrpc::from_value(val).map_err(Error::ParseError)).collect();
 				Ok(responses?)
 			}
-		}
-	}
-
-	fn process_response(response: jsonrpc::Output) -> Result<(JsonValue, u64), Error> {
-		match response.id().as_number().copied() {
-			Some(n) => Ok((response.try_into().map_err(Error::Request)?, n)),
-			_ => Err(Error::InvalidRequestId),
 		}
 	}
 }
@@ -135,14 +128,10 @@ impl Client for HttpClient {
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		let json_value = match response {
-			jsonrpc::Response::Single(rp) => {
-				let (val, received_id) = Self::process_response(rp)?;
-				if id == received_id {
-					Ok(val)
-				} else {
-					Err(Error::InvalidRequestId)
-				}
-			}
+			jsonrpc::Response::Single(response) => match response.id() {
+				jsonrpc::Id::Num(n) if n == &id => response.try_into().map_err(Error::Request),
+				_ => Err(Error::InvalidRequestId),
+			},
 			// Server should not send batch response to a single request.
 			jsonrpc::Response::Batch(_rps) => {
 				Err(Error::Custom("Server replied with batch response to a single request".to_string()))
