@@ -40,6 +40,12 @@ impl Sender {
 		let mut calls = Vec::with_capacity(batch.requests.len());
 		let mut ids = Vec::with_capacity(batch.requests.len());
 
+		fn garbage_collect_request_ids(ids: &[u64], request_manager: &mut RequestManager) {
+			for id in ids {
+				request_manager.reclaim_request_id(*id);
+			}
+		}
+
 		for (method, params) in batch.requests {
 			let id = request_manager.next_request_id()?;
 			ids.push(id);
@@ -51,20 +57,19 @@ impl Sender {
 			}));
 		}
 
+		if let Err(send_back) = request_manager.insert_pending_batch(ids.clone(), batch.send_back) {
+			let _ = send_back.send(Err(Error::InvalidRequestId));
+			garbage_collect_request_ids(&ids, request_manager);
+			return Err(Error::InvalidRequestId);
+		}
+
 		let res =
 			self.transport.send_request(Request::Batch(calls)).await.map_err(|e| Error::TransportError(Box::new(e)));
 
 		match res {
-			Ok(_) => {
-				request_manager
-					.insert_pending_batch(ids.clone(), batch.send_back)
-					.expect("ID valid checked above; qed");
-				Ok(())
-			}
+			Ok(_) => Ok(()),
 			Err(e) => {
-				for id in ids {
-					request_manager.reclaim_request_id(id);
-				}
+				garbage_collect_request_ids(&ids, request_manager);
 				Err(e)
 			}
 		}
@@ -91,7 +96,7 @@ impl Sender {
 			jsonrpc: jsonrpc::Version::V2,
 			method: request.method,
 			params: request.params,
-			id: jsonrpc::Id::Num(id as u64),
+			id: jsonrpc::Id::Num(id),
 		}));
 		match self.transport.send_request(req).await {
 			Ok(_) => {

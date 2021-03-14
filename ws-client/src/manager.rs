@@ -105,11 +105,17 @@ impl RequestManager {
 		send_back: PendingBatchOneshot,
 	) -> Result<(), PendingBatchOneshot> {
 		for id in &batch {
-			self.insert_pending_call(*id, None).expect("valid IDs; qed");
+			if self.insert_pending_call(*id, None).is_err() {
+				return Err(send_back);
+			}
 		}
 		let digest = batch.iter().cloned().collect();
-		self.batches.insert(digest, (batch, send_back));
-		Ok(())
+		if let Entry::Vacant(v) = self.batches.entry(digest) {
+			v.insert((batch, send_back));
+			Ok(())
+		} else {
+			Err(send_back)
+		}
 	}
 	/// Tries to insert a new pending subscription.
 	///
