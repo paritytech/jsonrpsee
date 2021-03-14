@@ -197,19 +197,20 @@ impl WsClient {
 		let requests: Vec<(String, jsonrpc::Params)> =
 			requests.into_iter().map(|(r, p)| (r.into(), p.into())).collect();
 		log::trace!("[frontend]: send batch request: {:?}", requests);
-		self.to_back
+		if self
+			.to_back
 			.clone()
 			.send(FrontToBack::Batch(BatchMessage { requests, send_back: send_back_tx }))
 			.await
-			.map_err(Error::Internal)?;
+			.is_err()
+		{
+			return Err(self.read_error_from_backend().await);
+		}
 
 		let json_values = match send_back_rx.await {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
-			Err(_) => {
-				let err = io::Error::new(io::ErrorKind::Other, "background task closed");
-				return Err(Error::TransportError(Box::new(err)));
-			}
+			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
 		let values: Result<_, _> =
