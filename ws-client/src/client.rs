@@ -175,7 +175,7 @@ impl WsClient {
 				max_concurrent_requests,
 			)
 			.await;
-			has_shutdown_sender.swap(true, Ordering::Relaxed);
+			has_shutdown_sender.store(true, Ordering::Relaxed);
 		});
 		Ok(Self { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)), has_shutdown })
 	}
