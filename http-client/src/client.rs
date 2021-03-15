@@ -49,7 +49,7 @@ impl Client for HttpClient {
 		P: Into<jsonrpc::Params> + Send,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
-		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
+		let id = self.request_id.fetch_add(1, Ordering::Relaxed);
 		let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 			jsonrpc: jsonrpc::Version::V2,
 			method: method.into(),
