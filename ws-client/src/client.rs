@@ -42,6 +42,7 @@ use jsonrpsee_types::{
 	traits::{Client, SubscriptionClient},
 };
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
 
@@ -80,15 +81,17 @@ impl ErrorFromBack {
 /// It's possible that the background thread is terminated and this makes the client unusable.
 /// An error [`Error::RestartNeeded`] is returned if this happens and users has to manually
 /// handle dropping and restarting a new client.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct WsClient {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
-	error: Mutex<ErrorFromBack>,
+	error: Arc<Mutex<ErrorFromBack>>,
 	/// Request timeout
 	request_timeout: Option<Duration>,
+	/// Shutdown receiver
+	shutdown_receiver: async_std::channel::Receiver<()>,
 }
 
 /// Configuration.
@@ -157,6 +160,8 @@ impl WsClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
+		let (shutdown_sender, shutdown_receiver) = async_std::channel::unbounded::<()>();
+
 		async_std::task::spawn(async move {
 			background_task(
 				sender,
@@ -167,8 +172,19 @@ impl WsClient {
 				max_concurrent_requests,
 			)
 			.await;
+			shutdown_sender.close();
 		});
-		Ok(Self { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)) })
+		Ok(Self {
+			to_back,
+			request_timeout,
+			error: Arc::new(Mutex::new(ErrorFromBack::Unread(err_rx))),
+			shutdown_receiver,
+		})
+	}
+
+	/// True if the backend has not shutdown
+	pub async fn is_connected(&self) -> bool {
+		!self.shutdown_receiver.is_closed()
 	}
 
 	// Reads the error message from the backend thread.
