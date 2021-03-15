@@ -180,8 +180,8 @@ impl WsClient {
 		Ok(Self { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)), has_shutdown })
 	}
 
-	/// True if the backend has not shutdown
-	pub async fn is_connected(&self) -> bool {
+	/// Checks if the client is connected to the target.
+	pub fn is_connected(&self) -> bool {
 		!self.has_shutdown.load(Ordering::Relaxed)
 	}
 
