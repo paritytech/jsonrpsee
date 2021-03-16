@@ -171,6 +171,11 @@ impl WsClient {
 		Ok(Self { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)) })
 	}
 
+	/// Checks if the client is connected to the target.
+	pub fn is_connected(&self) -> bool {
+		!self.to_back.is_closed()
+	}
+
 	// Reads the error message from the backend thread.
 	async fn read_error_from_backend(&self) -> Error {
 		let mut err_lock = self.error.lock().await;
