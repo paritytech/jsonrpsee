@@ -350,17 +350,17 @@ async fn background_task(
 				log::trace!("Closing subscription: {:?}", sub_id);
 				// NOTE: The subscription may have been closed earlier if
 				// the channel was full or disconnected.
-				if let Some(unsub_request) = manager
+				if let Some(unsub) = manager
 					.get_request_id_by_subscription_id(&sub_id)
 					.and_then(|req_id| build_unsubscribe_message(&mut manager, req_id, sub_id))
 				{
-					send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
+					stop_subscription(&mut sender, &mut manager, unsub).await;
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Single(response))), _)) => {
 				match process_response(&mut manager, response, max_notifs_per_subscription) {
-					Ok(Some(unsub_request)) => {
-						send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
+					Ok(Some(unsub)) => {
+						stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
 					Ok(None) => (),
 					Err(err) => {
@@ -388,7 +388,7 @@ async fn background_task(
 							log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
 							let unsub_req = build_unsubscribe_message(&mut manager, request_id, sub_id)
 								.expect("request ID and subscription ID valid checked above; qed");
-							send_unsubscribe_request(&mut sender, &mut manager, unsub_req).await;
+							stop_subscription(&mut sender, &mut manager, unsub_req).await;
 						}
 					}
 					None => {
@@ -458,10 +458,7 @@ fn process_response(
 			if manager.insert_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method).is_ok() {
 				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
 					Ok(_) => Ok(None),
-					Err(_) => {
-						let request = build_unsubscribe_message(manager, response_id, sub_id);
-						Ok(request)
-					}
+					Err(_) => Ok(build_unsubscribe_message(manager, response_id, sub_id)),
 				}
 			} else {
 				let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
@@ -472,16 +469,19 @@ fn process_response(
 	}
 }
 
-async fn send_unsubscribe_request(
+/// Sends an unsubscribe to request to server to indicate
+/// that the client is not interested in the subscription anymore.
+async fn stop_subscription(
 	sender: &mut jsonrpc_transport::Sender,
 	manager: &mut RequestManager,
-	request: RequestMessage,
+	unsub: RequestMessage,
 ) {
-	if let Err(e) = sender.start_request(request, manager).await {
+	if let Err(e) = sender.start_request(unsub, manager).await {
 		log::error!("Send unsubscribe request failed: {:?}", e);
 	}
 }
 
+/// Builds an unsubscription message, semantically the same as an ordinary request.
 fn build_unsubscribe_message(
 	manager: &mut RequestManager,
 	req_id: u64,
