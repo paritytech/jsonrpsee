@@ -173,15 +173,15 @@ impl RequestManager {
 		&mut self,
 		request_id: RequestId,
 		subscription_id: SubscriptionId,
-	) -> Option<(SubscriptionSink, UnsubscribeMethod)> {
+	) -> Option<(SubscriptionSink, UnsubscribeMethod, SubscriptionId)> {
 		match (self.requests.entry(request_id), self.subscriptions.entry(subscription_id)) {
 			(Entry::Occupied(request), Entry::Occupied(subscription))
 				if matches!(request.get(), Kind::Subscription(_)) =>
 			{
 				let (_req_id, kind) = request.remove_entry();
-				let _sub_id = subscription.remove_entry();
-				if let Kind::Subscription(send_back) = kind {
-					Some(send_back)
+				let (sub_id, _req_id) = subscription.remove_entry();
+				if let Kind::Subscription((send_back, unsub)) = kind {
+					Some((send_back, unsub, sub_id))
 				} else {
 					unreachable!("Subscription is Subscription checked above; qed");
 				}
