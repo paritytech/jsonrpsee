@@ -42,8 +42,6 @@ use jsonrpsee_types::{
 	traits::{Client, SubscriptionClient},
 };
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
 
@@ -91,8 +89,6 @@ pub struct WsClient {
 	error: Mutex<ErrorFromBack>,
 	/// Request timeout
 	request_timeout: Option<Duration>,
-	/// True if the background thread has shutdown
-	has_shutdown: Arc<AtomicBool>,
 }
 
 /// Configuration.
@@ -161,10 +157,6 @@ impl WsClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let has_shutdown = Arc::new(AtomicBool::new(false));
-		// clone this to move into background task
-		let has_shutdown_sender = has_shutdown.clone();
-
 		async_std::task::spawn(async move {
 			background_task(
 				sender,
@@ -175,14 +167,13 @@ impl WsClient {
 				max_concurrent_requests,
 			)
 			.await;
-			has_shutdown_sender.store(true, Ordering::Relaxed);
 		});
-		Ok(Self { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)), has_shutdown })
+		Ok(Self { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)) })
 	}
 
 	/// Checks if the client is connected to the target.
 	pub fn is_connected(&self) -> bool {
-		!self.has_shutdown.load(Ordering::Relaxed)
+		!self.to_back.is_closed()
 	}
 
 	// Reads the error message from the backend thread.
