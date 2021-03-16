@@ -352,7 +352,7 @@ async fn background_task(
 				// the channel was full or disconnected.
 				if let Some(unsub_request) = manager
 					.get_request_id_by_subscription_id(&sub_id)
-					.and_then(|req_id| build_unsubscribe_request(&mut manager, req_id, sub_id))
+					.and_then(|req_id| build_unsubscribe_message(&mut manager, req_id, sub_id))
 				{
 					send_unsubscribe_request(&mut sender, &mut manager, unsub_request).await;
 				}
@@ -386,7 +386,7 @@ async fn background_task(
 					Some(send_back_sink) => {
 						if let Err(e) = send_back_sink.try_send(notif.params.result) {
 							log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
-							let unsub_req = build_unsubscribe_request(&mut manager, request_id, sub_id)
+							let unsub_req = build_unsubscribe_message(&mut manager, request_id, sub_id)
 								.expect("request ID and subscription ID valid checked above; qed");
 							send_unsubscribe_request(&mut sender, &mut manager, unsub_req).await;
 						}
@@ -446,7 +446,7 @@ fn process_response(
 				}
 			};
 
-			let sub_id: SubscriptionId = match jsonrpc::from_value(json_sub_id.clone()) {
+			let sub_id: SubscriptionId = match jsonrpc::from_value(json_sub_id) {
 				Ok(sub_id) => sub_id,
 				Err(_) => {
 					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
@@ -459,7 +459,7 @@ fn process_response(
 				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
 					Ok(_) => Ok(None),
 					Err(_) => {
-						let request = build_unsubscribe_request(manager, response_id, sub_id);
+						let request = build_unsubscribe_message(manager, response_id, sub_id);
 						Ok(request)
 					}
 				}
@@ -482,12 +482,12 @@ async fn send_unsubscribe_request(
 	}
 }
 
-fn build_unsubscribe_request(
+fn build_unsubscribe_message(
 	manager: &mut RequestManager,
 	req_id: u64,
 	sub_id: SubscriptionId,
 ) -> Option<RequestMessage> {
-	let (_, unsub) = manager.remove_subscription(req_id, sub_id.clone())?;
+	let (_, unsub, sub_id) = manager.remove_subscription(req_id, sub_id)?;
 	manager.reclaim_request_id(req_id);
 	let json_sub_id = jsonrpc::to_value(sub_id).expect("SubscriptionId to JSON is infallible; qed");
 	Some(RequestMessage { method: unsub, params: jsonrpc::Params::Array(vec![json_sub_id]), send_back: None })
