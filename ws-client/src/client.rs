@@ -43,7 +43,7 @@ use jsonrpsee_types::{
 };
 use std::{borrow::Cow, convert::TryInto};
 use std::{collections::BTreeSet, time::Duration};
-use std::{io, marker::PhantomData};
+use std::marker::PhantomData;
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -449,10 +449,11 @@ async fn background_task(
 					// NOTE(niklasad1): O(n)
 					let pos = match rps_unordered.iter().position(|(i, _)| *i == id) {
 						Some(pos) => pos,
-						None => unreachable!("All request ID's valid checked by RequestManager above; qed"),
+						None => unreachable!("All request IDs valid checked by RequestManager above; qed"),
 					};
-					// Dummy value should never be.
-					let (_, rp) = std::mem::replace(&mut rps_unordered[pos], (0, JsonValue::Number(0.into())));
+					// NOTE(niklasad1): doesn't preserve order but doesn't matter because
+					// the responses might be unordered.
+					let (_, rp) = rps_unordered.swap_remove(pos);
 					ordered_responses.push(rp);
 				}
 				let _ = send_back.send(Ok(ordered_responses));
