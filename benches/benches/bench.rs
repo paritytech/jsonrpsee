@@ -1,4 +1,3 @@
-use async_std::task::block_on;
 use criterion::*;
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
 use jsonrpsee_types::{jsonrpc::Params, traits::Client};
@@ -23,7 +22,7 @@ pub fn websocket_requests(crit: &mut Criterion) {
 	let rt = TokioRuntime::new().unwrap();
 	let url = rt.block_on(helpers::ws_server());
 	let config = WsConfig::with_url(&url);
-	let client = Arc::new(block_on(WsClient::new(config)).unwrap());
+	let client = Arc::new(rt.block_on(WsClient::new(config)).unwrap());
 	run_round_trip(&rt, crit, client.clone(), "ws_round_trip");
 	run_concurrent_round_trip(&rt, crit, client.clone(), "ws_concurrent_round_trip");
 }
