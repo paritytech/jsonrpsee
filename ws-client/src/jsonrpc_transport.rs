@@ -46,8 +46,8 @@ impl Sender {
 			ids.push(batch_id);
 			calls.push(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 				jsonrpc: jsonrpc::Version::V2,
-				method: method.into(),
-				params: params.into(),
+				method,
+				params,
 				id: jsonrpc::Id::Num(batch_id),
 			}));
 		}

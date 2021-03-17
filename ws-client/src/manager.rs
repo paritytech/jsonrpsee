@@ -134,7 +134,7 @@ impl RequestManager {
 		for (idx, batch_id) in batch.iter().enumerate() {
 			order.insert(*batch_id, idx);
 		}
-		batch.sort();
+		batch.sort_unstable();
 		if let Entry::Vacant(v) = self.batches.entry(batch) {
 			v.insert(BatchState { order, request_id, send_back });
 			Ok(())

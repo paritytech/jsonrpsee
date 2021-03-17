@@ -436,7 +436,7 @@ async fn background_task(
 					rps_unordered.push((id, rp));
 				}
 
-				digest.sort();
+				digest.sort_unstable();
 				let batch_state = match manager.complete_pending_batch(digest) {
 					Some(state) => state,
 					None => {
