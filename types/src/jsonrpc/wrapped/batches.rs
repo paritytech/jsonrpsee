@@ -190,7 +190,7 @@ impl<T> BatchesState<T> {
 	}
 
 	/// Returns a list of all user data associated to active batches.
-	pub fn batches<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> + 'a {
+	pub fn batches(&mut self) -> impl Iterator<Item = &mut T> {
 		self.batches.iter_mut().filter_map(|entry| entry.as_mut().map(|(_, user_param)| user_param))
 	}
 
@@ -221,12 +221,7 @@ where
 	T: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.debug_list()
-			.entries(self.batches.iter().enumerate().filter_map(|(batch_id, value)| match value {
-				Some(value) => Some((batch_id, value)),
-				None => None,
-			}))
-			.finish()
+		f.write_fmt(format_args!("Batches: {:?} Vacant: {:?}", self.batches, self.vacant))
 	}
 }
 

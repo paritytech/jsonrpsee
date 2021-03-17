@@ -133,7 +133,7 @@ impl Pattern for Host {
 	}
 }
 
-impl ::std::ops::Deref for Host {
+impl std::ops::Deref for Host {
 	type Target = str;
 	fn deref(&self) -> &Self::Target {
 		&self.as_string
@@ -147,16 +147,6 @@ pub enum DomainsValidation<T> {
 	AllowOnly(Vec<T>),
 	/// Disable domains validation completely.
 	Disabled,
-}
-
-impl<T> Into<Option<Vec<T>>> for DomainsValidation<T> {
-	fn into(self) -> Option<Vec<T>> {
-		use self::DomainsValidation::*;
-		match self {
-			AllowOnly(list) => Some(list),
-			Disabled => None,
-		}
-	}
 }
 
 impl<T> From<Option<Vec<T>>> for DomainsValidation<T> {

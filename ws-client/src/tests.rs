@@ -152,6 +152,20 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
+#[tokio::test]
+async fn is_connected_works() {
+	let server = WebSocketTestServer::with_hardcoded_response(
+		"127.0.0.1:0".parse().unwrap(),
+		ok_response(jsonrpc::JsonValue::String("foo".into()), Id::Num(99_u64)),
+	)
+	.await;
+	let uri = to_ws_uri_string(server.local_addr());
+	let client = WsClient::new(WsConfig::with_url(&uri)).await.unwrap();
+	assert!(client.is_connected());
+	client.request::<String, _, _>("say_hello", jsonrpc::Params::None).await.unwrap_err();
+	assert!(!client.is_connected())
+}
+
 async fn run_batch_request_with_response(batch: Vec<(String, Params)>, response: String) -> Result<Vec<String>, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response).await;
 	let uri = to_ws_uri_string(server.local_addr());

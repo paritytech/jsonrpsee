@@ -49,7 +49,7 @@ pub async fn read_response_to_body(
 	let mut received_data = Vec::with_capacity(body_size as usize);
 
 	while let Some(chunk) = body.next().await {
-		let chunk = chunk.map_err(|e| GenericTransportError::Inner(e))?;
+		let chunk = chunk.map_err(GenericTransportError::Inner)?;
 		let body_length = chunk.len() + received_data.len();
 		if body_length > config.max_request_body_size as usize {
 			return Err(GenericTransportError::TooLarge);
@@ -66,7 +66,7 @@ pub async fn read_response_to_body(
 fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u32> {
 	let length = read_header_value(headers, "content-length")?;
 	// HTTP Content-Length indicates number of bytes in decimal.
-	u32::from_str_radix(length, 10).ok()
+	length.parse::<u32>().ok()
 }
 
 /// Returns a string value when there is exactly one value for the given header.

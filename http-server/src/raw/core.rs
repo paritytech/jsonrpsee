@@ -75,9 +75,6 @@ pub enum RawServerEvent<'a> {
 pub struct RawServerRequest<'a> {
 	/// Reference to the request within `self.batches`.
 	inner: batches::BatchesRequest<'a, Option<RequestId>>,
-
-	/// Reference to the corresponding field in `RawServer`.
-	raw: &'a mut HttpTransportServer,
 }
 
 impl RawServer {
@@ -135,7 +132,7 @@ impl RawServer {
 	/// Returns `None` if the request ID is invalid or if the request has already been answered in
 	/// the past.
 	pub fn request_by_id<'a>(&'a mut self, id: &RawServerRequestId) -> Option<RawServerRequest<'a>> {
-		Some(RawServerRequest { inner: self.batches.request_by_id(id.inner)?, raw: &mut self.raw })
+		Some(RawServerRequest { inner: self.batches.request_by_id(id.inner)? })
 	}
 }
 

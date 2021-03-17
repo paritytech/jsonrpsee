@@ -32,11 +32,8 @@ async fn http_server(tx: Sender<SocketAddr>) {
 
 async fn ws_server(tx: Sender<SocketAddr>) {
 	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
-
 	tx.send(server.local_addr().unwrap()).unwrap();
-
 	server.register_method("say_hello", |_| Ok("lo")).unwrap();
-
 	server.start().await;
 }
 
@@ -50,20 +47,21 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 	c.bench_function("synchronous_http_round_trip", |b| {
 		b.iter(|| {
 			rt.block_on(async {
-				let _: JsonValue = black_box(client.request("say_hello", Params::None).await.unwrap());
+				black_box(client.request::<String, _, _>("say_hello", Params::None).await.unwrap());
 			})
 		})
 	});
 
-	c.bench_function_over_inputs(
-		"concurrent_http_round_trip",
-		move |b: &mut Bencher, size: &usize| {
+	let mut group = c.benchmark_group("concurrent_http_round_trip");
+
+	for num_concurrent_tasks in concurrent_tasks() {
+		group.bench_function(format!("{}", num_concurrent_tasks), |b| {
 			b.iter(|| {
 				let mut tasks = Vec::new();
-				for _ in 0..*size {
+				for _ in 0..num_concurrent_tasks {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
-						let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
+						let _ = black_box(client_rc.request::<String, _, _>("say_hello", Params::None)).await;
 					});
 					tasks.push(task);
 				}
@@ -71,9 +69,9 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 					rt.block_on(task).unwrap();
 				}
 			})
-		},
-		concurrent_tasks(),
-	);
+		});
+	}
+	group.finish();
 }
 
 pub fn websocket_requests(c: &mut criterion::Criterion) {
@@ -88,20 +86,21 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 	c.bench_function("synchronous_websocket_round_trip", |b| {
 		b.iter(|| {
 			rt.block_on(async {
-				let _: JsonValue = black_box(client.request("say_hello", Params::None).await.unwrap());
+				black_box(client.request::<String, _, _>("say_hello", Params::None).await.unwrap());
 			})
 		})
 	});
 
-	c.bench_function_over_inputs(
-		"concurrent_websocket_round_trip",
-		move |b: &mut Bencher, size: &usize| {
+	let mut group = c.benchmark_group("concurrent_websocket_round_trip");
+
+	for num_concurrent_tasks in concurrent_tasks() {
+		group.bench_function(format!("{}", num_concurrent_tasks), |b| {
 			b.iter(|| {
 				let mut tasks = Vec::new();
-				for _ in 0..*size {
+				for _ in 0..num_concurrent_tasks {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
-						let _: Result<JsonValue, _> = black_box(client_rc.request("say_hello", Params::None)).await;
+						let _ = black_box(client_rc.request::<String, _, _>("say_hello", Params::None)).await;
 					});
 					tasks.push(task);
 				}
@@ -109,8 +108,7 @@ pub fn websocket_requests(c: &mut criterion::Criterion) {
 					rt.block_on(task).unwrap();
 				}
 			})
-		},
-		// TODO(niklasad1): This deadlocks when more than 8 tasks are spawned.
-		concurrent_tasks(),
-	);
+		});
+	}
+	group.finish();
 }

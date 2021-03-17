@@ -148,7 +148,7 @@ fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
 	let json = match serde_json::to_string(&JsonRpcError {
 		jsonrpc: TwoPointZero,
 		error: JsonRpcErrorParams { code, message },
-		id: id,
+		id,
 	}) {
 		Ok(json) => json,
 		Err(err) => {
