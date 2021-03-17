@@ -1,5 +1,6 @@
 use crate::transport::HttpTransportClient;
 use async_trait::async_trait;
+use fnv::FnvHashMap;
 use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{error::Error, http::HttpConfig, jsonrpc, traits::Client};
 use std::convert::TryInto;
@@ -88,8 +89,9 @@ impl Client for HttpClient {
 		let mut calls = Vec::with_capacity(batch.len());
 		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
 		let mut ordered_requests = Vec::with_capacity(batch.len());
+		let mut request_set = FnvHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
-		for (method, params) in batch.into_iter() {
+		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
 			calls.push(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 				jsonrpc: jsonrpc::Version::V2,
@@ -98,6 +100,7 @@ impl Client for HttpClient {
 				id: jsonrpc::Id::Num(id),
 			}));
 			ordered_requests.push(id);
+			request_set.insert(id, pos);
 		}
 
 		let batch_request = jsonrpc::Request::Batch(calls);
@@ -122,9 +125,8 @@ impl Client for HttpClient {
 						Some(n) => *n,
 						_ => return Err(Error::InvalidRequestId),
 					};
-					// NOTE(niklasad1): O(n)
-					let pos = match ordered_requests.iter().position(|i| i == &id) {
-						Some(id) => id,
+					let pos = match request_set.get(&id) {
+						Some(pos) => *pos,
 						None => return Err(Error::InvalidRequestId),
 					};
 					let json_val: jsonrpc::JsonValue = rp.try_into().map_err(Error::Request)?;

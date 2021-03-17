@@ -21,6 +21,7 @@ serde_json = "1.0"
 thiserror = "1.0"
 unicase = "2.6"
 url = "2.2"
+fnv = "1"
 
 [features]
 default = ["tokio1"]
