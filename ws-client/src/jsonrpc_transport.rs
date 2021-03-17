@@ -37,31 +37,26 @@ impl Sender {
 		batch: BatchMessage,
 		request_manager: &mut RequestManager,
 	) -> Result<(), Error> {
+		let req_id = request_manager.next_request_id()?;
 		let mut calls = Vec::with_capacity(batch.requests.len());
 		let mut ids = Vec::with_capacity(batch.requests.len());
 
-		fn garbage_collect_request_ids(ids: &[u64], request_manager: &mut RequestManager) {
-			for id in ids {
-				request_manager.reclaim_request_id(*id);
-			}
-		}
-
 		for (method, params) in batch.requests {
-			let id = request_manager.next_request_id()?;
-			ids.push(id);
+			let batch_id = request_manager.next_batch_id();
+			ids.push(batch_id);
 			calls.push(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 				jsonrpc: jsonrpc::Version::V2,
 				method: method.into(),
 				params: params.into(),
-				id: jsonrpc::Id::Num(id),
+				id: jsonrpc::Id::Num(batch_id),
 			}));
 		}
 
-		if let Err(send_back) = request_manager.insert_pending_batch(ids.clone(), batch.send_back) {
+		if let Err(send_back) = request_manager.insert_pending_batch(ids, batch.send_back, req_id) {
+			request_manager.reclaim_request_id(req_id);
 			let _ = send_back.send(Err(Error::InvalidRequestId));
-			garbage_collect_request_ids(&ids, request_manager);
 			return Err(Error::InvalidRequestId);
-		}
+		};
 
 		let res =
 			self.transport.send_request(Request::Batch(calls)).await.map_err(|e| Error::TransportError(Box::new(e)));
@@ -69,7 +64,7 @@ impl Sender {
 		match res {
 			Ok(_) => Ok(()),
 			Err(e) => {
-				garbage_collect_request_ids(&ids, request_manager);
+				request_manager.reclaim_request_id(req_id);
 				Err(e)
 			}
 		}

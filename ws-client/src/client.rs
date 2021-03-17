@@ -42,8 +42,8 @@ use jsonrpsee_types::{
 	traits::{Client, SubscriptionClient},
 };
 use std::marker::PhantomData;
+use std::time::Duration;
 use std::{borrow::Cow, convert::TryInto};
-use std::{collections::BTreeSet, time::Duration};
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -412,8 +412,9 @@ async fn background_task(
 				}
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Batch(batch))), _)) => {
-				let mut digest = BTreeSet::new();
-				let mut rps_unordered: Vec<_> = Vec::new();
+				let mut digest = Vec::with_capacity(batch.len());
+				let mut ordered_responses = vec![JsonValue::Null; batch.len()];
+				let mut rps_unordered: Vec<_> = Vec::with_capacity(batch.len());
 
 				for rp in batch {
 					let id = match rp.id().as_number().copied() {
@@ -431,31 +432,29 @@ async fn background_task(
 							return;
 						}
 					};
-					digest.insert(id);
+					digest.push(id);
 					rps_unordered.push((id, rp));
 				}
 
-				let (batch_ordered, send_back) = match manager.complete_pending_batch(digest) {
-					Some((batch, send_back)) => (batch, send_back),
+				digest.sort();
+				let batch_state = match manager.complete_pending_batch(digest) {
+					Some(state) => state,
 					None => {
 						log::warn!("Received unknown batch response");
 						continue;
 					}
 				};
 
-				let mut ordered_responses = Vec::new();
-				for id in batch_ordered {
-					// NOTE(niklasad1): O(n)
-					let pos = match rps_unordered.iter().position(|(i, _)| *i == id) {
-						Some(pos) => pos,
-						None => unreachable!("All request IDs valid checked by RequestManager above; qed"),
-					};
-					// NOTE(niklasad1): doesn't preserve order but doesn't matter because
-					// the responses might be unordered.
-					let (_, rp) = rps_unordered.swap_remove(pos);
-					ordered_responses.push(rp);
+				for (id, rp) in rps_unordered {
+					let pos = batch_state
+						.order
+						.get(&id)
+						.copied()
+						.expect("All request IDs valid checked by RequestManager above; qed");
+					ordered_responses[pos] = rp;
 				}
-				let _ = send_back.send(Ok(ordered_responses));
+				manager.reclaim_request_id(batch_state.request_id);
+				let _ = batch_state.send_back.send(Ok(ordered_responses));
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
 				let sub_id = notif.params.subscription;
