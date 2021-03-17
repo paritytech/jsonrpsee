@@ -179,44 +179,6 @@ impl WsClient {
 		*err_lock = next_state;
 		err
 	}
-
-	/// Perform a batch request towards the server.
-	///
-	/// Returns `Ok` if all requests were answered successfully.
-	/// Returns `Error` if any of the requests fails.
-	//
-	// TODO(niklasad1): maybe simplify generic `requests`, it's quite unreadable.
-	pub async fn batch_request<'a, T>(
-		&self,
-		requests: impl IntoIterator<Item = (impl Into<String>, impl Into<jsonrpc::Params>)>,
-	) -> Result<Vec<T>, Error>
-	where
-		T: jsonrpc::DeserializeOwned,
-	{
-		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let requests: Vec<(String, jsonrpc::Params)> =
-			requests.into_iter().map(|(r, p)| (r.into(), p.into())).collect();
-		log::trace!("[frontend]: send batch request: {:?}", requests);
-		if self
-			.to_back
-			.clone()
-			.send(FrontToBack::Batch(BatchMessage { requests, send_back: send_back_tx }))
-			.await
-			.is_err()
-		{
-			return Err(self.read_error_from_backend().await);
-		}
-
-		let json_values = match send_back_rx.await {
-			Ok(Ok(v)) => v,
-			Ok(Err(err)) => return Err(err),
-			Err(_) => return Err(self.read_error_from_backend().await),
-		};
-
-		let values: Result<_, _> =
-			json_values.into_iter().map(|val| jsonrpc::from_value(val).map_err(Error::ParseError)).collect();
-		Ok(values?)
-	}
 }
 
 #[async_trait]
@@ -275,6 +237,36 @@ impl Client for WsClient {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
+	}
+
+	async fn batch_request<T, M, P>(&self, batch: Vec<(M, P)>) -> Result<Vec<T>, Error>
+	where
+		T: DeserializeOwned,
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+	{
+		let (send_back_tx, send_back_rx) = oneshot::channel();
+		let requests: Vec<(String, jsonrpc::Params)> = batch.into_iter().map(|(r, p)| (r.into(), p.into())).collect();
+		log::trace!("[frontend]: send batch request: {:?}", requests);
+		if self
+			.to_back
+			.clone()
+			.send(FrontToBack::Batch(BatchMessage { requests, send_back: send_back_tx }))
+			.await
+			.is_err()
+		{
+			return Err(self.read_error_from_backend().await);
+		}
+
+		let json_values = match send_back_rx.await {
+			Ok(Ok(v)) => v,
+			Ok(Err(err)) => return Err(err),
+			Err(_) => return Err(self.read_error_from_backend().await),
+		};
+
+		let values: Result<_, _> =
+			json_values.into_iter().map(|val| jsonrpc::from_value(val).map_err(Error::ParseError)).collect();
+		Ok(values?)
 	}
 }
 
