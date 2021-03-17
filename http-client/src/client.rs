@@ -129,7 +129,6 @@ impl Client for HttpClient {
 					};
 					let json_val: jsonrpc::JsonValue = rp.try_into().map_err(Error::Request)?;
 					let response = jsonrpc::from_value(json_val).map_err(Error::ParseError)?;
-					ordered_requests.swap_remove(pos);
 					responses[pos] = response;
 				}
 				Ok(responses)
