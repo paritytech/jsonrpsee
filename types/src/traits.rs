@@ -28,7 +28,7 @@ pub trait Client {
 	/// Returns `Error` if any of the requests in batch fails.
 	async fn batch_request<T, M, P>(&self, batch: Vec<(M, P)>) -> Result<Vec<T>, Error>
 	where
-		T: DeserializeOwned,
+		T: DeserializeOwned + Default + Clone,
 		M: Into<String> + Send,
 		P: Into<Params> + Send;
 }

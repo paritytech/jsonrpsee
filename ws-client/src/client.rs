@@ -41,9 +41,9 @@ use jsonrpsee_types::{
 	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::{Client, SubscriptionClient},
 };
+use std::marker::PhantomData;
 use std::{borrow::Cow, convert::TryInto};
 use std::{collections::BTreeSet, time::Duration};
-use std::marker::PhantomData;
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -246,7 +246,7 @@ impl Client for WsClient {
 
 	async fn batch_request<T, M, P>(&self, batch: Vec<(M, P)>) -> Result<Vec<T>, Error>
 	where
-		T: DeserializeOwned,
+		T: DeserializeOwned + Default + Clone,
 		M: Into<String> + Send,
 		P: Into<jsonrpc::Params> + Send,
 	{
