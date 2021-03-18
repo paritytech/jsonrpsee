@@ -1,4 +1,3 @@
-use crate::server::{RpcError, RpcParams};
 use beef::lean::Cow;
 use rustc_hash::FxHashMap;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
@@ -8,15 +7,15 @@ use serde_json::value::RawValue;
 use std::fmt;
 use tokio::sync::mpsc;
 
+pub mod error;
+pub mod traits;
+
 pub type ConnectionId = usize;
 pub type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
 pub type RpcId<'a> = Option<&'a RawValue>;
 pub type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
 pub type Methods = FxHashMap<&'static str, Method>;
-
-pub trait RpcMethod<R>: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static {}
-
-impl<R, T> RpcMethod<R> for T where T: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static {}
+pub use error::RpcError;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -110,5 +109,35 @@ impl Serialize for TwoPointZero {
 		S: Serializer,
 	{
 		serializer.serialize_str("2.0")
+	}
+}
+
+/// Parameters sent with the RPC request
+#[derive(Clone, Copy)]
+pub struct RpcParams<'a>(Option<&'a str>);
+
+impl<'a> RpcParams<'a> {
+	/// Create params
+	pub fn new(raw: Option<&'a str>) -> Self {
+		Self(raw)
+	}
+
+	/// Attempt to parse all parameters as array or map into type T
+	pub fn parse<T>(self) -> Result<T, RpcError>
+	where
+		T: Deserialize<'a>,
+	{
+		match self.0 {
+			None => Err(RpcError::InvalidParams),
+			Some(params) => serde_json::from_str(params).map_err(|_| RpcError::InvalidParams),
+		}
+	}
+
+	/// Attempt to parse only the first parameter from an array into type T
+	pub fn one<T>(self) -> Result<T, RpcError>
+	where
+		T: Deserialize<'a>,
+	{
+		self.parse::<[T; 1]>().map(|[res]| res)
 	}
 }
