@@ -2,7 +2,12 @@ use crate::transport::HttpTransportClient;
 use async_trait::async_trait;
 use fnv::FnvHashMap;
 use jsonrpc::DeserializeOwned;
-use jsonrpsee_types::{error::Error, http::HttpConfig, jsonrpc, traits::Client};
+use jsonrpsee_types::{
+	error::{Error, Mismatch},
+	http::HttpConfig,
+	jsonrpc,
+	traits::Client,
+};
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -37,7 +42,6 @@ impl Client for HttpClient {
 			method: method.into(),
 			params: params.into(),
 		}));
-
 		self.transport.send_notification(request).await.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
@@ -68,14 +72,14 @@ impl Client for HttpClient {
 				jsonrpc::Id::Num(n) if n == &id => response.try_into().map_err(Error::Request),
 				_ => Err(Error::InvalidRequestId),
 			},
-			// Server should not send batch response to a single request.
-			jsonrpc::Response::Batch(_rps) => {
-				Err(Error::Custom("Server replied with batch response to a single request".to_string()))
-			}
-			// Server should not reply to a Notification.
-			jsonrpc::Response::Notif(_notif) => {
-				Err(Error::Custom(format!("Server replied with notification response to request ID: {}", id)))
-			}
+			jsonrpc::Response::Batch(_rps) => Err(Error::InvalidResponse(Mismatch {
+				expected: "Single response".into(),
+				got: "Batch Response".into(),
+			})),
+			jsonrpc::Response::Notif(_notif) => Err(Error::InvalidResponse(Mismatch {
+				expected: "Single response".into(),
+				got: "Notification Response".into(),
+			})),
 		}?;
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
@@ -111,12 +115,14 @@ impl Client for HttpClient {
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		match response {
-			jsonrpc::Response::Single(_) => {
-				Err(Error::Custom("Server replied with single response to a batch request".to_string()))
-			}
-			jsonrpc::Response::Notif(_notif) => {
-				Err(Error::Custom("Server replied with notification to with a batch request".to_string()))
-			}
+			jsonrpc::Response::Single(_) => Err(Error::InvalidResponse(Mismatch {
+				expected: "Batch response".into(),
+				got: "Single Response".into(),
+			})),
+			jsonrpc::Response::Notif(_notif) => Err(Error::InvalidResponse(Mismatch {
+				expected: "Batch response".into(),
+				got: "Notification response".into(),
+			})),
 			jsonrpc::Response::Batch(rps) => {
 				// NOTE: `T::default` is placeholder and will be replaced in loop below.
 				let mut responses = vec![T::default(); ordered_requests.len()];
