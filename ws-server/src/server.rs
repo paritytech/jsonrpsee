@@ -33,7 +33,6 @@ use serde_json::value::{to_raw_value, RawValue};
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::{
 	net::{TcpListener, ToSocketAddrs},
 	sync::mpsc,
@@ -41,53 +40,16 @@ use tokio::{
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::types::{ConnectionId, Methods, RpcId, RpcSender};
-use crate::types::{JsonRpcError, JsonRpcErrorParams};
-use crate::types::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
-use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};
+use jsonrpsee_types::jsonrpc_types_two::{ConnectionId, Methods, RpcError, RpcId, RpcParams, RpcSender};
+use jsonrpsee_types::jsonrpc_types_two::{JsonRpcError, JsonRpcErrorParams};
+use jsonrpsee_types::jsonrpc_types_two::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
+use jsonrpsee_types::jsonrpc_types_two::{JsonRpcNotification, JsonRpcNotificationParams};
 
 mod module;
 
 pub use module::{RpcContextModule, RpcModule};
 
 type SubscriptionId = u64;
-
-trait RpcResult {
-	fn to_json(self, id: Option<&RawValue>) -> anyhow::Result<String>;
-}
-
-#[derive(Error, Debug)]
-pub enum RpcError {
-	#[error("unknown rpc error")]
-	Unknown,
-	#[error("invalid params")]
-	InvalidParams,
-}
-
-/// Parameters sent with the RPC request
-#[derive(Clone, Copy)]
-pub struct RpcParams<'a>(Option<&'a str>);
-
-impl<'a> RpcParams<'a> {
-	/// Attempt to parse all parameters as array or map into type T
-	pub fn parse<T>(self) -> Result<T, RpcError>
-	where
-		T: Deserialize<'a>,
-	{
-		match self.0 {
-			None => Err(RpcError::InvalidParams),
-			Some(params) => serde_json::from_str(params).map_err(|_| RpcError::InvalidParams),
-		}
-	}
-
-	/// Attempt to parse only the first parameter from an array into type T
-	pub fn one<T>(self) -> Result<T, RpcError>
-	where
-		T: Deserialize<'a>,
-	{
-		self.parse::<[T; 1]>().map(|[res]| res)
-	}
-}
 
 #[derive(Clone)]
 pub struct SubscriptionSink {
@@ -257,7 +219,7 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 
 		match serde_json::from_slice::<JsonRpcRequest>(&data) {
 			Ok(req) => {
-				let params = RpcParams(req.params.map(|params| params.get()));
+				let params = RpcParams::new(req.params.map(|params| params.get()));
 
 				if let Some(method) = methods.get(&*req.method) {
 					(method)(req.id, params, &tx, id)?;
