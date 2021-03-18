@@ -31,7 +31,7 @@ pub enum Error {
 	#[error("Frontend/backend channel error: {0}")]
 	Internal(#[source] futures::channel::mpsc::SendError),
 	/// Invalid response,
-	#[error("Invalid response detected: {0}")]
+	#[error("Invalid response: {0}")]
 	InvalidResponse(Mismatch<String>),
 	/// The background task has been terminated.
 	#[error("The background task been terminated because: {0}; restart required")]
