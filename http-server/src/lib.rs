@@ -24,16 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-mod raw;
+///mod module;
 mod server;
 mod transport;
 
-#[cfg(test)]
-mod tests;
+pub use server::Server as HttpServer;
 
-pub use jsonrpsee_types::http::HttpConfig;
-pub use raw::RawServer as HttpRawServer;
-pub use raw::RawServerEvent as HttpRawServerEvent;
-pub use raw::TypedResponder as HttpTypedResponder;
-pub use server::{RegisteredMethod, RegisteredNotification, Server as HttpServer};
-pub use transport::HttpTransportServer;
+//#[cfg(test)]
+//mod tests;

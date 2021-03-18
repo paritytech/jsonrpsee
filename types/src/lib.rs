@@ -9,7 +9,7 @@ extern crate alloc;
 pub mod jsonrpc;
 
 /// JSON-RPC 2.0 specification related types v2.
-pub mod jsonrpc_types_two;
+pub mod jsonrpc_v2;
 
 /// Shared error type.
 pub mod error;

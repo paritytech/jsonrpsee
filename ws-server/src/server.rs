@@ -40,10 +40,10 @@ use tokio::{
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use jsonrpsee_types::jsonrpc_types_two::{ConnectionId, Methods, RpcError, RpcId, RpcParams, RpcSender};
-use jsonrpsee_types::jsonrpc_types_two::{JsonRpcError, JsonRpcErrorParams};
-use jsonrpsee_types::jsonrpc_types_two::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
-use jsonrpsee_types::jsonrpc_types_two::{JsonRpcNotification, JsonRpcNotificationParams};
+use jsonrpsee_types::jsonrpc_v2::{ConnectionId, Methods, RpcError, RpcId, RpcParams, RpcSender};
+use jsonrpsee_types::jsonrpc_v2::{JsonRpcError, JsonRpcErrorParams};
+use jsonrpsee_types::jsonrpc_v2::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
+use jsonrpsee_types::jsonrpc_v2::{JsonRpcNotification, JsonRpcNotificationParams};
 
 mod module;
 

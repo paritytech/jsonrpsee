@@ -24,9 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-mod background;
-#[allow(unused)]
-mod response;
+pub mod background;
+pub mod response;
 
 use jsonrpsee_types::{http::HttpConfig, jsonrpc};
 use jsonrpsee_utils::http::access_control::AccessControl;
