@@ -4,7 +4,7 @@ JSON-RPC library designed for async/await in Rust.
 
 Designed to be the successor to [ParityTech's JSONRPC crate](https://github.com/paritytech/jsonrpc/).
 
-Supports `WebSocket` and `HTTP` transports for both client-side and server-ide.
+Support `WebSocket` and `HTTP` transports for both client and server.
 
 ## Under development
 
