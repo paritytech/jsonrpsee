@@ -7,52 +7,31 @@ use futures::{pin_mut, select};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode};
 use jsonrpsee_types::jsonrpc::JsonValue;
-use std::net::SocketAddr;
 
-async fn server(server_started_tx: Sender<SocketAddr>) {
-	let server = HttpServer::new("127.0.0.1:0", HttpConfig::default()).await.unwrap();
-	let mut hello = server.register_method("say_hello".to_owned()).unwrap();
-	let mut add = server.register_method("add".to_owned()).unwrap();
-	let mut notif = server.register_notification("notif".to_owned(), false).unwrap();
-	server_started_tx.send(*server.local_addr()).unwrap();
+const SOCK_ADDR: &str = "127.0.0.1:9933";
 
-	loop {
-		let hello_fut = async {
-			let handle = hello.next().await;
-			handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
-		}
-		.fuse();
-
-		let add_fut = async {
-			let handle = add.next().await;
-			let params: Vec<u64> = handle.params().clone().parse().unwrap();
-			let sum: u64 = params.iter().sum();
-			handle.respond(Ok(JsonValue::Number(sum.into()))).await.unwrap();
-		}
-		.fuse();
-
-		let notif_fut = async {
-			let params = notif.next().await;
-			println!("received notification: say_hello params[{:?}]", params);
-		}
-		.fuse();
-
-		pin_mut!(hello_fut, add_fut, notif_fut);
-		select! {
-			_ = hello_fut => (),
-			_ = add_fut => (),
-			_ = notif_fut => (),
-			complete => (),
-		};
-	}
+async fn server() {
+	let mut server =
+		HttpServer::new(&SOCK_ADDR.parse().unwrap(), HttpConfig::default(), Default::default()).await.unwrap();
+	server.register_method("say_hello", |_| Ok("lo")).unwrap();
+	server
+		.register_method("add", |params| {
+			let params: Vec<u64> = params.parse()?;
+			let sum: u64 = params.into_iter().sum();
+			Ok(sum)
+		})
+		.unwrap();
+	server.register_method("notif", |_| Ok("")).unwrap();
+	server.start().await.unwrap();
 }
 
 #[tokio::test]
 async fn single_method_call_works() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
-	let uri = to_http_uri(server_addr);
+	let _ = env_logger::try_init();
+	tokio::spawn(async { server().await });
+	let uri = to_http_uri(SOCK_ADDR.parse().unwrap());
+
+	std::thread::sleep(std::time::Duration::from_secs(3));
 
 	for i in 0..10 {
 		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
@@ -64,48 +43,45 @@ async fn single_method_call_works() {
 
 #[tokio::test]
 async fn single_method_call_with_params() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
+	tokio::spawn(server());
+
+	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-	let response = http_request(req.into(), to_http_uri(server_addr)).await.unwrap();
+	let response = http_request(req.into(), SOCK_ADDR.parse().unwrap()).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
 
 #[tokio::test]
 async fn should_return_method_not_found() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
+	tokio::spawn(server());
+	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":"foo"}"#;
-	let response = http_request(req.into(), to_http_uri(server_addr)).await.unwrap();
+	let response = http_request(req.into(), to_http_uri(SOCK_ADDR.parse().unwrap())).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, method_not_found(Id::Str("foo".into())));
 }
 
 #[tokio::test]
 async fn invalid_json_id_missing_value() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
+	tokio::spawn(server());
+	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
-	let response = http_request(req.into(), to_http_uri(server_addr)).await.unwrap();
+	let response = http_request(req.into(), to_http_uri(SOCK_ADDR.parse().unwrap())).await.unwrap();
 	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
 	assert_eq!(response.body, parse_error(Id::Null));
 }
 
 #[tokio::test]
 async fn invalid_request_object() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
+	tokio::spawn(server());
+	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
-	let response = http_request(req.into(), to_http_uri(server_addr)).await.unwrap();
+	let response = http_request(req.into(), to_http_uri(SOCK_ADDR.parse().unwrap())).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, invalid_request(Id::Num(1)));
 }

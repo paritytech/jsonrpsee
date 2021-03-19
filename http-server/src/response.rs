@@ -106,7 +106,7 @@ pub fn too_large<S: Into<String>>(msg: S) -> hyper::Response<hyper::Body> {
 }
 
 /// Create a response for a template.
-fn from_template(status: hyper::StatusCode, body: String) -> hyper::Response<hyper::Body> {
+pub fn from_template(status: hyper::StatusCode, body: String) -> hyper::Response<hyper::Body> {
 	hyper::Response::builder()
 		.status(status)
 		.header("content-type", hyper::header::HeaderValue::from_static("text/plain; charset=utf-8"))

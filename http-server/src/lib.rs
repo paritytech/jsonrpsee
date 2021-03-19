@@ -24,11 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-///mod module;
+mod module;
+mod response;
 mod server;
-mod transport;
 
+pub use jsonrpsee_types::http::HttpConfig;
 pub use server::Server as HttpServer;
 
-//#[cfg(test)]
-//mod tests;
+#[cfg(test)]
+mod tests;

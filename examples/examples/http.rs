@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_server(server_started_tx: Sender<()>, addr: &str) {
-	let mut server = HttpServer::new(&addr.parse().unwrap()).await.unwrap();
+	let mut server = HttpServer::new(&addr.parse().unwrap(), Default::default(), Default::default()).await.unwrap();
 	server.register_method("say_hello", |_| Ok("lo")).unwrap();
 	server.start().await;
 }

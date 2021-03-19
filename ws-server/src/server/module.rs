@@ -1,6 +1,6 @@
-use crate::server::{send_response, Methods, RpcError, RpcParams, SubscriptionId, SubscriptionSink};
+use crate::server::{Methods, RpcError, RpcParams, SubscriptionId, SubscriptionSink};
 use jsonrpsee_types::error::Error;
-use jsonrpsee_types::jsonrpc_v2::traits::RpcMethod;
+use jsonrpsee_types::jsonrpc_v2::{helpers::send_response, traits::RpcMethod};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
