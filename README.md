@@ -41,5 +41,5 @@ See [tracking issue for next stable release](https://github.com/paritytech/jsonr
 
 ## Users
 
-If your project uses `jsonrpsee` we like to know please open a pull request and add your project to the list below:
+If your project uses `jsonrpsee` we like to know. Please open a pull request and add your project to the list below:
 - [substrate-subxt](https://github.com/paritytech/substrate-subxt)
