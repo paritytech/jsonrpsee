@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-utils"
-version = "0.2.0-alpha.2"
+version = "0.2.0-alpha.3"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for jsonrpsee"
 edition = "2018"
@@ -11,7 +11,7 @@ futures = "0.3"
 globset = "0.4"
 hyper13 = { package = "hyper", version = "0.13", default-features = false, features = ["stream"], optional = true }
 hyper14 = { package = "hyper", version = "0.14", default-features = false, features = ["stream"], optional = true }
-jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.2" }
+jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.3" }
 lazy_static = "1.4"
 log = "0.4"
 unicase = "2.6"
