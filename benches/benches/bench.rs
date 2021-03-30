@@ -1,51 +1,99 @@
 use async_std::task::block_on;
 use criterion::*;
+use futures::channel::oneshot::{self, Sender};
 use jsonrpsee_http_client::{HttpClient, HttpConfig};
-use jsonrpsee_types::{jsonrpc::Params, traits::Client};
+use jsonrpsee_http_server::HttpServer;
+use jsonrpsee_types::{
+	jsonrpc::{JsonValue, Params},
+	traits::Client,
+};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
+use jsonrpsee_ws_server::WsServer;
+use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::runtime::Runtime as TokioRuntime;
-
-mod helpers;
 
 criterion_group!(benches, http_requests, websocket_requests);
 criterion_main!(benches);
 
-pub fn http_requests(crit: &mut Criterion) {
-	let rt = TokioRuntime::new().unwrap();
-	let url = rt.block_on(helpers::http_server());
-	let client = Arc::new(HttpClient::new(url, HttpConfig::default()).unwrap());
-	run_round_trip(&rt, crit, client.clone(), "http_round_trip");
-	run_concurrent_round_trip(&rt, crit, client.clone(), "http_concurrent_round_trip");
+fn concurrent_tasks() -> Vec<usize> {
+	let cores = num_cpus::get();
+	vec![cores / 4, cores / 2, cores, cores * 2, cores * 4]
 }
 
-pub fn websocket_requests(crit: &mut Criterion) {
-	let rt = TokioRuntime::new().unwrap();
-	let url = rt.block_on(helpers::ws_server());
-	let config = WsConfig::with_url(&url);
-	let client = Arc::new(block_on(WsClient::new(config)).unwrap());
-	run_round_trip(&rt, crit, client.clone(), "ws_round_trip");
-	run_concurrent_round_trip(&rt, crit, client.clone(), "ws_concurrent_round_trip");
+async fn http_server(tx: Sender<SocketAddr>) {
+	let server = HttpServer::new("127.0.0.1:0", HttpConfig { max_request_body_size: u32::MAX }).await.unwrap();
+	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
+	tx.send(*server.local_addr()).unwrap();
+	loop {
+		let r = say_hello.next().await;
+		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
+	}
 }
 
-fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Client>, name: &str) {
-	crit.bench_function(name, |b| {
+async fn ws_server(tx: Sender<SocketAddr>) {
+	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
+	tx.send(server.local_addr().unwrap()).unwrap();
+	server.register_method("say_hello", |_| Ok("lo")).unwrap();
+	server.start().await;
+}
+
+pub fn http_requests(c: &mut criterion::Criterion) {
+	let rt = tokio::runtime::Runtime::new().unwrap();
+	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
+	async_std::task::spawn(http_server(tx_addr));
+	let server_addr = block_on(rx_addr).unwrap();
+	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr), HttpConfig::default()).unwrap());
+
+	c.bench_function("synchronous_http_round_trip", |b| {
 		b.iter(|| {
 			rt.block_on(async {
 				black_box(client.request::<String, _, _>("say_hello", Params::None).await.unwrap());
 			})
 		})
 	});
+
+	let mut group = c.benchmark_group("concurrent_http_round_trip");
+
+	for num_concurrent_tasks in concurrent_tasks() {
+		group.bench_function(format!("{}", num_concurrent_tasks), |b| {
+			b.iter(|| {
+				let mut tasks = Vec::new();
+				for _ in 0..num_concurrent_tasks {
+					let client_rc = client.clone();
+					let task = rt.spawn(async move {
+						let _ = black_box(client_rc.request::<String, _, _>("say_hello", Params::None)).await;
+					});
+					tasks.push(task);
+				}
+				for task in tasks {
+					rt.block_on(task).unwrap();
+				}
+			})
+		});
+	}
+	group.finish();
 }
 
-fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
-	rt: &TokioRuntime,
-	crit: &mut Criterion,
-	client: Arc<C>,
-	name: &str,
-) {
-	let mut group = crit.benchmark_group(name);
-	for num_concurrent_tasks in helpers::concurrent_tasks() {
+pub fn websocket_requests(c: &mut criterion::Criterion) {
+	let rt = tokio::runtime::Runtime::new().unwrap();
+	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
+	rt.spawn(ws_server(tx_addr));
+	let server_addr = block_on(rx_addr).unwrap();
+	let url = format!("ws://{}", server_addr);
+	let config = WsConfig::with_url(&url);
+	let client = Arc::new(block_on(WsClient::new(config)).unwrap());
+
+	c.bench_function("synchronous_websocket_round_trip", |b| {
+		b.iter(|| {
+			rt.block_on(async {
+				black_box(client.request::<String, _, _>("say_hello", Params::None).await.unwrap());
+			})
+		})
+	});
+
+	let mut group = c.benchmark_group("concurrent_websocket_round_trip");
+
+	for num_concurrent_tasks in concurrent_tasks() {
 		group.bench_function(format!("{}", num_concurrent_tasks), |b| {
 			b.iter(|| {
 				let mut tasks = Vec::new();
