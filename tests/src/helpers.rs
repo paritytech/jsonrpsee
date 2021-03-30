@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee_http_server::{HttpConfig, HttpServer};
-use jsonrpsee_types::jsonrpc::JsonValue;
 use jsonrpsee_ws_server::WsServer;
 
 use std::net::SocketAddr;
@@ -83,22 +82,9 @@ pub async fn websocket_server() -> SocketAddr {
 }
 
 pub async fn http_server() -> SocketAddr {
-	let (server_started_tx, server_started_rx) = oneshot::channel();
-
-	std::thread::spawn(move || {
-		let rt = tokio::runtime::Runtime::new().unwrap();
-
-		let server = rt.block_on(HttpServer::new("127.0.0.1:0", HttpConfig::default())).unwrap();
-		server_started_tx.send(*server.local_addr()).unwrap();
-		let mut call = server.register_method("say_hello".to_owned()).unwrap();
-
-		rt.block_on(async move {
-			loop {
-				let handle = call.next().await;
-				handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
-			}
-		});
-	});
-
-	server_started_rx.await.unwrap()
+	let mut server =
+		HttpServer::new(&"127.0.0.1:0".parse().unwrap(), HttpConfig::default(), Default::default()).await.unwrap();
+	server.register_method("say_hello", |_| Ok("hello")).unwrap();
+	server.register_method("notif", |_| Ok("")).unwrap();
+	server.start().await.unwrap()
 }

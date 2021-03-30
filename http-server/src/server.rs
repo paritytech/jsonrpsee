@@ -31,7 +31,7 @@ use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error as HyperError;
 use jsonrpsee_types::error::{Error, GenericTransportError};
-use jsonrpsee_types::jsonrpc_v2::{helpers::send_error, JsonRpcRequest, RpcError, RpcParams};
+use jsonrpsee_types::jsonrpc_v2::{helpers::send_error, JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
 use jsonrpsee_utils::http::{access_control::AccessControl, hyper_helpers::read_response_to_body};
 use serde::Serialize;
 use std::net::SocketAddr;
@@ -66,8 +66,13 @@ impl Server {
 		self.root.register_method(method_name, callback)
 	}
 
+	/// Register all methods from a module on this server.
+	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
+		self.root.merge(module)
+	}
+
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
-	pub async fn start(self) -> anyhow::Result<()> {
+	pub async fn start(self) -> anyhow::Result<SocketAddr> {
 		let methods = Arc::new(self.root.into_methods());
 		let config = self.config;
 		let access_control = self.access_control;
@@ -101,34 +106,41 @@ impl Server {
 							}
 						};
 
-						let req = match serde_json::from_slice::<JsonRpcRequest>(&body) {
-							Ok(req) => req,
-							Err(_e) => return Ok::<_, HyperError>(response::parse_error()),
+						// TODO: oneshot would sufficient too.
+						let (tx, mut rx) = mpsc::unbounded_channel();
+
+						match serde_json::from_slice::<JsonRpcRequest>(&body) {
+							Ok(req) => {
+								log::info!("recv: {:?}", req);
+								let params = RpcParams::new(req.params.map(|params| params.get()));
+								if let Some(method) = methods.get(&*req.method) {
+									(method)(req.id, params, &tx, 0).unwrap();
+								} else {
+									send_error(req.id, &tx, -32601, "Method not found");
+								}
+							}
+							Err(_e) => {
+								let (id, code, msg) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
+									Ok(req) => (req.id, -32600, "Invalid request"),
+									Err(_) => (None, -32700, "Parse error"),
+								};
+								send_error(id, &tx, code, msg);
+							}
 						};
 
-						log::info!("recv: {:?}", req);
-
-						// TODO: technically we could just call inner module for this?!.
-						// oneshot would sufficient too.
-						let (tx, mut rx) = mpsc::unbounded_channel();
-						let params = RpcParams::new(req.params.map(|params| params.get()));
-						if let Some(method) = methods.get(&*req.method) {
-							(method)(req.id, params, &tx, 0).unwrap();
-						} else {
-							send_error(req.id, &tx, -32601, "Method not found");
-						}
 						let response = rx.recv().await.unwrap();
 						log::info!("send: {:?}", response);
-						Ok::<_, HyperError>(response::from_template(hyper::StatusCode::OK, response))
+						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))
 			}
 		});
 
 		let server = self.listener.serve(make_service);
-		log::info!("server running: {}", server.local_addr());
+		let addr = server.local_addr();
 		// Run server forever.
-		server.await.map_err(Into::into)
+		tokio::spawn(async move { server.await.unwrap() });
+		Ok(addr)
 	}
 }
 

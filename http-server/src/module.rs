@@ -1,6 +1,5 @@
 use jsonrpsee_types::error::Error;
 use jsonrpsee_types::jsonrpc_v2::{helpers::send_response, traits::RpcMethod, Methods, RpcError, RpcParams};
-use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::sync::Arc;
 
