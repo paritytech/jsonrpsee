@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee_http_server::{HttpConfig, HttpServer};
+use jsonrpsee_http_server::HttpServerBuilder;
 use jsonrpsee_ws_server::WsServer;
 
 use std::net::SocketAddr;
@@ -82,8 +82,7 @@ pub async fn websocket_server() -> SocketAddr {
 }
 
 pub async fn http_server() -> SocketAddr {
-	let mut server =
-		HttpServer::new(&"127.0.0.1:0".parse().unwrap(), HttpConfig::default(), Default::default()).await.unwrap();
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	server.register_method("say_hello", |_| Ok("hello")).unwrap();
 	server.register_method("notif", |_| Ok("")).unwrap();
 	server.start().await.unwrap()

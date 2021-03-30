@@ -28,9 +28,8 @@ mod module;
 mod response;
 mod server;
 
-pub use jsonrpsee_types::http::HttpConfig;
 pub use module::{RpcContextModule, RpcModule};
-pub use server::Server as HttpServer;
+pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
 
 #[cfg(test)]
 mod tests;

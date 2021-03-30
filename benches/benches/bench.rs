@@ -1,8 +1,8 @@
 use async_std::task::block_on;
 use criterion::*;
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_http_client::{HttpClient, HttpConfig};
-use jsonrpsee_http_server::HttpServer;
+use jsonrpsee_http_client::HttpClientBuilder;
+use jsonrpsee_http_server::HttpServerBuilder;
 use jsonrpsee_types::{jsonrpc::Params, traits::Client};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use jsonrpsee_ws_server::WsServer;
@@ -18,8 +18,7 @@ fn concurrent_tasks() -> Vec<usize> {
 }
 
 async fn http_server() -> SocketAddr {
-	let mut server =
-		HttpServer::new(&"127.0.0.1:0".parse().unwrap(), HttpConfig::default(), Default::default()).await.unwrap();
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	server.register_method("say_hello", |_| Ok("lo")).unwrap();
 	server.start().await.unwrap()
 }
@@ -34,7 +33,8 @@ async fn ws_server(tx: Sender<SocketAddr>) {
 pub fn http_requests(c: &mut criterion::Criterion) {
 	let rt = tokio::runtime::Runtime::new().unwrap();
 	let server_addr = rt.block_on(http_server());
-	let client = Arc::new(HttpClient::new(&format!("http://{}", server_addr), HttpConfig::default()).unwrap());
+	let url = format!("ws://{}", server_addr);
+	let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
 
 	c.bench_function("synchronous_http_round_trip", |b| {
 		b.iter(|| {

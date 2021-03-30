@@ -8,7 +8,7 @@
 
 use hyper::client::{Client, HttpConnector};
 use hyper_rustls::HttpsConnector;
-use jsonrpsee_types::{error::GenericTransportError, http::HttpConfig, jsonrpc};
+use jsonrpsee_types::{error::GenericTransportError, jsonrpc};
 use jsonrpsee_utils::http::hyper_helpers;
 use thiserror::Error;
 
@@ -22,12 +22,12 @@ pub struct HttpTransportClient {
 	/// HTTP client
 	client: Client<HttpsConnector<HttpConnector>>,
 	/// Configurable max request body size
-	config: HttpConfig,
+	max_request_body_size: u32,
 }
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
+	pub fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
 			#[cfg(feature = "tokio1")]
@@ -35,7 +35,7 @@ impl HttpTransportClient {
 			#[cfg(feature = "tokio02")]
 			let connector = HttpsConnector::new();
 			let client = Client::builder().build::<_, hyper::Body>(connector);
-			Ok(HttpTransportClient { client, target, config })
+			Ok(HttpTransportClient { client, target, max_request_body_size })
 		} else {
 			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
 		}
@@ -46,7 +46,7 @@ impl HttpTransportClient {
 		let body = jsonrpc::to_vec(&request).map_err(Error::Serialization)?;
 		log::debug!("send: {}", request);
 
-		if body.len() > self.config.max_request_body_size as usize {
+		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
 		}
 
@@ -77,7 +77,7 @@ impl HttpTransportClient {
 	) -> Result<jsonrpc::Response, Error> {
 		let response = self.send_request(request).await?;
 		let (parts, body) = response.into_parts();
-		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.config).await?;
+		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.max_request_body_size).await?;
 
 		// Note that we don't check the Content-Type of the request. This is deemed
 		// unnecessary, as a parsing error while happen anyway.
@@ -138,23 +138,19 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Error, HttpTransportClient};
-	use jsonrpsee_types::{
-		http::HttpConfig,
-		jsonrpc::{Call, Id, MethodCall, Params, Request, Version},
-	};
+	use jsonrpsee_types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err = HttpTransportClient::new("ws://localhost:9933", HttpConfig::default()).unwrap_err();
+		let err = HttpTransportClient::new("ws://localhost:9933", 80).unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[tokio::test]
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
-		let client =
-			HttpTransportClient::new("http://localhost:9933", HttpConfig { max_request_body_size: 80 }).unwrap();
-		assert_eq!(client.config.max_request_body_size, eighty_bytes_limit);
+		let client = HttpTransportClient::new("http://localhost:9933", 80).unwrap();
+		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
 		let request = Request::Single(Call::MethodCall(MethodCall {
 			jsonrpc: Version::V2,

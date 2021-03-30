@@ -33,7 +33,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
-use jsonrpsee_http_client::{HttpClient, HttpConfig};
+use jsonrpsee_http_client::HttpClientBuilder;
 use jsonrpsee_types::{
 	error::Error,
 	jsonrpc::{JsonValue, Params},
@@ -74,9 +74,9 @@ async fn ws_method_call_works() {
 async fn http_method_call_works() {
 	let server_addr = http_server().await;
 	let uri = format!("http://{}", server_addr);
-	let client = HttpClient::new(&uri, HttpConfig::default()).unwrap();
-	let response: JsonValue = client.request("say_hello", Params::None).await.unwrap();
-	assert_eq!(response, JsonValue::String("hello".into()));
+	let client = HttpClientBuilder::default().build(&uri).unwrap();
+	let response: String = client.request("say_hello", Params::None).await.unwrap();
+	assert_eq!(&response, "hello");
 }
 
 #[tokio::test]
@@ -201,7 +201,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 
 #[tokio::test]
 async fn https_works() {
-	let client = HttpClient::new("https://kusama-rpc.polkadot.io", HttpConfig::default()).unwrap();
+	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
 	let response: String = client.request("system_chain", Params::None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
@@ -221,7 +221,7 @@ async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
 
 #[tokio::test]
 async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
-	let client = HttpClient::new("http://♥♥♥♥♥♥∀∂", HttpConfig::default()).unwrap();
+	let client = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂").unwrap();
 	let err: Result<(), Error> = client.request("system_chain", Params::None).await;
 	assert!(matches!(err, Err(Error::TransportError(_))));
 }

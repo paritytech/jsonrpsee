@@ -2,14 +2,13 @@
 
 use std::net::SocketAddr;
 
-use crate::{HttpConfig, HttpServer};
+use crate::HttpServerBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode};
 use jsonrpsee_types::jsonrpc::JsonValue;
 
 async fn server() -> SocketAddr {
-	let mut server =
-		HttpServer::new(&"127.0.0.1:0".parse().unwrap(), HttpConfig::default(), Default::default()).await.unwrap();
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	server.register_method("say_hello", |_| Ok("lo")).unwrap();
 	server
 		.register_method("add", |params| {

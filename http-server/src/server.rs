@@ -26,7 +26,6 @@
 
 use crate::module::RpcModule;
 use crate::response;
-use crate::HttpConfig;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error as HyperError;
@@ -38,25 +37,53 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+/// Builder to create JSON-RPC HTTP server.
+pub struct Builder {
+	access_control: AccessControl,
+	max_request_body_size: u32,
+}
+
+impl Builder {
+	/// Sets the maximum size of a request body in bytes (default is 10 MiB).
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.max_request_body_size = size;
+		self
+	}
+
+	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
+		self.access_control = acl;
+		self
+	}
+
+	pub fn build(self, addr: SocketAddr) -> anyhow::Result<Server> {
+		let listener = hyper::Server::try_bind(&addr)?.tcp_nodelay(true);
+		Ok(Server {
+			listener,
+			root: RpcModule::new(),
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+		})
+	}
+}
+
+impl Default for Builder {
+	fn default() -> Self {
+		Self { max_request_body_size: 10 * 1024 * 1024, access_control: AccessControl::default() }
+	}
+}
+
 pub struct Server {
 	/// Hyper server.
 	listener: HyperBuilder<AddrIncoming>,
 	/// Registered methods.
 	root: RpcModule,
-	/// Http settings.
-	config: HttpConfig,
+	/// Max request body size.
+	max_request_body_size: u32,
 	/// Access control
 	access_control: AccessControl,
 }
 
 impl Server {
-	/// ...
-	pub async fn new(addr: &SocketAddr, config: HttpConfig, access_control: AccessControl) -> anyhow::Result<Self> {
-		// TODO: use create the TCP socket manually to more fine-grained settings.
-		let listener = hyper::Server::try_bind(&addr)?.tcp_nodelay(true);
-		Ok(Self { listener, root: RpcModule::new(), config, access_control })
-	}
-
 	/// Register a new RPC method, which responds with a given callback.
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
@@ -74,7 +101,7 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) -> anyhow::Result<SocketAddr> {
 		let methods = Arc::new(self.root.into_methods());
-		let config = self.config;
+		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
 
 		let make_service = make_service_fn(move |_| {
@@ -96,7 +123,7 @@ impl Server {
 						}
 
 						let (parts, body) = request.into_parts();
-						let body = match read_response_to_body(&parts.headers, body, config).await {
+						let body = match read_response_to_body(&parts.headers, body, max_request_body_size).await {
 							Ok(body) => body,
 							Err(GenericTransportError::TooLarge) => {
 								return Ok::<_, HyperError>(response::too_large("The request was too large"))

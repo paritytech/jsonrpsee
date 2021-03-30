@@ -1,10 +1,37 @@
 use crate::transport::HttpTransportClient;
 use async_trait::async_trait;
 use jsonrpc::DeserializeOwned;
-use jsonrpsee_types::{error::Error, http::HttpConfig, jsonrpc, traits::Client};
+use jsonrpsee_types::{error::Error, jsonrpc, traits::Client};
 
 use std::convert::TryInto;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Http Client Builder.
+#[derive(Debug)]
+pub struct HttpClientBuilder {
+	max_request_body_size: u32,
+}
+
+impl HttpClientBuilder {
+	/// Sets the maximum size of a request body in bytes (default is 10 MiB).
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.max_request_body_size = size;
+		self
+	}
+
+	/// Build the HTTP client with target to connect to.
+	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
+		let transport = HttpTransportClient::new(target, self.max_request_body_size)
+			.map_err(|e| Error::TransportError(Box::new(e)))?;
+		Ok(HttpClient { transport, request_id: AtomicU64::new(0) })
+	}
+}
+
+impl Default for HttpClientBuilder {
+	fn default() -> Self {
+		Self { max_request_body_size: 10 * 1024 * 1024 }
+	}
+}
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
 #[derive(Debug)]
@@ -13,16 +40,6 @@ pub struct HttpClient {
 	transport: HttpTransportClient,
 	/// Request ID that wraps around when overflowing.
 	request_id: AtomicU64,
-}
-
-impl HttpClient {
-	/// Initializes a new HTTP client.
-	///
-	/// Fails when the URL is invalid.
-	pub fn new(target: impl AsRef<str>, config: HttpConfig) -> Result<Self, Error> {
-		let transport = HttpTransportClient::new(target, config).map_err(|e| Error::TransportError(Box::new(e)))?;
-		Ok(Self { transport, request_id: AtomicU64::new(0) })
-	}
 }
 
 #[async_trait]

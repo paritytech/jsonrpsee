@@ -14,9 +14,6 @@ pub mod jsonrpc_v2;
 /// Shared error type.
 pub mod error;
 
-/// Shared types for HTTP
-pub mod http;
-
 /// Shared client types.
 pub mod client;
 

@@ -27,7 +27,7 @@
 //! Utility methods relying on hyper
 
 use futures::StreamExt;
-use jsonrpsee_types::{error::GenericTransportError, http::HttpConfig};
+use jsonrpsee_types::error::GenericTransportError;
 
 /// Read a hyper response with configured `HTTP` settings.
 ///
@@ -36,13 +36,13 @@ use jsonrpsee_types::{error::GenericTransportError, http::HttpConfig};
 pub async fn read_response_to_body(
 	headers: &hyper::HeaderMap,
 	mut body: hyper::Body,
-	config: HttpConfig,
+	max_request_body_size: u32,
 ) -> Result<Vec<u8>, GenericTransportError<hyper::Error>> {
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in practise
 	// and for that case we fallback to allocating in the while-loop below instead of pre-allocating.
 	let body_size = read_header_content_length(&headers).unwrap_or(0);
 
-	if body_size > config.max_request_body_size {
+	if body_size > max_request_body_size {
 		return Err(GenericTransportError::TooLarge);
 	}
 
@@ -51,7 +51,7 @@ pub async fn read_response_to_body(
 	while let Some(chunk) = body.next().await {
 		let chunk = chunk.map_err(GenericTransportError::Inner)?;
 		let body_length = chunk.len() + received_data.len();
-		if body_length > config.max_request_body_size as usize {
+		if body_length > max_request_body_size as usize {
 			return Err(GenericTransportError::TooLarge);
 		}
 		received_data.extend_from_slice(&chunk);
@@ -90,7 +90,7 @@ pub fn read_header_values<'a>(
 
 #[cfg(test)]
 mod tests {
-	use super::{read_header_content_length, read_response_to_body, HttpConfig};
+	use super::{read_header_content_length, read_response_to_body};
 	use jsonrpsee_types::jsonrpc;
 
 	#[tokio::test]
@@ -99,7 +99,7 @@ mod tests {
 		let expected: jsonrpc::Request = serde_json::from_str(s).unwrap();
 		let body = hyper::Body::from(s.to_owned());
 		let headers = hyper::header::HeaderMap::new();
-		let bytes = read_response_to_body(&headers, body, HttpConfig::default()).await.unwrap();
+		let bytes = read_response_to_body(&headers, body, 10 * 1024 * 1024).await.unwrap();
 		let req: jsonrpc::Request = serde_json::from_slice(&bytes).unwrap();
 		assert_eq!(req, expected);
 	}
@@ -108,7 +108,7 @@ mod tests {
 	async fn body_to_bytes_size_limit_works() {
 		let headers = hyper::header::HeaderMap::new();
 		let body = hyper::Body::from(vec![0; 128]);
-		assert!(read_response_to_body(&headers, body, HttpConfig { max_request_body_size: 127 }).await.is_err());
+		assert!(read_response_to_body(&headers, body, 127).await.is_err());
 	}
 
 	#[test]
