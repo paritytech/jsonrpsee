@@ -41,6 +41,7 @@ use tokio::sync::mpsc;
 pub struct Builder {
 	access_control: AccessControl,
 	max_request_body_size: u32,
+	keep_alive: bool,
 }
 
 impl Builder {
@@ -50,13 +51,27 @@ impl Builder {
 		self
 	}
 
+	/// Sets access control settings.
 	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
 		self.access_control = acl;
 		self
 	}
 
+	/// Enables or disables HTTP keep-alive.
+	///
+	/// Default is true.
+	pub fn keep_alive(mut self, keep_alive: bool) -> Self {
+		self.keep_alive = keep_alive;
+		self
+	}
+
 	pub fn build(self, addr: SocketAddr) -> anyhow::Result<Server> {
-		let listener = hyper::Server::try_bind(&addr)?.tcp_nodelay(true);
+		let listener = hyper::Server::try_bind(&addr)?
+			.tcp_nodelay(true)
+			.tcp_sleep_on_accept_errors(true)
+			.http1_keepalive(self.keep_alive)
+			.http1_max_buf_size(self.max_request_body_size as usize)
+			.http2_max_frame_size(Some(self.max_request_body_size));
 		Ok(Server {
 			listener,
 			root: RpcModule::new(),
@@ -68,7 +83,7 @@ impl Builder {
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { max_request_body_size: 10 * 1024 * 1024, access_control: AccessControl::default() }
+		Self { max_request_body_size: 10 * 1024 * 1024, access_control: AccessControl::default(), keep_alive: true }
 	}
 }
 
@@ -155,7 +170,7 @@ impl Server {
 							}
 						};
 
-						let response = rx.recv().await.unwrap();
+						let response = rx.recv().await.expect("Sender is still alive managed by us above; qed");
 						log::info!("send: {:?}", response);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
@@ -165,8 +180,8 @@ impl Server {
 
 		let server = self.listener.serve(make_service);
 		let addr = server.local_addr();
-		// Run server forever.
-		tokio::spawn(async move { server.await.unwrap() });
+		// NOTE(niklasad1): should we provide hyper's graceful shutdown here?!
+		tokio::spawn(async move { server.await });
 		Ok(addr)
 	}
 }
