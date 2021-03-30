@@ -8,7 +8,7 @@ Support `WebSocket` and `HTTP` transports for both client and server.
 
 ## Under development
 
-The library is still under development and do not use in production.
+The library is still under development; do not use in production.
 
 ## Sub-projects
 - [jsonrpsee-http-client](./http-client) [![crates.io][ws-client-image]][ws-client-url]
