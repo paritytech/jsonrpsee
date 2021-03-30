@@ -33,7 +33,7 @@ async fn ws_server(tx: Sender<SocketAddr>) {
 pub fn http_requests(c: &mut criterion::Criterion) {
 	let rt = tokio::runtime::Runtime::new().unwrap();
 	let server_addr = rt.block_on(http_server());
-	let url = format!("ws://{}", server_addr);
+	let url = format!("http://{}", server_addr);
 	let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
 
 	c.bench_function("synchronous_http_round_trip", |b| {

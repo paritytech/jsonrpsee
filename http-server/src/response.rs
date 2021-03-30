@@ -31,26 +31,9 @@ pub fn internal_error<T: Into<String>>(msg: T) -> hyper::Response<hyper::Body> {
 	from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, format!("Internal Server Error: {}", msg.into()))
 }
 
-/// Create a JSON response for service unavailable.
-pub fn service_unavailable<T: Into<String>>(msg: T) -> hyper::Response<hyper::Body> {
-	hyper::Response::builder()
-		.status(hyper::StatusCode::SERVICE_UNAVAILABLE)
-		.header("content-type", hyper::header::HeaderValue::from_static("application/json; charset=utf-8"))
-		.body(hyper::Body::from(msg.into()))
-		.expect("Unable to parse response body for type conversion")
-}
-
 /// Create a response for not allowed hosts.
 pub fn host_not_allowed() -> hyper::Response<hyper::Body> {
 	from_template(hyper::StatusCode::FORBIDDEN, "Provided Host header is not whitelisted.\n".to_owned())
-}
-
-/// Create a response for unsupported content type.
-pub fn unsupported_content_type() -> hyper::Response<hyper::Body> {
-	from_template(
-		hyper::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-		"Supplied content type is not allowed. Content-Type: application/json is required\n".to_owned(),
-	)
 }
 
 /// Create a response for disallowed method used.

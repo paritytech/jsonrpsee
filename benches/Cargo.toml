@@ -19,7 +19,7 @@ jsonrpsee-ws-client = { path = "../ws-client" }
 jsonrpsee-ws-server = { path = "../ws-server" }
 jsonrpsee-http-server = { path = "../http-server" }
 num_cpus = "1"
-tokio = { version = "1.3", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 
 [[bench]]
 name = "bench"
