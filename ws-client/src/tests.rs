@@ -5,7 +5,7 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
 use jsonrpsee_types::{
 	error::Error,
-	jsonrpc,
+	jsonrpc::{self, Params},
 	traits::{Client, SubscriptionClient},
 };
 
@@ -128,6 +128,31 @@ async fn response_with_wrong_id() {
 }
 
 #[tokio::test]
+async fn batch_request_works() {
+	let _ = env_logger::try_init();
+	let batch_request = vec![
+		("say_hello".to_string(), Params::None),
+		("say_goodbye".to_string(), Params::Array(vec![0.into(), 1.into(), 2.into()])),
+		("get_swag".to_string(), Params::None),
+	];
+	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
+	let response = run_batch_request_with_response(batch_request, server_response).await.unwrap();
+	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
+}
+
+#[tokio::test]
+async fn batch_request_out_of_order_response() {
+	let batch_request = vec![
+		("say_hello".to_string(), Params::None),
+		("say_goodbye".to_string(), Params::Array(vec![0.into(), 1.into(), 2.into()])),
+		("get_swag".to_string(), Params::None),
+	];
+	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
+	let response = run_batch_request_with_response(batch_request, server_response).await.unwrap();
+	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
+}
+
+#[tokio::test]
 async fn is_connected_works() {
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
@@ -139,4 +164,11 @@ async fn is_connected_works() {
 	assert!(client.is_connected());
 	client.request::<String, _, _>("say_hello", jsonrpc::Params::None).await.unwrap_err();
 	assert!(!client.is_connected())
+}
+
+async fn run_batch_request_with_response(batch: Vec<(String, Params)>, response: String) -> Result<Vec<String>, Error> {
+	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response).await;
+	let uri = to_ws_uri_string(server.local_addr());
+	let client = WsClient::new(WsConfig::with_url(&uri)).await.unwrap();
+	client.batch_request(batch).await
 }

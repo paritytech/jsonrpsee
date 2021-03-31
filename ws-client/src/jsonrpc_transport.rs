@@ -8,9 +8,9 @@ use crate::{
 	transport::{self, WsConnectError, WsHandshakeError, WsTransportClientBuilder},
 };
 use core::convert::TryInto;
-use jsonrpsee_types::client::{NotificationMessage, RequestMessage, SubscriptionMessage};
+use jsonrpsee_types::client::{BatchMessage, NotificationMessage, RequestMessage, SubscriptionMessage};
 use jsonrpsee_types::error::Error;
-use jsonrpsee_types::jsonrpc;
+use jsonrpsee_types::jsonrpc::{self, Request};
 
 /// Creates a new JSONRPC WebSocket connection, represented as a Sender and Receiver pair.
 pub async fn websocket_connection(config: WsConfig<'_>) -> Result<(Sender, Receiver), WsHandshakeError> {
@@ -29,6 +29,45 @@ impl Sender {
 	/// Creates a new JSONRPC sender.
 	pub fn new(transport: transport::Sender) -> Self {
 		Self { transport }
+	}
+
+	/// Send a batch request.
+	pub async fn start_batch_request(
+		&mut self,
+		batch: BatchMessage,
+		request_manager: &mut RequestManager,
+	) -> Result<(), Error> {
+		let req_id = request_manager.next_request_id()?;
+		let mut calls = Vec::with_capacity(batch.requests.len());
+		let mut ids = Vec::with_capacity(batch.requests.len());
+
+		for (method, params) in batch.requests {
+			let batch_id = request_manager.next_batch_id();
+			ids.push(batch_id);
+			calls.push(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
+				jsonrpc: jsonrpc::Version::V2,
+				method,
+				params,
+				id: jsonrpc::Id::Num(batch_id),
+			}));
+		}
+
+		if let Err(send_back) = request_manager.insert_pending_batch(ids, batch.send_back, req_id) {
+			request_manager.reclaim_request_id(req_id);
+			let _ = send_back.send(Err(Error::InvalidRequestId));
+			return Err(Error::InvalidRequestId);
+		};
+
+		let res =
+			self.transport.send_request(Request::Batch(calls)).await.map_err(|e| Error::TransportError(Box::new(e)));
+
+		match res {
+			Ok(_) => Ok(()),
+			Err(e) => {
+				request_manager.reclaim_request_id(req_id);
+				Err(e)
+			}
+		}
 	}
 
 	/// Sends a request to the server but it doesn’t wait for a response.
@@ -52,7 +91,7 @@ impl Sender {
 			jsonrpc: jsonrpc::Version::V2,
 			method: request.method,
 			params: request.params,
-			id: jsonrpc::Id::Num(id as u64),
+			id: jsonrpc::Id::Num(id),
 		}));
 		match self.transport.send_request(req).await {
 			Ok(_) => {

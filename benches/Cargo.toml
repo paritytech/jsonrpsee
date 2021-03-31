@@ -10,7 +10,6 @@ license = "MIT"
 bench = false
 
 [dev-dependencies]
-async-std = "1.8"
 criterion = "0.3"
 futures = "0.3"
 jsonrpsee-types = { path = "../types" }

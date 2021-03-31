@@ -19,6 +19,18 @@ pub trait Client {
 		T: DeserializeOwned,
 		M: Into<String> + Send,
 		P: Into<Params> + Send;
+
+	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
+	///
+	/// The response to batch are returned in the same order as it was inserted in the batch.
+	///
+	/// Returns `Ok` if all requests in the batch were answered successfully.
+	/// Returns `Error` if any of the requests in batch fails.
+	async fn batch_request<T, M, P>(&self, batch: Vec<(M, P)>) -> Result<Vec<T>, Error>
+	where
+		T: DeserializeOwned + Default + Clone,
+		M: Into<String> + Send,
+		P: Into<Params> + Send;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.

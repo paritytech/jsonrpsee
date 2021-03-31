@@ -25,6 +25,15 @@ pub struct NotificationMessage {
 	pub params: Params,
 }
 
+/// Batch request message.
+#[derive(Debug)]
+pub struct BatchMessage {
+	/// Requests in the batch
+	pub requests: Vec<(String, Params)>,
+	/// One-shot channel over which we send back the result of this request.
+	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
+}
+
 /// Request message.
 #[derive(Debug)]
 pub struct RequestMessage {
@@ -54,6 +63,8 @@ pub struct SubscriptionMessage {
 /// Message that the Client can send to the background task.
 #[derive(Debug)]
 pub enum FrontToBack {
+	/// Send a batch request to the server.
+	Batch(BatchMessage),
 	/// Send a notification to the server.
 	Notification(NotificationMessage),
 	/// Send a request to the server.

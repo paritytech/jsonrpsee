@@ -225,15 +225,21 @@ impl<'a> WsTransportClientBuilder<'a> {
 			let timeout = async_std::task::sleep(self.timeout);
 			futures::pin_mut!(socket, timeout);
 			match future::select(socket, timeout).await {
-				future::Either::Left((socket, _)) => match self.mode {
-					Mode::Plain => TlsOrPlain::Plain(socket?),
-					Mode::Tls => {
-						let connector = async_tls::TlsConnector::default();
-						let dns_name = webpki::DNSNameRef::try_from_ascii_str(self.host.as_str())?;
-						let tls_stream = connector.connect(&dns_name.to_owned(), socket?).await?;
-						TlsOrPlain::Tls(tls_stream)
+				future::Either::Left((socket, _)) => {
+					let socket = socket?;
+					if let Err(err) = socket.set_nodelay(true) {
+						log::warn!("set nodelay failed: {:?}", err);
 					}
-				},
+					match self.mode {
+						Mode::Plain => TlsOrPlain::Plain(socket),
+						Mode::Tls => {
+							let connector = async_tls::TlsConnector::default();
+							let dns_name = webpki::DNSNameRef::try_from_ascii_str(self.host.as_str())?;
+							let tls_stream = connector.connect(&dns_name.to_owned(), socket).await?;
+							TlsOrPlain::Tls(tls_stream)
+						}
+					}
+				}
 				future::Either::Right((_, _)) => return Err(WsNewError::Timeout),
 			}
 		};

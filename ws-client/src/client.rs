@@ -36,7 +36,7 @@ use futures::{
 };
 use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
-	client::{FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
+	client::{BatchMessage, FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
 	error::Error,
 	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::{Client, SubscriptionClient},
@@ -243,6 +243,36 @@ impl Client for WsClient {
 		};
 		jsonrpc::from_value(json_value).map_err(Error::ParseError)
 	}
+
+	async fn batch_request<T, M, P>(&self, batch: Vec<(M, P)>) -> Result<Vec<T>, Error>
+	where
+		T: DeserializeOwned + Default + Clone,
+		M: Into<String> + Send,
+		P: Into<jsonrpc::Params> + Send,
+	{
+		let (send_back_tx, send_back_rx) = oneshot::channel();
+		let requests: Vec<(String, jsonrpc::Params)> = batch.into_iter().map(|(r, p)| (r.into(), p.into())).collect();
+		log::trace!("[frontend]: send batch request: {:?}", requests);
+		if self
+			.to_back
+			.clone()
+			.send(FrontToBack::Batch(BatchMessage { requests, send_back: send_back_tx }))
+			.await
+			.is_err()
+		{
+			return Err(self.read_error_from_backend().await);
+		}
+
+		let json_values = match send_back_rx.await {
+			Ok(Ok(v)) => v,
+			Ok(Err(err)) => return Err(err),
+			Err(_) => return Err(self.read_error_from_backend().await),
+		};
+
+		let values: Result<_, _> =
+			json_values.into_iter().map(|val| jsonrpc::from_value(val).map_err(Error::ParseError)).collect();
+		Ok(values?)
+	}
 }
 
 #[async_trait]
@@ -328,6 +358,13 @@ async fn background_task(
 				return;
 			}
 
+			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
+				log::trace!("[backend]: client prepares to send batch request: {:?}", batch);
+				if let Err(e) = sender.start_batch_request(batch, &mut manager).await {
+					log::warn!("[backend]: client batch request failed: {:?}", e);
+				}
+			}
+
 			// User called `notification` on the front-end
 			Either::Left((Some(FrontToBack::Notification(notif)), _)) => {
 				log::trace!("[backend]: client prepares to send notification: {:?}", notif);
@@ -374,8 +411,50 @@ async fn background_task(
 					}
 				}
 			}
-			Either::Right((Some(Ok(jsonrpc::Response::Batch(_responses))), _)) => {
-				log::warn!("Ignore batch response not supported, #103");
+			Either::Right((Some(Ok(jsonrpc::Response::Batch(batch))), _)) => {
+				let mut digest = Vec::with_capacity(batch.len());
+				let mut ordered_responses = vec![JsonValue::Null; batch.len()];
+				let mut rps_unordered: Vec<_> = Vec::with_capacity(batch.len());
+
+				for rp in batch {
+					let id = match rp.id().as_number().copied() {
+						Some(id) => id,
+						None => {
+							let _ = front_error.send(Error::InvalidRequestId);
+							return;
+						}
+					};
+					let rp: Result<JsonValue, Error> = rp.try_into().map_err(Error::Request);
+					let rp = match rp {
+						Ok(rp) => rp,
+						Err(err) => {
+							let _ = front_error.send(err);
+							return;
+						}
+					};
+					digest.push(id);
+					rps_unordered.push((id, rp));
+				}
+
+				digest.sort_unstable();
+				let batch_state = match manager.complete_pending_batch(digest) {
+					Some(state) => state,
+					None => {
+						log::warn!("Received unknown batch response");
+						continue;
+					}
+				};
+
+				for (id, rp) in rps_unordered {
+					let pos = batch_state
+						.order
+						.get(&id)
+						.copied()
+						.expect("All request IDs valid checked by RequestManager above; qed");
+					ordered_responses[pos] = rp;
+				}
+				manager.reclaim_request_id(batch_state.request_id);
+				let _ = batch_state.send_back.send(Ok(ordered_responses));
 			}
 			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
 				let sub_id = notif.params.subscription;
