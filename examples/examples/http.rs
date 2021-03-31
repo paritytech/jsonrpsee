@@ -37,8 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let server_addr = run_server().await;
 	let url = format!("http://{}", server_addr);
 
-	std::thread::sleep(std::time::Duration::from_secs(1));
-
 	let client = HttpClientBuilder::default().build(url)?;
 	let response: Result<String, _> = client.request("say_hello", Params::None).await;
 	println!("r: {:?}", response);
