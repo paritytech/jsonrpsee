@@ -26,15 +26,16 @@
 
 use crate::module::RpcModule;
 use crate::response;
-use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::Error as HyperError;
+use hyper::{
+	server::{conn::AddrIncoming, Builder as HyperBuilder},
+	service::{make_service_fn, service_fn},
+	Error as HyperError,
+};
 use jsonrpsee_types::error::{Error, GenericTransportError};
 use jsonrpsee_types::jsonrpc_v2::{helpers::send_error, JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
 use jsonrpsee_utils::http::{access_control::AccessControl, hyper_helpers::read_response_to_body};
 use serde::Serialize;
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc;
 
 /// Builder to create JSON-RPC HTTP server.
@@ -113,7 +114,7 @@ impl Server {
 		self.root.merge(module)
 	}
 
-	/// Start responding to connections requests. This will block current thread until the server is stopped.
+	/// Start the server.
 	pub async fn start(self) -> anyhow::Result<SocketAddr> {
 		let methods = Arc::new(self.root.into_methods());
 		let max_request_body_size = self.max_request_body_size;
@@ -125,7 +126,6 @@ impl Server {
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
-					log::info!("{:?}", request);
 					let methods = methods.clone();
 					let access_control = access_control.clone();
 					async move {
@@ -153,10 +153,13 @@ impl Server {
 
 						match serde_json::from_slice::<JsonRpcRequest>(&body) {
 							Ok(req) => {
-								log::info!("recv: {:?}", req);
+								log::debug!("recv: {:?}", req);
 								let params = RpcParams::new(req.params.map(|params| params.get()));
 								if let Some(method) = methods.get(&*req.method) {
-									(method)(req.id, params, &tx, 0).unwrap();
+									// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+									if let Err(err) = (method)(req.id, params, &tx, 0) {
+										log::error!("method_call: {} failed: {:?}", req.method, err);
+									}
 								} else {
 									send_error(req.id, &tx, -32601, "Method not found");
 								}
@@ -171,7 +174,7 @@ impl Server {
 						};
 
 						let response = rx.recv().await.expect("Sender is still alive managed by us above; qed");
-						log::info!("send: {:?}", response);
+						log::debug!("send: {:?}", response);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))
@@ -186,11 +189,11 @@ impl Server {
 	}
 }
 
+// Checks to that access control of the received request is the same as configured.
 fn access_control_is_valid(
 	access_control: &AccessControl,
 	request: &hyper::Request<hyper::Body>,
 ) -> Result<(), hyper::Response<hyper::Body>> {
-	// Process access control
 	if access_control.deny_host(request) {
 		return Err(response::host_not_allowed());
 	}
@@ -203,6 +206,7 @@ fn access_control_is_valid(
 	Ok(())
 }
 
+/// Checks that content type of received request is valid for JSON-RPC.
 fn content_type_is_valid(request: &hyper::Request<hyper::Body>) -> Result<(), hyper::Response<hyper::Body>> {
 	match *request.method() {
 		hyper::Method::POST if is_json(request.headers().get("content-type")) => Ok(()),
