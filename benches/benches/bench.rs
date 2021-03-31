@@ -1,6 +1,5 @@
 use async_std::task::block_on;
 use criterion::*;
-use futures::channel::oneshot::{self, Sender};
 use jsonrpsee_http_client::HttpClientBuilder;
 use jsonrpsee_http_server::HttpServerBuilder;
 use jsonrpsee_types::{jsonrpc::Params, traits::Client};
@@ -20,14 +19,17 @@ fn concurrent_tasks() -> Vec<usize> {
 async fn http_server() -> SocketAddr {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	server.register_method("say_hello", |_| Ok("lo")).unwrap();
-	server.start().await.unwrap()
+	let addr = server.local_addr().unwrap();
+	tokio::spawn(async move { server.start().await.unwrap() });
+	addr
 }
 
-async fn ws_server(tx: Sender<SocketAddr>) {
+async fn ws_server() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
-	tx.send(server.local_addr().unwrap()).unwrap();
+	let addr = server.local_addr().unwrap();
 	server.register_method("say_hello", |_| Ok("lo")).unwrap();
-	server.start().await;
+	tokio::spawn(async move { server.start().await });
+	addr
 }
 
 pub fn http_requests(c: &mut criterion::Criterion) {
@@ -68,10 +70,8 @@ pub fn http_requests(c: &mut criterion::Criterion) {
 
 pub fn websocket_requests(c: &mut criterion::Criterion) {
 	let rt = tokio::runtime::Runtime::new().unwrap();
-	let (tx_addr, rx_addr) = oneshot::channel::<SocketAddr>();
-	rt.spawn(ws_server(tx_addr));
-	let server_addr = block_on(rx_addr).unwrap();
-	let url = format!("ws://{}", server_addr);
+	let addr = rt.block_on(ws_server());
+	let url = format!("ws://{}", addr);
 	let config = WsConfig::with_url(&url);
 	let client = Arc::new(block_on(WsClient::new(config)).unwrap());
 

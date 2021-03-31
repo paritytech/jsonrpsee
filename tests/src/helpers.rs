@@ -83,7 +83,9 @@ pub async fn websocket_server() -> SocketAddr {
 
 pub async fn http_server() -> SocketAddr {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let addr = server.local_addr().unwrap();
 	server.register_method("say_hello", |_| Ok("hello")).unwrap();
 	server.register_method("notif", |_| Ok("")).unwrap();
-	server.start().await.unwrap()
+	tokio::spawn(async move { server.start().await.unwrap() });
+	addr
 }

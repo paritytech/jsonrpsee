@@ -26,6 +26,7 @@
 
 use crate::module::RpcModule;
 use crate::response;
+use anyhow::anyhow;
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
 	service::{make_service_fn, service_fn},
@@ -35,7 +36,11 @@ use jsonrpsee_types::error::{Error, GenericTransportError};
 use jsonrpsee_types::jsonrpc_v2::{helpers::send_error, JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
 use jsonrpsee_utils::http::{access_control::AccessControl, hyper_helpers::read_response_to_body};
 use serde::Serialize;
-use std::{net::SocketAddr, sync::Arc};
+use socket2::{Domain, Socket, Type};
+use std::{
+	net::{SocketAddr, TcpListener},
+	sync::Arc,
+};
 use tokio::sync::mpsc;
 
 /// Builder to create JSON-RPC HTTP server.
@@ -67,14 +72,24 @@ impl Builder {
 	}
 
 	pub fn build(self, addr: SocketAddr) -> anyhow::Result<Server> {
-		let listener = hyper::Server::try_bind(&addr)?
-			.tcp_nodelay(true)
-			.tcp_sleep_on_accept_errors(true)
-			.http1_keepalive(self.keep_alive)
-			.http1_max_buf_size(self.max_request_body_size as usize)
-			.http2_max_frame_size(Some(self.max_request_body_size));
+		let domain = Domain::for_address(addr);
+		let socket = Socket::new(domain, Type::STREAM, None)?;
+		socket.set_nodelay(true)?;
+		socket.set_reuse_address(true)?;
+		socket.set_reuse_port(true)?;
+		socket.set_nonblocking(true)?;
+		socket.set_keepalive(self.keep_alive)?;
+		let address = addr.into();
+		socket.bind(&address)?;
+
+		socket.listen(128)?;
+		let listener: TcpListener = socket.into();
+		let local_addr = listener.local_addr().ok();
+
+		let listener = hyper::Server::from_tcp(listener)?;
 		Ok(Server {
 			listener,
+			local_addr,
 			root: RpcModule::new(),
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
@@ -91,6 +106,8 @@ impl Default for Builder {
 pub struct Server {
 	/// Hyper server.
 	listener: HyperBuilder<AddrIncoming>,
+	/// Local address
+	local_addr: Option<SocketAddr>,
 	/// Registered methods.
 	root: RpcModule,
 	/// Max request body size.
@@ -114,8 +131,13 @@ impl Server {
 		self.root.merge(module)
 	}
 
+	/// Returns socket address to which the server is bound.
+	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
+		self.local_addr.ok_or_else(|| anyhow!("SocketAddr is missing"))
+	}
+
 	/// Start the server.
-	pub async fn start(self) -> anyhow::Result<SocketAddr> {
+	pub async fn start(self) -> anyhow::Result<()> {
 		let methods = Arc::new(self.root.into_methods());
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
@@ -182,10 +204,8 @@ impl Server {
 		});
 
 		let server = self.listener.serve(make_service);
-		let addr = server.local_addr();
 		// NOTE(niklasad1): should we provide hyper's graceful shutdown here?!
-		tokio::spawn(async move { server.await });
-		Ok(addr)
+		server.await.map_err(Into::into)
 	}
 }
 
