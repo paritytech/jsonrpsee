@@ -133,7 +133,7 @@ impl Server {
 
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
-		self.local_addr.ok_or_else(|| anyhow!("SocketAddr is missing"))
+		self.local_addr.ok_or_else(|| anyhow!("Local address not found"))
 	}
 
 	/// Start the server.
