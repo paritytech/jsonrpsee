@@ -7,6 +7,7 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
+anyhow = "1"
 futures = "0.3"
 globset = "0.4"
 hyper13 = { package = "hyper", version = "0.13", default-features = false, features = ["stream"], optional = true }
@@ -14,6 +15,10 @@ hyper14 = { package = "hyper", version = "0.14", default-features = false, featu
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.3" }
 lazy_static = "1.4"
 log = "0.4"
+rustc-hash = "1"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+tokio = { version = "1", features = ["sync"] }
 unicase = "2.6"
 
 [features]

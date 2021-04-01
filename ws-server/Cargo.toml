@@ -14,6 +14,7 @@ bs58 = "0.4"
 fnv = "1"
 futures = "0.3"
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.3" }
+jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.3" }
 log = "0.4"
 parking_lot = "0.11"
 rand = "0.8"

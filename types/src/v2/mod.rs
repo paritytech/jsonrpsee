@@ -1,77 +1,95 @@
-use crate::server::{RpcError, RpcParams};
 use beef::lean::Cow;
-use rustc_hash::FxHashMap;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::fmt;
-use tokio::sync::mpsc;
 
-pub type ConnectionId = usize;
-pub type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
-pub type RpcId<'a> = Option<&'a RawValue>;
-pub type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
-pub type Methods = FxHashMap<&'static str, Method>;
+/// Error type.
+pub mod error;
 
-pub trait RpcMethod<R>: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static {}
+/// Traits.
+pub mod traits;
 
-impl<R, T> RpcMethod<R> for T where T: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static {}
+pub use error::RpcError;
 
+/// [JSON-RPC request object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct JsonRpcRequest<'a> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
-
+	/// Request ID
 	#[serde(borrow)]
 	pub id: Option<&'a RawValue>,
-
+	/// Name of the method to be invoked.
 	#[serde(borrow)]
 	pub method: Cow<'a, str>,
-
+	/// Parameter values of the request.
 	#[serde(borrow)]
 	pub params: Option<&'a RawValue>,
 }
 
+/// Invalid request with known request ID.
 #[derive(Deserialize, Debug)]
 pub struct JsonRpcInvalidRequest<'a> {
+	/// Request ID
 	#[serde(borrow)]
 	pub id: Option<&'a RawValue>,
 }
 
+/// JSON-RPC notification (a request object without a request ID).
 #[derive(Serialize, Debug)]
 pub struct JsonRpcNotification<'a> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
+	/// Name of the method to be invoked.
 	pub method: &'a str,
+	/// Parameter values of the request.
 	pub params: JsonRpcNotificationParams<'a>,
 }
 
+/// JSON-RPC parameter values for subscriptions.
 #[derive(Serialize, Debug)]
 pub struct JsonRpcNotificationParams<'a> {
+	/// Subscription ID
 	pub subscription: u64,
+	/// Result.
 	pub result: &'a RawValue,
 }
 
+/// JSON-RPC successful response object.
 #[derive(Serialize, Debug)]
 pub struct JsonRpcResponse<'a, T> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
+	/// Result.
 	pub result: T,
+	/// Request ID
 	pub id: Option<&'a RawValue>,
 }
 
+/// JSON-RPC error response object.
 #[derive(Serialize, Debug)]
 pub struct JsonRpcError<'a> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
+	/// Error.
 	pub error: JsonRpcErrorParams<'a>,
+	/// Request ID
 	pub id: Option<&'a RawValue>,
 }
 
+/// [JSON-RPC error object](https://www.jsonrpc.org/specification#error-object)
 #[derive(Serialize, Debug)]
 pub struct JsonRpcErrorParams<'a> {
+	/// Error code.
 	pub code: i32,
+	/// Error message.
 	pub message: &'a str,
 }
 
+/// JSON-RPC v2 marker type.
 #[derive(Debug, Default)]
 pub struct TwoPointZero;
 
@@ -110,5 +128,35 @@ impl Serialize for TwoPointZero {
 		S: Serializer,
 	{
 		serializer.serialize_str("2.0")
+	}
+}
+
+/// Parameters sent with the RPC request
+#[derive(Clone, Copy)]
+pub struct RpcParams<'a>(Option<&'a str>);
+
+impl<'a> RpcParams<'a> {
+	/// Create params
+	pub fn new(raw: Option<&'a str>) -> Self {
+		Self(raw)
+	}
+
+	/// Attempt to parse all parameters as array or map into type T
+	pub fn parse<T>(self) -> Result<T, RpcError>
+	where
+		T: Deserialize<'a>,
+	{
+		match self.0 {
+			None => Err(RpcError::InvalidParams),
+			Some(params) => serde_json::from_str(params).map_err(|_| RpcError::InvalidParams),
+		}
+	}
+
+	/// Attempt to parse only the first parameter from an array into type T
+	pub fn one<T>(self) -> Result<T, RpcError>
+	where
+		T: Deserialize<'a>,
+	{
+		self.parse::<[T; 1]>().map(|[res]| res)
 	}
 }

@@ -1,5 +1,5 @@
 use criterion::*;
-use jsonrpsee_http_client::{HttpClient, HttpConfig};
+use jsonrpsee_http_client::HttpClientBuilder;
 use jsonrpsee_types::{jsonrpc::Params, traits::Client};
 use jsonrpsee_ws_client::{WsClient, WsConfig};
 use std::sync::Arc;
@@ -13,7 +13,7 @@ criterion_main!(benches);
 pub fn http_requests(crit: &mut Criterion) {
 	let rt = TokioRuntime::new().unwrap();
 	let url = rt.block_on(helpers::http_server());
-	let client = Arc::new(HttpClient::new(url, HttpConfig::default()).unwrap());
+	let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
 	run_round_trip(&rt, crit, client.clone(), "http_round_trip");
 	run_concurrent_round_trip(&rt, crit, client.clone(), "http_concurrent_round_trip");
 }

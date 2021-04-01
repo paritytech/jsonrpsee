@@ -42,6 +42,5 @@ mod transport;
 #[cfg(test)]
 mod tests;
 
-pub use client::HttpClient;
-pub use jsonrpsee_types::http::HttpConfig;
+pub use client::{HttpClient, HttpClientBuilder};
 pub use transport::HttpTransportClient;

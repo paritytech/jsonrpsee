@@ -1,7 +1,6 @@
-use crate::client::HttpClient;
+use crate::client::HttpClientBuilder;
 use jsonrpsee_types::{
 	error::Error,
-	http::HttpConfig,
 	jsonrpc::{self, ErrorCode, JsonValue, Params},
 	traits::Client,
 };
@@ -19,7 +18,7 @@ async fn method_call_works() {
 async fn notification_works() {
 	let server_addr = http_server_with_hardcoded_response(String::new()).await;
 	let uri = format!("http://{}", server_addr);
-	let client = HttpClient::new(&uri, HttpConfig::default()).unwrap();
+	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client
 		.notification("i_dont_care_about_the_response_because_the_server_should_not_respond", Params::None)
 		.await
@@ -96,14 +95,14 @@ async fn batch_request_out_of_order_response() {
 async fn run_batch_request_with_response(batch: Vec<(String, Params)>, response: String) -> Result<Vec<String>, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).await;
 	let uri = format!("http://{}", server_addr);
-	let client = HttpClient::new(&uri, HttpConfig::default()).unwrap();
+	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client.batch_request(batch).await
 }
 
 async fn run_request_with_response(response: String) -> Result<JsonValue, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).await;
 	let uri = format!("http://{}", server_addr);
-	let client = HttpClient::new(&uri, HttpConfig::default())?;
+	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client.request("say_hello", Params::None).await
 }
 
