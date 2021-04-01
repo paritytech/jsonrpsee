@@ -149,7 +149,7 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set max concurrent request.
+	/// Set max concurrent requests.
 	pub fn max_concurrent_requests(mut self, max: usize) -> Self {
 		self.max_concurrent_requests = max;
 		self
