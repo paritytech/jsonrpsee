@@ -1,7 +1,7 @@
 //! Shared types in `jsonrpsee` for clients, servers and utilities.
 
 #![deny(unsafe_code)]
-//#![warn(missing_docs)]
+#![warn(missing_docs)]
 
 extern crate alloc;
 
@@ -9,7 +9,7 @@ extern crate alloc;
 pub mod jsonrpc;
 
 /// JSON-RPC 2.0 specification related types v2.
-pub mod jsonrpc_v2;
+pub mod v2;
 
 /// Shared error type.
 pub mod error;

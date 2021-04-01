@@ -28,6 +28,7 @@ mod module;
 mod response;
 mod server;
 
+pub use jsonrpsee_utils::http::access_control::{AccessControl, AccessControlBuilder};
 pub use module::{RpcContextModule, RpcModule};
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
 

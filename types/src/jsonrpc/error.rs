@@ -36,7 +36,7 @@ use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 
-/// JSONRPC error code
+/// JSON-RPC error code
 #[derive(Debug, PartialEq, Clone)]
 pub enum ErrorCode {
 	/// Invalid JSON was received by the server.

@@ -33,8 +33,9 @@ use hyper::{
 	Error as HyperError,
 };
 use jsonrpsee_types::error::{Error, GenericTransportError};
-use jsonrpsee_types::jsonrpc_v2::{helpers::send_error, JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
+use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
 use jsonrpsee_utils::http::{access_control::AccessControl, hyper_helpers::read_response_to_body};
+use jsonrpsee_utils::server_utils::send_error;
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
 use std::{
@@ -170,7 +171,7 @@ impl Server {
 							}
 						};
 
-						// TODO: oneshot would sufficient too.
+						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded_channel();
 
 						match serde_json::from_slice::<JsonRpcRequest>(&body) {
@@ -204,7 +205,6 @@ impl Server {
 		});
 
 		let server = self.listener.serve(make_service);
-		// NOTE(niklasad1): should we provide hyper's graceful shutdown here?!
 		server.await.map_err(Into::into)
 	}
 }

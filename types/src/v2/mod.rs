@@ -1,77 +1,95 @@
 use beef::lean::Cow;
-use rustc_hash::FxHashMap;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::fmt;
-use tokio::sync::mpsc;
 
+/// Error type.
 pub mod error;
-pub mod helpers;
+
+/// Traits.
 pub mod traits;
 
-pub type ConnectionId = usize;
-pub type RpcSender<'a> = &'a mpsc::UnboundedSender<String>;
-pub type RpcId<'a> = Option<&'a RawValue>;
-pub type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
-pub type Methods = FxHashMap<&'static str, Method>;
 pub use error::RpcError;
 
+/// [JSON-RPC request object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct JsonRpcRequest<'a> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
-
+	/// Request ID
 	#[serde(borrow)]
 	pub id: Option<&'a RawValue>,
-
+	/// Name of the method to be invoked.
 	#[serde(borrow)]
 	pub method: Cow<'a, str>,
-
+	/// Parameter values of the request.
 	#[serde(borrow)]
 	pub params: Option<&'a RawValue>,
 }
 
+/// Invalid request with known request ID.
 #[derive(Deserialize, Debug)]
 pub struct JsonRpcInvalidRequest<'a> {
+	/// Request ID
 	#[serde(borrow)]
 	pub id: Option<&'a RawValue>,
 }
 
+/// JSON-RPC notification (a request object without a request ID).
 #[derive(Serialize, Debug)]
 pub struct JsonRpcNotification<'a> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
+	/// Name of the method to be invoked.
 	pub method: &'a str,
+	/// Parameter values of the request.
 	pub params: JsonRpcNotificationParams<'a>,
 }
 
+/// JSON-RPC parameter values for subscriptions.
 #[derive(Serialize, Debug)]
 pub struct JsonRpcNotificationParams<'a> {
+	/// Subscription ID
 	pub subscription: u64,
+	/// Result.
 	pub result: &'a RawValue,
 }
 
+/// JSON-RPC successful response object.
 #[derive(Serialize, Debug)]
 pub struct JsonRpcResponse<'a, T> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
+	/// Result.
 	pub result: T,
+	/// Request ID
 	pub id: Option<&'a RawValue>,
 }
 
+/// JSON-RPC error response object.
 #[derive(Serialize, Debug)]
 pub struct JsonRpcError<'a> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
+	/// Error.
 	pub error: JsonRpcErrorParams<'a>,
+	/// Request ID
 	pub id: Option<&'a RawValue>,
 }
 
+/// [JSON-RPC error object](https://www.jsonrpc.org/specification#error-object)
 #[derive(Serialize, Debug)]
 pub struct JsonRpcErrorParams<'a> {
+	/// Error code.
 	pub code: i32,
+	/// Error message.
 	pub message: &'a str,
 }
 
+/// JSON-RPC v2 marker type.
 #[derive(Debug, Default)]
 pub struct TwoPointZero;
 

@@ -9,10 +9,7 @@ license = "MIT"
 [dependencies]
 async-trait = "0.1"
 anyhow = "1"
-# TODO: revisit whether to use `futures::channel` or `tokio::channel` here.
-tokio = { version = "1", features = ["sync"] }
 beef = "0.5"
-rustc-hash = "1"
 futures = "0.3"
 log = "0.4"
 thiserror = "1.0"
