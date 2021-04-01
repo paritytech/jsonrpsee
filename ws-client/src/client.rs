@@ -24,8 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::jsonrpc_transport;
 use crate::manager::{RequestManager, RequestStatus};
+use crate::transport::WsTransportClientBuilder;
+use crate::{jsonrpc_transport, transport::parse_url};
 use async_std::sync::Mutex;
 use async_trait::async_trait;
 use futures::{
@@ -93,44 +94,19 @@ pub struct WsClient {
 
 /// Configuration.
 #[derive(Clone, Debug)]
-pub struct WsConfig<'a> {
-	/// URL to connect to.
-	///
-	/// If the port number is missing from the URL, the default port number is used.
-	///
-	///
-	/// `ws://host` - port 80 is used
-	///
-	/// `wss://host` - port 443 is used
-	pub url: &'a str,
-	/// Max request body size
-	pub max_request_body_size: usize,
-	/// Request timeout
-	pub request_timeout: Option<Duration>,
-	/// Connection timeout
-	pub connection_timeout: Duration,
-	/// `Origin` header to pass during the HTTP handshake. If `None`, no
-	/// `Origin` header was passed.
-	pub origin: Option<Cow<'a, str>>,
-	/// Url to send during the HTTP handshake.
-	pub handshake_url: Cow<'a, str>,
-	/// Max concurrent request.
-	pub max_concurrent_requests: usize,
-	/// Max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
-	///
-	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`](jsonrpsee_types::client::Subscription) frequently enough
-	/// such that the buffer capacity doesn't exceeds.
-	///
-	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
-	/// because it is passed to [`futures::channel::mpsc::channel`].
-	pub max_notifs_per_subscription: usize,
+pub struct WsClientBuilder<'a> {
+	max_request_body_size: usize,
+	request_timeout: Option<Duration>,
+	connection_timeout: Duration,
+	origin: Option<Cow<'a, str>>,
+	handshake_url: Cow<'a, str>,
+	max_concurrent_requests: usize,
+	max_notifs_per_subscription: usize,
 }
 
-impl<'a> WsConfig<'a> {
-	/// Default WebSocket configuration with a specified URL to connect to.
-	pub fn with_url(url: &'a str) -> Self {
+impl<'a> Default for WsClientBuilder<'a> {
+	fn default() -> Self {
 		Self {
-			url,
 			max_request_body_size: 10 * 1024 * 1024,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
@@ -142,25 +118,88 @@ impl<'a> WsConfig<'a> {
 	}
 }
 
-impl WsClient {
-	/// Initializes a new WebSocket client
+impl<'a> WsClientBuilder<'a> {
+	/// Set max request body size.
+	pub fn max_request_body_size(mut self, size: usize) -> Self {
+		self.max_request_body_size = size;
+		self
+	}
+
+	/// Set request timeout for requests.
+	pub fn request_timeout(mut self, timeout: Option<Duration>) -> Self {
+		self.request_timeout = timeout;
+		self
+	}
+
+	/// Set connection timeout for the handshake.
+	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
+		self.connection_timeout = timeout;
+		self
+	}
+
+	/// Set origin header to pass during the handshake.
+	pub fn origin_header(mut self, origin: Option<Cow<'a, str>>) -> Self {
+		self.origin = origin;
+		self
+	}
+
+	/// Set URL to send during the HTTP handshake.
+	pub fn handshake_url(mut self, url: Cow<'a, str>) -> Self {
+		self.handshake_url = url;
+		self
+	}
+
+	/// Set max concurrent request.
+	pub fn max_concurrent_requests(mut self, max: usize) -> Self {
+		self.max_concurrent_requests = max;
+		self
+	}
+
+	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
 	///
-	/// Fails when the URL is invalid.
-	pub async fn new(config: WsConfig<'_>) -> Result<WsClient, Error> {
-		let max_capacity_per_subscription = config.max_notifs_per_subscription;
-		let max_concurrent_requests = config.max_concurrent_requests;
-		let request_timeout = config.request_timeout;
-		let (to_back, from_front) = mpsc::channel(config.max_concurrent_requests);
+	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`](jsonrpsee_types::client::Subscription) frequently enough
+	/// such that the buffer capacity doesn't exceeds.
+	///
+	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
+	/// because it is passed to [`futures::channel::mpsc::channel`].
+	///
+	pub fn max_notifs_per_subscription(mut self, max: usize) -> Self {
+		self.max_notifs_per_subscription = max;
+		self
+	}
+
+	/// Build the client with specified URL to connect to.
+	/// If the port number is missing from the URL, the default port number is used.
+	///
+	///
+	/// `ws://host` - port 80 is used
+	///
+	/// `wss://host` - port 443 is used
+	pub async fn build(self, url: &'a str) -> Result<WsClient, Error> {
+		let max_capacity_per_subscription = self.max_notifs_per_subscription;
+		let max_concurrent_requests = self.max_concurrent_requests;
+		let request_timeout = self.request_timeout;
+		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 
-		let (sender, receiver) = jsonrpc_transport::websocket_connection(config.clone())
-			.await
-			.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let (sockaddrs, host, mode) = parse_url(url).map_err(|e| Error::TransportError(Box::new(e)))?;
+
+		let builder = WsTransportClientBuilder {
+			sockaddrs,
+			mode,
+			host,
+			handshake_url: self.handshake_url,
+			timeout: self.connection_timeout,
+			origin: None,
+			max_request_body_size: self.max_request_body_size,
+		};
+
+		let (sender, receiver) = builder.build().await.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
 			background_task(
-				sender,
-				receiver,
+				jsonrpc_transport::Sender::new(sender),
+				jsonrpc_transport::Receiver::new(receiver),
 				from_front,
 				err_tx,
 				max_capacity_per_subscription,
@@ -168,9 +207,11 @@ impl WsClient {
 			)
 			.await;
 		});
-		Ok(Self { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)) })
+		Ok(WsClient { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)) })
 	}
+}
 
+impl WsClient {
 	/// Checks if the client is connected to the target.
 	pub fn is_connected(&self) -> bool {
 		!self.to_back.is_closed()

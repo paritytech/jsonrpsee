@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::WsConfig;
 use async_std::net::TcpStream;
 use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
@@ -32,7 +31,7 @@ use futures::prelude::*;
 use jsonrpsee_types::jsonrpc;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
-use std::{borrow::Cow, convert::TryFrom, io, net::SocketAddr, time::Duration};
+use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
 use thiserror::Error;
 
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
@@ -64,20 +63,20 @@ pub struct Receiver {
 #[derive(Debug)]
 pub struct WsTransportClientBuilder<'a> {
 	/// Socket addresses to try to connect to.
-	sockaddrs: Vec<SocketAddr>,
+	pub sockaddrs: Vec<SocketAddr>,
 	/// Host.
-	host: Host,
+	pub host: Host,
 	/// Stream mode, either plain TCP or TLS.
-	mode: Mode,
+	pub mode: Mode,
 	/// Url to send during the HTTP handshake.
-	handshake_url: Cow<'a, str>,
+	pub handshake_url: Cow<'a, str>,
 	/// Timeout for the connection.
-	timeout: Duration,
+	pub timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header is passed.
-	origin: Option<Cow<'a, str>>,
+	pub origin: Option<Cow<'a, str>>,
 	/// Max payload size
-	max_request_body_size: usize,
+	pub max_request_body_size: usize,
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -267,32 +266,6 @@ impl<'a> WsTransportClientBuilder<'a> {
 	}
 }
 
-impl<'a> TryFrom<WsConfig<'a>> for WsTransportClientBuilder<'a> {
-	type Error = WsHandshakeError;
-
-	fn try_from(config: WsConfig<'a>) -> Result<Self, Self::Error> {
-		let url =
-			url::Url::parse(&config.url).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
-		let mode = match url.scheme() {
-			"ws" => Mode::Plain,
-			"wss" => Mode::Tls,
-			_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
-		};
-		let host = url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?.into();
-		// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
-		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self {
-			sockaddrs,
-			host: Host(host),
-			mode,
-			handshake_url: config.handshake_url.clone(),
-			timeout: config.connection_timeout,
-			origin: None,
-			max_request_body_size: config.max_request_body_size,
-		})
-	}
-}
-
 impl From<io::Error> for WsNewError {
 	fn from(err: io::Error) -> WsNewError {
 		WsNewError::Io(err)
@@ -323,46 +296,56 @@ impl From<soketto::connection::Error> for WsConnectError {
 	}
 }
 
+/// Helper to parse an URL to WebSocket address.
+pub fn parse_url(url: impl AsRef<str>) -> Result<(Vec<SocketAddr>, Host, Mode), WsHandshakeError> {
+	let url = url::Url::parse(url.as_ref()).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
+	let mode = match url.scheme() {
+		"ws" => Mode::Plain,
+		"wss" => Mode::Tls,
+		_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
+	};
+	let host = Host(url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?.into());
+	// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
+	let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
+	Ok((sockaddrs, host, mode))
+}
+
 #[cfg(test)]
 mod tests {
-	use super::{Mode, WsConfig, WsHandshakeError, WsTransportClientBuilder};
-	use std::convert::TryInto;
+	use super::{parse_url, Mode, WsHandshakeError};
 
 	#[test]
 	fn ws_works() {
-		let ws_config = WsConfig::with_url("ws://127.0.0.1:9933");
-		let builder: WsTransportClientBuilder = ws_config.try_into().unwrap();
-		assert_eq!(builder.host.as_str(), "127.0.0.1");
-		assert_eq!(builder.mode, Mode::Plain);
+		let (_sockaddrs, host, mode) = parse_url("ws://127.0.0.1:9933").unwrap();
+		assert_eq!(host.as_str(), "127.0.0.1");
+		assert_eq!(mode, Mode::Plain);
 	}
 
 	#[test]
 	fn wss_works() {
-		let builder: WsTransportClientBuilder =
-			WsConfig::with_url("wss://kusama-rpc.polkadot.io:443").try_into().unwrap();
-		assert_eq!(builder.host.as_str(), "kusama-rpc.polkadot.io");
-		assert_eq!(builder.mode, Mode::Tls);
+		let (_sockaddrs, host, mode) = parse_url("wss://kusama-rpc.polkadot.io:443").unwrap();
+		assert_eq!(host.as_str(), "kusama-rpc.polkadot.io");
+		assert_eq!(mode, Mode::Tls);
 	}
 
 	#[test]
 	fn faulty_url_scheme() {
-		let err: Result<WsTransportClientBuilder, _> =
-			WsConfig::with_url("http://kusama-rpc.polkadot.io:443").try_into();
-		assert!(matches!(err, Err(WsHandshakeError::Url(_))));
+		let err = parse_url("http://kusama-rpc.polkadot.io:443").unwrap_err();
+		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
 	#[test]
 	fn faulty_port() {
-		let builder: Result<WsTransportClientBuilder, _> = WsConfig::with_url("ws://127.0.0.1:-43").try_into();
-		assert!(matches!(builder, Err(super::WsHandshakeError::Url(_))));
-		let builder: Result<WsTransportClientBuilder, _> = WsConfig::with_url("ws://127.0.0.1:99999").try_into();
-		assert!(matches!(builder, Err(super::WsHandshakeError::Url(_))));
+		let err = parse_url("ws://127.0.0.1:-43").unwrap_err();
+		assert!(matches!(err, WsHandshakeError::Url(_)));
+		let err = parse_url("ws://127.0.0.1:99999").unwrap_err();
+		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
 	#[test]
 	fn default_port_works() {
-		let builder: WsTransportClientBuilder = WsConfig::with_url("ws://127.0.0.1").try_into().unwrap();
-		assert_eq!(builder.host.as_str(), "127.0.0.1");
-		assert_eq!(builder.mode, Mode::Plain);
+		let (_sockaddr, host, mode) = parse_url("ws://127.0.0.1").unwrap();
+		assert_eq!(host.as_str(), "127.0.0.1");
+		assert_eq!(mode, Mode::Plain);
 	}
 }
