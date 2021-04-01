@@ -33,6 +33,10 @@ use hyper::{
 	Error as HyperError,
 };
 use jsonrpsee_types::error::{Error, GenericTransportError};
+use jsonrpsee_types::v2::error::{
+	INVALID_REQUEST_CODE, INVALID_REQUEST_MSG, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG, PARSE_ERROR_CODE,
+	PARSE_ERROR_MSG,
+};
 use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
 use jsonrpsee_utils::http::{access_control::AccessControl, hyper_helpers::read_response_to_body};
 use jsonrpsee_utils::server_utils::send_error;
@@ -184,13 +188,13 @@ impl Server {
 										log::error!("method_call: {} failed: {:?}", req.method, err);
 									}
 								} else {
-									send_error(req.id, &tx, -32601, "Method not found");
+									send_error(req.id, &tx, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG);
 								}
 							}
 							Err(_e) => {
 								let (id, code, msg) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
-									Ok(req) => (req.id, -32600, "Invalid request"),
-									Err(_) => (None, -32700, "Parse error"),
+									Ok(req) => (req.id, INVALID_REQUEST_CODE, INVALID_REQUEST_MSG),
+									Err(_) => (None, PARSE_ERROR_CODE, PARSE_ERROR_MSG),
 								};
 								send_error(id, &tx, code, msg);
 							}
