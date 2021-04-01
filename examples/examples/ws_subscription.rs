@@ -29,7 +29,7 @@ use jsonrpsee_types::{
 	jsonrpc::{JsonValue, Params},
 	traits::SubscriptionClient,
 };
-use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
+use jsonrpsee_ws_client::{WsClientBuilder, WsSubscription};
 use jsonrpsee_ws_server::WsServer;
 use tokio::task;
 
@@ -47,8 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 
 	server_started_rx.await?;
-	let config = WsConfig::with_url(SERVER_URI);
-	let client = WsClient::new(config).await?;
+	let client = WsClientBuilder::default().build(SERVER_URI).await?;
 	let mut subscribe_hello: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await?;
 

@@ -39,14 +39,13 @@ use jsonrpsee_types::{
 	jsonrpc::{JsonValue, Params},
 	traits::{Client, SubscriptionClient},
 };
-use jsonrpsee_ws_client::{WsClient, WsConfig, WsSubscription};
+use jsonrpsee_ws_client::{WsClientBuilder, WsSubscription};
 
 #[tokio::test]
 async fn ws_subscription_works() {
 	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
-	let config = WsConfig::with_url(&server_url);
-	let client = WsClient::new(config).await.unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 	let mut foo_sub: WsSubscription<JsonValue> =
@@ -64,8 +63,7 @@ async fn ws_subscription_works() {
 async fn ws_method_call_works() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
-	let config = WsConfig::with_url(&server_url);
-	let client = WsClient::new(config).await.unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let response: JsonValue = client.request("say_hello", Params::None).await.unwrap();
 	assert_eq!(response, JsonValue::String("hello".into()));
 }
@@ -86,8 +84,7 @@ async fn ws_subscription_several_clients() {
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
-		let config = WsConfig::with_url(&server_url);
-		let client = WsClient::new(config).await.unwrap();
+		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 		let hello_sub: WsSubscription<JsonValue> =
 			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: WsSubscription<JsonValue> =
@@ -103,10 +100,8 @@ async fn ws_subscription_several_clients_with_drop() {
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
-		let mut config = WsConfig::with_url(&server_url);
-		config.max_notifs_per_subscription = u32::MAX as usize;
-
-		let client = WsClient::new(config).await.unwrap();
+		let client =
+			WsClientBuilder::default().max_notifs_per_subscription(u32::MAX as usize).build(&server_url).await.unwrap();
 		let hello_sub: WsSubscription<String> =
 			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: WsSubscription<u64> =
@@ -151,9 +146,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let mut config = WsConfig::with_url(&server_url);
-	config.max_notifs_per_subscription = 4;
-	let client = WsClient::new(config).await.unwrap();
+	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 
@@ -182,10 +175,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 async fn ws_more_request_than_buffer_should_not_deadlock() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
-
-	let mut config = WsConfig::with_url(&server_url);
-	config.max_concurrent_requests = 2;
-	let client = Arc::new(WsClient::new(config).await.unwrap());
+	let client = Arc::new(WsClientBuilder::default().max_concurrent_requests(2).build(&server_url).await.unwrap());
 
 	let mut requests = Vec::new();
 
@@ -208,14 +198,14 @@ async fn https_works() {
 
 #[tokio::test]
 async fn wss_works() {
-	let client = WsClient::new(WsConfig::with_url("wss://kusama-rpc.polkadot.io")).await.unwrap();
+	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
 	let response: String = client.request("system_chain", Params::None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
 #[tokio::test]
 async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
-	let err = WsClient::new(WsConfig::with_url("wss://♥♥♥♥♥♥∀∂")).await;
+	let err = WsClientBuilder::default().build("wss://♥♥♥♥♥♥∀∂").await;
 	assert!(matches!(err, Err(Error::TransportError(_))));
 }
 
