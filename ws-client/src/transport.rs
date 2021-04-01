@@ -296,7 +296,7 @@ impl From<soketto::connection::Error> for WsConnectError {
 	}
 }
 
-/// Helper to parse an URL to WebSocket address.
+/// Helper to parse an URL to a WebSocket address.
 pub fn parse_url(url: impl AsRef<str>) -> Result<(Vec<SocketAddr>, Host, Mode), WsHandshakeError> {
 	let url = url::Url::parse(url.as_ref()).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
 	let mode = match url.scheme() {
