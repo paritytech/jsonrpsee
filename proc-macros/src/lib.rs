@@ -225,27 +225,27 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name.to_string(),
-					jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
+					jsonrpsee::types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee::types::error::Error::Custom(format!("{:?}", e)))?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span =>
-				jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
+				jsonrpsee::types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee::types::error::Error::Custom(format!("{:?}", e)))?
 			));
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote! {jsonrpsee_types::jsonrpc::Params::None}
+			quote! {jsonrpsee::types::jsonrpc::Params::None}
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=>
-				jsonrpsee_types::jsonrpc::Params::Array(vec![
+				jsonrpsee::types::jsonrpc::Params::Array(vec![
 					#(#params_to_array),*
 				])
 			)
 		} else {
 			let params_list_len = params_list.len();
 			quote_spanned!(function.signature.span()=>
-				jsonrpsee_types::jsonrpc::Params::Map({
-					let mut map = jsonrpsee_types::jsonrpc::JsonMap::with_capacity(#params_list_len);
+				jsonrpsee::types::jsonrpc::Params::Map({
+					let mut map = jsonrpsee::types::jsonrpc::JsonMap::with_capacity(#params_list_len);
 					#(#params_to_json)*
 					map
 				})
@@ -264,10 +264,10 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-			#visibility async fn #f_name (client: &impl jsonrpsee_types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, jsonrpsee_types::error::Error>
+			#visibility async fn #f_name (client: &impl jsonrpsee::types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, jsonrpsee::types::error::Error>
 			where
-				#ret_ty: jsonrpsee_types::jsonrpc::DeserializeOwned
-				#(, #params_tys: jsonrpsee_types::jsonrpc::Serialize)*
+				#ret_ty: jsonrpsee::types::jsonrpc::DeserializeOwned
+				#(, #params_tys: jsonrpsee::types::jsonrpc::Serialize)*
 			{
 				#function_body
 			}

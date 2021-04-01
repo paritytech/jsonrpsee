@@ -24,9 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee_http_server::{HttpConfig, HttpServer};
-use jsonrpsee_types::jsonrpc::JsonValue;
-use jsonrpsee_ws_server::WsServer;
+use jsonrpsee::{
+	http_server::{HttpConfig, HttpServer},
+	types::jsonrpc::JsonValue,
+	ws_server::WsServer,
+};
 
 use std::net::SocketAddr;
 use std::time::Duration;
