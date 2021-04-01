@@ -125,7 +125,7 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set request timeout for requests.
+	/// Set request timeout.
 	pub fn request_timeout(mut self, timeout: Option<Duration>) -> Self {
 		self.request_timeout = timeout;
 		self
