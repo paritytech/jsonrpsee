@@ -29,7 +29,7 @@ use jsonrpsee_types::{
 	jsonrpc::{JsonValue, Params},
 	traits::Client,
 };
-use jsonrpsee_ws_client::{WsClient, WsConfig};
+use jsonrpsee_ws_client::WsClientBuilder;
 use jsonrpsee_ws_server::WsServer;
 use tokio::task;
 
@@ -46,15 +46,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	});
 
 	server_started_rx.await?;
-	let client = WsClient::new(WsConfig::with_url(SERVER_URI)).await?;
+	let client = WsClientBuilder::default().build(SERVER_URI).await?;
 	let response: JsonValue = client.request("say_hello", Params::None).await?;
 	println!("r: {:?}", response);
 
 	Ok(())
 }
 
-async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let mut server = WsServer::new(url).await.unwrap();
+async fn run_server(server_started_tx: Sender<()>, addr: &str) {
+	let mut server = WsServer::new(addr).await.unwrap();
 
 	server.register_method("say_hello", |_| Ok("lo")).unwrap();
 

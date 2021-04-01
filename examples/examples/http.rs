@@ -24,42 +24,30 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use async_std::task;
-use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_http_client::{HttpClient, HttpConfig};
-use jsonrpsee_http_server::HttpServer;
-use jsonrpsee_types::{
-	jsonrpc::{JsonValue, Params},
-	traits::Client,
-};
+use std::net::SocketAddr;
 
-const SOCK_ADDR: &str = "127.0.0.1:9933";
-const SERVER_URI: &str = "http://localhost:9933";
+use jsonrpsee_http_client::HttpClientBuilder;
+use jsonrpsee_http_server::HttpServerBuilder;
+use jsonrpsee_types::{jsonrpc::Params, traits::Client};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	env_logger::init();
 
-	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-	let _server = task::spawn(async move {
-		run_server(server_started_tx, SOCK_ADDR).await;
-	});
+	let server_addr = run_server().await;
+	let url = format!("http://{}", server_addr);
 
-	server_started_rx.await?;
-
-	let client = HttpClient::new(SERVER_URI, HttpConfig::default())?;
-	let response: Result<JsonValue, _> = client.request("say_hello", Params::None).await;
+	let client = HttpClientBuilder::default().build(url)?;
+	let response: Result<String, _> = client.request("say_hello", Params::None).await;
 	println!("r: {:?}", response);
 
 	Ok(())
 }
 
-async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let server = HttpServer::new(url, HttpConfig::default()).await.unwrap();
-	let mut say_hello = server.register_method("say_hello".to_string()).unwrap();
-	server_started_tx.send(()).unwrap();
-	loop {
-		let r = say_hello.next().await;
-		r.respond(Ok(JsonValue::String("lo".to_owned()))).await.unwrap();
-	}
+async fn run_server() -> SocketAddr {
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	server.register_method("say_hello", |_| Ok("lo")).unwrap();
+	let addr = server.local_addr().unwrap();
+	tokio::spawn(async move { server.start().await.unwrap() });
+	addr
 }

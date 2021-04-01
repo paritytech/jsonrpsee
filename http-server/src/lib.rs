@@ -24,16 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-mod raw;
+mod module;
+mod response;
 mod server;
-mod transport;
+
+pub use jsonrpsee_utils::http::access_control::{AccessControl, AccessControlBuilder};
+pub use module::{RpcContextModule, RpcModule};
+pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
 
 #[cfg(test)]
 mod tests;
-
-pub use jsonrpsee_types::http::HttpConfig;
-pub use raw::RawServer as HttpRawServer;
-pub use raw::RawServerEvent as HttpRawServerEvent;
-pub use raw::TypedResponder as HttpTypedResponder;
-pub use server::{RegisteredMethod, RegisteredNotification, Server as HttpServer};
-pub use transport::HttpTransportServer;

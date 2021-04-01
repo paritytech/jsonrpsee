@@ -27,7 +27,6 @@
 extern crate alloc;
 
 mod server;
-mod types;
 
 #[cfg(test)]
 mod tests;
