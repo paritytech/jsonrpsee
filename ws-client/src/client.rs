@@ -143,7 +143,7 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set URL to send during the HTTP handshake.
+	/// Set URL to send during the handshake.
 	pub fn handshake_url(mut self, url: Cow<'a, str>) -> Self {
 		self.handshake_url = url;
 		self
