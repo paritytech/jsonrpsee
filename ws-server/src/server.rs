@@ -28,12 +28,11 @@ use futures::io::{BufReader, BufWriter};
 use jsonrpsee_types::error::Error;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
-use serde_json::value::{to_raw_value, RawValue};
+use serde::Serialize;
+use serde_json::value::to_raw_value;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use thiserror::Error;
 use tokio::{
 	net::{TcpListener, ToSocketAddrs},
 	sync::mpsc,
@@ -41,53 +40,16 @@ use tokio::{
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::types::{ConnectionId, Methods, RpcId, RpcSender};
-use crate::types::{JsonRpcError, JsonRpcErrorParams};
-use crate::types::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcResponse, TwoPointZero};
-use crate::types::{JsonRpcNotification, JsonRpcNotificationParams};
+use jsonrpsee_types::v2::error::{METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG};
+use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::{JsonRpcNotification, JsonRpcNotificationParams};
+use jsonrpsee_utils::server_utils::{send_error, ConnectionId, Methods};
 
 mod module;
 
 pub use module::{RpcContextModule, RpcModule};
 
 type SubscriptionId = u64;
-
-trait RpcResult {
-	fn to_json(self, id: Option<&RawValue>) -> anyhow::Result<String>;
-}
-
-#[derive(Error, Debug)]
-pub enum RpcError {
-	#[error("unknown rpc error")]
-	Unknown,
-	#[error("invalid params")]
-	InvalidParams,
-}
-
-/// Parameters sent with the RPC request
-#[derive(Clone, Copy)]
-pub struct RpcParams<'a>(Option<&'a str>);
-
-impl<'a> RpcParams<'a> {
-	/// Attempt to parse all parameters as array or map into type T
-	pub fn parse<T>(self) -> Result<T, RpcError>
-	where
-		T: Deserialize<'a>,
-	{
-		match self.0 {
-			None => Err(RpcError::InvalidParams),
-			Some(params) => serde_json::from_str(params).map_err(|_| RpcError::InvalidParams),
-		}
-	}
-
-	/// Attempt to parse only the first parameter from an array into type T
-	pub fn one<T>(self) -> Result<T, RpcError>
-	where
-		T: Deserialize<'a>,
-	{
-		self.parse::<[T; 1]>().map(|[res]| res)
-	}
-}
 
 #[derive(Clone)]
 pub struct SubscriptionSink {
@@ -124,42 +86,6 @@ impl SubscriptionSink {
 		}
 
 		Ok(())
-	}
-}
-
-// Private helper for sending JSON-RPC responses to the client
-fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
-	let json = match serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result }) {
-		Ok(json) => json,
-		Err(err) => {
-			log::error!("Error serializing response: {:?}", err);
-
-			return send_error(id, tx, -32603, "Internal error");
-		}
-	};
-
-	if let Err(err) = tx.send(json) {
-		log::error!("Error sending response to the client: {:?}", err)
-	}
-}
-
-// Private helper for sending JSON-RPC errors to the client
-fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
-	let json = match serde_json::to_string(&JsonRpcError {
-		jsonrpc: TwoPointZero,
-		error: JsonRpcErrorParams { code, message },
-		id,
-	}) {
-		Ok(json) => json,
-		Err(err) => {
-			log::error!("Error serializing error message: {:?}", err);
-
-			return;
-		}
-	};
-
-	if let Err(err) = tx.send(json) {
-		log::error!("Error sending response to the client: {:?}", err)
 	}
 }
 
@@ -257,12 +183,12 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 
 		match serde_json::from_slice::<JsonRpcRequest>(&data) {
 			Ok(req) => {
-				let params = RpcParams(req.params.map(|params| params.get()));
+				let params = RpcParams::new(req.params.map(|params| params.get()));
 
 				if let Some(method) = methods.get(&*req.method) {
 					(method)(req.id, params, &tx, id)?;
 				} else {
-					send_error(req.id, &tx, -32601, "Method not found");
+					send_error(req.id, &tx, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG);
 				}
 			}
 			Err(_) => {

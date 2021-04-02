@@ -64,7 +64,7 @@ proc_macros::rpc_client_api! {
 async fn proc_macros_generic_ws_client_api() {
 	let server_addr = helpers::websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
-	let client = WsClient::new(WsConfig::with_url(&server_url)).await.unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	assert_eq!(Test::<String>::say_hello(&client).await.unwrap(), "hello".to_string());
 	assert_eq!(Test2::<u16, String>::foo(&client, 99_u16).await.unwrap(), "hello".to_string());
@@ -75,7 +75,7 @@ async fn proc_macros_generic_ws_client_api() {
 async fn proc_macros_generic_http_client_api() {
 	let server_addr = helpers::http_server().await;
 	let server_url = format!("http://{}", server_addr);
-	let client = HttpClient::new(&server_url, HttpConfig::default()).unwrap();
+	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
 	assert_eq!(Test::<String>::say_hello(&client).await.unwrap(), "hello".to_string());
 	assert_eq!(Test2::<u16, String>::foo(&client, 99_u16).await.unwrap(), "hello".to_string());

@@ -31,7 +31,7 @@ use crate::http::hosts::{AllowHosts, Host};
 use crate::http::{cors, hosts, hyper_helpers};
 use hyper::header;
 
-/// Define access on control on http layer
+/// Define access on control on HTTP layer.
 #[derive(Clone)]
 pub struct AccessControl {
 	allow_hosts: AllowHosts,
@@ -116,10 +116,12 @@ impl Default for AccessControlBuilder {
 }
 
 impl AccessControlBuilder {
+	/// Create a new builder for `AccessControl`.
 	pub fn new() -> Self {
 		Self::default()
 	}
 
+	/// Configure allow host.
 	pub fn allow_host(mut self, host: Host) -> Self {
 		let allow_hosts = match self.allow_hosts {
 			AllowHosts::Any => vec![host],
@@ -132,6 +134,7 @@ impl AccessControlBuilder {
 		self
 	}
 
+	/// Configure CORS origin.
 	pub fn cors_allow_origin(mut self, allow_origin: AccessControlAllowOrigin) -> Self {
 		let cors_allow_origin = match self.cors_allow_origin {
 			Some(mut cors_allow_origin) => {
@@ -144,11 +147,13 @@ impl AccessControlBuilder {
 		self
 	}
 
+	/// Configure CORS max age.
 	pub fn cors_max_age(mut self, max_age: u32) -> Self {
 		self.cors_max_age = Some(max_age);
 		self
 	}
 
+	/// Configure which CORS header that is allowed.
 	pub fn cors_allow_header(mut self, header: String) -> Self {
 		let allow_headers = match self.cors_allow_headers {
 			AccessControlAllowHeaders::Any => vec![header],
@@ -161,11 +166,13 @@ impl AccessControlBuilder {
 		self
 	}
 
+	/// Enable or disable to continue with invalid CORS.
 	pub fn continue_on_invalid_cors(mut self, continue_on_invalid_cors: bool) -> Self {
 		self.continue_on_invalid_cors = continue_on_invalid_cors;
 		self
 	}
 
+	/// Build.
 	pub fn build(self) -> AccessControl {
 		AccessControl {
 			allow_hosts: self.allow_hosts,

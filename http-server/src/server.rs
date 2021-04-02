@@ -24,288 +24,230 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::raw::{RawServer, RawServerEvent, RawServerRequestId};
-use crate::transport::HttpTransportServer;
-use jsonrpsee_types::{
-	error::Error,
-	http::HttpConfig,
-	jsonrpc::{self, JsonValue},
+use crate::module::RpcModule;
+use crate::response;
+use anyhow::anyhow;
+use hyper::{
+	server::{conn::AddrIncoming, Builder as HyperBuilder},
+	service::{make_service_fn, service_fn},
+	Error as HyperError,
 };
-
-use futures::{channel::mpsc, future::Either, pin_mut, prelude::*};
-use parking_lot::Mutex;
+use jsonrpsee_types::error::{Error, GenericTransportError};
+use jsonrpsee_types::v2::error::{
+	INVALID_REQUEST_CODE, INVALID_REQUEST_MSG, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG, PARSE_ERROR_CODE,
+	PARSE_ERROR_MSG,
+};
+use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
+use jsonrpsee_utils::http::{access_control::AccessControl, hyper_helpers::read_response_to_body};
+use jsonrpsee_utils::server_utils::send_error;
+use serde::Serialize;
+use socket2::{Domain, Socket, Type};
 use std::{
-	collections::{HashMap, HashSet},
-	error,
-	net::SocketAddr,
-	sync::{atomic, Arc},
+	net::{SocketAddr, TcpListener},
+	sync::Arc,
 };
+use tokio::sync::mpsc;
 
-/// Server that can be cloned.
-///
-/// > **Note**: This struct is designed to be easy to use, but it works by maintaining a background
-/// >           task running in parallel. If this is not desirable, you are encouraged to use the
-/// >           [`RawServer`] struct instead.
-#[derive(Clone)]
+/// Builder to create JSON-RPC HTTP server.
+pub struct Builder {
+	access_control: AccessControl,
+	max_request_body_size: u32,
+	keep_alive: bool,
+}
+
+impl Builder {
+	/// Sets the maximum size of a request body in bytes (default is 10 MiB).
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.max_request_body_size = size;
+		self
+	}
+
+	/// Sets access control settings.
+	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
+		self.access_control = acl;
+		self
+	}
+
+	/// Enables or disables HTTP keep-alive.
+	///
+	/// Default is true.
+	pub fn keep_alive(mut self, keep_alive: bool) -> Self {
+		self.keep_alive = keep_alive;
+		self
+	}
+
+	pub fn build(self, addr: SocketAddr) -> anyhow::Result<Server> {
+		let domain = Domain::for_address(addr);
+		let socket = Socket::new(domain, Type::STREAM, None)?;
+		socket.set_nodelay(true)?;
+		socket.set_reuse_address(true)?;
+		socket.set_reuse_port(true)?;
+		socket.set_nonblocking(true)?;
+		socket.set_keepalive(self.keep_alive)?;
+		let address = addr.into();
+		socket.bind(&address)?;
+
+		socket.listen(128)?;
+		let listener: TcpListener = socket.into();
+		let local_addr = listener.local_addr().ok();
+
+		let listener = hyper::Server::from_tcp(listener)?;
+		Ok(Server {
+			listener,
+			local_addr,
+			root: RpcModule::new(),
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+		})
+	}
+}
+
+impl Default for Builder {
+	fn default() -> Self {
+		Self { max_request_body_size: 10 * 1024 * 1024, access_control: AccessControl::default(), keep_alive: true }
+	}
+}
+
 pub struct Server {
-	/// Local socket address of the transport server.
-	local_addr: SocketAddr,
-	/// Channel to send requests to the background task.
-	to_back: mpsc::UnboundedSender<FrontToBack>,
-	/// List of methods (for RPC queries and notifications) that have been
-	/// registered. Serves no purpose except to check for duplicates.
-	registered_methods: Arc<Mutex<HashSet<String>>>,
-	/// Next unique ID used when registering a subscription.
-	next_subscription_unique_id: Arc<atomic::AtomicUsize>,
-}
-
-/// Notification method that's been registered.
-pub struct RegisteredNotification {
-	/// Receives notifications that the client sent to us.
-	queries_rx: mpsc::Receiver<jsonrpc::Params>,
-}
-
-/// Method that's been registered.
-pub struct RegisteredMethod {
-	/// Clone of [`Server::to_back`].
-	to_back: mpsc::UnboundedSender<FrontToBack>,
-	/// Receives requests that the client sent to us.
-	queries_rx: mpsc::Receiver<(RawServerRequestId, jsonrpc::Params)>,
-}
-
-/// Active request that needs to be answered.
-pub struct IncomingRequest {
-	/// Clone of [`Server::to_back`].
-	to_back: mpsc::UnboundedSender<FrontToBack>,
-	/// Identifier of the request towards the server.
-	request_id: RawServerRequestId,
-	/// Parameters of the request.
-	params: jsonrpc::Params,
-}
-
-/// Message that the [`Server`] can send to the background task.
-enum FrontToBack {
-	/// Registers a notifications endpoint.
-	RegisterNotifications {
-		/// Name of the method.
-		name: String,
-		/// Where to send incoming notifications.
-		handler: mpsc::Sender<jsonrpc::Params>,
-		/// See the documentation of [`Server::register_notifications`].
-		allow_losses: bool,
-	},
-
-	/// Registers a method. The server will then handle requests using this method.
-	RegisterMethod {
-		/// Name of the method.
-		name: String,
-		/// Where to send requests.
-		handler: mpsc::Sender<(RawServerRequestId, jsonrpc::Params)>,
-	},
-
-	/// Send a response to a request that a client made.
-	AnswerRequest {
-		/// Request to answer.
-		request_id: RawServerRequestId,
-		/// Response to send back.
-		answer: Result<JsonValue, jsonrpc::Error>,
-	},
+	/// Hyper server.
+	listener: HyperBuilder<AddrIncoming>,
+	/// Local address
+	local_addr: Option<SocketAddr>,
+	/// Registered methods.
+	root: RpcModule,
+	/// Max request body size.
+	max_request_body_size: u32,
+	/// Access control
+	access_control: AccessControl,
 }
 
 impl Server {
-	/// Initializes a new server based upon this raw server.
-	pub async fn new(url: impl AsRef<str>, config: HttpConfig) -> Result<Self, Box<dyn error::Error + Send + Sync>> {
-		let sockaddr = url.as_ref().parse()?;
-		let transport_server = HttpTransportServer::new(&sockaddr, config).await?;
-		let local_addr = *transport_server.local_addr();
+	/// Register a new RPC method, which responds with a given callback.
+	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	where
+		R: Serialize,
+		F: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static,
+	{
+		self.root.register_method(method_name, callback)
+	}
 
-		// We use an unbounded channel because the only exchanged messages concern registering
-		// methods. The volume of messages is therefore very low and it doesn't make sense to have
-		// a backpressure mechanism.
-		// TODO: that's not true anymore ^
-		let (to_back, from_front) = mpsc::unbounded();
+	/// Register all methods from a module on this server.
+	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
+		self.root.merge(module)
+	}
 
-		async_std::task::spawn(async move {
-			background_task(transport_server.into(), from_front).await;
+	/// Returns socket address to which the server is bound.
+	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
+		self.local_addr.ok_or_else(|| anyhow!("Local address not found"))
+	}
+
+	/// Start the server.
+	pub async fn start(self) -> anyhow::Result<()> {
+		let methods = Arc::new(self.root.into_methods());
+		let max_request_body_size = self.max_request_body_size;
+		let access_control = self.access_control;
+
+		let make_service = make_service_fn(move |_| {
+			let methods = methods.clone();
+			let access_control = access_control.clone();
+
+			async move {
+				Ok::<_, HyperError>(service_fn(move |request| {
+					let methods = methods.clone();
+					let access_control = access_control.clone();
+					async move {
+						if let Err(e) = access_control_is_valid(&access_control, &request) {
+							return Ok::<_, HyperError>(e);
+						}
+
+						if let Err(e) = content_type_is_valid(&request) {
+							return Ok::<_, HyperError>(e);
+						}
+
+						let (parts, body) = request.into_parts();
+						let body = match read_response_to_body(&parts.headers, body, max_request_body_size).await {
+							Ok(body) => body,
+							Err(GenericTransportError::TooLarge) => {
+								return Ok::<_, HyperError>(response::too_large("The request was too large"))
+							}
+							Err(GenericTransportError::Inner(e)) => {
+								return Ok::<_, HyperError>(response::internal_error(e.to_string()))
+							}
+						};
+
+						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
+						let (tx, mut rx) = mpsc::unbounded_channel();
+
+						match serde_json::from_slice::<JsonRpcRequest>(&body) {
+							Ok(req) => {
+								log::debug!("recv: {:?}", req);
+								let params = RpcParams::new(req.params.map(|params| params.get()));
+								if let Some(method) = methods.get(&*req.method) {
+									// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+									if let Err(err) = (method)(req.id, params, &tx, 0) {
+										log::error!("method_call: {} failed: {:?}", req.method, err);
+									}
+								} else {
+									send_error(req.id, &tx, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG);
+								}
+							}
+							Err(_e) => {
+								let (id, code, msg) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
+									Ok(req) => (req.id, INVALID_REQUEST_CODE, INVALID_REQUEST_MSG),
+									Err(_) => (None, PARSE_ERROR_CODE, PARSE_ERROR_MSG),
+								};
+								send_error(id, &tx, code, msg);
+							}
+						};
+
+						let response = rx.recv().await.expect("Sender is still alive managed by us above; qed");
+						log::debug!("send: {:?}", response);
+						Ok::<_, HyperError>(response::ok_response(response))
+					}
+				}))
+			}
 		});
 
-		Ok(Server {
-			local_addr,
-			to_back,
-			registered_methods: Arc::new(Mutex::new(HashSet::new())),
-			next_subscription_unique_id: Arc::new(atomic::AtomicUsize::new(0)),
-		})
-	}
-
-	/// Local socket address of the transport server.
-	pub fn local_addr(&self) -> &SocketAddr {
-		&self.local_addr
-	}
-
-	/// Registers a notification method name towards the server.
-	///
-	/// Clients will then be able to call this method.
-	/// The returned object allows you to process incoming notifications.
-	///
-	/// If `allow_losses` is true, then the server is allowed to drop notifications if the
-	/// notifications handler (i.e. the code that uses [`RegisteredNotifications`]) is too slow
-	/// to process notifications.
-	///
-	/// Returns an error if the method name was already registered.
-	pub fn register_notification(
-		&self,
-		method_name: String,
-		allow_losses: bool,
-	) -> Result<RegisteredNotification, Error> {
-		if !self.registered_methods.lock().insert(method_name.clone()) {
-			return Err(Error::MethodAlreadyRegistered(method_name));
-		}
-
-		log::trace!("[frontend]: register_notification={}", method_name);
-		let (tx, rx) = mpsc::channel(32);
-
-		self.to_back
-			.unbounded_send(FrontToBack::RegisterNotifications { name: method_name, handler: tx, allow_losses })
-			.map_err(|e| Error::Internal(e.into_send_error()))?;
-
-		Ok(RegisteredNotification { queries_rx: rx })
-	}
-
-	/// Registers a method towards the server.
-	///
-	/// Clients will then be able to call this method.
-	/// The returned object allows you to handle incoming requests.
-	///
-	/// Contrary to [`register_notifications`](Server::register_notifications), there is no
-	/// `allow_losses` parameter here. If the handler is too slow to process requests, then the
-	/// server automatically returns an "internal error" to the client.
-	///
-	/// Returns an error if the method name was already registered.
-	pub fn register_method(&self, method_name: String) -> Result<RegisteredMethod, Error> {
-		if !self.registered_methods.lock().insert(method_name.clone()) {
-			return Err(Error::MethodAlreadyRegistered(method_name));
-		}
-
-		log::trace!("[frontend]: register_method={}", method_name);
-		let (tx, rx) = mpsc::channel(32);
-
-		self.to_back
-			.unbounded_send(FrontToBack::RegisterMethod { name: method_name, handler: tx })
-			.map_err(|e| Error::Internal(e.into_send_error()))?;
-
-		Ok(RegisteredMethod { to_back: self.to_back.clone(), queries_rx: rx })
+		let server = self.listener.serve(make_service);
+		server.await.map_err(Into::into)
 	}
 }
 
-impl RegisteredNotification {
-	/// Returns the next notification.
-	pub async fn next(&mut self) -> jsonrpc::Params {
-		loop {
-			match self.queries_rx.next().await {
-				Some(v) => break v,
-				None => futures::pending!(),
-			}
+// Checks to that access control of the received request is the same as configured.
+fn access_control_is_valid(
+	access_control: &AccessControl,
+	request: &hyper::Request<hyper::Body>,
+) -> Result<(), hyper::Response<hyper::Body>> {
+	if access_control.deny_host(request) {
+		return Err(response::host_not_allowed());
+	}
+	if access_control.deny_cors_origin(request) {
+		return Err(response::invalid_allow_origin());
+	}
+	if access_control.deny_cors_header(request) {
+		return Err(response::invalid_allow_headers());
+	}
+	Ok(())
+}
+
+/// Checks that content type of received request is valid for JSON-RPC.
+fn content_type_is_valid(request: &hyper::Request<hyper::Body>) -> Result<(), hyper::Response<hyper::Body>> {
+	match *request.method() {
+		hyper::Method::POST if is_json(request.headers().get("content-type")) => Ok(()),
+		_ => Err(response::method_not_allowed()),
+	}
+}
+
+/// Returns true if the `content_type` header indicates a valid JSON message.
+fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
+	match content_type.and_then(|val| val.to_str().ok()) {
+		Some(ref content)
+			if content.eq_ignore_ascii_case("application/json")
+				|| content.eq_ignore_ascii_case("application/json; charset=utf-8")
+				|| content.eq_ignore_ascii_case("application/json;charset=utf-8") =>
+		{
+			true
 		}
-	}
-}
-
-impl RegisteredMethod {
-	/// Returns the next request.
-	pub async fn next(&mut self) -> IncomingRequest {
-		let (request_id, params) = loop {
-			match self.queries_rx.next().await {
-				Some(v) => break v,
-				None => futures::pending!(),
-			}
-		};
-		IncomingRequest { to_back: self.to_back.clone(), request_id, params }
-	}
-}
-
-impl IncomingRequest {
-	/// Returns the parameters of the request.
-	pub fn params(&self) -> &jsonrpc::Params {
-		&self.params
-	}
-
-	/// Respond to the request.
-	pub async fn respond(mut self, response: impl Into<Result<JsonValue, jsonrpc::Error>>) -> Result<(), Error> {
-		self.to_back
-			.send(FrontToBack::AnswerRequest { request_id: self.request_id, answer: response.into() })
-			.await
-			.map_err(Error::Internal)
-	}
-}
-
-/// Function being run in the background that processes messages from the frontend.
-async fn background_task(mut server: RawServer, mut from_front: mpsc::UnboundedReceiver<FrontToBack>) {
-	// List of notifications methods that the user has registered, and the channels to dispatch
-	// incoming notifications.
-	let mut registered_notifications: HashMap<String, (mpsc::Sender<_>, bool)> = HashMap::new();
-	// List of methods that the user has registered, and the channels to dispatch incoming
-	// requests.
-	let mut registered_methods: HashMap<String, mpsc::Sender<_>> = HashMap::new();
-
-	loop {
-		// We need to do a little transformation in order to destroy the borrow to `client`
-		// and `from_front`.
-		let outcome = {
-			let next_message = from_front.next();
-			let next_event = server.next_event();
-			pin_mut!(next_message);
-			pin_mut!(next_event);
-			match future::select(next_message, next_event).await {
-				Either::Left((v, _)) => Either::Left(v),
-				Either::Right((v, _)) => Either::Right(v),
-			}
-		};
-
-		match outcome {
-			Either::Left(None) => {
-				log::trace!("[backend]: background_task terminated");
-				return;
-			}
-			Either::Left(Some(FrontToBack::AnswerRequest { request_id, answer })) => {
-				log::trace!("[backend]: answer_request: {:?} id: {:?}", answer, request_id);
-				server.request_by_id(&request_id).unwrap().respond(answer);
-			}
-			Either::Left(Some(FrontToBack::RegisterNotifications { name, handler, allow_losses })) => {
-				log::trace!("[backend]: register_notification: {:?}", name);
-				registered_notifications.insert(name, (handler, allow_losses));
-			}
-			Either::Left(Some(FrontToBack::RegisterMethod { name, handler })) => {
-				log::trace!("[backend]: register_method: {:?}", name);
-				registered_methods.insert(name, handler);
-			}
-			Either::Right(RawServerEvent::Notification(notification)) => {
-				log::trace!("[backend]: received notification: {:?}", notification);
-				if let Some((handler, allow_losses)) = registered_notifications.get_mut(notification.method()) {
-					let params: &jsonrpc::Params = notification.params().into();
-					// Note: we just ignore errors. It doesn't make sense logically speaking to
-					// unregister the notification here.
-					if *allow_losses {
-						let _ = handler.send(params.clone()).now_or_never();
-					} else {
-						let _ = handler.send(params.clone()).await;
-					}
-				}
-			}
-			Either::Right(RawServerEvent::Request(request)) => {
-				log::trace!("[backend]: received request: {:?}", request);
-				if let Some(handler) = registered_methods.get_mut(request.method()) {
-					let params: &jsonrpc::Params = request.params().into();
-					match handler.send((request.id(), params.clone())).now_or_never() {
-						Some(Ok(())) => {}
-						Some(Err(_)) | None => {
-							request.respond(Err(From::from(jsonrpc::ErrorCode::ServerError(0))));
-						}
-					}
-				} else {
-					// TODO: we assert that the request is valid because the parsing succeeded but
-					// not registered.
-					request.respond(Err(From::from(jsonrpc::ErrorCode::MethodNotFound)));
-				}
-			}
-		}
+		_ => false,
 	}
 }

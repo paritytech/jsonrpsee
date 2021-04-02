@@ -24,16 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use futures::channel::oneshot;
 use jsonrpsee::{
 	http_server::{HttpConfig, HttpServer},
 	types::jsonrpc::JsonValue,
 	ws_server::WsServer,
 };
-
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures::channel::oneshot;
 
 pub async fn websocket_server_with_subscription() -> SocketAddr {
 	let (server_started_tx, server_started_rx) = oneshot::channel();
@@ -85,22 +84,10 @@ pub async fn websocket_server() -> SocketAddr {
 }
 
 pub async fn http_server() -> SocketAddr {
-	let (server_started_tx, server_started_rx) = oneshot::channel();
-
-	std::thread::spawn(move || {
-		let rt = tokio::runtime::Runtime::new().unwrap();
-
-		let server = rt.block_on(HttpServer::new("127.0.0.1:0", HttpConfig::default())).unwrap();
-		server_started_tx.send(*server.local_addr()).unwrap();
-		let mut call = server.register_method("say_hello".to_owned()).unwrap();
-
-		rt.block_on(async move {
-			loop {
-				let handle = call.next().await;
-				handle.respond(Ok(JsonValue::String("hello".to_owned()))).await.unwrap();
-			}
-		});
-	});
-
-	server_started_rx.await.unwrap()
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let addr = server.local_addr().unwrap();
+	server.register_method("say_hello", |_| Ok("hello")).unwrap();
+	server.register_method("notif", |_| Ok("")).unwrap();
+	tokio::spawn(async move { server.start().await.unwrap() });
+	addr
 }

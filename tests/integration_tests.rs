@@ -30,7 +30,6 @@ mod helpers;
 
 use std::sync::Arc;
 use std::time::Duration;
-
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::{
 	http_client::{HttpClient, HttpConfig},
@@ -46,8 +45,7 @@ use jsonrpsee::{
 async fn ws_subscription_works() {
 	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
-	let config = WsConfig::with_url(&server_url);
-	let client = WsClient::new(config).await.unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 	let mut foo_sub: WsSubscription<JsonValue> =
@@ -65,8 +63,7 @@ async fn ws_subscription_works() {
 async fn ws_method_call_works() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
-	let config = WsConfig::with_url(&server_url);
-	let client = WsClient::new(config).await.unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let response: JsonValue = client.request("say_hello", Params::None).await.unwrap();
 	assert_eq!(response, JsonValue::String("hello".into()));
 }
@@ -75,9 +72,9 @@ async fn ws_method_call_works() {
 async fn http_method_call_works() {
 	let server_addr = http_server().await;
 	let uri = format!("http://{}", server_addr);
-	let client = HttpClient::new(&uri, HttpConfig::default()).unwrap();
-	let response: JsonValue = client.request("say_hello", Params::None).await.unwrap();
-	assert_eq!(response, JsonValue::String("hello".into()));
+	let client = HttpClientBuilder::default().build(&uri).unwrap();
+	let response: String = client.request("say_hello", Params::None).await.unwrap();
+	assert_eq!(&response, "hello");
 }
 
 #[tokio::test]
@@ -87,8 +84,7 @@ async fn ws_subscription_several_clients() {
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
-		let config = WsConfig::with_url(&server_url);
-		let client = WsClient::new(config).await.unwrap();
+		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 		let hello_sub: WsSubscription<JsonValue> =
 			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: WsSubscription<JsonValue> =
@@ -104,10 +100,8 @@ async fn ws_subscription_several_clients_with_drop() {
 
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
-		let mut config = WsConfig::with_url(&server_url);
-		config.max_notifs_per_subscription = u32::MAX as usize;
-
-		let client = WsClient::new(config).await.unwrap();
+		let client =
+			WsClientBuilder::default().max_notifs_per_subscription(u32::MAX as usize).build(&server_url).await.unwrap();
 		let hello_sub: WsSubscription<String> =
 			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: WsSubscription<u64> =
@@ -152,9 +146,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let mut config = WsConfig::with_url(&server_url);
-	config.max_notifs_per_subscription = 4;
-	let client = WsClient::new(config).await.unwrap();
+	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
 	let mut hello_sub: WsSubscription<JsonValue> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
 
@@ -183,10 +175,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 async fn ws_more_request_than_buffer_should_not_deadlock() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
-
-	let mut config = WsConfig::with_url(&server_url);
-	config.max_concurrent_requests = 2;
-	let client = Arc::new(WsClient::new(config).await.unwrap());
+	let client = Arc::new(WsClientBuilder::default().max_concurrent_requests(2).build(&server_url).await.unwrap());
 
 	let mut requests = Vec::new();
 
@@ -202,27 +191,27 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 
 #[tokio::test]
 async fn https_works() {
-	let client = HttpClient::new("https://kusama-rpc.polkadot.io", HttpConfig::default()).unwrap();
+	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
 	let response: String = client.request("system_chain", Params::None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
 #[tokio::test]
 async fn wss_works() {
-	let client = WsClient::new(WsConfig::with_url("wss://kusama-rpc.polkadot.io")).await.unwrap();
+	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
 	let response: String = client.request("system_chain", Params::None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
 #[tokio::test]
 async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
-	let err = WsClient::new(WsConfig::with_url("wss://♥♥♥♥♥♥∀∂")).await;
+	let err = WsClientBuilder::default().build("wss://♥♥♥♥♥♥∀∂").await;
 	assert!(matches!(err, Err(Error::TransportError(_))));
 }
 
 #[tokio::test]
 async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
-	let client = HttpClient::new("http://♥♥♥♥♥♥∀∂", HttpConfig::default()).unwrap();
+	let client = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂").unwrap();
 	let err: Result<(), Error> = client.request("system_chain", Params::None).await;
 	assert!(matches!(err, Err(Error::TransportError(_))));
 }
