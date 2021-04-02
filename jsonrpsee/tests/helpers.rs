@@ -25,14 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::channel::oneshot;
-use jsonrpsee::{
-	http_server::{HttpConfig, HttpServer},
-	types::jsonrpc::JsonValue,
-	ws_server::WsServer,
-};
+use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServer};
 use std::net::SocketAddr;
 use std::time::Duration;
-
 
 pub async fn websocket_server_with_subscription() -> SocketAddr {
 	let (server_started_tx, server_started_rx) = oneshot::channel();

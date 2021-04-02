@@ -28,18 +28,18 @@
 
 mod helpers;
 
-use std::sync::Arc;
-use std::time::Duration;
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::{
-	http_client::{HttpClient, HttpConfig},
+	http_client::HttpClientBuilder,
 	types::{
 		error::Error,
 		jsonrpc::{JsonValue, Params},
 		traits::{Client, SubscriptionClient},
 	},
-	ws_client::{WsClient, WsConfig, WsSubscription},
+	ws_client::{WsClientBuilder, WsSubscription},
 };
+use std::sync::Arc;
+use std::time::Duration;
 
 #[tokio::test]
 async fn ws_subscription_works() {

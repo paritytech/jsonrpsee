@@ -5,21 +5,16 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Benchmarks for jsonrpsee"
 edition = "2018"
 license = "MIT"
-
-[lib]
-bench = false
+publish = false
 
 [dev-dependencies]
 criterion = "0.3"
 futures = "0.3"
-jsonrpsee-types = { path = "../types" }
-jsonrpsee-http-client = { path = "../http-client" }
-jsonrpsee-ws-client = { path = "../ws-client" }
-jsonrpsee-ws-server = { path = "../ws-server" }
-jsonrpsee-http-server = { path = "../http-server" }
+jsonrpsee = { path = "../jsonrpsee" }
 num_cpus = "1"
 tokio = { version = "1", features = ["full"] }
 
 [[bench]]
 name = "bench"
+path = "bench.rs"
 harness = false

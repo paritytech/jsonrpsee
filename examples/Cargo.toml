@@ -1,0 +1,27 @@
+[package]
+name = "jsonrpsee-examples"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Examples for jsonrpsee"
+edition = "2018"
+publish = false
+
+[dev-dependencies]
+anyhow = "1"
+env_logger = "0.8"
+futures = "0.3"
+jsonrpsee = { path = "../jsonrpsee" }
+log = "0.4"
+tokio = { version = "1", features = ["full"] }
+
+[[example]]
+name = "http"
+path = "http.rs"
+
+[[example]]
+name = "ws"
+path = "ws.rs"
+
+[[example]]
+name = "ws_subscription"
+path = "ws_subscription.rs"
