@@ -8,11 +8,9 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1.0.34"
-async-std = { version = "1.8.0", features = ["attributes"] }
 beef = "0.5"
-bs58 = "0.4"
 fnv = "1"
-futures = "0.3"
+futures = { version = "0.3", default-features = false }
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.4" }
 jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.4" }
 log = "0.4"
@@ -30,4 +28,3 @@ thiserror = "1"
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
 jsonrpsee-ws-client = { path = "../ws-client" }
-tokio = { version = "1", features = ["full"] }

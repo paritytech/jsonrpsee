@@ -24,8 +24,14 @@
 // IN background_task WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::io::{BufReader, BufWriter};
-use jsonrpsee_types::error::Error;
+use futures::{
+	channel::mpsc,
+	io::{BufReader, BufWriter},
+};
+use jsonrpsee_types::{
+	error::Error,
+	v2::error::{INVALID_REQUEST_CODE, INVALID_REQUEST_MSG, PARSE_ERROR_CODE, PARSE_ERROR_MSG},
+};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
@@ -33,10 +39,7 @@ use serde_json::value::to_raw_value;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::{
-	net::{TcpListener, ToSocketAddrs},
-	sync::mpsc,
-};
+use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
@@ -75,7 +78,7 @@ impl SubscriptionSink {
 			})?;
 
 			// Log broken connections
-			if sender.send(msg).is_err() {
+			if sender.unbounded_send(msg).is_err() {
 				errored.push((*conn_id, *sub_id));
 			}
 		}
@@ -165,10 +168,10 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
-	let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+	let (tx, mut rx) = mpsc::unbounded::<String>();
 
 	tokio::spawn(async move {
-		while let Some(response) = rx.recv().await {
+		while let Some(response) = rx.next().await {
 			let _ = sender.send_binary_mut(response.into_bytes()).await;
 			let _ = sender.flush().await;
 		}
@@ -193,8 +196,8 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 			}
 			Err(_) => {
 				let (id, code, msg) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
-					Ok(req) => (req.id, -32600, "Invalid request"),
-					Err(_) => (None, -32700, "Parse error"),
+					Ok(req) => (req.id, INVALID_REQUEST_CODE, INVALID_REQUEST_MSG),
+					Err(_) => (None, PARSE_ERROR_CODE, PARSE_ERROR_MSG),
 				};
 
 				send_error(id, &tx, code, msg);

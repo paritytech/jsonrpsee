@@ -27,6 +27,7 @@
 use crate::module::RpcModule;
 use crate::response;
 use anyhow::anyhow;
+use futures::{channel::mpsc, StreamExt};
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
 	service::{make_service_fn, service_fn},
@@ -46,7 +47,6 @@ use std::{
 	net::{SocketAddr, TcpListener},
 	sync::Arc,
 };
-use tokio::sync::mpsc;
 
 /// Builder to create JSON-RPC HTTP server.
 pub struct Builder {
@@ -175,7 +175,7 @@ impl Server {
 						};
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
-						let (tx, mut rx) = mpsc::unbounded_channel();
+						let (tx, mut rx) = mpsc::unbounded();
 
 						match serde_json::from_slice::<JsonRpcRequest>(&body) {
 							Ok(req) => {
@@ -199,7 +199,7 @@ impl Server {
 							}
 						};
 
-						let response = rx.recv().await.expect("Sender is still alive managed by us above; qed");
+						let response = rx.next().await.expect("Sender is still alive managed by us above; qed");
 						log::debug!("send: {:?}", response);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
