@@ -26,9 +26,7 @@
 
 //! Host header validation.
 
-use crate::http::matcher::{Matcher, Pattern};
-use std::collections::HashSet;
-use std::net::SocketAddr;
+use crate::access_control::matcher::{Matcher, Pattern};
 
 const SPLIT_PROOF: &str = "split always returns non-empty iterator.";
 
@@ -135,6 +133,7 @@ impl Pattern for Host {
 
 impl std::ops::Deref for Host {
 	type Target = str;
+
 	fn deref(&self) -> &Self::Target {
 		&self.as_string
 	}
@@ -167,17 +166,6 @@ pub fn is_host_valid(host: Option<&str>, allow_hosts: &AllowHosts) -> bool {
 			AllowHosts::Only(allow_hosts) => allow_hosts.iter().any(|h| h.matches(host)),
 		},
 	}
-}
-
-/// Updates given list of hosts with the address.
-pub fn update(hosts: Option<Vec<Host>>, address: &SocketAddr) -> Option<Vec<Host>> {
-	hosts.map(|current_hosts| {
-		let mut new_hosts = current_hosts.into_iter().collect::<HashSet<_>>();
-		let address = address.to_string();
-		new_hosts.insert(address.clone().into());
-		new_hosts.insert(address.replace("127.0.0.1", "localhost").into());
-		new_hosts.into_iter().collect()
-	})
 }
 
 /// Allowed hosts for http header 'host'

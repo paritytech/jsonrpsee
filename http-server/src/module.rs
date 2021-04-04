@@ -1,6 +1,6 @@
 use jsonrpsee_types::error::Error;
 use jsonrpsee_types::v2::{traits::RpcMethod, RpcError, RpcParams};
-use jsonrpsee_utils::server_utils::{send_response, Methods};
+use jsonrpsee_utils::server::{send_response, Methods};
 use serde::Serialize;
 use std::sync::Arc;
 
