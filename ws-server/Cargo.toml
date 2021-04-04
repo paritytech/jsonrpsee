@@ -8,8 +8,6 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1.0.34"
-beef = "0.5"
-fnv = "1"
 futures = { version = "0.3", default-features = false }
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.4" }
 jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.4" }
@@ -23,7 +21,6 @@ soketto = "0.4"
 tokio = { version = "1", features = ["net", "rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.1", features = ["net"] }
 tokio-util = { version = "0.6", features = ["compat"] }
-thiserror = "1"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
