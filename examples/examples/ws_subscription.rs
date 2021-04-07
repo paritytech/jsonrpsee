@@ -25,10 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::{
-	jsonrpc::{JsonValue, Params},
-	traits::SubscriptionClient,
-};
+use jsonrpsee_types::traits::SubscriptionClient;
 use jsonrpsee_ws_client::{WsClientBuilder, WsSubscription};
 use jsonrpsee_ws_server::WsServer;
 use tokio::task;
@@ -48,8 +45,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	server_started_rx.await?;
 	let client = WsClientBuilder::default().build(SERVER_URI).await?;
-	let mut subscribe_hello: WsSubscription<JsonValue> =
-		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await?;
+	let mut subscribe_hello: WsSubscription<String> =
+		client.subscribe("subscribe_hello".into(), None.into(), "unsubscribe_hello".into()).await?;
 
 	let mut i = 0;
 	while i <= NUM_SUBSCRIPTION_RESPONSES {
@@ -57,6 +54,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		log::debug!("received {:?}", r);
 		i += 1;
 	}
+
+	drop(subscribe_hello);
+
+	loop {}
 
 	Ok(())
 }

@@ -30,7 +30,7 @@ fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Clie
 	crit.bench_function(name, |b| {
 		b.iter(|| {
 			rt.block_on(async {
-				black_box(client.request::<String, _, _>("say_hello", Params::None).await.unwrap());
+				black_box(client.request::<String>("say_hello".into(), None.into()).await.unwrap());
 			})
 		})
 	});
@@ -50,7 +50,7 @@ fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
 				for _ in 0..num_concurrent_tasks {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
-						let _ = black_box(client_rc.request::<String, _, _>("say_hello", Params::None)).await;
+						let _ = black_box(client_rc.request::<String>("say_hello".into(), None.into())).await;
 					});
 					tasks.push(task);
 				}

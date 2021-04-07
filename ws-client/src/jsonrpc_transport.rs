@@ -6,9 +6,12 @@ use crate::{
 	manager::RequestManager,
 	transport::{self, WsConnectError},
 };
-use jsonrpsee_types::client::{BatchMessage, NotificationMessage, RequestMessage, SubscriptionMessage};
-use jsonrpsee_types::error::Error;
-use jsonrpsee_types::jsonrpc::{self, Request};
+use jsonrpsee_types::{
+	client::{BatchMessage, NotificationMessage, RequestMessage, SubscriptionMessage},
+	error::Error,
+	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse},
+};
+use serde::de::DeserializeOwned;
 
 /// JSONRPC WebSocket sender.
 #[derive(Debug)]
@@ -28,7 +31,8 @@ impl Sender {
 		batch: BatchMessage,
 		request_manager: &mut RequestManager,
 	) -> Result<(), Error> {
-		let req_id = request_manager.next_request_id()?;
+		todo!();
+		/*let req_id = request_manager.next_request_id()?;
 		let mut calls = Vec::with_capacity(batch.requests.len());
 		let mut ids = Vec::with_capacity(batch.requests.len());
 
@@ -58,7 +62,7 @@ impl Sender {
 				request_manager.reclaim_request_id(req_id);
 				Err(e)
 			}
-		}
+		}*/
 	}
 
 	/// Sends a request to the server but it doesn’t wait for a response.
@@ -78,12 +82,7 @@ impl Sender {
 				return Err(Error::Custom(str_err));
 			}
 		};
-		let req = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
-			jsonrpc: jsonrpc::Version::V2,
-			method: request.method,
-			params: request.params,
-			id: jsonrpc::Id::Num(id),
-		}));
+		let req = JsonRpcCall::new(id, request.method.inner(), request.params.inner());
 		match self.transport.send_request(req).await {
 			Ok(_) => {
 				request_manager.insert_pending_call(id, request.send_back).expect("ID unused checked above; qed");
@@ -100,14 +99,9 @@ impl Sender {
 	/// Sends a notification to the server. The notification doesn't need any response.
 	///
 	/// Returns `Ok(())` if the notification was successfully sent otherwise `Err(_)`.
-	pub async fn send_notification(&mut self, notif: NotificationMessage) -> Result<(), Error> {
-		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
-			jsonrpc: jsonrpc::Version::V2,
-			method: notif.method,
-			params: notif.params,
-		}));
-
-		self.transport.send_request(request).await.map_err(|e| Error::TransportError(Box::new(e)))
+	pub async fn send_notification<'a>(&mut self, notif: NotificationMessage) -> Result<(), Error> {
+		let notif = JsonRpcNotification::new(notif.method.inner(), notif.params.inner());
+		self.transport.send_request(notif).await.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
 	/// Sends a request to the server to start a new subscription but it doesn't wait for a response.
@@ -116,31 +110,26 @@ impl Sender {
 	/// Returns `Ok()` if the request was successfully sent otherwise `Err(_)`.
 	pub async fn start_subscription(
 		&mut self,
-		subscription: SubscriptionMessage,
+		sub: SubscriptionMessage,
 		request_manager: &mut RequestManager,
 	) -> Result<(), Error> {
 		let id = match request_manager.next_request_id() {
 			Ok(id) => id,
 			Err(err) => {
 				let str_err = err.to_string();
-				let _ = subscription.send_back.send(Err(err));
+				let _ = sub.send_back.send(Err(err));
 				return Err(Error::Custom(str_err));
 			}
 		};
+		let req = JsonRpcCall::new(id, sub.subscribe_method.inner(), sub.params.inner());
 
-		let req = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
-			jsonrpc: jsonrpc::Version::V2,
-			method: subscription.subscribe_method,
-			params: subscription.params,
-			id: jsonrpc::Id::Num(id as u64),
-		}));
 		if let Err(e) = self.transport.send_request(req).await {
 			let str_err = e.to_string();
-			let _ = subscription.send_back.send(Err(Error::TransportError(Box::new(e))));
+			let _ = sub.send_back.send(Err(Error::TransportError(Box::new(e))));
 			return Err(Error::Custom(str_err));
 		}
 		request_manager
-			.insert_pending_subscription(id, subscription.send_back, subscription.unsubscribe_method)
+			.insert_pending_subscription(id, sub.send_back, sub.unsubscribe_method)
 			.expect("Request ID unused checked above; qed");
 		Ok(())
 	}
@@ -159,7 +148,10 @@ impl Receiver {
 	}
 
 	/// Reads the next response, fails if the response ID was not a number.
-	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
+	pub async fn next_response<T>(&mut self) -> Result<JsonRpcResponse<T>, WsConnectError>
+	where
+		T: DeserializeOwned + std::fmt::Debug,
+	{
 		self.transport.next_response().await
 	}
 }

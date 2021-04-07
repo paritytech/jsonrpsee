@@ -1,4 +1,3 @@
-use crate::jsonrpc;
 use std::fmt;
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
@@ -22,11 +21,8 @@ pub enum Error {
 	#[error("Networking or low-level protocol error: {0}")]
 	TransportError(#[source] Box<dyn std::error::Error + Send + Sync>),
 	/// JSON-RPC request error.
-	#[error("JSON-RPC request error: {0:?}")]
-	Request(#[source] jsonrpc::Error),
-	/// Subscription error.
-	#[error("Subscription failed, subscribe_method: {0} unsubscribe_method: {1}")]
-	Subscription(String, String),
+	//#[error("JSON-RPC request error: {0:?}")]
+	//Request(#[source] jsonrpc::Error),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	Internal(#[source] futures::channel::mpsc::SendError),
@@ -38,7 +34,7 @@ pub enum Error {
 	RestartNeeded(String),
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
-	ParseError(#[source] jsonrpc::ParseError),
+	ParseError(#[source] serde_json::Error),
 	/// Invalid subscription ID.
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionId,

@@ -35,16 +35,19 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
-use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
 	client::{BatchMessage, FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
 	error::Error,
-	jsonrpc::{self, JsonValue, SubscriptionId},
 	traits::{Client, SubscriptionClient},
+	v2::dummy::{
+		JsonRpcMethod, JsonRpcParams, JsonRpcParamsOwned, JsonRpcResponse, JsonRpcResponseObject, SubscriptionId,
+	},
 };
+use serde::de::DeserializeOwned;
+use serde_json::Value as JsonValue;
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::time::Duration;
-use std::{borrow::Cow, convert::TryInto};
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -84,6 +87,9 @@ impl ErrorFromBack {
 #[derive(Debug)]
 pub struct WsClient {
 	/// Channel to send requests to the background task.
+	//
+	// NOTE(niklasad1): allow str slices instead of allocated Strings but it's hard to do because putting a lifetime on FrontToBack
+	// screws everything up.
 	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
@@ -229,37 +235,37 @@ impl WsClient {
 
 #[async_trait]
 impl Client for WsClient {
-	/// Send a notification to the server.
-	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
-	where
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
-	{
-		let method = method.into();
-		let params = params.into();
+	async fn notification<'a>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<(), Error> {
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		match self.to_back.clone().send(FrontToBack::Notification(NotificationMessage { method, params })).await {
+		match self
+			.to_back
+			.clone()
+			.send(FrontToBack::Notification(NotificationMessage {
+				method: method.to_owned(),
+				params: params.to_owned(),
+			}))
+			.await
+		{
 			Ok(()) => Ok(()),
 			Err(_) => Err(self.read_error_from_backend().await),
 		}
 	}
 
-	/// Perform a request towards the server.
-	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
+	async fn request<'a, T>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<T, Error>
 	where
 		T: DeserializeOwned,
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
 	{
-		let method = method.into();
-		let params = params.into();
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::StartRequest(RequestMessage { method, params, send_back: Some(send_back_tx) }))
+			.send(FrontToBack::StartRequest(RequestMessage {
+				method: method.to_owned(),
+				params: params.to_owned(),
+				send_back: Some(send_back_tx),
+			}))
 			.await
 			.is_err()
 		{
@@ -282,15 +288,15 @@ impl Client for WsClient {
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
-		jsonrpc::from_value(json_value).map_err(Error::ParseError)
+		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	async fn batch_request<T, M, P>(&self, batch: Vec<(M, P)>) -> Result<Vec<T>, Error>
+	async fn batch_request<'a, T>(&self, batch: Vec<(JsonRpcMethod<'a>, JsonRpcParams<'a>)>) -> Result<Vec<T>, Error>
 	where
 		T: DeserializeOwned + Default + Clone,
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
 	{
+		todo!();
+		/*
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let requests: Vec<(String, jsonrpc::Params)> = batch.into_iter().map(|(r, p)| (r.into(), p.into())).collect();
 		log::trace!("[frontend]: send batch request: {:?}", requests);
@@ -312,7 +318,7 @@ impl Client for WsClient {
 
 		let values: Result<_, _> =
 			json_values.into_iter().map(|val| jsonrpc::from_value(val).map_err(Error::ParseError)).collect();
-		Ok(values?)
+		Ok(values?)*/
 	}
 }
 
@@ -322,35 +328,31 @@ impl SubscriptionClient for WsClient {
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	async fn subscribe<SM, UM, P, N>(
+	async fn subscribe<'a, N>(
 		&self,
-		subscribe_method: SM,
-		params: P,
-		unsubscribe_method: UM,
+		subscribe_method: JsonRpcMethod<'a>,
+		params: JsonRpcParams<'a>,
+		unsubscribe_method: JsonRpcMethod<'a>,
 	) -> Result<Subscription<N>, Error>
 	where
-		SM: Into<String> + Send,
-		UM: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
 		N: DeserializeOwned,
 	{
-		let subscribe_method = subscribe_method.into();
-		let unsubscribe_method = unsubscribe_method.into();
-		let params = params.into();
+		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
+		let sub_method = subscribe_method.to_owned();
+		let unsub_method = unsubscribe_method.to_owned();
 
 		if subscribe_method == unsubscribe_method {
-			return Err(Error::Subscription(subscribe_method, unsubscribe_method));
+			return Err(Error::SubscriptionNameConflict(sub_method.0));
 		}
 
-		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
 			.to_back
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
-				subscribe_method,
-				unsubscribe_method,
-				params,
+				subscribe_method: sub_method,
+				unsubscribe_method: unsub_method,
+				params: params.to_owned(),
 				send_back: send_back_tx,
 			}))
 			.await
@@ -380,7 +382,8 @@ async fn background_task(
 	let mut manager = RequestManager::new(max_concurrent_requests);
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
-		let res = receiver.next_response().await;
+		// TODO: fix JsonValue here.
+		let res = receiver.next_response::<JsonValue>().await;
 		Some((res, receiver))
 	});
 
@@ -440,7 +443,7 @@ async fn background_task(
 					stop_subscription(&mut sender, &mut manager, unsub).await;
 				}
 			}
-			Either::Right((Some(Ok(jsonrpc::Response::Single(response))), _)) => {
+			Either::Right((Some(Ok(JsonRpcResponse::Single(response))), _)) => {
 				match process_response(&mut manager, response, max_notifs_per_subscription) {
 					Ok(Some(unsub)) => {
 						stop_subscription(&mut sender, &mut manager, unsub).await;
@@ -452,29 +455,14 @@ async fn background_task(
 					}
 				}
 			}
-			Either::Right((Some(Ok(jsonrpc::Response::Batch(batch))), _)) => {
+			Either::Right((Some(Ok(JsonRpcResponse::Batch(batch))), _)) => {
 				let mut digest = Vec::with_capacity(batch.len());
 				let mut ordered_responses = vec![JsonValue::Null; batch.len()];
 				let mut rps_unordered: Vec<_> = Vec::with_capacity(batch.len());
 
 				for rp in batch {
-					let id = match rp.id().as_number().copied() {
-						Some(id) => id,
-						None => {
-							let _ = front_error.send(Error::InvalidRequestId);
-							return;
-						}
-					};
-					let rp: Result<JsonValue, Error> = rp.try_into().map_err(Error::Request);
-					let rp = match rp {
-						Ok(rp) => rp,
-						Err(err) => {
-							let _ = front_error.send(err);
-							return;
-						}
-					};
-					digest.push(id);
-					rps_unordered.push((id, rp));
+					digest.push(rp.id);
+					rps_unordered.push((rp.id, rp.result));
 				}
 
 				digest.sort_unstable();
@@ -497,7 +485,8 @@ async fn background_task(
 				manager.reclaim_request_id(batch_state.request_id);
 				let _ = batch_state.send_back.send(Ok(ordered_responses));
 			}
-			Either::Right((Some(Ok(jsonrpc::Response::Notif(notif))), _)) => {
+			Either::Right((Some(Ok(JsonRpcResponse::Subscription(notif))), _)) => {
+				log::info!("notif: {:?}", notif);
 				let sub_id = notif.params.subscription;
 				let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 					Some(r) => r,
@@ -542,36 +531,26 @@ async fn background_task(
 /// Returns `Err(_)` if the response couldn't be handled.
 fn process_response(
 	manager: &mut RequestManager,
-	response: jsonrpc::Output,
+	response: JsonRpcResponseObject<JsonValue>,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
-	let response_id: u64 = *response.id().as_number().ok_or(Error::InvalidRequestId)?;
-
-	match manager.request_status(&response_id) {
+	match manager.request_status(&response.id) {
 		RequestStatus::PendingMethodCall => {
-			let send_back_oneshot = match manager.complete_pending_call(response_id) {
+			let send_back_oneshot = match manager.complete_pending_call(response.id) {
 				Some(Some(send)) => send,
 				Some(None) => return Ok(None),
 				None => return Err(Error::InvalidRequestId),
 			};
 
-			manager.reclaim_request_id(response_id);
-			let response = response.try_into().map_err(Error::Request);
-			let _ = send_back_oneshot.send(response);
+			manager.reclaim_request_id(response.id);
+			let _ = send_back_oneshot.send(Ok(response.result));
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
 			let (send_back_oneshot, unsubscribe_method) =
-				manager.complete_pending_subscription(response_id).ok_or(Error::InvalidRequestId)?;
-			let json_sub_id: JsonValue = match response.try_into() {
-				Ok(response) => response,
-				Err(e) => {
-					let _ = send_back_oneshot.send(Err(Error::Request(e)));
-					return Ok(None);
-				}
-			};
+				manager.complete_pending_subscription(response.id).ok_or(Error::InvalidRequestId)?;
 
-			let sub_id: SubscriptionId = match jsonrpc::from_value(json_sub_id) {
+			let sub_id: SubscriptionId = match serde_json::from_value(response.result) {
 				Ok(sub_id) => sub_id,
 				Err(_) => {
 					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
@@ -579,6 +558,7 @@ fn process_response(
 				}
 			};
 
+			let response_id = response.id;
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
 			if manager.insert_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method).is_ok() {
 				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
@@ -614,6 +594,9 @@ fn build_unsubscribe_message(
 ) -> Option<RequestMessage> {
 	let (_, unsub, sub_id) = manager.remove_subscription(req_id, sub_id)?;
 	manager.reclaim_request_id(req_id);
-	let json_sub_id = jsonrpc::to_value(sub_id).expect("SubscriptionId to JSON is infallible; qed");
-	Some(RequestMessage { method: unsub, params: jsonrpc::Params::Array(vec![json_sub_id]), send_back: None })
+	// TODO(niklasad): better type for params or maybe a macro?!.
+	let sub_id_str = serde_json::to_string(&sub_id).expect("SubscriptionId to JSON is infallible; qed");
+	let params_str = format!("[ {} ]", sub_id_str);
+	let params = JsonRpcParamsOwned(Some(params_str));
+	Some(RequestMessage { method: unsub, params, send_back: None })
 }

@@ -8,8 +8,13 @@
 
 use hyper::client::{Client, HttpConnector};
 use hyper_rustls::HttpsConnector;
-use jsonrpsee_types::{error::GenericTransportError, jsonrpc};
+use jsonrpsee_types::{
+	error::GenericTransportError,
+	v2::dummy::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse},
+};
 use jsonrpsee_utils::http::hyper_helpers;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
@@ -42,9 +47,8 @@ impl HttpTransportClient {
 	}
 
 	/// Send request.
-	async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, Error> {
-		let body = jsonrpc::to_vec(&request).map_err(Error::Serialization)?;
-		log::debug!("send: {}", request);
+	async fn send<'a>(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
+		log::debug!("send: {}", body);
 
 		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
@@ -65,24 +69,29 @@ impl HttpTransportClient {
 	}
 
 	/// Send notification.
-	pub async fn send_notification(&self, request: jsonrpc::Request) -> Result<(), Error> {
-		let _response = self.send_request(request).await?;
+	pub async fn send_notification<'a>(&self, notif: JsonRpcNotification<'a>) -> Result<(), Error> {
+		let body = serde_json::to_string(&notif).map_err(Error::Serialization)?;
+		let _response = self.send(body).await?;
 		Ok(())
 	}
 
 	/// Send request and wait for response.
-	pub async fn send_request_and_wait_for_response(
+	pub async fn send_request_and_wait_for_response<'a, T>(
 		&self,
-		request: jsonrpc::Request,
-	) -> Result<jsonrpc::Response, Error> {
-		let response = self.send_request(request).await?;
+		request: impl Into<JsonRpcRequest<'a>>,
+	) -> Result<JsonRpcResponse<T>, Error>
+	where
+		T: DeserializeOwned,
+	{
+		let body = serde_json::to_string(&request.into()).map_err(Error::Serialization)?;
+		let response = self.send(body).await?;
 		let (parts, body) = response.into_parts();
 		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.max_request_body_size).await?;
 
 		// Note that we don't check the Content-Type of the request. This is deemed
 		// unnecessary, as a parsing error while happen anyway.
-		let response: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::ParseError)?;
-		log::debug!("recv: {}", jsonrpc::to_string(&response).expect("request valid JSON; qed"));
+		let response = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+		//log::debug!("recv: {}", serde_json::to_string(&response).expect("valid JSON; qed"));
 		Ok(response)
 	}
 }

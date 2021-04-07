@@ -1,8 +1,12 @@
-use crate::error::Error;
-use crate::jsonrpc::{self, DeserializeOwned, JsonValue, Params, SubscriptionId};
+use crate::{
+	error::Error,
+	v2::dummy::{JsonRpcMethod, JsonRpcMethodOwned, JsonRpcParams, JsonRpcParamsOwned, SubscriptionId},
+};
 use core::marker::PhantomData;
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
+use serde::de::DeserializeOwned;
+use serde_json::Value as JsonValue;
 
 /// Active subscription on a Client.
 pub struct Subscription<Notif> {
@@ -20,16 +24,16 @@ pub struct Subscription<Notif> {
 #[derive(Debug)]
 pub struct NotificationMessage {
 	/// Method for the notification.
-	pub method: String,
+	pub method: JsonRpcMethodOwned,
 	/// Parameters to send to the server.
-	pub params: Params,
+	pub params: JsonRpcParamsOwned,
 }
 
 /// Batch request message.
 #[derive(Debug)]
 pub struct BatchMessage {
 	/// Requests in the batch
-	pub requests: Vec<(String, Params)>,
+	pub requests: Vec<(JsonRpcMethodOwned, JsonRpcParamsOwned)>,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
 }
@@ -38,9 +42,9 @@ pub struct BatchMessage {
 #[derive(Debug)]
 pub struct RequestMessage {
 	/// Method for the request.
-	pub method: String,
+	pub method: JsonRpcMethodOwned,
 	/// Parameters of the request.
-	pub params: Params,
+	pub params: JsonRpcParamsOwned,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
 }
@@ -49,11 +53,11 @@ pub struct RequestMessage {
 #[derive(Debug)]
 pub struct SubscriptionMessage {
 	/// Method for the subscription request.
-	pub subscribe_method: String,
+	pub subscribe_method: JsonRpcMethodOwned,
 	/// Parameters to send for the subscription.
-	pub params: Params,
+	pub params: JsonRpcParamsOwned,
 	/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
-	pub unsubscribe_method: String,
+	pub unsubscribe_method: JsonRpcMethodOwned,
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
@@ -91,7 +95,7 @@ where
 	pub async fn next(&mut self) -> Option<Notif> {
 		loop {
 			match self.notifs_rx.next().await {
-				Some(n) => match jsonrpc::from_value(n) {
+				Some(n) => match serde_json::from_value(n) {
 					Ok(parsed) => return Some(parsed),
 					Err(e) => log::debug!("Subscription response error: {:?}", e),
 				},

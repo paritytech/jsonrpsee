@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee_http_client::HttpClientBuilder;
 use jsonrpsee_http_server::HttpServerBuilder;
-use jsonrpsee_types::{jsonrpc::Params, traits::Client};
+use jsonrpsee_types::{traits::Client, v2::RawValue};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let url = format!("http://{}", server_addr);
 
 	let client = HttpClientBuilder::default().build(url)?;
-	let response: Result<String, _> = client.request("say_hello", Params::None).await;
+	let response: Result<String, _> = client.request("say_hello".into(), None.into()).await;
 	println!("r: {:?}", response);
 
 	Ok(())

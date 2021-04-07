@@ -1,14 +1,17 @@
 use crate::transport::HttpTransportClient;
 use async_trait::async_trait;
 use fnv::FnvHashMap;
-use jsonrpc::DeserializeOwned;
 use jsonrpsee_types::{
 	error::{Error, Mismatch},
-	jsonrpc,
 	traits::Client,
+	v2::dummy::{JsonRpcCall, JsonRpcMethod, JsonRpcNotification, JsonRpcParams, JsonRpcResponse},
 };
-use std::convert::TryInto;
+use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+const SINGLE_RESPONSE: &str = "Single Response";
+const BATCH_RESPONSE: &str = "Batch response";
+const SUBSCRIPTION_RESPONSE: &str = "Subscription response";
 
 /// Http Client Builder.
 #[derive(Debug)]
@@ -48,34 +51,19 @@ pub struct HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
-	where
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
-	{
-		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
-			jsonrpc: jsonrpc::Version::V2,
-			method: method.into(),
-			params: params.into(),
-		}));
-		self.transport.send_notification(request).await.map_err(|e| Error::TransportError(Box::new(e)))
+	async fn notification<'a>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<(), Error> {
+		let notif = JsonRpcNotification::new(method.inner(), params.inner());
+		self.transport.send_notification(notif).await.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
 	/// Perform a request towards the server.
-	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
+	async fn request<'a, T>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<T, Error>
 	where
 		T: DeserializeOwned,
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::Relaxed);
-		let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
-			jsonrpc: jsonrpc::Version::V2,
-			method: method.into(),
-			params: params.into(),
-			id: jsonrpc::Id::Num(id),
-		}));
+		let request = JsonRpcCall::new(id, method.inner(), params.inner());
 
 		let response = self
 			.transport
@@ -83,47 +71,30 @@ impl Client for HttpClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let json_value = match response {
-			jsonrpc::Response::Single(response) => match response.id() {
-				jsonrpc::Id::Num(n) if n == &id => response.try_into().map_err(Error::Request),
-				_ => Err(Error::InvalidRequestId),
-			},
-			jsonrpc::Response::Batch(_rps) => Err(Error::InvalidResponse(Mismatch {
-				expected: "Single response".into(),
-				got: "Batch Response".into(),
-			})),
-			jsonrpc::Response::Notif(_notif) => Err(Error::InvalidResponse(Mismatch {
-				expected: "Single response".into(),
-				got: "Notification Response".into(),
-			})),
-		}?;
-		jsonrpc::from_value(json_value).map_err(Error::ParseError)
+		match response {
+			JsonRpcResponse::Single(response) if response.id == id => Ok(response.result),
+			JsonRpcResponse::Single(_) => Err(Error::InvalidRequestId),
+			JsonRpcResponse::Batch(_rps) => Err(invalid_response(SINGLE_RESPONSE, BATCH_RESPONSE)),
+			JsonRpcResponse::Subscription(_notif) => Err(invalid_response(SINGLE_RESPONSE, SUBSCRIPTION_RESPONSE)),
+		}
 	}
 
-	async fn batch_request<T, M, P>(&self, batch: Vec<(M, P)>) -> Result<Vec<T>, Error>
+	async fn batch_request<'a, T>(&self, batch: Vec<(JsonRpcMethod<'a>, JsonRpcParams<'a>)>) -> Result<Vec<T>, Error>
 	where
 		T: DeserializeOwned + Default + Clone,
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
 	{
-		let mut calls = Vec::with_capacity(batch.len());
+		let mut batch_request = Vec::with_capacity(batch.len());
 		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
 		let mut ordered_requests = Vec::with_capacity(batch.len());
 		let mut request_set = FnvHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-			calls.push(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
-				jsonrpc: jsonrpc::Version::V2,
-				method: method.into(),
-				params: params.into(),
-				id: jsonrpc::Id::Num(id),
-			}));
+			batch_request.push(JsonRpcCall::new(id, method.inner(), params.inner()));
 			ordered_requests.push(id);
 			request_set.insert(id, pos);
 		}
 
-		let batch_request = jsonrpc::Request::Batch(calls);
 		let response = self
 			.transport
 			.send_request_and_wait_for_response(batch_request)
@@ -131,32 +102,24 @@ impl Client for HttpClient {
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		match response {
-			jsonrpc::Response::Single(_) => Err(Error::InvalidResponse(Mismatch {
-				expected: "Batch response".into(),
-				got: "Single Response".into(),
-			})),
-			jsonrpc::Response::Notif(_notif) => Err(Error::InvalidResponse(Mismatch {
-				expected: "Batch response".into(),
-				got: "Notification response".into(),
-			})),
-			jsonrpc::Response::Batch(rps) => {
+			JsonRpcResponse::Single(_response) => Err(invalid_response(BATCH_RESPONSE, SINGLE_RESPONSE)),
+			JsonRpcResponse::Subscription(_notif) => Err(invalid_response(BATCH_RESPONSE, SUBSCRIPTION_RESPONSE)),
+			JsonRpcResponse::Batch(rps) => {
 				// NOTE: `T::default` is placeholder and will be replaced in loop below.
 				let mut responses = vec![T::default(); ordered_requests.len()];
 				for rp in rps {
-					let id = match rp.id().as_number() {
-						Some(n) => *n,
-						_ => return Err(Error::InvalidRequestId),
-					};
-					let pos = match request_set.get(&id) {
+					let pos = match request_set.get(&rp.id) {
 						Some(pos) => *pos,
 						None => return Err(Error::InvalidRequestId),
 					};
-					let json_val: jsonrpc::JsonValue = rp.try_into().map_err(Error::Request)?;
-					let response = jsonrpc::from_value(json_val).map_err(Error::ParseError)?;
-					responses[pos] = response;
+					responses[pos] = rp.result
 				}
 				Ok(responses)
 			}
 		}
 	}
+}
+
+fn invalid_response(expected: impl Into<String>, got: impl Into<String>) -> Error {
+	Error::InvalidResponse(Mismatch { expected: expected.into(), got: got.into() })
 }

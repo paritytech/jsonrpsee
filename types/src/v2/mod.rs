@@ -1,17 +1,19 @@
-use beef::lean::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
 use std::fmt;
 
+/// Niklas dummy types
+pub mod dummy;
 /// Error type.
 pub mod error;
-
 /// Traits.
 pub mod traits;
 
+pub use beef::lean::Cow;
 pub use error::RpcError;
+pub use serde_json::to_string;
+pub use serde_json::value::{to_raw_value, RawValue};
 
 /// [JSON-RPC request object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Deserialize, Debug)]
