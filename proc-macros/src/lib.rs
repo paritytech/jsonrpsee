@@ -28,6 +28,8 @@ extern crate proc_macro;
 
 use inflector::Inflector as _;
 use proc_macro::TokenStream;
+use proc_macro2::Span;
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::{format_ident, quote, quote_spanned};
 use std::collections::HashSet;
 use syn::spanned::Spanned as _;
@@ -189,6 +191,12 @@ fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenS
 fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
 	let visibility = &api.visibility;
 
+	let _jsonrpsee_types = match crate_name("jsonrpsee-types") {
+		Ok(FoundCrate::Itself) => unreachable!(),
+		Ok(FoundCrate::Name(name)) => syn::Ident::new(&name, Span::call_site()),
+		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
+	};
+
 	let mut client_functions = Vec::new();
 	for function in &api.definitions {
 		let f_name = &function.signature.ident;
@@ -225,27 +233,27 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name.to_string(),
-					jsonrpsee::types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee::types::error::Error::Custom(format!("{:?}", e)))?
+					#_jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| #_jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span =>
-				jsonrpsee::types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| jsonrpsee::types::error::Error::Custom(format!("{:?}", e)))?
+				#_jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| #_jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
 			));
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote! {jsonrpsee::types::jsonrpc::Params::None}
+			quote! {#_jsonrpsee_types::jsonrpc::Params::None}
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=>
-				jsonrpsee::types::jsonrpc::Params::Array(vec![
+				#_jsonrpsee_types::jsonrpc::Params::Array(vec![
 					#(#params_to_array),*
 				])
 			)
 		} else {
 			let params_list_len = params_list.len();
 			quote_spanned!(function.signature.span()=>
-				jsonrpsee::types::jsonrpc::Params::Map({
-					let mut map = jsonrpsee::types::jsonrpc::JsonMap::with_capacity(#params_list_len);
+				#_jsonrpsee_types::jsonrpc::Params::Map({
+					let mut map = #_jsonrpsee_types::jsonrpc::JsonMap::with_capacity(#params_list_len);
 					#(#params_to_json)*
 					map
 				})
@@ -264,10 +272,10 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-			#visibility async fn #f_name (client: &impl jsonrpsee::types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, jsonrpsee::types::error::Error>
+			#visibility async fn #f_name (client: &impl #_jsonrpsee_types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_jsonrpsee_types::error::Error>
 			where
-				#ret_ty: jsonrpsee::types::jsonrpc::DeserializeOwned
-				#(, #params_tys: jsonrpsee::types::jsonrpc::Serialize)*
+				#ret_ty: #_jsonrpsee_types::jsonrpc::DeserializeOwned
+				#(, #params_tys: #_jsonrpsee_types::jsonrpc::Serialize)*
 			{
 				#function_body
 			}
