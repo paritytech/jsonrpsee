@@ -7,13 +7,12 @@ license = "MIT"
 edition = "2018"
 
 [dependencies]
-http-client = { path = "../http-client", version = "0.2.0-alpha.4", package = "jsonrpsee-http-client" }
-http-server = { path = "../http-server", version = "0.2.0-alpha.4", package = "jsonrpsee-http-server" }
-ws-client = { path = "../ws-client", version = "0.2.0-alpha.4", package = "jsonrpsee-ws-client" }
-ws-server = { path = "../ws-server", version = "0.2.0-alpha.4", package = "jsonrpsee-ws-server" }
-types = { path = "../types", version = "0.2.0-alpha.4", package = "jsonrpsee-types" }
-utils = { path = "../utils", version = "0.2.0-alpha.4", package = "jsonrpsee-utils" }
-proc-macros = { path = "../proc-macros", version = "0.2.0-alpha.4", package = "jsonrpsee-proc-macros" }
+http-client = { path = "../http-client", version = "0.2.0-alpha.4", package = "jsonrpsee-http-client", optional = true }
+http-server = { path = "../http-server", version = "0.2.0-alpha.4", package = "jsonrpsee-http-server", optional = true }
+ws-client = { path = "../ws-client", version = "0.2.0-alpha.4", package = "jsonrpsee-ws-client", optional = true }
+ws-server = { path = "../ws-server", version = "0.2.0-alpha.4", package = "jsonrpsee-ws-server", optional = true }
+types = { path = "../types", version = "0.2.0-alpha.4", package = "jsonrpsee-types", optional = true }
+proc-macros = { path = "../proc-macros", version = "0.2.0-alpha.4", package = "jsonrpsee-proc-macros", optional = true }
 
 [dev-dependencies]
 env_logger = "0.8"
@@ -21,3 +20,9 @@ futures = "0.3"
 log = "0.4"
 test-utils = { path = "../test-utils", version = "0.2.0-alpha.4", package = "jsonrpsee-test-utils" }
 tokio = { version = "1", features = ["full"] }
+
+[features]
+client = ["http-client", "ws-client", "types"]
+server = ["http-server", "ws-server"]
+macros = ["proc-macros"]
+full = ["client", "server", "macros"]

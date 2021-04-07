@@ -1,9 +1,19 @@
 //! jsonrpsee wrapper crate.
 
+#[cfg(feature = "client")]
 pub use http_client;
-pub use http_server;
-pub use proc_macros;
-pub use types;
-pub use utils;
+
+#[cfg(feature = "client")]
 pub use ws_client;
+
+#[cfg(feature = "client")]
+pub use types;
+
+#[cfg(feature = "server")]
+pub use http_server;
+
+#[cfg(feature = "server")]
 pub use ws_server;
+
+#[cfg(feature = "macros")]
+pub use proc_macros;
