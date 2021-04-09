@@ -39,11 +39,9 @@ use jsonrpsee_types::{
 	client::{BatchMessage, FrontToBack, NotificationMessage, RequestMessage, Subscription, SubscriptionMessage},
 	error::Error,
 	traits::{Client, SubscriptionClient},
-	v2::dummy::{
-		JsonRpcMethod, JsonRpcParams, JsonRpcParamsOwned, JsonRpcResponse, JsonRpcResponseObject, SubscriptionId,
-	},
+	v2::dummy::{JsonRpcMethod, JsonRpcParams, JsonRpcResponse, JsonRpcResponseObject, SubscriptionId},
 };
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value as JsonValue;
 use std::borrow::Cow;
 use std::marker::PhantomData;
@@ -235,27 +233,33 @@ impl WsClient {
 
 #[async_trait]
 impl Client for WsClient {
-	async fn notification<'a>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<(), Error> {
-		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
+	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
+	where
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync + Clone,
+	{
+		todo!();
+		/*log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
 		match self
 			.to_back
 			.clone()
 			.send(FrontToBack::Notification(NotificationMessage {
-				method: method.to_owned(),
+				method: JsonRpcMethodOwned(method.to_string()),
 				params: params.to_owned(),
 			}))
 			.await
 		{
 			Ok(()) => Ok(()),
 			Err(_) => Err(self.read_error_from_backend().await),
-		}
+		}*/
 	}
 
-	async fn request<'a, T>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<T, Error>
+	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
 	where
-		T: DeserializeOwned,
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync + Clone,
+		R: DeserializeOwned,
 	{
-		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
+		todo!();
+		/*log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
 		if self
@@ -288,12 +292,13 @@ impl Client for WsClient {
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
-		serde_json::from_value(json_value).map_err(Error::ParseError)
+		serde_json::from_value(json_value).map_err(Error::ParseError)*/
 	}
 
-	async fn batch_request<'a, T>(&self, batch: Vec<(JsonRpcMethod<'a>, JsonRpcParams<'a>)>) -> Result<Vec<T>, Error>
+	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
 	where
-		T: DeserializeOwned + Default + Clone,
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync + Clone,
+		R: DeserializeOwned + Default + Clone,
 	{
 		todo!();
 		/*
@@ -328,16 +333,18 @@ impl SubscriptionClient for WsClient {
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	async fn subscribe<'a, N>(
+	async fn subscribe<'a, T, N>(
 		&self,
-		subscribe_method: JsonRpcMethod<'a>,
-		params: JsonRpcParams<'a>,
-		unsubscribe_method: JsonRpcMethod<'a>,
+		subscribe_method: &'a str,
+		params: JsonRpcParams<'a, T>,
+		unsubscribe_method: &'a str,
 	) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync + Clone,
 	{
-		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
+		todo!();
+		/*log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 		let sub_method = subscribe_method.to_owned();
 		let unsub_method = unsubscribe_method.to_owned();
 
@@ -366,7 +373,7 @@ impl SubscriptionClient for WsClient {
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
-		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
+		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })*/
 	}
 }
 
@@ -595,8 +602,7 @@ fn build_unsubscribe_message(
 	let (_, unsub, sub_id) = manager.remove_subscription(req_id, sub_id)?;
 	manager.reclaim_request_id(req_id);
 	// TODO(niklasad): better type for params or maybe a macro?!.
-	let sub_id_str = serde_json::to_string(&sub_id).expect("SubscriptionId to JSON is infallible; qed");
-	let params_str = format!("[ {} ]", sub_id_str);
-	let params = JsonRpcParamsOwned(Some(params_str));
-	Some(RequestMessage { method: unsub, params, send_back: None })
+	let params: JsonRpcParams<_> = vec![&sub_id].into();
+	todo!();
+	//Some(RequestMessage { method: unsub, params, send_back: None })
 }

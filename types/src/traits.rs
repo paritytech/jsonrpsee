@@ -4,18 +4,21 @@ use crate::{
 	v2::dummy::{JsonRpcMethod, JsonRpcParams},
 };
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
 #[async_trait]
 pub trait Client {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
-	async fn notification<'a>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<(), Error>;
+	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
+	where
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync + Clone;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<'a, T>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<T, Error>
+	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
 	where
-		T: DeserializeOwned;
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync + Clone,
+		R: DeserializeOwned;
 
 	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
 	///
@@ -23,9 +26,10 @@ pub trait Client {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, T>(&self, batch: Vec<(JsonRpcMethod<'a>, JsonRpcParams<'a>)>) -> Result<Vec<T>, Error>
+	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
 	where
-		T: DeserializeOwned + Default + Clone;
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync + Clone,
+		R: DeserializeOwned + Default + Clone;
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
@@ -39,12 +43,13 @@ pub trait SubscriptionClient: Client {
 	/// The `unsubscribe_method` is used to close the subscription.
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`](crate::client::Subscription) for further documentation.
-	async fn subscribe<'a, Notif>(
+	async fn subscribe<'a, T, Notif>(
 		&self,
-		subscribe_method: JsonRpcMethod<'a>,
-		params: JsonRpcParams<'a>,
-		unsubscribe_method: JsonRpcMethod<'a>,
+		subscribe_method: &'a str,
+		params: JsonRpcParams<'a, T>,
+		unsubscribe_method: &'a str,
 	) -> Result<Subscription<Notif>, Error>
 	where
-		Notif: DeserializeOwned;
+		Notif: DeserializeOwned,
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync + Clone;
 }

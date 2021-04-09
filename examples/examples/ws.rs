@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::traits::Client;
+use jsonrpsee_types::{traits::Client, v2::dummy::JsonRpcParams};
 use jsonrpsee_ws_client::WsClientBuilder;
 use jsonrpsee_ws_server::WsServer;
 use tokio::task;
@@ -44,7 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	server_started_rx.await?;
 	let client = WsClientBuilder::default().build(SERVER_URI).await?;
-	let response: String = client.request("say_hello".into(), None.into()).await?;
+	let params: JsonRpcParams<u64> = None.into();
+	let response: String = client.request("say_hello", params).await?;
 	println!("r: {:?}", response);
 
 	Ok(())

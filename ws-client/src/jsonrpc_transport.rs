@@ -74,7 +74,8 @@ impl Sender {
 		request: RequestMessage,
 		request_manager: &mut RequestManager,
 	) -> Result<(), Error> {
-		let id = match request_manager.next_request_id() {
+		todo!();
+		/*let id = match request_manager.next_request_id() {
 			Ok(id) => id,
 			Err(err) => {
 				let str_err = err.to_string();
@@ -93,15 +94,16 @@ impl Sender {
 				let _ = request.send_back.map(|tx| tx.send(Err(Error::TransportError(Box::new(e)))));
 				Err(Error::Custom(str_err))
 			}
-		}
+		}*/
 	}
 
 	/// Sends a notification to the server. The notification doesn't need any response.
 	///
 	/// Returns `Ok(())` if the notification was successfully sent otherwise `Err(_)`.
 	pub async fn send_notification<'a>(&mut self, notif: NotificationMessage) -> Result<(), Error> {
-		let notif = JsonRpcNotification::new(notif.method.inner(), notif.params.inner());
-		self.transport.send_request(notif).await.map_err(|e| Error::TransportError(Box::new(e)))
+		todo!();
+		//let notif = JsonRpcNotification::new(notif.method.inner(), notif.params.inner());
+		//self.transport.send_request(notif).await.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
 	/// Sends a request to the server to start a new subscription but it doesn't wait for a response.
@@ -113,7 +115,8 @@ impl Sender {
 		sub: SubscriptionMessage,
 		request_manager: &mut RequestManager,
 	) -> Result<(), Error> {
-		let id = match request_manager.next_request_id() {
+		todo!();
+		/*	let id = match request_manager.next_request_id() {
 			Ok(id) => id,
 			Err(err) => {
 				let str_err = err.to_string();
@@ -130,7 +133,7 @@ impl Sender {
 		}
 		request_manager
 			.insert_pending_subscription(id, sub.send_back, sub.unsubscribe_method)
-			.expect("Request ID unused checked above; qed");
+			.expect("Request ID unused checked above; qed");*/
 		Ok(())
 	}
 }

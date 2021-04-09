@@ -1,12 +1,14 @@
 use crate::{
 	error::Error,
-	v2::dummy::{JsonRpcMethod, JsonRpcMethodOwned, JsonRpcParams, JsonRpcParamsOwned, SubscriptionId},
+	v2::dummy::{JsonRpcMethod, JsonRpcMethodOwned, JsonRpcParams, SubscriptionId},
 };
 use core::marker::PhantomData;
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
+
+type JsonRpcParamsOwned = String;
 
 /// Active subscription on a Client.
 pub struct Subscription<Notif> {

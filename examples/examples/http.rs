@@ -28,7 +28,10 @@ use std::net::SocketAddr;
 
 use jsonrpsee_http_client::HttpClientBuilder;
 use jsonrpsee_http_server::HttpServerBuilder;
-use jsonrpsee_types::{traits::Client, v2::RawValue};
+use jsonrpsee_types::{
+	traits::Client,
+	v2::{dummy::JsonRpcParams, RawValue},
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,8 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let server_addr = run_server().await;
 	let url = format!("http://{}", server_addr);
 
+	let params: JsonRpcParams<_> = vec![&1_u64, &2, &3].into();
+
 	let client = HttpClientBuilder::default().build(url)?;
-	let response: Result<String, _> = client.request("say_hello".into(), None.into()).await;
+	let response: Result<u64, _> = client.request("say_hello", params).await;
 	println!("r: {:?}", response);
 
 	Ok(())
@@ -46,7 +51,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn run_server() -> SocketAddr {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
-	server.register_method("say_hello", |_| Ok("lo")).unwrap();
+	server
+		.register_method("say_hello", |params| {
+			let params: Vec<u64> = params.parse()?;
+			let sum: u64 = params.into_iter().sum();
+			Ok(sum)
+		})
+		.unwrap();
 	let addr = server.local_addr().unwrap();
 	tokio::spawn(async move { server.start().await.unwrap() });
 	addr

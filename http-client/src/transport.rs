@@ -69,19 +69,23 @@ impl HttpTransportClient {
 	}
 
 	/// Send notification.
-	pub async fn send_notification<'a>(&self, notif: JsonRpcNotification<'a>) -> Result<(), Error> {
+	pub async fn send_notification<'a, T>(&self, notif: JsonRpcNotification<'a, T>) -> Result<(), Error>
+	where
+		T: Serialize + std::fmt::Debug + PartialEq,
+	{
 		let body = serde_json::to_string(&notif).map_err(Error::Serialization)?;
 		let _response = self.send(body).await?;
 		Ok(())
 	}
 
 	/// Send request and wait for response.
-	pub async fn send_request_and_wait_for_response<'a, T>(
+	pub async fn send_request_and_wait_for_response<'a, T, R>(
 		&self,
-		request: impl Into<JsonRpcRequest<'a>>,
-	) -> Result<JsonRpcResponse<T>, Error>
+		request: impl Into<JsonRpcRequest<'a, T>>,
+	) -> Result<JsonRpcResponse<R>, Error>
 	where
-		T: DeserializeOwned,
+		T: Serialize + std::fmt::Debug + PartialEq + 'a,
+		R: DeserializeOwned,
 	{
 		let body = serde_json::to_string(&request.into()).map_err(Error::Serialization)?;
 		let response = self.send(body).await?;

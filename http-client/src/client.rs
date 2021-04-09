@@ -6,7 +6,7 @@ use jsonrpsee_types::{
 	traits::Client,
 	v2::dummy::{JsonRpcCall, JsonRpcMethod, JsonRpcNotification, JsonRpcParams, JsonRpcResponse},
 };
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const SINGLE_RESPONSE: &str = "Single Response";
@@ -51,19 +51,23 @@ pub struct HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<'a>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<(), Error> {
-		let notif = JsonRpcNotification::new(method.inner(), params.inner());
+	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
+	where
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+	{
+		let notif = JsonRpcNotification::new(method, params);
 		self.transport.send_notification(notif).await.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
 	/// Perform a request towards the server.
-	async fn request<'a, T>(&self, method: JsonRpcMethod<'a>, params: JsonRpcParams<'a>) -> Result<T, Error>
+	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
 	where
-		T: DeserializeOwned,
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		R: DeserializeOwned,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::Relaxed);
-		let request = JsonRpcCall::new(id, method.inner(), params.inner());
+		let request = JsonRpcCall::new(id, method, params);
 
 		let response = self
 			.transport
@@ -79,9 +83,10 @@ impl Client for HttpClient {
 		}
 	}
 
-	async fn batch_request<'a, T>(&self, batch: Vec<(JsonRpcMethod<'a>, JsonRpcParams<'a>)>) -> Result<Vec<T>, Error>
+	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
 	where
-		T: DeserializeOwned + Default + Clone,
+		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		R: DeserializeOwned + Default + Clone,
 	{
 		let mut batch_request = Vec::with_capacity(batch.len());
 		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
@@ -90,7 +95,7 @@ impl Client for HttpClient {
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-			batch_request.push(JsonRpcCall::new(id, method.inner(), params.inner()));
+			batch_request.push(JsonRpcCall::new(id, method, params));
 			ordered_requests.push(id);
 			request_set.insert(id, pos);
 		}
@@ -106,7 +111,7 @@ impl Client for HttpClient {
 			JsonRpcResponse::Subscription(_notif) => Err(invalid_response(BATCH_RESPONSE, SUBSCRIPTION_RESPONSE)),
 			JsonRpcResponse::Batch(rps) => {
 				// NOTE: `T::default` is placeholder and will be replaced in loop below.
-				let mut responses = vec![T::default(); ordered_requests.len()];
+				let mut responses = vec![R::default(); ordered_requests.len()];
 				for rp in rps {
 					let pos = match request_set.get(&rp.id) {
 						Some(pos) => *pos,

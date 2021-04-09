@@ -14,17 +14,6 @@ impl JsonRpcMethodOwned {
 	}
 }
 
-#[derive(Debug)]
-/// JSON-RPC method call.
-pub struct JsonRpcParamsOwned(pub Option<String>);
-
-impl JsonRpcParamsOwned {
-	/// Get inner.
-	pub fn inner(&self) -> Option<&str> {
-		self.0.as_ref().map(|p| p.as_str())
-	}
-}
-
 /// Serializable JSON-RPC method call.
 #[derive(Serialize, Debug, PartialEq)]
 pub struct JsonRpcMethod<'a>(&'a str);
@@ -47,55 +36,77 @@ impl<'a> JsonRpcMethod<'a> {
 	}
 }
 
-/// Serializable JSON-RPC params.
 #[derive(Serialize, Debug, PartialEq)]
-pub struct JsonRpcParams<'a>(Option<&'a str>);
+#[serde(untagged)]
+pub enum JsonRpcParams<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
+	NoParams,
+	Array(Vec<&'a T>),
+}
 
-impl<'a> From<Option<&'a str>> for JsonRpcParams<'a> {
-	fn from(raw: Option<&'a str>) -> Self {
-		Self(raw)
+impl<'a, T> From<Option<&'a T>> for JsonRpcParams<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
+	fn from(_raw: Option<&'a T>) -> Self {
+		Self::NoParams
 	}
 }
 
-impl<'a> JsonRpcParams<'a> {
-	/// Get inner representation of the params.
-	pub fn inner(&self) -> Option<&'a str> {
-		self.0
-	}
-
-	/// To owned.
-	pub fn to_owned(&self) -> JsonRpcParamsOwned {
-		JsonRpcParamsOwned(self.0.map(ToOwned::to_owned))
+impl<'a, T> From<Vec<&'a T>> for JsonRpcParams<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
+	fn from(arr: Vec<&'a T>) -> Self {
+		Self::Array(arr)
 	}
 }
 
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
-pub enum JsonRpcRequest<'a> {
-	Single(JsonRpcCall<'a>),
-	Batch(Vec<JsonRpcCall<'a>>),
-	Notif(JsonRpcNotification<'a>),
+pub enum JsonRpcRequest<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq + 'a,
+{
+	Single(JsonRpcCall<'a, T>),
+	Batch(Vec<JsonRpcCall<'a, T>>),
+	Notif(JsonRpcNotification<'a, T>),
 }
 
-impl<'a> From<JsonRpcCall<'a>> for JsonRpcRequest<'a> {
-	fn from(call: JsonRpcCall<'a>) -> Self {
+impl<'a, T> From<JsonRpcCall<'a, T>> for JsonRpcRequest<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
+	fn from(call: JsonRpcCall<'a, T>) -> Self {
 		JsonRpcRequest::Single(call)
 	}
 }
-impl<'a> From<Vec<JsonRpcCall<'a>>> for JsonRpcRequest<'a> {
-	fn from(batch: Vec<JsonRpcCall<'a>>) -> Self {
+impl<'a, T> From<Vec<JsonRpcCall<'a, T>>> for JsonRpcRequest<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
+	fn from(batch: Vec<JsonRpcCall<'a, T>>) -> Self {
 		JsonRpcRequest::Batch(batch)
 	}
 }
-impl<'a> From<JsonRpcNotification<'a>> for JsonRpcRequest<'a> {
-	fn from(notif: JsonRpcNotification<'a>) -> Self {
+
+impl<'a, T> From<JsonRpcNotification<'a, T>> for JsonRpcRequest<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
+	fn from(notif: JsonRpcNotification<'a, T>) -> Self {
 		JsonRpcRequest::Notif(notif)
 	}
 }
 
 /// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Serialize, Debug)]
-pub struct JsonRpcCall<'a> {
+pub struct JsonRpcCall<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
@@ -105,19 +116,25 @@ pub struct JsonRpcCall<'a> {
 	pub id: u64,
 	/// Parameter values of the request.
 	#[serde(borrow)]
-	pub params: Option<&'a str>,
+	pub params: JsonRpcParams<'a, T>,
 }
 
-impl<'a> JsonRpcCall<'a> {
+impl<'a, T> JsonRpcCall<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(id: u64, method: &'a str, params: Option<&'a str>) -> Self {
+	pub fn new(id: u64, method: &'a str, params: JsonRpcParams<'a, T>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
 	}
 }
 
 /// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Serialize, Debug)]
-pub struct JsonRpcNotification<'a> {
+pub struct JsonRpcNotification<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
@@ -125,12 +142,15 @@ pub struct JsonRpcNotification<'a> {
 	pub method: &'a str,
 	/// Parameter values of the request.
 	#[serde(borrow)]
-	pub params: Option<&'a str>,
+	pub params: JsonRpcParams<'a, T>,
 }
 
-impl<'a> JsonRpcNotification<'a> {
+impl<'a, T> JsonRpcNotification<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(method: &'a str, params: Option<&'a str>) -> Self {
+	pub fn new(method: &'a str, params: JsonRpcParams<'a, T>) -> Self {
 		Self { jsonrpc: TwoPointZero, method, params }
 	}
 }

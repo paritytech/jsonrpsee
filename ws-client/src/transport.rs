@@ -29,7 +29,7 @@ use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
 use jsonrpsee_types::v2::dummy::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Serialize};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
@@ -159,7 +159,10 @@ pub enum WsConnectError {
 impl Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub async fn send_request<'a>(&mut self, request: impl Into<JsonRpcRequest<'a>>) -> Result<(), WsConnectError> {
+	pub async fn send_request<'a, T>(&mut self, request: impl Into<JsonRpcRequest<'a, T>>) -> Result<(), WsConnectError>
+	where
+		T: Serialize + std::fmt::Debug + PartialEq + 'a,
+	{
 		let body = serde_json::to_string(&request.into()).map_err(WsConnectError::Serialization)?;
 		log::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
