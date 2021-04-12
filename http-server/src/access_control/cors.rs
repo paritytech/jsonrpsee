@@ -49,22 +49,22 @@ pub enum OriginProtocol {
 pub struct Origin {
 	protocol: OriginProtocol,
 	host: Host,
-	as_string: String,
+	host_with_proto: String,
 	matcher: Matcher,
 }
 
 impl<T: AsRef<str>> From<T> for Origin {
-	fn from(string: T) -> Self {
-		Origin::parse(string.as_ref())
+	fn from(origin: T) -> Self {
+		Origin::parse(origin.as_ref())
 	}
 }
 
 impl Origin {
 	fn with_host(protocol: OriginProtocol, host: Host) -> Self {
-		let string = Self::to_string(&protocol, &host);
-		let matcher = Matcher::new(&string);
+		let host_with_proto = Self::host_with_proto(&protocol, &host);
+		let matcher = Matcher::new(&host_with_proto);
 
-		Origin { protocol, host, as_string: string, matcher }
+		Origin { protocol, host, host_with_proto, matcher }
 	}
 
 	/// Creates new origin given protocol, hostname and port parts.
@@ -75,10 +75,10 @@ impl Origin {
 
 	/// Attempts to parse given string as a `Origin`.
 	/// NOTE: This method always succeeds and falls back to sensible defaults.
-	pub fn parse(data: &str) -> Self {
-		let mut it = data.split("://");
-		let proto = it.next().expect("split always returns non-empty iterator.");
-		let hostname = it.next();
+	pub fn parse(origin: &str) -> Self {
+		let mut parts = origin.split("://");
+		let proto = parts.next().expect("split always returns non-empty iterator.");
+		let hostname = parts.next();
 
 		let (proto, hostname) = match hostname {
 			None => (None, proto),
@@ -98,7 +98,7 @@ impl Origin {
 		Origin::with_host(protocol, hostname)
 	}
 
-	fn to_string(protocol: &OriginProtocol, host: &Host) -> String {
+	fn host_with_proto(protocol: &OriginProtocol, host: &Host) -> String {
 		format!(
 			"{}://{}",
 			match *protocol {
@@ -120,7 +120,7 @@ impl Pattern for Origin {
 impl ops::Deref for Origin {
 	type Target = str;
 	fn deref(&self) -> &Self::Target {
-		&self.as_string
+		&self.host_with_proto
 	}
 }
 

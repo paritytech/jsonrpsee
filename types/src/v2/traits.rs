@@ -11,5 +11,5 @@ impl<R, T> RpcMethod<R> for T where T: Fn(RpcParams) -> Result<R, RpcError> + Se
 
 /// RPC Call Result.
 trait RpcResult {
-	fn to_json(self, id: Option<&RawValue>) -> anyhow::Result<String>;
+	fn into_json(self, id: Option<&RawValue>) -> anyhow::Result<String>;
 }

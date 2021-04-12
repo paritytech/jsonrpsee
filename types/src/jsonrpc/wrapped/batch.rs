@@ -155,6 +155,7 @@ impl BatchState {
 	}
 
 	/// Extracts the next request from the batch. Returns `None` if the batch is empty.
+	#[allow(clippy::should_implement_trait)]
 	pub fn next(&mut self) -> Option<BatchInc> {
 		if self.to_yield.is_empty() {
 			return None;

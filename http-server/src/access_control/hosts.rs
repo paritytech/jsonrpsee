@@ -61,7 +61,7 @@ impl From<u16> for Port {
 pub struct Host {
 	hostname: String,
 	port: Port,
-	as_string: String,
+	host_with_port: String,
 	matcher: Matcher,
 }
 
@@ -76,10 +76,10 @@ impl Host {
 	pub fn new<T: Into<Port>>(hostname: &str, port: T) -> Self {
 		let port = port.into();
 		let hostname = Self::pre_process(hostname);
-		let string = Self::to_string(&hostname, &port);
-		let matcher = Matcher::new(&string);
+		let host_with_port = Self::from_str(&hostname, &port);
+		let matcher = Matcher::new(&host_with_port);
 
-		Host { hostname, port, as_string: string, matcher }
+		Host { hostname, port, host_with_port, matcher }
 	}
 
 	/// Attempts to parse given string as a `Host`.
@@ -112,7 +112,7 @@ impl Host {
 		it.next().expect(SPLIT_PROOF).to_lowercase()
 	}
 
-	fn to_string(hostname: &str, port: &Port) -> String {
+	fn from_str(hostname: &str, port: &Port) -> String {
 		format!(
 			"{}{}",
 			hostname,
@@ -135,7 +135,7 @@ impl std::ops::Deref for Host {
 	type Target = str;
 
 	fn deref(&self) -> &Self::Target {
-		&self.as_string
+		&self.host_with_port
 	}
 }
 
