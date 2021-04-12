@@ -53,11 +53,12 @@ mod module;
 pub use module::{RpcContextModule, RpcModule};
 
 type SubscriptionId = u64;
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>;
 
 #[derive(Clone)]
 pub struct SubscriptionSink {
 	method: &'static str,
-	subscribers: Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>,
+	subscribers: Subscribers,
 }
 
 impl SubscriptionSink {
