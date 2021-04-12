@@ -14,5 +14,5 @@ jsonrpsee-types = { version = "0.2.0-alpha.4", path = "../types" }
 Inflector = "0.11.4"
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "1.0", features = ["full", "extra-traits", "parsing", "printing", "proc-macro", "visit"] }
+syn = { version = "1.0", default-features = false, features = ["extra-traits"] }
 proc-macro-crate = "1"
