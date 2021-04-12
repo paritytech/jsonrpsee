@@ -24,12 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Access control based on http headers
+//! Access control based on HTTP headers
 
-use crate::http::cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
-use crate::http::hosts::{AllowHosts, Host};
-use crate::http::{cors, hosts, hyper_helpers};
+mod cors;
+mod hosts;
+mod matcher;
+
+pub use cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
+pub use hosts::{AllowHosts, Host};
+
 use hyper::header;
+use jsonrpsee_utils::hyper_helpers;
 
 /// Define access on control on HTTP layer.
 #[derive(Clone)]

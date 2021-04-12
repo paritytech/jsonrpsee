@@ -9,7 +9,7 @@
 use hyper::client::{Client, HttpConnector};
 use hyper_rustls::HttpsConnector;
 use jsonrpsee_types::{error::GenericTransportError, jsonrpc};
-use jsonrpsee_utils::http::hyper_helpers;
+use jsonrpsee_utils::hyper_helpers;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";

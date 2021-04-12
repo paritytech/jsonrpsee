@@ -14,7 +14,7 @@ hyper14-rustls = { package = "hyper-rustls", version = "0.22", optional = true }
 hyper14 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2", "tcp"], optional = true }
 hyper13 = { package = "hyper", version = "0.13", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.4" }
-jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.4", default-features = false, optional = true }
+jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.4", optional = true }
 log = "0.4"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
@@ -25,8 +25,8 @@ fnv = "1"
 
 [features]
 default = ["tokio1"]
-tokio1 = ["hyper14", "hyper14-rustls", "jsonrpsee-utils/hyper14"]
-tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper13"]
+tokio1 = ["hyper14", "hyper14-rustls", "jsonrpsee-utils/hyper_14"]
+tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper_13"]
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
