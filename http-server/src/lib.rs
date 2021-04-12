@@ -31,7 +31,6 @@ mod server;
 
 pub use access_control::{AccessControl, AccessControlBuilder, AllowHosts, Host};
 pub use jsonrpsee_types::error::Error;
-pub use jsonrpsee_utils::http::access_control::{AccessControl, AccessControlBuilder};
 pub use module::{RpcContextModule, RpcModule};
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
 
