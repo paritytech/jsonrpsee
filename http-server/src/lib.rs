@@ -24,11 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+mod access_control;
 mod module;
 mod response;
 mod server;
 
-pub use jsonrpsee_utils::http::access_control::{AccessControl, AccessControlBuilder};
+pub use access_control::{AccessControl, AccessControlBuilder, AllowHosts, Host};
 pub use module::{RpcContextModule, RpcModule};
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
 

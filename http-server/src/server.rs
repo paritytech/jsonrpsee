@@ -26,6 +26,7 @@
 
 use crate::module::RpcModule;
 use crate::response;
+use crate::AccessControl;
 use anyhow::anyhow;
 use futures::{channel::mpsc, StreamExt};
 use hyper::{
@@ -39,8 +40,7 @@ use jsonrpsee_types::v2::error::{
 	PARSE_ERROR_MSG,
 };
 use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
-use jsonrpsee_utils::http::{access_control::AccessControl, hyper_helpers::read_response_to_body};
-use jsonrpsee_utils::server_utils::send_error;
+use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
 use std::{

@@ -26,8 +26,8 @@
 
 //! CORS handling utility functions
 
-use crate::http::hosts::{Host, Port};
-use crate::http::matcher::{Matcher, Pattern};
+use crate::access_control::hosts::{Host, Port};
+use crate::access_control::matcher::{Matcher, Pattern};
 use lazy_static::lazy_static;
 use std::collections::HashSet;
 use std::{fmt, ops};
@@ -323,7 +323,7 @@ lazy_static! {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::http::hosts::Host;
+	use crate::access_control::hosts::Host;
 	use std::iter;
 
 	#[test]

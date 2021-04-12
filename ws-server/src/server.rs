@@ -46,7 +46,7 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 use jsonrpsee_types::v2::error::{METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG};
 use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::{JsonRpcNotification, JsonRpcNotificationParams};
-use jsonrpsee_utils::server_utils::{send_error, ConnectionId, Methods};
+use jsonrpsee_utils::server::{send_error, ConnectionId, Methods};
 
 mod module;
 
