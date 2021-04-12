@@ -8,7 +8,7 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1"
-futures = { version = "0.3", default-features = false }
+futures = "0.3"
 globset = "0.4"
 hyper13 = { package = "hyper", version = "0.13", default-features = false, features = ["stream"], optional = true }
 hyper14 = { package = "hyper", version = "0.14", default-features = false, features = ["stream"], optional = true }
