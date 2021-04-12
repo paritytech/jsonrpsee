@@ -24,8 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::jsonrpc;
 use crate::error::Error;
+use crate::jsonrpc;
 
 use alloc::string::String;
 use core::fmt;
