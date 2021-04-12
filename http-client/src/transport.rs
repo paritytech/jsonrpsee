@@ -16,7 +16,7 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
-pub struct HttpTransportClient {
+pub(crate) struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
 	/// HTTP client
@@ -27,7 +27,7 @@ pub struct HttpTransportClient {
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	pub fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
+	pub(crate) fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
 			#[cfg(feature = "tokio1")]
@@ -65,13 +65,13 @@ impl HttpTransportClient {
 	}
 
 	/// Send notification.
-	pub async fn send_notification(&self, request: jsonrpc::Request) -> Result<(), Error> {
+	pub(crate) async fn send_notification(&self, request: jsonrpc::Request) -> Result<(), Error> {
 		let _response = self.send_request(request).await?;
 		Ok(())
 	}
 
 	/// Send request and wait for response.
-	pub async fn send_request_and_wait_for_response(
+	pub(crate) async fn send_request_and_wait_for_response(
 		&self,
 		request: jsonrpc::Request,
 	) -> Result<jsonrpc::Response, Error> {
@@ -89,7 +89,7 @@ impl HttpTransportClient {
 
 /// Error that can happen during a request.
 #[derive(Debug, Error)]
-pub enum Error {
+pub(crate) enum Error {
 	/// Invalid URL.
 	#[error("Invalid Url: {0}")]
 	Url(String),
@@ -98,10 +98,6 @@ pub enum Error {
 	// TODO: can that happen?
 	#[error("Error while serializing the request")]
 	Serialization(#[source] serde_json::error::Error),
-
-	/// Response given by the server failed to decode as UTF-8.
-	#[error("Response body is not UTF-8")]
-	Utf8(#[source] std::string::FromUtf8Error),
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
 	#[error("Error while performing the HTTP request")]

@@ -1,7 +1,6 @@
 use criterion::*;
 use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	types::{jsonrpc::Params, traits::Client},
+	http_client::{jsonrpc::Params, Client, HttpClientBuilder},
 	ws_client::WsClientBuilder,
 };
 use std::sync::Arc;

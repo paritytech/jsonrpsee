@@ -31,4 +31,5 @@ mod server;
 #[cfg(test)]
 mod tests;
 
+pub use jsonrpsee_types::error::Error;
 pub use server::{RpcContextModule, RpcModule, Server as WsServer, SubscriptionSink};

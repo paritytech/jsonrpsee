@@ -6,9 +6,6 @@ pub use http_client;
 #[cfg(feature = "client")]
 pub use ws_client;
 
-#[cfg(feature = "client")]
-pub use types;
-
 #[cfg(feature = "server")]
 pub use http_server;
 

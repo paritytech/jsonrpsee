@@ -191,10 +191,12 @@ fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenS
 fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
 	let visibility = &api.visibility;
 
-	let _jsonrpsee_types = match crate_name("jsonrpsee-types") {
-		Ok(FoundCrate::Itself) => panic!("Deriving RPC methods in the `types` crate is not supported"),
-		Ok(FoundCrate::Name(name)) => syn::Ident::new(&name, Span::call_site()),
-		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
+	let _crate = match (crate_name("jsonrpsee-http-client"), crate_name("jsonrpsee-ws-client")) {
+		(Ok(FoundCrate::Name(name)), _) => syn::Ident::new(&name, Span::call_site()),
+		(_, Ok(FoundCrate::Name(name))) => syn::Ident::new(&name, Span::call_site()),
+		(_, Err(e)) => return Err(syn::Error::new(Span::call_site(), &e)),
+		(Err(e), _) => return Err(syn::Error::new(Span::call_site(), &e)),
+		(_, _) => panic!("Deriving RPC methods in the `types` crate is not supported"),
 	};
 
 	let mut client_functions = Vec::new();
@@ -233,27 +235,27 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name.to_string(),
-					#_jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| #_jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
+					#_crate::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| #_crate::Error::Custom(format!("{:?}", e)))?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span =>
-				#_jsonrpsee_types::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| #_jsonrpsee_types::error::Error::Custom(format!("{:?}", e)))?
+				#_crate::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| #_crate::Error::Custom(format!("{:?}", e)))?
 			));
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote! {#_jsonrpsee_types::jsonrpc::Params::None}
+			quote! {#_crate::jsonrpc::Params::None}
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=>
-				#_jsonrpsee_types::jsonrpc::Params::Array(vec![
+				#_crate::jsonrpc::Params::Array(vec![
 					#(#params_to_array),*
 				])
 			)
 		} else {
 			let params_list_len = params_list.len();
 			quote_spanned!(function.signature.span()=>
-				#_jsonrpsee_types::jsonrpc::Params::Map({
-					let mut map = #_jsonrpsee_types::jsonrpc::JsonMap::with_capacity(#params_list_len);
+				#_crate::jsonrpc::Params::Map({
+					let mut map = #_crate::jsonrpc::JsonMap::with_capacity(#params_list_len);
 					#(#params_to_json)*
 					map
 				})
@@ -272,10 +274,10 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-			#visibility async fn #f_name (client: &impl #_jsonrpsee_types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_jsonrpsee_types::error::Error>
+			#visibility async fn #f_name (client: &impl #_crate::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::Error>
 			where
-				#ret_ty: #_jsonrpsee_types::jsonrpc::DeserializeOwned
-				#(, #params_tys: #_jsonrpsee_types::jsonrpc::Serialize)*
+				#ret_ty: #_crate::jsonrpc::DeserializeOwned
+				#(, #params_tys: #_crate::jsonrpc::Serialize)*
 			{
 				#function_body
 			}
