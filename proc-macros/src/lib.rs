@@ -192,7 +192,7 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 	let visibility = &api.visibility;
 
 	let _jsonrpsee_types = match crate_name("jsonrpsee-types") {
-		Ok(FoundCrate::Itself) => unreachable!(),
+		Ok(FoundCrate::Itself) => panic!("Deriving RPC methods in the `types` crate is not supported"),
 		Ok(FoundCrate::Name(name)) => syn::Ident::new(&name, Span::call_site()),
 		Err(e) => return Err(syn::Error::new(Span::call_site(), &e)),
 	};
