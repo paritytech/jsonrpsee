@@ -9,7 +9,7 @@
 use hyper::client::{Client, HttpConnector};
 use hyper_rustls::HttpsConnector;
 use jsonrpsee_types::{error::GenericTransportError, jsonrpc};
-use jsonrpsee_utils::http::hyper_helpers;
+use jsonrpsee_utils::hyper_helpers;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
@@ -35,7 +35,7 @@ impl HttpTransportClient {
 			#[cfg(feature = "tokio02")]
 			let connector = HttpsConnector::new();
 			let client = Client::builder().build::<_, hyper::Body>(connector);
-			Ok(HttpTransportClient { client, target, max_request_body_size })
+			Ok(HttpTransportClient { target, client, max_request_body_size })
 		} else {
 			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
 		}

@@ -101,7 +101,7 @@ pub enum WsNewError {
 
 	/// Invalid DNS name error for TLS
 	#[error("Invalid DNS name: {}", 0)]
-	InvalidDNSName(#[source] webpki::InvalidDNSNameError),
+	InvalidDnsName(#[source] webpki::InvalidDnsNameError),
 
 	/// RawServer rejected our handshake.
 	#[error("Server returned an error status code: {}", status_code)]
@@ -233,8 +233,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 						Mode::Plain => TlsOrPlain::Plain(socket),
 						Mode::Tls => {
 							let connector = async_tls::TlsConnector::default();
-							let dns_name = webpki::DNSNameRef::try_from_ascii_str(self.host.as_str())?;
-							let tls_stream = connector.connect(&dns_name.to_owned(), socket).await?;
+							let dns_name: &str = webpki::DnsNameRef::try_from_ascii_str(self.host.as_str())?.into();
+							let tls_stream = connector.connect(dns_name, socket).await?;
 							TlsOrPlain::Tls(tls_stream)
 						}
 					}
@@ -272,9 +272,9 @@ impl From<io::Error> for WsNewError {
 	}
 }
 
-impl From<webpki::InvalidDNSNameError> for WsNewError {
-	fn from(err: webpki::InvalidDNSNameError) -> WsNewError {
-		WsNewError::InvalidDNSName(err)
+impl From<webpki::InvalidDnsNameError> for WsNewError {
+	fn from(err: webpki::InvalidDnsNameError) -> WsNewError {
+		WsNewError::InvalidDnsName(err)
 	}
 }
 
