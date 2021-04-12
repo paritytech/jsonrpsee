@@ -20,7 +20,7 @@ soketto = "0.4"
 pin-project = "1"
 thiserror = "1"
 url = "2"
-webpki = "0.21"
+webpki = { version = "0.22", features = ["std"] }
 
 [dev-dependencies]
 env_logger = "0.8"
