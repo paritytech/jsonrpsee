@@ -13,8 +13,7 @@ use jsonrpsee_types::{
 	v2::dummy::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse},
 };
 use jsonrpsee_utils::http::hyper_helpers;
-use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
@@ -71,7 +70,7 @@ impl HttpTransportClient {
 	/// Send notification.
 	pub async fn send_notification<'a, T>(&self, notif: JsonRpcNotification<'a, T>) -> Result<(), Error>
 	where
-		T: Serialize + std::fmt::Debug + PartialEq,
+		T: Serialize + std::fmt::Debug,
 	{
 		let body = serde_json::to_string(&notif).map_err(Error::Serialization)?;
 		let _response = self.send(body).await?;
@@ -84,7 +83,7 @@ impl HttpTransportClient {
 		request: impl Into<JsonRpcRequest<'a, T>>,
 	) -> Result<JsonRpcResponse<R>, Error>
 	where
-		T: Serialize + std::fmt::Debug + PartialEq + 'a,
+		T: Serialize + std::fmt::Debug + 'a,
 		R: DeserializeOwned,
 	{
 		let body = serde_json::to_string(&request.into()).map_err(Error::Serialization)?;
@@ -151,7 +150,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Error, HttpTransportClient};
-	use jsonrpsee_types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
+	use jsonrpsee_types::v2::dummy::{JsonRpcCall, JsonRpcParams};
 
 	#[test]
 	fn invalid_http_url_rejected() {
@@ -165,15 +164,14 @@ mod tests {
 		let client = HttpTransportClient::new("http://localhost:9933", 80).unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
-		let request = Request::Single(Call::MethodCall(MethodCall {
-			jsonrpc: Version::V2,
-			method: "request_larger_than_eightybytes".to_string(),
-			params: Params::None,
-			id: Id::Num(1),
-		}));
-		let bytes = serde_json::to_vec(&request).unwrap();
-		assert_eq!(bytes.len(), 81);
-		let response = client.send_request(request).await.unwrap_err();
+		let body = serde_json::to_string(&JsonRpcCall::new(
+			1,
+			"request_larger_than_eightybytes",
+			JsonRpcParams::NoParams::<u64>,
+		))
+		.unwrap();
+		assert_eq!(body.len(), 81);
+		let response = client.send(body).await.unwrap_err();
 		assert!(matches!(response, Error::RequestTooLarge));
 	}
 }

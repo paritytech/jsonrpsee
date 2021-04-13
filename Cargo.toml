@@ -5,7 +5,7 @@ members = [
 	"http-client",
 	"http-server",
 	"test-utils",
-	"tests",
+	# "tests",
 	"types",
 	"utils",
 	"ws-client",

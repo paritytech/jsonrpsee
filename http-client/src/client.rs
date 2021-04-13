@@ -53,7 +53,7 @@ pub struct HttpClient {
 impl Client for HttpClient {
 	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
 	where
-		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		T: Serialize + std::fmt::Debug + Send + Sync,
 	{
 		let notif = JsonRpcNotification::new(method, params);
 		self.transport.send_notification(notif).await.map_err(|e| Error::TransportError(Box::new(e)))
@@ -62,7 +62,7 @@ impl Client for HttpClient {
 	/// Perform a request towards the server.
 	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
 	where
-		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		T: Serialize + std::fmt::Debug + Send + Sync,
 		R: DeserializeOwned,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
@@ -85,7 +85,7 @@ impl Client for HttpClient {
 
 	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
 	where
-		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		T: Serialize + std::fmt::Debug + Send + Sync,
 		R: DeserializeOwned + Default + Clone,
 	{
 		let mut batch_request = Vec::with_capacity(batch.len());

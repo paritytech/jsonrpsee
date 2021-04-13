@@ -13,8 +13,7 @@ pub mod stream;
 /// WebSocket transport.
 pub mod transport;
 
-#[cfg(test)]
-mod tests;
-
+//#[cfg(test)]
+//mod tests;
 pub use client::{WsClient, WsClientBuilder};
 pub use jsonrpsee_types::client::Subscription as WsSubscription;

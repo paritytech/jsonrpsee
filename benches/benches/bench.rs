@@ -1,6 +1,6 @@
 use criterion::*;
 use jsonrpsee_http_client::HttpClientBuilder;
-use jsonrpsee_types::{jsonrpc::Params, traits::Client};
+use jsonrpsee_types::{traits::Client, v2::dummy::JsonRpcParams};
 use jsonrpsee_ws_client::WsClientBuilder;
 use std::sync::Arc;
 use tokio::runtime::Runtime as TokioRuntime;
@@ -30,7 +30,7 @@ fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Clie
 	crit.bench_function(name, |b| {
 		b.iter(|| {
 			rt.block_on(async {
-				black_box(client.request::<String>("say_hello".into(), None.into()).await.unwrap());
+				black_box(client.request::<u64, String>("say_hello", JsonRpcParams::NoParams).await.unwrap());
 			})
 		})
 	});
@@ -50,7 +50,9 @@ fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
 				for _ in 0..num_concurrent_tasks {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
-						let _ = black_box(client_rc.request::<String>("say_hello".into(), None.into())).await;
+						let _ = black_box(
+							client_rc.request::<u64, String>("say_hello", JsonRpcParams::NoParams).await.unwrap(),
+						);
 					});
 					tasks.push(task);
 				}

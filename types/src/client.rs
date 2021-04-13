@@ -5,8 +5,6 @@ use futures::prelude::*;
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
-type JsonRpcParamsOwned = String;
-
 /// Active subscription on a Client.
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.

@@ -244,7 +244,7 @@ impl WsClient {
 impl Client for WsClient {
 	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
 	where
-		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		T: Serialize + std::fmt::Debug + Send + Sync,
 	{
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
 		let notif = JsonRpcNotification::new(method, params);
@@ -257,7 +257,7 @@ impl Client for WsClient {
 
 	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
 	where
-		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		T: Serialize + std::fmt::Debug + Send + Sync,
 		R: DeserializeOwned,
 	{
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
@@ -296,7 +296,7 @@ impl Client for WsClient {
 
 	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
 	where
-		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		T: Serialize + std::fmt::Debug + Send + Sync,
 		R: DeserializeOwned + Default + Clone,
 	{
 		todo!();
@@ -340,7 +340,7 @@ impl SubscriptionClient for WsClient {
 	) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
-		T: Serialize + std::fmt::Debug + PartialEq + Send + Sync,
+		T: Serialize + std::fmt::Debug + Send + Sync,
 	{
 		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 

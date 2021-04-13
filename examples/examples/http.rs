@@ -28,10 +28,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee_http_client::HttpClientBuilder;
 use jsonrpsee_http_server::HttpServerBuilder;
-use jsonrpsee_types::{
-	traits::Client,
-	v2::{dummy::JsonRpcParams, RawValue},
-};
+use jsonrpsee_types::{traits::Client, v2::dummy::JsonRpcParams};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
