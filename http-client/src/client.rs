@@ -4,7 +4,7 @@ use fnv::FnvHashMap;
 use jsonrpsee_types::{
 	error::{Error, Mismatch},
 	traits::Client,
-	v2::dummy::{JsonRpcCall, JsonRpcMethod, JsonRpcNotification, JsonRpcParams, JsonRpcResponse},
+	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcResponse},
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};

@@ -159,11 +159,7 @@ pub enum WsConnectError {
 impl Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub async fn send_request<'a, T>(&mut self, request: impl Into<JsonRpcRequest<'a, T>>) -> Result<(), WsConnectError>
-	where
-		T: Serialize + std::fmt::Debug + PartialEq + 'a,
-	{
-		let body = serde_json::to_string(&request.into()).map_err(WsConnectError::Serialization)?;
+	pub async fn send(&mut self, body: String) -> Result<(), WsConnectError> {
 		log::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;

@@ -1,40 +1,8 @@
 //! Client side JSON-RPC types.
 
 use crate::v2::TwoPointZero;
+use alloc::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
-
-#[derive(Debug)]
-/// JSON-RPC method call.
-pub struct JsonRpcMethodOwned(pub String);
-
-impl JsonRpcMethodOwned {
-	/// Get inner.
-	pub fn inner(&self) -> &str {
-		self.0.as_str()
-	}
-}
-
-/// Serializable JSON-RPC method call.
-#[derive(Serialize, Debug, PartialEq)]
-pub struct JsonRpcMethod<'a>(&'a str);
-
-impl<'a> From<&'a str> for JsonRpcMethod<'a> {
-	fn from(raw: &'a str) -> Self {
-		Self(raw)
-	}
-}
-
-impl<'a> JsonRpcMethod<'a> {
-	/// Get inner representation of the method.
-	pub fn inner(&self) -> &'a str {
-		self.0
-	}
-
-	/// To owned.
-	pub fn to_owned(&self) -> JsonRpcMethodOwned {
-		JsonRpcMethodOwned(self.0.to_owned())
-	}
-}
 
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(untagged)]
@@ -44,14 +12,25 @@ where
 {
 	NoParams,
 	Array(Vec<&'a T>),
+	Map(BTreeMap<&'a str, &'a T>),
 }
 
+// FIXME: this is a little weird but nice if `None.into()` works.
 impl<'a, T> From<Option<&'a T>> for JsonRpcParams<'a, T>
 where
 	T: Serialize + std::fmt::Debug + PartialEq,
 {
 	fn from(_raw: Option<&'a T>) -> Self {
 		Self::NoParams
+	}
+}
+
+impl<'a, T> From<BTreeMap<&'a str, &'a T>> for JsonRpcParams<'a, T>
+where
+	T: Serialize + std::fmt::Debug + PartialEq,
+{
+	fn from(map: BTreeMap<&'a str, &'a T>) -> Self {
+		Self::Map(map)
 	}
 }
 
@@ -138,10 +117,8 @@ where
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
-	#[serde(borrow)]
 	pub method: &'a str,
 	/// Parameter values of the request.
-	#[serde(borrow)]
 	pub params: JsonRpcParams<'a, T>,
 }
 

@@ -1,7 +1,4 @@
-use crate::{
-	error::Error,
-	v2::dummy::{JsonRpcMethod, JsonRpcMethodOwned, JsonRpcParams, SubscriptionId},
-};
+use crate::{error::Error, v2::dummy::SubscriptionId};
 use core::marker::PhantomData;
 use futures::channel::{mpsc, oneshot};
 use futures::prelude::*;
@@ -22,20 +19,11 @@ pub struct Subscription<Notif> {
 	pub marker: PhantomData<Notif>,
 }
 
-/// Notification message.
-#[derive(Debug)]
-pub struct NotificationMessage {
-	/// Method for the notification.
-	pub method: JsonRpcMethodOwned,
-	/// Parameters to send to the server.
-	pub params: JsonRpcParamsOwned,
-}
-
 /// Batch request message.
 #[derive(Debug)]
 pub struct BatchMessage {
 	/// Requests in the batch
-	pub requests: Vec<(JsonRpcMethodOwned, JsonRpcParamsOwned)>,
+	pub requests: Vec<(String, u64)>,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
 }
@@ -43,10 +31,10 @@ pub struct BatchMessage {
 /// Request message.
 #[derive(Debug)]
 pub struct RequestMessage {
-	/// Method for the request.
-	pub method: JsonRpcMethodOwned,
-	/// Parameters of the request.
-	pub params: JsonRpcParamsOwned,
+	/// Serialized message.
+	pub raw: String,
+	/// Request ID.
+	pub raw_id: u64,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
 }
@@ -54,12 +42,12 @@ pub struct RequestMessage {
 /// Subscription message.
 #[derive(Debug)]
 pub struct SubscriptionMessage {
-	/// Method for the subscription request.
-	pub subscribe_method: JsonRpcMethodOwned,
-	/// Parameters to send for the subscription.
-	pub params: JsonRpcParamsOwned,
+	/// Serialized message.
+	pub raw: String,
+	/// Request ID of the serialized message.
+	pub raw_id: u64,
 	/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
-	pub unsubscribe_method: JsonRpcMethodOwned,
+	pub unsubscribe_method: String,
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
@@ -69,14 +57,16 @@ pub struct SubscriptionMessage {
 /// Message that the Client can send to the background task.
 #[derive(Debug)]
 pub enum FrontToBack {
-	/// Send a batch request to the server.
-	Batch(BatchMessage),
+	// Send a batch request to the server.
+	//Batch(BatchMessage),
 	/// Send a notification to the server.
-	Notification(NotificationMessage),
+	Notification(String),
 	/// Send a request to the server.
-	StartRequest(RequestMessage),
+	Request(RequestMessage),
 	/// Send a subscription request to the server.
 	Subscribe(SubscriptionMessage),
+	/// Retrieve request ID.
+	RequestId(oneshot::Sender<Result<u64, Error>>),
 	/// When a subscription channel is closed, we send this message to the background
 	/// task to mark it ready for garbage collection.
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
