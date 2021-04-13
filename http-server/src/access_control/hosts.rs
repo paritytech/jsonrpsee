@@ -26,9 +26,7 @@
 
 //! Host header validation.
 
-use crate::http::matcher::{Matcher, Pattern};
-use std::collections::HashSet;
-use std::net::SocketAddr;
+use crate::access_control::matcher::{Matcher, Pattern};
 
 const SPLIT_PROOF: &str = "split always returns non-empty iterator.";
 
@@ -63,7 +61,7 @@ impl From<u16> for Port {
 pub struct Host {
 	hostname: String,
 	port: Port,
-	as_string: String,
+	host_with_port: String,
 	matcher: Matcher,
 }
 
@@ -78,10 +76,10 @@ impl Host {
 	pub fn new<T: Into<Port>>(hostname: &str, port: T) -> Self {
 		let port = port.into();
 		let hostname = Self::pre_process(hostname);
-		let string = Self::to_string(&hostname, &port);
-		let matcher = Matcher::new(&string);
+		let host_with_port = Self::from_str(&hostname, &port);
+		let matcher = Matcher::new(&host_with_port);
 
-		Host { hostname, port, as_string: string, matcher }
+		Host { hostname, port, host_with_port, matcher }
 	}
 
 	/// Attempts to parse given string as a `Host`.
@@ -114,7 +112,7 @@ impl Host {
 		it.next().expect(SPLIT_PROOF).to_lowercase()
 	}
 
-	fn to_string(hostname: &str, port: &Port) -> String {
+	fn from_str(hostname: &str, port: &Port) -> String {
 		format!(
 			"{}{}",
 			hostname,
@@ -135,8 +133,9 @@ impl Pattern for Host {
 
 impl std::ops::Deref for Host {
 	type Target = str;
+
 	fn deref(&self) -> &Self::Target {
-		&self.as_string
+		&self.host_with_port
 	}
 }
 
@@ -167,17 +166,6 @@ pub fn is_host_valid(host: Option<&str>, allow_hosts: &AllowHosts) -> bool {
 			AllowHosts::Only(allow_hosts) => allow_hosts.iter().any(|h| h.matches(host)),
 		},
 	}
-}
-
-/// Updates given list of hosts with the address.
-pub fn update(hosts: Option<Vec<Host>>, address: &SocketAddr) -> Option<Vec<Host>> {
-	hosts.map(|current_hosts| {
-		let mut new_hosts = current_hosts.into_iter().collect::<HashSet<_>>();
-		let address = address.to_string();
-		new_hosts.insert(address.clone().into());
-		new_hosts.insert(address.replace("127.0.0.1", "localhost").into());
-		new_hosts.into_iter().collect()
-	})
 }
 
 /// Allowed hosts for http header 'host'

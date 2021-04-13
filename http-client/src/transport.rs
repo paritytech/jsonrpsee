@@ -12,7 +12,7 @@ use jsonrpsee_types::{
 	error::GenericTransportError,
 	v2::dummy::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse},
 };
-use jsonrpsee_utils::http::hyper_helpers;
+use jsonrpsee_utils::hyper_helpers;
 use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
@@ -39,7 +39,7 @@ impl HttpTransportClient {
 			#[cfg(feature = "tokio02")]
 			let connector = HttpsConnector::new();
 			let client = Client::builder().build::<_, hyper::Body>(connector);
-			Ok(HttpTransportClient { client, target, max_request_body_size })
+			Ok(HttpTransportClient { target, client, max_request_body_size })
 		} else {
 			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
 		}

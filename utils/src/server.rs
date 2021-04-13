@@ -1,11 +1,11 @@
 //! Shared helpers for JSON-RPC Servers.
 
+use futures::channel::mpsc;
 use jsonrpsee_types::v2::error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG};
 use jsonrpsee_types::v2::{JsonRpcError, JsonRpcErrorParams, JsonRpcResponse, RpcParams, TwoPointZero};
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
-use tokio::sync::mpsc;
 
 /// Connection ID.
 pub type ConnectionId = usize;
@@ -29,7 +29,7 @@ pub fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
 		}
 	};
 
-	if let Err(err) = tx.send(json) {
+	if let Err(err) = tx.unbounded_send(json) {
 		log::error!("Error sending response to the client: {:?}", err)
 	}
 }
@@ -49,7 +49,7 @@ pub fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
 		}
 	};
 
-	if let Err(err) = tx.send(json) {
+	if let Err(err) = tx.unbounded_send(json) {
 		log::error!("Error sending response to the client: {:?}", err)
 	}
 }

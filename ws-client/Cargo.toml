@@ -14,13 +14,13 @@ fnv = "1"
 futures = "0.3"
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.4" }
 log = "0.4"
-serde = { version = "1", default-features = false, features = ["derive"] }
+serde = "1"
 serde_json = "1"
 soketto = "0.4"
 pin-project = "1"
 thiserror = "1"
 url = "2"
-webpki = "0.21"
+webpki = { version = "0.22", features = ["std"] }
 
 [dev-dependencies]
 env_logger = "0.8"

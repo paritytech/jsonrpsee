@@ -22,7 +22,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Cache Dependencies & Build Outputs
-        uses: actions/cache@v2.1.4
+        uses: actions/cache@v2.1.5
         with:
           path: |
             ~/.cargo/registry
@@ -56,7 +56,7 @@ jobs:
           override: true
 
       - name: Cache Dependencies & Build Outputs
-        uses: actions/cache@v2.1.4
+        uses: actions/cache@v2.1.5
         with:
           path: |
             ~/.cargo/registry
@@ -91,7 +91,7 @@ jobs:
           override: true
 
       - name: Cache Dependencies & Build Outputs
-        uses: actions/cache@v2.1.4
+        uses: actions/cache@v2.1.5
         with:
           path: |
             ~/.cargo/registry

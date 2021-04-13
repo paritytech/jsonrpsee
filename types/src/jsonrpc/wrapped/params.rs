@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::error::Error;
 use crate::jsonrpc;
 
 use alloc::string::String;
@@ -53,12 +54,12 @@ impl<'a> Params<'a> {
 	/// Returns a parameter of the request by name and decodes it.
 	///
 	/// Returns an error if the parameter doesn't exist or is of the wrong type.
-	pub fn get<'k, T>(self, param: impl Into<ParamKey<'k>>) -> Result<T, ()>
+	pub fn get<'k, T>(self, param: impl Into<ParamKey<'k>>) -> Result<T, Error>
 	where
 		T: serde::de::DeserializeOwned,
 	{
-		let val = self.get_raw(param).ok_or(())?;
-		serde_json::from_value(val.clone()).map_err(|_| ())
+		let val = self.get_raw(param).ok_or_else(|| Error::Custom("No such param".into()))?;
+		serde_json::from_value(val.clone()).map_err(Error::ParseError)
 	}
 
 	/// Returns a parameter of the request by name.

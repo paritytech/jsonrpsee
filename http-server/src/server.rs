@@ -26,7 +26,9 @@
 
 use crate::module::RpcModule;
 use crate::response;
+use crate::AccessControl;
 use anyhow::anyhow;
+use futures::{channel::mpsc, StreamExt};
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
 	service::{make_service_fn, service_fn},
@@ -38,15 +40,13 @@ use jsonrpsee_types::v2::error::{
 	PARSE_ERROR_MSG,
 };
 use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
-use jsonrpsee_utils::http::{access_control::AccessControl, hyper_helpers::read_response_to_body};
-use jsonrpsee_utils::server_utils::send_error;
+use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
 use std::{
 	net::{SocketAddr, TcpListener},
 	sync::Arc,
 };
-use tokio::sync::mpsc;
 
 /// Builder to create JSON-RPC HTTP server.
 pub struct Builder {
@@ -175,7 +175,7 @@ impl Server {
 						};
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
-						let (tx, mut rx) = mpsc::unbounded_channel();
+						let (tx, mut rx) = mpsc::unbounded();
 
 						match serde_json::from_slice::<JsonRpcRequest>(&body) {
 							Ok(req) => {
@@ -199,7 +199,7 @@ impl Server {
 							}
 						};
 
-						let response = rx.recv().await.expect("Sender is still alive managed by us above; qed");
+						let response = rx.next().await.expect("Sender is still alive managed by us above; qed");
 						log::debug!("send: {:?}", response);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
