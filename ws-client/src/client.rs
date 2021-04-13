@@ -300,14 +300,19 @@ impl Client for WsClient {
 		R: DeserializeOwned + Default + Clone,
 	{
 		todo!();
-		/*
+		/*let mut batches = Vec::with_capacity(batch.len());
+		let mut ids = Vec::with_capacity(batch.len());
+
+		let req_id = self.next_request_id().await?;
+
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let requests: Vec<(String, jsonrpc::Params)> = batch.into_iter().map(|(r, p)| (r.into(), p.into())).collect();
-		log::trace!("[frontend]: send batch request: {:?}", requests);
+
+		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
+		log::trace!("[frontend]: send batch request: {:?}", raw);
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { requests, send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, raw_ids: ids, send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
@@ -321,7 +326,7 @@ impl Client for WsClient {
 		};
 
 		let values: Result<_, _> =
-			json_values.into_iter().map(|val| jsonrpc::from_value(val).map_err(Error::ParseError)).collect();
+			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
 		Ok(values?)*/
 	}
 }
@@ -415,12 +420,27 @@ async fn background_task(
 				let _ = send_back.send(req_id);
 			}
 
-			/*Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
-				log::trace!("[backend]: client prepares to send batch request: {:?}", batch);
-				if let Err(e) = sender.start_batch_request(batch, &mut manager).await {
+			Either::Left((Some(FrontToBack::BatchIds(num_reqs, send_back)), _)) => {
+				let req_id = match manager.next_request_id() {
+					Ok(id) => id,
+					Err(e) => {
+						let _ = send_back.send(Err(e));
+						continue;
+					}
+				};
+				let mut batch_ids = Vec::with_capacity(num_reqs as usize);
+				for _ in 0..num_reqs {
+					batch_ids.push(manager.next_batch_id());
+				}
+				let _ = send_back.send(Ok((batch_ids, req_id)));
+			}
+
+			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
+				log::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
+				if let Err(e) = sender.send(batch.raw).await {
 					log::warn!("[backend]: client batch request failed: {:?}", e);
 				}
-			}*/
+			}
 			// User called `notification` on the front-end
 			Either::Left((Some(FrontToBack::Notification(notif)), _)) => {
 				log::trace!("[backend]: client prepares to send notification: {:?}", notif);

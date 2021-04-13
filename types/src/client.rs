@@ -20,8 +20,10 @@ pub struct Subscription<Notif> {
 /// Batch request message.
 #[derive(Debug)]
 pub struct BatchMessage {
-	/// Requests in the batch
-	pub requests: Vec<(String, u64)>,
+	/// Serialized batch request.
+	pub raw: String,
+	/// Request IDs.
+	pub raw_ids: Vec<u64>,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
 }
@@ -55,8 +57,8 @@ pub struct SubscriptionMessage {
 /// Message that the Client can send to the background task.
 #[derive(Debug)]
 pub enum FrontToBack {
-	// Send a batch request to the server.
-	//Batch(BatchMessage),
+	/// Send a batch request to the server.
+	Batch(BatchMessage),
 	/// Send a notification to the server.
 	Notification(String),
 	/// Send a request to the server.
@@ -65,6 +67,8 @@ pub enum FrontToBack {
 	Subscribe(SubscriptionMessage),
 	/// Retrieve request ID.
 	RequestId(oneshot::Sender<Result<u64, Error>>),
+	/// Fetch batch IDs for a batch request,
+	BatchIds(u64, oneshot::Sender<Result<(Vec<u64>, u64), Error>>),
 	/// When a subscription channel is closed, we send this message to the background
 	/// task to mark it ready for garbage collection.
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.

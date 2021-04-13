@@ -14,6 +14,7 @@ where
 	/// No params.
 	NoParams,
 	/// Positional params.
+	// TODO(niklasad1): maybe smallvec here?!
 	Array(Vec<&'a T>),
 	/// Params by name.
 	Map(BTreeMap<&'a str, &'a T>),
