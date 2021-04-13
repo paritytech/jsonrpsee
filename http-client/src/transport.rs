@@ -46,7 +46,7 @@ impl HttpTransportClient {
 	}
 
 	/// Send request.
-	async fn send<'a>(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
+	async fn send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
 		log::debug!("send: {}", body);
 
 		if body.len() > self.max_request_body_size as usize {
