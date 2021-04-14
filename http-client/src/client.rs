@@ -56,7 +56,12 @@ impl Client for HttpClient {
 		T: Serialize + std::fmt::Debug + Send + Sync,
 	{
 		let notif = JsonRpcNotification::new(method, params);
-		self.transport.send_notification(notif).await.map_err(|e| Error::TransportError(Box::new(e)))
+		let _ = self
+			.transport
+			.send(serde_json::to_string(&notif).map_err(Error::ParseError)?)
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)));
+		Ok(())
 	}
 
 	/// Perform a request towards the server.
@@ -69,11 +74,13 @@ impl Client for HttpClient {
 		let id = self.request_id.fetch_add(1, Ordering::Relaxed);
 		let request = JsonRpcCall::new(id, method, params);
 
-		let response = self
+		let body = self
 			.transport
-			.send_request_and_wait_for_response(request)
+			.send_and_wait_for_response(serde_json::to_string(&request).map_err(Error::ParseError)?)
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
+
+		let response = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
 		match response {
 			JsonRpcResponse::Single(response) if response.id == id => Ok(response.result),
@@ -100,17 +107,19 @@ impl Client for HttpClient {
 			request_set.insert(id, pos);
 		}
 
-		let response = self
+		let body = self
 			.transport
-			.send_request_and_wait_for_response(batch_request)
+			.send_and_wait_for_response(serde_json::to_string(&batch_request).map_err(Error::ParseError)?)
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
+
+		let response = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 
 		match response {
 			JsonRpcResponse::Single(_response) => Err(invalid_response(BATCH_RESPONSE, SINGLE_RESPONSE)),
 			JsonRpcResponse::Subscription(_notif) => Err(invalid_response(BATCH_RESPONSE, SUBSCRIPTION_RESPONSE)),
 			JsonRpcResponse::Batch(rps) => {
-				// NOTE: `T::default` is placeholder and will be replaced in loop below.
+				// NOTE: `R::default` is placeholder and will be replaced in loop below.
 				let mut responses = vec![R::default(); ordered_requests.len()];
 				for rp in rps {
 					let pos = match request_set.get(&rp.id) {

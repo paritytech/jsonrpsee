@@ -445,8 +445,7 @@ async fn background_task(
 	let mut manager = RequestManager::new();
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
-		// TODO: fix JsonValue here.
-		let res = receiver.next_response::<JsonValue>().await;
+		let res = receiver.next_response().await;
 		Some((res, receiver))
 	});
 
@@ -515,69 +514,78 @@ async fn background_task(
 					stop_subscription(&mut sender, unsub).await;
 				}
 			}
-			Either::Right((Some(Ok(JsonRpcResponse::Single(response))), _)) => {
-				match process_response(&mut manager, response, max_notifs_per_subscription) {
-					Ok(Some(unsub)) => {
-						stop_subscription(&mut sender, unsub).await;
-					}
-					Ok(None) => (),
-					Err(err) => {
-						let _ = front_error.send(err);
-						return;
-					}
-				}
-			}
-			Either::Right((Some(Ok(JsonRpcResponse::Batch(batch))), _)) => {
-				let mut digest = Vec::with_capacity(batch.len());
-				let mut ordered_responses = vec![JsonValue::Null; batch.len()];
-				let mut rps_unordered: Vec<_> = Vec::with_capacity(batch.len());
-
-				for rp in batch {
-					digest.push(rp.id);
-					rps_unordered.push((rp.id, rp.result));
-				}
-
-				digest.sort_unstable();
-				let batch_state = match manager.complete_pending_batch(digest) {
-					Some(state) => state,
-					None => {
-						log::warn!("Received unknown batch response");
-						continue;
-					}
+			Either::Right((Some(Ok(raw)), _)) => {
+				let response: JsonRpcResponse<JsonValue> = match serde_json::from_slice(&raw) {
+					Ok(response) => response,
+					Err(_e) => continue,
 				};
 
-				for (id, rp) in rps_unordered {
-					let pos = batch_state
-						.order
-						.get(&id)
-						.copied()
-						.expect("All request IDs valid checked by RequestManager above; qed");
-					ordered_responses[pos] = rp;
-				}
-				let _ = batch_state.send_back.send(Ok(ordered_responses));
-			}
-			Either::Right((Some(Ok(JsonRpcResponse::Subscription(notif))), _)) => {
-				log::info!("notif: {:?}", notif);
-				let sub_id = notif.params.subscription;
-				let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
-					Some(r) => r,
-					None => {
-						log::error!("Subscription ID: {:?} not found", sub_id);
-						continue;
-					}
-				};
-
-				match manager.as_subscription_mut(&request_id) {
-					Some(send_back_sink) => {
-						if let Err(e) = send_back_sink.try_send(notif.params.result) {
-							log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
-							let unsub_req = build_unsubscribe_message(&mut manager, request_id, sub_id)
-								.expect("request ID and subscription ID valid checked above; qed");
-							stop_subscription(&mut sender, unsub_req).await;
+				match response {
+					JsonRpcResponse::Single(call) => {
+						match process_response(&mut manager, call, max_notifs_per_subscription) {
+							Ok(Some(unsub)) => {
+								stop_subscription(&mut sender, unsub).await;
+							}
+							Ok(None) => (),
+							Err(err) => {
+								let _ = front_error.send(err);
+								return;
+							}
 						}
 					}
-					None => {
-						log::error!("Subscription ID: {:?} not an active subscription", sub_id);
+					JsonRpcResponse::Batch(batch) => {
+						let mut digest = Vec::with_capacity(batch.len());
+						let mut ordered_responses = vec![JsonValue::Null; batch.len()];
+						let mut rps_unordered: Vec<_> = Vec::with_capacity(batch.len());
+
+						for rp in batch {
+							digest.push(rp.id);
+							rps_unordered.push((rp.id, rp.result));
+						}
+
+						digest.sort_unstable();
+						let batch_state = match manager.complete_pending_batch(digest) {
+							Some(state) => state,
+							None => {
+								log::warn!("Received unknown batch response");
+								continue;
+							}
+						};
+
+						for (id, rp) in rps_unordered {
+							let pos = batch_state
+								.order
+								.get(&id)
+								.copied()
+								.expect("All request IDs valid checked by RequestManager above; qed");
+							ordered_responses[pos] = rp;
+						}
+						let _ = batch_state.send_back.send(Ok(ordered_responses));
+					}
+					JsonRpcResponse::Subscription(notif) => {
+						log::info!("notif: {:?}", notif);
+						let sub_id = notif.params.subscription;
+						let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
+							Some(r) => r,
+							None => {
+								log::error!("Subscription ID: {:?} not found", sub_id);
+								continue;
+							}
+						};
+
+						match manager.as_subscription_mut(&request_id) {
+							Some(send_back_sink) => {
+								if let Err(e) = send_back_sink.try_send(notif.params.result) {
+									log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
+									let unsub_req = build_unsubscribe_message(&mut manager, request_id, sub_id)
+										.expect("request ID and subscription ID valid checked above; qed");
+									stop_subscription(&mut sender, unsub_req).await;
+								}
+							}
+							None => {
+								log::error!("Subscription ID: {:?} not an active subscription", sub_id);
+							}
+						}
 					}
 				}
 			}

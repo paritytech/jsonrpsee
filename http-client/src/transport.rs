@@ -45,8 +45,8 @@ impl HttpTransportClient {
 		}
 	}
 
-	/// Send request.
-	async fn send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
+	/// Send serialized message.
+	pub async fn send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
 		log::debug!("send: {}", body);
 
 		if body.len() > self.max_request_body_size as usize {
@@ -67,35 +67,12 @@ impl HttpTransportClient {
 		}
 	}
 
-	/// Send notification.
-	pub async fn send_notification<'a, T>(&self, notif: JsonRpcNotification<'a, T>) -> Result<(), Error>
-	where
-		T: Serialize + std::fmt::Debug,
-	{
-		let body = serde_json::to_string(&notif).map_err(Error::Serialization)?;
-		let _response = self.send(body).await?;
-		Ok(())
-	}
-
-	/// Send request and wait for response.
-	pub async fn send_request_and_wait_for_response<'a, T, R>(
-		&self,
-		request: impl Into<JsonRpcRequest<'a, T>>,
-	) -> Result<JsonRpcResponse<R>, Error>
-	where
-		T: Serialize + std::fmt::Debug + 'a,
-		R: DeserializeOwned,
-	{
-		let body = serde_json::to_string(&request.into()).map_err(Error::Serialization)?;
+	/// Send serialized message and wait until all bytes from the body is read.
+	pub async fn send_and_wait_for_response(&self, body: String) -> Result<Vec<u8>, Error> {
 		let response = self.send(body).await?;
 		let (parts, body) = response.into_parts();
 		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.max_request_body_size).await?;
-
-		// Note that we don't check the Content-Type of the request. This is deemed
-		// unnecessary, as a parsing error while happen anyway.
-		let response = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-		//log::debug!("recv: {}", serde_json::to_string(&response).expect("valid JSON; qed"));
-		Ok(response)
+		Ok(body)
 	}
 }
 

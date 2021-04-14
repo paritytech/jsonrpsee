@@ -10,7 +10,7 @@ pub mod error;
 /// Traits.
 pub mod traits;
 
-// TODO(niklasad1): revisit re-exports.
+// TODO: revisit re-exports.
 pub use beef::lean::Cow;
 pub use error::RpcError;
 pub use serde_json::value::{to_raw_value, RawValue};

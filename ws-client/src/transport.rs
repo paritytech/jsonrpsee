@@ -28,8 +28,6 @@ use async_std::net::TcpStream;
 use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
-use jsonrpsee_types::v2::dummy::JsonRpcResponse;
-use serde::de::DeserializeOwned;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
@@ -169,19 +167,10 @@ impl Sender {
 
 impl Receiver {
 	/// Returns a `Future` resolving when the server sent us something back.
-	//
-	// TODO(niklasad1): return Vec<u8> instead to have a clean abstraction.
-	pub async fn next_response<T>(&mut self) -> Result<JsonRpcResponse<T>, WsConnectError>
-	where
-		T: DeserializeOwned + std::fmt::Debug,
-	{
+	pub async fn next_response(&mut self) -> Result<Vec<u8>, WsConnectError> {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
-
-		let response = serde_json::from_slice(&message).map_err(WsConnectError::ParseError)?;
-		log::debug!("recv: {:?}", response);
-
-		Ok(response)
+		Ok(message)
 	}
 }
 
