@@ -39,7 +39,8 @@ extern crate hyper13_rustls as hyper_rustls;
 mod client;
 mod transport;
 
-//#[cfg(test)]
-//mod tests;
+#[cfg(test)]
+mod tests;
+
 pub use client::{HttpClient, HttpClientBuilder};
 pub use transport::HttpTransportClient;
