@@ -65,10 +65,6 @@ pub enum FrontToBack {
 	Request(RequestMessage),
 	/// Send a subscription request to the server.
 	Subscribe(SubscriptionMessage),
-	/// Retrieve request ID.
-	RequestId(oneshot::Sender<Result<u64, Error>>),
-	/// Fetch batch IDs for a batch request,
-	BatchIds(u64, oneshot::Sender<Result<(Vec<u64>, u64), Error>>),
 	/// When a subscription channel is closed, we send this message to the background
 	/// task to mark it ready for garbage collection.
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.

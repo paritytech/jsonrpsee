@@ -11,7 +11,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
-criterion_group!(benches, /*http_requests, websocket_requests,*/ jsonrpsee_types_v1, jsonrpsee_types_v2);
+criterion_group!(benches, /*http_requests,*/ websocket_requests /*, jsonrpsee_types_v1, jsonrpsee_types_v2*/);
 criterion_main!(benches);
 
 fn v1_serialize(req: Request) -> String {
@@ -57,7 +57,8 @@ pub fn http_requests(crit: &mut Criterion) {
 pub fn websocket_requests(crit: &mut Criterion) {
 	let rt = TokioRuntime::new().unwrap();
 	let url = rt.block_on(helpers::ws_server());
-	let client = Arc::new(rt.block_on(WsClientBuilder::default().build(&url)).unwrap());
+	let client =
+		Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 	run_round_trip(&rt, crit, client.clone(), "ws_round_trip");
 	run_concurrent_round_trip(&rt, crit, client.clone(), "ws_concurrent_round_trip");
 }

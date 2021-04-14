@@ -44,9 +44,12 @@ use jsonrpsee_types::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value as JsonValue;
-use std::borrow::Cow;
-use std::marker::PhantomData;
-use std::time::Duration;
+use std::{
+	borrow::Cow,
+	marker::PhantomData,
+	sync::atomic::{AtomicU64, AtomicUsize, Ordering},
+	time::Duration,
+};
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -92,6 +95,62 @@ pub struct WsClient {
 	error: Mutex<ErrorFromBack>,
 	/// Request timeout
 	request_timeout: Option<Duration>,
+	/// Request ID manager.
+	id_guard: RequestIdGuard,
+}
+
+#[derive(Debug)]
+struct RequestIdGuard {
+	// Current pending requests.
+	current_pending: AtomicUsize,
+	/// Max concurrent pending requests allowed.
+	max_concurrent_requests: usize,
+	/// Get the next request ID.
+	current_id: AtomicU64,
+}
+
+impl RequestIdGuard {
+	fn new(limit: usize) -> Self {
+		Self { current_pending: AtomicUsize::new(0), max_concurrent_requests: limit, current_id: AtomicU64::new(0) }
+	}
+
+	fn get_slot(&self) -> Result<(), Error> {
+		if self.current_pending.load(Ordering::Relaxed) >= self.max_concurrent_requests {
+			Err(Error::MaxSlotsExceeded)
+		} else {
+			// NOTE: `fetch_add` wraps on overflow but can't occur because `current_pending` is checked above.
+			self.current_pending.fetch_add(1, Ordering::Relaxed);
+			Ok(())
+		}
+	}
+
+	/// Attempts to get the next request ID.
+	///
+	/// Fails if request limit has been exceeded.
+	fn next_request_id(&self) -> Result<u64, Error> {
+		self.get_slot()?;
+		let id = self.current_id.fetch_add(1, Ordering::Relaxed);
+		Ok(id)
+	}
+
+	/// Attempts to get the next batch IDs that only counts as one request..
+	///
+	/// Fails if request limit has been exceeded.
+	fn next_batch_ids(&self, len: usize) -> Result<Vec<u64>, Error> {
+		self.get_slot()?;
+		let mut batch = Vec::with_capacity(len);
+		for _ in 0..len {
+			batch.push(self.current_id.fetch_add(1, Ordering::Relaxed));
+		}
+		Ok(batch)
+	}
+
+	fn reclaim_request_id(&self) {
+		let curr = self.current_pending.load(Ordering::Relaxed);
+		if curr > 0 {
+			self.current_pending.store(curr - 1, Ordering::Relaxed);
+		}
+	}
 }
 
 /// Configuration.
@@ -199,17 +258,14 @@ impl<'a> WsClientBuilder<'a> {
 		let (sender, receiver) = builder.build().await.map_err(|e| Error::TransportError(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
-			background_task(
-				sender,
-				receiver,
-				from_front,
-				err_tx,
-				max_capacity_per_subscription,
-				max_concurrent_requests,
-			)
-			.await;
+			background_task(sender, receiver, from_front, err_tx, max_capacity_per_subscription).await;
 		});
-		Ok(WsClient { to_back, request_timeout, error: Mutex::new(ErrorFromBack::Unread(err_rx)) })
+		Ok(WsClient {
+			to_back,
+			request_timeout,
+			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
+			id_guard: RequestIdGuard::new(max_concurrent_requests),
+		})
 	}
 }
 
@@ -226,17 +282,6 @@ impl WsClient {
 		let (next_state, err) = from_back.read_error().await;
 		*err_lock = next_state;
 		err
-	}
-
-	async fn next_request_id(&self) -> Result<u64, Error> {
-		let (reqid_tx, reqid_rx) = oneshot::channel();
-		if self.to_back.clone().send(FrontToBack::RequestId(reqid_tx)).await.is_err() {
-			return Err(self.read_error_from_backend().await);
-		} else {
-			// TODO: error handling.
-			let req_id = reqid_rx.await.unwrap().unwrap();
-			Ok(req_id)
-		}
 	}
 }
 
@@ -262,7 +307,7 @@ impl Client for WsClient {
 	{
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let req_id = self.next_request_id().await?;
+		let req_id = self.id_guard.next_request_id()?;
 		let raw = serde_json::to_string(&JsonRpcCall::new(req_id, method, params)).map_err(Error::ParseError)?;
 
 		if self
@@ -272,6 +317,7 @@ impl Client for WsClient {
 			.await
 			.is_err()
 		{
+			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
@@ -280,12 +326,13 @@ impl Client for WsClient {
 			futures::pin_mut!(send_back_rx, timeout);
 			match future::select(send_back_rx, timeout).await {
 				future::Either::Left((send_back_rx_out, _)) => send_back_rx_out,
-				future::Either::Right((_, _)) => return Err(Error::WsRequestTimeout),
+				future::Either::Right((_, _)) => Ok(Err(Error::WsRequestTimeout)),
 			}
 		} else {
 			send_back_rx.await
 		};
 
+		self.id_guard.reclaim_request_id();
 		let json_value = match send_back_rx_out {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
@@ -299,11 +346,12 @@ impl Client for WsClient {
 		T: Serialize + std::fmt::Debug + Send + Sync,
 		R: DeserializeOwned + Default + Clone,
 	{
-		todo!();
-		/*let mut batches = Vec::with_capacity(batch.len());
-		let mut ids = Vec::with_capacity(batch.len());
+		let batch_ids = self.id_guard.next_batch_ids(batch.len())?;
+		let mut batches = Vec::with_capacity(batch.len());
 
-		let req_id = self.next_request_id().await?;
+		for (idx, (method, params)) in batch.into_iter().enumerate() {
+			batches.push(JsonRpcCall::new(batch_ids[idx], method, params));
+		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
@@ -312,14 +360,17 @@ impl Client for WsClient {
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, raw_ids: ids, send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, raw_ids: batch_ids, send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
+			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let json_values = match send_back_rx.await {
+		let res = send_back_rx.await;
+		self.id_guard.reclaim_request_id();
+		let json_values = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
@@ -327,7 +378,7 @@ impl Client for WsClient {
 
 		let values: Result<_, _> =
 			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
-		Ok(values?)*/
+		Ok(values?)
 	}
 }
 
@@ -354,7 +405,7 @@ impl SubscriptionClient for WsClient {
 			return Err(Error::SubscriptionNameConflict(unsub_method));
 		}
 
-		let req_id = self.next_request_id().await?;
+		let req_id = self.id_guard.next_request_id()?;
 		let raw =
 			serde_json::to_string(&JsonRpcCall::new(req_id, subscribe_method, params)).map_err(Error::ParseError)?;
 
@@ -390,9 +441,8 @@ async fn background_task(
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
-	max_concurrent_requests: usize,
 ) {
-	let mut manager = RequestManager::new(max_concurrent_requests);
+	let mut manager = RequestManager::new();
 
 	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
 		// TODO: fix JsonValue here.
@@ -413,26 +463,6 @@ async fn background_task(
 			Either::Left((None, _)) => {
 				log::trace!("[backend]: frontend dropped; terminate client");
 				return;
-			}
-
-			Either::Left((Some(FrontToBack::RequestId(send_back)), _)) => {
-				let req_id = manager.next_request_id();
-				let _ = send_back.send(req_id);
-			}
-
-			Either::Left((Some(FrontToBack::BatchIds(num_reqs, send_back)), _)) => {
-				let req_id = match manager.next_request_id() {
-					Ok(id) => id,
-					Err(e) => {
-						let _ = send_back.send(Err(e));
-						continue;
-					}
-				};
-				let mut batch_ids = Vec::with_capacity(num_reqs as usize);
-				for _ in 0..num_reqs {
-					batch_ids.push(manager.next_batch_id());
-				}
-				let _ = send_back.send(Ok((batch_ids, req_id)));
 			}
 
 			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
@@ -457,7 +487,6 @@ async fn background_task(
 						.insert_pending_call(request.raw_id, request.send_back)
 						.expect("ID unused checked above; qed"),
 					Err(e) => {
-						manager.reclaim_request_id(request.raw_id);
 						log::warn!("[backend]: client request failed: {:?}", e);
 						let _ = request.send_back.map(|s| s.send(Err(Error::TransportError(Box::new(e)))));
 					}
@@ -471,7 +500,6 @@ async fn background_task(
 					.expect("Request ID unused checked above; qed"),
 				Err(e) => {
 					log::warn!("[backend]: client subscription failed: {:?}", e);
-					manager.reclaim_request_id(sub.raw_id);
 					let _ = sub.send_back.send(Err(Error::TransportError(Box::new(e))));
 				}
 			},
@@ -484,13 +512,13 @@ async fn background_task(
 					.get_request_id_by_subscription_id(&sub_id)
 					.and_then(|req_id| build_unsubscribe_message(&mut manager, req_id, sub_id))
 				{
-					stop_subscription(&mut sender, &mut manager, unsub).await;
+					stop_subscription(&mut sender, unsub).await;
 				}
 			}
 			Either::Right((Some(Ok(JsonRpcResponse::Single(response))), _)) => {
 				match process_response(&mut manager, response, max_notifs_per_subscription) {
 					Ok(Some(unsub)) => {
-						stop_subscription(&mut sender, &mut manager, unsub).await;
+						stop_subscription(&mut sender, unsub).await;
 					}
 					Ok(None) => (),
 					Err(err) => {
@@ -526,7 +554,6 @@ async fn background_task(
 						.expect("All request IDs valid checked by RequestManager above; qed");
 					ordered_responses[pos] = rp;
 				}
-				manager.reclaim_request_id(batch_state.request_id);
 				let _ = batch_state.send_back.send(Ok(ordered_responses));
 			}
 			Either::Right((Some(Ok(JsonRpcResponse::Subscription(notif))), _)) => {
@@ -546,7 +573,7 @@ async fn background_task(
 							log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
 							let unsub_req = build_unsubscribe_message(&mut manager, request_id, sub_id)
 								.expect("request ID and subscription ID valid checked above; qed");
-							stop_subscription(&mut sender, &mut manager, unsub_req).await;
+							stop_subscription(&mut sender, unsub_req).await;
 						}
 					}
 					None => {
@@ -585,8 +612,6 @@ fn process_response(
 				Some(None) => return Ok(None),
 				None => return Err(Error::InvalidRequestId),
 			};
-
-			manager.reclaim_request_id(response.id);
 			let _ = send_back_oneshot.send(Ok(response.result));
 			Ok(None)
 		}
@@ -620,11 +645,12 @@ fn process_response(
 
 /// Sends an unsubscribe to request to server to indicate
 /// that the client is not interested in the subscription anymore.
-async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManager, unsub: RequestMessage) {
+//
+// NOTE: we don't count this a concurrent request as it's part of a subscription.
+async fn stop_subscription(sender: &mut WsSender, unsub: RequestMessage) {
 	if let Err(e) = sender.send(unsub.raw).await {
 		log::error!("Send unsubscribe request failed: {:?}", e);
 	}
-	manager.reclaim_request_id(unsub.raw_id);
 }
 
 /// Builds an unsubscription message, semantically the same as an ordinary request.
