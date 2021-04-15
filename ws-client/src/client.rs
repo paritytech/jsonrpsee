@@ -466,8 +466,16 @@ async fn background_task(
 
 			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
 				log::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
+				// NOTE(niklasad1): annoying allocation.
+				if let Err(send_back) = manager.insert_pending_batch(batch.raw_ids.clone(), batch.send_back) {
+					log::warn!("[backend]: batch request: {:?} already pending", batch.raw_ids);
+					let _ = send_back.send(Err(Error::InvalidRequestId));
+					continue;
+				}
+
 				if let Err(e) = sender.send(batch.raw).await {
 					log::warn!("[backend]: client batch request failed: {:?}", e);
+					manager.complete_pending_batch(batch.raw_ids);
 				}
 			}
 			// User called `notification` on the front-end
@@ -522,6 +530,7 @@ async fn background_task(
 
 				match response {
 					JsonRpcResponse::Single(call) => {
+						log::debug!("[backend]: recv method_call {:?}", call);
 						match process_response(&mut manager, call, max_notifs_per_subscription) {
 							Ok(Some(unsub)) => {
 								stop_subscription(&mut sender, unsub).await;
@@ -534,6 +543,7 @@ async fn background_task(
 						}
 					}
 					JsonRpcResponse::Batch(batch) => {
+						log::debug!("[backend]: recv batch {:?}", batch);
 						let mut digest = Vec::with_capacity(batch.len());
 						let mut ordered_responses = vec![JsonValue::Null; batch.len()];
 						let mut rps_unordered: Vec<_> = Vec::with_capacity(batch.len());
@@ -563,7 +573,7 @@ async fn background_task(
 						let _ = batch_state.send_back.send(Ok(ordered_responses));
 					}
 					JsonRpcResponse::Subscription(notif) => {
-						log::info!("notif: {:?}", notif);
+						log::debug!("[backend]: recv subscription response {:?}", notif);
 						let sub_id = notif.params.subscription;
 						let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 							Some(r) => r,
