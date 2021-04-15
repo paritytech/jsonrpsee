@@ -118,7 +118,13 @@ impl Client for HttpClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let response = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+		let response = match serde_json::from_slice(&body) {
+			Ok(response) => response,
+			Err(_) => {
+				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				return Err(Error::Request(err));
+			}
+		};
 
 		match response {
 			JsonRpcResponse::Single(_response) => Err(invalid_response(BATCH_RESPONSE, SINGLE_RESPONSE)),

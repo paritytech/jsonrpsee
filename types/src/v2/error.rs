@@ -1,3 +1,4 @@
+use super::TwoPointZero;
 use serde::{de::Deserializer, ser::Serializer, Deserialize};
 use serde_json::Value as JsonValue;
 use std::fmt;
@@ -14,10 +15,24 @@ pub enum RpcError {
 	InvalidParams,
 }
 
+#[derive(Error, Debug, Deserialize, PartialEq)]
+pub struct JsonRpcError {
+	pub jsonrpc: TwoPointZero,
+	#[serde(rename = "error")]
+	pub inner: JsonRpcErrorObject,
+	pub id: u64,
+}
+
+impl fmt::Display for JsonRpcError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", self.inner)
+	}
+}
+
 /// [JSON-RPC Error object](https://www.jsonrpc.org/specification#error_object)
 #[derive(Error, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct JsonRpcError {
+pub struct JsonRpcErrorObject {
 	/// Code
 	pub code: ErrorCode,
 	/// Message
@@ -26,7 +41,7 @@ pub struct JsonRpcError {
 	pub data: Option<JsonValue>,
 }
 
-impl fmt::Display for JsonRpcError {
+impl fmt::Display for JsonRpcErrorObject {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{}: {}", self.code.to_string(), self.message)
 	}

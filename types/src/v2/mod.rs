@@ -93,7 +93,7 @@ pub struct JsonRpcErrorParams<'a> {
 }
 
 /// JSON-RPC v2 marker type.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct TwoPointZero;
 
 struct TwoPointZeroVisitor;

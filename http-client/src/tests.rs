@@ -4,7 +4,7 @@ use jsonrpsee_test_utils::types::Id;
 use jsonrpsee_types::{
 	error::Error,
 	traits::Client,
-	v2::{dummy::JsonRpcParams, error::*},
+	v2::{dummy::JsonRpcParams, error::*, TwoPointZero},
 };
 use serde::Serialize;
 use serde_json::Value as JsonValue;
@@ -113,13 +113,12 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 	client.request::<u64, JsonValue>("say_hello", JsonRpcParams::NoParams).await
 }
 
-fn assert_jsonrpc_error_response(response: Error, code: i32, message: &str) {
-	panic!("err: {:?}", response);
-	/*let expected = jsonrpc::Error { code, message, data: None };
-	match response {
+fn assert_jsonrpc_error_response(error: Error, code: i32, message: &str) {
+	match &error {
 		Error::Request(err) => {
-			assert_eq!(err, expected);
+			assert_eq!(err.inner.code.code(), code);
+			assert_eq!(&err.inner.message, message);
 		}
-		e @ _ => panic!("Expected error: \"{}\", got: {:?}", expected, e),
-	};*/
+		e @ _ => panic!("Expected error: \"{}\", got: {:?}", error, e),
+	};
 }

@@ -41,6 +41,7 @@ use jsonrpsee_types::{
 	v2::dummy::{
 		JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcResponse, JsonRpcResponseObject, SubscriptionId,
 	},
+	v2::error::JsonRpcError,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value as JsonValue;
@@ -531,7 +532,26 @@ async fn background_task(
 			Either::Right((Some(Ok(raw)), _)) => {
 				let response: JsonRpcResponse<JsonValue> = match serde_json::from_slice(&raw) {
 					Ok(response) => response,
-					Err(_e) => continue,
+					Err(_) => {
+						let err: Result<JsonRpcError, _> = serde_json::from_slice(&raw).map_err(Error::ParseError);
+						if let Ok(err) = err {
+							match manager.request_status(&err.id) {
+								RequestStatus::PendingMethodCall => {
+									let send_back =
+										manager.complete_pending_call(err.id).expect("State checked above; qed");
+									let _ = send_back.map(|s| s.send(Err(Error::Request(err))));
+								}
+								RequestStatus::PendingSubscription => {
+									let (_, send_back, _) = manager
+										.complete_pending_subscription(err.id)
+										.expect("State checked above; qed");
+									let _ = send_back.send(Err(Error::Request(err)));
+								}
+								_ => (),
+							}
+						}
+						continue;
+					}
 				};
 
 				match response {

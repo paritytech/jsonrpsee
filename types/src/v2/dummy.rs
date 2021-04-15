@@ -1,6 +1,6 @@
 //! Client side JSON-RPC types.
 
-use crate::v2::TwoPointZero;
+use crate::v2::{error::JsonRpcError, TwoPointZero};
 use alloc::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
@@ -185,4 +185,13 @@ pub enum SubscriptionId {
 	Num(u64),
 	/// String id
 	Str(String),
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use serde_json::Value;
+
+	#[test]
+	fn deser_error() {}
 }

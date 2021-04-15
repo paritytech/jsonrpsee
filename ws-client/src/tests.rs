@@ -24,7 +24,7 @@ async fn notif_works() {
 #[tokio::test]
 async fn response_with_wrong_id() {
 	let err = run_request_with_response(ok_response("hello".into(), Id::Num(99))).await.unwrap_err();
-	assert!(matches!(err, Error::InvalidRequestId));
+	assert!(matches!(err, Error::RestartNeeded(_)));
 }
 
 #[tokio::test]
@@ -131,12 +131,12 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 	client.request::<u64, JsonValue>("say_hello", JsonRpcParams::NoParams).await
 }
 
-fn assert_error_response(response: Error, code: i32, message: &str) {
-	todo!();
-	/*match response {
-		Err(Error::Request(err)) => {
-			assert_eq!(err, expected);
+fn assert_error_response(error: Error, code: i32, message: &str) {
+	match &error {
+		Error::Request(err) => {
+			assert_eq!(err.inner.code.code(), code);
+			assert_eq!(&err.inner.message, message);
 		}
-		e @ _ => panic!("Expected error: \"{}\", got: {:?}", expected, e),
-	};*/
+		e @ _ => panic!("Expected error: \"{}\", got: {:?}", error, e),
+	};
 }
