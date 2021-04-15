@@ -118,7 +118,7 @@ impl RequestIdGuard {
 		if self.current_pending.load(Ordering::Relaxed) >= self.max_concurrent_requests {
 			Err(Error::MaxSlotsExceeded)
 		} else {
-			// NOTE: `fetch_add` wraps on overflow but can't occur because `current_pending` is checked above.
+			// NOTE: `fetch_add` wraps on overflow but that can't occur because `current_pending` is checked above.
 			self.current_pending.fetch_add(1, Ordering::Relaxed);
 			Ok(())
 		}
@@ -326,7 +326,7 @@ impl Client for WsClient {
 			futures::pin_mut!(send_back_rx, timeout);
 			match future::select(send_back_rx, timeout).await {
 				future::Either::Left((send_back_rx_out, _)) => send_back_rx_out,
-				future::Either::Right((_, _)) => Ok(Err(Error::WsRequestTimeout)),
+				future::Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
 			}
 		} else {
 			send_back_rx.await

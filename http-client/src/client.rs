@@ -5,6 +5,7 @@ use jsonrpsee_types::{
 	error::{Error, Mismatch},
 	traits::Client,
 	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcResponse},
+	v2::error::JsonRpcError,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -78,7 +79,13 @@ impl Client for HttpClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let response = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+		let response = match serde_json::from_slice(&body) {
+			Ok(response) => response,
+			Err(_) => {
+				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				return Err(Error::Request(err));
+			}
+		};
 
 		match response {
 			JsonRpcResponse::Single(response) if response.id == id => Ok(response.result),

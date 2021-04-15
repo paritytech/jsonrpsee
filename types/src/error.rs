@@ -1,4 +1,7 @@
-use crate::v2::RpcError as JsonRpcError;
+use crate::v2::error::JsonRpcError;
+use serde::de::Deserializer;
+use serde::ser::Serializer;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Convenience type for displaying errors.
@@ -52,9 +55,9 @@ pub enum Error {
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
-	/// Websocket request timeout
-	#[error("Websocket request timeout")]
-	WsRequestTimeout,
+	/// Request timeout
+	#[error("Request timeout")]
+	RequestTimeout,
 	/// Configured max number of request slots exceeded.
 	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,

@@ -131,7 +131,7 @@ async fn run_batch_request_with_response<'a, T: Serialize + std::fmt::Debug + Se
 
 async fn run_request_with_response(response: String) -> Result<JsonValue, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response).await;
-	let uri = format!("http://{}", server.local_addr());
+	let uri = format!("ws://{}", server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).await.unwrap();
 	client.request::<u64, JsonValue>("say_hello", JsonRpcParams::NoParams).await
 }
