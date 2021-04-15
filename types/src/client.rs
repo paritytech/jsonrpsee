@@ -23,7 +23,7 @@ pub struct BatchMessage {
 	/// Serialized batch request.
 	pub raw: String,
 	/// Request IDs.
-	pub raw_ids: Vec<u64>,
+	pub ids: Vec<u64>,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
 }
@@ -34,7 +34,7 @@ pub struct RequestMessage {
 	/// Serialized message.
 	pub raw: String,
 	/// Request ID.
-	pub raw_id: u64,
+	pub id: u64,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
 }
@@ -44,8 +44,10 @@ pub struct RequestMessage {
 pub struct SubscriptionMessage {
 	/// Serialized message.
 	pub raw: String,
-	/// Request ID of the serialized message.
-	pub raw_id: u64,
+	/// Request ID of the subscribe message.
+	pub subscribe_id: u64,
+	/// Request ID of the unsubscribe message.
+	pub unsubscribe_id: u64,
 	/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
 	pub unsubscribe_method: String,
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.

@@ -133,10 +133,10 @@ impl RequestIdGuard {
 		Ok(id)
 	}
 
-	/// Attempts to get the next batch IDs that only counts as one request..
+	/// Attempts to get the `n` number next IDs that only counts as one request.
 	///
 	/// Fails if request limit has been exceeded.
-	fn next_batch_ids(&self, len: usize) -> Result<Vec<u64>, Error> {
+	fn next_request_ids(&self, len: usize) -> Result<Vec<u64>, Error> {
 		self.get_slot()?;
 		let mut batch = Vec::with_capacity(len);
 		for _ in 0..len {
@@ -313,7 +313,7 @@ impl Client for WsClient {
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Request(RequestMessage { raw, raw_id: req_id, send_back: Some(send_back_tx) }))
+			.send(FrontToBack::Request(RequestMessage { raw, id: req_id, send_back: Some(send_back_tx) }))
 			.await
 			.is_err()
 		{
@@ -346,7 +346,7 @@ impl Client for WsClient {
 		T: Serialize + std::fmt::Debug + Send + Sync,
 		R: DeserializeOwned + Default + Clone,
 	{
-		let batch_ids = self.id_guard.next_batch_ids(batch.len())?;
+		let batch_ids = self.id_guard.next_request_ids(batch.len())?;
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
@@ -360,7 +360,7 @@ impl Client for WsClient {
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, raw_ids: batch_ids, send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
@@ -405,9 +405,9 @@ impl SubscriptionClient for WsClient {
 			return Err(Error::SubscriptionNameConflict(unsub_method));
 		}
 
-		let req_id = self.id_guard.next_request_id()?;
+		let ids = self.id_guard.next_request_ids(2)?;
 		let raw =
-			serde_json::to_string(&JsonRpcCall::new(req_id, subscribe_method, params)).map_err(Error::ParseError)?;
+			serde_json::to_string(&JsonRpcCall::new(ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -415,7 +415,8 @@ impl SubscriptionClient for WsClient {
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				raw,
-				raw_id: req_id,
+				subscribe_id: ids[0],
+				unsubscribe_id: ids[1],
 				unsubscribe_method: unsub_method,
 				send_back: send_back_tx,
 			}))
@@ -467,15 +468,15 @@ async fn background_task(
 			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
 				log::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
 				// NOTE(niklasad1): annoying allocation.
-				if let Err(send_back) = manager.insert_pending_batch(batch.raw_ids.clone(), batch.send_back) {
-					log::warn!("[backend]: batch request: {:?} already pending", batch.raw_ids);
+				if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
+					log::warn!("[backend]: batch request: {:?} already pending", batch.ids);
 					let _ = send_back.send(Err(Error::InvalidRequestId));
 					continue;
 				}
 
 				if let Err(e) = sender.send(batch.raw).await {
 					log::warn!("[backend]: client batch request failed: {:?}", e);
-					manager.complete_pending_batch(batch.raw_ids);
+					manager.complete_pending_batch(batch.ids);
 				}
 			}
 			// User called `notification` on the front-end
@@ -491,7 +492,7 @@ async fn background_task(
 				log::trace!("[backend]: client prepares to send request={:?}", request);
 				match sender.send(request.raw).await {
 					Ok(_) => manager
-						.insert_pending_call(request.raw_id, request.send_back)
+						.insert_pending_call(request.id, request.send_back)
 						.expect("ID unused checked above; qed"),
 					Err(e) => {
 						log::warn!("[backend]: client request failed: {:?}", e);
@@ -503,7 +504,12 @@ async fn background_task(
 			// User called `subscribe` on the front-end.
 			Either::Left((Some(FrontToBack::Subscribe(sub)), _)) => match sender.send(sub.raw).await {
 				Ok(_) => manager
-					.insert_pending_subscription(sub.raw_id, sub.send_back, sub.unsubscribe_method)
+					.insert_pending_subscription(
+						sub.subscribe_id,
+						sub.unsubscribe_id,
+						sub.send_back,
+						sub.unsubscribe_method,
+					)
 					.expect("Request ID unused checked above; qed"),
 				Err(e) => {
 					log::warn!("[backend]: client subscription failed: {:?}", e);
@@ -519,7 +525,7 @@ async fn background_task(
 					.get_request_id_by_subscription_id(&sub_id)
 					.and_then(|req_id| build_unsubscribe_message(&mut manager, req_id, sub_id))
 				{
-					stop_subscription(&mut sender, unsub).await;
+					stop_subscription(&mut sender, &mut manager, unsub).await;
 				}
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
@@ -533,7 +539,7 @@ async fn background_task(
 						log::debug!("[backend]: recv method_call {:?}", call);
 						match process_response(&mut manager, call, max_notifs_per_subscription) {
 							Ok(Some(unsub)) => {
-								stop_subscription(&mut sender, unsub).await;
+								stop_subscription(&mut sender, &mut manager, unsub).await;
 							}
 							Ok(None) => (),
 							Err(err) => {
@@ -587,9 +593,9 @@ async fn background_task(
 							Some(send_back_sink) => {
 								if let Err(e) = send_back_sink.try_send(notif.params.result) {
 									log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
-									let unsub_req = build_unsubscribe_message(&mut manager, request_id, sub_id)
+									let unsub_msg = build_unsubscribe_message(&mut manager, request_id, sub_id)
 										.expect("request ID and subscription ID valid checked above; qed");
-									stop_subscription(&mut sender, unsub_req).await;
+									stop_subscription(&mut sender, &mut manager, unsub_msg).await;
 								}
 							}
 							None => {
@@ -634,7 +640,7 @@ fn process_response(
 			Ok(None)
 		}
 		RequestStatus::PendingSubscription => {
-			let (send_back_oneshot, unsubscribe_method) =
+			let (unsub_id, send_back_oneshot, unsubscribe_method) =
 				manager.complete_pending_subscription(response.id).ok_or(Error::InvalidRequestId)?;
 
 			let sub_id: SubscriptionId = match serde_json::from_value(response.result) {
@@ -647,7 +653,10 @@ fn process_response(
 
 			let response_id = response.id;
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
-			if manager.insert_subscription(response_id, sub_id.clone(), subscribe_tx, unsubscribe_method).is_ok() {
+			if manager
+				.insert_subscription(response_id, unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
+				.is_ok()
+			{
 				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
 					Ok(_) => Ok(None),
 					Err(_) => Ok(build_unsubscribe_message(manager, response_id, sub_id)),
@@ -665,21 +674,26 @@ fn process_response(
 /// that the client is not interested in the subscription anymore.
 //
 // NOTE: we don't count this a concurrent request as it's part of a subscription.
-async fn stop_subscription(sender: &mut WsSender, unsub: RequestMessage) {
+async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManager, unsub: RequestMessage) {
 	if let Err(e) = sender.send(unsub.raw).await {
 		log::error!("Send unsubscribe request failed: {:?}", e);
+		let _ = manager.complete_pending_call(unsub.id);
 	}
 }
 
 /// Builds an unsubscription message, semantically the same as an ordinary request.
 fn build_unsubscribe_message(
 	manager: &mut RequestManager,
-	req_id: u64,
+	sub_req_id: u64,
 	sub_id: SubscriptionId,
 ) -> Option<RequestMessage> {
-	let (_, unsub, sub_id) = manager.remove_subscription(req_id, sub_id)?;
+	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
+	if manager.insert_pending_call(unsub_req_id, None).is_err() {
+		log::warn!("Unsubscribe message failed to get slot in the RequestManager");
+		return None;
+	}
 	// TODO(niklasad): better type for params or maybe a macro?!.
 	let params: JsonRpcParams<_> = vec![&sub_id].into();
-	let raw = serde_json::to_string(&JsonRpcCall::new(req_id, &unsub, params)).unwrap();
-	Some(RequestMessage { raw, raw_id: req_id, send_back: None })
+	let raw = serde_json::to_string(&JsonRpcCall::new(unsub_req_id, &unsub, params)).unwrap();
+	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }

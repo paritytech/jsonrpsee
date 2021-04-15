@@ -119,7 +119,7 @@ async fn ws_subscription_several_clients_with_drop() {
 		drop(foo_sub);
 		// Send this request to make sure that the client's background thread hasn't
 		// been canceled.
-		let _r: String = client.request("say_hello", JsonRpcParams::NoParams::<u64>).await.unwrap();
+		assert!(client.is_connected());
 		drop(client);
 	}
 
