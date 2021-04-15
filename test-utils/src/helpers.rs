@@ -114,7 +114,7 @@ pub async fn http_server_with_hardcoded_response(response: String) -> SocketAddr
 		}
 	});
 
-	let (tx, rx) = futures::channel::oneshot::channel::<SocketAddr>();
+	let (tx, rx) = futures_channel::oneshot::channel::<SocketAddr>();
 
 	tokio::spawn(async {
 		let addr = SocketAddr::from(([127, 0, 0, 1], 0));
