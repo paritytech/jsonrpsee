@@ -8,12 +8,8 @@
 
 use hyper::client::{Client, HttpConnector};
 use hyper_rustls::HttpsConnector;
-use jsonrpsee_types::{
-	error::GenericTransportError,
-	v2::dummy::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse},
-};
+use jsonrpsee_types::error::GenericTransportError;
 use jsonrpsee_utils::hyper_helpers;
-use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
@@ -45,8 +41,7 @@ impl HttpTransportClient {
 		}
 	}
 
-	/// Send serialized message.
-	pub async fn send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
+	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
 		log::debug!("send: {}", body);
 
 		if body.len() > self.max_request_body_size as usize {
@@ -67,12 +62,18 @@ impl HttpTransportClient {
 		}
 	}
 
-	/// Send serialized message and wait until all bytes from the body is read.
-	pub async fn send_and_wait_for_response(&self, body: String) -> Result<Vec<u8>, Error> {
-		let response = self.send(body).await?;
+	/// Send serialized message and wait until all bytes from the HTTP message body is read.
+	pub async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
+		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
 		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.max_request_body_size).await?;
 		Ok(body)
+	}
+
+	/// Send serialized message without reading the HTTP message body.
+	pub async fn send(&self, body: String) -> Result<(), Error> {
+		let _ = self.inner_send(body).await?;
+		Ok(())
 	}
 }
 
@@ -82,15 +83,6 @@ pub enum Error {
 	/// Invalid URL.
 	#[error("Invalid Url: {0}")]
 	Url(String),
-
-	/// Error while serializing the request.
-	// TODO: can that happen?
-	#[error("Error while serializing the request")]
-	Serialization(#[source] serde_json::error::Error),
-
-	/// Response given by the server failed to decode as UTF-8.
-	#[error("Response body is not UTF-8")]
-	Utf8(#[source] std::string::FromUtf8Error),
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
 	#[error("Error while performing the HTTP request")]
@@ -102,10 +94,6 @@ pub enum Error {
 		/// Status code returned by the server.
 		status_code: u16,
 	},
-
-	/// Failed to parse the JSON returned by the server into a JSON-RPC response.
-	#[error("Error while parsing the response body")]
-	ParseError(#[source] serde_json::error::Error),
 
 	/// Request body too large.
 	#[error("The request body was too large")]
@@ -127,7 +115,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Error, HttpTransportClient};
-	use jsonrpsee_types::v2::dummy::{JsonRpcCall, JsonRpcParams};
 
 	#[test]
 	fn invalid_http_url_rejected() {
@@ -141,12 +128,7 @@ mod tests {
 		let client = HttpTransportClient::new("http://localhost:9933", 80).unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
-		let body = serde_json::to_string(&JsonRpcCall::new(
-			1,
-			"request_larger_than_eightybytes",
-			JsonRpcParams::NoParams::<u64>,
-		))
-		.unwrap();
+		let body = "a".repeat(81);
 		assert_eq!(body.len(), 81);
 		let response = client.send(body).await.unwrap_err();
 		assert!(matches!(response, Error::RequestTooLarge));

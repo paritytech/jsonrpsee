@@ -56,12 +56,10 @@ impl Client for HttpClient {
 		T: Serialize + std::fmt::Debug + Send + Sync,
 	{
 		let notif = JsonRpcNotification::new(method, params);
-		let _ = self
-			.transport
+		self.transport
 			.send(serde_json::to_string(&notif).map_err(Error::ParseError)?)
 			.await
-			.map_err(|e| Error::TransportError(Box::new(e)));
-		Ok(())
+			.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
 	/// Perform a request towards the server.
@@ -76,7 +74,7 @@ impl Client for HttpClient {
 
 		let body = self
 			.transport
-			.send_and_wait_for_response(serde_json::to_string(&request).map_err(Error::ParseError)?)
+			.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?)
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
@@ -109,7 +107,7 @@ impl Client for HttpClient {
 
 		let body = self
 			.transport
-			.send_and_wait_for_response(serde_json::to_string(&batch_request).map_err(Error::ParseError)?)
+			.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?)
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
