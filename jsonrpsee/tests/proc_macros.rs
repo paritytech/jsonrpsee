@@ -1,24 +1,24 @@
 // Not all proc macros are used let's suppress it for now.
 #![allow(dead_code)]
 
-use crate::helpers;
-use jsonrpsee_http_client::*;
-use jsonrpsee_ws_client::*;
+mod helpers;
 
-jsonrpsee_proc_macros::rpc_client_api! {
+use jsonrpsee::{http_client::*, proc_macros, ws_client::*};
+
+proc_macros::rpc_client_api! {
 	Test<T> {
 		fn say_hello() -> T;
 	}
 }
 
-jsonrpsee_proc_macros::rpc_client_api! {
+proc_macros::rpc_client_api! {
 	pub(crate) Test2<B, T> {
 		#[rpc(method = "say_hello")]
 		fn foo(b: B) -> T;
 	}
 }
 
-jsonrpsee_proc_macros::rpc_client_api! {
+proc_macros::rpc_client_api! {
 	Author {
 		#[rpc(method = "author_submitExtrinsic", positional_params)]
 		fn submit_extrinsic(extrinsic: String) -> u128;
@@ -42,14 +42,14 @@ jsonrpsee_proc_macros::rpc_client_api! {
 }
 
 // https://github.com/paritytech/jsonrpsee/issues/104
-jsonrpsee_proc_macros::rpc_client_api! {
+proc_macros::rpc_client_api! {
 	Registrar {
 		#[rpc(method = "say_hello")]
 		fn register_para(foo: i32, bar: String);
 	}
 }
 
-jsonrpsee_proc_macros::rpc_client_api! {
+proc_macros::rpc_client_api! {
 	ManyReturnTypes<A, B, C, D, E> {
 		#[rpc(method = "say_hello")]
 		fn a() -> A;

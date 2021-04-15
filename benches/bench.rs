@@ -1,7 +1,8 @@
 use criterion::*;
-use jsonrpsee_http_client::HttpClientBuilder;
-use jsonrpsee_types::{jsonrpc::Params, traits::Client};
-use jsonrpsee_ws_client::WsClientBuilder;
+use jsonrpsee::{
+	http_client::{jsonrpc::Params, Client, HttpClientBuilder},
+	ws_client::WsClientBuilder,
+};
 use std::sync::Arc;
 use tokio::runtime::Runtime as TokioRuntime;
 

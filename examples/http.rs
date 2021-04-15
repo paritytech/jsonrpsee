@@ -24,41 +24,30 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::{
-	jsonrpc::{JsonValue, Params},
-	traits::Client,
+use jsonrpsee::{
+	http_client::{jsonrpc::Params, Client, HttpClientBuilder},
+	http_server::HttpServerBuilder,
 };
-use jsonrpsee_ws_client::WsClientBuilder;
-use jsonrpsee_ws_server::WsServer;
-use tokio::task;
-
-const SOCK_ADDR: &str = "127.0.0.1:9944";
-const SERVER_URI: &str = "ws://localhost:9944";
+use std::net::SocketAddr;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
 	env_logger::init();
 
-	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-	let _server = task::spawn(async move {
-		run_server(server_started_tx, SOCK_ADDR).await;
-	});
+	let server_addr = run_server().await?;
+	let url = format!("http://{}", server_addr);
 
-	server_started_rx.await?;
-	let client = WsClientBuilder::default().build(SERVER_URI).await?;
-	let response: JsonValue = client.request("say_hello", Params::None).await?;
+	let client = HttpClientBuilder::default().build(url)?;
+	let response: Result<String, _> = client.request("say_hello", Params::None).await;
 	println!("r: {:?}", response);
 
 	Ok(())
 }
 
-async fn run_server(server_started_tx: Sender<()>, addr: &str) {
-	let mut server = WsServer::new(addr).await.unwrap();
-
-	server.register_method("say_hello", |_| Ok("lo")).unwrap();
-
-	server_started_tx.send(()).unwrap();
-
-	server.start().await;
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
+	server.register_method("say_hello", |_| Ok("lo"))?;
+	let addr = server.local_addr();
+	tokio::spawn(async move { server.start().await });
+	addr
 }

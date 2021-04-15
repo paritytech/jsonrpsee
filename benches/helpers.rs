@@ -1,6 +1,5 @@
 use futures::channel::oneshot;
-use jsonrpsee_http_server::HttpServerBuilder;
-use jsonrpsee_ws_server::WsServer;
+use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServer};
 
 /// Run jsonrpsee HTTP server for benchmarks.
 pub async fn http_server() -> String {

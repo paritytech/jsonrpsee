@@ -24,31 +24,22 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::{
-	jsonrpc::{JsonValue, Params},
-	traits::SubscriptionClient,
+use jsonrpsee::{
+	ws_client::{jsonrpc::Params, SubscriptionClient, WsClientBuilder, WsSubscription},
+	ws_server::WsServer,
 };
-use jsonrpsee_ws_client::{WsClientBuilder, WsSubscription};
-use jsonrpsee_ws_server::WsServer;
-use tokio::task;
+use std::net::SocketAddr;
 
-const SOCK_ADDR: &str = "127.0.0.1:9966";
-const SERVER_URI: &str = "ws://localhost:9966";
 const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
 	env_logger::init();
+	let addr = run_server().await?;
+	let url = format!("ws://{}", addr);
 
-	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-	let _server = task::spawn(async move {
-		run_server(server_started_tx, SOCK_ADDR).await;
-	});
-
-	server_started_rx.await?;
-	let client = WsClientBuilder::default().build(SERVER_URI).await?;
-	let mut subscribe_hello: WsSubscription<JsonValue> =
+	let client = WsClientBuilder::default().build(&url).await?;
+	let mut subscribe_hello: WsSubscription<String> =
 		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await?;
 
 	let mut i = 0;
@@ -61,9 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	Ok(())
 }
 
-async fn run_server(server_started_tx: Sender<()>, url: &str) {
-	let mut server = WsServer::new(url).await.unwrap();
-
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let mut server = WsServer::new("127.0.0.1:0").await?;
 	let mut subscription = server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
 
 	std::thread::spawn(move || loop {
@@ -71,7 +61,7 @@ async fn run_server(server_started_tx: Sender<()>, url: &str) {
 		std::thread::sleep(std::time::Duration::from_secs(1));
 	});
 
-	server_started_tx.send(()).unwrap();
-
-	server.start().await;
+	let addr = server.local_addr();
+	tokio::spawn(async move { server.start().await });
+	addr
 }

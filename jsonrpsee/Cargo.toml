@@ -1,0 +1,27 @@
+[package]
+name = "jsonrpsee"
+description = "JSON-RPC crate"
+version = "0.2.0-alpha.4"
+authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
+license = "MIT"
+edition = "2018"
+
+[dependencies]
+http-client = { path = "../http-client", version = "0.2.0-alpha.4", package = "jsonrpsee-http-client", optional = true }
+http-server = { path = "../http-server", version = "0.2.0-alpha.4", package = "jsonrpsee-http-server", optional = true }
+ws-client = { path = "../ws-client", version = "0.2.0-alpha.4", package = "jsonrpsee-ws-client", optional = true }
+ws-server = { path = "../ws-server", version = "0.2.0-alpha.4", package = "jsonrpsee-ws-server", optional = true }
+proc-macros = { path = "../proc-macros", version = "0.2.0-alpha.4", package = "jsonrpsee-proc-macros", optional = true }
+
+[dev-dependencies]
+env_logger = "0.8"
+futures = "0.3"
+log = "0.4"
+test-utils = { path = "../test-utils", version = "0.2.0-alpha.4", package = "jsonrpsee-test-utils" }
+tokio = { version = "1", features = ["full"] }
+
+[features]
+client = ["http-client", "ws-client"]
+server = ["http-server", "ws-server"]
+macros = ["proc-macros"]
+full = ["client", "server", "macros"]
