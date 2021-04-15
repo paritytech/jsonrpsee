@@ -4,17 +4,24 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Examples for jsonrpsee"
 edition = "2018"
+publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+[dev-dependencies]
+anyhow = "1"
 env_logger = "0.8"
 futures = "0.3"
+jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 log = "0.4"
-jsonrpsee-types = { path = "../types" }
-jsonrpsee-http-client = { path = "../http-client" }
-jsonrpsee-ws-client = { path = "../ws-client" }
-jsonrpsee-ws-server = { path = "../ws-server" }
-jsonrpsee-http-server = { path = "../http-server" }
-jsonrpsee-proc-macros = { path = "../proc-macros" }
 tokio = { version = "1", features = ["full"] }
+
+[[example]]
+name = "http"
+path = "http.rs"
+
+[[example]]
+name = "ws"
+path = "ws.rs"
+
+[[example]]
+name = "ws_subscription"
+path = "ws_subscription.rs"

@@ -24,13 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee_http_server::HttpServerBuilder;
-use jsonrpsee_ws_server::WsServer;
-
+use futures::channel::oneshot;
+use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServer};
 use std::net::SocketAddr;
 use std::time::Duration;
-
-use futures::channel::oneshot;
 
 pub async fn websocket_server_with_subscription() -> SocketAddr {
 	let (server_started_tx, server_started_rx) = oneshot::channel();

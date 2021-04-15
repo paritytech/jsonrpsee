@@ -27,19 +27,14 @@
 #![cfg(test)]
 
 mod helpers;
-// mod proc_macros;
-
-use std::sync::Arc;
-use std::time::Duration;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
-use jsonrpsee_http_client::HttpClientBuilder;
-use jsonrpsee_types::{
-	error::Error,
-	traits::{Client, SubscriptionClient},
-	v2::{dummy::JsonRpcParams, JsonValue},
+use jsonrpsee::{
+	http_client::{Client, Error, HttpClientBuilder},
+	ws_client::{jsonrpc::JsonValue, JsonRpcParams, SubscriptionClient, WsClientBuilder, WsSubscription},
 };
-use jsonrpsee_ws_client::{WsClientBuilder, WsSubscription};
+use std::sync::Arc;
+use std::time::Duration;
 
 #[tokio::test]
 async fn ws_subscription_works() {

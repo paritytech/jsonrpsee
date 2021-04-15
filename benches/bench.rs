@@ -1,11 +1,8 @@
 use criterion::*;
-use jsonrpsee_http_client::HttpClientBuilder;
-use jsonrpsee_types::{
-	jsonrpc::{self, Params, Request},
-	traits::Client,
-	v2::dummy::{JsonRpcCall, JsonRpcParams, JsonRpcRequest},
+use jsonrpsee::{
+	http_client::{jsonrpc, Client, HttpClientBuilder, JsonRpcCall, JsonRpcParams, JsonRpcRequest},
+	ws_client::WsClientBuilder,
 };
-use jsonrpsee_ws_client::WsClientBuilder;
 use std::sync::Arc;
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -14,7 +11,7 @@ mod helpers;
 criterion_group!(benches, /*http_requests,*/ websocket_requests /*, jsonrpsee_types_v1, jsonrpsee_types_v2*/);
 criterion_main!(benches);
 
-fn v1_serialize(req: Request) -> String {
+fn v1_serialize(req: jsonrpc::Request) -> String {
 	serde_json::to_string(&req).unwrap()
 }
 
@@ -28,7 +25,7 @@ pub fn jsonrpsee_types_v1(crit: &mut Criterion) {
 			let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
 				jsonrpc: jsonrpc::Version::V2,
 				method: "say_hello".to_string(),
-				params: Params::Array(vec![1_u64.into(), 2_u64.into()]),
+				params: jsonrpc::Params::Array(vec![1_u64.into(), 2_u64.into()]),
 				id: jsonrpc::Id::Num(0),
 			}));
 			v1_serialize(request);

@@ -24,17 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use jsonrpsee::{
+	http_client::{Client, HttpClientBuilder, JsonRpcParams},
+	http_server::HttpServerBuilder,
+};
 use std::net::SocketAddr;
 
-use jsonrpsee_http_client::HttpClientBuilder;
-use jsonrpsee_http_server::HttpServerBuilder;
-use jsonrpsee_types::{traits::Client, v2::dummy::JsonRpcParams};
-
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
 	env_logger::init();
 
-	let server_addr = run_server().await;
+	let server_addr = run_server().await?;
 	let url = format!("http://{}", server_addr);
 
 	let params: JsonRpcParams<_> = vec![&1_u64, &2, &3].into();
@@ -46,16 +46,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	Ok(())
 }
 
-async fn run_server() -> SocketAddr {
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
-	server
-		.register_method("say_hello", |params| {
-			let params: Vec<u64> = params.parse()?;
-			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
-		})
-		.unwrap();
-	let addr = server.local_addr().unwrap();
-	tokio::spawn(async move { server.start().await.unwrap() });
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
+	server.register_method("say_hello", |_| Ok("lo"))?;
+	let addr = server.local_addr();
+	tokio::spawn(async move { server.start().await });
 	addr
 }

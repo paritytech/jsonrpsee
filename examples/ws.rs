@@ -24,15 +24,30 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-mod access_control;
-mod module;
-mod response;
-mod server;
+use jsonrpsee::{
+	ws_client::{Client, JsonRpcParams, WsClientBuilder},
+	ws_server::WsServer,
+};
+use std::net::SocketAddr;
 
-pub use access_control::{AccessControl, AccessControlBuilder, AllowHosts, Host};
-pub use jsonrpsee_types::error::Error;
-pub use module::{RpcContextModule, RpcModule};
-pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+	env_logger::init();
+	let addr = run_server().await?;
+	let url = format!("ws://{}", addr);
 
-#[cfg(test)]
-mod tests;
+	let client = WsClientBuilder::default().build(&url).await?;
+	let response: String = client.request("say_hello", JsonRpcParams::NoParams::<u64>).await?;
+	println!("r: {:?}", response);
+
+	Ok(())
+}
+
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let mut server = WsServer::new("127.0.0.1:0").await?;
+	server.register_method("say_hello", |_| Ok("lo"))?;
+
+	let addr = server.local_addr();
+	tokio::spawn(async move { server.start().await });
+	addr
+}

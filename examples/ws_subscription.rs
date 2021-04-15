@@ -24,39 +24,50 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::channel::oneshot::{self, Sender};
-use jsonrpsee_types::{traits::Client, v2::dummy::JsonRpcParams};
-use jsonrpsee_ws_client::WsClientBuilder;
-use jsonrpsee_ws_server::WsServer;
-use tokio::task;
+use jsonrpsee::{
+	ws_client::{JsonRpcParams, SubscriptionClient, WsClientBuilder, WsSubscription},
+	ws_server::WsServer,
+};
+use std::net::SocketAddr;
 
-const SOCK_ADDR: &str = "127.0.0.1:9944";
-const SERVER_URI: &str = "ws://localhost:9944";
+const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
 	env_logger::init();
+	let addr = run_server().await?;
+	let url = format!("ws://{}", addr);
 
-	let (server_started_tx, server_started_rx) = oneshot::channel::<()>();
-	let _server = task::spawn(async move {
-		run_server(server_started_tx, SOCK_ADDR).await;
-	});
-
-	server_started_rx.await?;
-	let client = WsClientBuilder::default().build(SERVER_URI).await?;
+	let client = WsClientBuilder::default().build(&url).await?;
 	let params: JsonRpcParams<u64> = None.into();
-	let response: String = client.request("say_hello", params).await?;
-	println!("r: {:?}", response);
+	let mut subscribe_hello: WsSubscription<String> =
+		client.subscribe("subscribe_hello", params, "unsubscribe_hello").await?;
+
+	let mut i = 0;
+	while i <= NUM_SUBSCRIPTION_RESPONSES {
+		let r = subscribe_hello.next().await;
+		log::debug!("received {:?}", r);
+		i += 1;
+	}
+
+	drop(subscribe_hello);
+	drop(client);
+
+	std::thread::sleep(std::time::Duration::from_secs(1));
 
 	Ok(())
 }
 
-async fn run_server(server_started_tx: Sender<()>, addr: &str) {
-	let mut server = WsServer::new(addr).await.unwrap();
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let mut server = WsServer::new("127.0.0.1:0").await?;
+	let mut subscription = server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
 
-	server.register_method("say_hello", |_| Ok("lo")).unwrap();
+	std::thread::spawn(move || loop {
+		subscription.send(&"hello my friend").unwrap();
+		std::thread::sleep(std::time::Duration::from_secs(1));
+	});
 
-	server_started_tx.send(()).unwrap();
-
-	server.start().await;
+	let addr = server.local_addr();
+	tokio::spawn(async move { server.start().await });
+	addr
 }

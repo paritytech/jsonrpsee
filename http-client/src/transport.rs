@@ -16,7 +16,7 @@ const CONTENT_TYPE_JSON: &str = "application/json";
 
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
-pub struct HttpTransportClient {
+pub(crate) struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
 	/// HTTP client
@@ -27,7 +27,7 @@ pub struct HttpTransportClient {
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	pub fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
+	pub(crate) fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
 			#[cfg(feature = "tokio1")]
@@ -63,7 +63,7 @@ impl HttpTransportClient {
 	}
 
 	/// Send serialized message and wait until all bytes from the HTTP message body is read.
-	pub async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
+	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
 		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.max_request_body_size).await?;
@@ -71,7 +71,7 @@ impl HttpTransportClient {
 	}
 
 	/// Send serialized message without reading the HTTP message body.
-	pub async fn send(&self, body: String) -> Result<(), Error> {
+	pub(crate) async fn send(&self, body: String) -> Result<(), Error> {
 		let _ = self.inner_send(body).await?;
 		Ok(())
 	}
@@ -79,7 +79,7 @@ impl HttpTransportClient {
 
 /// Error that can happen during a request.
 #[derive(Debug, Error)]
-pub enum Error {
+pub(crate) enum Error {
 	/// Invalid URL.
 	#[error("Invalid Url: {0}")]
 	Url(String),

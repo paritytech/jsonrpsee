@@ -17,4 +17,11 @@ pub mod transport;
 mod tests;
 
 pub use client::{WsClient, WsClientBuilder};
-pub use jsonrpsee_types::client::Subscription as WsSubscription;
+pub use jsonrpsee_types::{
+	client::Subscription as WsSubscription,
+	error::Error,
+	jsonrpc,
+	traits::{Client, SubscriptionClient},
+	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcRequest},
+	v2::error,
+};

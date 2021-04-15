@@ -1,4 +1,4 @@
-use serde::{de::Deserializer, ser::Serializer, Deserialize, Serialize};
+use serde::{de::Deserializer, ser::Serializer, Deserialize};
 use serde_json::Value as JsonValue;
 use std::fmt;
 use thiserror::Error;

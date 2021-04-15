@@ -1,7 +1,4 @@
 use crate::v2::error::JsonRpcError;
-use serde::de::Deserializer;
-use serde::ser::Serializer;
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Convenience type for displaying errors.

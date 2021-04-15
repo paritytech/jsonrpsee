@@ -1,13 +1,8 @@
 #![cfg(test)]
 
-use crate::{WsClientBuilder, WsSubscription};
+use crate::{error::*, Client, Error, JsonRpcParams, SubscriptionClient, WsClientBuilder, WsSubscription};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
-use jsonrpsee_types::{
-	error::Error,
-	traits::{Client, SubscriptionClient},
-	v2::{dummy::JsonRpcParams, error::*},
-};
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 
