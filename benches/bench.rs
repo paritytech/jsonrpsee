@@ -8,7 +8,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
-criterion_group!(benches, /*http_requests,*/ websocket_requests /*, jsonrpsee_types_v1, jsonrpsee_types_v2*/);
+criterion_group!(benches, http_requests, websocket_requests, jsonrpsee_types_v1, jsonrpsee_types_v2);
 criterion_main!(benches);
 
 fn v1_serialize(req: jsonrpc::Request) -> String {
@@ -36,7 +36,7 @@ pub fn jsonrpsee_types_v1(crit: &mut Criterion) {
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 	crit.bench_function("jsonrpsee_types_v2", |b| {
 		b.iter(|| {
-			let params = JsonRpcParams::Array(&[1, 2]);
+			let params = JsonRpcParams::Array(&[1_u64, 2]);
 			let request = JsonRpcCall::new(0, "say_hello", params);
 			v2_serialize(request);
 		})
