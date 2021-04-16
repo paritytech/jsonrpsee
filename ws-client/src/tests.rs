@@ -80,7 +80,7 @@ async fn batch_request_works() {
 	let _ = env_logger::try_init();
 	let batch_request = vec![
 		("say_hello", JsonRpcParams::NoParams),
-		("say_goodbye", JsonRpcParams::Array(vec![&0_u64, &1, &2])),
+		("say_goodbye", JsonRpcParams::Array(&[0_u64, 1, 2])),
 		("get_swag", JsonRpcParams::NoParams),
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
@@ -92,7 +92,7 @@ async fn batch_request_works() {
 async fn batch_request_out_of_order_response() {
 	let batch_request = vec![
 		("say_hello", JsonRpcParams::NoParams),
-		("say_goodbye", JsonRpcParams::Array(vec![&0_u64, &1, &2])),
+		("say_goodbye", JsonRpcParams::Array(&[0_u64, 1, 2])),
 		("get_swag", JsonRpcParams::NoParams),
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();

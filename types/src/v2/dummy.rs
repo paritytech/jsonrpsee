@@ -1,6 +1,6 @@
 //! Client side JSON-RPC types.
 
-use crate::v2::{error::JsonRpcError, TwoPointZero};
+use crate::v2::TwoPointZero;
 use alloc::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
@@ -14,8 +14,7 @@ where
 	/// No params.
 	NoParams,
 	/// Positional params.
-	// TODO(niklasad1): maybe smallvec here?!
-	Array(Vec<&'a T>),
+	Array(&'a [T]),
 	/// Params by name.
 	Map(BTreeMap<&'a str, &'a T>),
 }
@@ -39,53 +38,12 @@ where
 	}
 }
 
-impl<'a, T> From<Vec<&'a T>> for JsonRpcParams<'a, T>
+impl<'a, T> From<&'a [T]> for JsonRpcParams<'a, T>
 where
 	T: Serialize + std::fmt::Debug,
 {
-	fn from(arr: Vec<&'a T>) -> Self {
+	fn from(arr: &'a [T]) -> Self {
 		Self::Array(arr)
-	}
-}
-
-/// Serializable JSON-RPC request object which may be a notification, method call or batch.
-#[derive(Serialize, Debug)]
-#[serde(untagged)]
-pub enum JsonRpcRequest<'a, T>
-where
-	T: Serialize + std::fmt::Debug + 'a,
-{
-	/// Single method call.
-	Single(JsonRpcCall<'a, T>),
-	/// Batch.
-	Batch(Vec<JsonRpcCall<'a, T>>),
-	/// Notification.
-	Notif(JsonRpcNotification<'a, T>),
-}
-
-impl<'a, T> From<JsonRpcCall<'a, T>> for JsonRpcRequest<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
-	fn from(call: JsonRpcCall<'a, T>) -> Self {
-		JsonRpcRequest::Single(call)
-	}
-}
-impl<'a, T> From<Vec<JsonRpcCall<'a, T>>> for JsonRpcRequest<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
-	fn from(batch: Vec<JsonRpcCall<'a, T>>) -> Self {
-		JsonRpcRequest::Batch(batch)
-	}
-}
-
-impl<'a, T> From<JsonRpcNotification<'a, T>> for JsonRpcRequest<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
-	fn from(notif: JsonRpcNotification<'a, T>) -> Self {
-		JsonRpcRequest::Notif(notif)
 	}
 }
 
@@ -158,9 +116,12 @@ pub struct JsonRpcNotificationParams<T> {
 	pub result: T,
 }
 
+/// JSON-RPC notification response.
 #[derive(Deserialize, Debug)]
 pub struct JsonRpcResponseNotif<T> {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
+	/// Params.
 	pub params: JsonRpcNotificationParams<T>,
 }
 

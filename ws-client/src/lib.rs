@@ -22,6 +22,6 @@ pub use jsonrpsee_types::{
 	error::Error,
 	jsonrpc,
 	traits::{Client, SubscriptionClient},
-	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcRequest},
+	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams},
 	v2::error,
 };
