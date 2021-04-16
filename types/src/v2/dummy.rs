@@ -99,17 +99,6 @@ where
 	}
 }
 
-/// [Successful JSON-RPC object](https://www.jsonrpc.org/specification#response_object).
-#[derive(Deserialize, Debug)]
-pub struct JsonRpcResponseObject<T> {
-	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
-	/// Result.
-	pub result: T,
-	/// Request ID
-	pub id: u64,
-}
-
 /// JSON-RPC parameter values for subscriptions.
 #[derive(Deserialize, Debug)]
 pub struct JsonRpcNotificationParams<T> {
@@ -120,6 +109,8 @@ pub struct JsonRpcNotificationParams<T> {
 }
 
 /// JSON-RPC notification response.
+// NOTE(niklasad1): basically the same as Maciej version but I wanted to support Strings too.
+// Maybe make subscription ID generic?!
 #[derive(Deserialize, Debug)]
 pub struct JsonRpcResponseNotif<T> {
 	/// JSON-RPC version.
