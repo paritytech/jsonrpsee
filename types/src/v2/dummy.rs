@@ -128,18 +128,6 @@ pub struct JsonRpcResponseNotif<T> {
 	pub params: JsonRpcNotificationParams<T>,
 }
 
-/// Represent the different JSON-RPC responses.
-#[derive(Deserialize, Debug)]
-#[serde(untagged)]
-pub enum JsonRpcResponse<T> {
-	/// Single response.
-	Single(JsonRpcResponseObject<T>),
-	/// Batch response.
-	Batch(Vec<JsonRpcResponseObject<T>>),
-	/// Notification response used for subscriptions.
-	Subscription(JsonRpcResponseNotif<T>),
-}
-
 /// Id of a subscription, communicated by the server.
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

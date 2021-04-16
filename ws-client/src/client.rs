@@ -24,7 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::manager::{RequestManager, RequestStatus};
+use crate::helpers::{
+	build_unsubscribe_message, process_batch_response, process_error_response, process_single_response,
+	process_subscription_response, stop_subscription,
+};
+use crate::manager::RequestManager;
 use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
 use async_std::sync::Mutex;
 use async_trait::async_trait;
@@ -38,13 +42,11 @@ use jsonrpsee_types::{
 	client::{BatchMessage, FrontToBack, RequestMessage, Subscription, SubscriptionMessage},
 	error::Error,
 	traits::{Client, SubscriptionClient},
-	v2::dummy::{
-		JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcResponse, JsonRpcResponseObject, SubscriptionId,
-	},
+	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcResponseNotif},
 	v2::error::JsonRpcError,
+	v2::JsonRpcResponse,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use serde_json::Value as JsonValue;
 use std::{
 	borrow::Cow,
 	marker::PhantomData,
@@ -530,99 +532,48 @@ async fn background_task(
 				}
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
-				let response: JsonRpcResponse<JsonValue> = match serde_json::from_slice(&raw) {
-					Ok(response) => response,
-					Err(_) => {
-						let err: Result<JsonRpcError, _> = serde_json::from_slice(&raw).map_err(Error::ParseError);
-						if let Ok(err) = err {
-							match manager.request_status(&err.id) {
-								RequestStatus::PendingMethodCall => {
-									let send_back =
-										manager.complete_pending_call(err.id).expect("State checked above; qed");
-									let _ = send_back.map(|s| s.send(Err(Error::Request(err))));
-								}
-								RequestStatus::PendingSubscription => {
-									let (_, send_back, _) = manager
-										.complete_pending_subscription(err.id)
-										.expect("State checked above; qed");
-									let _ = send_back.send(Err(Error::Request(err)));
-								}
-								_ => (),
-							}
+				// Single response to a request.
+				if let Ok(single) = serde_json::from_slice::<JsonRpcResponse<_>>(&raw) {
+					log::debug!("[backend]: recv method_call {:?}", single);
+					match process_single_response(&mut manager, single, max_notifs_per_subscription) {
+						Ok(Some(unsub)) => {
+							stop_subscription(&mut sender, &mut manager, unsub).await;
 						}
-						continue;
-					}
-				};
-
-				match response {
-					JsonRpcResponse::Single(call) => {
-						log::debug!("[backend]: recv method_call {:?}", call);
-						match process_response(&mut manager, call, max_notifs_per_subscription) {
-							Ok(Some(unsub)) => {
-								stop_subscription(&mut sender, &mut manager, unsub).await;
-							}
-							Ok(None) => (),
-							Err(err) => {
-								let _ = front_error.send(err);
-								return;
-							}
+						Ok(None) => (),
+						Err(err) => {
+							let _ = front_error.send(err);
+							return;
 						}
 					}
-					JsonRpcResponse::Batch(batch) => {
-						log::debug!("[backend]: recv batch {:?}", batch);
-						let mut digest = Vec::with_capacity(batch.len());
-						let mut ordered_responses = vec![JsonValue::Null; batch.len()];
-						let mut rps_unordered: Vec<_> = Vec::with_capacity(batch.len());
-
-						for rp in batch {
-							digest.push(rp.id);
-							rps_unordered.push((rp.id, rp.result));
-						}
-
-						digest.sort_unstable();
-						let batch_state = match manager.complete_pending_batch(digest) {
-							Some(state) => state,
-							None => {
-								log::warn!("Received unknown batch response");
-								continue;
-							}
-						};
-
-						for (id, rp) in rps_unordered {
-							let pos = batch_state
-								.order
-								.get(&id)
-								.copied()
-								.expect("All request IDs valid checked by RequestManager above; qed");
-							ordered_responses[pos] = rp;
-						}
-						let _ = batch_state.send_back.send(Ok(ordered_responses));
+				}
+				// Subscription response.
+				else if let Ok(notif) = serde_json::from_slice::<JsonRpcResponseNotif<_>>(&raw) {
+					log::debug!("[backend]: recv subscription {:?}", notif);
+					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
+						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
-					JsonRpcResponse::Subscription(notif) => {
-						log::debug!("[backend]: recv subscription response {:?}", notif);
-						let sub_id = notif.params.subscription;
-						let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
-							Some(r) => r,
-							None => {
-								log::error!("Subscription ID: {:?} not found", sub_id);
-								continue;
-							}
-						};
-
-						match manager.as_subscription_mut(&request_id) {
-							Some(send_back_sink) => {
-								if let Err(e) = send_back_sink.try_send(notif.params.result) {
-									log::error!("Dropping subscription {:?} error: {:?}", sub_id, e);
-									let unsub_msg = build_unsubscribe_message(&mut manager, request_id, sub_id)
-										.expect("request ID and subscription ID valid checked above; qed");
-									stop_subscription(&mut sender, &mut manager, unsub_msg).await;
-								}
-							}
-							None => {
-								log::error!("Subscription ID: {:?} not an active subscription", sub_id);
-							}
-						}
+				}
+				// Batch response.
+				else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcResponse<_>>>(&raw) {
+					log::debug!("[backend]: recv batch {:?}", batch);
+					if let Err(e) = process_batch_response(&mut manager, batch) {
+						let _ = front_error.send(e);
+						break;
 					}
+				}
+				// Error response
+				else if let Ok(err) = serde_json::from_slice::<JsonRpcError>(&raw) {
+					log::debug!("[backend]: recv error response {:?}", err);
+					if let Err(e) = process_error_response(&mut manager, err) {
+						let _ = front_error.send(e);
+						break;
+					}
+				}
+				// Unparsable response
+				else {
+					log::debug!("[backend]: recv unparseable message");
+					let _ = front_error.send(Error::InvalidRequestId);
+					return;
 				}
 			}
 			Either::Right((Some(Err(e)), _)) => {
@@ -637,84 +588,4 @@ async fn background_task(
 			}
 		}
 	}
-}
-
-/// Process a response from the server.
-///
-/// Returns `Ok(None)` if the response was successful
-/// Returns `Ok(Some(_))` if the response got an error but could be handled.
-/// Returns `Err(_)` if the response couldn't be handled.
-fn process_response(
-	manager: &mut RequestManager,
-	response: JsonRpcResponseObject<JsonValue>,
-	max_capacity_per_subscription: usize,
-) -> Result<Option<RequestMessage>, Error> {
-	match manager.request_status(&response.id) {
-		RequestStatus::PendingMethodCall => {
-			let send_back_oneshot = match manager.complete_pending_call(response.id) {
-				Some(Some(send)) => send,
-				Some(None) => return Ok(None),
-				None => return Err(Error::InvalidRequestId),
-			};
-			let _ = send_back_oneshot.send(Ok(response.result));
-			Ok(None)
-		}
-		RequestStatus::PendingSubscription => {
-			let (unsub_id, send_back_oneshot, unsubscribe_method) =
-				manager.complete_pending_subscription(response.id).ok_or(Error::InvalidRequestId)?;
-
-			let sub_id: SubscriptionId = match serde_json::from_value(response.result) {
-				Ok(sub_id) => sub_id,
-				Err(_) => {
-					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
-					return Ok(None);
-				}
-			};
-
-			let response_id = response.id;
-			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
-			if manager
-				.insert_subscription(response_id, unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
-				.is_ok()
-			{
-				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
-					Ok(_) => Ok(None),
-					Err(_) => Ok(build_unsubscribe_message(manager, response_id, sub_id)),
-				}
-			} else {
-				let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
-				Ok(None)
-			}
-		}
-		RequestStatus::Subscription | RequestStatus::Invalid => Err(Error::InvalidRequestId),
-	}
-}
-
-/// Sends an unsubscribe to request to server to indicate
-/// that the client is not interested in the subscription anymore.
-//
-// NOTE: we don't count this a concurrent request as it's part of a subscription.
-async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManager, unsub: RequestMessage) {
-	if let Err(e) = sender.send(unsub.raw).await {
-		log::error!("Send unsubscribe request failed: {:?}", e);
-		let _ = manager.complete_pending_call(unsub.id);
-	}
-}
-
-/// Builds an unsubscription message, semantically the same as an ordinary request.
-fn build_unsubscribe_message(
-	manager: &mut RequestManager,
-	sub_req_id: u64,
-	sub_id: SubscriptionId,
-) -> Option<RequestMessage> {
-	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
-	let sub_id_slice = &[sub_id];
-	if manager.insert_pending_call(unsub_req_id, None).is_err() {
-		log::warn!("Unsubscribe message failed to get slot in the RequestManager");
-		return None;
-	}
-	// TODO(niklasad): better type for params or maybe a macro?!.
-	let params = JsonRpcParams::Array(sub_id_slice);
-	let raw = serde_json::to_string(&JsonRpcCall::new(unsub_req_id, &unsub, params)).unwrap();
-	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }

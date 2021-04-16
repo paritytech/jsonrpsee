@@ -42,7 +42,7 @@ pub struct JsonRpcInvalidRequest<'a> {
 }
 
 /// JSON-RPC notification (a request object without a request ID).
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct JsonRpcNotification<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -53,22 +53,24 @@ pub struct JsonRpcNotification<'a> {
 }
 
 /// JSON-RPC parameter values for subscriptions.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct JsonRpcNotificationParams<'a> {
 	/// Subscription ID
 	pub subscription: u64,
 	/// Result.
+	#[serde(borrow)]
 	pub result: &'a RawValue,
 }
 
 /// JSON-RPC successful response object.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct JsonRpcResponse<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Result.
 	pub result: T,
 	/// Request ID
+	#[serde(borrow)]
 	pub id: Option<&'a RawValue>,
 }
 

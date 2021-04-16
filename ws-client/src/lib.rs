@@ -6,6 +6,8 @@
 
 /// WebSocket Client.
 pub mod client;
+/// Helpers.
+pub mod helpers;
 /// Request manager.
 pub mod manager;
 /// Stream.

@@ -2,17 +2,14 @@ use crate::transport::HttpTransportClient;
 use async_trait::async_trait;
 use fnv::FnvHashMap;
 use jsonrpsee_types::{
-	error::{Error, Mismatch},
+	error::Error,
 	traits::Client,
-	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcResponse},
+	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams},
 	v2::error::JsonRpcError,
+	v2::{JsonRpcResponse, RawValue},
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
-
-const SINGLE_RESPONSE: &str = "Single Response";
-const BATCH_RESPONSE: &str = "Batch response";
-const SUBSCRIPTION_RESPONSE: &str = "Subscription response";
 
 /// Http Client Builder.
 #[derive(Debug)]
@@ -79,7 +76,7 @@ impl Client for HttpClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let response = match serde_json::from_slice(&body) {
+		let response: JsonRpcResponse<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
 				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
@@ -87,11 +84,12 @@ impl Client for HttpClient {
 			}
 		};
 
-		match response {
-			JsonRpcResponse::Single(response) if response.id == id => Ok(response.result),
-			JsonRpcResponse::Single(_) => Err(Error::InvalidRequestId),
-			JsonRpcResponse::Batch(_rps) => Err(invalid_response(SINGLE_RESPONSE, BATCH_RESPONSE)),
-			JsonRpcResponse::Subscription(_notif) => Err(invalid_response(SINGLE_RESPONSE, SUBSCRIPTION_RESPONSE)),
+		let response_id = parse_request_id(response.id)?;
+
+		if response_id == id {
+			Ok(response.result)
+		} else {
+			Err(Error::InvalidRequestId)
 		}
 	}
 
@@ -118,7 +116,7 @@ impl Client for HttpClient {
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let response = match serde_json::from_slice(&body) {
+		let rps: Vec<JsonRpcResponse<_>> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
 				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
@@ -126,25 +124,26 @@ impl Client for HttpClient {
 			}
 		};
 
-		match response {
-			JsonRpcResponse::Single(_response) => Err(invalid_response(BATCH_RESPONSE, SINGLE_RESPONSE)),
-			JsonRpcResponse::Subscription(_notif) => Err(invalid_response(BATCH_RESPONSE, SUBSCRIPTION_RESPONSE)),
-			JsonRpcResponse::Batch(rps) => {
-				// NOTE: `R::default` is placeholder and will be replaced in loop below.
-				let mut responses = vec![R::default(); ordered_requests.len()];
-				for rp in rps {
-					let pos = match request_set.get(&rp.id) {
-						Some(pos) => *pos,
-						None => return Err(Error::InvalidRequestId),
-					};
-					responses[pos] = rp.result
-				}
-				Ok(responses)
-			}
+		// NOTE: `R::default` is placeholder and will be replaced in loop below.
+		let mut responses = vec![R::default(); ordered_requests.len()];
+		for rp in rps {
+			let response_id = parse_request_id(rp.id)?;
+			let pos = match request_set.get(&response_id) {
+				Some(pos) => *pos,
+				None => return Err(Error::InvalidRequestId),
+			};
+			responses[pos] = rp.result
 		}
+		Ok(responses)
 	}
 }
 
-fn invalid_response(expected: impl Into<String>, got: impl Into<String>) -> Error {
-	Error::InvalidResponse(Mismatch { expected: expected.into(), got: got.into() })
+fn parse_request_id(raw: Option<&RawValue>) -> Result<u64, Error> {
+	match raw {
+		None => Err(Error::InvalidRequestId),
+		Some(id) => {
+			let id = serde_json::from_str(id.get()).map_err(Error::ParseError)?;
+			Ok(id)
+		}
+	}
 }

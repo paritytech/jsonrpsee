@@ -69,7 +69,7 @@ async fn internal_error_works() {
 async fn subscription_response_to_request() {
 	let req = r#"{"jsonrpc":"2.0","method":"subscribe_hello","params":{"subscription":"3px4FrtxSYQ1zBKW154NoVnrDhrq764yQNCXEgZyM6Mu","result":"hello my friend"}}"#.to_string();
 	let err = run_request_with_response(req).await.unwrap_err();
-	assert!(matches!(err, Error::InvalidResponse(_)));
+	assert!(matches!(err, Error::ParseError(_)));
 }
 
 #[tokio::test]
