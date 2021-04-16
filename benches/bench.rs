@@ -36,7 +36,7 @@ pub fn jsonrpsee_types_v1(crit: &mut Criterion) {
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 	crit.bench_function("jsonrpsee_types_v2", |b| {
 		b.iter(|| {
-			let params: JsonRpcParams<_> = vec![&1, &2].into();
+			let params = JsonRpcParams::Array(&[1, 2]);
 			let request = JsonRpcCall::new(0, "say_hello", params);
 			v2_serialize(request);
 		})

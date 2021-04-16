@@ -15,11 +15,15 @@ pub enum RpcError {
 	InvalidParams,
 }
 
+/// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
 #[derive(Error, Debug, Deserialize, PartialEq)]
 pub struct JsonRpcError {
+	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	#[serde(rename = "error")]
+	/// Error object.
 	pub inner: JsonRpcErrorObject,
+	/// Request ID.
 	pub id: u64,
 }
 
@@ -33,7 +37,7 @@ impl fmt::Display for JsonRpcError {
 #[derive(Error, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct JsonRpcErrorObject {
-	/// Code
+	/// Error code
 	pub code: ErrorCode,
 	/// Message
 	pub message: String,

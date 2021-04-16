@@ -16,10 +16,12 @@ where
 	/// Positional params.
 	Array(&'a [T]),
 	/// Params by name.
+	//
+	// TODO(niklasad1): maybe take a reference here but BTreeMap needs allocation anyway.
 	Map(BTreeMap<&'a str, &'a T>),
 }
 
-// FIXME: this is a little weird but nice if `None.into()` works.
+// TODO(niklasad1): this is a little weird but nice if `None.into()` works.
 impl<'a, T> From<Option<&'a T>> for JsonRpcParams<'a, T>
 where
 	T: Serialize + std::fmt::Debug,
@@ -97,6 +99,7 @@ where
 	}
 }
 
+/// [Successful JSON-RPC object](https://www.jsonrpc.org/specification#response_object).
 #[derive(Deserialize, Debug)]
 pub struct JsonRpcResponseObject<T> {
 	/// JSON-RPC version.
@@ -150,8 +153,6 @@ pub enum SubscriptionId {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use serde_json::Value;
 
 	#[test]
 	fn deser_error() {}
