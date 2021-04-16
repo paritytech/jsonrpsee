@@ -2,7 +2,7 @@ use crate::error::Error;
 use crate::jsonrpc::{self, DeserializeOwned, JsonValue, Params, SubscriptionId};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{stream::StreamExt, sink::SinkExt, future::FutureExt};
+use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
 
 /// Active subscription on a Client.
 pub struct Subscription<Notif> {
