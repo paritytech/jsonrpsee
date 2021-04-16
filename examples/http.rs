@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	http_client::{Client, HttpClientBuilder, JsonRpcParams},
+	http_client::{traits::Client, v2::JsonRpcParams, HttpClientBuilder},
 	http_server::HttpServerBuilder,
 };
 use std::net::SocketAddr;

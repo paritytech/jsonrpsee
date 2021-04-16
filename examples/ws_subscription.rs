@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	ws_client::{JsonRpcParams, SubscriptionClient, WsClientBuilder, WsSubscription},
+	ws_client::{traits::SubscriptionClient, v2::JsonRpcParams, Subscription, WsClientBuilder},
 	ws_server::WsServer,
 };
 use std::net::SocketAddr;
@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let params: JsonRpcParams<u64> = None.into();
-	let mut subscribe_hello: WsSubscription<String> =
+	let mut subscribe_hello: Subscription<String> =
 		client.subscribe("subscribe_hello", params, "unsubscribe_hello").await?;
 
 	let mut i = 0;

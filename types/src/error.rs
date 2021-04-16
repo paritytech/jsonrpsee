@@ -1,5 +1,16 @@
-use crate::v2::error::JsonRpcError;
+use crate::v2::JsonRpcErrorAlloc;
 use std::fmt;
+
+/// Error.
+#[derive(thiserror::Error, Debug)]
+pub enum RpcError {
+	/// Unknown error.
+	#[error("unknown rpc error")]
+	Unknown,
+	/// Invalid params in the RPC call.
+	#[error("invalid params")]
+	InvalidParams,
+}
 
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
@@ -24,7 +35,7 @@ pub enum Error {
 	TransportError(#[source] Box<dyn std::error::Error + Send + Sync>),
 	/// JSON-RPC request error.
 	#[error("JSON-RPC request error: {0:?}")]
-	Request(#[source] JsonRpcError),
+	Request(#[source] JsonRpcErrorAlloc),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	Internal(#[source] futures::channel::mpsc::SendError),

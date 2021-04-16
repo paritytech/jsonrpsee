@@ -1,6 +1,10 @@
 use criterion::*;
 use jsonrpsee::{
-	http_client::{Client, HttpClientBuilder, JsonRpcCall, JsonRpcParams},
+	http_client::{
+		traits::Client,
+		v2::{JsonRpcCallSer, JsonRpcParams},
+		HttpClientBuilder,
+	},
 	ws_client::WsClientBuilder,
 };
 use std::sync::Arc;
@@ -11,7 +15,7 @@ mod helpers;
 criterion_group!(benches, http_requests, websocket_requests, jsonrpsee_types_v2);
 criterion_main!(benches);
 
-fn v2_serialize(req: JsonRpcCall<u64>) -> String {
+fn v2_serialize(req: JsonRpcCallSer<u64>) -> String {
 	serde_json::to_string(&req).unwrap()
 }
 
@@ -19,7 +23,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 	crit.bench_function("jsonrpsee_types_v2", |b| {
 		b.iter(|| {
 			let params = JsonRpcParams::Array(&[1_u64, 2]);
-			let request = JsonRpcCall::new(0, "say_hello", params);
+			let request = JsonRpcCallSer::new(0, "say_hello", params);
 			v2_serialize(request);
 		})
 	});

@@ -28,8 +28,14 @@ use crate::helpers::{
 	build_unsubscribe_message, process_batch_response, process_error_response, process_single_response,
 	process_subscription_response, stop_subscription,
 };
-use crate::manager::RequestManager;
+use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
+use crate::v2::{
+	JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotifAlloc, JsonRpcNotificationSer, JsonRpcParams, JsonRpcResponse,
+};
+use crate::{
+	manager::RequestManager, BatchMessage, Error, FrontToBack, RequestMessage, Subscription, SubscriptionMessage,
+};
 use async_std::sync::Mutex;
 use async_trait::async_trait;
 use futures::{
@@ -37,14 +43,6 @@ use futures::{
 	future::Either,
 	prelude::*,
 	sink::SinkExt,
-};
-use jsonrpsee_types::{
-	client::{BatchMessage, FrontToBack, RequestMessage, Subscription, SubscriptionMessage},
-	error::Error,
-	traits::{Client, SubscriptionClient},
-	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams, JsonRpcResponseNotif},
-	v2::error::JsonRpcError,
-	v2::JsonRpcResponse,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -295,9 +293,13 @@ impl Client for WsClient {
 		T: Serialize + std::fmt::Debug + Send + Sync,
 	{
 		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
-		let notif = JsonRpcNotification::new(method, params);
+		// NOTE: we use this to guard against max number of concurrent requests.
+		let _req_id = self.id_guard.next_request_id()?;
+		let notif = JsonRpcNotificationSer::new(method, params);
 		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
-		match self.to_back.clone().send(FrontToBack::Notification(raw)).await {
+		let res = self.to_back.clone().send(FrontToBack::Notification(raw)).await;
+		self.id_guard.reclaim_request_id();
+		match res {
 			Ok(()) => Ok(()),
 			Err(_) => Err(self.read_error_from_backend().await),
 		}
@@ -311,7 +313,7 @@ impl Client for WsClient {
 		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
-		let raw = serde_json::to_string(&JsonRpcCall::new(req_id, method, params)).map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&JsonRpcCallSer::new(req_id, method, params)).map_err(Error::ParseError)?;
 
 		if self
 			.to_back
@@ -353,7 +355,7 @@ impl Client for WsClient {
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(JsonRpcCall::new(batch_ids[idx], method, params));
+			batches.push(JsonRpcCallSer::new(batch_ids[idx], method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -410,7 +412,7 @@ impl SubscriptionClient for WsClient {
 
 		let ids = self.id_guard.next_request_ids(2)?;
 		let raw =
-			serde_json::to_string(&JsonRpcCall::new(ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
+			serde_json::to_string(&JsonRpcCallSer::new(ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -547,7 +549,7 @@ async fn background_task(
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) = serde_json::from_slice::<JsonRpcResponseNotif<_>>(&raw) {
+				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifAlloc<_>>(&raw) {
 					log::debug!("[backend]: recv subscription {:?}", notif);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
@@ -562,7 +564,7 @@ async fn background_task(
 					}
 				}
 				// Error response
-				else if let Ok(err) = serde_json::from_slice::<JsonRpcError>(&raw) {
+				else if let Ok(err) = serde_json::from_slice::<JsonRpcErrorAlloc>(&raw) {
 					log::debug!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);

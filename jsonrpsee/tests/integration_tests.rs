@@ -30,8 +30,8 @@ mod helpers;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::{
-	http_client::{Client, Error, HttpClientBuilder},
-	ws_client::{JsonRpcParams, JsonValue, SubscriptionClient, WsClientBuilder, WsSubscription},
+	http_client::{traits::Client, Error, HttpClientBuilder},
+	ws_client::{traits::SubscriptionClient, v2::JsonRpcParams, JsonValue, Subscription, WsClientBuilder},
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,9 +41,9 @@ async fn ws_subscription_works() {
 	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut hello_sub: WsSubscription<String> =
+	let mut hello_sub: Subscription<String> =
 		client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
-	let mut foo_sub: WsSubscription<u64> =
+	let mut foo_sub: Subscription<u64> =
 		client.subscribe("subscribe_foo", JsonRpcParams::NoParams::<u64>, "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
@@ -80,9 +80,9 @@ async fn ws_subscription_several_clients() {
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
 		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-		let hello_sub: WsSubscription<JsonValue> =
+		let hello_sub: Subscription<JsonValue> =
 			client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
-		let foo_sub: WsSubscription<JsonValue> =
+		let foo_sub: Subscription<JsonValue> =
 			client.subscribe("subscribe_foo", JsonRpcParams::NoParams::<u64>, "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
@@ -97,9 +97,9 @@ async fn ws_subscription_several_clients_with_drop() {
 	for _ in 0..10 {
 		let client =
 			WsClientBuilder::default().max_notifs_per_subscription(u32::MAX as usize).build(&server_url).await.unwrap();
-		let hello_sub: WsSubscription<String> =
+		let hello_sub: Subscription<String> =
 			client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
-		let foo_sub: WsSubscription<u64> =
+		let foo_sub: Subscription<u64> =
 			client.subscribe("subscribe_foo", JsonRpcParams::NoParams::<u64>, "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
@@ -142,7 +142,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
-	let mut hello_sub: WsSubscription<JsonValue> =
+	let mut hello_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
 
 	// don't poll the subscription stream for 2 seconds, should be full now.
@@ -160,7 +160,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let _hello_req: JsonValue = client.request("say_hello", JsonRpcParams::NoParams::<u64>).await.unwrap();
 
 	// The same subscription should be possible to register again.
-	let mut other_sub: WsSubscription<JsonValue> =
+	let mut other_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
 
 	other_sub.next().await.unwrap();

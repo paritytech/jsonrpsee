@@ -1,20 +1,14 @@
-use serde::de::{self, Deserializer, Unexpected, Visitor};
+use crate::{error::RpcError, Cow, Error};
+use alloc::collections::BTreeMap;
+use serde::de::{self, DeserializeOwned, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use std::fmt;
+use thiserror::Error;
 
-/// Niklas dummy types
-pub mod dummy;
-/// Error type.
+/// JSON-RPC related error types.
 pub mod error;
-/// Traits.
-pub mod traits;
-
-// TODO: revisit re-exports.
-pub use beef::lean::Cow;
-pub use error::RpcError;
-pub use serde_json::value::{to_raw_value, RawValue};
-pub use serde_json::Value as JsonValue;
 
 /// [JSON-RPC request object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Deserialize, Debug)]
@@ -83,6 +77,24 @@ pub struct JsonRpcError<'a> {
 	pub error: JsonRpcErrorParams<'a>,
 	/// Request ID
 	pub id: Option<&'a RawValue>,
+}
+
+/// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
+#[derive(Error, Debug, Deserialize, PartialEq)]
+pub struct JsonRpcErrorAlloc {
+	/// JSON-RPC version.
+	pub jsonrpc: TwoPointZero,
+	#[serde(rename = "error")]
+	/// Error object.
+	pub inner: error::JsonRpcErrorObject,
+	/// Request ID.
+	pub id: u64,
+}
+
+impl fmt::Display for JsonRpcErrorAlloc {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{}", self.inner)
+	}
 }
 
 /// [JSON-RPC error object](https://www.jsonrpc.org/specification#error-object)
@@ -163,5 +175,142 @@ impl<'a> RpcParams<'a> {
 		T: Deserialize<'a>,
 	{
 		self.parse::<[T; 1]>().map(|[res]| res)
+	}
+}
+
+/// [JSON-RPC parameters](https://www.jsonrpc.org/specification#parameter_structures)
+#[derive(Serialize, Debug)]
+#[serde(untagged)]
+pub enum JsonRpcParams<'a, T>
+where
+	T: Serialize + std::fmt::Debug,
+{
+	/// No params.
+	NoParams,
+	/// Positional params.
+	Array(&'a [T]),
+	/// Params by name.
+	//
+	// TODO(niklasad1): maybe take a reference here but BTreeMap needs allocation anyway.
+	Map(BTreeMap<&'a str, &'a T>),
+}
+
+// TODO(niklasad1): this is a little weird but nice if `None.into()` works.
+impl<'a, T> From<Option<&'a T>> for JsonRpcParams<'a, T>
+where
+	T: Serialize + std::fmt::Debug,
+{
+	fn from(_raw: Option<&'a T>) -> Self {
+		Self::NoParams
+	}
+}
+
+impl<'a, T> From<BTreeMap<&'a str, &'a T>> for JsonRpcParams<'a, T>
+where
+	T: Serialize + std::fmt::Debug,
+{
+	fn from(map: BTreeMap<&'a str, &'a T>) -> Self {
+		Self::Map(map)
+	}
+}
+
+impl<'a, T> From<&'a [T]> for JsonRpcParams<'a, T>
+where
+	T: Serialize + std::fmt::Debug,
+{
+	fn from(arr: &'a [T]) -> Self {
+		Self::Array(arr)
+	}
+}
+
+/// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object)
+#[derive(Serialize, Debug)]
+pub struct JsonRpcCallSer<'a, T>
+where
+	T: Serialize + std::fmt::Debug,
+{
+	/// JSON-RPC version.
+	pub jsonrpc: TwoPointZero,
+	/// Name of the method to be invoked.
+	pub method: &'a str,
+	/// Request ID
+	pub id: u64,
+	/// Parameter values of the request.
+	pub params: JsonRpcParams<'a, T>,
+}
+
+impl<'a, T> JsonRpcCallSer<'a, T>
+where
+	T: Serialize + std::fmt::Debug,
+{
+	/// Create a new serializable JSON-RPC request.
+	pub fn new(id: u64, method: &'a str, params: JsonRpcParams<'a, T>) -> Self {
+		Self { jsonrpc: TwoPointZero, id, method, params }
+	}
+}
+
+/// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object)
+#[derive(Serialize, Debug)]
+pub struct JsonRpcNotificationSer<'a, T>
+where
+	T: Serialize + std::fmt::Debug,
+{
+	/// JSON-RPC version.
+	pub jsonrpc: TwoPointZero,
+	/// Name of the method to be invoked.
+	pub method: &'a str,
+	/// Parameter values of the request.
+	pub params: JsonRpcParams<'a, T>,
+}
+
+impl<'a, T> JsonRpcNotificationSer<'a, T>
+where
+	T: Serialize + std::fmt::Debug,
+{
+	/// Create a new serializable JSON-RPC request.
+	pub fn new(method: &'a str, params: JsonRpcParams<'a, T>) -> Self {
+		Self { jsonrpc: TwoPointZero, method, params }
+	}
+}
+
+/// JSON-RPC parameter values for subscriptions.
+#[derive(Deserialize, Debug)]
+pub struct JsonRpcNotificationParamsAlloc<T> {
+	/// Subscription ID
+	pub subscription: SubscriptionId,
+	/// Result.
+	pub result: T,
+}
+
+/// JSON-RPC notification response.
+// NOTE(niklasad1): basically the same as Maciej version but I wanted to support Strings too.
+// Maybe make subscription ID generic?!
+#[derive(Deserialize, Debug)]
+pub struct JsonRpcNotifAlloc<T> {
+	/// JSON-RPC version.
+	pub jsonrpc: TwoPointZero,
+	/// Params.
+	pub params: JsonRpcNotificationParamsAlloc<T>,
+}
+
+/// Id of a subscription, communicated by the server.
+#[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+#[serde(untagged)]
+pub enum SubscriptionId {
+	/// Numeric id
+	Num(u64),
+	/// String id
+	Str(String),
+}
+
+/// Parse request ID from RawValue.
+pub fn parse_request_id<T: DeserializeOwned>(raw: Option<&RawValue>) -> Result<T, crate::Error> {
+	match raw {
+		None => Err(Error::InvalidRequestId),
+		Some(v) => {
+			let val = serde_json::from_str(v.get()).map_err(Error::ParseError)?;
+			Ok(val)
+		}
 	}
 }

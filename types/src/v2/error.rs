@@ -1,37 +1,7 @@
-use super::TwoPointZero;
+use crate::JsonValue;
 use serde::{de::Deserializer, ser::Serializer, Deserialize};
-use serde_json::Value as JsonValue;
 use std::fmt;
 use thiserror::Error;
-
-/// Error.
-#[derive(Error, Debug)]
-pub enum RpcError {
-	/// Unknown error.
-	#[error("unknown rpc error")]
-	Unknown,
-	/// Invalid params in the RPC call.
-	#[error("invalid params")]
-	InvalidParams,
-}
-
-/// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
-#[derive(Error, Debug, Deserialize, PartialEq)]
-pub struct JsonRpcError {
-	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
-	#[serde(rename = "error")]
-	/// Error object.
-	pub inner: JsonRpcErrorObject,
-	/// Request ID.
-	pub id: u64,
-}
-
-impl fmt::Display for JsonRpcError {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", self.inner)
-	}
-}
 
 /// [JSON-RPC Error object](https://www.jsonrpc.org/specification#error_object)
 #[derive(Error, Debug, PartialEq, Deserialize)]

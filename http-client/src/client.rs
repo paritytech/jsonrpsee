@@ -1,13 +1,9 @@
+use crate::traits::Client;
 use crate::transport::HttpTransportClient;
+use crate::v2::{JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotificationSer, JsonRpcParams, JsonRpcResponse};
+use crate::{Error, JsonRawValue};
 use async_trait::async_trait;
 use fnv::FnvHashMap;
-use jsonrpsee_types::{
-	error::Error,
-	traits::Client,
-	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams},
-	v2::error::JsonRpcError,
-	v2::{JsonRpcResponse, RawValue},
-};
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -53,7 +49,7 @@ impl Client for HttpClient {
 	where
 		T: Serialize + std::fmt::Debug + Send + Sync,
 	{
-		let notif = JsonRpcNotification::new(method, params);
+		let notif = JsonRpcNotificationSer::new(method, params);
 		self.transport
 			.send(serde_json::to_string(&notif).map_err(Error::ParseError)?)
 			.await
@@ -68,7 +64,7 @@ impl Client for HttpClient {
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::Relaxed);
-		let request = JsonRpcCall::new(id, method, params);
+		let request = JsonRpcCallSer::new(id, method, params);
 
 		let body = self
 			.transport
@@ -79,7 +75,7 @@ impl Client for HttpClient {
 		let response: JsonRpcResponse<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				let err: JsonRpcErrorAlloc = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 				return Err(Error::Request(err));
 			}
 		};
@@ -105,7 +101,7 @@ impl Client for HttpClient {
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-			batch_request.push(JsonRpcCall::new(id, method, params));
+			batch_request.push(JsonRpcCallSer::new(id, method, params));
 			ordered_requests.push(id);
 			request_set.insert(id, pos);
 		}
@@ -119,7 +115,7 @@ impl Client for HttpClient {
 		let rps: Vec<JsonRpcResponse<_>> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				let err: JsonRpcErrorAlloc = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 				return Err(Error::Request(err));
 			}
 		};
@@ -138,7 +134,7 @@ impl Client for HttpClient {
 	}
 }
 
-fn parse_request_id(raw: Option<&RawValue>) -> Result<u64, Error> {
+fn parse_request_id(raw: Option<&JsonRawValue>) -> Result<u64, Error> {
 	match raw {
 		None => Err(Error::InvalidRequestId),
 		Some(id) => {

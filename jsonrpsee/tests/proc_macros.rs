@@ -1,7 +1,7 @@
 // Not all proc macros are used let's suppress it for now.
 #![allow(dead_code)]
 
-/*mod helpers;
+mod helpers;
 
 use jsonrpsee::{http_client::*, proc_macros, ws_client::*};
 
@@ -81,4 +81,4 @@ async fn proc_macros_generic_http_client_api() {
 	assert_eq!(Test2::<u16, String>::foo(&client, 99_u16).await.unwrap(), "hello".to_string());
 	// TODO: https://github.com/paritytech/jsonrpsee/issues/212
 	//assert!(Registrar::register_para(&client, 99, "para").await.is_ok());
-}*/
+}

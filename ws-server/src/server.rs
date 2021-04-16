@@ -28,10 +28,6 @@ use futures::{
 	channel::mpsc,
 	io::{BufReader, BufWriter},
 };
-use jsonrpsee_types::{
-	error::Error,
-	v2::error::{INVALID_REQUEST_CODE, INVALID_REQUEST_MSG, PARSE_ERROR_CODE, PARSE_ERROR_MSG},
-};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
@@ -43,9 +39,13 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use jsonrpsee_types::v2::error::{METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG};
-use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams, TwoPointZero};
-use jsonrpsee_types::v2::{JsonRpcNotification, JsonRpcNotificationParams};
+use jsonrpsee_types::error::{Error, RpcError};
+use jsonrpsee_types::v2::error::{
+	INVALID_REQUEST_CODE, INVALID_REQUEST_MSG, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG, PARSE_ERROR_CODE,
+	PARSE_ERROR_MSG,
+};
+use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, TwoPointZero};
+use jsonrpsee_types::v2::{JsonRpcNotification, JsonRpcNotificationParams, RpcParams};
 use jsonrpsee_utils::server::{send_error, ConnectionId, Methods};
 
 mod module;

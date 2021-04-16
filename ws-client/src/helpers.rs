@@ -2,11 +2,11 @@ use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use futures::channel::mpsc;
 use jsonrpsee_types::{
-	client::RequestMessage,
-	error::Error,
-	v2::dummy::{JsonRpcCall, JsonRpcParams, JsonRpcResponseNotif, SubscriptionId},
-	v2::error::JsonRpcError,
-	v2::{JsonRpcResponse, RawValue},
+	v2::{
+		parse_request_id, JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotifAlloc, JsonRpcParams, JsonRpcResponse,
+		SubscriptionId,
+	},
+	Error, RequestMessage,
 };
 use serde_json::Value as JsonValue;
 
@@ -52,7 +52,7 @@ pub fn process_batch_response<'a>(
 /// Returns `Err(Some(msg))` if the subscription was full.
 pub fn process_subscription_response(
 	manager: &mut RequestManager,
-	notif: JsonRpcResponseNotif<JsonValue>,
+	notif: JsonRpcNotifAlloc<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
 	let sub_id = notif.params.subscription;
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -153,25 +153,15 @@ pub fn build_unsubscribe_message(
 	}
 	// TODO(niklasad): better type for params or maybe a macro?!.
 	let params = JsonRpcParams::Array(sub_id_slice);
-	let raw = serde_json::to_string(&JsonRpcCall::new(unsub_req_id, &unsub, params)).unwrap();
+	let raw = serde_json::to_string(&JsonRpcCallSer::new(unsub_req_id, &unsub, params)).unwrap();
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
-}
-
-fn parse_request_id(raw: Option<&RawValue>) -> Result<u64, Error> {
-	match raw {
-		None => Err(Error::InvalidRequestId),
-		Some(id) => {
-			let id = serde_json::from_str(id.get()).map_err(Error::ParseError)?;
-			Ok(id)
-		}
-	}
 }
 
 /// Attempts to process an error response.
 ///
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
-pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcError) -> Result<(), Error> {
+pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcErrorAlloc) -> Result<(), Error> {
 	match manager.request_status(&err.id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back = manager.complete_pending_call(err.id).expect("State checked above; qed");

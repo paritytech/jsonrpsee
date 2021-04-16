@@ -1,5 +1,5 @@
-use crate::error::Error;
-use crate::{client::Subscription, v2::dummy::JsonRpcParams};
+use crate::v2::{JsonRpcParams, RpcParams};
+use crate::{error::RpcError, Error, Subscription};
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -50,3 +50,8 @@ pub trait SubscriptionClient: Client {
 		Notif: DeserializeOwned,
 		T: Serialize + std::fmt::Debug + Send + Sync;
 }
+
+/// JSON-RPC server interface for managing method calls.
+pub trait RpcMethod<R>: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static {}
+
+impl<R, T> RpcMethod<R> for T where T: Fn(RpcParams) -> Result<R, RpcError> + Send + Sync + 'static {}

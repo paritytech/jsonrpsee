@@ -1,6 +1,6 @@
 use crate::server::{RpcError, RpcParams, SubscriptionId, SubscriptionSink};
 use jsonrpsee_types::error::Error;
-use jsonrpsee_types::v2::traits::RpcMethod;
+use jsonrpsee_types::traits::RpcMethod;
 use jsonrpsee_utils::server::{send_response, Methods};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;

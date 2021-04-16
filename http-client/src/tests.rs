@@ -1,13 +1,11 @@
-use crate::client::HttpClientBuilder;
+use crate::v2::error::{
+	INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, INVALID_PARAMS_CODE, INVALID_PARAMS_MSG, INVALID_REQUEST_CODE,
+	INVALID_REQUEST_MSG, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG, PARSE_ERROR_CODE, PARSE_ERROR_MSG,
+};
+use crate::v2::JsonRpcParams;
+use crate::{traits::Client, Error, HttpClientBuilder, JsonValue, Serialize};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::Id;
-use jsonrpsee_types::{
-	error::Error,
-	traits::Client,
-	v2::{dummy::JsonRpcParams, error::*},
-};
-use serde::Serialize;
-use serde_json::Value as JsonValue;
 
 #[tokio::test]
 async fn method_call_works() {

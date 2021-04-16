@@ -234,28 +234,28 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 			params_list.push(quote_spanned!(pat_span=> #generated_param_name: impl Into<#ty>));
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
-					#rpc_param_name.to_string(),
-					#_crate::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| #_crate::Error::Custom(format!("{:?}", e)))?
+					#rpc_param_name,
+					#_crate::to_json_value(#generated_param_name.into()).map_err(|e| #_crate::Error::Custom(format!("{:?}", e)))?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span =>
-				#_crate::jsonrpc::to_value(#generated_param_name.into()).map_err(|e| #_crate::Error::Custom(format!("{:?}", e)))?
+				#_crate::to_json_value(#generated_param_name.into()).map_err(|e| #_crate::Error::Custom(format!("{:?}", e)))?
 			));
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote! {#_crate::jsonrpc::Params::None}
+			quote! {None.into()}
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=>
-				#_crate::jsonrpc::Params::Array(vec![
+				#_crate::v2::JsonRpcParams::Array(&[
 					#(#params_to_array),*
 				])
 			)
 		} else {
 			let params_list_len = params_list.len();
 			quote_spanned!(function.signature.span()=>
-				#_crate::jsonrpc::Params::Map({
-					let mut map = #_crate::jsonrpc::JsonMap::with_capacity(#params_list_len);
+				#_crate::v2::JsonRpcParams::Map({
+					let mut map = alloc:collections::BTreeMap::with_capacity(#params_list_len);
 					#(#params_to_json)*
 					map
 				})
@@ -274,10 +274,10 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-			#visibility async fn #f_name (client: &impl #_crate::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::Error>
+			#visibility async fn #f_name (client: &impl #_crate::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::Error>
 			where
-				#ret_ty: #_crate::jsonrpc::DeserializeOwned
-				#(, #params_tys: #_crate::jsonrpc::Serialize)*
+				#ret_ty: #_crate::DeserializeOwned
+				#(, #params_tys: #_crate::Serialize)*
 			{
 				#function_body
 			}

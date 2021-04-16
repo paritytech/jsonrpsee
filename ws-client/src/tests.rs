@@ -1,6 +1,10 @@
 #![cfg(test)]
 
-use crate::{error::*, Client, Error, JsonRpcParams, SubscriptionClient, WsClientBuilder, WsSubscription};
+use crate::v2::{error::*, JsonRpcParams};
+use crate::{
+	traits::{Client, SubscriptionClient},
+	Error, Subscription, WsClientBuilder,
+};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
 use serde::Serialize;
@@ -68,7 +72,7 @@ async fn subscription_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).await.unwrap();
 	{
-		let mut sub: WsSubscription<String> =
+		let mut sub: Subscription<String> =
 			client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
 		let response: String = sub.next().await.unwrap().into();
 		assert_eq!("hello my friend".to_owned(), response);
