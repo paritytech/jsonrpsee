@@ -231,15 +231,15 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 				syn::Ident::new(&format!("param{}", param_index), proc_macro2::Span::call_site());
 
 			params_tys.push(ty);
-			params_list.push(quote_spanned!(pat_span=> #generated_param_name: #ty));
+			params_list.push(quote_spanned!(pat_span=> #generated_param_name: impl Into<#ty>));
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name,
-					#_crate::to_json_value(#generated_param_name).map_err(#_crate::Error::ParseError)?
+					#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::Error::ParseError)?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span=>
-				#_crate::to_json_value(#generated_param_name).map_err(#_crate::Error::ParseError)?
+				#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::Error::ParseError)?
 			));
 		}
 
