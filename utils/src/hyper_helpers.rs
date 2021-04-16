@@ -26,7 +26,7 @@
 
 //! Utility methods relying on hyper
 
-use futures::StreamExt;
+use futures_util::stream::StreamExt;
 use jsonrpsee_types::error::GenericTransportError;
 
 /// Read a hyper response with configured `HTTP` settings.

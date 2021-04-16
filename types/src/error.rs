@@ -29,7 +29,7 @@ pub enum Error {
 	Subscription(String, String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
-	Internal(#[source] futures::channel::mpsc::SendError),
+	Internal(#[source] futures_channel::mpsc::SendError),
 	/// Invalid response,
 	#[error("Invalid response: {0}")]
 	InvalidResponse(Mismatch<String>),

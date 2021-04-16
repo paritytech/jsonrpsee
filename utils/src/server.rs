@@ -1,6 +1,6 @@
 //! Shared helpers for JSON-RPC Servers.
 
-use futures::channel::mpsc;
+use futures_channel::mpsc;
 use jsonrpsee_types::v2::error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG};
 use jsonrpsee_types::v2::{JsonRpcError, JsonRpcErrorParams, JsonRpcResponse, RpcParams, TwoPointZero};
 use rustc_hash::FxHashMap;
