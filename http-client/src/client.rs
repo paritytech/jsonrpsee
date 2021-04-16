@@ -47,7 +47,7 @@ pub struct HttpClient {
 impl Client for HttpClient {
 	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 	{
 		let notif = JsonRpcNotificationSer::new(method, params);
 		self.transport
@@ -59,7 +59,7 @@ impl Client for HttpClient {
 	/// Perform a request towards the server.
 	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 		R: DeserializeOwned,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
@@ -91,7 +91,7 @@ impl Client for HttpClient {
 
 	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 		R: DeserializeOwned + Default + Clone,
 	{
 		let mut batch_request = Vec::with_capacity(batch.len());

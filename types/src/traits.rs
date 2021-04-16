@@ -9,12 +9,12 @@ pub trait Client {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
 	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync;
+		T: Serialize + Send + Sync;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
 	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 		R: DeserializeOwned;
 
 	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
@@ -25,7 +25,7 @@ pub trait Client {
 	/// Returns `Error` if any of the requests in batch fails.
 	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 		R: DeserializeOwned + Default + Clone;
 }
 
@@ -48,7 +48,7 @@ pub trait SubscriptionClient: Client {
 	) -> Result<Subscription<Notif>, Error>
 	where
 		Notif: DeserializeOwned,
-		T: Serialize + std::fmt::Debug + Send + Sync;
+		T: Serialize + Send + Sync;
 }
 
 /// JSON-RPC server interface for managing method calls.

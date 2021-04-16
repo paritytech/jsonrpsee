@@ -290,13 +290,13 @@ impl WsClient {
 impl Client for WsClient {
 	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 	{
-		log::trace!("[frontend]: send notification: method={:?}, params={:?}", method, params);
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
 		let notif = JsonRpcNotificationSer::new(method, params);
 		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
+		log::trace!("[frontend]: send notification: {:?}", raw);
 		let res = self.to_back.clone().send(FrontToBack::Notification(raw)).await;
 		self.id_guard.reclaim_request_id();
 		match res {
@@ -307,13 +307,13 @@ impl Client for WsClient {
 
 	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 		R: DeserializeOwned,
 	{
-		log::trace!("[frontend]: send request: method={:?}, params={:?}", method, params);
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
 		let raw = serde_json::to_string(&JsonRpcCallSer::new(req_id, method, params)).map_err(Error::ParseError)?;
+		log::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
 			.to_back
@@ -348,7 +348,7 @@ impl Client for WsClient {
 
 	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
 	where
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 		R: DeserializeOwned + Default + Clone,
 	{
 		let batch_ids = self.id_guard.next_request_ids(batch.len())?;
@@ -401,7 +401,7 @@ impl SubscriptionClient for WsClient {
 	) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
-		T: Serialize + std::fmt::Debug + Send + Sync,
+		T: Serialize + Send + Sync,
 	{
 		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 

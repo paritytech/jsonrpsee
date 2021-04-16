@@ -25,10 +25,32 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	http_client::{traits::Client, v2::JsonRpcParams, HttpClientBuilder},
+	http_client::{traits::Client, HttpClientBuilder},
 	http_server::HttpServerBuilder,
 };
 use std::net::SocketAddr;
+
+jsonrpsee::proc_macros::rpc_client_api! {
+	RpcApi {
+		#[rpc(method = "state_getPairs")]
+		fn storage_pairs() -> Vec<u8>;
+	}
+}
+
+jsonrpsee::proc_macros::rpc_client_api! {
+	Registrar {
+		#[rpc(method = "say_hello")]
+		fn register_para(foo: i32, bar: String);
+	}
+}
+
+jsonrpsee::proc_macros::rpc_client_api! {
+	ManyReturnTypes<A: Send + Sync, B: Send + Sync> {
+		#[rpc(method = "say_hello")]
+		fn a() -> A;
+		fn b() -> B;
+	}
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -37,10 +59,8 @@ async fn main() -> anyhow::Result<()> {
 	let server_addr = run_server().await?;
 	let url = format!("http://{}", server_addr);
 
-	let params = JsonRpcParams::Array(&[1_u64, 2, 3]);
-
 	let client = HttpClientBuilder::default().build(url)?;
-	let response: Result<String, _> = client.request("say_hello", params).await;
+	let response: Vec<u8> = RpcApi::storage_pairs(&client).await.unwrap();
 	println!("r: {:?}", response);
 
 	Ok(())
@@ -48,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
-	server.register_method("say_hello", |_| Ok("lo"))?;
+	server.register_method("state_getPairs", |_| Ok(vec![1, 2, 3]))?;
 	let addr = server.local_addr();
 	tokio::spawn(async move { server.start().await });
 	addr

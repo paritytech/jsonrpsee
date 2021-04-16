@@ -149,7 +149,7 @@ impl Serialize for TwoPointZero {
 }
 
 /// Parameters sent with the RPC request
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct RpcParams<'a>(Option<&'a str>);
 
 impl<'a> RpcParams<'a> {
@@ -181,10 +181,7 @@ impl<'a> RpcParams<'a> {
 /// [JSON-RPC parameters](https://www.jsonrpc.org/specification#parameter_structures)
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
-pub enum JsonRpcParams<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
+pub enum JsonRpcParams<'a, T> {
 	/// No params.
 	NoParams,
 	/// Positional params.
@@ -196,28 +193,19 @@ where
 }
 
 // TODO(niklasad1): this is a little weird but nice if `None.into()` works.
-impl<'a, T> From<Option<&'a T>> for JsonRpcParams<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
+impl<'a, T> From<Option<&'a T>> for JsonRpcParams<'a, T> {
 	fn from(_raw: Option<&'a T>) -> Self {
 		Self::NoParams
 	}
 }
 
-impl<'a, T> From<BTreeMap<&'a str, &'a T>> for JsonRpcParams<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
+impl<'a, T> From<BTreeMap<&'a str, &'a T>> for JsonRpcParams<'a, T> {
 	fn from(map: BTreeMap<&'a str, &'a T>) -> Self {
 		Self::Map(map)
 	}
 }
 
-impl<'a, T> From<&'a [T]> for JsonRpcParams<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
+impl<'a, T> From<&'a [T]> for JsonRpcParams<'a, T> {
 	fn from(arr: &'a [T]) -> Self {
 		Self::Array(arr)
 	}
@@ -225,10 +213,7 @@ where
 
 /// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Serialize, Debug)]
-pub struct JsonRpcCallSer<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
+pub struct JsonRpcCallSer<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
@@ -239,10 +224,7 @@ where
 	pub params: JsonRpcParams<'a, T>,
 }
 
-impl<'a, T> JsonRpcCallSer<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
+impl<'a, T> JsonRpcCallSer<'a, T> {
 	/// Create a new serializable JSON-RPC request.
 	pub fn new(id: u64, method: &'a str, params: JsonRpcParams<'a, T>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
@@ -251,10 +233,7 @@ where
 
 /// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Serialize, Debug)]
-pub struct JsonRpcNotificationSer<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
+pub struct JsonRpcNotificationSer<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
@@ -263,10 +242,7 @@ where
 	pub params: JsonRpcParams<'a, T>,
 }
 
-impl<'a, T> JsonRpcNotificationSer<'a, T>
-where
-	T: Serialize + std::fmt::Debug,
-{
+impl<'a, T> JsonRpcNotificationSer<'a, T> {
 	/// Create a new serializable JSON-RPC request.
 	pub fn new(method: &'a str, params: JsonRpcParams<'a, T>) -> Self {
 		Self { jsonrpc: TwoPointZero, method, params }

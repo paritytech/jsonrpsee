@@ -231,20 +231,21 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 				syn::Ident::new(&format!("param{}", param_index), proc_macro2::Span::call_site());
 
 			params_tys.push(ty);
-			params_list.push(quote_spanned!(pat_span=> #generated_param_name: impl Into<#ty>));
+			params_list.push(quote_spanned!(pat_span=> #generated_param_name: #ty));
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name,
-					#_crate::to_json_value(#generated_param_name.into()).map_err(|e| #_crate::Error::Custom(format!("{:?}", e)))?
+					&#generated_param_name
 				);
 			));
-			params_to_array.push(quote_spanned!(pat_span =>
-				#_crate::to_json_value(#generated_param_name.into()).map_err(|e| #_crate::Error::Custom(format!("{:?}", e)))?
+			params_to_array.push(quote_spanned!(pat_span=>
+				#generated_param_name
 			));
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote! {None.into()}
+			// NOTE(niklasad1): type annotation is required.
+			quote_spanned!(function.signature.span()=> #_crate::v2::JsonRpcParams::NoParams::<()>)
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=>
 				#_crate::v2::JsonRpcParams::Array(&[
@@ -252,10 +253,9 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 				])
 			)
 		} else {
-			let params_list_len = params_list.len();
 			quote_spanned!(function.signature.span()=>
 				#_crate::v2::JsonRpcParams::Map({
-					let mut map = alloc:collections::BTreeMap::with_capacity(#params_list_len);
+					let mut map = std::collections::BTreeMap::new();
 					#(#params_to_json)*
 					map
 				})

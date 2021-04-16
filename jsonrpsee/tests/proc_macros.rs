@@ -6,13 +6,13 @@ mod helpers;
 use jsonrpsee::{http_client::*, proc_macros, ws_client::*};
 
 proc_macros::rpc_client_api! {
-	Test<T> {
+	Test<T: Send + Sync> {
 		fn say_hello() -> T;
 	}
 }
 
 proc_macros::rpc_client_api! {
-	pub(crate) Test2<B, T> {
+	pub(crate) Test2<B: Send + Sync, T: Send + Sync> {
 		#[rpc(method = "say_hello")]
 		fn foo(b: B) -> T;
 	}
@@ -50,7 +50,7 @@ proc_macros::rpc_client_api! {
 }
 
 proc_macros::rpc_client_api! {
-	ManyReturnTypes<A, B, C, D, E> {
+	ManyReturnTypes<A: Send + Sync, B: Send + Sync, C: Send + Sync, D: Send + Sync, E: Send + Sync> {
 		#[rpc(method = "say_hello")]
 		fn a() -> A;
 		fn b() -> B;
@@ -68,7 +68,7 @@ async fn proc_macros_generic_ws_client_api() {
 
 	assert_eq!(Test::<String>::say_hello(&client).await.unwrap(), "hello".to_string());
 	assert_eq!(Test2::<u16, String>::foo(&client, 99_u16).await.unwrap(), "hello".to_string());
-	assert!(Registrar::register_para(&client, 99, "para").await.is_ok());
+	assert!(Registrar::register_para(&client, 99, "para".into()).await.is_ok());
 }
 
 #[tokio::test]
