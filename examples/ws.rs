@@ -37,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", JsonRpcParams::NoParams::<u64>).await?;
+	let response: String = client.request("say_hello", JsonRpcParams::NoParams).await?;
 	println!("r: {:?}", response);
 
 	Ok(())

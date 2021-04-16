@@ -1,20 +1,17 @@
 use crate::v2::{JsonRpcParams, RpcParams};
 use crate::{error::RpcError, Error, Subscription};
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
 #[async_trait]
 pub trait Client {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
-	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
-	where
-		T: Serialize + Send + Sync;
+	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error>;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
 	where
-		T: Serialize + Send + Sync,
 		R: DeserializeOwned;
 
 	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
@@ -23,9 +20,8 @@ pub trait Client {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
 	where
-		T: Serialize + Send + Sync,
 		R: DeserializeOwned + Default + Clone;
 }
 
@@ -40,15 +36,14 @@ pub trait SubscriptionClient: Client {
 	/// The `unsubscribe_method` is used to close the subscription.
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`](crate::client::Subscription) for further documentation.
-	async fn subscribe<'a, T, Notif>(
+	async fn subscribe<'a, Notif>(
 		&self,
 		subscribe_method: &'a str,
-		params: JsonRpcParams<'a, T>,
+		params: JsonRpcParams<'a>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<Notif>, Error>
 	where
-		Notif: DeserializeOwned,
-		T: Serialize + Send + Sync;
+		Notif: DeserializeOwned;
 }
 
 /// JSON-RPC server interface for managing method calls.

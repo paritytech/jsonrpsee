@@ -24,31 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	http_client::{traits::Client, HttpClientBuilder},
-	http_server::HttpServerBuilder,
-};
+use jsonrpsee::{http_client::HttpClientBuilder, http_server::HttpServerBuilder};
 use std::net::SocketAddr;
 
 jsonrpsee::proc_macros::rpc_client_api! {
 	RpcApi {
-		#[rpc(method = "state_getPairs")]
-		fn storage_pairs() -> Vec<u8>;
-	}
-}
-
-jsonrpsee::proc_macros::rpc_client_api! {
-	Registrar {
-		#[rpc(method = "say_hello")]
-		fn register_para(foo: i32, bar: String);
-	}
-}
-
-jsonrpsee::proc_macros::rpc_client_api! {
-	ManyReturnTypes<A: Send + Sync, B: Send + Sync> {
-		#[rpc(method = "say_hello")]
-		fn a() -> A;
-		fn b() -> B;
+		#[rpc(method = "state_getPairs", positional_params)]
+		fn storage_pairs(prefix: usize, hash: Option<String>) -> Vec<u8>;
 	}
 }
 
@@ -60,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("http://{}", server_addr);
 
 	let client = HttpClientBuilder::default().build(url)?;
-	let response: Vec<u8> = RpcApi::storage_pairs(&client).await.unwrap();
+	let response = RpcApi::storage_pairs(&client, 0_usize, Some("aaa".to_string())).await?;
 	println!("r: {:?}", response);
 
 	Ok(())

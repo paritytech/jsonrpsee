@@ -44,7 +44,7 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use std::{
 	borrow::Cow,
 	marker::PhantomData,
@@ -288,10 +288,7 @@ impl WsClient {
 
 #[async_trait]
 impl Client for WsClient {
-	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
-	where
-		T: Serialize + Send + Sync,
-	{
+	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
 		let notif = JsonRpcNotificationSer::new(method, params);
@@ -305,9 +302,8 @@ impl Client for WsClient {
 		}
 	}
 
-	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
 	where
-		T: Serialize + Send + Sync,
 		R: DeserializeOwned,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -346,9 +342,8 @@ impl Client for WsClient {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
 	where
-		T: Serialize + Send + Sync,
 		R: DeserializeOwned + Default + Clone,
 	{
 		let batch_ids = self.id_guard.next_request_ids(batch.len())?;
@@ -393,15 +388,14 @@ impl SubscriptionClient for WsClient {
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	async fn subscribe<'a, T, N>(
+	async fn subscribe<'a, N>(
 		&self,
 		subscribe_method: &'a str,
-		params: JsonRpcParams<'a, T>,
+		params: JsonRpcParams<'a>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
-		T: Serialize + Send + Sync,
 	{
 		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 

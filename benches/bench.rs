@@ -15,14 +15,14 @@ mod helpers;
 criterion_group!(benches, http_requests, websocket_requests, jsonrpsee_types_v2);
 criterion_main!(benches);
 
-fn v2_serialize(req: JsonRpcCallSer<u64>) -> String {
+fn v2_serialize<'a>(req: JsonRpcCallSer<'a>) -> String {
 	serde_json::to_string(&req).unwrap()
 }
 
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 	crit.bench_function("jsonrpsee_types_v2", |b| {
 		b.iter(|| {
-			let params = JsonRpcParams::Array(&[1_u64, 2]);
+			let params = JsonRpcParams::Array(vec![1_u64.into(), 2.into()]);
 			let request = JsonRpcCallSer::new(0, "say_hello", params);
 			v2_serialize(request);
 		})
@@ -50,7 +50,7 @@ fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Clie
 	crit.bench_function(name, |b| {
 		b.iter(|| {
 			rt.block_on(async {
-				black_box(client.request::<u64, String>("say_hello", JsonRpcParams::NoParams).await.unwrap());
+				black_box(client.request::<String>("say_hello", JsonRpcParams::NoParams).await.unwrap());
 			})
 		})
 	});
@@ -70,9 +70,8 @@ fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
 				for _ in 0..num_concurrent_tasks {
 					let client_rc = client.clone();
 					let task = rt.spawn(async move {
-						let _ = black_box(
-							client_rc.request::<u64, String>("say_hello", JsonRpcParams::NoParams).await.unwrap(),
-						);
+						let _ =
+							black_box(client_rc.request::<String>("say_hello", JsonRpcParams::NoParams).await.unwrap());
 					});
 					tasks.push(task);
 				}

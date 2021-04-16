@@ -235,20 +235,19 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name,
-					&#generated_param_name
+					#_crate::to_json_value(#generated_param_name).map_err(#_crate::Error::ParseError)?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span=>
-				#generated_param_name
+				#_crate::to_json_value(#generated_param_name).map_err(#_crate::Error::ParseError)?
 			));
 		}
 
 		let params_building = if params_list.is_empty() {
-			// NOTE(niklasad1): type annotation is required.
-			quote_spanned!(function.signature.span()=> #_crate::v2::JsonRpcParams::NoParams::<()>)
+			quote_spanned!(function.signature.span()=> #_crate::v2::JsonRpcParams::NoParams)
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=>
-				#_crate::v2::JsonRpcParams::Array(&[
+				#_crate::v2::JsonRpcParams::Array(vec![
 					#(#params_to_array),*
 				])
 			)

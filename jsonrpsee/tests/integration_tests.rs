@@ -42,9 +42,9 @@ async fn ws_subscription_works() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut hello_sub: Subscription<String> =
-		client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 	let mut foo_sub: Subscription<u64> =
-		client.subscribe("subscribe_foo", JsonRpcParams::NoParams::<u64>, "unsubscribe_foo").await.unwrap();
+		client.subscribe("subscribe_foo", JsonRpcParams::NoParams, "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
 		let hello = hello_sub.next().await.unwrap();
@@ -59,7 +59,7 @@ async fn ws_method_call_works() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let response: String = client.request("say_hello", JsonRpcParams::NoParams::<u64>).await.unwrap();
+	let response: String = client.request("say_hello", JsonRpcParams::NoParams).await.unwrap();
 	assert_eq!(&response, "hello");
 }
 
@@ -68,7 +68,7 @@ async fn http_method_call_works() {
 	let server_addr = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
-	let response: String = client.request("say_hello", JsonRpcParams::NoParams::<u64>).await.unwrap();
+	let response: String = client.request("say_hello", JsonRpcParams::NoParams).await.unwrap();
 	assert_eq!(&response, "hello");
 }
 
@@ -81,9 +81,9 @@ async fn ws_subscription_several_clients() {
 	for _ in 0..10 {
 		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 		let hello_sub: Subscription<JsonValue> =
-			client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
+			client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 		let foo_sub: Subscription<JsonValue> =
-			client.subscribe("subscribe_foo", JsonRpcParams::NoParams::<u64>, "unsubscribe_foo").await.unwrap();
+			client.subscribe("subscribe_foo", JsonRpcParams::NoParams, "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
 }
@@ -98,9 +98,9 @@ async fn ws_subscription_several_clients_with_drop() {
 		let client =
 			WsClientBuilder::default().max_notifs_per_subscription(u32::MAX as usize).build(&server_url).await.unwrap();
 		let hello_sub: Subscription<String> =
-			client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
+			client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 		let foo_sub: Subscription<u64> =
-			client.subscribe("subscribe_foo", JsonRpcParams::NoParams::<u64>, "unsubscribe_foo").await.unwrap();
+			client.subscribe("subscribe_foo", JsonRpcParams::NoParams, "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
 
@@ -143,7 +143,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 
 	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
 	let mut hello_sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 
 	// don't poll the subscription stream for 2 seconds, should be full now.
 	std::thread::sleep(Duration::from_secs(2));
@@ -157,11 +157,11 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	assert!(hello_sub.next().await.is_none());
 
 	// The client should still be useable => make sure it still works.
-	let _hello_req: JsonValue = client.request("say_hello", JsonRpcParams::NoParams::<u64>).await.unwrap();
+	let _hello_req: JsonValue = client.request("say_hello", JsonRpcParams::NoParams).await.unwrap();
 
 	// The same subscription should be possible to register again.
 	let mut other_sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", JsonRpcParams::NoParams::<u64>, "unsubscribe_hello").await.unwrap();
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 
 	other_sub.next().await.unwrap();
 }
@@ -176,8 +176,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 
 	for _ in 0..6 {
 		let c = client.clone();
-		requests
-			.push(tokio::spawn(async move { c.request::<u64, String>("say_hello", JsonRpcParams::NoParams).await }));
+		requests.push(tokio::spawn(async move { c.request::<String>("say_hello", JsonRpcParams::NoParams).await }));
 	}
 
 	for req in requests {
@@ -188,14 +187,14 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 #[tokio::test]
 async fn https_works() {
 	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
-	let response: String = client.request("system_chain", JsonRpcParams::NoParams::<u64>).await.unwrap();
+	let response: String = client.request("system_chain", JsonRpcParams::NoParams).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
 #[tokio::test]
 async fn wss_works() {
 	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
-	let response: String = client.request("system_chain", JsonRpcParams::NoParams::<u64>).await.unwrap();
+	let response: String = client.request("system_chain", JsonRpcParams::NoParams).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
@@ -208,6 +207,6 @@ async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
 #[tokio::test]
 async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
 	let client = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂").unwrap();
-	let err: Result<(), Error> = client.request("system_chain", JsonRpcParams::NoParams::<u64>).await;
+	let err: Result<(), Error> = client.request("system_chain", JsonRpcParams::NoParams).await;
 	assert!(matches!(err, Err(Error::TransportError(_))));
 }

@@ -3,7 +3,7 @@ use crate::v2::error::{
 	INVALID_REQUEST_MSG, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG, PARSE_ERROR_CODE, PARSE_ERROR_MSG,
 };
 use crate::v2::JsonRpcParams;
-use crate::{traits::Client, Error, HttpClientBuilder, JsonValue, Serialize};
+use crate::{traits::Client, Error, HttpClientBuilder, JsonValue};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::Id;
 
@@ -19,10 +19,7 @@ async fn notification_works() {
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client
-		.notification(
-			"i_dont_care_about_the_response_because_the_server_should_not_respond",
-			JsonRpcParams::NoParams::<u64>,
-		)
+		.notification("i_dont_care_about_the_response_because_the_server_should_not_respond", JsonRpcParams::NoParams)
 		.await
 		.unwrap();
 }
@@ -74,7 +71,7 @@ async fn subscription_response_to_request() {
 async fn batch_request_works() {
 	let batch_request = vec![
 		("say_hello", JsonRpcParams::NoParams),
-		("say_goodbye", JsonRpcParams::Array(&[0_u64, 1, 2])),
+		("say_goodbye", JsonRpcParams::Array(vec![0_u64.into(), 1.into(), 2.into()])),
 		("get_swag", JsonRpcParams::NoParams),
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
@@ -86,7 +83,7 @@ async fn batch_request_works() {
 async fn batch_request_out_of_order_response() {
 	let batch_request = vec![
 		("say_hello", JsonRpcParams::NoParams),
-		("say_goodbye", JsonRpcParams::Array(&[0_u64, 1, 2])),
+		("say_goodbye", JsonRpcParams::Array(vec![0_u64.into(), 1.into(), 2.into()])),
 		("get_swag", JsonRpcParams::NoParams),
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
@@ -94,8 +91,8 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
-async fn run_batch_request_with_response<'a, T: Serialize + std::fmt::Debug + Send + Sync>(
-	batch: Vec<(&'a str, JsonRpcParams<'a, T>)>,
+async fn run_batch_request_with_response<'a>(
+	batch: Vec<(&'a str, JsonRpcParams<'a>)>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).await;
@@ -108,7 +105,7 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 	let server_addr = http_server_with_hardcoded_response(response).await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
-	client.request::<u64, JsonValue>("say_hello", JsonRpcParams::NoParams).await
+	client.request("say_hello", JsonRpcParams::NoParams).await
 }
 
 fn assert_jsonrpc_error_response(error: Error, code: i32, message: &str) {

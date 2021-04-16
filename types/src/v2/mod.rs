@@ -3,7 +3,7 @@ use alloc::collections::BTreeMap;
 use serde::de::{self, DeserializeOwned, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
+use serde_json::{value::RawValue, Value as JsonValue};
 use std::fmt;
 use thiserror::Error;
 
@@ -181,39 +181,39 @@ impl<'a> RpcParams<'a> {
 /// [JSON-RPC parameters](https://www.jsonrpc.org/specification#parameter_structures)
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
-pub enum JsonRpcParams<'a, T> {
+pub enum JsonRpcParams<'a> {
 	/// No params.
 	NoParams,
 	/// Positional params.
-	Array(&'a [T]),
+	Array(Vec<JsonValue>),
 	/// Params by name.
 	//
 	// TODO(niklasad1): maybe take a reference here but BTreeMap needs allocation anyway.
-	Map(BTreeMap<&'a str, &'a T>),
+	Map(BTreeMap<&'a str, JsonValue>),
 }
 
 // TODO(niklasad1): this is a little weird but nice if `None.into()` works.
-impl<'a, T> From<Option<&'a T>> for JsonRpcParams<'a, T> {
-	fn from(_raw: Option<&'a T>) -> Self {
+impl<'a> From<Option<&'a JsonValue>> for JsonRpcParams<'a> {
+	fn from(_raw: Option<&'a JsonValue>) -> Self {
 		Self::NoParams
 	}
 }
 
-impl<'a, T> From<BTreeMap<&'a str, &'a T>> for JsonRpcParams<'a, T> {
-	fn from(map: BTreeMap<&'a str, &'a T>) -> Self {
+impl<'a> From<BTreeMap<&'a str, JsonValue>> for JsonRpcParams<'a> {
+	fn from(map: BTreeMap<&'a str, JsonValue>) -> Self {
 		Self::Map(map)
 	}
 }
 
-impl<'a, T> From<&'a [T]> for JsonRpcParams<'a, T> {
-	fn from(arr: &'a [T]) -> Self {
+impl<'a> From<Vec<JsonValue>> for JsonRpcParams<'a> {
+	fn from(arr: Vec<JsonValue>) -> Self {
 		Self::Array(arr)
 	}
 }
 
 /// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Serialize, Debug)]
-pub struct JsonRpcCallSer<'a, T> {
+pub struct JsonRpcCallSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
@@ -221,30 +221,30 @@ pub struct JsonRpcCallSer<'a, T> {
 	/// Request ID
 	pub id: u64,
 	/// Parameter values of the request.
-	pub params: JsonRpcParams<'a, T>,
+	pub params: JsonRpcParams<'a>,
 }
 
-impl<'a, T> JsonRpcCallSer<'a, T> {
+impl<'a> JsonRpcCallSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(id: u64, method: &'a str, params: JsonRpcParams<'a, T>) -> Self {
+	pub fn new(id: u64, method: &'a str, params: JsonRpcParams<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
 	}
 }
 
 /// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Serialize, Debug)]
-pub struct JsonRpcNotificationSer<'a, T> {
+pub struct JsonRpcNotificationSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
 	pub method: &'a str,
 	/// Parameter values of the request.
-	pub params: JsonRpcParams<'a, T>,
+	pub params: JsonRpcParams<'a>,
 }
 
-impl<'a, T> JsonRpcNotificationSer<'a, T> {
+impl<'a> JsonRpcNotificationSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(method: &'a str, params: JsonRpcParams<'a, T>) -> Self {
+	pub fn new(method: &'a str, params: JsonRpcParams<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, method, params }
 	}
 }

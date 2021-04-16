@@ -4,7 +4,7 @@ use crate::v2::{JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotificationSer, JsonR
 use crate::{Error, JsonRawValue};
 use async_trait::async_trait;
 use fnv::FnvHashMap;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Http Client Builder.
@@ -45,10 +45,7 @@ pub struct HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<'a, T>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<(), Error>
-	where
-		T: Serialize + Send + Sync,
-	{
+	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
 		let notif = JsonRpcNotificationSer::new(method, params);
 		self.transport
 			.send(serde_json::to_string(&notif).map_err(Error::ParseError)?)
@@ -57,9 +54,8 @@ impl Client for HttpClient {
 	}
 
 	/// Perform a request towards the server.
-	async fn request<'a, T, R>(&self, method: &'a str, params: JsonRpcParams<'a, T>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
 	where
-		T: Serialize + Send + Sync,
 		R: DeserializeOwned,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
@@ -89,9 +85,8 @@ impl Client for HttpClient {
 		}
 	}
 
-	async fn batch_request<'a, T, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a, T>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
 	where
-		T: Serialize + Send + Sync,
 		R: DeserializeOwned + Default + Clone,
 	{
 		let mut batch_request = Vec::with_capacity(batch.len());
