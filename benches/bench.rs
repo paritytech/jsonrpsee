@@ -1,6 +1,6 @@
 use criterion::*;
 use jsonrpsee::{
-	http_client::{jsonrpc, Client, HttpClientBuilder, JsonRpcCall, JsonRpcParams},
+	http_client::{Client, HttpClientBuilder, JsonRpcCall, JsonRpcParams},
 	ws_client::WsClientBuilder,
 };
 use std::sync::Arc;
@@ -8,29 +8,11 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
-criterion_group!(benches, http_requests, websocket_requests, jsonrpsee_types_v1, jsonrpsee_types_v2);
+criterion_group!(benches, http_requests, websocket_requests, jsonrpsee_types_v2);
 criterion_main!(benches);
-
-fn v1_serialize(req: jsonrpc::Request) -> String {
-	serde_json::to_string(&req).unwrap()
-}
 
 fn v2_serialize(req: JsonRpcCall<u64>) -> String {
 	serde_json::to_string(&req).unwrap()
-}
-
-pub fn jsonrpsee_types_v1(crit: &mut Criterion) {
-	crit.bench_function("jsonrpsee_types_v1", |b| {
-		b.iter(|| {
-			let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
-				jsonrpc: jsonrpc::Version::V2,
-				method: "say_hello".to_string(),
-				params: jsonrpc::Params::Array(vec![1_u64.into(), 2_u64.into()]),
-				id: jsonrpc::Id::Num(0),
-			}));
-			v1_serialize(request);
-		})
-	});
 }
 
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {

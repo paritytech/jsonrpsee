@@ -46,7 +46,7 @@ pub use client::{HttpClient, HttpClientBuilder};
 
 pub use jsonrpsee_types::{
 	error::Error,
-	jsonrpc,
 	traits::Client,
 	v2::dummy::{JsonRpcCall, JsonRpcNotification, JsonRpcParams},
+	v2::JsonValue,
 };

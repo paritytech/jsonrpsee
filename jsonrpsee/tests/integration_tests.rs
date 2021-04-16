@@ -31,7 +31,7 @@ mod helpers;
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::{
 	http_client::{Client, Error, HttpClientBuilder},
-	ws_client::{jsonrpc::JsonValue, JsonRpcParams, SubscriptionClient, WsClientBuilder, WsSubscription},
+	ws_client::{JsonRpcParams, JsonValue, SubscriptionClient, WsClientBuilder, WsSubscription},
 };
 use std::sync::Arc;
 use std::time::Duration;

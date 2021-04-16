@@ -5,9 +5,6 @@
 
 extern crate alloc;
 
-/// JSON-RPC 2.0 specification related types.
-pub mod jsonrpc;
-
 /// JSON-RPC 2.0 specification related types v2.
 pub mod v2;
 

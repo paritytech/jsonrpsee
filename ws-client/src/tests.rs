@@ -111,6 +111,8 @@ async fn is_connected_works() {
 	let client = WsClientBuilder::default().build(&uri).await.unwrap();
 	assert!(client.is_connected());
 	client.request::<u64, String>("say_hello", JsonRpcParams::NoParams).await.unwrap_err();
+	// give the background thread some time to terminate.
+	std::thread::sleep(std::time::Duration::from_millis(100));
 	assert!(!client.is_connected())
 }
 
