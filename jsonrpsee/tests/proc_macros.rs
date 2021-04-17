@@ -68,7 +68,7 @@ async fn proc_macros_generic_ws_client_api() {
 
 	assert_eq!(Test::<String>::say_hello(&client).await.unwrap(), "hello".to_string());
 	assert_eq!(Test2::<u16, String>::foo(&client, 99_u16).await.unwrap(), "hello".to_string());
-	assert!(Registrar::register_para(&client, 99, "para".into()).await.is_ok());
+	assert!(Registrar::register_para(&client, 99, "para").await.is_ok());
 }
 
 #[tokio::test]
