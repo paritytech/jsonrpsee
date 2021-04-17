@@ -8,7 +8,6 @@ license = "MIT"
 
 [dependencies]
 async-trait = "0.1"
-futures = "0.3"
 hyper13-rustls = { package = "hyper-rustls", version = "0.21", optional = true }
 hyper14-rustls = { package = "hyper-rustls", version = "0.22", optional = true }
 hyper14 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2", "tcp"], optional = true }

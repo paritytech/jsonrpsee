@@ -1,4 +1,4 @@
-use futures::channel::oneshot;
+use futures_channel::oneshot;
 use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServer};
 
 /// Run jsonrpsee HTTP server for benchmarks.

@@ -1,8 +1,11 @@
-use futures::channel::mpsc::{self, Receiver, Sender};
-use futures::future::FutureExt;
-use futures::io::{BufReader, BufWriter};
-use futures::sink::SinkExt;
-use futures::stream::{self, StreamExt};
+use futures_channel::mpsc::{self, Receiver, Sender};
+use futures_util::{
+	future::FutureExt,
+	io::{BufReader, BufWriter},
+	pin_mut, select,
+	sink::SinkExt,
+	stream::{self, StreamExt},
+};
 use serde::{Deserialize, Serialize};
 use soketto::handshake;
 use soketto::handshake::{server::Response, Server};
@@ -131,9 +134,9 @@ async fn server_backend(listener: async_std::net::TcpListener, mut exit: Receive
 	loop {
 		let conn_fut = listener.accept().fuse();
 		let exit_fut = exit.next();
-		futures::pin_mut!(exit_fut, conn_fut);
+		pin_mut!(exit_fut, conn_fut);
 
-		futures::select! {
+		select! {
 			_ = exit_fut => break,
 			conn = conn_fut => {
 				if let Ok((stream, _)) = conn {
@@ -178,15 +181,15 @@ async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mu
 		};
 		Some((ret, receiver))
 	});
-	futures::pin_mut!(ws_stream);
+	pin_mut!(ws_stream);
 
 	loop {
 		let next_ws = ws_stream.next().fuse();
 		let next_exit = exit.next().fuse();
 		let time_out = tokio::time::sleep(Duration::from_secs(1)).fuse();
-		futures::pin_mut!(time_out, next_exit, next_ws);
+		pin_mut!(time_out, next_exit, next_ws);
 
-		futures::select! {
+		select! {
 			_ = time_out => {
 				if let ServerMode::Subscription { subscription_response, .. } = &mode {
 					if let Err(e) = sender.send_text(&subscription_response).await {

@@ -1,7 +1,7 @@
 use crate::{v2::SubscriptionId, Error};
 use core::marker::PhantomData;
-use futures::channel::{mpsc, oneshot};
-use futures::prelude::*;
+use futures_channel::{mpsc, oneshot};
+use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 

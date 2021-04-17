@@ -9,7 +9,6 @@ publish = false
 [dev-dependencies]
 anyhow = "1"
 env_logger = "0.8"
-futures = "0.3"
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 jsonrpsee-ws-client = { path = "../ws-client" }
 log = "0.4"

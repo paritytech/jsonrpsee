@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::channel::oneshot;
+use futures_channel::oneshot;
 use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServer};
 use std::net::SocketAddr;
 use std::time::Duration;
