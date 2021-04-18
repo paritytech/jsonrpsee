@@ -84,16 +84,15 @@ pub struct JsonRpcError<'a> {
 pub struct JsonRpcErrorAlloc {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
-	#[serde(rename = "error")]
 	/// Error object.
-	pub inner: error::JsonRpcErrorObject,
+	pub error: error::JsonRpcErrorObject,
 	/// Request ID.
 	pub id: u64,
 }
 
 impl fmt::Display for JsonRpcErrorAlloc {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", self.inner)
+		write!(f, "{:?}: {}: {}", self.jsonrpc, self.error, self.id)
 	}
 }
 
@@ -179,16 +178,20 @@ impl<'a> RpcParams<'a> {
 }
 
 /// [JSON-RPC parameters](https://www.jsonrpc.org/specification#parameter_structures)
+///
+/// If your type implement `Into<JsonValue>` call that favor of `serde_json::to:value` to
+/// construct the parameters. Because `serde_json::to_value` serializes the type which
+/// allocates whereas `Into<JsonValue>` doesn't in most cases.
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
 pub enum JsonRpcParams<'a> {
 	/// No params.
 	NoParams,
-	/// Positional params.
+	/// Positional params (heap allocated)
 	Array(Vec<JsonValue>),
+	/// Positional params (slices)
+	ArrayRef(&'a [JsonValue]),
 	/// Params by name.
-	//
-	// TODO(niklasad1): maybe take a reference here but BTreeMap needs allocation anyway.
 	Map(BTreeMap<&'a str, JsonValue>),
 }
 
@@ -201,6 +204,12 @@ impl<'a> From<BTreeMap<&'a str, JsonValue>> for JsonRpcParams<'a> {
 impl<'a> From<Vec<JsonValue>> for JsonRpcParams<'a> {
 	fn from(arr: Vec<JsonValue>) -> Self {
 		Self::Array(arr)
+	}
+}
+
+impl<'a> From<&'a [JsonValue]> for JsonRpcParams<'a> {
+	fn from(slice: &'a [JsonValue]) -> Self {
+		Self::ArrayRef(slice)
 	}
 }
 
@@ -252,8 +261,6 @@ pub struct JsonRpcNotificationParamsAlloc<T> {
 }
 
 /// JSON-RPC notification response.
-// NOTE(niklasad1): basically the same as Maciej version but I wanted to support Strings too.
-// Maybe make subscription ID generic?!
 #[derive(Deserialize, Debug)]
 pub struct JsonRpcNotifAlloc<T> {
 	/// JSON-RPC version.
@@ -271,6 +278,15 @@ pub enum SubscriptionId {
 	Num(u64),
 	/// String id
 	Str(String),
+}
+
+impl From<SubscriptionId> for JsonValue {
+	fn from(sub_id: SubscriptionId) -> Self {
+		match sub_id {
+			SubscriptionId::Num(n) => n.into(),
+			SubscriptionId::Str(s) => s.into(),
+		}
+	}
 }
 
 /// Parse request ID from RawValue.

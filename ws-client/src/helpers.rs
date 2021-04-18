@@ -1,22 +1,17 @@
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use futures::channel::mpsc;
-use jsonrpsee_types::{
-	v2::{
-		parse_request_id, JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotifAlloc, JsonRpcParams, JsonRpcResponse,
-		SubscriptionId,
-	},
-	Error, RequestMessage,
+use jsonrpsee_types::v2::{
+	parse_request_id, JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotifAlloc, JsonRpcParams, JsonRpcResponse,
+	SubscriptionId,
 };
+use jsonrpsee_types::{Error, RequestMessage};
 use serde_json::Value as JsonValue;
 
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
-pub fn process_batch_response<'a>(
-	manager: &mut RequestManager,
-	rps: Vec<JsonRpcResponse<'a, JsonValue>>,
-) -> Result<(), Error> {
+pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<JsonRpcResponse<JsonValue>>) -> Result<(), Error> {
 	let mut digest = Vec::with_capacity(rps.len());
 	let mut ordered_responses = vec![JsonValue::Null; rps.len()];
 	let mut rps_unordered: Vec<_> = Vec::with_capacity(rps.len());
@@ -139,20 +134,21 @@ pub async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManag
 	}
 }
 
-/// Builds an unsubscription message, semantically the same as an ordinary request.
+/// Builds an unsubscription message.
 pub fn build_unsubscribe_message(
 	manager: &mut RequestManager,
 	sub_req_id: u64,
 	sub_id: SubscriptionId,
 ) -> Option<RequestMessage> {
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
+	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
 	if manager.insert_pending_call(unsub_req_id, None).is_err() {
 		log::warn!("Unsubscribe message failed to get slot in the RequestManager");
 		return None;
 	}
 	// TODO(niklasad): better type for params or maybe a macro?!.
-	let params = JsonRpcParams::Array(vec![serde_json::to_value(sub_id).unwrap()]);
-	let raw = serde_json::to_string(&JsonRpcCallSer::new(unsub_req_id, &unsub, params)).unwrap();
+	let params = JsonRpcParams::ArrayRef(sub_id_slice);
+	let raw = serde_json::to_string(&JsonRpcCallSer::new(unsub_req_id, &unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 

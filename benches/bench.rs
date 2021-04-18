@@ -20,9 +20,18 @@ fn v2_serialize<'a>(req: JsonRpcCallSer<'a>) -> String {
 }
 
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
-	crit.bench_function("jsonrpsee_types_v2", |b| {
+	crit.bench_function("jsonrpsee_types_v2_array_ref", |b| {
 		b.iter(|| {
-			let params = JsonRpcParams::Array(vec![1_u64.into(), 2.into()]);
+			let params = &[1_u64.into(), 2_u32.into()];
+			let params = JsonRpcParams::ArrayRef(params);
+			let request = JsonRpcCallSer::new(0, "say_hello", params);
+			v2_serialize(request);
+		})
+	});
+
+	crit.bench_function("jsonrpsee_types_v2_vec", |b| {
+		b.iter(|| {
+			let params = JsonRpcParams::Array(vec![1_u64.into(), 2_u32.into()]);
 			let request = JsonRpcCallSer::new(0, "say_hello", params);
 			v2_serialize(request);
 		})

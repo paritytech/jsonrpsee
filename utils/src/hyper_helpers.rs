@@ -93,17 +93,6 @@ mod tests {
 	use super::{read_header_content_length, read_response_to_body};
 
 	#[tokio::test]
-	async fn body_to_request_works() {
-		/*let s = r#"[{"a":"hello"}]"#;
-		let expected: JsonRpcRequest = serde_json::from_str(s).unwrap();
-		let body = hyper::Body::from(s.to_owned());
-		let headers = hyper::header::HeaderMap::new();
-		let bytes = read_response_to_body(&headers, body, 10 * 1024 * 1024).await.unwrap();
-		let req: JsonRpcRequest = serde_json::from_slice(&bytes).unwrap();
-		assert_eq!(req, expected);*/
-	}
-
-	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {
 		let headers = hyper::header::HeaderMap::new();
 		let body = hyper::Body::from(vec![0; 128]);

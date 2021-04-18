@@ -49,11 +49,6 @@ async fn main() -> anyhow::Result<()> {
 		i += 1;
 	}
 
-	drop(subscribe_hello);
-	drop(client);
-
-	std::thread::sleep(std::time::Duration::from_secs(1));
-
 	Ok(())
 }
 

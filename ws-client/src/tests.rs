@@ -138,9 +138,9 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 
 fn assert_error_response(error: Error, code: i32, message: &str) {
 	match &error {
-		Error::Request(err) => {
-			assert_eq!(err.inner.code.code(), code);
-			assert_eq!(&err.inner.message, message);
+		Error::Request(e) => {
+			assert_eq!(e.error.code.code(), code);
+			assert_eq!(e.error.message, message);
 		}
 		e @ _ => panic!("Expected error: \"{}\", got: {:?}", error, e),
 	};

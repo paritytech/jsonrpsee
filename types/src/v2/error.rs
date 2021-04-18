@@ -17,7 +17,7 @@ pub struct JsonRpcErrorObject {
 
 impl fmt::Display for JsonRpcErrorObject {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}: {}", self.code.to_string(), self.message)
+		write!(f, "{}: {}: {:?}", self.code.code(), self.message, self.data)
 	}
 }
 
@@ -73,7 +73,7 @@ pub enum ErrorCode {
 
 impl ErrorCode {
 	/// Returns integer code value
-	pub fn code(&self) -> i32 {
+	pub const fn code(&self) -> i32 {
 		match *self {
 			ErrorCode::ParseError => PARSE_ERROR_CODE,
 			ErrorCode::InvalidRequest => INVALID_REQUEST_CODE,
@@ -84,11 +84,10 @@ impl ErrorCode {
 			ErrorCode::ApplicationError(code) => code,
 		}
 	}
-}
 
-impl fmt::Display for ErrorCode {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let err = match *self {
+	/// Returns the message for the given error code.
+	pub const fn message(&self) -> &str {
+		match self {
 			ErrorCode::ParseError => PARSE_ERROR_MSG,
 			ErrorCode::InvalidRequest => INVALID_REQUEST_MSG,
 			ErrorCode::MethodNotFound => METHOD_NOT_FOUND_MSG,
@@ -96,8 +95,13 @@ impl fmt::Display for ErrorCode {
 			ErrorCode::InternalError => INTERNAL_ERROR_MSG,
 			ErrorCode::ServerError(_) => SERVER_ERROR_MSG,
 			ErrorCode::ApplicationError(_) => APPLICATION_ERROR_MSG,
-		};
-		f.write_str(err)
+		}
+	}
+}
+
+impl fmt::Display for ErrorCode {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.code())
 	}
 }
 

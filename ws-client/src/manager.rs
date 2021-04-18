@@ -47,7 +47,7 @@ pub struct BatchState {
 	pub send_back: PendingBatchOneshot,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
 	/// List of requests that are waiting for a response from the server.
@@ -60,9 +60,9 @@ pub struct RequestManager {
 }
 
 impl RequestManager {
-	/// Create a new `RequestManager` with specified capacity.
+	/// Create a new `RequestManager`.
 	pub fn new() -> Self {
-		Self { requests: FnvHashMap::default(), subscriptions: HashMap::new(), batches: HashMap::default() }
+		Self::default()
 	}
 
 	/// Tries to insert a new pending call.
