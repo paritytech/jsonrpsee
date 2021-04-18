@@ -192,13 +192,6 @@ pub enum JsonRpcParams<'a> {
 	Map(BTreeMap<&'a str, JsonValue>),
 }
 
-// TODO(niklasad1): this is a little weird but nice if `None.into()` works.
-impl<'a> From<Option<&'a JsonValue>> for JsonRpcParams<'a> {
-	fn from(_raw: Option<&'a JsonValue>) -> Self {
-		Self::NoParams
-	}
-}
-
 impl<'a> From<BTreeMap<&'a str, JsonValue>> for JsonRpcParams<'a> {
 	fn from(map: BTreeMap<&'a str, JsonValue>) -> Self {
 		Self::Map(map)

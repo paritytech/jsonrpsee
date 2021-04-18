@@ -238,7 +238,7 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote_spanned!(function.signature.span()=> None.into())
+			quote_spanned!(function.signature.span()=> #_crate::v2::JsonRpcParams::NoParams)
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=> vec![#(#params_to_array),*].into())
 		} else {
