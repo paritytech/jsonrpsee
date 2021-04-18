@@ -189,7 +189,7 @@ pub enum JsonRpcParams<'a> {
 	NoParams,
 	/// Positional params (heap allocated)
 	Array(Vec<JsonValue>),
-	/// Positional params (slices)
+	/// Positional params (slice)
 	ArrayRef(&'a [JsonValue]),
 	/// Params by name.
 	Map(BTreeMap<&'a str, JsonValue>),
