@@ -12,6 +12,7 @@ http-server = { path = "../http-server", version = "0.2.0-alpha.4", package = "j
 ws-client = { path = "../ws-client", version = "0.2.0-alpha.4", package = "jsonrpsee-ws-client", optional = true }
 ws-server = { path = "../ws-server", version = "0.2.0-alpha.4", package = "jsonrpsee-ws-server", optional = true }
 proc-macros = { path = "../proc-macros", version = "0.2.0-alpha.4", package = "jsonrpsee-proc-macros", optional = true }
+types = { path = "../types", version = "0.2.0-alpha.4", package = "jsonrpsee-types", optional = true }
 
 [dev-dependencies]
 env_logger = "0.8"
@@ -23,5 +24,5 @@ tokio = { version = "1", features = ["full"] }
 [features]
 client = ["http-client", "ws-client"]
 server = ["http-server", "ws-server"]
-macros = ["proc-macros"]
+macros = ["proc-macros", "types"]
 full = ["client", "server", "macros"]

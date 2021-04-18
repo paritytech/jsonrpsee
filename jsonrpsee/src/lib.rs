@@ -14,3 +14,6 @@ pub use ws_server;
 
 #[cfg(feature = "macros")]
 pub use proc_macros;
+
+#[cfg(feature = "macros")]
+pub use types;

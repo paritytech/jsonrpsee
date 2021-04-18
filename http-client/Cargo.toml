@@ -29,4 +29,5 @@ tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper_13"]
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
+jsonrpsee-proc-macros = { path = "../proc-macros" }
 tokio = { version = "1.0", features = ["net", "rt-multi-thread", "macros"] }

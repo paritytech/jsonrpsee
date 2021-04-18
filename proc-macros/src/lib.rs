@@ -191,13 +191,7 @@ fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenS
 fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
 	let visibility = &api.visibility;
 
-	let _crate = match (crate_name("jsonrpsee-http-client"), crate_name("jsonrpsee-ws-client")) {
-		(Ok(FoundCrate::Name(name)), _) => syn::Ident::new(&name, Span::call_site()),
-		(_, Ok(FoundCrate::Name(name))) => syn::Ident::new(&name, Span::call_site()),
-		(_, Err(e)) => return Err(syn::Error::new(Span::call_site(), &e)),
-		(Err(e), _) => return Err(syn::Error::new(Span::call_site(), &e)),
-		(_, _) => panic!("Deriving RPC methods in the `types` crate is not supported"),
-	};
+	let _crate = find_jsonrpsee_crate()?;
 
 	let mut client_functions = Vec::new();
 	for function in &api.definitions {
@@ -244,20 +238,16 @@ fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote_spanned!(function.signature.span()=> #_crate::v2::JsonRpcParams::NoParams)
+			quote_spanned!(function.signature.span()=> None.into())
 		} else if function.attributes.positional_params {
-			quote_spanned!(function.signature.span()=>
-				#_crate::v2::JsonRpcParams::Array(vec![
-					#(#params_to_array),*
-				])
-			)
+			quote_spanned!(function.signature.span()=> vec![#(#params_to_array),*].into())
 		} else {
 			quote_spanned!(function.signature.span()=>
-				#_crate::v2::JsonRpcParams::Map({
+				{
 					let mut map = std::collections::BTreeMap::new();
 					#(#params_to_json)*
-					map
-				})
+					map.into()
+				}
 			)
 		};
 
@@ -307,5 +297,26 @@ fn rpc_param_name(pat: &syn::Pat, _attrs: &[syn::Attribute]) -> syn::parse::Resu
 		// TODO: check other fields of the `PatIdent`
 		syn::Pat::Ident(ident) => Ok(ident.ident.to_string()),
 		_ => unimplemented!(),
+	}
+}
+
+/// Search for `jsonrpsee` in `Cargo.toml`.
+fn find_jsonrpsee_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
+	match crate_name("jsonrpsee") {
+		Ok(FoundCrate::Name(name)) => {
+			let ident = syn::Ident::new(&name, Span::call_site());
+			Ok(quote!(#ident::types))
+		}
+		Ok(FoundCrate::Itself) => panic!("Deriving RPC methods in any of the `jsonrpsee crates` is not supported"),
+		Err(_) => match (crate_name("jsonrpsee-http-client"), crate_name("jsonrpsee-ws-client")) {
+			(Ok(FoundCrate::Name(name)), _) | (_, Ok(FoundCrate::Name(name))) => {
+				let ident = syn::Ident::new(&name, Span::call_site());
+				Ok(quote!(#ident))
+			}
+			(Ok(FoundCrate::Itself), _) | (_, Ok(FoundCrate::Itself)) => {
+				panic!("Deriving RPC methods in any of the `jsonrpsee crates` is not supported")
+			}
+			(_, Err(e)) => Err(syn::Error::new(Span::call_site(), &e)),
+		},
 	}
 }

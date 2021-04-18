@@ -8,7 +8,7 @@ license = "MIT"
 
 [dependencies]
 async-trait = "0.1"
-async-std = { version = "1.9", default-features = false, features = ["std"] }
+async-std = "1.9"
 async-tls = "0.11"
 fnv = "1"
 futures = { version = "0.3", default-features = false, features = ["std"] }

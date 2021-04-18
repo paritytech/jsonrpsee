@@ -1,0 +1,14 @@
+[package]
+name = "jsonrpsee-integration-tests"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Integration tests for jsonrpsee"
+edition = "2018"
+license = "MIT"
+publish = false
+
+[dev-dependencies]
+env_logger = "0.8"
+futures-channel = { version = "0.3", default-features = false }
+jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
