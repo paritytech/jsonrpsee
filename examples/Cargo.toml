@@ -8,7 +8,6 @@ publish = false
 
 [dev-dependencies]
 anyhow = "1"
-async-std = "1"
 env_logger = "0.8"
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 log = "0.4"
