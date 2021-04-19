@@ -8,7 +8,7 @@
 
 use fnv::FnvHashMap;
 use futures::channel::{mpsc, oneshot};
-use jsonrpsee_types::{v2::SubscriptionId, Error, JsonValue};
+use jsonrpsee_types::{v2::params::SubscriptionId, Error, JsonValue};
 use std::collections::hash_map::{Entry, HashMap};
 
 #[derive(Debug)]
@@ -247,7 +247,7 @@ impl RequestManager {
 mod tests {
 	use super::{Error, RequestManager};
 	use futures::channel::{mpsc, oneshot};
-	use jsonrpsee_types::v2::SubscriptionId;
+	use jsonrpsee_types::v2::params::SubscriptionId;
 	use serde_json::Value as JsonValue;
 
 	#[test]

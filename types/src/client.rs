@@ -1,4 +1,4 @@
-use crate::{v2::SubscriptionId, Error};
+use crate::{v2::params::SubscriptionId, Error};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};

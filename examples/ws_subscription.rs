@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	ws_client::{traits::SubscriptionClient, v2::JsonRpcParams, Subscription, WsClientBuilder},
+	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
 	ws_server::WsServer,
 };
 use std::net::SocketAddr;

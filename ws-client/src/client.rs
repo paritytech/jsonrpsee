@@ -30,9 +30,10 @@ use crate::helpers::{
 };
 use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
-use crate::v2::{
-	JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotifAlloc, JsonRpcNotificationSer, JsonRpcParams, JsonRpcResponse,
-};
+use crate::v2::error::JsonRpcErrorAlloc;
+use crate::v2::params::{Id, JsonRpcParams};
+use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
+use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse};
 use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, RequestMessage, Subscription, SubscriptionMessage,
 };
@@ -308,7 +309,8 @@ impl Client for WsClient {
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
-		let raw = serde_json::to_string(&JsonRpcCallSer::new(req_id, method, params)).map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(req_id), method, params))
+			.map_err(Error::ParseError)?;
 		log::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
@@ -350,7 +352,7 @@ impl Client for WsClient {
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(JsonRpcCallSer::new(batch_ids[idx], method, params));
+			batches.push(JsonRpcCallSer::new(Id::Number(batch_ids[idx]), method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -405,8 +407,8 @@ impl SubscriptionClient for WsClient {
 		}
 
 		let ids = self.id_guard.next_request_ids(2)?;
-		let raw =
-			serde_json::to_string(&JsonRpcCallSer::new(ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(ids[0]), subscribe_method, params))
+			.map_err(Error::ParseError)?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -543,7 +545,7 @@ async fn background_task(
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifAlloc<_>>(&raw) {
+				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifResponse<_>>(&raw) {
 					log::debug!("[backend]: recv subscription {:?}", notif);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;

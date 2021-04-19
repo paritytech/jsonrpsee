@@ -1,11 +1,11 @@
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use futures::channel::mpsc;
-use jsonrpsee_types::v2::{
-	parse_request_id, JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotifAlloc, JsonRpcParams, JsonRpcResponse,
-	SubscriptionId,
-};
-use jsonrpsee_types::{Error, RequestMessage};
+use jsonrpsee_types::v2::params::{Id, JsonRpcParams, SubscriptionId};
+use jsonrpsee_types::v2::parse_request_id;
+use jsonrpsee_types::v2::request::JsonRpcCallSer;
+use jsonrpsee_types::v2::response::{JsonRpcNotifResponse, JsonRpcResponse};
+use jsonrpsee_types::{v2::error::JsonRpcErrorAlloc, Error, RequestMessage};
 use serde_json::Value as JsonValue;
 
 /// Attempts to process a batch response.
@@ -47,7 +47,7 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<JsonRpcResp
 /// Returns `Err(Some(msg))` if the subscription was full.
 pub fn process_subscription_response(
 	manager: &mut RequestManager,
-	notif: JsonRpcNotifAlloc<JsonValue>,
+	notif: JsonRpcNotifResponse<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
 	let sub_id = notif.params.subscription;
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -148,7 +148,7 @@ pub fn build_unsubscribe_message(
 	}
 	// TODO(niklasad): better type for params or maybe a macro?!.
 	let params = JsonRpcParams::ArrayRef(sub_id_slice);
-	let raw = serde_json::to_string(&JsonRpcCallSer::new(unsub_req_id, &unsub, params)).ok()?;
+	let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 
@@ -157,14 +157,15 @@ pub fn build_unsubscribe_message(
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
 pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcErrorAlloc) -> Result<(), Error> {
-	match manager.request_status(&err.id) {
+	let id = err.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
+	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
-			let send_back = manager.complete_pending_call(err.id).expect("State checked above; qed");
+			let send_back = manager.complete_pending_call(id).expect("State checked above; qed");
 			let _ = send_back.map(|s| s.send(Err(Error::Request(err))));
 			Ok(())
 		}
 		RequestStatus::PendingSubscription => {
-			let (_, send_back, _) = manager.complete_pending_subscription(err.id).expect("State checked above; qed");
+			let (_, send_back, _) = manager.complete_pending_subscription(id).expect("State checked above; qed");
 			let _ = send_back.send(Err(Error::Request(err)));
 			Ok(())
 		}

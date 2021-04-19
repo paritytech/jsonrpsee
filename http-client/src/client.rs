@@ -1,6 +1,11 @@
 use crate::traits::Client;
 use crate::transport::HttpTransportClient;
-use crate::v2::{JsonRpcCallSer, JsonRpcErrorAlloc, JsonRpcNotificationSer, JsonRpcParams, JsonRpcResponse};
+use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
+use crate::v2::{
+	error::JsonRpcErrorAlloc,
+	params::{Id, JsonRpcParams},
+	response::JsonRpcResponse,
+};
 use crate::{Error, JsonRawValue};
 use async_trait::async_trait;
 use fnv::FnvHashMap;
@@ -60,7 +65,7 @@ impl Client for HttpClient {
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::Relaxed);
-		let request = JsonRpcCallSer::new(id, method, params);
+		let request = JsonRpcCallSer::new(Id::Number(id), method, params);
 
 		let body = self
 			.transport
@@ -96,7 +101,7 @@ impl Client for HttpClient {
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-			batch_request.push(JsonRpcCallSer::new(id, method, params));
+			batch_request.push(JsonRpcCallSer::new(Id::Number(id), method, params));
 			ordered_requests.push(id);
 			request_set.insert(id, pos);
 		}

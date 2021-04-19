@@ -1,4 +1,4 @@
-use crate::v2::{JsonRpcParams, RpcParams};
+use crate::v2::params::{JsonRpcParams, RpcParams};
 use crate::{error::RpcError, Error, Subscription};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;

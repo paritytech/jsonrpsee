@@ -2,7 +2,7 @@ use crate::v2::error::{
 	INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, INVALID_PARAMS_CODE, INVALID_PARAMS_MSG, INVALID_REQUEST_CODE,
 	INVALID_REQUEST_MSG, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG, PARSE_ERROR_CODE, PARSE_ERROR_MSG,
 };
-use crate::v2::JsonRpcParams;
+use crate::v2::params::JsonRpcParams;
 use crate::{traits::Client, Error, HttpClientBuilder, JsonValue};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::Id;
@@ -114,6 +114,6 @@ fn assert_jsonrpc_error_response(error: Error, code: i32, message: &str) {
 			assert_eq!(e.error.code(), code);
 			assert_eq!(e.error.message(), message);
 		}
-		e @ _ => panic!("Expected error: \"{}\", got: {:?}", error, e),
+		e => panic!("Expected error: \"{}\", got: {:?}", error, e),
 	};
 }

@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::v2::{error::*, JsonRpcParams};
+use crate::v2::{error::*, params::JsonRpcParams};
 use crate::{
 	traits::{Client, SubscriptionClient},
 	Error, Subscription, WsClientBuilder,
@@ -73,7 +73,7 @@ async fn subscription_works() {
 	{
 		let mut sub: Subscription<String> =
 			client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
-		let response: String = sub.next().await.unwrap().into();
+		let response: String = sub.next().await.unwrap();
 		assert_eq!("hello my friend".to_owned(), response);
 	}
 }
@@ -142,6 +142,6 @@ fn assert_error_response(error: Error, code: i32, message: &str) {
 			assert_eq!(e.error.code(), code);
 			assert_eq!(e.error.message(), message);
 		}
-		e @ _ => panic!("Expected error: \"{}\", got: {:?}", error, e),
+		e => panic!("Expected error: \"{}\", got: {:?}", error, e),
 	};
 }

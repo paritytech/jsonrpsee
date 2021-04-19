@@ -1,8 +1,9 @@
 //! Shared helpers for JSON-RPC Servers.
 
 use futures_channel::mpsc;
-use jsonrpsee_types::v2::error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG};
-use jsonrpsee_types::v2::{JsonRpcError, JsonRpcErrorParams, JsonRpcResponse, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::error::{ErrorCode, JsonRpcError};
+use jsonrpsee_types::v2::params::{RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::response::JsonRpcResponse;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
@@ -25,7 +26,7 @@ pub fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
 		Err(err) => {
 			log::error!("Error serializing response: {:?}", err);
 
-			return send_error(id, tx, INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG);
+			return send_error(id, tx, ErrorCode::InternalError);
 		}
 	};
 
@@ -35,12 +36,8 @@ pub fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
 }
 
 /// Helper for sending JSON-RPC errors to the client
-pub fn send_error(id: RpcId, tx: RpcSender, code: i32, message: &str) {
-	let json = match serde_json::to_string(&JsonRpcError {
-		jsonrpc: TwoPointZero,
-		error: JsonRpcErrorParams { code, message },
-		id,
-	}) {
+pub fn send_error(id: RpcId, tx: RpcSender, error: ErrorCode) {
+	let json = match serde_json::to_string(&JsonRpcError { jsonrpc: TwoPointZero, error, id }) {
 		Ok(json) => json,
 		Err(err) => {
 			log::error!("Error serializing error message: {:?}", err);
