@@ -554,7 +554,7 @@ fn process_response(
 				Some(None) => {
 					manager.reclaim_request_id(response_id);
 					return Ok(None);
-				},
+				}
 				None => return Err(Error::InvalidRequestId),
 			};
 
