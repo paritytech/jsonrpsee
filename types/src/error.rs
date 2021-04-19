@@ -1,4 +1,4 @@
-use crate::v2::JsonRpcErrorAlloc;
+use crate::v2::error::JsonRpcErrorAlloc;
 use std::fmt;
 
 /// Error.

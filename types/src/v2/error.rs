@@ -1,11 +1,37 @@
-use crate::JsonValue;
-use serde::{
-	de::Deserializer,
-	ser::{SerializeSeq, Serializer},
-	Deserialize, Serialize,
-};
+use crate::v2::params::{Id, TwoPointZero};
+use serde::de::{Deserializer, MapAccess, Visitor};
+use serde::ser::{SerializeMap, Serializer};
+use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use std::fmt;
 use thiserror::Error;
+
+/// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
+#[derive(Serialize, Debug)]
+pub struct JsonRpcError<'a> {
+	/// JSON-RPC version.
+	pub jsonrpc: TwoPointZero,
+	/// Error.
+	pub error: ErrorCode,
+	/// Request ID
+	pub id: Option<&'a RawValue>,
+}
+/// [Failed JSON-RPC response object with allocations](https://www.jsonrpc.org/specification#response_object).
+#[derive(Error, Debug, Deserialize, PartialEq)]
+pub struct JsonRpcErrorAlloc {
+	/// JSON-RPC version.
+	pub jsonrpc: TwoPointZero,
+	/// Error object.
+	pub error: ErrorCode,
+	/// Request ID.
+	pub id: Id,
+}
+
+impl fmt::Display for JsonRpcErrorAlloc {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{:?}: {}: {:?}", self.jsonrpc, self.error, self.id)
+	}
+}
 
 /// Parse error code.
 pub const PARSE_ERROR_CODE: i32 = -32700;
@@ -87,7 +113,7 @@ impl ErrorCode {
 
 impl fmt::Display for ErrorCode {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", self.code())
+		write!(f, "{}: {}", self.code(), self.message())
 	}
 }
 
@@ -110,8 +136,8 @@ impl<'a> serde::Deserialize<'a> for ErrorCode {
 	where
 		D: Deserializer<'a>,
 	{
-		let code: i32 = serde::Deserialize::deserialize(deserializer)?;
-		Ok(ErrorCode::from(code))
+		let code = deserializer.deserialize_map(ErrorCodeVisitor)?;
+		Ok(code)
 	}
 }
 
@@ -120,22 +146,59 @@ impl serde::Serialize for ErrorCode {
 	where
 		S: Serializer,
 	{
-		let mut seq = serializer.serialize_seq(Some(2))?;
-		seq.serialize_element(&self.code())?;
-		seq.serialize_element(self.message())?;
-		seq.end()
+		let mut map = serializer.serialize_map(Some(2))?;
+		map.serialize_entry("code", &self.code())?;
+		map.serialize_entry("message", self.message())?;
+		map.end()
+	}
+}
+
+struct ErrorCodeVisitor;
+
+impl<'de> Visitor<'de> for ErrorCodeVisitor {
+	type Value = ErrorCode;
+
+	// Format a message stating what data this Visitor expects to receive.
+	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+		formatter.write_str("code")
+	}
+
+	fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+	where
+		M: MapAccess<'de>,
+	{
+		let mut maybe_code = None;
+
+		while let Ok(Some((key, val))) = access.next_entry::<&str, i32>() {
+			if key == "code" && maybe_code.is_none() {
+				maybe_code = Some(val.into())
+			}
+		}
+
+		let code = maybe_code.ok_or_else(|| serde::de::Error::missing_field("code"))?;
+		Ok(code)
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use super::{ErrorCode, Id, JsonRpcError, JsonRpcErrorAlloc, TwoPointZero};
 
 	#[test]
-	fn it_works() {
-		let code = ErrorCode::InternalError;
+	fn deserialize_works() {
+		let ser = r#"{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}"#;
+		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
+		assert_eq!(err.jsonrpc, TwoPointZero);
+		assert_eq!(err.error, ErrorCode::ParseError);
+		assert_eq!(err.id, Id::Null);
+	}
 
-		let ser = serde_json::to_string(&code).unwrap();
-		panic!("{}", ser);
+	#[test]
+	fn serialize_works() {
+		let exp = r#"{"jsonrpc": "2.0", "error": {"code": -32608, "message": "Internal error"}, "id": 1337}"#;
+		let raw_id = serde_json::value::to_raw_value(&1337).unwrap();
+		let err = JsonRpcError { jsonrpc: TwoPointZero, error: ErrorCode::InternalError, id: Some(&*raw_id) };
+		let ser = serde_json::to_string(&err).unwrap();
+		assert_eq!(exp, ser);
 	}
 }
