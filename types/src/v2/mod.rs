@@ -10,6 +10,11 @@ use thiserror::Error;
 /// JSON-RPC related error types.
 pub mod error;
 
+//// JSON-RPC request types.
+//pub mod request;
+
+/// JSON-RPC response types.
+
 /// [JSON-RPC request object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -85,7 +90,7 @@ pub struct JsonRpcErrorAlloc {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Error object.
-	pub error: error::JsonRpcErrorObject,
+	pub error: error::ErrorCode,
 	/// Request ID.
 	pub id: u64,
 }

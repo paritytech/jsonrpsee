@@ -111,8 +111,8 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 fn assert_jsonrpc_error_response(error: Error, code: i32, message: &str) {
 	match &error {
 		Error::Request(e) => {
-			assert_eq!(e.error.code.code(), code);
-			assert_eq!(e.error.message, message);
+			assert_eq!(e.error.code(), code);
+			assert_eq!(e.error.message(), message);
 		}
 		e @ _ => panic!("Expected error: \"{}\", got: {:?}", error, e),
 	};

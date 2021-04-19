@@ -1,25 +1,11 @@
 use crate::JsonValue;
-use serde::{de::Deserializer, ser::Serializer, Deserialize};
+use serde::{
+	de::Deserializer,
+	ser::{SerializeSeq, Serializer},
+	Deserialize, Serialize,
+};
 use std::fmt;
 use thiserror::Error;
-
-/// [JSON-RPC Error object](https://www.jsonrpc.org/specification#error_object)
-#[derive(Error, Debug, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct JsonRpcErrorObject {
-	/// Error code
-	pub code: ErrorCode,
-	/// Message
-	pub message: String,
-	/// Optional data
-	pub data: Option<JsonValue>,
-}
-
-impl fmt::Display for JsonRpcErrorObject {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}: {}: {:?}", self.code.code(), self.message, self.data)
-	}
-}
 
 /// Parse error code.
 pub const PARSE_ERROR_CODE: i32 = -32700;
@@ -134,6 +120,22 @@ impl serde::Serialize for ErrorCode {
 	where
 		S: Serializer,
 	{
-		serializer.serialize_i32(self.code())
+		let mut seq = serializer.serialize_seq(Some(2))?;
+		seq.serialize_element(&self.code())?;
+		seq.serialize_element(self.message())?;
+		seq.end()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn it_works() {
+		let code = ErrorCode::InternalError;
+
+		let ser = serde_json::to_string(&code).unwrap();
+		panic!("{}", ser);
 	}
 }
