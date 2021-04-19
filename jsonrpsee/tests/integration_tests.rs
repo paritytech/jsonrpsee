@@ -188,6 +188,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn https_works() {
 	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
 	let response: String = client.request("system_chain", Params::None).await.unwrap();
@@ -195,6 +196,7 @@ async fn https_works() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn wss_works() {
 	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
 	let response: String = client.request("system_chain", Params::None).await.unwrap();
