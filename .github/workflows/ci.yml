@@ -40,7 +40,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -A clippy::mutable_key_type
+          args: -- -A clippy::mutable_key_type -D warnings
 
   check-code:
     name: Check

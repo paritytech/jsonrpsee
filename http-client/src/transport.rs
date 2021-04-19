@@ -81,7 +81,7 @@ impl HttpTransportClient {
 
 		// Note that we don't check the Content-Type of the request. This is deemed
 		// unnecessary, as a parsing error while happen anyway.
-		let response: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::ParseError)?;
+		let response: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::Parsing)?;
 		log::debug!("recv: {}", jsonrpc::to_string(&response).expect("request valid JSON; qed"));
 		Ok(response)
 	}
@@ -112,7 +112,7 @@ pub(crate) enum Error {
 
 	/// Failed to parse the JSON returned by the server into a JSON-RPC response.
 	#[error("Error while parsing the response body")]
-	ParseError(#[source] serde_json::error::Error),
+	Parsing(#[source] serde_json::error::Error),
 
 	/// Request body too large.
 	#[error("The request body was too large")]
