@@ -186,7 +186,7 @@ mod tests {
 
 	#[test]
 	fn deserialize_works() {
-		let ser = r#"{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}"#;
+		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
 		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
 		assert_eq!(err.jsonrpc, TwoPointZero);
 		assert_eq!(err.error, ErrorCode::ParseError);
@@ -195,7 +195,7 @@ mod tests {
 
 	#[test]
 	fn serialize_works() {
-		let exp = r#"{"jsonrpc": "2.0", "error": {"code": -32608, "message": "Internal error"}, "id": 1337}"#;
+		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
 		let raw_id = serde_json::value::to_raw_value(&1337).unwrap();
 		let err = JsonRpcError { jsonrpc: TwoPointZero, error: ErrorCode::InternalError, id: Some(&*raw_id) };
 		let ser = serde_json::to_string(&err).unwrap();
