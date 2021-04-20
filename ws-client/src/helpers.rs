@@ -142,7 +142,7 @@ pub fn build_unsubscribe_message(
 ) -> Option<RequestMessage> {
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
-	// TODO(niklasad): better type for params or maybe a macro?!.
+	// TODO: https://github.com/paritytech/jsonrpsee/issues/275
 	let params = JsonRpcParams::ArrayRef(sub_id_slice);
 	let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
