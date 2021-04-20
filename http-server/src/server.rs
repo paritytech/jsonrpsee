@@ -28,7 +28,8 @@ use crate::module::RpcModule;
 use crate::response;
 use crate::AccessControl;
 use anyhow::anyhow;
-use futures::{channel::mpsc, StreamExt};
+use futures_channel::mpsc;
+use futures_util::stream::StreamExt;
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
 	service::{make_service_fn, service_fn},

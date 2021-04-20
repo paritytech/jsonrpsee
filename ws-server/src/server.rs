@@ -24,10 +24,8 @@
 // IN background_task WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures::{
-	channel::mpsc,
-	io::{BufReader, BufWriter},
-};
+use futures_channel::mpsc;
+use futures_util::io::{BufReader, BufWriter};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;

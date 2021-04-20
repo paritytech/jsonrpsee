@@ -8,7 +8,8 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1.0.34"
-futures = { version = "0.3", default-features = false }
+futures-channel = "0.3"
+futures-util = { version = "0.3", default-features = false, features = ["io"] }
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.5" }
 jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.5", features = ["server"] }
 log = "0.4"
