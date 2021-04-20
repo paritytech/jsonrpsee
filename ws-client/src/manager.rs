@@ -101,7 +101,7 @@ impl RequestManager {
 			Err(send_back)
 		}
 	}
-	/// Tries to insert a new pending subscription.
+	/// Tries to insert a new pending subscription and reserves a slot for a "potential" unsubscription request.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
 	pub fn insert_pending_subscription(
@@ -111,8 +111,13 @@ impl RequestManager {
 		send_back: PendingSubscriptionOneshot,
 		unsubscribe_method: UnsubscribeMethod,
 	) -> Result<(), PendingSubscriptionOneshot> {
-		if let Entry::Vacant(v) = self.requests.entry(sub_req_id) {
-			v.insert(Kind::PendingSubscription((unsub_req_id, send_back, unsubscribe_method)));
+		// The request IDs are not in the manager and the `sub_id` and `unsub_id` are not equal.
+		if !self.requests.contains_key(&sub_req_id)
+			&& !self.requests.contains_key(&unsub_req_id)
+			&& sub_req_id != unsub_req_id
+		{
+			self.requests.insert(sub_req_id, Kind::PendingSubscription((unsub_req_id, send_back, unsubscribe_method)));
+			self.requests.insert(unsub_req_id, Kind::PendingMethodCall(None));
 			Ok(())
 		} else {
 			Err(send_back)
@@ -279,6 +284,25 @@ mod tests {
 
 		assert!(manager.as_subscription_mut(&1).is_some());
 		assert!(manager.remove_subscription(1, SubscriptionId::Str("uniq_id_from_server".to_string())).is_some());
+	}
+
+	#[test]
+	fn insert_subscription_with_same_sub_and_unsub_id_should_err() {
+		let (tx1, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
+		let (tx2, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
+		let (tx3, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
+		let (tx4, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
+		let mut manager = RequestManager::new();
+		assert!(manager.insert_pending_subscription(1, 1, tx1, "unsubscribe_method".into()).is_err());
+		assert!(manager.insert_pending_subscription(0, 1, tx2, "unsubscribe_method".into()).is_ok());
+		assert!(
+			manager.insert_pending_subscription(99, 0, tx3, "unsubscribe_method".into()).is_err(),
+			"unsub request ID already occupied"
+		);
+		assert!(
+			manager.insert_pending_subscription(99, 1, tx4, "unsubscribe_method".into()).is_err(),
+			"sub request ID already occupied"
+		);
 	}
 
 	#[test]

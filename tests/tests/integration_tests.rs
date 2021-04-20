@@ -212,3 +212,17 @@ async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
 	let err: Result<(), Error> = client.request("system_chain", JsonRpcParams::NoParams).await;
 	assert!(matches!(err, Err(Error::TransportError(_))));
 }
+
+#[tokio::test]
+async fn ws_unsubscribe_releases_request_slots() {
+	let server_addr = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
+
+	let sub1: Subscription<JsonValue> =
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
+	drop(sub1);
+	let _: Subscription<JsonValue> =
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
+}

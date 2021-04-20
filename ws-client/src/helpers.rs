@@ -142,10 +142,6 @@ pub fn build_unsubscribe_message(
 ) -> Option<RequestMessage> {
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
-	if manager.insert_pending_call(unsub_req_id, None).is_err() {
-		log::warn!("Unsubscribe message failed to get slot in the RequestManager");
-		return None;
-	}
 	// TODO(niklasad): better type for params or maybe a macro?!.
 	let params = JsonRpcParams::ArrayRef(sub_id_slice);
 	let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;

@@ -293,7 +293,10 @@ impl Client for WsClient {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
 		let notif = JsonRpcNotificationSer::new(method, params);
-		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&notif).map_err(|e| {
+			self.id_guard.reclaim_request_id();
+			Error::ParseError(e)
+		})?;
 		log::trace!("[frontend]: send notification: {:?}", raw);
 		let res = self.to_back.clone().send(FrontToBack::Notification(raw)).await;
 		self.id_guard.reclaim_request_id();
@@ -309,8 +312,10 @@ impl Client for WsClient {
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
-		let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(req_id), method, params))
-			.map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(req_id), method, params)).map_err(|e| {
+			self.id_guard.reclaim_request_id();
+			Error::ParseError(e)
+		})?;
 		log::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
@@ -357,7 +362,10 @@ impl Client for WsClient {
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
-		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&batches).map_err(|e| {
+			self.id_guard.reclaim_request_id();
+			Error::ParseError(e)
+		})?;
 		log::trace!("[frontend]: send batch request: {:?}", raw);
 		if self
 			.to_back
@@ -401,14 +409,16 @@ impl SubscriptionClient for WsClient {
 	{
 		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 
-		let unsub_method = unsubscribe_method.to_owned();
 		if subscribe_method == unsubscribe_method {
-			return Err(Error::SubscriptionNameConflict(unsub_method));
+			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
 		}
 
 		let ids = self.id_guard.next_request_ids(2)?;
-		let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(ids[0]), subscribe_method, params))
-			.map_err(Error::ParseError)?;
+		let raw =
+			serde_json::to_string(&JsonRpcCallSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
+				self.id_guard.reclaim_request_id();
+				Error::ParseError(e)
+			})?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -418,16 +428,19 @@ impl SubscriptionClient for WsClient {
 				raw,
 				subscribe_id: ids[0],
 				unsubscribe_id: ids[1],
-				unsubscribe_method: unsub_method,
+				unsubscribe_method: unsubscribe_method.to_owned(),
 				send_back: send_back_tx,
 			}))
 			.await
 			.is_err()
 		{
+			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let (notifs_rx, id) = match send_back_rx.await {
+		let res = send_back_rx.await;
+		self.id_guard.reclaim_request_id();
+		let (notifs_rx, id) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
