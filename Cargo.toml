@@ -6,6 +6,7 @@ members = [
 	"http-server",
 	"test-utils",
 	"jsonrpsee",
+	"tests",
 	"types",
 	"utils",
 	"ws-client",

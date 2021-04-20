@@ -28,7 +28,6 @@ use async_std::net::TcpStream;
 use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
-use jsonrpsee_types::jsonrpc;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
@@ -156,12 +155,11 @@ pub enum WsConnectError {
 }
 
 impl Sender {
-	/// Sends out out a request. Returns a `Future` that finishes when the request has been
+	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub async fn send_request(&mut self, request: jsonrpc::Request) -> Result<(), WsConnectError> {
-		log::debug!("send: {}", request);
-		let request = jsonrpc::to_vec(&request).map_err(WsConnectError::Serialization)?;
-		self.inner.send_binary(request).await?;
+	pub async fn send(&mut self, body: String) -> Result<(), WsConnectError> {
+		log::debug!("send: {}", body);
+		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
 		Ok(())
 	}
@@ -169,13 +167,10 @@ impl Sender {
 
 impl Receiver {
 	/// Returns a `Future` resolving when the server sent us something back.
-	pub async fn next_response(&mut self) -> Result<jsonrpc::Response, WsConnectError> {
+	pub async fn next_response(&mut self) -> Result<Vec<u8>, WsConnectError> {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
-
-		let response = jsonrpc::from_slice(&message).map_err(WsConnectError::ParseError)?;
-		log::debug!("recv: {}", response);
-		Ok(response)
+		Ok(message)
 	}
 }
 

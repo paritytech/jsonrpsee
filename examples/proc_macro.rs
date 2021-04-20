@@ -24,33 +24,34 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Type definitions from the JSON-RPC specifications.
-//!
-//! All these common implement the `Serialize` and `Deserialize` traits of the `serde` library
-//! and can be serialize/deserialized using the `to_string`/`to_vec`/`from_slice` methods.
+use jsonrpsee::{http_client::HttpClientBuilder, http_server::HttpServerBuilder};
+use std::net::SocketAddr;
 
-mod error;
-mod id;
-mod params;
-mod request;
-mod response;
-mod version;
+jsonrpsee::proc_macros::rpc_client_api! {
+	RpcApi {
+		#[rpc(method = "state_getPairs", positional_params)]
+		fn storage_pairs(prefix: usize, hash: Option<String>) -> Vec<u8>;
+	}
+}
 
-/// Wrappers on-top of plain serialize/deserialize types with additional convience methods.
-pub mod wrapped;
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+	env_logger::init();
 
-pub use serde::{de::DeserializeOwned, ser::Serialize};
-pub use serde_json::error::Error as ParseError;
-pub use serde_json::Map as JsonMap;
-pub use serde_json::Number as JsonNumber;
-pub use serde_json::Value as JsonValue;
-pub use serde_json::{from_slice, from_value, to_string, to_value, to_vec};
+	let server_addr = run_server().await?;
+	let url = format!("http://{}", server_addr);
 
-pub use self::error::{Error, ErrorCode};
-pub use self::id::Id;
-pub use self::params::Params;
-pub use self::request::{Call, MethodCall, Notification, Request};
-pub use self::response::{
-	Failure, Output, Response, SubscriptionId, SubscriptionNotif, SubscriptionNotifParams, Success,
-};
-pub use self::version::Version;
+	let client = HttpClientBuilder::default().build(url)?;
+	let response = RpcApi::storage_pairs(&client, 0_usize, Some("aaa".to_string())).await?;
+	println!("r: {:?}", response);
+
+	Ok(())
+}
+
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
+	server.register_method("state_getPairs", |_| Ok(vec![1, 2, 3]))?;
+	let addr = server.local_addr();
+	tokio::spawn(async move { server.start().await });
+	addr
+}

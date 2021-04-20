@@ -6,13 +6,13 @@ mod helpers;
 use jsonrpsee::{http_client::*, proc_macros, ws_client::*};
 
 proc_macros::rpc_client_api! {
-	Test<T> {
+	Test<T: Send + Sync> {
 		fn say_hello() -> T;
 	}
 }
 
 proc_macros::rpc_client_api! {
-	pub(crate) Test2<B, T> {
+	pub(crate) Test2<B: Send + Sync, T: Send + Sync> {
 		#[rpc(method = "say_hello")]
 		fn foo(b: B) -> T;
 	}
@@ -50,7 +50,7 @@ proc_macros::rpc_client_api! {
 }
 
 proc_macros::rpc_client_api! {
-	ManyReturnTypes<A, B, C, D, E> {
+	ManyReturnTypes<A: Send + Sync, B: Send + Sync, C: Send + Sync, D: Send + Sync, E: Send + Sync> {
 		#[rpc(method = "say_hello")]
 		fn a() -> A;
 		fn b() -> B;

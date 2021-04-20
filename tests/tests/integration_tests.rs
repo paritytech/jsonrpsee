@@ -30,11 +30,8 @@ mod helpers;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::{
-	http_client::{Client, Error, HttpClientBuilder},
-	ws_client::{
-		jsonrpc::{JsonValue, Params},
-		SubscriptionClient, WsClientBuilder, WsSubscription,
-	},
+	http_client::{traits::Client, Error, HttpClientBuilder},
+	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, JsonValue, Subscription, WsClientBuilder},
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -44,16 +41,16 @@ async fn ws_subscription_works() {
 	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut hello_sub: WsSubscription<JsonValue> =
-		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
-	let mut foo_sub: WsSubscription<JsonValue> =
-		client.subscribe("subscribe_foo", Params::None, "unsubscribe_foo").await.unwrap();
+	let mut hello_sub: Subscription<String> =
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
+	let mut foo_sub: Subscription<u64> =
+		client.subscribe("subscribe_foo", JsonRpcParams::NoParams, "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
 		let hello = hello_sub.next().await.unwrap();
 		let foo = foo_sub.next().await.unwrap();
-		assert_eq!(hello, JsonValue::String("hello from subscription".to_owned()));
-		assert_eq!(foo, JsonValue::Number(1337_u64.into()));
+		assert_eq!(&hello, "hello from subscription");
+		assert_eq!(foo, 1337);
 	}
 }
 
@@ -62,8 +59,8 @@ async fn ws_method_call_works() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let response: JsonValue = client.request("say_hello", Params::None).await.unwrap();
-	assert_eq!(response, JsonValue::String("hello".into()));
+	let response: String = client.request("say_hello", JsonRpcParams::NoParams).await.unwrap();
+	assert_eq!(&response, "hello");
 }
 
 #[tokio::test]
@@ -71,7 +68,7 @@ async fn http_method_call_works() {
 	let server_addr = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
-	let response: String = client.request("say_hello", Params::None).await.unwrap();
+	let response: String = client.request("say_hello", JsonRpcParams::NoParams).await.unwrap();
 	assert_eq!(&response, "hello");
 }
 
@@ -83,10 +80,10 @@ async fn ws_subscription_several_clients() {
 	let mut clients = Vec::with_capacity(10);
 	for _ in 0..10 {
 		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-		let hello_sub: WsSubscription<JsonValue> =
-			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
-		let foo_sub: WsSubscription<JsonValue> =
-			client.subscribe("subscribe_foo", Params::None, "unsubscribe_foo").await.unwrap();
+		let hello_sub: Subscription<JsonValue> =
+			client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
+		let foo_sub: Subscription<JsonValue> =
+			client.subscribe("subscribe_foo", JsonRpcParams::NoParams, "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
 }
@@ -100,10 +97,10 @@ async fn ws_subscription_several_clients_with_drop() {
 	for _ in 0..10 {
 		let client =
 			WsClientBuilder::default().max_notifs_per_subscription(u32::MAX as usize).build(&server_url).await.unwrap();
-		let hello_sub: WsSubscription<String> =
-			client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
-		let foo_sub: WsSubscription<u64> =
-			client.subscribe("subscribe_foo", Params::None, "unsubscribe_foo").await.unwrap();
+		let hello_sub: Subscription<String> =
+			client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
+		let foo_sub: Subscription<u64> =
+			client.subscribe("subscribe_foo", JsonRpcParams::NoParams, "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
 
@@ -122,7 +119,7 @@ async fn ws_subscription_several_clients_with_drop() {
 		drop(foo_sub);
 		// Send this request to make sure that the client's background thread hasn't
 		// been canceled.
-		let _r: String = client.request("say_hello", Params::None).await.unwrap();
+		assert!(client.is_connected());
 		drop(client);
 	}
 
@@ -145,8 +142,8 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
-	let mut hello_sub: WsSubscription<JsonValue> =
-		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
+	let mut hello_sub: Subscription<JsonValue> =
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 
 	// don't poll the subscription stream for 2 seconds, should be full now.
 	std::thread::sleep(Duration::from_secs(2));
@@ -160,11 +157,11 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	assert!(hello_sub.next().await.is_none());
 
 	// The client should still be useable => make sure it still works.
-	let _hello_req: JsonValue = client.request("say_hello", Params::None).await.unwrap();
+	let _hello_req: JsonValue = client.request("say_hello", JsonRpcParams::NoParams).await.unwrap();
 
 	// The same subscription should be possible to register again.
-	let mut other_sub: WsSubscription<JsonValue> =
-		client.subscribe("subscribe_hello", Params::None, "unsubscribe_hello").await.unwrap();
+	let mut other_sub: Subscription<JsonValue> =
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 
 	other_sub.next().await.unwrap();
 }
@@ -179,7 +176,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 
 	for _ in 0..6 {
 		let c = client.clone();
-		requests.push(tokio::spawn(async move { c.request::<String, _, _>("say_hello", Params::None).await }));
+		requests.push(tokio::spawn(async move { c.request::<String>("say_hello", JsonRpcParams::NoParams).await }));
 	}
 
 	for req in requests {
@@ -191,7 +188,7 @@ async fn ws_more_request_than_buffer_should_not_deadlock() {
 #[ignore]
 async fn https_works() {
 	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
-	let response: String = client.request("system_chain", Params::None).await.unwrap();
+	let response: String = client.request("system_chain", JsonRpcParams::NoParams).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
@@ -199,7 +196,7 @@ async fn https_works() {
 #[ignore]
 async fn wss_works() {
 	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
-	let response: String = client.request("system_chain", Params::None).await.unwrap();
+	let response: String = client.request("system_chain", JsonRpcParams::NoParams).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
@@ -212,6 +209,20 @@ async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
 #[tokio::test]
 async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
 	let client = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂").unwrap();
-	let err: Result<(), Error> = client.request("system_chain", Params::None).await;
+	let err: Result<(), Error> = client.request("system_chain", JsonRpcParams::NoParams).await;
 	assert!(matches!(err, Err(Error::TransportError(_))));
+}
+
+#[tokio::test]
+async fn ws_unsubscribe_releases_request_slots() {
+	let server_addr = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
+
+	let sub1: Subscription<JsonValue> =
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
+	drop(sub1);
+	let _: Subscription<JsonValue> =
+		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 }

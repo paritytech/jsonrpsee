@@ -1,13 +1,15 @@
+use crate::traits::Client;
 use crate::transport::HttpTransportClient;
+use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
+use crate::v2::{
+	error::JsonRpcErrorAlloc,
+	params::{Id, JsonRpcParams},
+	response::JsonRpcResponse,
+};
+use crate::{Error, JsonRawValue};
 use async_trait::async_trait;
 use fnv::FnvHashMap;
-use jsonrpc::DeserializeOwned;
-use jsonrpsee_types::{
-	error::{Error, Mismatch},
-	jsonrpc,
-	traits::Client,
-};
-use std::convert::TryInto;
+use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Http Client Builder.
@@ -48,115 +50,96 @@ pub struct HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<M, P>(&self, method: M, params: P) -> Result<(), Error>
-	where
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
-	{
-		let request = jsonrpc::Request::Single(jsonrpc::Call::Notification(jsonrpc::Notification {
-			jsonrpc: jsonrpc::Version::V2,
-			method: method.into(),
-			params: params.into(),
-		}));
-		self.transport.send_notification(request).await.map_err(|e| Error::TransportError(Box::new(e)))
+	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
+		let notif = JsonRpcNotificationSer::new(method, params);
+		self.transport
+			.send(serde_json::to_string(&notif).map_err(Error::ParseError)?)
+			.await
+			.map_err(|e| Error::TransportError(Box::new(e)))
 	}
 
 	/// Perform a request towards the server.
-	async fn request<T, M, P>(&self, method: M, params: P) -> Result<T, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
 	where
-		T: DeserializeOwned,
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
+		R: DeserializeOwned,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::Relaxed);
-		let request = jsonrpc::Request::Single(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
-			jsonrpc: jsonrpc::Version::V2,
-			method: method.into(),
-			params: params.into(),
-			id: jsonrpc::Id::Num(id),
-		}));
+		let request = JsonRpcCallSer::new(Id::Number(id), method, params);
 
-		let response = self
+		let body = self
 			.transport
-			.send_request_and_wait_for_response(request)
+			.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?)
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		let json_value = match response {
-			jsonrpc::Response::Single(response) => match response.id() {
-				jsonrpc::Id::Num(n) if n == &id => response.try_into().map_err(Error::Request),
-				_ => Err(Error::InvalidRequestId),
-			},
-			jsonrpc::Response::Batch(_rps) => Err(Error::InvalidResponse(Mismatch {
-				expected: "Single response".into(),
-				got: "Batch Response".into(),
-			})),
-			jsonrpc::Response::Notif(_notif) => Err(Error::InvalidResponse(Mismatch {
-				expected: "Single response".into(),
-				got: "Notification Response".into(),
-			})),
-		}?;
-		jsonrpc::from_value(json_value).map_err(Error::ParseError)
+		let response: JsonRpcResponse<_> = match serde_json::from_slice(&body) {
+			Ok(response) => response,
+			Err(_) => {
+				let err: JsonRpcErrorAlloc = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				return Err(Error::Request(err));
+			}
+		};
+
+		let response_id = parse_request_id(response.id)?;
+
+		if response_id == id {
+			Ok(response.result)
+		} else {
+			Err(Error::InvalidRequestId)
+		}
 	}
 
-	async fn batch_request<T, M, P>(&self, batch: Vec<(M, P)>) -> Result<Vec<T>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
 	where
-		T: DeserializeOwned + Default + Clone,
-		M: Into<String> + Send,
-		P: Into<jsonrpc::Params> + Send,
+		R: DeserializeOwned + Default + Clone,
 	{
-		let mut calls = Vec::with_capacity(batch.len());
+		let mut batch_request = Vec::with_capacity(batch.len());
 		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
 		let mut ordered_requests = Vec::with_capacity(batch.len());
 		let mut request_set = FnvHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-			calls.push(jsonrpc::Call::MethodCall(jsonrpc::MethodCall {
-				jsonrpc: jsonrpc::Version::V2,
-				method: method.into(),
-				params: params.into(),
-				id: jsonrpc::Id::Num(id),
-			}));
+			batch_request.push(JsonRpcCallSer::new(Id::Number(id), method, params));
 			ordered_requests.push(id);
 			request_set.insert(id, pos);
 		}
 
-		let batch_request = jsonrpc::Request::Batch(calls);
-		let response = self
+		let body = self
 			.transport
-			.send_request_and_wait_for_response(batch_request)
+			.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?)
 			.await
 			.map_err(|e| Error::TransportError(Box::new(e)))?;
 
-		match response {
-			jsonrpc::Response::Single(_) => Err(Error::InvalidResponse(Mismatch {
-				expected: "Batch response".into(),
-				got: "Single Response".into(),
-			})),
-			jsonrpc::Response::Notif(_notif) => Err(Error::InvalidResponse(Mismatch {
-				expected: "Batch response".into(),
-				got: "Notification response".into(),
-			})),
-			jsonrpc::Response::Batch(rps) => {
-				// NOTE: `T::default` is placeholder and will be replaced in loop below.
-				let mut responses = vec![T::default(); ordered_requests.len()];
-				for rp in rps {
-					let id = match rp.id().as_number() {
-						Some(n) => *n,
-						_ => return Err(Error::InvalidRequestId),
-					};
-					let pos = match request_set.get(&id) {
-						Some(pos) => *pos,
-						None => return Err(Error::InvalidRequestId),
-					};
-					let json_val: jsonrpc::JsonValue = rp.try_into().map_err(Error::Request)?;
-					let response = jsonrpc::from_value(json_val).map_err(Error::ParseError)?;
-					responses[pos] = response;
-				}
-				Ok(responses)
+		let rps: Vec<JsonRpcResponse<_>> = match serde_json::from_slice(&body) {
+			Ok(response) => response,
+			Err(_) => {
+				let err: JsonRpcErrorAlloc = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				return Err(Error::Request(err));
 			}
+		};
+
+		// NOTE: `R::default` is placeholder and will be replaced in loop below.
+		let mut responses = vec![R::default(); ordered_requests.len()];
+		for rp in rps {
+			let response_id = parse_request_id(rp.id)?;
+			let pos = match request_set.get(&response_id) {
+				Some(pos) => *pos,
+				None => return Err(Error::InvalidRequestId),
+			};
+			responses[pos] = rp.result
+		}
+		Ok(responses)
+	}
+}
+
+fn parse_request_id(raw: Option<&JsonRawValue>) -> Result<u64, Error> {
+	match raw {
+		None => Err(Error::InvalidRequestId),
+		Some(id) => {
+			let id = serde_json::from_str(id.get()).map_err(Error::ParseError)?;
+			Ok(id)
 		}
 	}
 }

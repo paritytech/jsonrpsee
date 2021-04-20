@@ -34,12 +34,9 @@ use hyper::{
 	service::{make_service_fn, service_fn},
 	Error as HyperError,
 };
-use jsonrpsee_types::error::{Error, GenericTransportError};
-use jsonrpsee_types::v2::error::{
-	INVALID_REQUEST_CODE, INVALID_REQUEST_MSG, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG, PARSE_ERROR_CODE,
-	PARSE_ERROR_MSG,
-};
-use jsonrpsee_types::v2::{JsonRpcInvalidRequest, JsonRpcRequest, RpcError, RpcParams};
+use jsonrpsee_types::error::{Error, GenericTransportError, RpcError};
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
+use jsonrpsee_types::v2::{error::ErrorCode, params::RpcParams};
 use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
@@ -187,15 +184,15 @@ impl Server {
 										log::error!("method_call: {} failed: {:?}", req.method, err);
 									}
 								} else {
-									send_error(req.id, &tx, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG);
+									send_error(req.id, &tx, ErrorCode::MethodNotFound);
 								}
 							}
 							Err(_e) => {
-								let (id, code, msg) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
-									Ok(req) => (req.id, INVALID_REQUEST_CODE, INVALID_REQUEST_MSG),
-									Err(_) => (None, PARSE_ERROR_CODE, PARSE_ERROR_MSG),
+								let (id, err) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
+									Ok(req) => (req.id, ErrorCode::InvalidRequest),
+									Err(_) => (None, ErrorCode::ParseError),
 								};
-								send_error(id, &tx, code, msg);
+								send_error(id, &tx, err);
 							}
 						};
 

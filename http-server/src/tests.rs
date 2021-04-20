@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use crate::HttpServerBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode};
-use jsonrpsee_types::jsonrpc::JsonValue;
+use serde_json::Value as JsonValue;
 
 async fn server() -> SocketAddr {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();

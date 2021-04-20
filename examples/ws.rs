@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	ws_client::{jsonrpc::Params, Client, WsClientBuilder},
+	ws_client::{traits::Client, v2::params::JsonRpcParams, WsClientBuilder},
 	ws_server::WsServer,
 };
 use std::net::SocketAddr;
@@ -37,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", Params::None).await?;
+	let response: String = client.request("say_hello", JsonRpcParams::NoParams).await?;
 	println!("r: {:?}", response);
 
 	Ok(())
