@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-http-server"
-version = "0.2.0-alpha.4"
+version = "0.2.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "HTTP server for JSON-RPC"
 edition = "2018"
@@ -10,8 +10,8 @@ license = "MIT"
 anyhow = "1"
 hyper = { version = "0.14", features = ["server", "http1", "http2"] }
 futures = { version = "0.3", default-features = false }
-jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.4" }
-jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.4", features = ["server"] }
+jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.5" }
+jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.5", features = ["server"] }
 globset = "0.4"
 lazy_static = "1.4"
 log = "0.4"
