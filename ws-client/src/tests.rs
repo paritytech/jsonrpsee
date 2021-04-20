@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::v2::{error::*, params::JsonRpcParams};
+use crate::v2::{error::ErrorCode, params::JsonRpcParams};
 use crate::{
 	traits::{Client, SubscriptionClient},
 	Error, Subscription, WsClientBuilder,
@@ -33,31 +33,31 @@ async fn response_with_wrong_id() {
 #[tokio::test]
 async fn response_method_not_found() {
 	let err = run_request_with_response(method_not_found(Id::Num(0))).await.unwrap_err();
-	assert_error_response(err, METHOD_NOT_FOUND_CODE, METHOD_NOT_FOUND_MSG);
+	assert_error_response(err, ErrorCode::MethodNotFound);
 }
 
 #[tokio::test]
 async fn parse_error_works() {
 	let err = run_request_with_response(parse_error(Id::Num(0))).await.unwrap_err();
-	assert_error_response(err, PARSE_ERROR_CODE, PARSE_ERROR_MSG);
+	assert_error_response(err, ErrorCode::ParseError);
 }
 
 #[tokio::test]
 async fn invalid_request_works() {
 	let err = run_request_with_response(invalid_request(Id::Num(0_u64))).await.unwrap_err();
-	assert_error_response(err, INVALID_REQUEST_CODE, INVALID_REQUEST_MSG);
+	assert_error_response(err, ErrorCode::InvalidRequest);
 }
 
 #[tokio::test]
 async fn invalid_params_works() {
 	let err = run_request_with_response(invalid_params(Id::Num(0_u64))).await.unwrap_err();
-	assert_error_response(err, INVALID_PARAMS_CODE, INVALID_PARAMS_MSG);
+	assert_error_response(err, ErrorCode::InvalidParams);
 }
 
 #[tokio::test]
 async fn internal_error_works() {
 	let err = run_request_with_response(internal_error(Id::Num(0_u64))).await.unwrap_err();
-	assert_error_response(err, INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG);
+	assert_error_response(err, ErrorCode::InternalError);
 }
 
 #[tokio::test]
@@ -80,7 +80,6 @@ async fn subscription_works() {
 
 #[tokio::test]
 async fn batch_request_works() {
-	let _ = env_logger::try_init();
 	let batch_request = vec![
 		("say_hello", JsonRpcParams::NoParams),
 		("say_goodbye", JsonRpcParams::Array(vec![0_u64.into(), 1.into(), 2.into()])),
@@ -136,12 +135,9 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 	client.request("say_hello", JsonRpcParams::NoParams).await
 }
 
-fn assert_error_response(error: Error, code: i32, message: &str) {
+fn assert_error_response(error: Error, code: ErrorCode) {
 	match &error {
-		Error::Request(e) => {
-			assert_eq!(e.error.code(), code);
-			assert_eq!(e.error.message(), message);
-		}
+		Error::Request(e) => assert_eq!(e.error, code),
 		e => panic!("Expected error: \"{}\", got: {:?}", error, e),
 	};
 }
