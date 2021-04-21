@@ -5,6 +5,9 @@
 
 extern crate alloc;
 
+/// Ten megabytes.
+pub const TEN_MB: u32 = 10 * 1024 * 1024;
+
 /// JSON-RPC 2.0 specification related types v2.
 pub mod v2;
 

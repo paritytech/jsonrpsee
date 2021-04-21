@@ -6,7 +6,7 @@ use crate::v2::{
 	params::{Id, JsonRpcParams},
 	response::JsonRpcResponse,
 };
-use crate::{Error, JsonRawValue};
+use crate::{Error, JsonRawValue, TEN_MB};
 use async_trait::async_trait;
 use fnv::FnvHashMap;
 use serde::de::DeserializeOwned;
@@ -35,7 +35,7 @@ impl HttpClientBuilder {
 
 impl Default for HttpClientBuilder {
 	fn default() -> Self {
-		Self { max_request_body_size: 10 * 1024 * 1024 }
+		Self { max_request_body_size: TEN_MB }
 	}
 }
 
