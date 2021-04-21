@@ -37,7 +37,7 @@ use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse};
 use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, RequestMessage, Subscription, SubscriptionMessage,
 };
-use crate::TEN_MB;
+use crate::TEN_MB_SIZE_BYTES;
 use async_std::sync::Mutex;
 use async_trait::async_trait;
 use futures::{
@@ -171,7 +171,7 @@ pub struct WsClientBuilder<'a> {
 impl<'a> Default for WsClientBuilder<'a> {
 	fn default() -> Self {
 		Self {
-			max_request_body_size: TEN_MB,
+			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
 			origin: None,
