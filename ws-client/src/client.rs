@@ -37,6 +37,7 @@ use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse};
 use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, RequestMessage, Subscription, SubscriptionMessage,
 };
+use crate::TEN_MB_SIZE_BYTES;
 use async_std::sync::Mutex;
 use async_trait::async_trait;
 use futures::{
@@ -158,7 +159,7 @@ impl RequestIdGuard {
 /// Configuration.
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder<'a> {
-	max_request_body_size: usize,
+	max_request_body_size: u32,
 	request_timeout: Option<Duration>,
 	connection_timeout: Duration,
 	origin: Option<Cow<'a, str>>,
@@ -170,7 +171,7 @@ pub struct WsClientBuilder<'a> {
 impl<'a> Default for WsClientBuilder<'a> {
 	fn default() -> Self {
 		Self {
-			max_request_body_size: 10 * 1024 * 1024,
+			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
 			origin: None,
@@ -183,7 +184,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 
 impl<'a> WsClientBuilder<'a> {
 	/// Set max request body size.
-	pub fn max_request_body_size(mut self, size: usize) -> Self {
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
 		self
 	}

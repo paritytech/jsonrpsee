@@ -27,6 +27,7 @@
 use crate::module::RpcModule;
 use crate::response;
 use crate::AccessControl;
+use crate::TEN_MB_SIZE_BYTES;
 use anyhow::anyhow;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
@@ -101,7 +102,7 @@ impl Builder {
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { max_request_body_size: 10 * 1024 * 1024, access_control: AccessControl::default(), keep_alive: true }
+		Self { max_request_body_size: TEN_MB_SIZE_BYTES, access_control: AccessControl::default(), keep_alive: true }
 	}
 }
 
