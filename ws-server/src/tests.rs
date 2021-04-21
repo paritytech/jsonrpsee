@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::WsServer;
-use futures::channel::oneshot::{self, Sender};
+use futures_channel::oneshot::{self, Sender};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestClient};
 use jsonrpsee_types::error::Error;

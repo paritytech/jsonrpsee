@@ -5,13 +5,17 @@ authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krie
 description = "HTTP server for JSON-RPC"
 edition = "2018"
 license = "MIT"
+repository = "https://github.com/paritytech/jsonrpsee"
+homepage = "https://github.com/paritytech/jsonrpsee"
+documentation = "https://docs.rs/jsonrpsee-http-server"
 
 [dependencies]
 anyhow = "1"
-hyper = { version = "0.14", features = ["server", "http1", "http2"] }
-futures = { version = "0.3", default-features = false }
+hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
+futures-channel = "0.3"
+futures-util = { version = "0.3", default-features = false }
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.5" }
-jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.5", features = ["server"] }
+jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.5", features = ["server", "hyper_14"] }
 globset = "0.4"
 lazy_static = "1.4"
 log = "0.4"
