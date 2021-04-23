@@ -119,7 +119,7 @@ impl RequestIdGuard {
 
 	fn get_slot(&self) -> Result<(), Error> {
 		self.current_pending
-			.fetch_updated(Ordering::Relaxed, Ordering::Relaxed, |val| {
+			.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
 				if val >= self.max_concurrent_requests {
 					None
 				} else {
