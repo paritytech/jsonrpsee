@@ -118,13 +118,16 @@ impl RequestIdGuard {
 	}
 
 	fn get_slot(&self) -> Result<(), Error> {
-		if self.current_pending.load(Ordering::Relaxed) >= self.max_concurrent_requests {
-			Err(Error::MaxSlotsExceeded)
-		} else {
-			// NOTE: `fetch_add` wraps on overflow but that can't occur because `current_pending` is checked above.
-			self.current_pending.fetch_add(1, Ordering::Relaxed);
-			Ok(())
-		}
+		self.current_pending
+			.fetch_updated(Ordering::Relaxed, Ordering::Relaxed, |val| {
+				if val >= self.max_concurrent_requests {
+					None
+				} else {
+					Some(val + 1)
+				}
+			})
+			.map(|_| ())
+			.map_err(|_| Error::MaxSlotsExceeded)
 	}
 
 	/// Attempts to get the next request ID.
@@ -149,10 +152,14 @@ impl RequestIdGuard {
 	}
 
 	fn reclaim_request_id(&self) {
-		let curr = self.current_pending.load(Ordering::Relaxed);
-		if curr > 0 {
-			self.current_pending.store(curr - 1, Ordering::Relaxed);
-		}
+		// NOTE we ignore the error here, since we are simply saturating at 0
+		let _ = self.current_pending.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
+			if val > 0 {
+				Some(val - 1)
+			} else {
+				None
+			}
+		});
 	}
 }
 
