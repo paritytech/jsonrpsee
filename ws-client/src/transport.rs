@@ -75,7 +75,7 @@ pub struct WsTransportClientBuilder<'a> {
 	/// `Origin` header is passed.
 	pub origin: Option<Cow<'a, str>>,
 	/// Max payload size
-	pub max_request_body_size: usize,
+	pub max_request_body_size: u32,
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -255,7 +255,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 		// If the handshake succeeded, return.
 		let mut builder = client.into_builder();
-		builder.set_max_message_size(self.max_request_body_size);
+		builder.set_max_message_size(self.max_request_body_size as usize);
 		let (sender, receiver) = builder.finish();
 		Ok((Sender { inner: sender }, Receiver { inner: receiver }))
 	}

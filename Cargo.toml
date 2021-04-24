@@ -13,3 +13,4 @@ members = [
 	"ws-server",
 	"proc-macros",
 ]
+resolver = "2"
