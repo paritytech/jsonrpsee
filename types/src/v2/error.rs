@@ -1,8 +1,8 @@
 use crate::v2::params::{Id, TwoPointZero};
-use serde::de::{Deserializer, Error as DeserializeError, MapAccess, Visitor};
-use serde::ser::{SerializeMap, Serializer};
+use serde::de::Deserializer;
+use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
+use serde_json::value::{RawValue, Value as JsonValue};
 use std::fmt;
 use thiserror::Error;
 
@@ -12,7 +12,7 @@ pub struct JsonRpcError<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Error.
-	pub error: ErrorCode,
+	pub error: JsonRpcErrorObject<'a>,
 	/// Request ID
 	pub id: Option<&'a RawValue>,
 }
@@ -21,16 +21,48 @@ pub struct JsonRpcError<'a> {
 pub struct JsonRpcErrorAlloc {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
-	/// Error object.
-	pub error: ErrorCode,
+	/// JSON-RPC error object.
+	pub error: JsonRpcErrorObjectAlloc,
 	/// Request ID.
 	pub id: Id,
 }
 
 impl fmt::Display for JsonRpcErrorAlloc {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{:?}: {}: {:?}", self.jsonrpc, self.error, self.id)
+		write!(f, "{:?}: {:?}: {:?}", self.jsonrpc, self.error, self.id)
 	}
+}
+
+/// JSON-RPC error object.
+#[derive(Debug, PartialEq, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JsonRpcErrorObjectAlloc {
+	/// Code
+	pub code: JsonRpcErrorCode,
+	/// Message
+	pub message: String,
+	/// Optional data
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub data: Option<JsonValue>,
+}
+
+impl From<JsonRpcErrorCode> for JsonRpcErrorObjectAlloc {
+	fn from(code: JsonRpcErrorCode) -> Self {
+		Self { message: code.message().to_owned(), code, data: None }
+	}
+}
+
+/// JSON-RPC error object with no extra allocations.
+#[derive(Debug, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct JsonRpcErrorObject<'a> {
+	/// Code
+	pub code: JsonRpcErrorCode,
+	/// Message
+	pub message: &'a str,
+	/// Optional data
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub data: Option<&'a RawValue>,
 }
 
 /// Parse error code.
@@ -43,10 +75,6 @@ pub const INVALID_PARAMS_CODE: i32 = -32602;
 pub const INVALID_REQUEST_CODE: i32 = -32600;
 /// Method not found error code.
 pub const METHOD_NOT_FOUND_CODE: i32 = -32601;
-/// Reserved for implementation-defined server-errors.
-pub const SERVER_ERROR_CODE_RANGE_START: i32 = -32000;
-/// Reserved for implementation-defined server-errors.
-pub const SERVER_ERROR_CODE_RANGE_END: i32 = 32099;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
@@ -60,15 +88,10 @@ pub const INVALID_REQUEST_MSG: &str = "Invalid request";
 pub const METHOD_NOT_FOUND_MSG: &str = "Method not found";
 /// Reserved for implementation-defined server-errors.
 pub const SERVER_ERROR_MSG: &str = "Server error";
-/// Application defined error which is not in the reserved space (-32000..=-32768)
-pub const APPLICATION_ERROR_MSG: &str = "Application error";
-
-/// Expected field to be found in the deserialization visitor.
-const ERROR_CODE_KEY: &str = "code";
 
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Copy, Clone)]
-pub enum ErrorCode {
+pub enum JsonRpcErrorCode {
 	/// Invalid JSON was received by the server.
 	/// An error occurred on the server while parsing the JSON text.
 	ParseError,
@@ -82,136 +105,104 @@ pub enum ErrorCode {
 	InternalError,
 	/// Reserved for implementation-defined server-errors.
 	ServerError(i32),
-	/// Application defined error which is not in the reserved space (-32000..=-32768)
-	ApplicationError(i32),
 }
 
-impl ErrorCode {
+impl JsonRpcErrorCode {
 	/// Returns integer code value
 	pub const fn code(&self) -> i32 {
 		match *self {
-			ErrorCode::ParseError => PARSE_ERROR_CODE,
-			ErrorCode::InvalidRequest => INVALID_REQUEST_CODE,
-			ErrorCode::MethodNotFound => METHOD_NOT_FOUND_CODE,
-			ErrorCode::InvalidParams => INVALID_PARAMS_CODE,
-			ErrorCode::InternalError => INTERNAL_ERROR_CODE,
-			ErrorCode::ServerError(code) => code,
-			ErrorCode::ApplicationError(code) => code,
+			JsonRpcErrorCode::ParseError => PARSE_ERROR_CODE,
+			JsonRpcErrorCode::InvalidRequest => INVALID_REQUEST_CODE,
+			JsonRpcErrorCode::MethodNotFound => METHOD_NOT_FOUND_CODE,
+			JsonRpcErrorCode::InvalidParams => INVALID_PARAMS_CODE,
+			JsonRpcErrorCode::InternalError => INTERNAL_ERROR_CODE,
+			JsonRpcErrorCode::ServerError(code) => code,
 		}
 	}
 
 	/// Returns the message for the given error code.
 	pub const fn message(&self) -> &str {
 		match self {
-			ErrorCode::ParseError => PARSE_ERROR_MSG,
-			ErrorCode::InvalidRequest => INVALID_REQUEST_MSG,
-			ErrorCode::MethodNotFound => METHOD_NOT_FOUND_MSG,
-			ErrorCode::InvalidParams => INVALID_PARAMS_MSG,
-			ErrorCode::InternalError => INTERNAL_ERROR_MSG,
-			ErrorCode::ServerError(_) => SERVER_ERROR_MSG,
-			ErrorCode::ApplicationError(_) => APPLICATION_ERROR_MSG,
+			JsonRpcErrorCode::ParseError => PARSE_ERROR_MSG,
+			JsonRpcErrorCode::InvalidRequest => INVALID_REQUEST_MSG,
+			JsonRpcErrorCode::MethodNotFound => METHOD_NOT_FOUND_MSG,
+			JsonRpcErrorCode::InvalidParams => INVALID_PARAMS_MSG,
+			JsonRpcErrorCode::InternalError => INTERNAL_ERROR_MSG,
+			JsonRpcErrorCode::ServerError(_) => SERVER_ERROR_MSG,
 		}
 	}
 }
 
-impl fmt::Display for ErrorCode {
+impl fmt::Display for JsonRpcErrorCode {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}: {}", self.code(), self.message())
 	}
 }
 
-impl From<i32> for ErrorCode {
+impl From<i32> for JsonRpcErrorCode {
 	fn from(code: i32) -> Self {
 		match code {
-			PARSE_ERROR_CODE => ErrorCode::ParseError,
-			INVALID_REQUEST_CODE => ErrorCode::InvalidRequest,
-			METHOD_NOT_FOUND_CODE => ErrorCode::MethodNotFound,
-			INVALID_PARAMS_CODE => ErrorCode::InvalidParams,
-			INTERNAL_ERROR_CODE => ErrorCode::InternalError,
-			SERVER_ERROR_CODE_RANGE_START..=SERVER_ERROR_CODE_RANGE_END => ErrorCode::ServerError(code),
-			code => ErrorCode::ApplicationError(code),
+			PARSE_ERROR_CODE => JsonRpcErrorCode::ParseError,
+			INVALID_REQUEST_CODE => JsonRpcErrorCode::InvalidRequest,
+			METHOD_NOT_FOUND_CODE => JsonRpcErrorCode::MethodNotFound,
+			INVALID_PARAMS_CODE => JsonRpcErrorCode::InvalidParams,
+			INTERNAL_ERROR_CODE => JsonRpcErrorCode::InternalError,
+			code => JsonRpcErrorCode::ServerError(code),
 		}
 	}
 }
 
-impl<'a> serde::Deserialize<'a> for ErrorCode {
-	fn deserialize<D>(deserializer: D) -> Result<ErrorCode, D::Error>
+impl<'a> serde::Deserialize<'a> for JsonRpcErrorCode {
+	fn deserialize<D>(deserializer: D) -> Result<JsonRpcErrorCode, D::Error>
 	where
 		D: Deserializer<'a>,
 	{
-		let code = deserializer.deserialize_map(ErrorCodeVisitor)?;
-		Ok(code)
+		let code: i32 = Deserialize::deserialize(deserializer)?;
+		Ok(JsonRpcErrorCode::from(code))
 	}
 }
 
-impl serde::Serialize for ErrorCode {
+impl serde::Serialize for JsonRpcErrorCode {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
 	{
-		let mut map = serializer.serialize_map(Some(2))?;
-		map.serialize_entry("code", &self.code())?;
-		map.serialize_entry("message", self.message())?;
-		map.end()
-	}
-}
-
-struct ErrorCodeVisitor;
-
-impl<'de> Visitor<'de> for ErrorCodeVisitor {
-	type Value = ErrorCode;
-
-	// Format a message stating what data this Visitor expects to receive.
-	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-		formatter.write_str(ERROR_CODE_KEY)
-	}
-
-	fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-	where
-		M: MapAccess<'de>,
-	{
-		let mut res = None;
-
-		loop {
-			match access.next_entry::<&str, i32>() {
-				Ok(Some((key, val))) if key == ERROR_CODE_KEY && res.is_none() => {
-					res = Some(Ok(val.into()));
-				}
-				Ok(Some((key, _))) if key == ERROR_CODE_KEY => {
-					res = Some(Err(DeserializeError::duplicate_field(ERROR_CODE_KEY)));
-				}
-				Ok(None) => break,
-				// traverse the entire map otherwise it will err,
-				_ => (),
-			}
-		}
-
-		match res {
-			Some(res) => res,
-			None => Err(DeserializeError::missing_field(ERROR_CODE_KEY)),
-		}
+		serializer.serialize_i32(self.code())
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{ErrorCode, Id, JsonRpcError, JsonRpcErrorAlloc, TwoPointZero};
+	use super::{
+		Id, JsonRpcError, JsonRpcErrorAlloc, JsonRpcErrorCode, JsonRpcErrorObject, JsonRpcErrorObjectAlloc,
+		TwoPointZero,
+	};
 
 	#[test]
 	fn deserialize_works() {
 		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
 		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
 		assert_eq!(err.jsonrpc, TwoPointZero);
-		assert_eq!(err.error, ErrorCode::ParseError);
+		assert_eq!(
+			err.error,
+			JsonRpcErrorObjectAlloc { code: JsonRpcErrorCode::ParseError, message: "Parse error".into(), data: None }
+		);
 		assert_eq!(err.id, Id::Null);
 	}
 
 	#[test]
-	fn deserialize_with_unknown_fields() {
-		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan", "lol":1337},"id":null}"#;
+	fn deserialize_with_optional_data() {
+		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
 		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
 		assert_eq!(err.jsonrpc, TwoPointZero);
-		assert_eq!(err.error, ErrorCode::ParseError);
+		assert_eq!(
+			err.error,
+			JsonRpcErrorObjectAlloc {
+				code: JsonRpcErrorCode::ParseError,
+				message: "Parse error".into(),
+				data: Some("vegan".into())
+			}
+		);
 		assert_eq!(err.id, Id::Null);
 	}
 
@@ -219,7 +210,11 @@ mod tests {
 	fn serialize_works() {
 		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
 		let raw_id = serde_json::value::to_raw_value(&1337).unwrap();
-		let err = JsonRpcError { jsonrpc: TwoPointZero, error: ErrorCode::InternalError, id: Some(&*raw_id) };
+		let err = JsonRpcError {
+			jsonrpc: TwoPointZero,
+			error: JsonRpcErrorObject { code: JsonRpcErrorCode::InternalError, message: "Internal error", data: None },
+			id: Some(&*raw_id),
+		};
 		let ser = serde_json::to_string(&err).unwrap();
 		assert_eq!(exp, ser);
 	}
