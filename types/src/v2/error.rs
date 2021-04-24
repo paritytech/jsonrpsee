@@ -1,5 +1,5 @@
 use crate::v2::params::{Id, TwoPointZero};
-use serde::de::{Deserializer, MapAccess, Visitor, Error as DeserializeError};
+use serde::de::{Deserializer, Error as DeserializeError, MapAccess, Visitor};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -174,21 +174,21 @@ impl<'de> Visitor<'de> for ErrorCodeVisitor {
 
 		loop {
 			match access.next_entry::<&str, i32>() {
-				Ok(Some((key, val))) if key == ERROR_CODE_KEY && res.is_none() =>  {
+				Ok(Some((key, val))) if key == ERROR_CODE_KEY && res.is_none() => {
 					res = Some(Ok(val.into()));
 				}
-				Ok(Some((key, _))) if key == ERROR_CODE_KEY =>  {
+				Ok(Some((key, _))) if key == ERROR_CODE_KEY => {
 					res = Some(Err(DeserializeError::duplicate_field(ERROR_CODE_KEY)));
 				}
 				Ok(None) => break,
 				// traverse the entire map otherwise it will err,
-				_ => (),
+				_ => break,
 			}
 		}
 
 		match res {
 			Some(res) => res,
-			None => Err(DeserializeError::missing_field(ERROR_CODE_KEY))
+			None => Err(DeserializeError::missing_field(ERROR_CODE_KEY)),
 		}
 	}
 }
