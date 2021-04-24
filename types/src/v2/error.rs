@@ -204,11 +204,6 @@ mod tests {
 		assert_eq!(err.jsonrpc, TwoPointZero);
 		assert_eq!(err.error, ErrorCode::ParseError);
 		assert_eq!(err.id, Id::Null);
-		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
-		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
-		assert_eq!(err.jsonrpc, TwoPointZero);
-		assert_eq!(err.error, ErrorCode::ParseError);
-		assert_eq!(err.id, Id::Null);
 	}
 
 	#[test]
