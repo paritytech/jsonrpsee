@@ -182,7 +182,7 @@ impl<'de> Visitor<'de> for ErrorCodeVisitor {
 				}
 				Ok(None) => break,
 				// traverse the entire map otherwise it will err,
-				_ => break,
+				_ => (),
 			}
 		}
 
