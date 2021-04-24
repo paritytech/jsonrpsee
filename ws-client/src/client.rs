@@ -119,7 +119,7 @@ impl RequestIdGuard {
 
 	fn get_slot(&self) -> Result<(), Error> {
 		self.current_pending
-			.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
+			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
 				if val >= self.max_concurrent_requests {
 					None
 				} else {
@@ -153,7 +153,7 @@ impl RequestIdGuard {
 
 	fn reclaim_request_id(&self) {
 		// NOTE we ignore the error here, since we are simply saturating at 0
-		let _ = self.current_pending.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |val| {
+		let _ = self.current_pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
 			if val > 0 {
 				Some(val - 1)
 			} else {
