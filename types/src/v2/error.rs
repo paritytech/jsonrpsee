@@ -1,5 +1,5 @@
 use crate::v2::params::{Id, TwoPointZero};
-use serde::de::{Deserializer, MapAccess, Visitor};
+use serde::de::{Deserializer, MapAccess, Visitor, Error as DeserializeError};
 use serde::ser::{SerializeMap, Serializer};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -62,6 +62,9 @@ pub const METHOD_NOT_FOUND_MSG: &str = "Method not found";
 pub const SERVER_ERROR_MSG: &str = "Server error";
 /// Application defined error which is not in the reserved space (-32000..=-32768)
 pub const APPLICATION_ERROR_MSG: &str = "Application error";
+
+/// Expected field to be found in the deserialization visitor.
+const ERROR_CODE_KEY: &str = "code";
 
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Copy, Clone)]
@@ -160,23 +163,33 @@ impl<'de> Visitor<'de> for ErrorCodeVisitor {
 
 	// Format a message stating what data this Visitor expects to receive.
 	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-		formatter.write_str("code")
+		formatter.write_str(ERROR_CODE_KEY)
 	}
 
 	fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
 	where
 		M: MapAccess<'de>,
 	{
-		let mut maybe_code = None;
+		let mut res = None;
 
-		while let Ok(Some((key, val))) = access.next_entry::<&str, i32>() {
-			if key == "code" && maybe_code.is_none() {
-				maybe_code = Some(val.into())
+		loop {
+			match access.next_entry::<&str, i32>() {
+				Ok(Some((key, val))) if key == ERROR_CODE_KEY && res.is_none() =>  {
+					res = Some(Ok(val.into()));
+				}
+				Ok(Some((key, _))) if key == ERROR_CODE_KEY =>  {
+					res = Some(Err(DeserializeError::duplicate_field(ERROR_CODE_KEY)));
+				}
+				Ok(None) => break,
+				// traverse the entire map otherwise it will err,
+				_ => (),
 			}
 		}
 
-		let code = maybe_code.ok_or_else(|| serde::de::Error::missing_field("code"))?;
-		Ok(code)
+		match res {
+			Some(res) => res,
+			None => Err(DeserializeError::missing_field(ERROR_CODE_KEY))
+		}
 	}
 }
 
@@ -187,6 +200,20 @@ mod tests {
 	#[test]
 	fn deserialize_works() {
 		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
+		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
+		assert_eq!(err.jsonrpc, TwoPointZero);
+		assert_eq!(err.error, ErrorCode::ParseError);
+		assert_eq!(err.id, Id::Null);
+		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
+		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
+		assert_eq!(err.jsonrpc, TwoPointZero);
+		assert_eq!(err.error, ErrorCode::ParseError);
+		assert_eq!(err.id, Id::Null);
+	}
+
+	#[test]
+	fn deserialize_with_unknown_fields() {
+		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan", "lol":1337},"id":null}"#;
 		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
 		assert_eq!(err.jsonrpc, TwoPointZero);
 		assert_eq!(err.error, ErrorCode::ParseError);
