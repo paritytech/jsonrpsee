@@ -36,36 +36,31 @@ async fn response_with_wrong_id() {
 #[tokio::test]
 async fn response_method_not_found() {
 	let err = run_request_with_response(method_not_found(Id::Num(0))).await.unwrap_err();
-	let code = JsonRpcErrorCode::MethodNotFound;
-	assert_error_response(err, JsonRpcErrorObjectAlloc { code, message: code.message().to_owned(), data: None });
+	assert_error_response(err, JsonRpcErrorCode::MethodNotFound.into());
 }
 
 #[tokio::test]
 async fn parse_error_works() {
 	let err = run_request_with_response(parse_error(Id::Num(0))).await.unwrap_err();
-	let code = JsonRpcErrorCode::ParseError;
-	assert_error_response(err, JsonRpcErrorObjectAlloc { code, message: code.message().to_owned(), data: None });
+	assert_error_response(err, JsonRpcErrorCode::ParseError.into());
 }
 
 #[tokio::test]
 async fn invalid_request_works() {
 	let err = run_request_with_response(invalid_request(Id::Num(0_u64))).await.unwrap_err();
-	let code = JsonRpcErrorCode::InvalidRequest;
-	assert_error_response(err, JsonRpcErrorObjectAlloc { code, message: code.message().to_owned(), data: None });
+	assert_error_response(err, JsonRpcErrorCode::InvalidRequest.into());
 }
 
 #[tokio::test]
 async fn invalid_params_works() {
 	let err = run_request_with_response(invalid_params(Id::Num(0_u64))).await.unwrap_err();
-	let code = JsonRpcErrorCode::InvalidParams;
-	assert_error_response(err, JsonRpcErrorObjectAlloc { code, message: code.message().to_owned(), data: None });
+	assert_error_response(err, JsonRpcErrorCode::InvalidParams.into());
 }
 
 #[tokio::test]
 async fn internal_error_works() {
 	let err = run_request_with_response(internal_error(Id::Num(0_u64))).await.unwrap_err();
-	let code = JsonRpcErrorCode::InternalError;
-	assert_error_response(err, JsonRpcErrorObjectAlloc { code, message: code.message().to_owned(), data: None });
+	assert_error_response(err, JsonRpcErrorCode::InternalError.into());
 }
 
 #[tokio::test]
