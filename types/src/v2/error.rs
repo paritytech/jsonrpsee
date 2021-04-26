@@ -47,7 +47,7 @@ pub struct JsonRpcErrorObjectAlloc {
 
 impl From<JsonRpcErrorCode> for JsonRpcErrorObjectAlloc {
 	fn from(code: JsonRpcErrorCode) -> Self {
-		Self { message: code.message().to_owned(), code, data: None }
+		Self { code, message: code.message().to_owned(), data: None }
 	}
 }
 
@@ -66,7 +66,7 @@ pub struct JsonRpcErrorObject<'a> {
 
 impl<'a> From<JsonRpcErrorCode> for JsonRpcErrorObject<'a> {
 	fn from(code: JsonRpcErrorCode) -> Self {
-		Self { message: code.message(), code, data: None }
+		Self { code, message: code.message(), data: None }
 	}
 }
 
