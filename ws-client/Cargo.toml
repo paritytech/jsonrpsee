@@ -1,19 +1,23 @@
 [package]
 name = "jsonrpsee-ws-client"
-version = "0.2.0-alpha.4"
+version = "0.2.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
 edition = "2018"
 license = "MIT"
+repository = "https://github.com/paritytech/jsonrpsee"
+homepage = "https://github.com/paritytech/jsonrpsee"
+documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 async-trait = "0.1"
-async-std = { version = "1.9", default-features = false, features = ["std"] }
+async-std = "1.9"
 async-tls = "0.11"
 fnv = "1"
 futures = { version = "0.3", default-features = false, features = ["std"] }
-jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.4" }
+jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.5" }
 log = "0.4"
+serde = "1"
 serde_json = "1"
 soketto = "0.4"
 pin-project = "1"

@@ -1,10 +1,13 @@
 [package]
 name = "jsonrpsee-proc-macros"
 description = "Procedueral macros for jsonrpsee"
-version = "0.2.0-alpha.4"
+version = "0.2.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
 edition = "2018"
+repository = "https://github.com/paritytech/jsonrpsee"
+homepage = "https://github.com/paritytech/jsonrpsee"
+documentation = "https://docs.rs/jsonrpsee-proc-macros"
 
 [lib]
 proc-macro = true
@@ -13,5 +16,5 @@ proc-macro = true
 Inflector = "0.11.4"
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "1.0", default-features = false, features = ["extra-traits"] }
+syn = { version = "1.0", default-features = false, features = ["extra-traits", "full"] }
 proc-macro-crate = "1"

@@ -6,9 +6,11 @@ members = [
 	"http-server",
 	"test-utils",
 	"jsonrpsee",
+	"tests",
 	"types",
 	"utils",
 	"ws-client",
 	"ws-server",
 	"proc-macros",
 ]
+resolver = "2"

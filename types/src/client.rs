@@ -1,8 +1,9 @@
-use crate::error::Error;
-use crate::jsonrpc::{self, DeserializeOwned, JsonValue, Params, SubscriptionId};
+use crate::{v2::params::SubscriptionId, Error};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
+use serde::de::DeserializeOwned;
+use serde_json::Value as JsonValue;
 
 /// Active subscription on a Client.
 pub struct Subscription<Notif> {
@@ -16,20 +17,13 @@ pub struct Subscription<Notif> {
 	pub marker: PhantomData<Notif>,
 }
 
-/// Notification message.
-#[derive(Debug)]
-pub struct NotificationMessage {
-	/// Method for the notification.
-	pub method: String,
-	/// Parameters to send to the server.
-	pub params: Params,
-}
-
 /// Batch request message.
 #[derive(Debug)]
 pub struct BatchMessage {
-	/// Requests in the batch
-	pub requests: Vec<(String, Params)>,
+	/// Serialized batch request.
+	pub raw: String,
+	/// Request IDs.
+	pub ids: Vec<u64>,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
 }
@@ -37,10 +31,10 @@ pub struct BatchMessage {
 /// Request message.
 #[derive(Debug)]
 pub struct RequestMessage {
-	/// Method for the request.
-	pub method: String,
-	/// Parameters of the request.
-	pub params: Params,
+	/// Serialized message.
+	pub raw: String,
+	/// Request ID.
+	pub id: u64,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
 }
@@ -48,10 +42,12 @@ pub struct RequestMessage {
 /// Subscription message.
 #[derive(Debug)]
 pub struct SubscriptionMessage {
-	/// Method for the subscription request.
-	pub subscribe_method: String,
-	/// Parameters to send for the subscription.
-	pub params: Params,
+	/// Serialized message.
+	pub raw: String,
+	/// Request ID of the subscribe message.
+	pub subscribe_id: u64,
+	/// Request ID of the unsubscribe message.
+	pub unsubscribe_id: u64,
 	/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
 	pub unsubscribe_method: String,
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
@@ -66,9 +62,9 @@ pub enum FrontToBack {
 	/// Send a batch request to the server.
 	Batch(BatchMessage),
 	/// Send a notification to the server.
-	Notification(NotificationMessage),
+	Notification(String),
 	/// Send a request to the server.
-	StartRequest(RequestMessage),
+	Request(RequestMessage),
 	/// Send a subscription request to the server.
 	Subscribe(SubscriptionMessage),
 	/// When a subscription channel is closed, we send this message to the background
@@ -91,7 +87,7 @@ where
 	pub async fn next(&mut self) -> Option<Notif> {
 		loop {
 			match self.notifs_rx.next().await {
-				Some(n) => match jsonrpc::from_value(n) {
+				Some(n) => match serde_json::from_value(n) {
 					Ok(parsed) => return Some(parsed),
 					Err(e) => log::debug!("Subscription response error: {:?}", e),
 				},

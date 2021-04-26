@@ -1,5 +1,17 @@
-use crate::jsonrpc;
+use crate::v2::error::JsonRpcErrorAlloc;
 use std::fmt;
+
+/// Error.
+#[derive(thiserror::Error, Debug)]
+pub enum RpcError {
+	/// Unknown error.
+	#[error("unknown rpc error")]
+	Unknown,
+	/// Invalid params in the RPC call.
+	#[error("invalid params")]
+	InvalidParams,
+}
+
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
@@ -23,10 +35,7 @@ pub enum Error {
 	TransportError(#[source] Box<dyn std::error::Error + Send + Sync>),
 	/// JSON-RPC request error.
 	#[error("JSON-RPC request error: {0:?}")]
-	Request(#[source] jsonrpc::Error),
-	/// Subscription error.
-	#[error("Subscription failed, subscribe_method: {0} unsubscribe_method: {1}")]
-	Subscription(String, String),
+	Request(#[source] JsonRpcErrorAlloc),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	Internal(#[source] futures_channel::mpsc::SendError),
@@ -38,7 +47,7 @@ pub enum Error {
 	RestartNeeded(String),
 	/// Failed to parse the data that the server sent back to us.
 	#[error("Parse error: {0}")]
-	ParseError(#[source] jsonrpc::ParseError),
+	ParseError(#[source] serde_json::Error),
 	/// Invalid subscription ID.
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionId,
@@ -54,9 +63,9 @@ pub enum Error {
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
-	/// Websocket request timeout
-	#[error("Websocket request timeout")]
-	WsRequestTimeout,
+	/// Request timeout
+	#[error("Request timeout")]
+	RequestTimeout,
 	/// Configured max number of request slots exceeded.
 	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,

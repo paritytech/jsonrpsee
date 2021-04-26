@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	http_client::{jsonrpc::Params, Client, HttpClientBuilder},
+	http_client::{traits::Client, HttpClientBuilder, JsonValue},
 	http_server::HttpServerBuilder,
 };
 use std::net::SocketAddr;
@@ -37,8 +37,10 @@ async fn main() -> anyhow::Result<()> {
 	let server_addr = run_server().await?;
 	let url = format!("http://{}", server_addr);
 
+	let params: &[JsonValue] = &[1_u64.into(), 2.into(), 3.into()];
+
 	let client = HttpClientBuilder::default().build(url)?;
-	let response: Result<String, _> = client.request("say_hello", Params::None).await;
+	let response: Result<String, _> = client.request("say_hello", params.into()).await;
 	println!("r: {:?}", response);
 
 	Ok(())

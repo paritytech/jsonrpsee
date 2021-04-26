@@ -24,3 +24,7 @@ path = "ws.rs"
 [[example]]
 name = "ws_subscription"
 path = "ws_subscription.rs"
+
+[[example]]
+name = "proc_macro"
+path = "proc_macro.rs"

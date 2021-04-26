@@ -43,4 +43,4 @@ mod transport;
 mod tests;
 
 pub use client::{HttpClient, HttpClientBuilder};
-pub use jsonrpsee_types::{error::Error, jsonrpc, traits::Client};
+pub use jsonrpsee_types::*;

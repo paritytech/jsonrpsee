@@ -6,8 +6,8 @@
 
 /// WebSocket Client.
 pub mod client;
-/// JSONRPC WebSocket transport.
-pub mod jsonrpc_transport;
+/// Helpers.
+pub mod helpers;
 /// Request manager.
 pub mod manager;
 /// Stream.
@@ -19,9 +19,4 @@ pub mod transport;
 mod tests;
 
 pub use client::{WsClient, WsClientBuilder};
-pub use jsonrpsee_types::{
-	client::Subscription as WsSubscription,
-	error::Error,
-	jsonrpc,
-	traits::{Client, SubscriptionClient},
-};
+pub use jsonrpsee_types::*;

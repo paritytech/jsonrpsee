@@ -38,7 +38,7 @@ pub async fn read_response_to_body(
 	mut body: hyper::Body,
 	max_request_body_size: u32,
 ) -> Result<Vec<u8>, GenericTransportError<hyper::Error>> {
-	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in practise
+	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in practice
 	// and for that case we fallback to allocating in the while-loop below instead of pre-allocating.
 	let body_size = read_header_content_length(&headers).unwrap_or(0);
 
@@ -91,18 +91,6 @@ pub fn read_header_values<'a>(
 #[cfg(test)]
 mod tests {
 	use super::{read_header_content_length, read_response_to_body};
-	use jsonrpsee_types::jsonrpc;
-
-	#[tokio::test]
-	async fn body_to_request_works() {
-		let s = r#"[{"a":"hello"}]"#;
-		let expected: jsonrpc::Request = serde_json::from_str(s).unwrap();
-		let body = hyper::Body::from(s.to_owned());
-		let headers = hyper::header::HeaderMap::new();
-		let bytes = read_response_to_body(&headers, body, 10 * 1024 * 1024).await.unwrap();
-		let req: jsonrpc::Request = serde_json::from_slice(&bytes).unwrap();
-		assert_eq!(req, expected);
-	}
 
 	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {

@@ -1,10 +1,11 @@
 #![cfg(test)]
 
 use crate::WsServer;
-use futures::channel::oneshot::{self, Sender};
+use futures_channel::oneshot::{self, Sender};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestClient};
-use jsonrpsee_types::{error::Error, jsonrpc::JsonValue};
+use jsonrpsee_types::error::Error;
+use serde_json::Value as JsonValue;
 use std::net::SocketAddr;
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
@@ -22,7 +23,6 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 		.register_method("add", |params| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
-
 			Ok(sum)
 		})
 		.unwrap();

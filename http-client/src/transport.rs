@@ -6,9 +6,9 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
+use crate::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
 use hyper_rustls::HttpsConnector;
-use jsonrpsee_types::{error::GenericTransportError, jsonrpc};
 use jsonrpsee_utils::hyper_helpers;
 use thiserror::Error;
 
@@ -41,10 +41,8 @@ impl HttpTransportClient {
 		}
 	}
 
-	/// Send request.
-	async fn send_request(&self, request: jsonrpc::Request) -> Result<hyper::Response<hyper::Body>, Error> {
-		let body = jsonrpc::to_vec(&request).map_err(Error::Serialization)?;
-		log::debug!("send: {}", request);
+	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
+		log::debug!("send: {}", body);
 
 		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
@@ -64,26 +62,18 @@ impl HttpTransportClient {
 		}
 	}
 
-	/// Send notification.
-	pub(crate) async fn send_notification(&self, request: jsonrpc::Request) -> Result<(), Error> {
-		let _response = self.send_request(request).await?;
-		Ok(())
-	}
-
-	/// Send request and wait for response.
-	pub(crate) async fn send_request_and_wait_for_response(
-		&self,
-		request: jsonrpc::Request,
-	) -> Result<jsonrpc::Response, Error> {
-		let response = self.send_request(request).await?;
+	/// Send serialized message and wait until all bytes from the HTTP message body is read.
+	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
+		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
 		let body = hyper_helpers::read_response_to_body(&parts.headers, body, self.max_request_body_size).await?;
+		Ok(body)
+	}
 
-		// Note that we don't check the Content-Type of the request. This is deemed
-		// unnecessary, as a parsing error while happen anyway.
-		let response: jsonrpc::Response = jsonrpc::from_slice(&body).map_err(Error::Parsing)?;
-		log::debug!("recv: {}", jsonrpc::to_string(&response).expect("request valid JSON; qed"));
-		Ok(response)
+	/// Send serialized message without reading the HTTP message body.
+	pub(crate) async fn send(&self, body: String) -> Result<(), Error> {
+		let _ = self.inner_send(body).await?;
+		Ok(())
 	}
 }
 
@@ -93,11 +83,6 @@ pub(crate) enum Error {
 	/// Invalid URL.
 	#[error("Invalid Url: {0}")]
 	Url(String),
-
-	/// Error while serializing the request.
-	// TODO: can that happen?
-	#[error("Error while serializing the request")]
-	Serialization(#[source] serde_json::error::Error),
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
 	#[error("Error while performing the HTTP request")]
@@ -109,10 +94,6 @@ pub(crate) enum Error {
 		/// Status code returned by the server.
 		status_code: u16,
 	},
-
-	/// Failed to parse the JSON returned by the server into a JSON-RPC response.
-	#[error("Error while parsing the response body")]
-	Parsing(#[source] serde_json::error::Error),
 
 	/// Request body too large.
 	#[error("The request body was too large")]
@@ -134,7 +115,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Error, HttpTransportClient};
-	use jsonrpsee_types::jsonrpc::{Call, Id, MethodCall, Params, Request, Version};
 
 	#[test]
 	fn invalid_http_url_rejected() {
@@ -148,15 +128,9 @@ mod tests {
 		let client = HttpTransportClient::new("http://localhost:9933", 80).unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
-		let request = Request::Single(Call::MethodCall(MethodCall {
-			jsonrpc: Version::V2,
-			method: "request_larger_than_eightybytes".to_string(),
-			params: Params::None,
-			id: Id::Num(1),
-		}));
-		let bytes = serde_json::to_vec(&request).unwrap();
-		assert_eq!(bytes.len(), 81);
-		let response = client.send_request(request).await.unwrap_err();
+		let body = "a".repeat(81);
+		assert_eq!(body.len(), 81);
+		let response = client.send(body).await.unwrap_err();
 		assert!(matches!(response, Error::RequestTooLarge));
 	}
 }

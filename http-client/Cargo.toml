@@ -1,10 +1,13 @@
 [package]
 name = "jsonrpsee-http-client"
-version = "0.2.0-alpha.4"
+version = "0.2.0-alpha.5"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "HTTP client for JSON-RPC"
 edition = "2018"
 license = "MIT"
+repository = "https://github.com/paritytech/jsonrpsee"
+homepage = "https://github.com/paritytech/jsonrpsee"
+documentation = "https://docs.rs/jsonrpsee-http-client"
 
 [dependencies]
 async-trait = "0.1"
@@ -12,13 +15,12 @@ hyper13-rustls = { package = "hyper-rustls", version = "0.21", optional = true }
 hyper14-rustls = { package = "hyper-rustls", version = "0.22", optional = true }
 hyper14 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2", "tcp"], optional = true }
 hyper13 = { package = "hyper", version = "0.13", optional = true }
-jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.4" }
-jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.4", optional = true }
+jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.5" }
+jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.5", optional = true }
 log = "0.4"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-unicase = "2.6"
 url = "2.2"
 fnv = "1"
 
