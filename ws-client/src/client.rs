@@ -228,7 +228,7 @@ impl<'a> WsClientBuilder<'a> {
 
 	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
 	///
-	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`](jsonrpsee_types::client::Subscription) frequently enough
+	/// You can also prevent the subscription being dropped by calling [`Subscription::next()`](crate::Subscription) frequently enough
 	/// such that the buffer capacity doesn't exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
