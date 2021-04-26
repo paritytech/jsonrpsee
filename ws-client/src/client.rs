@@ -135,7 +135,7 @@ impl RequestIdGuard {
 	/// Fails if request limit has been exceeded.
 	fn next_request_id(&self) -> Result<u64, Error> {
 		self.get_slot()?;
-		let id = self.current_id.fetch_add(1, Ordering::Relaxed);
+		let id = self.current_id.fetch_add(1, Ordering::SeqCst);
 		Ok(id)
 	}
 
@@ -146,7 +146,7 @@ impl RequestIdGuard {
 		self.get_slot()?;
 		let mut batch = Vec::with_capacity(len);
 		for _ in 0..len {
-			batch.push(self.current_id.fetch_add(1, Ordering::Relaxed));
+			batch.push(self.current_id.fetch_add(1, Ordering::SeqCst));
 		}
 		Ok(batch)
 	}

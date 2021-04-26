@@ -64,7 +64,7 @@ impl Client for HttpClient {
 		R: DeserializeOwned,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
-		let id = self.request_id.fetch_add(1, Ordering::Relaxed);
+		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
 		let request = JsonRpcCallSer::new(Id::Number(id), method, params);
 
 		let body = self
