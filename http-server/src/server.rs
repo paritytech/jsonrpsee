@@ -38,10 +38,7 @@ use hyper::{
 };
 use jsonrpsee_types::error::{Error, GenericTransportError, RpcError};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_types::v2::{
-	error::{JsonRpcErrorCode, JsonRpcErrorObject},
-	params::RpcParams,
-};
+use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
 use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
@@ -189,12 +186,7 @@ impl Server {
 										log::error!("method_call: {} failed: {:?}", req.method, err);
 									}
 								} else {
-									let code = JsonRpcErrorCode::MethodNotFound;
-									send_error(
-										req.id,
-										&tx,
-										JsonRpcErrorObject { code, message: code.message(), data: None },
-									);
+									send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 								}
 							}
 							Err(_e) => {
@@ -202,7 +194,7 @@ impl Server {
 									Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
 									Err(_) => (None, JsonRpcErrorCode::ParseError),
 								};
-								send_error(id, &tx, JsonRpcErrorObject { code, message: code.message(), data: None });
+								send_error(id, &tx, code.into());
 							}
 						};
 

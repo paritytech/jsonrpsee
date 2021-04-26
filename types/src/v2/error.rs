@@ -42,7 +42,6 @@ pub struct JsonRpcErrorObjectAlloc {
 	/// Message
 	pub message: String,
 	/// Optional data
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub data: Option<JsonValue>,
 }
 
@@ -63,6 +62,12 @@ pub struct JsonRpcErrorObject<'a> {
 	/// Optional data
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub data: Option<&'a RawValue>,
+}
+
+impl<'a> From<JsonRpcErrorCode> for JsonRpcErrorObject<'a> {
+	fn from(code: JsonRpcErrorCode) -> Self {
+		Self { message: code.message(), code, data: None }
+	}
 }
 
 /// Parse error code.
@@ -121,7 +126,7 @@ impl JsonRpcErrorCode {
 	}
 
 	/// Returns the message for the given error code.
-	pub const fn message(&self) -> &str {
+	pub const fn message(&self) -> &'static str {
 		match self {
 			JsonRpcErrorCode::ParseError => PARSE_ERROR_MSG,
 			JsonRpcErrorCode::InvalidRequest => INVALID_REQUEST_MSG,

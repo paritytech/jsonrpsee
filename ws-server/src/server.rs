@@ -37,13 +37,10 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
+use jsonrpsee_types::error::{Error, RpcError};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
-use jsonrpsee_types::{
-	error::{Error, RpcError},
-	v2::error::JsonRpcErrorObject,
-};
 use jsonrpsee_utils::server::{send_error, ConnectionId, Methods};
 
 mod module;
@@ -190,8 +187,7 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 				if let Some(method) = methods.get(&*req.method) {
 					(method)(req.id, params, &tx, id)?;
 				} else {
-					let code = JsonRpcErrorCode::MethodNotFound;
-					send_error(req.id, &tx, JsonRpcErrorObject { code, message: code.message(), data: None });
+					send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 				}
 			}
 			Err(_) => {
@@ -200,7 +196,7 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 					Err(_) => (None, JsonRpcErrorCode::ParseError),
 				};
 
-				send_error(id, &tx, JsonRpcErrorObject { code, message: code.message(), data: None });
+				send_error(id, &tx, code.into());
 			}
 		}
 	}
