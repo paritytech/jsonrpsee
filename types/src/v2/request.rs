@@ -33,7 +33,7 @@ pub struct JsonRpcRequest<'a> {
 #[serde(untagged)]
 pub enum SingleOrBatch<'a> {
 	Single(#[serde(borrow)] JsonRpcRequest<'a>),
-	Batch(#[serde(borrow)]Vec<JsonRpcRequest<'a>>),
+	Batch(#[serde(borrow)] Vec<JsonRpcRequest<'a>>),
 	// Batch(JsonRpcBatchRequest<'a>),
 }
 

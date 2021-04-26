@@ -118,13 +118,16 @@ impl RequestIdGuard {
 	}
 
 	fn get_slot(&self) -> Result<(), Error> {
-		if self.current_pending.load(Ordering::Relaxed) >= self.max_concurrent_requests {
-			Err(Error::MaxSlotsExceeded)
-		} else {
-			// NOTE: `fetch_add` wraps on overflow but that can't occur because `current_pending` is checked above.
-			self.current_pending.fetch_add(1, Ordering::Relaxed);
-			Ok(())
-		}
+		self.current_pending
+			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
+				if val >= self.max_concurrent_requests {
+					None
+				} else {
+					Some(val + 1)
+				}
+			})
+			.map(|_| ())
+			.map_err(|_| Error::MaxSlotsExceeded)
 	}
 
 	/// Attempts to get the next request ID.
@@ -132,7 +135,7 @@ impl RequestIdGuard {
 	/// Fails if request limit has been exceeded.
 	fn next_request_id(&self) -> Result<u64, Error> {
 		self.get_slot()?;
-		let id = self.current_id.fetch_add(1, Ordering::Relaxed);
+		let id = self.current_id.fetch_add(1, Ordering::SeqCst);
 		Ok(id)
 	}
 
@@ -143,16 +146,20 @@ impl RequestIdGuard {
 		self.get_slot()?;
 		let mut batch = Vec::with_capacity(len);
 		for _ in 0..len {
-			batch.push(self.current_id.fetch_add(1, Ordering::Relaxed));
+			batch.push(self.current_id.fetch_add(1, Ordering::SeqCst));
 		}
 		Ok(batch)
 	}
 
 	fn reclaim_request_id(&self) {
-		let curr = self.current_pending.load(Ordering::Relaxed);
-		if curr > 0 {
-			self.current_pending.store(curr - 1, Ordering::Relaxed);
-		}
+		// NOTE we ignore the error here, since we are simply saturating at 0
+		let _ = self.current_pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
+			if val > 0 {
+				Some(val - 1)
+			} else {
+				None
+			}
+		});
 	}
 }
 
@@ -221,7 +228,7 @@ impl<'a> WsClientBuilder<'a> {
 
 	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
 	///
-	/// You can also prevent the subscription being dropped by calling [`WsSubscription::next()`](jsonrpsee_types::client::Subscription) frequently enough
+	/// You can also prevent the subscription being dropped by calling [`Subscription::next()`](crate::Subscription) frequently enough
 	/// such that the buffer capacity doesn't exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
@@ -583,8 +590,11 @@ async fn background_task(
 				}
 				// Unparsable response
 				else {
-					log::debug!("[backend]: recv unparseable message");
-					let _ = front_error.send(Error::InvalidRequestId);
+					log::debug!(
+						"[backend]: recv unparseable message: {:?}",
+						serde_json::from_slice::<serde_json::Value>(&raw)
+					);
+					let _ = front_error.send(Error::Custom("Unparsable response".into()));
 					return;
 				}
 			}
