@@ -38,7 +38,7 @@ use hyper::{
 };
 use jsonrpsee_types::error::{Error, GenericTransportError, RpcError};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_types::v2::{error::ErrorCode, params::RpcParams};
+use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
 use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
@@ -186,15 +186,15 @@ impl Server {
 										log::error!("method_call: {} failed: {:?}", req.method, err);
 									}
 								} else {
-									send_error(req.id, &tx, ErrorCode::MethodNotFound);
+									send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 								}
 							}
 							Err(_e) => {
-								let (id, err) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
-									Ok(req) => (req.id, ErrorCode::InvalidRequest),
-									Err(_) => (None, ErrorCode::ParseError),
+								let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
+									Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
+									Err(_) => (None, JsonRpcErrorCode::ParseError),
 								};
-								send_error(id, &tx, err);
+								send_error(id, &tx, code.into());
 							}
 						};
 

@@ -590,8 +590,11 @@ async fn background_task(
 				}
 				// Unparsable response
 				else {
-					log::debug!("[backend]: recv unparseable message");
-					let _ = front_error.send(Error::InvalidRequestId);
+					log::debug!(
+						"[backend]: recv unparseable message: {:?}",
+						serde_json::from_slice::<serde_json::Value>(&raw)
+					);
+					let _ = front_error.send(Error::Custom("Unparsable response".into()));
 					return;
 				}
 			}

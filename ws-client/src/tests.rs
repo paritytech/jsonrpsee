@@ -1,6 +1,9 @@
 #![cfg(test)]
 
-use crate::v2::{error::ErrorCode, params::JsonRpcParams};
+use crate::v2::{
+	error::{JsonRpcErrorCode, JsonRpcErrorObjectAlloc},
+	params::JsonRpcParams,
+};
 use crate::{
 	traits::{Client, SubscriptionClient},
 	Error, Subscription, WsClientBuilder,
@@ -33,31 +36,31 @@ async fn response_with_wrong_id() {
 #[tokio::test]
 async fn response_method_not_found() {
 	let err = run_request_with_response(method_not_found(Id::Num(0))).await.unwrap_err();
-	assert_error_response(err, ErrorCode::MethodNotFound);
+	assert_error_response(err, JsonRpcErrorCode::MethodNotFound.into());
 }
 
 #[tokio::test]
 async fn parse_error_works() {
 	let err = run_request_with_response(parse_error(Id::Num(0))).await.unwrap_err();
-	assert_error_response(err, ErrorCode::ParseError);
+	assert_error_response(err, JsonRpcErrorCode::ParseError.into());
 }
 
 #[tokio::test]
 async fn invalid_request_works() {
 	let err = run_request_with_response(invalid_request(Id::Num(0_u64))).await.unwrap_err();
-	assert_error_response(err, ErrorCode::InvalidRequest);
+	assert_error_response(err, JsonRpcErrorCode::InvalidRequest.into());
 }
 
 #[tokio::test]
 async fn invalid_params_works() {
 	let err = run_request_with_response(invalid_params(Id::Num(0_u64))).await.unwrap_err();
-	assert_error_response(err, ErrorCode::InvalidParams);
+	assert_error_response(err, JsonRpcErrorCode::InvalidParams.into());
 }
 
 #[tokio::test]
 async fn internal_error_works() {
 	let err = run_request_with_response(internal_error(Id::Num(0_u64))).await.unwrap_err();
-	assert_error_response(err, ErrorCode::InternalError);
+	assert_error_response(err, JsonRpcErrorCode::InternalError.into());
 }
 
 #[tokio::test]
@@ -135,7 +138,7 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 	client.request("say_hello", JsonRpcParams::NoParams).await
 }
 
-fn assert_error_response(error: Error, code: ErrorCode) {
+fn assert_error_response(error: Error, code: JsonRpcErrorObjectAlloc) {
 	match &error {
 		Error::Request(e) => assert_eq!(e.error, code),
 		e => panic!("Expected error: \"{}\", got: {:?}", error, e),
