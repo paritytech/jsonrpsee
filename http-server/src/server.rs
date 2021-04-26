@@ -201,10 +201,8 @@ impl Server {
 						if let Ok(JsonRpcRequest { id, method: method_name, params, .. }) =
 							serde_json::from_slice::<JsonRpcRequest>(&body)
 						{
-							log::debug!("SINGLE");
 							execute(id, &tx, &method_name, params);
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
-							log::debug!("BATCH len={}", batch.len());
 							for JsonRpcRequest { id, method: method_name, params, .. } in batch {
 								execute(id, &tx, &method_name, params);
 							}
