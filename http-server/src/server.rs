@@ -37,10 +37,11 @@ use hyper::{
 	Error as HyperError,
 };
 use jsonrpsee_types::error::{Error, GenericTransportError, RpcError};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest, SingleOrBatch};
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
-use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
+use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::{send_error, RpcSender}};
 use serde::Serialize;
+use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
 use std::{
 	net::{SocketAddr, TcpListener},
@@ -153,6 +154,18 @@ impl Server {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
+
+					let execute = move |id: Option<&RawValue>, tx: RpcSender, method_name: &str, params:  Option<&RawValue>| {
+						if let Some(method) = methods.get(method_name) {
+							let params = RpcParams::new(params.map(|params| params.get()));
+							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+							if let Err(err) = (method)(id, params, &tx, 0) {
+								log::error!("execution of method call {} failed: {:?}, request id={:?}", method_name, err, id);
+							}
+						} else {
+							send_error(id, tx, JsonRpcErrorCode::MethodNotFound.into());
+						}
+					};
 					async move {
 						if let Err(e) = access_control_is_valid(&access_control, &request) {
 							return Ok::<_, HyperError>(e);
@@ -175,58 +188,32 @@ impl Server {
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded();
-						use SingleOrBatch::*;
-						match serde_json::from_slice::<SingleOrBatch>(&body) {
-							Ok(Single(JsonRpcRequest{ id, method: method_name, params, ..})) => {
-								log::debug!("SINGLE");
-								// log::debug!("recv: {:?}", req);
-								let params = RpcParams::new(params.map(|params| params.get()));
-								if let Some(method) = methods.get(&*method_name) {
-									// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-									if let Err(err) = (method)(id, params, &tx, 0) {
-										log::error!("method_call: {} failed: {:?}", method_name, err);
-									}
-								} else {
-									send_error(id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-								}
-							},
-							Ok(Batch(_requests)) => log::debug!("BATCH"),
-							Err(_e) => {
-								let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
-									Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-									Err(_) => (None, JsonRpcErrorCode::ParseError),
-								};
-								send_error(id, &tx, code.into());
+
+						if let Ok(JsonRpcRequest{ id, method: method_name, params, ..})
+							= serde_json::from_slice::<JsonRpcRequest>(&body) {
+							log::debug!("SINGLE");
+							execute(id, &tx, &method_name, params);
+
+						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
+							log::debug!("BATCH len={}", batch.len());
+							for JsonRpcRequest { id, method: method_name, params, .. } in batch {
+								execute(id, &tx, &method_name, params);
 							}
+						} else {
+							log::error!("[service_fn], Cannot parse request body={:?}", String::from_utf8_lossy(&body));
+							let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
+								Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
+								Err(_) => (None, JsonRpcErrorCode::ParseError),
+							};
+							send_error(id, &tx, code.into());
 						}
-
-
-						// match serde_json::from_slice::<JsonRpcRequest>(&body) {
-						// 	Ok(req) => {
-						// 		log::debug!("recv: {:?}", req);
-						// 		let params = RpcParams::new(req.params.map(|params| params.get()));
-						// 		if let Some(method) = methods.get(&*req.method) {
-						// 			// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-						// 			if let Err(err) = (method)(req.id, params, &tx, 0) {
-						// 				log::error!("method_call: {} failed: {:?}", req.method, err);
-						// 			}
-						// 		} else {
-						// 			send_error(req.id, &tx, ErrorCode::MethodNotFound);
-						// 		}
-						// 	}
-						// 	Err(e) => {
-						// 		log::debug!("recv (err): body={:?}, err={:?}", body, e);
-						// 		let (id, err) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
-						// 			Ok(req) => (req.id, ErrorCode::InvalidRequest),
-						// 			Err(_) => (None, ErrorCode::ParseError),
-						// 		};
-						// 		send_error(id, &tx, err);
-						// 	}
-						// };
-
-						let response = rx.next().await.expect("Sender is still alive managed by us above; qed");
-						log::debug!("send: {:?}", response);
-						Ok::<_, HyperError>(response::ok_response(response))
+						// TODO: the [docs]() seem to say that it's good practise to close the receiving end before reading all the items from the stream. Is it true?
+						rx.close();
+						// TODO: this allocates a `Vec` even for single requests, which is annoying. Find a better way (reusable Vec? Pre-allocate? Build a `String` directly?)
+						let responses = rx.collect::<Vec<String>>().await;
+						log::debug!("[service_fn] sending back: {:?}", responses);
+						// TODO: `join` will loop over the vec of responses again, which is dumb. Build the string directly.
+						Ok::<_, HyperError>(response::ok_response(responses.join(",")))
 					}
 				}))
 			}
