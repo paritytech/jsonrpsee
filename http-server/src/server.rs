@@ -37,7 +37,7 @@ use hyper::{
 	Error as HyperError,
 };
 use jsonrpsee_types::error::{Error, GenericTransportError, RpcError};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest, SingleOrBatch};
 use jsonrpsee_types::v2::{error::ErrorCode, params::RpcParams};
 use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
 use serde::Serialize;
@@ -175,28 +175,58 @@ impl Server {
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded();
-
-						match serde_json::from_slice::<JsonRpcRequest>(&body) {
-							Ok(req) => {
-								log::debug!("recv: {:?}", req);
-								let params = RpcParams::new(req.params.map(|params| params.get()));
-								if let Some(method) = methods.get(&*req.method) {
+						use SingleOrBatch::*;
+						match serde_json::from_slice::<SingleOrBatch>(&body) {
+							Ok(Single(JsonRpcRequest{ id, method: method_name, params, ..})) => {
+								log::debug!("SINGLE");
+								// log::debug!("recv: {:?}", req);
+								let params = RpcParams::new(params.map(|params| params.get()));
+								if let Some(method) = methods.get(&*method_name) {
 									// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-									if let Err(err) = (method)(req.id, params, &tx, 0) {
-										log::error!("method_call: {} failed: {:?}", req.method, err);
+									if let Err(err) = (method)(id, params, &tx, 0) {
+										log::error!("method_call: {} failed: {:?}", method_name, err);
 									}
 								} else {
-									send_error(req.id, &tx, ErrorCode::MethodNotFound);
+									send_error(id, &tx, ErrorCode::MethodNotFound);
 								}
-							}
-							Err(_e) => {
+							},
+							Ok(Batch(_requests)) => {
+								log::debug!("BATCH");
+							},
+							Err(e) => {
+								let bdy = std::str::from_utf8(&body);
+								log::debug!("recv (err): body={:?}, err={:?}", bdy, e);
 								let (id, err) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
 									Ok(req) => (req.id, ErrorCode::InvalidRequest),
 									Err(_) => (None, ErrorCode::ParseError),
 								};
 								send_error(id, &tx, err);
 							}
-						};
+						}
+
+
+						// match serde_json::from_slice::<JsonRpcRequest>(&body) {
+						// 	Ok(req) => {
+						// 		log::debug!("recv: {:?}", req);
+						// 		let params = RpcParams::new(req.params.map(|params| params.get()));
+						// 		if let Some(method) = methods.get(&*req.method) {
+						// 			// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+						// 			if let Err(err) = (method)(req.id, params, &tx, 0) {
+						// 				log::error!("method_call: {} failed: {:?}", req.method, err);
+						// 			}
+						// 		} else {
+						// 			send_error(req.id, &tx, ErrorCode::MethodNotFound);
+						// 		}
+						// 	}
+						// 	Err(e) => {
+						// 		log::debug!("recv (err): body={:?}, err={:?}", body, e);
+						// 		let (id, err) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
+						// 			Ok(req) => (req.id, ErrorCode::InvalidRequest),
+						// 			Err(_) => (None, ErrorCode::ParseError),
+						// 		};
+						// 		send_error(id, &tx, err);
+						// 	}
+						// };
 
 						let response = rx.next().await.expect("Sender is still alive managed by us above; qed");
 						log::debug!("send: {:?}", response);

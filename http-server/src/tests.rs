@@ -50,6 +50,42 @@ async fn single_method_call_with_params() {
 	assert_eq!(response.body, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
 
+// --> [
+//         {"jsonrpc": "2.0", "method": "sum", "params": [1,2,4], "id": "1"},
+//         {"jsonrpc": "2.0", "method": "notify_hello", "params": [7]},
+//         {"jsonrpc": "2.0", "method": "subtract", "params": [42,23], "id": "2"},
+//         {"foo": "boo"},
+//         {"jsonrpc": "2.0", "method": "foo.get", "params": {"name": "myself"}, "id": "5"},
+//         {"jsonrpc": "2.0", "method": "get_data", "id": "9"}
+//     ]
+// <-- [
+//         {"jsonrpc": "2.0", "result": 7, "id": "1"},
+//         {"jsonrpc": "2.0", "result": 19, "id": "2"},
+//         {"jsonrpc": "2.0", "error": {"code": -32600, "message": "Invalid Request"}, "id": null},
+//         {"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": "5"},
+//         {"jsonrpc": "2.0", "result": ["hello", 5], "id": "9"}
+//     ]
+#[tokio::test]
+async fn batched_method_calls() {
+	let _ = env_logger::try_init();
+
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	// let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	// let req = r#"[
+	// 	{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1},
+	// 	{"jsonrpc":"2.0","method":"add", "params":[3, 4],"id":2},
+	// 	{"jsonrpc":"2.0","method":"say_hello","id":3},
+	// 	{"jsonrpc":"2.0","method":"add", "params":[5, 6],"id":4}
+	// ]"#;
+	let response = http_request(req.into(), uri).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	log::info!("Response body: {:?}", response.body);
+	// assert_eq!(response.body, method_not_found(Id::Str("foo".into())));
+}
+
 #[tokio::test]
 async fn should_return_method_not_found() {
 	let addr = server().await;

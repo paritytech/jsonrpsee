@@ -20,6 +20,23 @@ pub struct JsonRpcRequest<'a> {
 	pub params: Option<&'a RawValue>,
 }
 
+// /// TODO: docs
+// #[derive(Deserialize, Debug)]
+// pub struct JsonRpcBatchRequest<'a>(
+// 	#[serde(borrow)]
+// 	pub
+// 	Vec<JsonRpcRequest<'a>>
+// );
+
+/// TODO: docs
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+pub enum SingleOrBatch<'a> {
+	Single(#[serde(borrow)] JsonRpcRequest<'a>),
+	Batch(#[serde(borrow)]Vec<JsonRpcRequest<'a>>),
+	// Batch(JsonRpcBatchRequest<'a>),
+}
+
 /// Invalid request with known request ID.
 #[derive(Deserialize, Debug)]
 pub struct JsonRpcInvalidRequest<'a> {
