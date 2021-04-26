@@ -39,7 +39,10 @@ use hyper::{
 use jsonrpsee_types::error::{Error, GenericTransportError, RpcError};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
-use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::{send_error, RpcSender}};
+use jsonrpsee_utils::{
+	hyper_helpers::read_response_to_body,
+	server::{send_error, RpcSender},
+};
 use serde::Serialize;
 use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
@@ -155,17 +158,23 @@ impl Server {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
 
-					let execute = move |id: Option<&RawValue>, tx: RpcSender, method_name: &str, params:  Option<&RawValue>| {
-						if let Some(method) = methods.get(method_name) {
-							let params = RpcParams::new(params.map(|params| params.get()));
-							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (method)(id, params, &tx, 0) {
-								log::error!("execution of method call {} failed: {:?}, request id={:?}", method_name, err, id);
+					let execute =
+						move |id: Option<&RawValue>, tx: RpcSender, method_name: &str, params: Option<&RawValue>| {
+							if let Some(method) = methods.get(method_name) {
+								let params = RpcParams::new(params.map(|params| params.get()));
+								// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+								if let Err(err) = (method)(id, params, &tx, 0) {
+									log::error!(
+										"execution of method call {} failed: {:?}, request id={:?}",
+										method_name,
+										err,
+										id
+									);
+								}
+							} else {
+								send_error(id, tx, JsonRpcErrorCode::MethodNotFound.into());
 							}
-						} else {
-							send_error(id, tx, JsonRpcErrorCode::MethodNotFound.into());
-						}
-					};
+						};
 					async move {
 						if let Err(e) = access_control_is_valid(&access_control, &request) {
 							return Ok::<_, HyperError>(e);
@@ -189,11 +198,11 @@ impl Server {
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded();
 
-						if let Ok(JsonRpcRequest{ id, method: method_name, params, ..})
-							= serde_json::from_slice::<JsonRpcRequest>(&body) {
+						if let Ok(JsonRpcRequest { id, method: method_name, params, .. }) =
+							serde_json::from_slice::<JsonRpcRequest>(&body)
+						{
 							log::debug!("SINGLE");
 							execute(id, &tx, &method_name, params);
-
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							log::debug!("BATCH len={}", batch.len());
 							for JsonRpcRequest { id, method: method_name, params, .. } in batch {
