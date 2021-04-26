@@ -26,8 +26,7 @@ pub fn send_response(id: RpcId, tx: RpcSender, result: impl Serialize) {
 		Err(err) => {
 			log::error!("Error serializing response: {:?}", err);
 
-			let code = JsonRpcErrorCode::InternalError;
-			return send_error(id, tx, JsonRpcErrorObject { code, message: code.message(), data: None });
+			return send_error(id, tx, JsonRpcErrorCode::InternalError.into());
 		}
 	};
 
