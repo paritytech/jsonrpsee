@@ -1,17 +1,6 @@
 use crate::v2::error::JsonRpcErrorAlloc;
 use std::fmt;
 
-/// Error.
-#[derive(thiserror::Error, Debug)]
-pub enum RpcError {
-	/// Unknown error.
-	#[error("unknown rpc error")]
-	Unknown,
-	/// Invalid params in the RPC call.
-	#[error("invalid params")]
-	InvalidParams,
-}
-
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
@@ -54,6 +43,9 @@ pub enum Error {
 	/// Invalid request ID.
 	#[error("Invalid request ID")]
 	InvalidRequestId,
+	/// Invalid params in the RPC call.
+	#[error("Invalid params in the RPC call")]
+	InvalidParams,
 	/// A request with the same request ID has already been registered.
 	#[error("A request with the same request ID has already been registered")]
 	DuplicateRequestId,
