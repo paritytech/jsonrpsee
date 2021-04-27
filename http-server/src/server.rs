@@ -198,6 +198,11 @@ impl Server {
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded();
 
+						// For [technical reasons](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
+						// used with untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged
+						// enum here and have to try each case individually: first the single request case, then the
+						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
+						// to [`serde_json::from_slice`] which is pretty annoying.
 						if let Ok(JsonRpcRequest { id, method: method_name, params, .. }) =
 							serde_json::from_slice::<JsonRpcRequest>(&body)
 						{
@@ -214,12 +219,17 @@ impl Server {
 							};
 							send_error(id, &tx, code.into());
 						}
-						// TODO: the [docs]() seem to say that it's good practise to close the receiving end before reading all the items from the stream. Is it true?
+						// TODO: the
+						// [docs](https://docs.rs/futures/0.3.14/futures/channel/mpsc/struct.Receiver.html#method.close)
+						// seem to say that it's good practise to close the receiving end before reading all the items
+						// from the stream. Is it true?
 						rx.close();
-						// TODO: this allocates a `Vec` even for single requests, which is annoying. Find a better way (reusable Vec? Pre-allocate? Build a `String` directly?)
+						// TODO: this allocates a `Vec` even for single requests, which is annoying. Find a better way
+						// (reusable Vec? Pre-allocate? Build a `String` directly?)
 						let responses = rx.collect::<Vec<String>>().await;
 						log::debug!("[service_fn] sending back: {:?}", responses);
-						// TODO: `join` will loop over the vec of responses again, which is dumb. Build the string directly.
+						// TODO: `join` will loop over the vec of responses again, which is dumb. Build the string
+						// directly.
 						Ok::<_, HyperError>(response::ok_response(responses.join(",")))
 					}
 				}))
