@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-ws-server"
-version = "0.2.0-alpha.5"
+version = "0.2.0-alpha.6"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket server for JSON-RPC"
 edition = "2018"
@@ -13,8 +13,8 @@ documentation = "https://docs.rs/jsonrpsee-ws-server"
 anyhow = "1.0.34"
 futures-channel = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["io"] }
-jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.5" }
-jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.5", features = ["server"] }
+jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.6" }
+jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.6", features = ["server"] }
 log = "0.4"
 parking_lot = "0.11"
 rand = "0.8"
