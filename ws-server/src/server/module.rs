@@ -1,4 +1,4 @@
-use crate::server::{RpcError, RpcParams, SubscriptionId, SubscriptionSink};
+use crate::server::{RpcParams, SubscriptionId, SubscriptionSink};
 use jsonrpsee_types::error::Error;
 use jsonrpsee_types::traits::RpcMethod;
 use jsonrpsee_utils::server::{send_response, Methods};
@@ -142,7 +142,7 @@ impl<Context> RpcContextModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(RpcParams, &Context) -> Result<R, RpcError> + Send + Sync + 'static,
+		F: Fn(RpcParams, &Context) -> Result<R, Error> + Send + Sync + 'static,
 	{
 		self.module.verify_method_name(method_name)?;
 

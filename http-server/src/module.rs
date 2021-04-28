@@ -1,4 +1,4 @@
-use jsonrpsee_types::{error::RpcError, traits::RpcMethod, v2::params::RpcParams, Error};
+use jsonrpsee_types::{traits::RpcMethod, v2::params::RpcParams, Error};
 use jsonrpsee_utils::server::{send_response, Methods};
 use serde::Serialize;
 use std::sync::Arc;
@@ -82,7 +82,7 @@ impl<Context> RpcContextModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(RpcParams, &Context) -> Result<R, RpcError> + Send + Sync + 'static,
+		F: Fn(RpcParams, &Context) -> Result<R, Error> + Send + Sync + 'static,
 	{
 		self.module.verify_method_name(method_name)?;
 
