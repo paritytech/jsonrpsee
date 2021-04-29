@@ -223,21 +223,21 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn returns_ok_if_attribue_does_not_exists() {
+	fn returns_ok_if_attribute_is_none() {
 		let mut a = ApiMethodAttrs { method: None, positional_params: true };
 		let b = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
 		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_ok());
 	}
 
 	#[test]
-	fn returns_an_error_if_attribue_already_exists() {
+	fn returns_ok_if_attribute_is_some_other_name() {
 		let mut a = ApiMethodAttrs { method: Some("method1".to_string()), positional_params: true };
 		let b = ApiMethodAttrs { method: Some("method2".to_string()), positional_params: true };
 		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_ok());
 	}
 
 	#[test]
-	fn returns_an_error_if_attribue_exists() {
+	fn returns_error_if_attribute_exists() {
 		let mut a = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
 		let b = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
 		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_err());
