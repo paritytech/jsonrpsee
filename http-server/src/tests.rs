@@ -81,8 +81,6 @@ async fn batched_method_calls() {
 	]"#;
 	let response = http_request(req.into(), uri).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	log::info!("[test] Response body: {:?}", response.body);
-	// TODO: the response should be wrapped in `[]`, but it's a straight up `String`
 	assert_eq!(
 		response.body,
 		r#"[{"jsonrpc":"2.0","result":3,"id":1},{"jsonrpc":"2.0","result":7,"id":2},{"jsonrpc":"2.0","result":"lo","id":3},{"jsonrpc":"2.0","result":11,"id":4}]"#

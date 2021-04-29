@@ -203,11 +203,13 @@ impl Server {
 						// enum here and have to try each case individually: first the single request case, then the
 						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
 						// to [`serde_json::from_slice`] which is pretty annoying.
+						let mut single = true;
 						if let Ok(JsonRpcRequest { id, method: method_name, params, .. }) =
 							serde_json::from_slice::<JsonRpcRequest>(&body)
 						{
 							execute(id, &tx, &method_name, params);
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
+							single = false;
 							for JsonRpcRequest { id, method: method_name, params, .. } in batch {
 								execute(id, &tx, &method_name, params);
 							}
@@ -219,18 +221,24 @@ impl Server {
 							};
 							send_error(id, &tx, code.into());
 						}
-						// TODO: the
-						// [docs](https://docs.rs/futures/0.3.14/futures/channel/mpsc/struct.Receiver.html#method.close)
-						// seem to say that it's good practise to close the receiving end before reading all the items
-						// from the stream. Is it true?
 						rx.close();
-						// TODO: this allocates a `Vec` even for single requests, which is annoying. Find a better way
-						// (reusable Vec? Pre-allocate? Build a `String` directly?)
-						let responses = rx.collect::<Vec<String>>().await;
-						log::debug!("[service_fn] sending back: {:?}", responses);
-						// TODO: `join` will loop over the vec of responses again, which is dumb. Build the string
-						// directly.
-						Ok::<_, HyperError>(response::ok_response(responses.join(",")))
+						let response =
+							if single {
+								rx.next().await.expect("Sender is still alive managed by us above; qed")
+							} else {
+								let mut buf = String::with_capacity(2048);
+								buf.push('[');
+								let mut buf = rx.fold(buf, move |mut acc, response| async move {
+									acc = [acc, response].concat();
+									acc.push(',');
+									acc
+								}).await;
+								buf.pop();
+								buf.push(']');
+								buf
+							};
+						log::debug!("[service_fn] sending back: {:?}", response);
+						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))
 			}
