@@ -140,7 +140,7 @@ impl syn::parse::Parse for ApiMethod {
 		for attribute in &item.attrs {
 			if attribute.path.is_ident("rpc") {
 				let attrs = attribute.parse_args()?;
-				attributes.try_merge(attrs)?;
+				attributes.try_merge(attrs);
 			} else {
 				// TODO: do we copy the attributes somewhere in the output?
 			}
@@ -154,7 +154,9 @@ impl ApiMethodAttrs {
 	/// Tries to merge another `ApiMethodAttrs` within this one. Returns an error if there is an
 	/// overlap in the attributes.
 	// TODO: span
-	fn try_merge(&mut self, other: ApiMethodAttrs) -> syn::parse::Result<()> {
+	fn try_merge(&mut self, other: ApiMethodAttrs)
+	//  -> syn::parse::Result<()>
+	{
 		if let Some(method) = other.method {
 			if self.method.is_some() {
 				// TODO: return Err(())
@@ -166,7 +168,7 @@ impl ApiMethodAttrs {
 			self.positional_params = true;
 		}
 
-		Ok(())
+		// Ok(())
 	}
 }
 
