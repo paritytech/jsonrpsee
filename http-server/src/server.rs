@@ -197,13 +197,14 @@ impl Server {
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded();
+						// Is this a single request or a batch (or error)?
+						let mut single = true;
 
 						// For [technical reasons](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
 						// used with untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged
 						// enum here and have to try each case individually: first the single request case, then the
 						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
 						// to [`serde_json::from_slice`] which is pretty annoying.
-						let mut single = true;
 						if let Ok(JsonRpcRequest { id, method: method_name, params, .. }) =
 							serde_json::from_slice::<JsonRpcRequest>(&body)
 						{
