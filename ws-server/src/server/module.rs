@@ -1,7 +1,10 @@
 use crate::server::{RpcParams, SubscriptionId, SubscriptionSink};
-use jsonrpsee_types::error::Error;
-use jsonrpsee_types::traits::RpcMethod;
-use jsonrpsee_utils::server::{send_response, Methods};
+use jsonrpsee_types::{error::InvalidParams, traits::RpcMethod};
+use jsonrpsee_types::{
+	error::{Error, ServerCallError},
+	v2::error::{JsonRpcErrorCode, JsonRpcErrorObject},
+};
+use jsonrpsee_utils::server::{send_error, send_response, Methods};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
@@ -35,16 +38,17 @@ impl RpcModule {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: RpcMethod<R>,
+		F: RpcMethod<R, InvalidParams>,
 	{
 		self.verify_method_name(method_name)?;
 
 		self.methods.insert(
 			method_name,
 			Box::new(move |id, params, tx, _| {
-				let result = callback(params)?;
-
-				send_response(id, tx, result);
+				match callback(params) {
+					Ok(res) => send_response(id, tx, res),
+					Err(InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+				};
 
 				Ok(())
 			}),
@@ -95,7 +99,7 @@ impl RpcModule {
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					let sub_id = params.one()?;
+					let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
 					subscribers.lock().remove(&(conn, sub_id));
 
@@ -142,7 +146,7 @@ impl<Context> RpcContextModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(RpcParams, &Context) -> Result<R, Error> + Send + Sync + 'static,
+		F: Fn(RpcParams, &Context) -> Result<R, ServerCallError> + Send + Sync + 'static,
 	{
 		self.module.verify_method_name(method_name)?;
 
@@ -151,14 +155,20 @@ impl<Context> RpcContextModule<Context> {
 		self.module.methods.insert(
 			method_name,
 			Box::new(move |id, params, tx, _| {
-				let result = callback(params, &*ctx)?;
-
-				send_response(id, tx, result);
+				match callback(params, &*ctx) {
+					Ok(res) => send_response(id, tx, res),
+					Err(ServerCallError::InvalidParams(_)) => {
+						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
+					}
+					Err(ServerCallError::ContextFailed(err)) => {
+						let err = JsonRpcErrorObject { code: 1.into(), message: &err.to_string(), data: None };
+						send_error(id, tx, err)
+					}
+				};
 
 				Ok(())
 			}),
 		);
-
 		Ok(())
 	}
 

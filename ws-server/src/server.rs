@@ -37,7 +37,7 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use jsonrpsee_types::error::Error;
+use jsonrpsee_types::error::{Error, InvalidParams};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
@@ -105,7 +105,7 @@ impl Server {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: Fn(RpcParams) -> Result<R, Error> + Send + Sync + 'static,
+		F: Fn(RpcParams) -> Result<R, InvalidParams> + Send + Sync + 'static,
 	{
 		self.root.register_method(method_name, callback)
 	}

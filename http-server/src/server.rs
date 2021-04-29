@@ -36,7 +36,7 @@ use hyper::{
 	service::{make_service_fn, service_fn},
 	Error as HyperError,
 };
-use jsonrpsee_types::error::{Error, GenericTransportError};
+use jsonrpsee_types::error::{Error, GenericTransportError, InvalidParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
 use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
@@ -124,7 +124,7 @@ impl Server {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: Fn(RpcParams) -> Result<R, Error> + Send + Sync + 'static,
+		F: Fn(RpcParams) -> Result<R, InvalidParams> + Send + Sync + 'static,
 	{
 		self.root.register_method(method_name, callback)
 	}

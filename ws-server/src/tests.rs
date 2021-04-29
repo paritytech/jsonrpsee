@@ -59,6 +59,19 @@ async fn single_method_call_with_params_works() {
 }
 
 #[tokio::test]
+async fn single_method_call_with_faulty_params_returns_err() {
+	let _ = env_logger::try_init();
+	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+	tokio::spawn(server(server_started_tx));
+	let server_addr = server_started_rx.await.unwrap();
+	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, invalid_params(Id::Num(1)));
+}
+
+#[tokio::test]
 async fn single_method_send_binary() {
 	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
 	tokio::spawn(server(server_started_tx));

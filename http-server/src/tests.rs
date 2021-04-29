@@ -42,12 +42,21 @@ async fn single_method_call_with_params() {
 	let addr = server().await;
 	let uri = to_http_uri(addr);
 
-	std::thread::sleep(std::time::Duration::from_secs(2));
-
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = http_request(req.into(), uri).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
+}
+
+#[tokio::test]
+async fn single_method_call_with_faulty_params_returns_err() {
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
+	let response = http_request(req.into(), uri).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, invalid_params(Id::Num(1)));
 }
 
 #[tokio::test]

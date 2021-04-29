@@ -27,8 +27,8 @@ impl HttpClientBuilder {
 
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
-		let transport = HttpTransportClient::new(target, self.max_request_body_size)
-			.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let transport =
+			HttpTransportClient::new(target, self.max_request_body_size).map_err(|e| Error::Transport(Box::new(e)))?;
 		Ok(HttpClient { transport, request_id: AtomicU64::new(0) })
 	}
 }
@@ -55,7 +55,7 @@ impl Client for HttpClient {
 		self.transport
 			.send(serde_json::to_string(&notif).map_err(Error::ParseError)?)
 			.await
-			.map_err(|e| Error::TransportError(Box::new(e)))
+			.map_err(|e| Error::Transport(Box::new(e)))
 	}
 
 	/// Perform a request towards the server.
@@ -71,7 +71,7 @@ impl Client for HttpClient {
 			.transport
 			.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?)
 			.await
-			.map_err(|e| Error::TransportError(Box::new(e)))?;
+			.map_err(|e| Error::Transport(Box::new(e)))?;
 
 		let response: JsonRpcResponse<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
@@ -110,7 +110,7 @@ impl Client for HttpClient {
 			.transport
 			.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?)
 			.await
-			.map_err(|e| Error::TransportError(Box::new(e)))?;
+			.map_err(|e| Error::Transport(Box::new(e)))?;
 
 		let rps: Vec<JsonRpcResponse<_>> = match serde_json::from_slice(&body) {
 			Ok(response) => response,

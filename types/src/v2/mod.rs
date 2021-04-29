@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::error::Error;
 use serde::de::DeserializeOwned;
 use serde_json::value::RawValue;
 
@@ -12,11 +12,11 @@ pub mod request;
 pub mod response;
 
 /// Parse request ID from RawValue.
-pub fn parse_request_id<T: DeserializeOwned>(raw: Option<&RawValue>) -> Result<T, crate::Error> {
+pub fn parse_request_id<T: DeserializeOwned>(raw: Option<&RawValue>) -> Result<T, Error> {
 	match raw {
 		None => Err(Error::InvalidRequestId),
 		Some(v) => {
-			let val = serde_json::from_str(v.get()).map_err(Error::ParseError)?;
+			let val = serde_json::from_str(v.get()).map_err(|_| Error::InvalidRequestId)?;
 			Ok(val)
 		}
 	}

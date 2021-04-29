@@ -16,12 +16,37 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 	}
 }
 
+/// Invalid params.
+#[derive(Debug)]
+pub struct InvalidParams;
+
+/// Error that may occur when a server fails to execute provided closure/callback.
+#[derive(Debug, thiserror::Error)]
+pub enum ServerCallError {
+	#[error("Invalid params in the RPC call")]
+	/// InvalidParams,
+	InvalidParams(InvalidParams),
+	#[error("Provided context failed: {0}")]
+	/// Provided context/metadata failed.
+	ContextFailed(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl From<InvalidParams> for ServerCallError {
+	fn from(params: InvalidParams) -> Self {
+		Self::InvalidParams(params)
+	}
+}
+
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+	/// Error that may occur when a server fails to execute provided closure/callback.
+	/// Note, will most likely imply that the JSON-RPC request was valid.
+	#[error("Server call failed: {0}")]
+	ServerCall(ServerCallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
-	TransportError(#[source] Box<dyn std::error::Error + Send + Sync>),
+	Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
 	/// JSON-RPC request error.
 	#[error("JSON-RPC request error: {0:?}")]
 	Request(#[source] JsonRpcErrorAlloc),
@@ -34,7 +59,7 @@ pub enum Error {
 	/// The background task has been terminated.
 	#[error("The background task been terminated because: {0}; restart required")]
 	RestartNeeded(String),
-	/// Failed to parse the data that the server sent back to us.
+	/// Failed to parse the data.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] serde_json::Error),
 	/// Invalid subscription ID.

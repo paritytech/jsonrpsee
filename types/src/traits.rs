@@ -47,6 +47,6 @@ pub trait SubscriptionClient: Client {
 }
 
 /// JSON-RPC server interface for managing method calls.
-pub trait RpcMethod<R>: Fn(RpcParams) -> Result<R, Error> + Send + Sync + 'static {}
+pub trait RpcMethod<R, E>: Fn(RpcParams) -> Result<R, E> + Send + Sync + 'static {}
 
-impl<R, T> RpcMethod<R> for T where T: Fn(RpcParams) -> Result<R, Error> + Send + Sync + 'static {}
+impl<R, T, E> RpcMethod<R, E> for T where T: Fn(RpcParams) -> Result<R, E> + Send + Sync + 'static {}
