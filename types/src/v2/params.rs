@@ -102,7 +102,7 @@ impl<'a> RpcParams<'a> {
 /// If your type implement `Into<JsonValue>` call that favor of `serde_json::to:value` to
 /// construct the parameters. Because `serde_json::to_value` serializes the type which
 /// allocates whereas `Into<JsonValue>` doesn't in most cases.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum JsonRpcParams<'a> {
 	/// No params.

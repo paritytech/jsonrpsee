@@ -9,11 +9,12 @@ use jsonrpsee::{
 	ws_client::WsClientBuilder,
 };
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
-criterion_group!(benches, http_requests, websocket_requests, jsonrpsee_types_v2);
+criterion_group!(benches, http_requests, batched_http_requests, websocket_requests, jsonrpsee_types_v2);
 criterion_main!(benches);
 
 fn v2_serialize<'a>(req: JsonRpcCallSer<'a>) -> String {
@@ -47,6 +48,13 @@ pub fn http_requests(crit: &mut Criterion) {
 	run_concurrent_round_trip(&rt, crit, client.clone(), "http_concurrent_round_trip");
 }
 
+pub fn batched_http_requests(crit: &mut Criterion) {
+	let rt = TokioRuntime::new().unwrap();
+	let url = rt.block_on(helpers::http_server());
+	let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
+	run_round_trip_with_batch(&rt, crit, client.clone(), "batched_http_round_trip", 10);
+}
+
 pub fn websocket_requests(crit: &mut Criterion) {
 	let rt = TokioRuntime::new().unwrap();
 	let url = rt.block_on(helpers::ws_server());
@@ -61,6 +69,17 @@ fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Clie
 		b.iter(|| {
 			rt.block_on(async {
 				black_box(client.request::<String>("say_hello", JsonRpcParams::NoParams).await.unwrap());
+			})
+		})
+	});
+}
+
+fn run_round_trip_with_batch(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Client>, name: &str, batch_size: usize) {
+	let batch = vec![("say_hello", JsonRpcParams::NoParams); batch_size];
+	crit.bench_function(name, |b| {
+		b.iter(|| {
+			rt.block_on(async {
+				black_box(client.batch_request::<String>(batch.clone()).await.unwrap());
 			})
 		})
 	});
