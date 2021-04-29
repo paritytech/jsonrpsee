@@ -227,21 +227,22 @@ impl Server {
 							send_error(id, &tx, code.into());
 						}
 						rx.close();
-						let response =
-							if single {
-								rx.next().await.expect("Sender is still alive managed by us above; qed")
-							} else {
-								let mut buf = String::with_capacity(2048);
-								buf.push('[');
-								let mut buf = rx.fold(buf, move |mut acc, response| async move {
+						let response = if single {
+							rx.next().await.expect("Sender is still alive managed by us above; qed")
+						} else {
+							let mut buf = String::with_capacity(2048);
+							buf.push('[');
+							let mut buf = rx
+								.fold(buf, move |mut acc, response| async move {
 									acc = [acc, response].concat();
 									acc.push(',');
 									acc
-								}).await;
-								buf.pop();
-								buf.push(']');
-								buf
-							};
+								})
+								.await;
+							buf.pop();
+							buf.push(']');
+							buf
+						};
 						log::debug!("[service_fn] sending back: {:?}", response);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}

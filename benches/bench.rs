@@ -74,7 +74,13 @@ fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Clie
 	});
 }
 
-fn run_round_trip_with_batch(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Client>, name: &str, batch_size: usize) {
+fn run_round_trip_with_batch(
+	rt: &TokioRuntime,
+	crit: &mut Criterion,
+	client: Arc<impl Client>,
+	name: &str,
+	batch_size: usize,
+) {
 	let batch = vec![("say_hello", JsonRpcParams::NoParams); batch_size];
 	crit.bench_function(name, |b| {
 		b.iter(|| {

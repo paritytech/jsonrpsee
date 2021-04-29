@@ -97,10 +97,7 @@ async fn batched_notifications() {
 	let response = http_request(req.into(), uri).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	// Note: this is *not* according to spec. Response should be the empty string, `""`.
-	assert_eq!(
-		response.body,
-		r#"[{"jsonrpc":"2.0","result":"","id":null},{"jsonrpc":"2.0","result":"","id":null}]"#
-	);
+	assert_eq!(response.body, r#"[{"jsonrpc":"2.0","result":"","id":null},{"jsonrpc":"2.0","result":"","id":null}]"#);
 }
 
 #[tokio::test]
