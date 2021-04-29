@@ -140,7 +140,7 @@ impl syn::parse::Parse for ApiMethod {
 		for attribute in &item.attrs {
 			if attribute.path.is_ident("rpc") {
 				let attrs = attribute.parse_args()?;
-				attributes.try_merge(attrs);
+				attributes.try_merge(attrs)?;
 			} else {
 				// TODO: do we copy the attributes somewhere in the output?
 			}
@@ -153,13 +153,10 @@ impl syn::parse::Parse for ApiMethod {
 impl ApiMethodAttrs {
 	/// Tries to merge another `ApiMethodAttrs` within this one. Returns an error if there is an
 	/// overlap in the attributes.
-	// TODO: span
-	fn try_merge(&mut self, other: ApiMethodAttrs)
-	//  -> syn::parse::Result<()>
-	{
+	fn try_merge(&mut self, other: ApiMethodAttrs) -> syn::parse::Result<()> {
 		if let Some(method) = other.method {
-			if self.method.is_some() {
-				// TODO: return Err(())
+			if self.method.as_deref() == Some(&method) {
+				return Err(syn::Error::new(method.span(), format!("Duplicate method attribute found: {}", method)));
 			}
 			self.method = Some(method);
 		}
@@ -168,7 +165,7 @@ impl ApiMethodAttrs {
 			self.positional_params = true;
 		}
 
-		// Ok(())
+		Ok(())
 	}
 }
 
@@ -218,5 +215,31 @@ impl syn::parse::Parse for ApiMethods {
 		}
 
 		Ok(out)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn returns_ok_if_attribue_does_not_exists() {
+		let mut a = ApiMethodAttrs { method: None, positional_params: true };
+		let b = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
+		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_ok());
+	}
+
+	#[test]
+	fn returns_an_error_if_attribue_already_exists() {
+		let mut a = ApiMethodAttrs { method: Some("method1".to_string()), positional_params: true };
+		let b = ApiMethodAttrs { method: Some("method2".to_string()), positional_params: true };
+		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_ok());
+	}
+
+	#[test]
+	fn returns_an_error_if_attribue_exists() {
+		let mut a = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
+		let b = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
+		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_err());
 	}
 }
