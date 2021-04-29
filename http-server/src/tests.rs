@@ -38,6 +38,18 @@ async fn single_method_call_works() {
 }
 
 #[tokio::test]
+async fn invalid_single_method_call() {
+	let _ = env_logger::try_init();
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":1, "params": "bar"}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, invalid_request(Id::Null));
+}
+
+#[tokio::test]
 async fn single_method_call_with_params() {
 	let addr = server().await;
 	let uri = to_http_uri(addr);
@@ -50,24 +62,8 @@ async fn single_method_call_with_params() {
 	assert_eq!(response.body, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
 
-// Batch request example from spec (https://www.jsonrpc.org/specification)
-// --> [
-//         {"jsonrpc": "2.0", "method": "sum", "params": [1,2,4], "id": "1"},
-//         {"jsonrpc": "2.0", "method": "notify_hello", "params": [7]},
-//         {"jsonrpc": "2.0", "method": "subtract", "params": [42,23], "id": "2"},
-//         {"foo": "boo"},
-//         {"jsonrpc": "2.0", "method": "foo.get", "params": {"name": "myself"}, "id": "5"},
-//         {"jsonrpc": "2.0", "method": "get_data", "id": "9"}
-//     ]
-// <-- [
-//         {"jsonrpc": "2.0", "result": 7, "id": "1"},
-//         {"jsonrpc": "2.0", "result": 19, "id": "2"},
-//         {"jsonrpc": "2.0", "error": {"code": -32600, "message": "Invalid Request"}, "id": null},
-//         {"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": "5"},
-//         {"jsonrpc": "2.0", "result": ["hello", 5], "id": "9"}
-//     ]
 #[tokio::test]
-async fn batched_method_calls() {
+async fn valid_batched_method_calls() {
 	let _ = env_logger::try_init();
 
 	let addr = server().await;
@@ -85,6 +81,63 @@ async fn batched_method_calls() {
 		response.body,
 		r#"[{"jsonrpc":"2.0","result":3,"id":1},{"jsonrpc":"2.0","result":7,"id":2},{"jsonrpc":"2.0","result":"lo","id":3},{"jsonrpc":"2.0","result":11,"id":4}]"#
 	);
+}
+
+#[tokio::test]
+async fn batched_notifications() {
+	let _ = env_logger::try_init();
+
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"[
+        {"jsonrpc": "2.0", "method": "notif", "params": [1,2,4]},
+        {"jsonrpc": "2.0", "method": "notif", "params": [7]}
+	]"#;
+	let response = http_request(req.into(), uri).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	// Note: this is *not* according to spec. Response should be the empty string, `""`.
+	assert_eq!(
+		response.body,
+		r#"[{"jsonrpc":"2.0","result":"","id":null},{"jsonrpc":"2.0","result":"","id":null}]"#
+	);
+}
+
+#[tokio::test]
+async fn invalid_batched_method_calls() {
+	let _ = env_logger::try_init();
+
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	// batch with no requests
+	let req = r#"[]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, invalid_request(Id::Null));
+
+	// batch with invalid request
+	let req = r#"[123]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	// Note: according to the spec the `id` should be `null` here, not 123.
+	assert_eq!(response.body, invalid_request(Id::Num(123)));
+
+	// batch with invalid request
+	let req = r#"[1, 2, 3]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	// Note: according to the spec this should return an array of three `Invalid Request`s
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	// invalid JSON in batch
+	let req = r#"[
+		{"jsonrpc": "2.0", "method": "sum", "params": [1,2,4], "id": "1"},
+		{"jsonrpc": "2.0", "method"
+	  ]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, parse_error(Id::Null));
 }
 
 #[tokio::test]

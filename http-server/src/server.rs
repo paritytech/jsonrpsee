@@ -200,7 +200,7 @@ impl Server {
 						// Is this a single request or a batch (or error)?
 						let mut single = true;
 
-						// For [technical reasons](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
+						// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
 						// used with untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged
 						// enum here and have to try each case individually: first the single request case, then the
 						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
@@ -210,9 +210,13 @@ impl Server {
 						{
 							execute(id, &tx, &method_name, params);
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
-							single = false;
-							for JsonRpcRequest { id, method: method_name, params, .. } in batch {
-								execute(id, &tx, &method_name, params);
+							if batch.len() > 0 {
+								single = false;
+								for JsonRpcRequest { id, method: method_name, params, .. } in batch {
+									execute(id, &tx, &method_name, params);
+								}
+							} else {
+								send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
 						} else {
 							log::error!("[service_fn], Cannot parse request body={:?}", String::from_utf8_lossy(&body));
