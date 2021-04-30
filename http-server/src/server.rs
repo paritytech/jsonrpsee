@@ -257,7 +257,8 @@ impl Server {
 	}
 }
 
-// Collect the results of all computations sent back on the ['Stream'] into a single `String` appropriately mapped in `[`/`]`.
+// Collect the results of all computations sent back on the ['Stream'] into a single `String` appropriately wrapped in
+// `[`/`]`.
 async fn collect_batch_responses(rx: mpsc::UnboundedReceiver<String>) -> String {
 	let mut buf = String::with_capacity(2048);
 	buf.push('[');
