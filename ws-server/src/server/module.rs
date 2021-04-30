@@ -1,5 +1,5 @@
 use crate::server::{RpcParams, SubscriptionId, SubscriptionSink};
-use jsonrpsee_types::{error::InvalidParams, traits::RpcMethod};
+use jsonrpsee_types::{error::InvalidParams, traits::RpcMethod, v2::error::CONTEXT_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::{Error, ServerCallError},
 	v2::error::{JsonRpcErrorCode, JsonRpcErrorObject},
@@ -161,7 +161,7 @@ impl<Context> RpcContextModule<Context> {
 						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
 					}
 					Err(ServerCallError::ContextFailed(err)) => {
-						let err = JsonRpcErrorObject { code: 1.into(), message: &err.to_string(), data: None };
+						let err = JsonRpcErrorObject { code: JsonRpcErrorCode::ServerError(CONTEXT_EXECUTION_FAILED_CODE), message: &err.to_string(), data: None };
 						send_error(id, tx, err)
 					}
 				};

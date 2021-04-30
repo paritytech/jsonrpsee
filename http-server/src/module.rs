@@ -1,4 +1,4 @@
-use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject};
+use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CONTEXT_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::{Error, InvalidParams, ServerCallError},
 	traits::RpcMethod,
@@ -103,7 +103,7 @@ impl<Context> RpcContextModule<Context> {
 						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
 					}
 					Err(ServerCallError::ContextFailed(err)) => {
-						let err = JsonRpcErrorObject { code: 1.into(), message: &err.to_string(), data: None };
+						let err = JsonRpcErrorObject { code: JsonRpcErrorCode::ServerError(CONTEXT_EXECUTION_FAILED_CODE), message: &err.to_string(), data: None };
 						send_error(id, tx, err)
 					}
 				};

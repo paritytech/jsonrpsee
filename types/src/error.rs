@@ -20,7 +20,7 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 #[derive(Debug)]
 pub struct InvalidParams;
 
-/// Error that may occur when a server fails to execute provided closure/callback.
+/// Error that may occur when a server fails to execute a call.
 #[derive(Debug, thiserror::Error)]
 pub enum ServerCallError {
 	#[error("Invalid params in the RPC call")]
@@ -40,8 +40,7 @@ impl From<InvalidParams> for ServerCallError {
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-	/// Error that may occur when a server fails to execute provided closure/callback.
-	/// Note, will most likely imply that the JSON-RPC request was valid.
+	/// Error that may occur when a server fails to execute a call.
 	#[error("Server call failed: {0}")]
 	ServerCall(ServerCallError),
 	/// Networking error or error on the low-level protocol layer.
