@@ -47,6 +47,7 @@ use serde::Serialize;
 use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
 use std::{
+	cmp,
 	net::{SocketAddr, TcpListener},
 	sync::Arc,
 };
@@ -158,6 +159,9 @@ impl Server {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
 
+					// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
+					// the params from the request. The result of the computation is sent back over the `tx` channel and
+					// the result(s) are collected into a `String` and sent back over the wire.
 					let execute =
 						move |id: Option<&RawValue>, tx: RpcSender, method_name: &str, params: Option<&RawValue>| {
 							if let Some(method) = methods.get(method_name) {
@@ -175,6 +179,9 @@ impl Server {
 								send_error(id, tx, JsonRpcErrorCode::MethodNotFound.into());
 							}
 						};
+
+					// Run some validation on the http request, then read the body and try to deserialize it into one of
+					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
 						if let Err(e) = access_control_is_valid(&access_control, &request) {
 							return Ok::<_, HyperError>(e);
@@ -220,32 +227,25 @@ impl Server {
 								send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
 						} else {
-							log::error!("[service_fn], Cannot parse request body={:?}", String::from_utf8_lossy(&body));
+							log::error!(
+								"[service_fn], Cannot parse request body={:?}",
+								String::from_utf8_lossy(&body[..cmp::min(body.len(), 1024)])
+							);
 							let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
 								Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
 								Err(_) => (None, JsonRpcErrorCode::ParseError),
 							};
 							send_error(id, &tx, code.into());
 						}
-						// Closes the receiving half of a channel without dropping it. This prevents any further messages from being sent on the channel.
+						// Closes the receiving half of a channel without dropping it. This prevents any further
+						// messages from being sent on the channel.
 						rx.close();
 						let response = if single {
 							rx.next().await.expect("Sender is still alive managed by us above; qed")
 						} else {
-							let mut buf = String::with_capacity(2048);
-							buf.push('[');
-							let mut buf = rx
-								.fold(buf, move |mut acc, response| async move {
-									acc = [acc, response].concat();
-									acc.push(',');
-									acc
-								})
-								.await;
-							buf.pop();
-							buf.push(']');
-							buf
+							collect_batch_responses(rx).await
 						};
-						log::debug!("[service_fn] sending back: {:?}", response);
+						log::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))
@@ -255,6 +255,23 @@ impl Server {
 		let server = self.listener.serve(make_service);
 		server.await.map_err(Into::into)
 	}
+}
+
+// Collect the results of all computations sent back on the ['Stream'] into a single `String` appropriately mapped in `[`/`]`.
+async fn collect_batch_responses(rx: mpsc::UnboundedReceiver<String>) -> String {
+	let mut buf = String::with_capacity(2048);
+	buf.push('[');
+	let mut buf = rx
+		.fold(buf, |mut acc, response| async {
+			acc = [acc, response].concat();
+			acc.push(',');
+			acc
+		})
+		.await;
+	// Remove trailing comma
+	buf.pop();
+	buf.push(']');
+	buf
 }
 
 // Checks to that access control of the received request is the same as configured.
