@@ -227,6 +227,7 @@ impl Server {
 							};
 							send_error(id, &tx, code.into());
 						}
+						// Closes the receiving half of a channel without dropping it. This prevents any further messages from being sent on the channel.
 						rx.close();
 						let response = if single {
 							rx.next().await.expect("Sender is still alive managed by us above; qed")
