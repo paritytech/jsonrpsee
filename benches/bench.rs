@@ -9,7 +9,6 @@ use jsonrpsee::{
 	ws_client::WsClientBuilder,
 };
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
