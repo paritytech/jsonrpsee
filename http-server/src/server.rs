@@ -205,6 +205,7 @@ impl Server {
 						// enum here and have to try each case individually: first the single request case, then the
 						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
 						// to [`serde_json::from_slice`] which is pretty annoying.
+						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(JsonRpcRequest { id, method: method_name, params, .. }) =
 							serde_json::from_slice::<JsonRpcRequest>(&body)
 						{
