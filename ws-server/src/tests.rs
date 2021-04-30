@@ -1,16 +1,15 @@
 #![cfg(test)]
 
-use crate::WsServer;
-use futures_channel::oneshot::{self, Sender};
+use crate::{RpcContextModule, WsServer};
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, WebSocketTestClient};
-use jsonrpsee_types::error::Error;
+use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
+use jsonrpsee_types::error::{Error, ServerCallError};
 use serde_json::Value as JsonValue;
 use std::net::SocketAddr;
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
-pub async fn server(server_started: Sender<SocketAddr>) {
+pub async fn server() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
 
 	server
@@ -26,17 +25,45 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 			Ok(sum)
 		})
 		.unwrap();
-	server_started.send(server.local_addr().unwrap()).unwrap();
+	let addr = server.local_addr().unwrap();
 
-	server.start().await;
+	tokio::spawn(async { server.start().await });
+	addr
+}
+
+/// Run server with user provided context.
+pub async fn server_with_context() -> SocketAddr {
+	let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
+
+	let ctx = TestContext;
+	let mut rpc_ctx = RpcContextModule::new(ctx);
+
+	rpc_ctx
+		.register_method("should_err", |_p, ctx| {
+			let _ = ctx.err().map_err(|e| ServerCallError::ContextFailed(e.into()))?;
+			Ok("err")
+		})
+		.unwrap();
+
+	rpc_ctx
+		.register_method("should_ok", |_p, ctx| {
+			let _ = ctx.ok().map_err(|e| ServerCallError::ContextFailed(e.into()))?;
+			Ok("ok")
+		})
+		.unwrap();
+
+	let rpc_module = rpc_ctx.into_module();
+	server.register_module(rpc_module).unwrap();
+	let addr = server.local_addr().unwrap();
+
+	tokio::spawn(async { server.start().await });
+	addr
 }
 
 #[tokio::test]
 async fn single_method_call_works() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	for i in 0..10 {
 		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
@@ -48,10 +75,8 @@ async fn single_method_call_works() {
 
 #[tokio::test]
 async fn single_method_call_with_params_works() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
@@ -61,10 +86,8 @@ async fn single_method_call_with_params_works() {
 #[tokio::test]
 async fn single_method_call_with_faulty_params_returns_err() {
 	let _ = env_logger::try_init();
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
@@ -72,11 +95,29 @@ async fn single_method_call_with_faulty_params_returns_err() {
 }
 
 #[tokio::test]
+async fn single_method_call_with_faulty_context() {
+	let addr = server_with_context().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, invalid_context("RPC context failed", Id::Num(1)));
+}
+
+#[tokio::test]
+async fn single_method_call_with_ok_context() {
+	let addr = server_with_context().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, ok_response("ok".into(), Id::Num(1)));
+}
+
+#[tokio::test]
 async fn single_method_send_binary() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = client.send_request_binary(req.as_bytes()).await.unwrap();
@@ -85,10 +126,8 @@ async fn single_method_send_binary() {
 
 #[tokio::test]
 async fn should_return_method_not_found() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":"foo"}"#;
 	let response = client.send_request_text(req).await.unwrap();
@@ -97,11 +136,9 @@ async fn should_return_method_not_found() {
 
 #[tokio::test]
 async fn invalid_json_id_missing_value() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
@@ -110,11 +147,9 @@ async fn invalid_json_id_missing_value() {
 
 #[tokio::test]
 async fn invalid_request_object() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, invalid_request(Id::Num(1)));
@@ -144,11 +179,9 @@ async fn register_same_subscribe_unsubscribe_is_err() {
 
 #[tokio::test]
 async fn parse_error_request_should_not_close_connection() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
 	let invalid_request = r#"{"jsonrpc":"2.0","method":"bar","params":[1,"id":99}"#;
 	let response1 = client.send_request_text(invalid_request).await.unwrap();
 	assert_eq!(response1, parse_error(Id::Null));
@@ -159,11 +192,9 @@ async fn parse_error_request_should_not_close_connection() {
 
 #[tokio::test]
 async fn invalid_request_should_not_close_connection() {
-	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
-	tokio::spawn(server(server_started_tx));
-	let server_addr = server_started_rx.await.unwrap();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
-	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, invalid_request(Id::Num(1)));

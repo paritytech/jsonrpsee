@@ -96,7 +96,6 @@ pub const METHOD_NOT_FOUND_MSG: &str = "Method not found";
 /// Reserved for implementation-defined server-errors.
 pub const SERVER_ERROR_MSG: &str = "Server error";
 
-
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Copy, Clone)]
 pub enum JsonRpcErrorCode {
