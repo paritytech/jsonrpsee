@@ -11,7 +11,6 @@ documentation = "https://docs.rs/jsonrpsee-ws-server"
 
 [dependencies]
 anyhow = "1.0.34"
-env_logger = "0.8"
 futures-channel = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["io"] }
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.6" }
@@ -28,5 +27,6 @@ tokio-stream = { version = "0.1.1", features = ["net"] }
 tokio-util = { version = "0.6", features = ["compat"] }
 
 [dev-dependencies]
+env_logger = "0.8"
 jsonrpsee-test-utils = { path = "../test-utils" }
 jsonrpsee-ws-client = { path = "../ws-client" }
