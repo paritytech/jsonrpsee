@@ -30,10 +30,10 @@ The library is still under development; do not use in production.
 
 ## Examples
 
-- [HTTP](./examples/examples/http.rs)
-- [WebSocket](./examples/examples/ws.rs)
-- [WebSocket pubsub](./examples/examples/ws_subscription.rs)
-- [API generation with proc macro](./examples/examples/proc_macro.rs)
+- [HTTP](./examples/http.rs)
+- [WebSocket](./examples/ws.rs)
+- [WebSocket pubsub](./examples/ws_subscription.rs)
+- [API generation with proc macro](./examples/proc_macro.rs)
 
 ## Roadmap
 
