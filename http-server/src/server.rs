@@ -210,7 +210,7 @@ impl Server {
 						{
 							execute(id, &tx, &method_name, params);
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
-							if batch.len() > 0 {
+							if !batch.is_empty() {
 								single = false;
 								for JsonRpcRequest { id, method: method_name, params, .. } in batch {
 									execute(id, &tx, &method_name, params);
