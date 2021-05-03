@@ -169,7 +169,7 @@ impl Server {
 								// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
 								if let Err(err) = (method)(id, params, &tx, 0) {
 									log::error!(
-										"execution of method call {} failed: {:?}, request id={:?}",
+										"execution of method call '{}' failed: {:?}, request id={:?}",
 										method_name,
 										err,
 										id
