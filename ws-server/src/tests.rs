@@ -3,7 +3,7 @@
 use crate::{RpcContextModule, WsServer};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
-use jsonrpsee_types::error::{Error, ServerCallError};
+use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
 use std::net::SocketAddr;
 
@@ -40,14 +40,14 @@ pub async fn server_with_context() -> SocketAddr {
 
 	rpc_ctx
 		.register_method("should_err", |_p, ctx| {
-			let _ = ctx.err().map_err(|e| ServerCallError::ContextFailed(e.into()))?;
+			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("err")
 		})
 		.unwrap();
 
 	rpc_ctx
 		.register_method("should_ok", |_p, ctx| {
-			let _ = ctx.ok().map_err(|e| ServerCallError::ContextFailed(e.into()))?;
+			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("ok")
 		})
 		.unwrap();

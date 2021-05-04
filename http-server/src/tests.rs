@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use crate::{HttpServerBuilder, RpcContextModule};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
-use jsonrpsee_types::error::ServerCallError;
+use jsonrpsee_types::error::CallError;
 use serde_json::Value as JsonValue;
 
 async fn server() -> SocketAddr {
@@ -33,14 +33,14 @@ pub async fn server_with_context() -> SocketAddr {
 
 	rpc_ctx
 		.register_method("should_err", |_p, ctx| {
-			let _ = ctx.err().map_err(|e| ServerCallError::ContextFailed(e.into()))?;
+			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("err")
 		})
 		.unwrap();
 
 	rpc_ctx
 		.register_method("should_ok", |_p, ctx| {
-			let _ = ctx.ok().map_err(|e| ServerCallError::ContextFailed(e.into()))?;
+			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("ok")
 		})
 		.unwrap();

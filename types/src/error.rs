@@ -20,18 +20,18 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 #[derive(Debug)]
 pub struct InvalidParams;
 
-/// Error that may occur when a server fails to execute a call.
+/// Error that occurs when a call failed.
 #[derive(Debug, thiserror::Error)]
-pub enum ServerCallError {
+pub enum CallError {
 	#[error("Invalid params in the RPC call")]
-	/// InvalidParams,
+	/// Invalid params in the call.
 	InvalidParams(InvalidParams),
-	#[error("Provided context failed: {0}")]
-	/// Provided context/metadata failed.
-	ContextFailed(#[source] Box<dyn std::error::Error + Send + Sync>),
+	#[error("RPC Call failed: {0}")]
+	/// The call failed.
+	Failed(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
-impl From<InvalidParams> for ServerCallError {
+impl From<InvalidParams> for CallError {
 	fn from(params: InvalidParams) -> Self {
 		Self::InvalidParams(params)
 	}
@@ -40,9 +40,9 @@ impl From<InvalidParams> for ServerCallError {
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-	/// Error that may occur when a server fails to execute a call.
+	/// Error that occurs when a call failed.
 	#[error("Server call failed: {0}")]
-	ServerCall(ServerCallError),
+	Call(CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -67,9 +67,6 @@ pub enum Error {
 	/// Invalid request ID.
 	#[error("Invalid request ID")]
 	InvalidRequestId,
-	/// Invalid params in the RPC call.
-	#[error("Invalid params in the RPC call")]
-	InvalidParams,
 	/// A request with the same request ID has already been registered.
 	#[error("A request with the same request ID has already been registered")]
 	DuplicateRequestId,
