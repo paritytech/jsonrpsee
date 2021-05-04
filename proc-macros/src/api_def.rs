@@ -153,11 +153,10 @@ impl syn::parse::Parse for ApiMethod {
 impl ApiMethodAttrs {
 	/// Tries to merge another `ApiMethodAttrs` within this one. Returns an error if there is an
 	/// overlap in the attributes.
-	// TODO: span
 	fn try_merge(&mut self, other: ApiMethodAttrs) -> syn::parse::Result<()> {
 		if let Some(method) = other.method {
-			if self.method.is_some() {
-				// TODO: return Err(())
+			if self.method.as_deref() == Some(&method) {
+				return Err(syn::Error::new(method.span(), format!("Duplicate method attribute found: {}", method)));
 			}
 			self.method = Some(method);
 		}
@@ -216,5 +215,31 @@ impl syn::parse::Parse for ApiMethods {
 		}
 
 		Ok(out)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn returns_ok_if_attribute_is_none() {
+		let mut a = ApiMethodAttrs { method: None, positional_params: true };
+		let b = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
+		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_ok());
+	}
+
+	#[test]
+	fn returns_ok_if_attribute_is_some_other_name() {
+		let mut a = ApiMethodAttrs { method: Some("method1".to_string()), positional_params: true };
+		let b = ApiMethodAttrs { method: Some("method2".to_string()), positional_params: true };
+		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_ok());
+	}
+
+	#[test]
+	fn returns_error_if_attribute_exists() {
+		let mut a = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
+		let b = ApiMethodAttrs { method: Some("method".to_string()), positional_params: true };
+		assert!(ApiMethodAttrs::try_merge(&mut a, b).is_err());
 	}
 }

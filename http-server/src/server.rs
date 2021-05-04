@@ -39,10 +39,15 @@ use hyper::{
 use jsonrpsee_types::error::{Error, GenericTransportError, InvalidParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
-use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::send_error};
+use jsonrpsee_utils::{
+	hyper_helpers::read_response_to_body,
+	server::{send_error, RpcSender},
+};
 use serde::Serialize;
+use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
 use std::{
+	cmp,
 	net::{SocketAddr, TcpListener},
 	sync::Arc,
 };
@@ -153,6 +158,30 @@ impl Server {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
+
+					// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
+					// the params from the request. The result of the computation is sent back over the `tx` channel and
+					// the result(s) are collected into a `String` and sent back over the wire.
+					let execute =
+						move |id: Option<&RawValue>, tx: RpcSender, method_name: &str, params: Option<&RawValue>| {
+							if let Some(method) = methods.get(method_name) {
+								let params = RpcParams::new(params.map(|params| params.get()));
+								// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+								if let Err(err) = (method)(id, params, &tx, 0) {
+									log::error!(
+										"execution of method call '{}' failed: {:?}, request id={:?}",
+										method_name,
+										err,
+										id
+									);
+								}
+							} else {
+								send_error(id, tx, JsonRpcErrorCode::MethodNotFound.into());
+							}
+						};
+
+					// Run some validation on the http request, then read the body and try to deserialize it into one of
+					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
 						if let Err(e) = access_control_is_valid(&access_control, &request) {
 							return Ok::<_, HyperError>(e);
@@ -175,31 +204,48 @@ impl Server {
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded();
+						// Is this a single request or a batch (or error)?
+						let mut single = true;
 
-						match serde_json::from_slice::<JsonRpcRequest>(&body) {
-							Ok(req) => {
-								log::debug!("recv: {:?}", req);
-								let params = RpcParams::new(req.params.map(|params| params.get()));
-								if let Some(method) = methods.get(&*req.method) {
-									// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-									if let Err(err) = (method)(req.id, params, &tx, 0) {
-										log::error!("method_call: {} failed: {:?}", req.method, err);
-									}
-								} else {
-									send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+						// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
+						// used with untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged
+						// enum here and have to try each case individually: first the single request case, then the
+						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
+						// to [`serde_json::from_slice`] which is pretty annoying.
+						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
+						if let Ok(JsonRpcRequest { id, method: method_name, params, .. }) =
+							serde_json::from_slice::<JsonRpcRequest>(&body)
+						{
+							execute(id, &tx, &method_name, params);
+						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
+							if !batch.is_empty() {
+								single = false;
+								for JsonRpcRequest { id, method: method_name, params, .. } in batch {
+									execute(id, &tx, &method_name, params);
 								}
+							} else {
+								send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
-							Err(_e) => {
-								let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
-									Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-									Err(_) => (None, JsonRpcErrorCode::ParseError),
-								};
-								send_error(id, &tx, code.into());
-							}
+						} else {
+							log::error!(
+								"[service_fn], Cannot parse request body={:?}",
+								String::from_utf8_lossy(&body[..cmp::min(body.len(), 1024)])
+							);
+							let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
+								Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
+								Err(_) => (None, JsonRpcErrorCode::ParseError),
+							};
+							send_error(id, &tx, code.into());
+						}
+						// Closes the receiving half of a channel without dropping it. This prevents any further
+						// messages from being sent on the channel.
+						rx.close();
+						let response = if single {
+							rx.next().await.expect("Sender is still alive managed by us above; qed")
+						} else {
+							collect_batch_responses(rx).await
 						};
-
-						let response = rx.next().await.expect("Sender is still alive managed by us above; qed");
-						log::debug!("send: {:?}", response);
+						log::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))
@@ -209,6 +255,24 @@ impl Server {
 		let server = self.listener.serve(make_service);
 		server.await.map_err(Into::into)
 	}
+}
+
+// Collect the results of all computations sent back on the ['Stream'] into a single `String` appropriately wrapped in
+// `[`/`]`.
+async fn collect_batch_responses(rx: mpsc::UnboundedReceiver<String>) -> String {
+	let mut buf = String::with_capacity(2048);
+	buf.push('[');
+	let mut buf = rx
+		.fold(buf, |mut acc, response| async {
+			acc = [acc, response].concat();
+			acc.push(',');
+			acc
+		})
+		.await;
+	// Remove trailing comma
+	buf.pop();
+	buf.push(']');
+	buf
 }
 
 // Checks to that access control of the received request is the same as configured.

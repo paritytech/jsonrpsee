@@ -13,7 +13,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
-criterion_group!(benches, http_requests, websocket_requests, jsonrpsee_types_v2);
+criterion_group!(benches, http_requests, batched_http_requests, websocket_requests, jsonrpsee_types_v2);
 criterion_main!(benches);
 
 fn v2_serialize<'a>(req: JsonRpcCallSer<'a>) -> String {
@@ -47,6 +47,13 @@ pub fn http_requests(crit: &mut Criterion) {
 	run_concurrent_round_trip(&rt, crit, client.clone(), "http_concurrent_round_trip");
 }
 
+pub fn batched_http_requests(crit: &mut Criterion) {
+	let rt = TokioRuntime::new().unwrap();
+	let url = rt.block_on(helpers::http_server());
+	let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
+	run_round_trip_with_batch(&rt, crit, client.clone(), "http batch requests");
+}
+
 pub fn websocket_requests(crit: &mut Criterion) {
 	let rt = TokioRuntime::new().unwrap();
 	let url = rt.block_on(helpers::ws_server());
@@ -64,6 +71,19 @@ fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Clie
 			})
 		})
 	});
+}
+
+/// Benchmark http batch requests over batch sizes of 2, 5, 10, 50 and 100 RPCs in each batch.
+fn run_round_trip_with_batch(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Client>, name: &str) {
+	let mut group = crit.benchmark_group(name);
+	for batch_size in [2, 5, 10, 50, 100usize].iter() {
+		let batch = vec![("say_hello", JsonRpcParams::NoParams); *batch_size];
+		group.throughput(Throughput::Elements(*batch_size as u64));
+		group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
+			b.iter(|| rt.block_on(async { client.batch_request::<String>(batch.clone()).await.unwrap() }))
+		});
+	}
+	group.finish();
 }
 
 fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
