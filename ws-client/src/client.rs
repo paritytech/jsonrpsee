@@ -253,7 +253,7 @@ impl<'a> WsClientBuilder<'a> {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 
-		let (sockaddrs, host, mode) = parse_url(url).map_err(|e| Error::TransportError(Box::new(e)))?;
+		let (sockaddrs, host, mode) = parse_url(url).map_err(|e| Error::Transport(Box::new(e)))?;
 
 		let builder = WsTransportClientBuilder {
 			sockaddrs,
@@ -265,7 +265,7 @@ impl<'a> WsClientBuilder<'a> {
 			max_request_body_size: self.max_request_body_size,
 		};
 
-		let (sender, receiver) = builder.build().await.map_err(|e| Error::TransportError(Box::new(e)))?;
+		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(Box::new(e)))?;
 
 		async_std::task::spawn(async move {
 			background_task(sender, receiver, from_front, err_tx, max_capacity_per_subscription).await;
@@ -518,7 +518,7 @@ async fn background_task(
 						.expect("ID unused checked above; qed"),
 					Err(e) => {
 						log::warn!("[backend]: client request failed: {:?}", e);
-						let _ = request.send_back.map(|s| s.send(Err(Error::TransportError(Box::new(e)))));
+						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(Box::new(e)))));
 					}
 				}
 			}
@@ -535,7 +535,7 @@ async fn background_task(
 					.expect("Request ID unused checked above; qed"),
 				Err(e) => {
 					log::warn!("[backend]: client subscription failed: {:?}", e);
-					let _ = sub.send_back.send(Err(Error::TransportError(Box::new(e))));
+					let _ = sub.send_back.send(Err(Error::Transport(Box::new(e))));
 				}
 			},
 			// User dropped a subscription.
@@ -600,7 +600,7 @@ async fn background_task(
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
-				let _ = front_error.send(Error::TransportError(Box::new(e)));
+				let _ = front_error.send(Error::Transport(Box::new(e)));
 				return;
 			}
 			Either::Right((None, _)) => {

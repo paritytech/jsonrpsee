@@ -16,12 +16,36 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 	}
 }
 
+/// Invalid params.
+#[derive(Debug)]
+pub struct InvalidParams;
+
+/// Error that occurs when a call failed.
+#[derive(Debug, thiserror::Error)]
+pub enum CallError {
+	#[error("Invalid params in the RPC call")]
+	/// Invalid params in the call.
+	InvalidParams(InvalidParams),
+	#[error("RPC Call failed: {0}")]
+	/// The call failed.
+	Failed(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl From<InvalidParams> for CallError {
+	fn from(params: InvalidParams) -> Self {
+		Self::InvalidParams(params)
+	}
+}
+
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+	/// Error that occurs when a call failed.
+	#[error("Server call failed: {0}")]
+	Call(CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
-	TransportError(#[source] Box<dyn std::error::Error + Send + Sync>),
+	Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
 	/// JSON-RPC request error.
 	#[error("JSON-RPC request error: {0:?}")]
 	Request(#[source] JsonRpcErrorAlloc),
@@ -34,7 +58,7 @@ pub enum Error {
 	/// The background task has been terminated.
 	#[error("The background task been terminated because: {0}; restart required")]
 	RestartNeeded(String),
-	/// Failed to parse the data that the server sent back to us.
+	/// Failed to parse the data.
 	#[error("Parse error: {0}")]
 	ParseError(#[source] serde_json::Error),
 	/// Invalid subscription ID.
@@ -43,9 +67,6 @@ pub enum Error {
 	/// Invalid request ID.
 	#[error("Invalid request ID")]
 	InvalidRequestId,
-	/// Invalid params in the RPC call.
-	#[error("Invalid params in the RPC call")]
-	InvalidParams,
 	/// A request with the same request ID has already been registered.
 	#[error("A request with the same request ID has already been registered")]
 	DuplicateRequestId,
