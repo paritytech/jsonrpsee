@@ -80,8 +80,8 @@ pub const INVALID_PARAMS_CODE: i32 = -32602;
 pub const INVALID_REQUEST_CODE: i32 = -32600;
 /// Method not found error code.
 pub const METHOD_NOT_FOUND_CODE: i32 = -32601;
-/// Custom server error when the user provided context failed during a call.
-pub const CONTEXT_EXECUTION_FAILED_CODE: i32 = -32000;
+/// Custom server error when a call failed.
+pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
