@@ -41,7 +41,7 @@ use jsonrpsee_types::error::Error;
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
-use jsonrpsee_utils::server::{send_error, ConnectionId, Methods};
+use jsonrpsee_utils::server::{send_error, ConnectionId, Methods, RpcSender};
 
 mod module;
 
@@ -149,7 +149,11 @@ impl Server {
 	}
 }
 
-async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, id: ConnectionId) -> anyhow::Result<()> {
+async fn background_task(
+	socket: tokio::net::TcpStream,
+	methods: Arc<Methods>,
+	conn_id: ConnectionId,
+) -> anyhow::Result<()> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
@@ -173,31 +177,51 @@ async fn background_task(socket: tokio::net::TcpStream, methods: Arc<Methods>, i
 		}
 	});
 
-	let mut data = Vec::new();
+	let mut data = Vec::with_capacity(100);
+
+	// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
+	// the params from the request. The result of the computation is sent back over the `tx` channel and
+	// the result(s) are collected into a `String` and sent back over the wire.
+	let execute = move |tx: RpcSender, req: JsonRpcRequest| {
+		if let Some(method) = methods.get(&*req.method) {
+			let params = RpcParams::new(req.params.map(|params| params.get()));
+			if let Err(err) = (method)(req.id, params, &tx, conn_id) {
+				log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
+				send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+			}
+		} else {
+			send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+		}
+	};
 
 	loop {
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
 
-		match serde_json::from_slice::<JsonRpcRequest>(&data) {
-			Ok(req) => {
-				let params = RpcParams::new(req.params.map(|params| params.get()));
-
-				if let Some(method) = methods.get(&*req.method) {
-					(method)(req.id, params, &tx, id)?;
-				} else {
-					send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
+		// used with untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged
+		// enum here and have to try each case individually: first the single request case, then the
+		// batch case and lastly the error. For the worst case – unparseable input – we make three calls
+		// to [`serde_json::from_slice`] which is pretty annoying.
+		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
+		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
+			execute(&tx, req);
+		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
+			if !batch.is_empty() {
+				for req in batch {
+					execute(&tx, req);
 				}
+			} else {
+				send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
 			}
-			Err(_) => {
-				let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
-					Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-					Err(_) => (None, JsonRpcErrorCode::ParseError),
-				};
+		} else {
+			let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
+				Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
+				Err(_) => (None, JsonRpcErrorCode::ParseError),
+			};
 
-				send_error(id, &tx, code.into());
-			}
+			send_error(id, &tx, code.into());
 		}
 	}
 }

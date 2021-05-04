@@ -26,6 +26,11 @@ pub async fn server(server_started: Sender<SocketAddr>) {
 			Ok(sum)
 		})
 		.unwrap();
+	server
+		.register_method("fail_please", |_params| {
+			Err::<(), Error>(Error::Custom("Oh noes".into()))
+		})
+		.unwrap();
 	server_started.send(server.local_addr().unwrap()).unwrap();
 
 	server.start().await;
@@ -157,4 +162,28 @@ async fn invalid_request_should_not_close_connection() {
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
 	let response = client.send_request_text(request).await.unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(33)));
+}
+
+#[tokio::test]
+async fn valid_request_that_fails_to_execute_should_not_close_connection() {
+	env_logger::init();
+	let (server_started_tx, server_started_rx) = oneshot::channel::<SocketAddr>();
+	tokio::spawn(server(server_started_tx));
+	let server_addr = server_started_rx.await.unwrap();
+	let mut client = WebSocketTestClient::new(server_addr).await.unwrap();
+
+	// Good request, executes fine
+	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
+	let response = client.send_request_text(request).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(33)));
+
+	// Good request, but causes error.
+	let req = r#"{"jsonrpc":"2.0","method":"fail_please","params":[],"id":123}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, server_error(Id::Num(123)));
+
+	// Connection is still good.
+	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;
+	let response = client.send_request_text(request).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(333)));
 }

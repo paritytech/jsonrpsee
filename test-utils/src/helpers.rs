@@ -64,6 +64,13 @@ pub fn internal_error(id: Id) -> String {
 	)
 }
 
+pub fn server_error(id: Id) -> String {
+	format!(
+		r#"{{"jsonrpc":"2.0","error":{{"code":-1,"message":"Server error"}},"id":{}}}"#,
+		serde_json::to_string(&id).unwrap()
+	)
+}
+
 /// Hardcoded server response when a client initiates a new subscription.
 ///
 /// NOTE: works only for one subscription because the subscription ID is hardcoded.
