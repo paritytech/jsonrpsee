@@ -203,14 +203,14 @@ async fn wss_works() {
 #[tokio::test]
 async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
 	let err = WsClientBuilder::default().build("wss://♥♥♥♥♥♥∀∂").await;
-	assert!(matches!(err, Err(Error::TransportError(_))));
+	assert!(matches!(err, Err(Error::Transport(_))));
 }
 
 #[tokio::test]
 async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
 	let client = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂").unwrap();
 	let err: Result<(), Error> = client.request("system_chain", JsonRpcParams::NoParams).await;
-	assert!(matches!(err, Err(Error::TransportError(_))));
+	assert!(matches!(err, Err(Error::Transport(_))));
 }
 
 #[tokio::test]

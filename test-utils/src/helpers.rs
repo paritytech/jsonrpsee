@@ -57,6 +57,14 @@ pub fn invalid_params(id: Id) -> String {
 	)
 }
 
+pub fn invalid_context(msg: &str, id: Id) -> String {
+	format!(
+		r#"{{"jsonrpc":"2.0","error":{{"code":-32000,"message":"{}"}},"id":{}}}"#,
+		msg,
+		serde_json::to_string(&id).unwrap()
+	)
+}
+
 pub fn internal_error(id: Id) -> String {
 	format!(
 		r#"{{"jsonrpc":"2.0","error":{{"code":-32603,"message":"Internal error"}},"id":{}}}"#,

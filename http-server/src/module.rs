@@ -1,5 +1,10 @@
-use jsonrpsee_types::{traits::RpcMethod, v2::params::RpcParams, Error};
-use jsonrpsee_utils::server::{send_response, Methods};
+use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee_types::{
+	error::{CallError, Error, InvalidParams},
+	traits::RpcMethod,
+	v2::params::RpcParams,
+};
+use jsonrpsee_utils::server::{send_error, send_response, Methods};
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -31,16 +36,17 @@ impl RpcModule {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: RpcMethod<R>,
+		F: RpcMethod<R, InvalidParams>,
 	{
 		self.verify_method_name(method_name)?;
 
 		self.methods.insert(
 			method_name,
 			Box::new(move |id, params, tx, _| {
-				let result = callback(params)?;
-
-				send_response(id, tx, result);
+				match callback(params) {
+					Ok(res) => send_response(id, tx, res),
+					Err(InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+				};
 
 				Ok(())
 			}),
@@ -82,7 +88,7 @@ impl<Context> RpcContextModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(RpcParams, &Context) -> Result<R, Error> + Send + Sync + 'static,
+		F: Fn(RpcParams, &Context) -> Result<R, CallError> + Send + Sync + 'static,
 	{
 		self.module.verify_method_name(method_name)?;
 
@@ -91,10 +97,18 @@ impl<Context> RpcContextModule<Context> {
 		self.module.methods.insert(
 			method_name,
 			Box::new(move |id, params, tx, _| {
-				let result = callback(params, &*ctx)?;
-
-				send_response(id, tx, result);
-
+				match callback(params, &*ctx) {
+					Ok(res) => send_response(id, tx, res),
+					Err(CallError::InvalidParams(_)) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+					Err(CallError::Failed(err)) => {
+						let err = JsonRpcErrorObject {
+							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
+							message: &err.to_string(),
+							data: None,
+						};
+						send_error(id, tx, err)
+					}
+				};
 				Ok(())
 			}),
 		);
