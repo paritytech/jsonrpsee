@@ -38,7 +38,7 @@ impl RpcModule {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: RpcMethod<R, InvalidParams>,
+		F: RpcMethod<R, CallError>,
 	{
 		self.verify_method_name(method_name)?;
 
@@ -47,7 +47,13 @@ impl RpcModule {
 			Box::new(move |id, params, tx, _| {
 				match callback(params) {
 					Ok(res) => send_response(id, tx, res),
-					Err(InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+					// TODO: this looks wonky...
+					Err(CallError::InvalidParams(InvalidParams)) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+					Err(CallError::Failed(e)) => {
+						// TODO: do something smart(-er) with the error?
+						log::error!("Call failed with: {}", e);
+						send_error(id, tx, JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into())
+					}
 				};
 
 				Ok(())

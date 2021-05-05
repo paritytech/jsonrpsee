@@ -37,7 +37,7 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use jsonrpsee_types::error::{Error, InvalidParams};
+use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
@@ -105,7 +105,7 @@ impl Server {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: Fn(RpcParams) -> Result<R, InvalidParams> + Send + Sync + 'static,
+		F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,
 	{
 		self.root.register_method(method_name, callback)
 	}
@@ -170,6 +170,10 @@ async fn background_task(
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 
+	// TODO: this doesn't work for batch requests. The responses should be read together and batch up into a single
+	// response and then sent back to the client.
+	// Plan: For batches, create a new pair of channels, `tx2`,`rx2`, pass `tx2` to `execute()`, collect results on
+	// `rx2` and when done, send the whole batch on `tx`.
 	tokio::spawn(async move {
 		while let Some(response) = rx.next().await {
 			let _ = sender.send_binary_mut(response.into_bytes()).await;

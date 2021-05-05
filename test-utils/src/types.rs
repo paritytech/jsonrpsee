@@ -76,6 +76,18 @@ impl WebSocketTestClient {
 		String::from_utf8(data).map_err(Into::into)
 	}
 
+	// TODO: this is completely wrong, the batch response should be sent back in a single response, clients should not
+	// read multiple times like this.
+	pub async fn send_batch(&mut self, msg: impl AsRef<str>, batch_len: usize) -> Result<String, Error> {
+		self.tx.send_text(msg).await?;
+		self.tx.flush().await?;
+		let mut data = Vec::new();
+		for _ in 0..batch_len {
+			self.rx.receive_data(&mut data).await?;
+		}
+		String::from_utf8(data).map_err(Into::into)
+	}
+
 	pub async fn send_request_binary(&mut self, msg: &[u8]) -> Result<String, Error> {
 		self.tx.send_binary(msg).await?;
 		self.tx.flush().await?;

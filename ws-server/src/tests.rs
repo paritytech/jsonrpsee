@@ -6,6 +6,18 @@ use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_types::error::{CallError, Error, InvalidParams};
 use serde_json::Value as JsonValue;
 use std::net::SocketAddr;
+use std::fmt;
+
+/// Applications can/should provide their own error.
+#[derive(Debug)]
+struct MyAppError;
+impl fmt::Display for MyAppError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "MyAppError")
+	}
+}
+impl std::error::Error for MyAppError {}
+
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
@@ -26,9 +38,13 @@ pub async fn server() -> SocketAddr {
 		})
 		.unwrap();
 	server
-		.register_method("fail_please", |_params| {
-			// TODO: Need something that makes more sense here.
-			Err::<(), _>(InvalidParams)
+		.register_method("invalid_params", |_params| {
+			Err::<(), _>(CallError::InvalidParams(InvalidParams))
+		})
+		.unwrap();
+	server
+		.register_method("call_fail", |_params| {
+			Err::<(), _>(CallError::Failed(Box::new(MyAppError)))
 		})
 		.unwrap();
 	let addr = server.local_addr().unwrap();
@@ -77,6 +93,22 @@ async fn single_method_call_works() {
 
 		assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(i)));
 	}
+}
+
+#[tokio::test]
+async fn batch_method_call_works() {
+	env_logger::init();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let mut batch = Vec::new();
+	for i in 0..5 {
+		batch.push(format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i));
+	}
+	let batch = format!("[{}]", batch.join(","));
+	let response = client.send_batch(batch, 5).await.unwrap();
+	println!("Response: {:?}", response);
+	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(1)));
 }
 
 #[tokio::test]
@@ -220,9 +252,9 @@ async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(33)));
 
 	// Good request, but causes error.
-	let req = r#"{"jsonrpc":"2.0","method":"fail_please","params":[],"id":123}"#;
+	let req = r#"{"jsonrpc":"2.0","method":"call_fail","params":[],"id":123}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, invalid_params(Id::Num(123)));
+	assert_eq!(response, server_error(Id::Num(123)));
 
 	// Connection is still good.
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;

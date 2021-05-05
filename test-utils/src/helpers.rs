@@ -72,10 +72,9 @@ pub fn internal_error(id: Id) -> String {
 	)
 }
 
-// TODO: remove?
 pub fn server_error(id: Id) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-1,"message":"Server error"}},"id":{}}}"#,
+		r#"{{"jsonrpc":"2.0","error":{{"code":-32000,"message":"Server error"}},"id":{}}}"#,
 		serde_json::to_string(&id).unwrap()
 	)
 }
