@@ -162,23 +162,23 @@ impl Server {
 					// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
 					// the params from the request. The result of the computation is sent back over the `tx` channel and
 					// the result(s) are collected into a `String` and sent back over the wire.
-					let execute =
-						move |id: Option<&RawValue>, tx: RpcSender, method_name: &str, params: Option<&RawValue>| {
-							if let Some(method) = methods.get(method_name) {
-								let params = RpcParams::new(params.map(|params| params.get()));
-								// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-								if let Err(err) = (method)(id, params, &tx, 0) {
-									log::error!(
-										"execution of method call '{}' failed: {:?}, request id={:?}",
-										method_name,
-										err,
-										id
-									);
-								}
-							} else {
-								send_error(id, tx, JsonRpcErrorCode::MethodNotFound.into());
+					let execute = move |tx: RpcSender, req: JsonRpcRequest| {
+						if let Some(method) = methods.get(&*req.method) {
+							let params = RpcParams::new(req.params.map(|params| params.get()));
+							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+							if let Err(err) = (method)(req.id, params, &tx, 0) {
+								log::error!(
+									"execution of method call '{}' failed: {:?}, request id={:?}",
+									req.method,
+									err,
+									req.id
+								);
+								send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 							}
-						};
+						} else {
+							send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+						}
+					};
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -213,15 +213,13 @@ impl Server {
 						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
 						// to [`serde_json::from_slice`] which is pretty annoying.
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
-						if let Ok(JsonRpcRequest { id, method: method_name, params, .. }) =
-							serde_json::from_slice::<JsonRpcRequest>(&body)
-						{
-							execute(id, &tx, &method_name, params);
+						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
+							execute(&tx, req);
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
 								single = false;
-								for JsonRpcRequest { id, method: method_name, params, .. } in batch {
-									execute(id, &tx, &method_name, params);
+								for req in batch {
+									execute(&tx, req);
 								}
 							} else {
 								send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
