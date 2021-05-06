@@ -54,7 +54,7 @@ pub fn send_error(id: RpcId, tx: RpcSender, error: JsonRpcErrorObject) {
 
 /// Read all the results of all method calls in a batch request from the ['Stream']. Format the result into a single
 /// `String` appropriately wrapped in `[`/`]`.
-pub async fn collect_batch_responses(rx: mpsc::UnboundedReceiver<String>) -> String {
+pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> String {
 	let mut buf = String::with_capacity(2048);
 	buf.push('[');
 	let mut buf = rx
