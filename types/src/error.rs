@@ -25,15 +25,15 @@ pub struct InvalidParams;
 pub enum CallError {
 	#[error("Invalid params in the RPC call")]
 	/// Invalid params in the call.
-	InvalidParams(InvalidParams),
+	InvalidParams,
 	#[error("RPC Call failed: {0}")]
 	/// The call failed.
 	Failed(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl From<InvalidParams> for CallError {
-	fn from(params: InvalidParams) -> Self {
-		Self::InvalidParams(params)
+	fn from(_params: InvalidParams) -> Self {
+		Self::InvalidParams
 	}
 }
 

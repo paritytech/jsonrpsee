@@ -1,9 +1,9 @@
 use crate::server::{RpcParams, SubscriptionId, SubscriptionSink};
-use jsonrpsee_types::{error::InvalidParams, traits::RpcMethod, v2::error::CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::{CallError, Error},
 	v2::error::{JsonRpcErrorCode, JsonRpcErrorObject},
 };
+use jsonrpsee_types::{traits::RpcMethod, v2::error::CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_utils::server::{send_error, send_response, Methods};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -47,12 +47,9 @@ impl RpcModule {
 			Box::new(move |id, params, tx, _| {
 				match callback(params) {
 					Ok(res) => send_response(id, tx, res),
-					// TODO: this looks wonky...
-					Err(CallError::InvalidParams(InvalidParams)) => {
-						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
-					}
+					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
 					Err(CallError::Failed(e)) => {
-						// TODO: do something smart(-er) with the error?
+						// TODO: Return the error message (`e`) to clients, see https://github.com/paritytech/jsonrpsee/issues/299
 						log::error!("Call failed with: {}", e);
 						send_error(id, tx, JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into())
 					}
@@ -165,7 +162,7 @@ impl<Context> RpcContextModule<Context> {
 			Box::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
-					Err(CallError::InvalidParams(_)) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
 					Err(CallError::Failed(err)) => {
 						let err = JsonRpcErrorObject {
 							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
