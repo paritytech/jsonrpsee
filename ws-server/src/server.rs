@@ -26,6 +26,7 @@
 
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
+use futures_util::stream::StreamExt;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
@@ -34,14 +35,14 @@ use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, ToSocketAddrs};
-use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
+use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
-use jsonrpsee_utils::server::{send_error, ConnectionId, Methods, RpcSender};
+use jsonrpsee_utils::server::{collect_batch_responses, send_error, ConnectionId, Methods, RpcSender};
 
 mod module;
 
@@ -170,10 +171,7 @@ async fn background_task(
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 
-	// TODO: this doesn't work for batch requests. The responses should be read together and batch up into a single
-	// response and then sent back to the client.
-	// Plan: For batches, create a new pair of channels, `tx2`,`rx2`, pass `tx2` to `execute()`, collect results on
-	// `rx2` and when done, send the whole batch on `tx`.
+	// Send results back to the client.
 	tokio::spawn(async move {
 		while let Some(response) = rx.next().await {
 			let _ = sender.send_binary_mut(response.into_bytes()).await;
@@ -213,8 +211,18 @@ async fn background_task(
 			execute(&tx, req);
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
+				// Batch responses must be sent back as a single message so we the results from each request in the
+				// batch and read the results off of a new channel, `rx2`, and then send the complete batch response
+				// back to the client over `tx`.
+				let (tx2, mut rx2) = mpsc::unbounded::<String>();
 				for req in batch {
-					execute(&tx, req);
+					execute(&tx2, req);
+				}
+				// TODO: add a test with a slow method call to prove this is correct.
+				rx2.close();
+				let results = collect_batch_responses(rx2).await;
+				if let Err(err) = tx.unbounded_send(results) {
+					log::error!("Error sending batch response to the client: {:?}", err)
 				}
 			} else {
 				send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());

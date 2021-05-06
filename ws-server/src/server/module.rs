@@ -48,7 +48,9 @@ impl RpcModule {
 				match callback(params) {
 					Ok(res) => send_response(id, tx, res),
 					// TODO: this looks wonky...
-					Err(CallError::InvalidParams(InvalidParams)) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+					Err(CallError::InvalidParams(InvalidParams)) => {
+						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
+					}
 					Err(CallError::Failed(e)) => {
 						// TODO: do something smart(-er) with the error?
 						log::error!("Call failed with: {}", e);

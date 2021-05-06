@@ -5,8 +5,8 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_types::error::{CallError, Error, InvalidParams};
 use serde_json::Value as JsonValue;
-use std::net::SocketAddr;
 use std::fmt;
+use std::net::SocketAddr;
 
 /// Applications can/should provide their own error.
 #[derive(Debug)]
@@ -17,7 +17,6 @@ impl fmt::Display for MyAppError {
 	}
 }
 impl std::error::Error for MyAppError {}
-
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
@@ -37,16 +36,8 @@ pub async fn server() -> SocketAddr {
 			Ok(sum)
 		})
 		.unwrap();
-	server
-		.register_method("invalid_params", |_params| {
-			Err::<(), _>(CallError::InvalidParams(InvalidParams))
-		})
-		.unwrap();
-	server
-		.register_method("call_fail", |_params| {
-			Err::<(), _>(CallError::Failed(Box::new(MyAppError)))
-		})
-		.unwrap();
+	server.register_method("invalid_params", |_params| Err::<(), _>(CallError::InvalidParams(InvalidParams))).unwrap();
+	server.register_method("call_fail", |_params| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
 	let addr = server.local_addr().unwrap();
 
 	tokio::spawn(async { server.start().await });
@@ -97,18 +88,19 @@ async fn single_method_call_works() {
 
 #[tokio::test]
 async fn batch_method_call_works() {
-	env_logger::init();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	let mut batch = Vec::new();
-	for i in 0..5 {
+	for i in 0..3 {
 		batch.push(format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i));
 	}
 	let batch = format!("[{}]", batch.join(","));
-	let response = client.send_batch(batch, 5).await.unwrap();
-	println!("Response: {:?}", response);
-	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(1)));
+	let response = client.send_request_text(batch).await.unwrap();
+	assert_eq!(
+		response,
+		r#"[{"jsonrpc":"2.0","result":"hello","id":0},{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","result":"hello","id":2}]"#
+	);
 }
 
 #[tokio::test]

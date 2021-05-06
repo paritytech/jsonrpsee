@@ -1,6 +1,7 @@
 //! Shared helpers for JSON-RPC Servers.
 
 use futures_channel::mpsc;
+use futures_util::stream::StreamExt;
 use jsonrpsee_types::v2::error::{JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject};
 use jsonrpsee_types::v2::params::{RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::response::JsonRpcResponse;
@@ -49,4 +50,22 @@ pub fn send_error(id: RpcId, tx: RpcSender, error: JsonRpcErrorObject) {
 	if let Err(err) = tx.unbounded_send(json) {
 		log::error!("Error sending response to the client: {:?}", err)
 	}
+}
+
+/// Read all the results of all method calls in a batch request from the ['Stream']. Format the result into a single
+/// `String` appropriately wrapped in `[`/`]`.
+pub async fn collect_batch_responses(rx: mpsc::UnboundedReceiver<String>) -> String {
+	let mut buf = String::with_capacity(2048);
+	buf.push('[');
+	let mut buf = rx
+		.fold(buf, |mut acc, response| async {
+			acc = [acc, response].concat();
+			acc.push(',');
+			acc
+		})
+		.await;
+	// Remove trailing comma
+	buf.pop();
+	buf.push(']');
+	buf
 }

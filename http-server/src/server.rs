@@ -36,15 +36,14 @@ use hyper::{
 	service::{make_service_fn, service_fn},
 	Error as HyperError,
 };
-use jsonrpsee_types::error::{Error, GenericTransportError, InvalidParams};
+use jsonrpsee_types::error::{CallError, Error, GenericTransportError};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
 use jsonrpsee_utils::{
 	hyper_helpers::read_response_to_body,
-	server::{send_error, RpcSender},
+	server::{collect_batch_responses, send_error, RpcSender},
 };
 use serde::Serialize;
-use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
 use std::{
 	cmp,
@@ -129,7 +128,7 @@ impl Server {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: Fn(RpcParams) -> Result<R, InvalidParams> + Send + Sync + 'static,
+		F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,
 	{
 		self.root.register_method(method_name, callback)
 	}
@@ -203,7 +202,7 @@ impl Server {
 						};
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
-						let (tx, mut rx) = mpsc::unbounded();
+						let (tx, mut rx) = mpsc::unbounded::<String>();
 						// Is this a single request or a batch (or error)?
 						let mut single = true;
 
@@ -253,24 +252,6 @@ impl Server {
 		let server = self.listener.serve(make_service);
 		server.await.map_err(Into::into)
 	}
-}
-
-// Collect the results of all computations sent back on the ['Stream'] into a single `String` appropriately wrapped in
-// `[`/`]`.
-async fn collect_batch_responses(rx: mpsc::UnboundedReceiver<String>) -> String {
-	let mut buf = String::with_capacity(2048);
-	buf.push('[');
-	let mut buf = rx
-		.fold(buf, |mut acc, response| async {
-			acc = [acc, response].concat();
-			acc.push(',');
-			acc
-		})
-		.await;
-	// Remove trailing comma
-	buf.pop();
-	buf.push(']');
-	buf
 }
 
 // Checks to that access control of the received request is the same as configured.
