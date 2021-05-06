@@ -84,7 +84,7 @@ pub fn process_notification(manager: &mut RequestManager, notif: JsonRpcNotifRes
 		None => return Err(Error::InvalidSubscriptionId),
 	};
 
-	match manager.as_subscription_mut(&request_id) {
+	match manager.as_notification_handler_mut(&request_id) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
 			Err(err) => {

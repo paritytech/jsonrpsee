@@ -16,7 +16,7 @@ enum Kind {
 	PendingMethodCall(PendingCallOneshot),
 	PendingSubscription((RequestId, PendingSubscriptionOneshot, UnsubscribeMethod)),
 	Subscription((RequestId, SubscriptionSink, UnsubscribeMethod)),
-	Notificationhandler(SubscriptionSink),
+	NotificationHandler(SubscriptionSink),
 }
 
 #[derive(Debug)]
@@ -157,7 +157,7 @@ impl RequestManager {
 		if let (Entry::Vacant(request), Entry::Vacant(subscription)) =
 			(self.requests.entry(sub_req_id), self.subscriptions.entry(subscription_id))
 		{
-			request.insert(Kind::Notificationhandler(send_back));
+			request.insert(Kind::NotificationHandler(send_back));
 			subscription.insert(sub_req_id);
 			Ok(())
 		} else {
@@ -245,6 +245,7 @@ impl RequestManager {
 			Kind::PendingMethodCall(_) => RequestStatus::PendingMethodCall,
 			Kind::PendingSubscription(_) => RequestStatus::PendingSubscription,
 			Kind::Subscription(_) => RequestStatus::Subscription,
+			Kind::NotificationHandler(_) => RequestStatus::Subscription,
 		})
 	}
 
@@ -253,6 +254,17 @@ impl RequestManager {
 	/// Returns `Some` if the `request_id` was registered as a subscription otherwise `None`.
 	pub fn as_subscription_mut(&mut self, request_id: &RequestId) -> Option<&mut SubscriptionSink> {
 		if let Some(Kind::Subscription((_, sink, _))) = self.requests.get_mut(request_id) {
+			Some(sink)
+		} else {
+			None
+		}
+	}
+
+	/// Get a mutable reference to underlying `Sink` in order to send incmoing notifications to the subscription.
+	///
+	/// Returns `Some` if the `request_id` was registered as a NotificationHandler otherwise `None`.
+	pub fn as_notification_handler_mut(&mut self, request_id: &RequestId) -> Option<&mut SubscriptionSink> {
+		if let Some(Kind::NotificationHandler(sink)) = self.requests.get_mut(request_id) {
 			Some(sink)
 		} else {
 			None
