@@ -33,7 +33,7 @@ use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, Ws
 use crate::v2::error::JsonRpcErrorAlloc;
 use crate::v2::params::{Id, JsonRpcParams};
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
-use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse};
+use crate::v2::response::{JsonRpcResponse, JsonRpcSubscriptionResponse};
 use crate::TEN_MB_SIZE_BYTES;
 use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, RequestMessage, Subscription, SubscriptionMessage,
@@ -566,7 +566,7 @@ async fn background_task(
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifResponse<_>>(&raw) {
+				else if let Ok(notif) = serde_json::from_slice::<JsonRpcSubscriptionResponse<_>>(&raw) {
 					log::debug!("[backend]: recv subscription {:?}", notif);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;

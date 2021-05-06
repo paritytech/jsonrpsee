@@ -14,11 +14,20 @@ pub struct JsonRpcResponse<'a, T> {
 	pub id: Option<&'a RawValue>,
 }
 
-/// JSON-RPC notification response.
+/// JSON-RPC subscription response.
 #[derive(Deserialize, Debug)]
-pub struct JsonRpcNotifResponse<T> {
+pub struct JsonRpcSubscriptionResponse<T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Params.
 	pub params: JsonRpcNotificationParamsAlloc<T>,
 }
+
+///// JSON-RPC notification response.
+//#[derive(Deserialize, Debug)]
+//pub struct JsonRpcNotifResponse<T> {
+//	/// JSON-RPC version.
+//	pub jsonrpc: TwoPointZero,
+//	/// Params.
+//	pub params: JsonRpcNotificationParamsAlloc<T>,
+//}
