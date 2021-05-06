@@ -25,18 +25,19 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::helpers::{
-	build_unsubscribe_message, process_batch_response, process_error_response, process_single_response,
-	process_subscription_response, stop_subscription,
+	build_unsubscribe_message, process_batch_response, process_error_response, process_notification,
+	process_single_response, process_subscription_response, stop_subscription,
 };
 use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcErrorAlloc;
-use crate::v2::params::{Id, JsonRpcParams};
+use crate::v2::params::{Id, JsonRpcParams, SubscriptionId};
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
-use crate::v2::response::{JsonRpcResponse, JsonRpcSubscriptionResponse};
+use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponse};
 use crate::TEN_MB_SIZE_BYTES;
 use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, RequestMessage, Subscription, SubscriptionMessage,
+	manager::RequestManager, BatchMessage, Error, FrontToBack, OnNotificationMessage, RequestMessage, Subscription,
+	SubscriptionMessage,
 };
 use async_std::sync::Mutex;
 use async_trait::async_trait;
@@ -455,6 +456,42 @@ impl SubscriptionClient for WsClient {
 		};
 		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
+
+	/// Register a notification handler for async messages from the server.
+	///
+	async fn on_notification<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
+	where
+		N: DeserializeOwned,
+	{
+		log::trace!("[frontend]: on_notification: {:?}", method);
+
+		let sub_id = SubscriptionId::Str(method.to_owned());
+		let req_id = self.id_guard.next_request_id()?;
+
+		let (send_back_tx, send_back_rx) = oneshot::channel();
+		if self
+			.to_back
+			.clone()
+			.send(FrontToBack::OnNotification(OnNotificationMessage {
+				send_back: send_back_tx,
+				req_id: req_id,
+				sub_id: sub_id,
+			}))
+			.await
+			.is_err()
+		{
+			self.id_guard.reclaim_request_id();
+			return Err(self.read_error_from_backend().await);
+		}
+
+		let res = send_back_rx.await;
+		let (notifs_rx, id) = match res {
+			Ok(Ok(val)) => val,
+			Ok(Err(err)) => return Err(err),
+			Err(_) => return Err(self.read_error_from_backend().await),
+		};
+		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
+	}
 }
 
 /// Function being run in the background that processes messages from the frontend.
@@ -550,6 +587,20 @@ async fn background_task(
 					stop_subscription(&mut sender, &mut manager, unsub).await;
 				}
 			}
+
+			// User called `on_notification` on the front-end.
+			Either::Left((Some(FrontToBack::OnNotification(sub)), _)) => {
+				log::trace!("[backend] registering notification handler: {:?}", sub.sub_id);
+				let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
+
+				if manager.insert_notification_handler(sub.req_id, sub.sub_id.clone(), subscribe_tx).is_ok() {
+					sub.send_back
+						.send(Ok((subscribe_rx, sub.sub_id.clone())))
+						.expect("error sending response for notification handler");
+				} else {
+					let _ = sub.send_back.send(Err(Error::InvalidSubscriptionId));
+				}
+			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<JsonRpcResponse<_>>(&raw) {
@@ -570,6 +621,17 @@ async fn background_task(
 					log::debug!("[backend]: recv subscription {:?}", notif);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
+					}
+				}
+				// Incoming Notification
+				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifResponse<_>>(&raw) {
+					log::debug!("[backend]: recv notification {:?}", notif);
+					match process_notification(&mut manager, notif) {
+						Ok(_) => return,
+						Err(err) => {
+							let _ = front_error.send(err);
+							return;
+						}
 					}
 				}
 				// Batch response.

@@ -4,7 +4,7 @@ use futures::channel::mpsc;
 use jsonrpsee_types::v2::params::{Id, JsonRpcParams, SubscriptionId};
 use jsonrpsee_types::v2::parse_request_id;
 use jsonrpsee_types::v2::request::JsonRpcCallSer;
-use jsonrpsee_types::v2::response::{JsonRpcResponse, JsonRpcSubscriptionResponse};
+use jsonrpsee_types::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponse};
 use jsonrpsee_types::{v2::error::JsonRpcErrorAlloc, Error, RequestMessage};
 use serde_json::Value as JsonValue;
 
@@ -68,6 +68,33 @@ pub fn process_subscription_response(
 		None => {
 			log::error!("Subscription ID: {:?} not an active subscription", sub_id);
 			Err(None)
+		}
+	}
+}
+
+/// Attempts to process an incoming notification
+///
+/// Returns Ok() if the response was successfully handled
+/// Returns Err() if there was no handler for the method
+
+pub fn process_notification(manager: &mut RequestManager, notif: JsonRpcNotifResponse<JsonValue>) -> Result<(), Error> {
+	let sub_id: SubscriptionId = SubscriptionId::Str(notif.method.to_owned());
+	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
+		Some(request_id) => request_id,
+		None => return Err(Error::InvalidSubscriptionId),
+	};
+
+	match manager.as_subscription_mut(&request_id) {
+		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
+			Ok(()) => Ok(()),
+			Err(err) => {
+				log::error!("Error sending notification subscription {:?} error: {:?}", sub_id, err);
+				Err(Error::Internal(err.into_send_error()))
+			}
+		},
+		None => {
+			log::error!("Subscription ID: {:?} not an active subscription", sub_id);
+			Err(Error::InvalidSubscriptionId)
 		}
 	}
 }

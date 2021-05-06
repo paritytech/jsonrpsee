@@ -16,6 +16,7 @@ enum Kind {
 	PendingMethodCall(PendingCallOneshot),
 	PendingSubscription((RequestId, PendingSubscriptionOneshot, UnsubscribeMethod)),
 	Subscription((RequestId, SubscriptionSink, UnsubscribeMethod)),
+	Notificationhandler(SubscriptionSink),
 }
 
 #[derive(Debug)]
@@ -143,6 +144,24 @@ impl RequestManager {
 			Ok(())
 		} else {
 			Err(send_back)
+		}
+	}
+
+	/// Inserts a subscription for handling incoming notifications
+	pub fn insert_notification_handler(
+		&mut self,
+		sub_req_id: RequestId,
+		subscription_id: SubscriptionId,
+		send_back: SubscriptionSink,
+	) -> Result<(), Error> {
+		if let (Entry::Vacant(request), Entry::Vacant(subscription)) =
+			(self.requests.entry(sub_req_id), self.subscriptions.entry(subscription_id))
+		{
+			request.insert(Kind::Notificationhandler(send_back));
+			subscription.insert(sub_req_id);
+			Ok(())
+		} else {
+			Err(Error::InvalidRequestId)
 		}
 	}
 
