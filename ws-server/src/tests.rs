@@ -38,6 +38,13 @@ pub async fn server() -> SocketAddr {
 		.unwrap();
 	server.register_method("invalid_params", |_params| Err::<(), _>(CallError::InvalidParams(InvalidParams))).unwrap();
 	server.register_method("call_fail", |_params| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	server
+		.register_method("sleep_for", |params| {
+			let sleep: Vec<u64> = params.parse()?;
+			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
+			Ok("Yawn!")
+		})
+		.unwrap();
 	let addr = server.local_addr().unwrap();
 
 	tokio::spawn(async { server.start().await });
@@ -74,7 +81,7 @@ pub async fn server_with_context() -> SocketAddr {
 }
 
 #[tokio::test]
-async fn single_method_call_works() {
+async fn single_method_calls_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -87,19 +94,50 @@ async fn single_method_call_works() {
 }
 
 #[tokio::test]
+async fn slow_method_calls_works() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"sleep_for","params":[1000],"id":123}"#;
+	let response = client.send_request_text(req).await.unwrap();
+
+	assert_eq!(response, ok_response(JsonValue::String("Yawn!".to_owned()), Id::Num(123)));
+}
+
+#[tokio::test]
 async fn batch_method_call_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	let mut batch = Vec::new();
-	for i in 0..3 {
+	batch.push(r#"{"jsonrpc":"2.0","method":"sleep_for","params":[1000],"id":123}"#.to_string());
+	for i in 1..4 {
 		batch.push(format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i));
 	}
 	let batch = format!("[{}]", batch.join(","));
 	let response = client.send_request_text(batch).await.unwrap();
 	assert_eq!(
 		response,
-		r#"[{"jsonrpc":"2.0","result":"hello","id":0},{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","result":"hello","id":2}]"#
+		r#"[{"jsonrpc":"2.0","result":"Yawn!","id":123},{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","result":"hello","id":2},{"jsonrpc":"2.0","result":"hello","id":3}]"#
+	);
+}
+
+#[tokio::test]
+async fn batch_method_call_where_some_calls_fail() {
+	env_logger::init();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let mut batch = Vec::new();
+	batch.push(r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#);
+	batch.push(r#"{"jsonrpc":"2.0","method":"call_fail","id":2}"#);
+	batch.push(r#"{"jsonrpc":"2.0","method":"add","params":[34, 45],"id":3}"#);
+	let batch = format!("[{}]", batch.join(","));
+	log::debug!("TEST: sending batch={:?}", batch);
+	let response = client.send_request_text(batch).await.unwrap();
+	assert_eq!(
+		response,
+		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
 	);
 }
 

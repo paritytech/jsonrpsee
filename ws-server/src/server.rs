@@ -218,7 +218,6 @@ async fn background_task(
 				for req in batch {
 					execute(&tx2, req);
 				}
-				// TODO: add a test with a slow method call to prove this is correct.
 				rx2.close();
 				let results = collect_batch_responses(rx2).await;
 				if let Err(err) = tx.unbounded_send(results) {
