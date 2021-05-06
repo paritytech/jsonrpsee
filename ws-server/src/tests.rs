@@ -3,7 +3,7 @@
 use crate::{RpcContextModule, WsServer};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
-use jsonrpsee_types::error::{CallError, Error, InvalidParams};
+use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
@@ -36,7 +36,7 @@ pub async fn server() -> SocketAddr {
 			Ok(sum)
 		})
 		.unwrap();
-	server.register_method("invalid_params", |_params| Err::<(), _>(CallError::InvalidParams(InvalidParams))).unwrap();
+	server.register_method("invalid_params", |_params| Err::<(), _>(CallError::InvalidParams)).unwrap();
 	server.register_method("call_fail", |_params| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
 	server
 		.register_method("sleep_for", |params| {
@@ -124,7 +124,6 @@ async fn batch_method_call_works() {
 
 #[tokio::test]
 async fn batch_method_call_where_some_calls_fail() {
-	env_logger::init();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -133,11 +132,12 @@ async fn batch_method_call_where_some_calls_fail() {
 	batch.push(r#"{"jsonrpc":"2.0","method":"call_fail","id":2}"#);
 	batch.push(r#"{"jsonrpc":"2.0","method":"add","params":[34, 45],"id":3}"#);
 	let batch = format!("[{}]", batch.join(","));
-	log::debug!("TEST: sending batch={:?}", batch);
+
 	let response = client.send_request_text(batch).await.unwrap();
+
 	assert_eq!(
 		response,
-		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
+		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
 	);
 }
 
@@ -284,7 +284,7 @@ async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	// Good request, but causes error.
 	let req = r#"{"jsonrpc":"2.0","method":"call_fail","params":[],"id":123}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, server_error(Id::Num(123)));
+	assert_eq!(response, r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":123}"#);
 
 	// Connection is still good.
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;

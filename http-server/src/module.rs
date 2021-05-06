@@ -46,10 +46,14 @@ impl RpcModule {
 				match callback(params) {
 					Ok(res) => send_response(id, tx, res),
 					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
-					Err(CallError::Failed(e)) => {
-						// TODO: Return the error message (`e`) to clients, see https://github.com/paritytech/jsonrpsee/issues/299
-						log::error!("Call failed with: {}", e);
-						send_error(id, tx, JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into())
+					Err(CallError::Failed(err)) => {
+						log::error!("Call failed with: {}", err);
+						let err = JsonRpcErrorObject {
+							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
+							message: &err.to_string(),
+							data: None,
+						};
+						send_error(id, tx, err)
 					}
 				};
 
