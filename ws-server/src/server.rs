@@ -201,11 +201,10 @@ async fn background_task(
 
 		receiver.receive_data(&mut data).await?;
 
-		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
-		// used with untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged
-		// enum here and have to try each case individually: first the single request case, then the
-		// batch case and lastly the error. For the worst case – unparseable input – we make three calls
-		// to [`serde_json::from_slice`] which is pretty annoying.
+		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be used with
+		// untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged enum here and have to try
+		// each case individually: first the single request case, then the batch case and lastly the error. For the
+		// worst case – unparseable input – we make three calls to [`serde_json::from_slice`] which is pretty annoying.
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			execute(&tx, req);
@@ -214,12 +213,14 @@ async fn background_task(
 				// Batch responses must be sent back as a single message so we the results from each request in the
 				// batch and read the results off of a new channel, `rx2`, and then send the complete batch response
 				// back to the client over `tx`.
-				let (tx2, mut rx2) = mpsc::unbounded::<String>();
+				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 				for req in batch {
-					execute(&tx2, req);
+					execute(&tx_batch, req);
 				}
-				rx2.close();
-				let results = collect_batch_response(rx2).await;
+				// Closes the receiving half of a channel without dropping it. This prevents any further messages from
+				// being sent on the channel.
+				rx_batch.close();
+				let results = collect_batch_response(rx_batch).await;
 				if let Err(err) = tx.unbounded_send(results) {
 					log::error!("Error sending batch response to the client: {:?}", err)
 				}
