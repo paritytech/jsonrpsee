@@ -60,8 +60,9 @@ pub struct SubscriptionMessage {
 #[derive(Debug)]
 pub struct OnNotificationMessage {
 	/// Request ID of the subscribe message.
-	pub sub_id: SubscriptionId,
 	pub req_id: u64,
+	/// SubscriptionId the method name this notification handler is attached to
+	pub sub_id: SubscriptionId,
 	/// We return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.

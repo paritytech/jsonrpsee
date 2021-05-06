@@ -1,5 +1,4 @@
 use crate::v2::params::{JsonRpcNotificationParamsAlloc, TwoPointZero};
-use beef::Cow;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
