@@ -42,7 +42,7 @@ use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
-use jsonrpsee_utils::server::{collect_batch_responses, send_error, ConnectionId, Methods, RpcSender};
+use jsonrpsee_utils::server::{collect_batch_response, send_error, ConnectionId, Methods, RpcSender};
 
 mod module;
 
@@ -219,7 +219,7 @@ async fn background_task(
 					execute(&tx2, req);
 				}
 				rx2.close();
-				let results = collect_batch_responses(rx2).await;
+				let results = collect_batch_response(rx2).await;
 				if let Err(err) = tx.unbounded_send(results) {
 					log::error!("Error sending batch response to the client: {:?}", err)
 				}

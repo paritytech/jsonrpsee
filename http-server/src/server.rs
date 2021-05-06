@@ -41,7 +41,7 @@ use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
 use jsonrpsee_utils::{
 	hyper_helpers::read_response_to_body,
-	server::{collect_batch_responses, send_error, RpcSender},
+	server::{collect_batch_response, send_error, RpcSender},
 };
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
@@ -240,7 +240,7 @@ impl Server {
 						let response = if single {
 							rx.next().await.expect("Sender is still alive managed by us above; qed")
 						} else {
-							collect_batch_responses(rx).await
+							collect_batch_response(rx).await
 						};
 						log::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
 						Ok::<_, HyperError>(response::ok_response(response))
