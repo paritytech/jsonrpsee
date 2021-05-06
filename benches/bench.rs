@@ -63,6 +63,14 @@ pub fn websocket_requests(crit: &mut Criterion) {
 	run_concurrent_round_trip(&rt, crit, client.clone(), "ws_concurrent_round_trip");
 }
 
+pub fn batched_ws_requests(crit: &mut Criterion) {
+	let rt = TokioRuntime::new().unwrap();
+	let url = rt.block_on(helpers::ws_server());
+	let client =
+		Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
+	run_round_trip_with_batch(&rt, crit, client.clone(), "ws batch requests");
+}
+
 fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Client>, name: &str) {
 	crit.bench_function(name, |b| {
 		b.iter(|| {
