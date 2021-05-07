@@ -36,8 +36,8 @@ use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
 use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponse};
 use crate::TEN_MB_SIZE_BYTES;
 use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, OnNotificationMessage, RequestMessage, Subscription,
-	SubscriptionMessage,
+	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, OnNotificationMessage,
+	RequestMessage, Subscription, SubscriptionMessage,
 };
 use async_std::sync::Mutex;
 use async_trait::async_trait;
@@ -459,14 +459,13 @@ impl SubscriptionClient for WsClient {
 
 	/// Register a notification handler for async messages from the server.
 	///
-	async fn on_notification<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
+	async fn register_notification<'a, N>(&self, method: &'a str) -> Result<NotificationHandler<N>, Error>
 	where
 		N: DeserializeOwned,
 	{
 		log::trace!("[frontend]: on_notification: {:?}", method);
 
 		let sub_id = SubscriptionId::Str(method.to_owned());
-		let req_id = self.id_guard.next_request_id()?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -474,23 +473,27 @@ impl SubscriptionClient for WsClient {
 			.clone()
 			.send(FrontToBack::OnNotification(OnNotificationMessage {
 				send_back: send_back_tx,
-				req_id: req_id,
-				sub_id: sub_id,
+				method: method.to_owned(),
 			}))
 			.await
 			.is_err()
 		{
-			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
 		let res = send_back_rx.await;
-		let (notifs_rx, id) = match res {
+		let (notifs_rx, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
-		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
+
+		Ok(NotificationHandler {
+			to_back: self.to_back.clone(),
+			notifs_rx,
+			marker: PhantomData,
+			method: method.to_owned(),
+		})
 	}
 }
 
@@ -590,12 +593,12 @@ async fn background_task(
 
 			// User called `on_notification` on the front-end.
 			Either::Left((Some(FrontToBack::OnNotification(sub)), _)) => {
-				log::trace!("[backend] registering notification handler: {:?}", sub.sub_id);
+				log::trace!("[backend] registering notification handler: {:?}", sub.method);
 				let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
 
-				if manager.insert_notification_handler(sub.req_id, sub.sub_id.clone(), subscribe_tx).is_ok() {
+				if manager.insert_notification_handler(&sub.method, subscribe_tx).is_ok() {
 					sub.send_back
-						.send(Ok((subscribe_rx, sub.sub_id.clone())))
+						.send(Ok((subscribe_rx, sub.method)))
 						.expect("error sending response for notification handler");
 				} else {
 					let _ = sub.send_back.send(Err(Error::InvalidSubscriptionId));

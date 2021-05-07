@@ -17,6 +17,18 @@ pub struct Subscription<Notif> {
 	pub marker: PhantomData<Notif>,
 }
 
+/// Active NotificationHandler on a Client.
+pub struct NotificationHandler<Notif> {
+	/// Channel to send requests to the background task.
+	pub to_back: mpsc::Sender<FrontToBack>,
+	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
+	pub notifs_rx: mpsc::Receiver<JsonValue>,
+	/// Method,
+	pub method: String,
+	/// Marker in order to pin the `Notif` parameter.
+	pub marker: PhantomData<Notif>,
+}
+
 /// Batch request message.
 #[derive(Debug)]
 pub struct BatchMessage {
@@ -59,14 +71,12 @@ pub struct SubscriptionMessage {
 /// OnNotification message.
 #[derive(Debug)]
 pub struct OnNotificationMessage {
-	/// Request ID of the subscribe message.
-	pub req_id: u64,
-	/// SubscriptionId the method name this notification handler is attached to
-	pub sub_id: SubscriptionId,
+	/// Method name this notification handler is attached to
+	pub method: String,
 	/// We return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
+	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, String), Error>>,
 }
 
 /// Message that the Client can send to the background task.

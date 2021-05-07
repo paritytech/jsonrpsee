@@ -16,7 +16,6 @@ enum Kind {
 	PendingMethodCall(PendingCallOneshot),
 	PendingSubscription((RequestId, PendingSubscriptionOneshot, UnsubscribeMethod)),
 	Subscription((RequestId, SubscriptionSink, UnsubscribeMethod)),
-	NotificationHandler(SubscriptionSink),
 }
 
 #[derive(Debug)]
@@ -58,6 +57,8 @@ pub struct RequestManager {
 	subscriptions: HashMap<SubscriptionId, RequestId>,
 	/// Pending batch requests
 	batches: FnvHashMap<Vec<RequestId>, BatchState>,
+	/// Registered Methods for incoming notifications
+	notification_handlers: HashMap<String, SubscriptionSink>,
 }
 
 impl RequestManager {
@@ -148,20 +149,12 @@ impl RequestManager {
 	}
 
 	/// Inserts a subscription for handling incoming notifications
-	pub fn insert_notification_handler(
-		&mut self,
-		sub_req_id: RequestId,
-		subscription_id: SubscriptionId,
-		send_back: SubscriptionSink,
-	) -> Result<(), Error> {
-		if let (Entry::Vacant(request), Entry::Vacant(subscription)) =
-			(self.requests.entry(sub_req_id), self.subscriptions.entry(subscription_id))
-		{
-			request.insert(Kind::NotificationHandler(send_back));
-			subscription.insert(sub_req_id);
+	pub fn insert_notification_handler(&mut self, method: &str, send_back: SubscriptionSink) -> Result<(), Error> {
+		if let Entry::Vacant(handle) = self.notification_handlers.entry(method.to_owned()) {
+			handle.insert(send_back);
 			Ok(())
 		} else {
-			Err(Error::InvalidRequestId)
+			Err(Error::MethodAlreadyRegistered(method.to_owned()))
 		}
 	}
 
@@ -245,7 +238,6 @@ impl RequestManager {
 			Kind::PendingMethodCall(_) => RequestStatus::PendingMethodCall,
 			Kind::PendingSubscription(_) => RequestStatus::PendingSubscription,
 			Kind::Subscription(_) => RequestStatus::Subscription,
-			Kind::NotificationHandler(_) => RequestStatus::Subscription,
 		})
 	}
 
@@ -263,8 +255,8 @@ impl RequestManager {
 	/// Get a mutable reference to underlying `Sink` in order to send incmoing notifications to the subscription.
 	///
 	/// Returns `Some` if the `request_id` was registered as a NotificationHandler otherwise `None`.
-	pub fn as_notification_handler_mut(&mut self, request_id: &RequestId) -> Option<&mut SubscriptionSink> {
-		if let Some(Kind::NotificationHandler(sink)) = self.requests.get_mut(request_id) {
+	pub fn as_notification_handler_mut(&mut self, method: &str) -> Option<&mut SubscriptionSink> {
+		if let Some(sink) = self.notification_handlers.get_mut(&method.to_owned()) {
 			Some(sink)
 		} else {
 			None

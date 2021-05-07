@@ -1,5 +1,5 @@
 use crate::v2::params::{JsonRpcParams, RpcParams};
-use crate::{Error, Subscription};
+use crate::{Error, NotificationHandler, Subscription};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
@@ -46,7 +46,7 @@ pub trait SubscriptionClient: Client {
 		Notif: DeserializeOwned;
 
 	/// Register a Subscription<Notif> that will listen for incoming JSON-RPC notifications
-	async fn on_notification<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
+	async fn register_notification<'a, Notif>(&self, method: &'a str) -> Result<NotificationHandler<Notif>, Error>
 	where
 		Notif: DeserializeOwned;
 }
