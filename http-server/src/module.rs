@@ -1,6 +1,6 @@
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
-	error::{CallError, Error, InvalidParams},
+	error::{CallError, Error},
 	traits::RpcMethod,
 	v2::params::RpcParams,
 };
@@ -36,7 +36,7 @@ impl RpcModule {
 	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: RpcMethod<R, InvalidParams>,
+		F: RpcMethod<R, CallError>,
 	{
 		self.verify_method_name(method_name)?;
 
@@ -45,7 +45,16 @@ impl RpcModule {
 			Box::new(move |id, params, tx, _| {
 				match callback(params) {
 					Ok(res) => send_response(id, tx, res),
-					Err(InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+					Err(CallError::Failed(err)) => {
+						log::error!("Call failed with: {}", err);
+						let err = JsonRpcErrorObject {
+							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
+							message: &err.to_string(),
+							data: None,
+						};
+						send_error(id, tx, err)
+					}
 				};
 
 				Ok(())
@@ -99,7 +108,7 @@ impl<Context> RpcContextModule<Context> {
 			Box::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
-					Err(CallError::InvalidParams(_)) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
+					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
 					Err(CallError::Failed(err)) => {
 						let err = JsonRpcErrorObject {
 							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),

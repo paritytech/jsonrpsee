@@ -5,7 +5,18 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
+use std::fmt;
 use std::net::SocketAddr;
+
+/// Applications can/should provide their own error.
+#[derive(Debug)]
+struct MyAppError;
+impl fmt::Display for MyAppError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "MyAppError")
+	}
+}
+impl std::error::Error for MyAppError {}
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
@@ -23,6 +34,15 @@ pub async fn server() -> SocketAddr {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
 			Ok(sum)
+		})
+		.unwrap();
+	server.register_method("invalid_params", |_params| Err::<(), _>(CallError::InvalidParams)).unwrap();
+	server.register_method("call_fail", |_params| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	server
+		.register_method("sleep_for", |params| {
+			let sleep: Vec<u64> = params.parse()?;
+			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
+			Ok("Yawn!")
 		})
 		.unwrap();
 	let addr = server.local_addr().unwrap();
@@ -61,7 +81,7 @@ pub async fn server_with_context() -> SocketAddr {
 }
 
 #[tokio::test]
-async fn single_method_call_works() {
+async fn single_method_calls_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -71,6 +91,54 @@ async fn single_method_call_works() {
 
 		assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(i)));
 	}
+}
+
+#[tokio::test]
+async fn slow_method_calls_works() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"sleep_for","params":[1000],"id":123}"#;
+	let response = client.send_request_text(req).await.unwrap();
+
+	assert_eq!(response, ok_response(JsonValue::String("Yawn!".to_owned()), Id::Num(123)));
+}
+
+#[tokio::test]
+async fn batch_method_call_works() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let mut batch = Vec::new();
+	batch.push(r#"{"jsonrpc":"2.0","method":"sleep_for","params":[1000],"id":123}"#.to_string());
+	for i in 1..4 {
+		batch.push(format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i));
+	}
+	let batch = format!("[{}]", batch.join(","));
+	let response = client.send_request_text(batch).await.unwrap();
+	assert_eq!(
+		response,
+		r#"[{"jsonrpc":"2.0","result":"Yawn!","id":123},{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","result":"hello","id":2},{"jsonrpc":"2.0","result":"hello","id":3}]"#
+	);
+}
+
+#[tokio::test]
+async fn batch_method_call_where_some_calls_fail() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let mut batch = Vec::new();
+	batch.push(r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#);
+	batch.push(r#"{"jsonrpc":"2.0","method":"call_fail","id":2}"#);
+	batch.push(r#"{"jsonrpc":"2.0","method":"add","params":[34, 45],"id":3}"#);
+	let batch = format!("[{}]", batch.join(","));
+
+	let response = client.send_request_text(batch).await.unwrap();
+
+	assert_eq!(
+		response,
+		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
+	);
 }
 
 #[tokio::test]
@@ -201,4 +269,25 @@ async fn invalid_request_should_not_close_connection() {
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
 	let response = client.send_request_text(request).await.unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(33)));
+}
+
+#[tokio::test]
+async fn valid_request_that_fails_to_execute_should_not_close_connection() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	// Good request, executes fine
+	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
+	let response = client.send_request_text(request).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(33)));
+
+	// Good request, but causes error.
+	let req = r#"{"jsonrpc":"2.0","method":"call_fail","params":[],"id":123}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":123}"#);
+
+	// Connection is still good.
+	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;
+	let response = client.send_request_text(request).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(333)));
 }
