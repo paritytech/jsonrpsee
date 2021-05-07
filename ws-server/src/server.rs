@@ -210,7 +210,7 @@ async fn background_task(
 			execute(&tx, req);
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
-				// Batch responses must be sent back as a single message so we the results from each request in the
+				// Batch responses must be sent back as a single message so we read the results from each request in the
 				// batch and read the results off of a new channel, `rx2`, and then send the complete batch response
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
