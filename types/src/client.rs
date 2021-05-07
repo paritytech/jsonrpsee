@@ -68,9 +68,9 @@ pub struct SubscriptionMessage {
 	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
 }
 
-/// OnNotification message.
+/// RegisterNotification message.
 #[derive(Debug)]
-pub struct OnNotificationMessage {
+pub struct RegisterNotificationMessage {
 	/// Method name this notification handler is attached to
 	pub method: String,
 	/// We return a [`mpsc::Receiver`] that will receive notifications.
@@ -90,8 +90,8 @@ pub enum FrontToBack {
 	Request(RequestMessage),
 	/// Send a subscription request to the server.
 	Subscribe(SubscriptionMessage),
-	/// Create a notification handler subscription
-	OnNotification(OnNotificationMessage),
+	/// Register a notification handler
+	RegisterNotification(RegisterNotificationMessage),
 	/// When a subscription channel is closed, we send this message to the background
 	/// task to mark it ready for garbage collection.
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.

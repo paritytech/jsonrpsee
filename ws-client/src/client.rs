@@ -31,12 +31,12 @@ use crate::helpers::{
 use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcErrorAlloc;
-use crate::v2::params::{Id, JsonRpcParams, SubscriptionId};
+use crate::v2::params::{Id, JsonRpcParams};
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
 use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponse};
 use crate::TEN_MB_SIZE_BYTES;
 use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, OnNotificationMessage,
+	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, RegisterNotificationMessage,
 	RequestMessage, Subscription, SubscriptionMessage,
 };
 use async_std::sync::Mutex;
@@ -463,15 +463,13 @@ impl SubscriptionClient for WsClient {
 	where
 		N: DeserializeOwned,
 	{
-		log::trace!("[frontend]: on_notification: {:?}", method);
-
-		let sub_id = SubscriptionId::Str(method.to_owned());
+		log::trace!("[frontend]: register_notification: {:?}", method);
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::OnNotification(OnNotificationMessage {
+			.send(FrontToBack::RegisterNotification(RegisterNotificationMessage {
 				send_back: send_back_tx,
 				method: method.to_owned(),
 			}))
@@ -592,16 +590,16 @@ async fn background_task(
 			}
 
 			// User called `on_notification` on the front-end.
-			Either::Left((Some(FrontToBack::OnNotification(sub)), _)) => {
-				log::trace!("[backend] registering notification handler: {:?}", sub.method);
+			Either::Left((Some(FrontToBack::RegisterNotification(reg)), _)) => {
+				log::trace!("[backend] registering notification handler: {:?}", reg.method);
 				let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
 
-				if manager.insert_notification_handler(&sub.method, subscribe_tx).is_ok() {
-					sub.send_back
-						.send(Ok((subscribe_rx, sub.method)))
+				if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
+					reg.send_back
+						.send(Ok((subscribe_rx, reg.method)))
 						.expect("error sending response for notification handler");
 				} else {
-					let _ = sub.send_back.send(Err(Error::InvalidSubscriptionId));
+					let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
 				}
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
