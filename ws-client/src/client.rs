@@ -589,7 +589,7 @@ async fn background_task(
 				}
 			}
 
-			// User called `on_notification` on the front-end.
+			// User called `register_notification` on the front-end.
 			Either::Left((Some(FrontToBack::RegisterNotification(reg)), _)) => {
 				log::trace!("[backend] registering notification handler: {:?}", reg.method);
 				let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
@@ -601,6 +601,12 @@ async fn background_task(
 				} else {
 					let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
 				}
+			}
+
+			// User called `on_notification` on the front-end.
+			Either::Left((Some(FrontToBack::UnregisterNotification(method)), _)) => {
+				log::trace!("[backend] unregistering notification handler: {:?}", method);
+				let _ = manager.remove_notification_handler(&method);
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.

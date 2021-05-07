@@ -92,6 +92,8 @@ pub enum FrontToBack {
 	Subscribe(SubscriptionMessage),
 	/// Register a notification handler
 	RegisterNotification(RegisterNotificationMessage),
+	/// Unregister a notification handler
+	UnregisterNotification(String),
 	/// When a subscription channel is closed, we send this message to the background
 	/// task to mark it ready for garbage collection.
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
@@ -130,5 +132,15 @@ impl<Notif> Drop for Subscription<Notif> {
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
 		let id = std::mem::replace(&mut self.id, SubscriptionId::Num(0));
 		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(id)).now_or_never();
+	}
+}
+
+impl<Notif> Drop for NotificationHandler<Notif> {
+	fn drop(&mut self) {
+		// We can't actually guarantee that this goes through. If the background task is busy, then
+		// the channel's buffer will be full, and our unsubscription request will never make it.
+		// However, when a notification arrives, the background task will realize that the channel
+		// to the `Subscription` has been closed, and will perform the unsubscribe.
+		let _ = self.to_back.send(FrontToBack::UnregisterNotification((&self.method).to_owned())).now_or_never();
 	}
 }

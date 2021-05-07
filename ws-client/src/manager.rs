@@ -148,13 +148,22 @@ impl RequestManager {
 		}
 	}
 
-	/// Inserts a subscription for handling incoming notifications
+	/// Inserts a handler for incoming notifications
 	pub fn insert_notification_handler(&mut self, method: &str, send_back: SubscriptionSink) -> Result<(), Error> {
 		if let Entry::Vacant(handle) = self.notification_handlers.entry(method.to_owned()) {
 			handle.insert(send_back);
 			Ok(())
 		} else {
 			Err(Error::MethodAlreadyRegistered(method.to_owned()))
+		}
+	}
+
+	/// Removes a notification handler
+	pub fn remove_notification_handler(&mut self, method: &str) -> Result<(), Error> {
+		if let Some(_) = self.notification_handlers.remove(&method.to_owned()) {
+			Ok(())
+		} else {
+			Err(Error::UnregisteredNotification(method.to_owned()))
 		}
 	}
 
