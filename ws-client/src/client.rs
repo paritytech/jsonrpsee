@@ -486,12 +486,7 @@ impl SubscriptionClient for WsClient {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		Ok(NotificationHandler {
-			to_back: self.to_back.clone(),
-			notifs_rx,
-			marker: PhantomData,
-			method: method.to_owned(),
-		})
+		Ok(NotificationHandler { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, method })
 	}
 }
 
@@ -632,10 +627,10 @@ async fn background_task(
 				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifResponse<_>>(&raw) {
 					log::debug!("[backend]: recv notification {:?}", notif);
 					match process_notification(&mut manager, notif) {
-						Ok(_) => return,
+						Ok(_) => {}
 						Err(err) => {
 							let _ = front_error.send(err);
-							return;
+							break;
 						}
 					}
 				}

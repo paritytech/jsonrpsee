@@ -265,11 +265,7 @@ impl RequestManager {
 	///
 	/// Returns `Some` if the `request_id` was registered as a NotificationHandler otherwise `None`.
 	pub fn as_notification_handler_mut(&mut self, method: &str) -> Option<&mut SubscriptionSink> {
-		if let Some(sink) = self.notification_handlers.get_mut(&method.to_owned()) {
-			Some(sink)
-		} else {
-			None
-		}
+		self.notification_handlers.get_mut(&method.to_owned())
 	}
 
 	/// Reverse lookup to get the request ID for a subscription ID.
