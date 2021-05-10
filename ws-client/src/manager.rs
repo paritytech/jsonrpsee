@@ -263,9 +263,9 @@ impl RequestManager {
 
 	/// Get a mutable reference to underlying `Sink` in order to send incmoing notifications to the subscription.
 	///
-	/// Returns `Some` if the `request_id` was registered as a NotificationHandler otherwise `None`.
-	pub fn as_notification_handler_mut(&mut self, method: &str) -> Option<&mut SubscriptionSink> {
-		self.notification_handlers.get_mut(&method.to_owned())
+	/// Returns `Some` if the `method` was registered as a NotificationHandler otherwise `None`.
+	pub fn as_notification_handler_mut(&mut self, method: String) -> Option<&mut SubscriptionSink> {
+		self.notification_handlers.get_mut(&method)
 	}
 
 	/// Reverse lookup to get the request ID for a subscription ID.
