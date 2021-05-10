@@ -596,7 +596,7 @@ async fn background_task(
 				}
 			}
 
-			// User dopped the notificationHandler for this method
+			// User dropped the notificationHandler for this method
 			Either::Left((Some(FrontToBack::UnregisterNotification(method)), _)) => {
 				log::trace!("[backend] unregistering notification handler: {:?}", method);
 				let _ = manager.remove_notification_handler(method);
