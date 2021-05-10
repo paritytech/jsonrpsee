@@ -81,7 +81,8 @@ pub fn process_notification(manager: &mut RequestManager, notif: JsonRpcNotifRes
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
 			Err(err) => {
-				log::error!("Error sending notification subscription {:?} error: {:?}", notif.method, err);
+				log::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
+				let _ = manager.remove_notification_handler(notif.method.to_owned());
 				Err(Error::Internal(err.into_send_error()))
 			}
 		},
