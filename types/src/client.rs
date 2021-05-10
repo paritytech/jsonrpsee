@@ -23,7 +23,7 @@ pub struct NotificationHandler<Notif> {
 	pub to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
 	pub notifs_rx: mpsc::Receiver<JsonValue>,
-	/// Method,
+	/// Method Name
 	pub method: String,
 	/// Marker in order to pin the `Notif` parameter.
 	pub marker: PhantomData<Notif>,

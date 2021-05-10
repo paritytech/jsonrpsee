@@ -67,7 +67,7 @@ pub enum Error {
 	/// Invalid request ID.
 	#[error("Invalid request ID")]
 	InvalidRequestId,
-	/// Unregistered notification method
+	/// Client received a notification with an unregistered method
 	#[error("Unregistered notification method")]
 	UnregisteredNotification(String),
 	/// A request with the same request ID has already been registered.
