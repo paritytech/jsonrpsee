@@ -45,7 +45,7 @@ pub trait SubscriptionClient: Client {
 	where
 		Notif: DeserializeOwned;
 
-	/// Register a Subscription<Notif> that will listen for incoming JSON-RPC notifications
+	/// Register a NotificationHandler<Notif> that will listen for incoming JSON-RPC notifications
 	async fn register_notification<'a, Notif>(&self, method: &'a str) -> Result<NotificationHandler<Notif>, Error>
 	where
 		Notif: DeserializeOwned;
