@@ -6,7 +6,7 @@ use crate::v2::{
 };
 use crate::{
 	traits::{Client, SubscriptionClient},
-	Error, Subscription, WsClientBuilder,
+	Error, NotificationHandler, Subscription, WsClientBuilder,
 };
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
@@ -78,6 +78,23 @@ async fn subscription_works() {
 			client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 		let response: String = sub.next().await.unwrap();
 		assert_eq!("hello my friend".to_owned(), response);
+	}
+}
+
+#[tokio::test]
+async fn notification_handler_works() {
+	let server = WebSocketTestServer::with_hardcoded_notification(
+		"127.0.0.1:0".parse().unwrap(),
+		server_notification("test", "server originated notification works".into()),
+	)
+	.await;
+
+	let uri = to_ws_uri_string(server.local_addr());
+	let client = WsClientBuilder::default().build(&uri).await.unwrap();
+	{
+		let mut nh: NotificationHandler<String> = client.register_notification("test").await.unwrap();
+		let response: String = nh.next().await.unwrap();
+		assert_eq!("server originated notification works".to_owned(), response);
 	}
 }
 

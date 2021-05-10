@@ -124,6 +124,28 @@ where
 	}
 }
 
+impl<Notif> NotificationHandler<Notif>
+where
+	Notif: DeserializeOwned,
+{
+	/// Returns the next notification from the stream
+	/// This may return `None` if the method has been unregistered,
+	/// may happen if the channel becomes full or is dropped.
+	///
+	/// Ignores any malformed packet.
+	pub async fn next(&mut self) -> Option<Notif> {
+		loop {
+			match self.notifs_rx.next().await {
+				Some(n) => match serde_json::from_value(n) {
+					Ok(parsed) => return Some(parsed),
+					Err(e) => log::debug!("NotificationHandler response error: {:?}", e),
+				},
+				None => return None,
+			}
+		}
+	}
+}
+
 impl<Notif> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
