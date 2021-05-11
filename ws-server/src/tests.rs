@@ -4,8 +4,8 @@ use crate::{RpcContextModule, WsServer};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_types::error::{CallError, Error};
-use serde_json::Value as JsonValue;
 use serde::Serialize;
+use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
 
@@ -47,18 +47,6 @@ pub async fn server() -> SocketAddr {
 		})
 		.unwrap();
 
-	#[derive(Serialize)]
-	struct A { a: u8 }
-	#[derive(Serialize)]
-	enum B {
-		One(A),
-		Two,
-	}
-
-	server.register_method::<B, _>("advanced_params", |params| {
-		let a = params.one()?;
-		Ok(B::One(A { a }))
-	}).unwrap();
 	let addr = server.local_addr().unwrap();
 
 	tokio::spawn(async { server.start().await });
