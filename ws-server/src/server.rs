@@ -55,7 +55,8 @@ type Subscribers<P> = Arc<Mutex<FxHashMap<SubscriptionId, SubscriberState<P>>>>;
 pub struct SubscriberState<P> {
 	/// Sink.
 	sink: mpsc::UnboundedSender<String>,
-	/// Either no params or the params has already been fetched.
+	/// Either no params or the params has not been fetched.
+	/// Note:  `subscriptions` with `params` are not pure/idempotent` such that they are removed from the Subscribers.
 	params: Option<P>,
 	/// Subscription ID.
 	sub_id: SubscriptionId,
