@@ -1,4 +1,5 @@
 use futures_channel::mpsc::{self, Receiver, Sender};
+use futures_channel::oneshot;
 use futures_util::{
 	future::FutureExt,
 	io::{BufReader, BufWriter},
@@ -118,10 +119,19 @@ impl WebSocketTestServer {
 
 	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every connection.
 	pub async fn with_hardcoded_notification(sockaddr: SocketAddr, notification: String) -> Self {
-		let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
-		let local_addr = listener.local_addr().unwrap();
-		let (tx, rx) = mpsc::channel::<()>(4);
-		tokio::spawn(server_backend(listener, rx, ServerMode::Notification(notification)));
+		let (tx, rx) = mpsc::channel::<()>(1);
+		let (addr_tx, addr_rx) = oneshot::channel();
+
+		std::thread::spawn(move || {
+			let rt = tokio::runtime::Runtime::new().unwrap();
+			let listener = rt.block_on(async_std::net::TcpListener::bind(sockaddr)).unwrap();
+			let local_addr = listener.local_addr().unwrap();
+
+			addr_tx.send(local_addr).unwrap();
+			rt.block_on(server_backend(listener, rx, ServerMode::Notification(notification)));
+		});
+
+		let local_addr = addr_rx.await.unwrap();
 
 		Self { local_addr, exit: tx }
 	}
@@ -209,7 +219,8 @@ async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mu
 	loop {
 		let next_ws = ws_stream.next().fuse();
 		let next_exit = exit.next().fuse();
-		let time_out = tokio::time::sleep(Duration::from_secs(1)).fuse();
+		let time_out = tokio::time::sleep(Duration::from_millis(200)).fuse();
+
 		pin_mut!(time_out, next_exit, next_ws);
 
 		select! {

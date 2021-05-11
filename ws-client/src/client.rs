@@ -626,13 +626,7 @@ async fn background_task(
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifResponse<_>>(&raw) {
 					log::debug!("[backend]: recv notification {:?}", notif);
-					match process_notification(&mut manager, notif) {
-						Ok(_) => {}
-						Err(err) => {
-							let _ = front_error.send(err);
-							break;
-						}
-					}
+					let _ = process_notification(&mut manager, notif);
 				}
 				// Batch response.
 				else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcResponse<_>>>(&raw) {

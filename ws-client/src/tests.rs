@@ -99,6 +99,37 @@ async fn notification_handler_works() {
 }
 
 #[tokio::test]
+async fn notification_without_polling_doesnt_make_client_unuseable() {
+	let server = WebSocketTestServer::with_hardcoded_notification(
+		"127.0.0.1:0".parse().unwrap(),
+		server_notification("test", "server originated notification".into()),
+	)
+	.await;
+
+	let uri = to_ws_uri_string(server.local_addr());
+	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&uri).await.unwrap();
+	let mut nh: NotificationHandler<String> = client.register_notification("test").await.unwrap();
+
+	// don't poll the notification stream for 2 seconds, should be full now.
+	std::thread::sleep(std::time::Duration::from_secs(2));
+
+	// Capacity is `num_sender` + `capacity`
+	for _ in 0..5 {
+		assert!(nh.next().await.is_some());
+	}
+
+	// NOTE: this is now unuseable and unregistered.
+	assert!(nh.next().await.is_none());
+
+	// The same subscription should be possible to register again.
+	let mut other_nh: NotificationHandler<String> = client.register_notification("test").await.unwrap();
+
+	// check that the new subscription works and the old one is still closed
+	assert!(other_nh.next().await.is_some());
+	assert!(nh.next().await.is_none());
+}
+
+#[tokio::test]
 async fn batch_request_works() {
 	let batch_request = vec![
 		("say_hello", JsonRpcParams::NoParams),
