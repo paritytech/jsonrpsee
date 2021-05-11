@@ -19,11 +19,13 @@ async fn server() -> SocketAddr {
 			Ok(sum)
 		})
 		.unwrap();
-	server.register_method("multiparam", |params| {
-		let params: (String, String, Vec<u8>) = params.parse()?;
-		let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
-		Ok(r)
-	}).unwrap();
+	server
+		.register_method("multiparam", |params| {
+			let params: (String, String, Vec<u8>) = params.parse()?;
+			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
+			Ok(r)
+		})
+		.unwrap();
 	server.register_method("notif", |_| Ok("")).unwrap();
 	tokio::spawn(async move { server.start().await.unwrap() });
 	addr
