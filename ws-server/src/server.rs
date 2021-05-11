@@ -56,7 +56,6 @@ pub struct SubscriberState<P> {
 	/// Sink.
 	sink: mpsc::UnboundedSender<String>,
 	/// Either no params or the params has already been fetched.
-	// TODO: need to distinguish between fetched param/no params.
 	params: Option<P>,
 	/// Subscription ID.
 	sub_id: SubscriptionId,
