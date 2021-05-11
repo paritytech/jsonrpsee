@@ -107,7 +107,6 @@ impl<P> SubscriptionSink<P> {
 		let result = to_raw_value(result)?;
 
 
-		let sub = subs.get(&sub.sub_id).ok_or_else(|| anyhow::anyhow!("Invalid subscription ID"))?;
 		let msg = serde_json::to_string(&JsonRpcNotification {
 			jsonrpc: TwoPointZero,
 			method: self.method,
