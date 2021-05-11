@@ -29,6 +29,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::value::to_raw_value;
 use soketto::handshake::{server::Response, Server as SokettoServer};
@@ -49,15 +50,25 @@ mod module;
 pub use module::{RpcContextModule, RpcModule};
 
 type SubscriptionId = u64;
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>;
+type Subscribers<P> = Arc<Mutex<FxHashMap<SubscriptionId, SubscriberState<P>>>>;
 
-#[derive(Clone)]
-pub struct SubscriptionSink {
-	method: &'static str,
-	subscribers: Subscribers,
+pub struct SubscriberState<P> {
+	/// Sink.
+	sink: mpsc::UnboundedSender<String>,
+	/// Either no params or the params has already been fetched.
+	// TODO: need to distinguish between fetched param/no params.
+	params: Option<P>,
+	/// Subscription ID.
+	sub_id: SubscriptionId,
 }
 
-impl SubscriptionSink {
+#[derive(Clone)]
+pub struct SubscriptionSink<P> {
+	method: &'static str,
+	subscribers: Subscribers<P>,
+}
+
+impl<P> SubscriptionSink<P> {
 	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
@@ -67,7 +78,7 @@ impl SubscriptionSink {
 		let mut errored = Vec::new();
 		let mut subs = self.subscribers.lock();
 
-		for ((conn_id, sub_id), sender) in subs.iter() {
+		for (sub_id, sub) in subs.iter() {
 			let msg = serde_json::to_string(&JsonRpcNotification {
 				jsonrpc: TwoPointZero,
 				method: self.method,
@@ -75,8 +86,8 @@ impl SubscriptionSink {
 			})?;
 
 			// Log broken connections
-			if sender.unbounded_send(msg).is_err() {
-				errored.push((*conn_id, *sub_id));
+			if sub.sink.unbounded_send(msg).is_err() {
+				errored.push(*sub_id);
 			}
 		}
 
@@ -86,6 +97,37 @@ impl SubscriptionSink {
 		}
 
 		Ok(())
+	}
+
+	/// Send response to a specific sender of a param/subscription ID
+	pub fn send_one<T>(&mut self, result: &T, sub: SubscriberState<P>) -> anyhow::Result<()>
+	where
+		T: Serialize,
+	{
+		let result = to_raw_value(result)?;
+
+		let subs = self.subscribers.lock();
+
+		let sub = subs.get(&sub.sub_id).ok_or_else(|| anyhow::anyhow!("Invalid subscription ID"))?;
+		let msg = serde_json::to_string(&JsonRpcNotification {
+			jsonrpc: TwoPointZero,
+			method: self.method,
+			params: JsonRpcNotificationParams { subscription: sub.sub_id, result: &*result },
+		})?;
+
+		let _ = sub.sink.unbounded_send(msg);
+		Ok(())
+	}
+
+	/// Fetch the subscription with input to be consumed
+	/// Use the `send_one` to send back the result to this subscription.
+	///
+	// TODO: optimize with a `Vec` instead of locking every time.
+	pub fn next_with_input(&self) -> Option<SubscriberState<P>> {
+		let mut subs = self.subscribers.lock();
+
+		let sub_id = subs.iter().find(|(_, s)| s.params.is_some()).map(|(sub_id, _)| sub_id).copied()?;
+		subs.remove(&sub_id)
 	}
 }
 
@@ -112,11 +154,11 @@ impl Server {
 	}
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription(
+	pub fn register_subscription<P: DeserializeOwned + Send + Sync + 'static>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink, Error> {
+	) -> Result<SubscriptionSink<P>, Error> {
 		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name)
 	}
 

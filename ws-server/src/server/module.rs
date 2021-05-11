@@ -1,4 +1,4 @@
-use crate::server::{RpcParams, SubscriptionId, SubscriptionSink};
+use crate::server::{RpcParams, SubscriptionId, SubscriptionSink, SubscriberState};
 use jsonrpsee_types::{
 	error::{CallError, Error},
 	v2::error::{JsonRpcErrorCode, JsonRpcErrorObject},
@@ -7,7 +7,7 @@ use jsonrpsee_types::{traits::RpcMethod, v2::error::CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_utils::server::{send_error, send_response, Methods};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -67,11 +67,11 @@ impl RpcModule {
 	}
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription(
+	pub fn register_subscription<P: DeserializeOwned + Send + Sync + 'static>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink, Error> {
+	) -> Result<SubscriptionSink<P>, Error> {
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
@@ -85,13 +85,14 @@ impl RpcModule {
 			let subscribers = subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
-				Box::new(move |id, _, tx, conn| {
+				Box::new(move |id, params, tx, _conn| {
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						subscribers.lock().insert((conn, sub_id), tx.clone());
+						let params = params.parse().ok();
+						subscribers.lock().insert(sub_id, SubscriberState { sink: tx.clone(), params, sub_id, });
 
 						sub_id
 					};
@@ -107,10 +108,10 @@ impl RpcModule {
 			let subscribers = subscribers.clone();
 			self.methods.insert(
 				unsubscribe_method_name,
-				Box::new(move |id, params, tx, conn| {
+				Box::new(move |id, params, tx, _conn| {
 					let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
-					subscribers.lock().remove(&(conn, sub_id));
+					subscribers.lock().remove(&sub_id);
 
 					send_response(id, tx, "Unsubscribed");
 
