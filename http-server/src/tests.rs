@@ -19,6 +19,13 @@ async fn server() -> SocketAddr {
 			Ok(sum)
 		})
 		.unwrap();
+	server
+		.register_method("multiparam", |params| {
+			let params: (String, String, Vec<u8>) = params.parse()?;
+			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
+			Ok(r)
+		})
+		.unwrap();
 	server.register_method("notif", |_| Ok("")).unwrap();
 	tokio::spawn(async move { server.start().await.unwrap() });
 	addr
@@ -88,6 +95,17 @@ async fn single_method_call_with_params() {
 	let response = http_request(req.into(), uri).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
+}
+
+#[tokio::test]
+async fn single_method_call_with_multiple_params_of_different_types() {
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":"multiparam", "params":["Hello", "World", [0,1,2,3]],"id":1}"#;
+	let response = http_request(req.into(), uri).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, ok_response(JsonValue::String("string1=5, string2=5, vec=4".into()), Id::Num(1)));
 }
 
 #[tokio::test]
