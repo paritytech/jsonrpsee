@@ -48,16 +48,17 @@ mod module;
 pub use module::{RpcContextModule, RpcModule};
 
 type SubscriptionId = u64;
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>;
+type Subscribers<P> = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), InnerSink<P>>>>;
 
 #[derive(Clone)]
-pub struct SubscriptionSink {
+pub struct SubscriptionSink<P> {
 	method: &'static str,
-	subscribers: Subscribers,
+	subscribers: Subscribers<P>,
 }
 
-impl SubscriptionSink {
-	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
+impl<P> SubscriptionSink<P> {
+	/// Send message on all subscription without input.
+	pub fn send_without_input<T>(&mut self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
 	{
@@ -67,6 +68,10 @@ impl SubscriptionSink {
 		let mut subs = self.subscribers.lock();
 
 		for ((conn_id, sub_id), sender) in subs.iter() {
+			if sender.params.is_none() {
+				continue;
+			}
+
 			let msg = serde_json::to_string(&JsonRpcNotification {
 				jsonrpc: TwoPointZero,
 				method: self.method,
@@ -74,7 +79,7 @@ impl SubscriptionSink {
 			})?;
 
 			// Log broken connections
-			if sender.unbounded_send(msg).is_err() {
+			if sender.sink.unbounded_send(msg).is_err() {
 				errored.push((*conn_id, *sub_id));
 			}
 		}
@@ -86,20 +91,41 @@ impl SubscriptionSink {
 
 		Ok(())
 	}
+
+	/// Extract subscriptions with input.
+	/// Usually, you want process the input before sending back
+	/// data on each subscription.
+	pub fn extract_with_input(&self) -> Vec<InnerSink<P>> {
+		let mut subs = self.subscribers.lock();
+
+		let mut input = Vec::new();
+		*subs = std::mem::replace(&mut *subs, FxHashMap::default())
+			.into_iter()
+			.filter_map(|(k, v)| {
+				if v.params.is_some() {
+					input.push(v);
+					None
+				} else {
+					Some((k, v))
+				}
+			})
+			.collect();
+		input
+	}
 }
 
-pub struct InnerSubSinkParams<P> {
+pub struct InnerSink<P> {
 	/// Sink.
 	sink: mpsc::UnboundedSender<String>,
 	/// Params.
-	params: P,
+	params: Option<P>,
 	/// Subscription ID.
 	sub_id: SubscriptionId,
 	/// Method name
 	method: &'static str,
 }
 
-impl<P> InnerSubSinkParams<P> {
+impl<P> InnerSink<P> {
 	pub fn send<T>(&self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
@@ -114,20 +140,8 @@ impl<P> InnerSubSinkParams<P> {
 		self.sink.unbounded_send(msg).map_err(|e| anyhow::anyhow!("{:?}", e))
 	}
 
-	pub fn params(&self) -> &P {
+	pub fn params(&self) -> &Option<P> {
 		&self.params
-	}
-}
-
-pub struct SubscriptionSinkParams<P> {
-	inner: Arc<Mutex<FxHashMap<SubscriptionId, InnerSubSinkParams<P>>>>,
-}
-
-impl<P> SubscriptionSinkParams<P> {
-	pub fn next(&self) -> Option<InnerSubSinkParams<P>> {
-		let mut subs = self.inner.lock();
-		let key = subs.keys().next().copied()?;
-		subs.remove(&key)
 	}
 }
 
@@ -154,23 +168,13 @@ impl Server {
 	}
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription(
+	pub fn register_subscription<P: DeserializeOwned + Send + Sync + 'static>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink, Error> {
+	) -> Result<SubscriptionSink<P>, Error> {
 		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name)
 	}
-
-	/// Register a new RPC subscription with the possibility to get the params in subscription request.
-	pub fn register_subscription_with_params<P: DeserializeOwned + Send + Sync + 'static>(
-		&mut self,
-		subscribe_method_name: &'static str,
-		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSinkParams<P>, Error> {
-		self.root.register_subscription_with_params(subscribe_method_name, unsubscribe_method_name)
-	}
-
 	/// Register all methods from a module on this server.
 	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
 		self.root.merge(module)

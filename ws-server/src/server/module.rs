@@ -1,4 +1,4 @@
-use crate::server::{InnerSubSinkParams, RpcParams, SubscriptionId, SubscriptionSink, SubscriptionSinkParams};
+use crate::server::{RpcParams, SubscriptionId, SubscriptionSink, InnerSink};
 use jsonrpsee_types::{
 	error::{CallError, Error},
 	v2::error::{JsonRpcErrorCode, JsonRpcErrorObject},
@@ -67,11 +67,11 @@ impl RpcModule {
 	}
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription(
+	pub fn register_subscription<P: DeserializeOwned + Send + Sync + 'static>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink, Error> {
+	) -> Result<SubscriptionSink<P>, Error> {
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
@@ -85,13 +85,20 @@ impl RpcModule {
 			let subscribers = subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
-				Box::new(move |id, _, tx, conn| {
+				Box::new(move |id, params, tx, conn| {
+					let params = params.parse().ok();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						subscribers.lock().insert((conn, sub_id), tx.clone());
+						let inner = InnerSink {
+							sink: tx.clone(),
+							sub_id,
+							params,
+							method: subscribe_method_name
+						};
+						subscribers.lock().insert((conn, sub_id), inner);
 
 						sub_id
 					};
@@ -120,66 +127,6 @@ impl RpcModule {
 		}
 
 		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
-	}
-
-	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription_with_params<P: DeserializeOwned + Send + Sync + 'static>(
-		&mut self,
-		subscribe_method_name: &'static str,
-		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSinkParams<P>, Error> {
-		if subscribe_method_name == unsubscribe_method_name {
-			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
-		}
-
-		self.verify_method_name(subscribe_method_name)?;
-		self.verify_method_name(unsubscribe_method_name)?;
-
-		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
-
-		{
-			let subscribers = subscribers.clone();
-			self.methods.insert(
-				subscribe_method_name,
-				Box::new(move |id, params, tx, _| {
-					let params = params.parse().map_err(|_| CallError::InvalidParams)?;
-					let sub_id = {
-						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
-
-						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
-
-						subscribers.lock().insert(
-							sub_id,
-							InnerSubSinkParams { sink: tx.clone(), params, sub_id, method: subscribe_method_name },
-						);
-
-						sub_id
-					};
-
-					send_response(id, tx, sub_id);
-
-					Ok(())
-				}),
-			);
-		}
-
-		{
-			let subscribers = subscribers.clone();
-			self.methods.insert(
-				unsubscribe_method_name,
-				Box::new(move |id, params, tx, _| {
-					let sub_id: u64 = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
-
-					subscribers.lock().remove(&sub_id);
-
-					send_response(id, tx, "Unsubscribed");
-
-					Ok(())
-				}),
-			);
-		}
-
-		Ok(SubscriptionSinkParams { inner: subscribers })
 	}
 
 	pub(crate) fn into_methods(self) -> Methods {
