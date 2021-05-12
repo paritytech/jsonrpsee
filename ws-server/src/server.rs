@@ -29,11 +29,10 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use serde_json::value::to_raw_value;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -89,6 +88,49 @@ impl SubscriptionSink {
 	}
 }
 
+pub struct InnerSubSinkParams<P> {
+	/// Sink.
+	sink: mpsc::UnboundedSender<String>,
+	/// Params.
+	params: P,
+	/// Subscription ID.
+	sub_id: SubscriptionId,
+	/// Method name
+	method: &'static str,
+}
+
+impl<P> InnerSubSinkParams<P> {
+	pub fn send<T>(&self, result: &T) -> anyhow::Result<()>
+	where
+		T: Serialize,
+	{
+		let result = to_raw_value(result)?;
+		let msg = serde_json::to_string(&JsonRpcNotification {
+			jsonrpc: TwoPointZero,
+			method: self.method,
+			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
+		})?;
+
+		self.sink.unbounded_send(msg).map_err(|e| anyhow::anyhow!("{:?}", e))
+	}
+
+	pub fn params(&self) -> &P {
+		&self.params
+	}
+}
+
+pub struct SubscriptionSinkParams<P> {
+	inner: Arc<Mutex<FxHashMap<SubscriptionId, InnerSubSinkParams<P>>>>
+}
+
+impl<P> SubscriptionSinkParams<P> {
+	pub fn next(&self) -> Option<InnerSubSinkParams<P>> {
+		let mut subs = self.inner.lock();
+		let key = subs.keys().next().copied()?;
+		subs.remove(&key)
+	}
+}
+
 pub struct Server {
 	root: RpcModule,
 	listener: TcpListener,
@@ -118,6 +160,15 @@ impl Server {
 		unsubscribe_method_name: &'static str,
 	) -> Result<SubscriptionSink, Error> {
 		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name)
+	}
+
+	/// Register a new RPC subscription with the possibility to get the params in subscription request.
+	pub fn register_subscription_with_params<P: DeserializeOwned + Send + Sync + 'static>(
+		&mut self,
+		subscribe_method_name: &'static str,
+		unsubscribe_method_name: &'static str,
+	) -> Result<SubscriptionSinkParams<P>, Error> {
+		self.root.register_subscription_with_params(subscribe_method_name, unsubscribe_method_name)
 	}
 
 	/// Register all methods from a module on this server.

@@ -1,4 +1,4 @@
-use crate::server::{RpcParams, SubscriptionId, SubscriptionSink};
+use crate::server::{InnerSubSinkParams, RpcParams, SubscriptionId, SubscriptionSink, SubscriptionSinkParams};
 use jsonrpsee_types::{
 	error::{CallError, Error},
 	v2::error::{JsonRpcErrorCode, JsonRpcErrorObject},
@@ -7,7 +7,7 @@ use jsonrpsee_types::{traits::RpcMethod, v2::error::CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_utils::server::{send_error, send_response, Methods};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -120,6 +120,66 @@ impl RpcModule {
 		}
 
 		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
+	}
+
+	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
+	pub fn register_subscription_with_params<P: DeserializeOwned + Send + Sync + 'static>(
+		&mut self,
+		subscribe_method_name: &'static str,
+		unsubscribe_method_name: &'static str,
+	) -> Result<SubscriptionSinkParams<P>, Error> {
+		if subscribe_method_name == unsubscribe_method_name {
+			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
+		}
+
+		self.verify_method_name(subscribe_method_name)?;
+		self.verify_method_name(unsubscribe_method_name)?;
+
+		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
+
+		{
+			let subscribers = subscribers.clone();
+			self.methods.insert(
+				subscribe_method_name,
+				Box::new(move |id, params, tx, _| {
+					let params = params.parse().map_err(|_| CallError::InvalidParams)?;
+					let sub_id = {
+						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
+
+						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
+
+						subscribers.lock().insert(
+							sub_id,
+							InnerSubSinkParams { sink: tx.clone(), params, sub_id, method: subscribe_method_name },
+						);
+
+						sub_id
+					};
+
+					send_response(id, tx, sub_id);
+
+					Ok(())
+				}),
+			);
+		}
+
+		{
+			let subscribers = subscribers.clone();
+			self.methods.insert(
+				unsubscribe_method_name,
+				Box::new(move |id, params, tx, _| {
+					let sub_id: u64 = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+
+					subscribers.lock().remove(&sub_id);
+
+					send_response(id, tx, "Unsubscribed");
+
+					Ok(())
+				}),
+			);
+		}
+
+		Ok(SubscriptionSinkParams { inner: subscribers })
 	}
 
 	pub(crate) fn into_methods(self) -> Methods {
