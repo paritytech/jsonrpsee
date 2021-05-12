@@ -29,7 +29,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use serde_json::value::to_raw_value;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
@@ -120,7 +120,7 @@ impl<P> InnerSubSinkParams<P> {
 }
 
 pub struct SubscriptionSinkParams<P> {
-	inner: Arc<Mutex<FxHashMap<SubscriptionId, InnerSubSinkParams<P>>>>
+	inner: Arc<Mutex<FxHashMap<SubscriptionId, InnerSubSinkParams<P>>>>,
 }
 
 impl<P> SubscriptionSinkParams<P> {
