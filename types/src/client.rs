@@ -17,6 +17,18 @@ pub struct Subscription<Notif> {
 	pub marker: PhantomData<Notif>,
 }
 
+/// Active NotificationHandler on a Client.
+pub struct NotificationHandler<Notif> {
+	/// Channel to send requests to the background task.
+	pub to_back: mpsc::Sender<FrontToBack>,
+	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
+	pub notifs_rx: mpsc::Receiver<JsonValue>,
+	/// Method Name
+	pub method: String,
+	/// Marker in order to pin the `Notif` parameter.
+	pub marker: PhantomData<Notif>,
+}
+
 /// Batch request message.
 #[derive(Debug)]
 pub struct BatchMessage {
@@ -56,6 +68,17 @@ pub struct SubscriptionMessage {
 	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
 }
 
+/// RegisterNotification message.
+#[derive(Debug)]
+pub struct RegisterNotificationMessage {
+	/// Method name this notification handler is attached to
+	pub method: String,
+	/// We return a [`mpsc::Receiver`] that will receive notifications.
+	/// When we get a response from the server about that subscription, we send the result over
+	/// this channel.
+	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, String), Error>>,
+}
+
 /// Message that the Client can send to the background task.
 #[derive(Debug)]
 pub enum FrontToBack {
@@ -67,6 +90,10 @@ pub enum FrontToBack {
 	Request(RequestMessage),
 	/// Send a subscription request to the server.
 	Subscribe(SubscriptionMessage),
+	/// Register a notification handler
+	RegisterNotification(RegisterNotificationMessage),
+	/// Unregister a notification handler
+	UnregisterNotification(String),
 	/// When a subscription channel is closed, we send this message to the background
 	/// task to mark it ready for garbage collection.
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
@@ -97,6 +124,28 @@ where
 	}
 }
 
+impl<Notif> NotificationHandler<Notif>
+where
+	Notif: DeserializeOwned,
+{
+	/// Returns the next notification from the stream
+	/// This may return `None` if the method has been unregistered,
+	/// may happen if the channel becomes full or is dropped.
+	///
+	/// Ignores any malformed packet.
+	pub async fn next(&mut self) -> Option<Notif> {
+		loop {
+			match self.notifs_rx.next().await {
+				Some(n) => match serde_json::from_value(n) {
+					Ok(parsed) => return Some(parsed),
+					Err(e) => log::debug!("NotificationHandler response error: {:?}", e),
+				},
+				None => return None,
+			}
+		}
+	}
+}
+
 impl<Notif> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
@@ -105,5 +154,14 @@ impl<Notif> Drop for Subscription<Notif> {
 		// to the `Subscription` has been closed, and will perform the unsubscribe.
 		let id = std::mem::replace(&mut self.id, SubscriptionId::Num(0));
 		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(id)).now_or_never();
+	}
+}
+
+impl<Notif> Drop for NotificationHandler<Notif> {
+	fn drop(&mut self) {
+		// We can't actually guarantee that this goes through. If the background task is busy, then
+		// the channel's buffer will be full, and our unregister request will never make it.
+		let notif_method = std::mem::take(&mut self.method);
+		let _ = self.to_back.send(FrontToBack::UnregisterNotification(notif_method)).now_or_never();
 	}
 }
