@@ -4,7 +4,6 @@ use crate::{RpcContextModule, WsServer};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_types::error::{CallError, Error};
-use serde::Serialize;
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
