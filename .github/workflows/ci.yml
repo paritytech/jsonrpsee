@@ -32,13 +32,13 @@ jobs:
         uses:                      Swatinem/rust-cache@v1.2.0
 
       - name: Cargo fmt
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@v1.0.3
         with:
           command: fmt
           args: --all -- --check
 
       - name: Cargo clippy
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@v1.0.3
         with:
           command: clippy
 
@@ -63,13 +63,13 @@ jobs:
         uses:                      Swatinem/rust-cache@v1.2.0
 
       - name: Cargo check all targets
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@v1.0.3
         with:
           command: check
           args: --all-targets
 
       - name: Cargo check HTTP client with tokio02
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@v1.0.3
         with:
           command: check
           args: --manifest-path http-client/Cargo.toml --no-default-features --features tokio02
@@ -92,12 +92,12 @@ jobs:
         uses:                      Swatinem/rust-cache@v1.2.0
 
       - name: Cargo build
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@v1.0.3
         with:
           command: build
           args: --workspace
 
       - name: Cargo test
-        uses: actions-rs/cargo@v1
+        uses: actions-rs/cargo@v1.0.3
         with:
           command: test
