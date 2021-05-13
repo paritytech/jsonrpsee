@@ -33,6 +33,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use serde_json::value::to_raw_value;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
+use std::convert::{TryFrom, TryInto};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -57,8 +58,12 @@ pub struct SubscriptionSink<P> {
 }
 
 impl<P> SubscriptionSink<P> {
-	/// Send message on all subscription without input.
-	pub fn send_without_input<T>(&mut self, result: &T) -> anyhow::Result<()>
+	/// Send a message on all the subscriptions
+	///
+	/// If you have subscriptions with params/input you should most likely
+	/// call `extract_with_input` to the process the input/params and send out
+	/// the result on each subscription individually instead.
+	pub fn send_all<T>(&mut self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
 	{
@@ -68,10 +73,6 @@ impl<P> SubscriptionSink<P> {
 		let mut subs = self.subscribers.lock();
 
 		for ((conn_id, sub_id), sender) in subs.iter() {
-			if sender.params.is_none() {
-				continue;
-			}
-
 			let msg = serde_json::to_string(&JsonRpcNotification {
 				jsonrpc: TwoPointZero,
 				method: self.method,
@@ -94,8 +95,8 @@ impl<P> SubscriptionSink<P> {
 
 	/// Extract subscriptions with input.
 	/// Usually, you want process the input before sending back
-	/// data on each subscription.
-	pub fn extract_with_input(&self) -> Vec<InnerSink<P>> {
+	/// data on that subscription.
+	pub fn extract_with_input(&self) -> Vec<InnerSinkWithParams<P>> {
 		let mut subs = self.subscribers.lock();
 
 		let mut input = Vec::new();
@@ -103,7 +104,8 @@ impl<P> SubscriptionSink<P> {
 			.into_iter()
 			.filter_map(|(k, v)| {
 				if v.params.is_some() {
-					input.push(v);
+					let with_input = v.try_into().expect("is Some checked above; qed");
+					input.push(with_input);
 					None
 				} else {
 					Some((k, v))
@@ -125,7 +127,32 @@ pub struct InnerSink<P> {
 	method: &'static str,
 }
 
-impl<P> InnerSink<P> {
+pub struct InnerSinkWithParams<P> {
+	/// Sink.
+	sink: mpsc::UnboundedSender<String>,
+	/// Params.
+	params: P,
+	/// Subscription ID.
+	sub_id: SubscriptionId,
+	/// Method name
+	method: &'static str,
+}
+
+impl<P> TryFrom<InnerSink<P>> for InnerSinkWithParams<P> {
+	type Error = ();
+
+	fn try_from(other: InnerSink<P>) -> Result<Self, Self::Error> {
+		match other.params {
+			Some(params) => Ok(InnerSinkWithParams { sink: other.sink, params, sub_id: other.sub_id, method: other.method }),
+			None => Err(())
+		}
+	}
+}
+
+impl<P> InnerSinkWithParams<P> {
+	/// Send data on a specific subscription
+	/// Note: a subscription can be "subscribed" to arbitary number of times with
+	/// diffrent input/params.
 	pub fn send<T>(&self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
@@ -140,7 +167,8 @@ impl<P> InnerSink<P> {
 		self.sink.unbounded_send(msg).map_err(|e| anyhow::anyhow!("{:?}", e))
 	}
 
-	pub fn params(&self) -> &Option<P> {
+	/// Get the input/params of the subscrption.
+	pub fn params(&self) -> &P {
 		&self.params
 	}
 }
