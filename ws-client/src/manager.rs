@@ -57,6 +57,8 @@ pub struct RequestManager {
 	subscriptions: HashMap<SubscriptionId, RequestId>,
 	/// Pending batch requests
 	batches: FnvHashMap<Vec<RequestId>, BatchState>,
+	/// Registered Methods for incoming notifications
+	notification_handlers: HashMap<String, SubscriptionSink>,
 }
 
 impl RequestManager {
@@ -143,6 +145,25 @@ impl RequestManager {
 			Ok(())
 		} else {
 			Err(send_back)
+		}
+	}
+
+	/// Inserts a handler for incoming notifications
+	pub fn insert_notification_handler(&mut self, method: &str, send_back: SubscriptionSink) -> Result<(), Error> {
+		if let Entry::Vacant(handle) = self.notification_handlers.entry(method.to_owned()) {
+			handle.insert(send_back);
+			Ok(())
+		} else {
+			Err(Error::MethodAlreadyRegistered(method.to_owned()))
+		}
+	}
+
+	/// Removes a notification handler
+	pub fn remove_notification_handler(&mut self, method: String) -> Result<(), Error> {
+		if let Some(_) = self.notification_handlers.remove(&method) {
+			Ok(())
+		} else {
+			Err(Error::UnregisteredNotification(method.to_owned()))
 		}
 	}
 
@@ -238,6 +259,13 @@ impl RequestManager {
 		} else {
 			None
 		}
+	}
+
+	/// Get a mutable reference to underlying `Sink` in order to send incmoing notifications to the subscription.
+	///
+	/// Returns `Some` if the `method` was registered as a NotificationHandler otherwise `None`.
+	pub fn as_notification_handler_mut(&mut self, method: String) -> Option<&mut SubscriptionSink> {
+		self.notification_handlers.get_mut(&method)
 	}
 
 	/// Reverse lookup to get the request ID for a subscription ID.

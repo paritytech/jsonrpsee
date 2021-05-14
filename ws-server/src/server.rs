@@ -187,7 +187,7 @@ impl Server {
 	}
 
 	/// Register a new RPC method, which responds with a given callback.
-	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
 		F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,

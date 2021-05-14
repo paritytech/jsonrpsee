@@ -25,18 +25,19 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::helpers::{
-	build_unsubscribe_message, process_batch_response, process_error_response, process_single_response,
-	process_subscription_response, stop_subscription,
+	build_unsubscribe_message, process_batch_response, process_error_response, process_notification,
+	process_single_response, process_subscription_response, stop_subscription,
 };
 use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcErrorAlloc;
 use crate::v2::params::{Id, JsonRpcParams};
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
-use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse};
+use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponse};
 use crate::TEN_MB_SIZE_BYTES;
 use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, RequestMessage, Subscription, SubscriptionMessage,
+	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, RegisterNotificationMessage,
+	RequestMessage, Subscription, SubscriptionMessage,
 };
 use async_std::sync::Mutex;
 use async_trait::async_trait;
@@ -455,6 +456,38 @@ impl SubscriptionClient for WsClient {
 		};
 		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
 	}
+
+	/// Register a notification handler for async messages from the server.
+	///
+	async fn register_notification<'a, N>(&self, method: &'a str) -> Result<NotificationHandler<N>, Error>
+	where
+		N: DeserializeOwned,
+	{
+		log::trace!("[frontend]: register_notification: {:?}", method);
+
+		let (send_back_tx, send_back_rx) = oneshot::channel();
+		if self
+			.to_back
+			.clone()
+			.send(FrontToBack::RegisterNotification(RegisterNotificationMessage {
+				send_back: send_back_tx,
+				method: method.to_owned(),
+			}))
+			.await
+			.is_err()
+		{
+			return Err(self.read_error_from_backend().await);
+		}
+
+		let res = send_back_rx.await;
+		let (notifs_rx, method) = match res {
+			Ok(Ok(val)) => val,
+			Ok(Err(err)) => return Err(err),
+			Err(_) => return Err(self.read_error_from_backend().await),
+		};
+
+		Ok(NotificationHandler { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, method })
+	}
 }
 
 /// Function being run in the background that processes messages from the frontend.
@@ -550,6 +583,24 @@ async fn background_task(
 					stop_subscription(&mut sender, &mut manager, unsub).await;
 				}
 			}
+
+			// User called `register_notification` on the front-end.
+			Either::Left((Some(FrontToBack::RegisterNotification(reg)), _)) => {
+				log::trace!("[backend] registering notification handler: {:?}", reg.method);
+				let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
+
+				if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
+					let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
+				} else {
+					let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
+				}
+			}
+
+			// User dropped the notificationHandler for this method
+			Either::Left((Some(FrontToBack::UnregisterNotification(method)), _)) => {
+				log::trace!("[backend] unregistering notification handler: {:?}", method);
+				let _ = manager.remove_notification_handler(method);
+			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<JsonRpcResponse<_>>(&raw) {
@@ -566,11 +617,16 @@ async fn background_task(
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifResponse<_>>(&raw) {
+				else if let Ok(notif) = serde_json::from_slice::<JsonRpcSubscriptionResponse<_>>(&raw) {
 					log::debug!("[backend]: recv subscription {:?}", notif);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
+				}
+				// Incoming Notification
+				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifResponse<_>>(&raw) {
+					log::debug!("[backend]: recv notification {:?}", notif);
+					let _ = process_notification(&mut manager, notif);
 				}
 				// Batch response.
 				else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcResponse<_>>>(&raw) {

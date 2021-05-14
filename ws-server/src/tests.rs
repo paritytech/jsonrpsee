@@ -45,6 +45,7 @@ pub async fn server() -> SocketAddr {
 			Ok("Yawn!")
 		})
 		.unwrap();
+
 	let addr = server.local_addr().unwrap();
 
 	tokio::spawn(async { server.start().await });
