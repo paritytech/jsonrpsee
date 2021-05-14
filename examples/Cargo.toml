@@ -12,6 +12,7 @@ env_logger = "0.8"
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 log = "0.4"
 tokio = { version = "1", features = ["full"] }
+serde_json = "1"
 
 [[example]]
 name = "http"
@@ -24,6 +25,10 @@ path = "ws.rs"
 [[example]]
 name = "ws_subscription"
 path = "ws_subscription.rs"
+
+[[example]]
+name = "ws_sub_with_params"
+path = "ws_sub_with_params.rs"
 
 [[example]]
 name = "proc_macro"
