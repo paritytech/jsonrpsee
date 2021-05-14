@@ -174,6 +174,7 @@ async fn background_task(
 	// Send results back to the client.
 	tokio::spawn(async move {
 		while let Some(response) = rx.next().await {
+			log::debug!("send: {}", response);
 			let _ = sender.send_binary_mut(response.into_bytes()).await;
 			let _ = sender.flush().await;
 		}
@@ -207,6 +208,7 @@ async fn background_task(
 		// worst case – unparseable input – we make three calls to [`serde_json::from_slice`] which is pretty annoying.
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
+			log::debug!("recv: {:?}", req);
 			execute(&tx, req);
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
