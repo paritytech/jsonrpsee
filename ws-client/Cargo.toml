@@ -24,6 +24,7 @@ pin-project = "1"
 thiserror = "1"
 url = "2"
 webpki = { version = "0.22", features = ["std"] }
+rustls = "0.19.1"
 
 [dev-dependencies]
 env_logger = "0.8"

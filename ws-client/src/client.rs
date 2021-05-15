@@ -39,7 +39,7 @@ use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, RegisterNotificationMessage,
 	RequestMessage, Subscription, SubscriptionMessage,
 };
-use async_std::sync::Mutex;
+use async_std::{path::PathBuf, sync::Mutex};
 use async_trait::async_trait;
 use futures::{
 	channel::{mpsc, oneshot},
@@ -47,6 +47,7 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+
 use serde::de::DeserializeOwned;
 use std::{
 	borrow::Cow,
@@ -167,6 +168,7 @@ impl RequestIdGuard {
 /// Configuration.
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder<'a> {
+	custom_certificate: Option<PathBuf>,
 	max_request_body_size: u32,
 	request_timeout: Option<Duration>,
 	connection_timeout: Duration,
@@ -179,6 +181,7 @@ pub struct WsClientBuilder<'a> {
 impl<'a> Default for WsClientBuilder<'a> {
 	fn default() -> Self {
 		Self {
+			custom_certificate: None,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
@@ -191,6 +194,12 @@ impl<'a> Default for WsClientBuilder<'a> {
 }
 
 impl<'a> WsClientBuilder<'a> {
+	/// Specify custom cert file
+	pub fn custom_certificate(mut self, path: impl Into<PathBuf>) -> Self {
+		self.custom_certificate = Some(path.into());
+		self
+	}
+
 	/// Set max request body size.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
@@ -248,6 +257,7 @@ impl<'a> WsClientBuilder<'a> {
 	///
 	/// `wss://host` - port 443 is used
 	pub async fn build(self, url: &'a str) -> Result<WsClient, Error> {
+		let custom_certificate = self.custom_certificate;
 		let max_capacity_per_subscription = self.max_notifs_per_subscription;
 		let max_concurrent_requests = self.max_concurrent_requests;
 		let request_timeout = self.request_timeout;
@@ -257,6 +267,7 @@ impl<'a> WsClientBuilder<'a> {
 		let (sockaddrs, host, mode) = parse_url(url).map_err(|e| Error::Transport(Box::new(e)))?;
 
 		let builder = WsTransportClientBuilder {
+			custom_certificate,
 			sockaddrs,
 			mode,
 			host,
