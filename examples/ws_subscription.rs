@@ -26,10 +26,9 @@
 
 use jsonrpsee::{
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
-	ws_server::{WsServer, InnerSubSinkParams},
+	ws_server::WsServer,
 };
 use std::net::SocketAddr;
-use serde_json::value::Value as JsonValue;
 
 const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
@@ -43,10 +42,6 @@ async fn main() -> anyhow::Result<()> {
 	let mut subscribe_hello: Subscription<String> =
 		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await?;
 
-	let param: JsonValue = 3.into();
-	let params = JsonRpcParams::Array(vec![param]);
-	let mut sub_params = client.subscribe::<Option<char>>("sub_params", params, "unsub_params").await?;
-	println!("subscription with params: {:?}", sub_params.next().await);
 	let mut i = 0;
 	while i <= NUM_SUBSCRIPTION_RESPONSES {
 		let r = subscribe_hello.next().await;
@@ -60,22 +55,10 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = WsServer::new("127.0.0.1:0").await?;
 	let mut subscription = server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
-	let mut subscription2 = server.register_subscription_with_params("sub_params", "unsub_params").unwrap();
 
 	std::thread::spawn(move || loop {
 		subscription.send(&"hello my friend").unwrap();
 		std::thread::sleep(std::time::Duration::from_secs(1));
-	});
-
-	std::thread::spawn(move || loop {
-		const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
-		subscription2.next().and_then(|inner_sub_sink_params: InnerSubSinkParams<usize>| {
-			let idx = *inner_sub_sink_params.params();
-			let result = LETTERS.chars().nth(idx);
-			// inner_sub_sink_params.send(&result);
-			result
-		});
-		std::thread::sleep(std::time::Duration::from_millis(100));
 	});
 
 	let addr = server.local_addr();

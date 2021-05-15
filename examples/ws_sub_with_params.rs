@@ -25,11 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
-	ws_server::{WsServer, InnerSubSinkParams},
+	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
+	ws_server::WsServer,
 };
 use std::net::SocketAddr;
-use serde_json::value::Value as JsonValue;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,25 +38,44 @@ async fn main() -> anyhow::Result<()> {
 
 	let client = WsClientBuilder::default().build(&url).await?;
 
-	let param: JsonValue = 3.into();
-	let params = JsonRpcParams::Array(vec![param]);
-	let mut sub_params = client.subscribe::<Option<char>>("sub_params", params, "unsub_params").await?;
-	println!("subscription with params: {:?}", sub_params.next().await);
+	// Subscription with a single parameter
+	let params = JsonRpcParams::Array(vec![3.into()]);
+	let mut sub_params_one = client.subscribe::<Option<char>>("sub_one_param", params, "unsub_one_param").await?;
+	println!("subscription with one param: {:?}", sub_params_one.next().await);
+
+	// Subscription with multiple parameters
+	let params = JsonRpcParams::Array(vec![2.into(), 5.into()]);
+	let mut sub_params_two = client.subscribe::<String>("sub_params_two", params, "unsub_params_two").await?;
+	println!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
+	const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
 	let mut server = WsServer::new("127.0.0.1:0").await?;
-	let mut sub = server.register_subscription_with_params("sub_params", "unsub_params").unwrap();
+	let one_param = server.register_subscription_with_params("sub_one_param", "unsub_one_param").unwrap();
+	let two_params = server.register_subscription_with_params("sub_params_two", "unsub_params_two").unwrap();
 
 	std::thread::spawn(move || loop {
-		const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
-		sub.next().and_then(|inner_sub_sink_params: InnerSubSinkParams<usize>| {
+		one_param.next().and_then(|inner_sub_sink_params| {
 			let idx = *inner_sub_sink_params.params();
 			let result = LETTERS.chars().nth(idx);
-			inner_sub_sink_params.send(&result);
+			let _ = inner_sub_sink_params.send(&result);
+			// TODO: why do I need to return something here? Returning "".into() works just as well...
 			result
+		});
+		std::thread::sleep(std::time::Duration::from_millis(50));
+	});
+
+	std::thread::spawn(move || loop {
+		two_params.next().and_then(|inner_sub_sink_params| {
+			let params: &Vec<usize> = inner_sub_sink_params.params();
+			// Validate your params here: check len, check > 0 etc
+			let result = LETTERS[params[0]..params[1]].to_string();
+			let _ = inner_sub_sink_params.send(&result);
+			// TODO: why do I need to return something here? Returning `Option::<char>::None` works just as well...
+			Some(result)
 		});
 		std::thread::sleep(std::time::Duration::from_millis(100));
 	});
