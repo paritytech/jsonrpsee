@@ -58,25 +58,23 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let two_params = server.register_subscription("sub_params_two", "unsub_params_two").unwrap();
 
 	std::thread::spawn(move || loop {
-		one_param.extract_with_input().iter().map(|inner_sub_sink_params| {
-			let idx = *inner_sub_sink_params.params();
+		for sink_params in one_param.extract_with_input().iter() {
+			let idx = *sink_params.params();
 			let result = LETTERS.chars().nth(idx);
-			let _ = inner_sub_sink_params.send(&result);
-			// TODO: why do I need to return something here? Returning "".into() works just as well...
-			result
-		});
+			let _ = sink_params.send(&result);
+			// // TODO: why do I need to return something here? Returning "".into() works just as well...
+			// result
+		}
 		std::thread::sleep(std::time::Duration::from_millis(50));
 	});
 
 	std::thread::spawn(move || loop {
-		two_params.extract_with_input().iter().map(|inner_sub_sink_params| {
-			let params: &Vec<usize> = inner_sub_sink_params.params();
+		for sink_params in two_params.extract_with_input().iter() {
+			let params: &Vec<usize> = sink_params.params();
 			// Validate your params here: check len, check > 0 etc
 			let result = LETTERS[params[0]..params[1]].to_string();
-			let _ = inner_sub_sink_params.send(&result);
-			// TODO: why do I need to return something here? Returning `Option::<char>::None` works just as well...
-			Some(result)
-		});
+			let _ = sink_params.send(&result);
+		}
 		std::thread::sleep(std::time::Duration::from_millis(100));
 	});
 
