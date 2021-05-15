@@ -26,5 +26,9 @@ name = "ws_subscription"
 path = "ws_subscription.rs"
 
 [[example]]
+name = "ws_sub_with_params"
+path = "ws_sub_with_params.rs"
+
+[[example]]
 name = "proc_macro"
 path = "proc_macro.rs"
