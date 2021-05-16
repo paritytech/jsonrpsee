@@ -160,10 +160,10 @@ impl RequestManager {
 
 	/// Removes a notification handler
 	pub fn remove_notification_handler(&mut self, method: String) -> Result<(), Error> {
-		if let Some(_) = self.notification_handlers.remove(&method) {
+		if self.notification_handlers.remove(&method).is_some() {
 			Ok(())
 		} else {
-			Err(Error::UnregisteredNotification(method.to_owned()))
+			Err(Error::UnregisteredNotification(method))
 		}
 	}
 
