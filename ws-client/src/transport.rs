@@ -61,8 +61,8 @@ pub struct Receiver {
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder<'a> {
-	/// Use the systems certificates
-	pub use_system_certificates: bool,
+	/// What certificate store to use
+	pub certificate_store: CertificateStore,
 	/// Socket addresses to try to connect to.
 	pub sockaddrs: Vec<SocketAddr>,
 	/// Host.
@@ -87,6 +87,15 @@ pub enum Mode {
 	Plain,
 	/// TLS mode (`wss://` URL).
 	Tls,
+}
+
+/// What certificate store to use
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CertificateStore {
+	/// Use the native system certificate store
+	Native,
+	/// Use webPki's certificate store
+	WebPki,
 }
 
 /// Error that can happen during the initial handshake.
@@ -210,7 +219,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		let client_config = match self.mode {
 			Mode::Tls => {
 				let mut client_config = rustls::ClientConfig::default();
-				if self.use_system_certificates {
+				if let CertificateStore::Native = self.certificate_store {
 					client_config.root_store =
 						rustls_native_certs::load_native_certs().map_err(|(_, e)| WsHandshakeError::NativeCert(e))?;
 				}

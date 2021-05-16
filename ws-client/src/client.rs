@@ -24,10 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::helpers::{
+use crate::{helpers::{
 	build_unsubscribe_message, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
-};
+}, transport::CertificateStore};
 use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcErrorAlloc;
@@ -168,7 +168,7 @@ impl RequestIdGuard {
 /// Configuration.
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder<'a> {
-	use_system_certificates: bool,
+	certificate_store: CertificateStore,
 	max_request_body_size: u32,
 	request_timeout: Option<Duration>,
 	connection_timeout: Duration,
@@ -181,7 +181,7 @@ pub struct WsClientBuilder<'a> {
 impl<'a> Default for WsClientBuilder<'a> {
 	fn default() -> Self {
 		Self {
-			use_system_certificates: true,
+			certificate_store: CertificateStore::Native,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
@@ -195,8 +195,8 @@ impl<'a> Default for WsClientBuilder<'a> {
 
 impl<'a> WsClientBuilder<'a> {
 	/// Set wheather to use system certificates
-	pub fn use_system_certificates(mut self, use_system_certificates: bool) -> Self {
-		self.use_system_certificates = use_system_certificates;
+	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
+		self.certificate_store = certificate_store;
 		self
 	}
 
@@ -257,7 +257,7 @@ impl<'a> WsClientBuilder<'a> {
 	///
 	/// `wss://host` - port 443 is used
 	pub async fn build(self, url: &'a str) -> Result<WsClient, Error> {
-		let use_system_certificates = self.use_system_certificates;
+		let certificate_store = self.certificate_store;
 		let max_capacity_per_subscription = self.max_notifs_per_subscription;
 		let max_concurrent_requests = self.max_concurrent_requests;
 		let request_timeout = self.request_timeout;
@@ -267,7 +267,7 @@ impl<'a> WsClientBuilder<'a> {
 		let (sockaddrs, host, mode) = parse_url(url).map_err(|e| Error::Transport(Box::new(e)))?;
 
 		let builder = WsTransportClientBuilder {
-			use_system_certificates,
+			certificate_store,
 			sockaddrs,
 			mode,
 			host,
