@@ -216,7 +216,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 	/// Try establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let client_config = match self.mode {
+		let connector = match self.mode {
 			Mode::Tls => {
 				let mut client_config = rustls::ClientConfig::default();
 				if let CertificateStore::Native = self.certificate_store {
@@ -229,7 +229,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		};
 
 		for sockaddr in &self.sockaddrs {
-			match self.try_connect(*sockaddr, &client_config).await {
+			match self.try_connect(*sockaddr, &connector).await {
 				Ok(res) => return Ok(res),
 				Err(e) => {
 					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
