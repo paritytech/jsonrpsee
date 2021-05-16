@@ -28,7 +28,6 @@ use async_std::net::TcpStream;
 use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
-use rustls::ClientConfig;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
@@ -210,18 +209,18 @@ impl<'a> WsTransportClientBuilder<'a> {
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let client_config = match self.mode {
 			Mode::Tls => {
-				let mut config = rustls::ClientConfig::default();
+				let mut client_config = rustls::ClientConfig::default();
 				if self.use_system_certificates {
-					config.root_store =
+					client_config.root_store =
 						rustls_native_certs::load_native_certs().map_err(|(_, e)| WsHandshakeError::NativeCert(e))?;
 				}
-				Some(config)
+				Some(client_config.into())
 			}
 			Mode::Plain => None,
 		};
 
 		for sockaddr in &self.sockaddrs {
-			match self.try_connect(*sockaddr, client_config.clone()).await {
+			match self.try_connect(*sockaddr, &client_config).await {
 				Ok(res) => return Ok(res),
 				Err(e) => {
 					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
@@ -234,7 +233,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	async fn try_connect(
 		&self,
 		sockaddr: SocketAddr,
-		tls_client_config: Option<ClientConfig>,
+		tls_connector: &Option<async_tls::TlsConnector>,
 	) -> Result<(Sender, Receiver), WsNewError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
@@ -247,10 +246,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 					if let Err(err) = socket.set_nodelay(true) {
 						log::warn!("set nodelay failed: {:?}", err);
 					}
-					match tls_client_config {
+					match tls_connector {
 						None => TlsOrPlain::Plain(socket),
-						Some(client_config) => {
-							let connector: async_tls::TlsConnector = client_config.into();
+						Some(connector) => {
 							let dns_name: &str = webpki::DnsNameRef::try_from_ascii_str(self.host.as_str())?.into();
 							let tls_stream = connector.connect(dns_name, socket).await?;
 							TlsOrPlain::Tls(tls_stream)
