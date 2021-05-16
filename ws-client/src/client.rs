@@ -181,7 +181,7 @@ pub struct WsClientBuilder<'a> {
 impl<'a> Default for WsClientBuilder<'a> {
 	fn default() -> Self {
 		Self {
-			use_system_certificates: false,
+			use_system_certificates: true,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
