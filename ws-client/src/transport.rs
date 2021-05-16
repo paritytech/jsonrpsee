@@ -28,6 +28,7 @@ use async_std::net::TcpStream;
 use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
+use rustls::ClientConfig;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
@@ -203,8 +204,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 	/// Try establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
+		let mut client_config = None;
 		for sockaddr in &self.sockaddrs {
-			match self.try_connect(*sockaddr).await {
+			match self.try_connect(*sockaddr, &mut client_config).await {
 				Ok(res) => return Ok(res),
 				Err(e) => {
 					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
@@ -214,7 +216,11 @@ impl<'a> WsTransportClientBuilder<'a> {
 		Err(WsHandshakeError::NoAddressFound)
 	}
 
-	async fn try_connect(&self, sockaddr: SocketAddr) -> Result<(Sender, Receiver), WsNewError> {
+	async fn try_connect(
+		&self,
+		sockaddr: SocketAddr,
+		client_config: &mut Option<ClientConfig>,
+	) -> Result<(Sender, Receiver), WsNewError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
 			let socket = TcpStream::connect(sockaddr);
@@ -229,10 +235,17 @@ impl<'a> WsTransportClientBuilder<'a> {
 					match self.mode {
 						Mode::Plain => TlsOrPlain::Plain(socket),
 						Mode::Tls => {
-							let mut client_config = rustls::ClientConfig::default();
-							if self.use_system_certificates {
-								client_config.root_store = rustls_native_certs::load_native_certs().map_err(|(_, e)| e)?;
-							}
+							let client_config = match &client_config {
+								Some(client_config) => client_config.clone(),
+								None => {
+									let mut config = rustls::ClientConfig::default();
+									if self.use_system_certificates {
+										config.root_store =
+											rustls_native_certs::load_native_certs().map_err(|(_, e)| e)?;
+									}
+									client_config.get_or_insert(config).clone()
+								}
+							};
 
 							let connector: async_tls::TlsConnector = client_config.into();
 							let dns_name: &str = webpki::DnsNameRef::try_from_ascii_str(self.host.as_str())?.into();
