@@ -120,6 +120,10 @@ pub enum WsNewError {
 /// Error that can happen during the initial handshake.
 #[derive(Debug, Error)]
 pub enum WsHandshakeError {
+	/// Failed to load system certs
+	#[error("Failed to load system certs: {}", 0)]
+	NativeCert(io::Error),
+
 	/// Invalid URL.
 	#[error("Invalid url: {}", 0)]
 	Url(Cow<'static, str>),
@@ -204,9 +208,20 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 	/// Try establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let mut client_config = None;
+		let client_config = match self.mode {
+			Mode::Tls => {
+				let mut config = rustls::ClientConfig::default();
+				if self.use_system_certificates {
+					config.root_store =
+						rustls_native_certs::load_native_certs().map_err(|(_, e)| WsHandshakeError::NativeCert(e))?;
+				}
+				Some(config)
+			}
+			Mode::Plain => None,
+		};
+
 		for sockaddr in &self.sockaddrs {
-			match self.try_connect(*sockaddr, &mut client_config).await {
+			match self.try_connect(*sockaddr, client_config.clone()).await {
 				Ok(res) => return Ok(res),
 				Err(e) => {
 					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
@@ -219,7 +234,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	async fn try_connect(
 		&self,
 		sockaddr: SocketAddr,
-		client_config: &mut Option<ClientConfig>,
+		tls_client_config: Option<ClientConfig>,
 	) -> Result<(Sender, Receiver), WsNewError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
@@ -232,21 +247,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 					if let Err(err) = socket.set_nodelay(true) {
 						log::warn!("set nodelay failed: {:?}", err);
 					}
-					match self.mode {
-						Mode::Plain => TlsOrPlain::Plain(socket),
-						Mode::Tls => {
-							let client_config = match &client_config {
-								Some(client_config) => client_config.clone(),
-								None => {
-									let mut config = rustls::ClientConfig::default();
-									if self.use_system_certificates {
-										config.root_store =
-											rustls_native_certs::load_native_certs().map_err(|(_, e)| e)?;
-									}
-									client_config.get_or_insert(config).clone()
-								}
-							};
-
+					match tls_client_config {
+						None => TlsOrPlain::Plain(socket),
+						Some(client_config) => {
 							let connector: async_tls::TlsConnector = client_config.into();
 							let dns_name: &str = webpki::DnsNameRef::try_from_ascii_str(self.host.as_str())?.into();
 							let tls_stream = connector.connect(dns_name, socket).await?;
