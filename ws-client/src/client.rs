@@ -39,7 +39,7 @@ use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, RegisterNotificationMessage,
 	RequestMessage, Subscription, SubscriptionMessage,
 };
-use async_std::{path::PathBuf, sync::Mutex};
+use async_std::sync::Mutex;
 use async_trait::async_trait;
 use futures::{
 	channel::{mpsc, oneshot},
@@ -168,7 +168,7 @@ impl RequestIdGuard {
 /// Configuration.
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder<'a> {
-	custom_certificate: Option<PathBuf>,
+	use_system_certificates: bool,
 	max_request_body_size: u32,
 	request_timeout: Option<Duration>,
 	connection_timeout: Duration,
@@ -181,7 +181,7 @@ pub struct WsClientBuilder<'a> {
 impl<'a> Default for WsClientBuilder<'a> {
 	fn default() -> Self {
 		Self {
-			custom_certificate: None,
+			use_system_certificates: false,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
@@ -194,9 +194,9 @@ impl<'a> Default for WsClientBuilder<'a> {
 }
 
 impl<'a> WsClientBuilder<'a> {
-	/// Specify custom cert file
-	pub fn custom_certificate(mut self, path: impl Into<PathBuf>) -> Self {
-		self.custom_certificate = Some(path.into());
+	/// Set wheather to use system certificates
+	pub fn use_system_certificates(mut self, use_system_certificates: bool) -> Self {
+		self.use_system_certificates = use_system_certificates;
 		self
 	}
 
@@ -257,7 +257,7 @@ impl<'a> WsClientBuilder<'a> {
 	///
 	/// `wss://host` - port 443 is used
 	pub async fn build(self, url: &'a str) -> Result<WsClient, Error> {
-		let custom_certificate = self.custom_certificate;
+		let use_system_certificates = self.use_system_certificates;
 		let max_capacity_per_subscription = self.max_notifs_per_subscription;
 		let max_concurrent_requests = self.max_concurrent_requests;
 		let request_timeout = self.request_timeout;
@@ -267,7 +267,7 @@ impl<'a> WsClientBuilder<'a> {
 		let (sockaddrs, host, mode) = parse_url(url).map_err(|e| Error::Transport(Box::new(e)))?;
 
 		let builder = WsTransportClientBuilder {
-			custom_certificate,
+			use_system_certificates,
 			sockaddrs,
 			mode,
 			host,

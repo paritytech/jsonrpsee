@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use async_std::{net::TcpStream, path::PathBuf};
+use async_std::net::TcpStream;
 use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
@@ -61,8 +61,8 @@ pub struct Receiver {
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder<'a> {
-	/// Custom certificate
-	pub custom_certificate: Option<PathBuf>,
+	/// Use the systems certificates
+	pub use_system_certificates: bool,
 	/// Socket addresses to try to connect to.
 	pub sockaddrs: Vec<SocketAddr>,
 	/// Host.
@@ -92,10 +92,6 @@ pub enum Mode {
 /// Error that can happen during the initial handshake.
 #[derive(Debug, Error)]
 pub enum WsNewError {
-	/// Error when reading specified certificate
-	#[error("Error when reading specified certificate: {}", 0)]
-	InvalidCertFile,
-
 	/// Error when opening the TCP socket.
 	#[error("Error when opening the TCP socket: {}", 0)]
 	Io(io::Error),
@@ -234,20 +230,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 						Mode::Plain => TlsOrPlain::Plain(socket),
 						Mode::Tls => {
 							let mut client_config = rustls::ClientConfig::default();
-							if let Some(path) = &self.custom_certificate {
-								// TODO: How to give use async for file io and still give add_pem_file() a std::io::BufRead?
-								let f = std::fs::File::open(&path)?;
-								let mut reader = io::BufReader::new(f);
-								let (added, failed) = client_config
-									.root_store
-									.add_pem_file(&mut reader)
-									.map_err(|()| WsNewError::InvalidCertFile)?;
-								log::debug!(
-									"Added {} out of {} certs from custom_certificate: '{:?}'",
-									added,
-									added + failed,
-									path
-								);
+							if self.use_system_certificates {
+								client_config.root_store = rustls_native_certs::load_native_certs().map_err(|(_, e)| e)?;
 							}
 
 							let connector: async_tls::TlsConnector = client_config.into();
