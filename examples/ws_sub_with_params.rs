@@ -62,8 +62,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let idx = *sink_params.params();
 			let result = LETTERS.chars().nth(idx);
 			let _ = sink_params.send(&result);
-			// // TODO: why do I need to return something here? Returning "".into() works just as well...
-			// result
 		}
 		std::thread::sleep(std::time::Duration::from_millis(50));
 	});
