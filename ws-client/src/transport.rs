@@ -61,6 +61,8 @@ pub struct Receiver {
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder<'a> {
+	/// What certificate store to use
+	pub certificate_store: CertificateStore,
 	/// Socket addresses to try to connect to.
 	pub sockaddrs: Vec<SocketAddr>,
 	/// Host.
@@ -85,6 +87,16 @@ pub enum Mode {
 	Plain,
 	/// TLS mode (`wss://` URL).
 	Tls,
+}
+
+/// What certificate store to use
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CertificateStore {
+	/// Use the native system certificate store
+	Native,
+	/// Use webPki's certificate store
+	WebPki,
 }
 
 /// Error that can happen during the initial handshake.
@@ -117,6 +129,10 @@ pub enum WsNewError {
 /// Error that can happen during the initial handshake.
 #[derive(Debug, Error)]
 pub enum WsHandshakeError {
+	/// Failed to load system certs
+	#[error("Failed to load system certs: {}", 0)]
+	CertificateStore(io::Error),
+
 	/// Invalid URL.
 	#[error("Invalid url: {}", 0)]
 	Url(Cow<'static, str>),
@@ -199,10 +215,22 @@ impl<'a> WsTransportClientBuilder<'a> {
 		self
 	}
 
-	/// Try establish the connection.
+	/// Try to establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
+		let connector = match self.mode {
+			Mode::Tls => {
+				let mut client_config = rustls::ClientConfig::default();
+				if let CertificateStore::Native = self.certificate_store {
+					client_config.root_store = rustls_native_certs::load_native_certs()
+						.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
+				}
+				Some(client_config.into())
+			}
+			Mode::Plain => None,
+		};
+
 		for sockaddr in &self.sockaddrs {
-			match self.try_connect(*sockaddr).await {
+			match self.try_connect(*sockaddr, &connector).await {
 				Ok(res) => return Ok(res),
 				Err(e) => {
 					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
@@ -212,7 +240,11 @@ impl<'a> WsTransportClientBuilder<'a> {
 		Err(WsHandshakeError::NoAddressFound)
 	}
 
-	async fn try_connect(&self, sockaddr: SocketAddr) -> Result<(Sender, Receiver), WsNewError> {
+	async fn try_connect(
+		&self,
+		sockaddr: SocketAddr,
+		tls_connector: &Option<async_tls::TlsConnector>,
+	) -> Result<(Sender, Receiver), WsNewError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
 			let socket = TcpStream::connect(sockaddr);
@@ -224,10 +256,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 					if let Err(err) = socket.set_nodelay(true) {
 						log::warn!("set nodelay failed: {:?}", err);
 					}
-					match self.mode {
-						Mode::Plain => TlsOrPlain::Plain(socket),
-						Mode::Tls => {
-							let connector = async_tls::TlsConnector::default();
+					match tls_connector {
+						None => TlsOrPlain::Plain(socket),
+						Some(connector) => {
 							let dns_name: &str = webpki::DnsNameRef::try_from_ascii_str(self.host.as_str())?.into();
 							let tls_stream = connector.connect(dns_name, socket).await?;
 							TlsOrPlain::Tls(tls_stream)
