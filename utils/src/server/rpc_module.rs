@@ -207,7 +207,7 @@ impl<Context> RpcContextModule<Context> {
 	}
 }
 
-/// The sending end of registered subscription.
+/// Used by the server to send data back to subscribers.
 #[derive(Clone)]
 pub struct SubscriptionSink {
 	method: &'static str,
