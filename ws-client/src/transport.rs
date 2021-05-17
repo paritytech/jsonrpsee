@@ -91,6 +91,7 @@ pub enum Mode {
 
 /// What certificate store to use
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum CertificateStore {
 	/// Use the native system certificate store
 	Native,
@@ -130,7 +131,7 @@ pub enum WsNewError {
 pub enum WsHandshakeError {
 	/// Failed to load system certs
 	#[error("Failed to load system certs: {}", 0)]
-	NativeCert(io::Error),
+	CertificateStore(io::Error),
 
 	/// Invalid URL.
 	#[error("Invalid url: {}", 0)]
@@ -214,14 +215,14 @@ impl<'a> WsTransportClientBuilder<'a> {
 		self
 	}
 
-	/// Try establish the connection.
+	/// Try to establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let connector = match self.mode {
 			Mode::Tls => {
 				let mut client_config = rustls::ClientConfig::default();
 				if let CertificateStore::Native = self.certificate_store {
-					client_config.root_store =
-						rustls_native_certs::load_native_certs().map_err(|(_, e)| WsHandshakeError::NativeCert(e))?;
+					client_config.root_store = rustls_native_certs::load_native_certs()
+						.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
 				}
 				Some(client_config.into())
 			}
