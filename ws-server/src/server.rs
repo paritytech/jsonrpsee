@@ -100,7 +100,7 @@ impl<P> SubscriptionSink<P> {
 		let mut subs = self.subscribers.lock();
 
 		let mut input = Vec::new();
-		*subs = std::mem::replace(&mut *subs, FxHashMap::default())
+		*subs = std::mem::take(&mut *subs)
 			.into_iter()
 			.filter_map(|(k, v)| {
 				if v.params.is_some() {
