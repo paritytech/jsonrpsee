@@ -232,7 +232,7 @@ impl SubscriptionSink {
 				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
 			})?;
 
-			// Log broken connections
+			// Track broken connections
 			if sender.unbounded_send(msg).is_err() {
 				errored.push((*conn_id, *sub_id));
 			}
