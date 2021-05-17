@@ -1,15 +1,29 @@
-use crate::server::{RpcParams, SubscriptionId, SubscriptionSink};
-use jsonrpsee_types::{
-	error::{CallError, Error},
-	v2::error::{JsonRpcErrorCode, JsonRpcErrorObject},
-};
-use jsonrpsee_types::{traits::RpcMethod, v2::error::CALL_EXECUTION_FAILED_CODE};
-use jsonrpsee_utils::server::{send_error, send_response, Methods};
+use crate::server::helpers::{send_error, send_response};
+use crate::server::{RpcId, RpcSender};
+use futures_channel::mpsc;
+use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::traits::RpcMethod;
+use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::request::JsonRpcNotification;
+
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
+use serde_json::value::to_raw_value;
 use std::sync::Arc;
 
+/// Method.
+pub type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
+/// Methods registered.
+pub type Methods = FxHashMap<&'static str, Method>;
+/// Connection ID.
+pub type ConnectionId = usize;
+/// Subscription ID.
+pub type SubscriptionId = u64;
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>;
+
+/// Abstract JSON-RPC module that be registered on server or merged with other modules.
 #[derive(Default)]
 pub struct RpcModule {
 	methods: Methods,
@@ -122,11 +136,13 @@ impl RpcModule {
 		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
 	}
 
-	pub(crate) fn into_methods(self) -> Methods {
+	/// Convert a module into methods.
+	pub fn into_methods(self) -> Methods {
 		self.methods
 	}
 
-	pub(crate) fn merge(&mut self, other: RpcModule) -> Result<(), Error> {
+	/// Merge modules.
+	pub fn merge(&mut self, other: RpcModule) -> Result<(), Error> {
 		for name in other.methods.keys() {
 			self.verify_method_name(name)?;
 		}
@@ -139,6 +155,8 @@ impl RpcModule {
 	}
 }
 
+/// Similar to [`RpcModule`] but it wraps additional context that can used
+/// embed specific data that can be accessed while a call is executed.
 pub struct RpcContextModule<Context> {
 	ctx: Arc<Context>,
 	module: RpcModule,
@@ -186,5 +204,44 @@ impl<Context> RpcContextModule<Context> {
 	/// Convert this `RpcContextModule` into a regular `RpcModule` that can be registered on the `Server`.
 	pub fn into_module(self) -> RpcModule {
 		self.module
+	}
+}
+
+/// The sending end of registered subscription.
+#[derive(Clone)]
+pub struct SubscriptionSink {
+	method: &'static str,
+	subscribers: Subscribers,
+}
+
+impl SubscriptionSink {
+	/// Send.
+	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
+	where
+		T: Serialize,
+	{
+		let result = to_raw_value(result)?;
+
+		let mut errored = Vec::new();
+		let mut subs = self.subscribers.lock();
+
+		for ((conn_id, sub_id), sender) in subs.iter() {
+			let msg = serde_json::to_string(&JsonRpcNotification {
+				jsonrpc: TwoPointZero,
+				method: self.method,
+				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
+			})?;
+
+			// Log broken connections
+			if sender.unbounded_send(msg).is_err() {
+				errored.push((*conn_id, *sub_id));
+			}
+		}
+
+		// Remove broken connections
+		for entry in errored {
+			subs.remove(&entry);
+		}
+		Ok(())
 	}
 }

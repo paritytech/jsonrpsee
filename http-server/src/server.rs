@@ -24,10 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::module::RpcModule;
-use crate::response;
-use crate::AccessControl;
-use crate::TEN_MB_SIZE_BYTES;
+use crate::{response, AccessControl, TEN_MB_SIZE_BYTES};
 use anyhow::anyhow;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
@@ -39,10 +36,11 @@ use hyper::{
 use jsonrpsee_types::error::{CallError, Error, GenericTransportError};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
-use jsonrpsee_utils::{
-	hyper_helpers::read_response_to_body,
-	server::{collect_batch_response, send_error, RpcSender},
-};
+use jsonrpsee_utils::hyper_helpers::read_response_to_body;
+use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
+use jsonrpsee_utils::server::rpc_module::RpcModule;
+use jsonrpsee_utils::server::RpcSender;
+
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
 use std::{

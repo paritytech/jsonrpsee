@@ -27,10 +27,7 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
 use serde::Serialize;
-use serde_json::value::to_raw_value;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -40,54 +37,11 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
-use jsonrpsee_utils::server::{collect_batch_response, send_error, ConnectionId, Methods, RpcSender};
-
-mod module;
-
-pub use module::{RpcContextModule, RpcModule};
-
-type SubscriptionId = u64;
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>;
-
-#[derive(Clone)]
-pub struct SubscriptionSink {
-	method: &'static str,
-	subscribers: Subscribers,
-}
-
-impl SubscriptionSink {
-	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
-	where
-		T: Serialize,
-	{
-		let result = to_raw_value(result)?;
-
-		let mut errored = Vec::new();
-		let mut subs = self.subscribers.lock();
-
-		for ((conn_id, sub_id), sender) in subs.iter() {
-			let msg = serde_json::to_string(&JsonRpcNotification {
-				jsonrpc: TwoPointZero,
-				method: self.method,
-				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
-			})?;
-
-			// Log broken connections
-			if sender.unbounded_send(msg).is_err() {
-				errored.push((*conn_id, *sub_id));
-			}
-		}
-
-		// Remove broken connections
-		for entry in errored {
-			subs.remove(&entry);
-		}
-
-		Ok(())
-	}
-}
+use jsonrpsee_types::v2::params::RpcParams;
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
+use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule, SubscriptionSink};
+use jsonrpsee_utils::server::RpcSender;
 
 pub struct Server {
 	root: RpcModule,
