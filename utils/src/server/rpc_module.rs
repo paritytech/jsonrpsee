@@ -23,7 +23,7 @@ pub type ConnectionId = usize;
 pub type SubscriptionId = u64;
 type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>;
 
-/// Abstract JSON-RPC module that be registered on server or merged with other modules.
+/// Sets of JSON-RPC methods can be organized into "module" that are in turn registered on server or, alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]
 pub struct RpcModule {
 	methods: Methods,
