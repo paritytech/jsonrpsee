@@ -17,7 +17,7 @@ use std::sync::Arc;
 pub type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
 /// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
-/// Connection ID.
+/// Connection ID. Set to `0` for http and to the connection ID for websockets.
 pub type ConnectionId = usize;
 /// Subscription ID.
 pub type SubscriptionId = u64;
