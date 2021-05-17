@@ -141,7 +141,7 @@ impl RpcModule {
 		self.methods
 	}
 
-	/// Merge modules.
+	/// Merge two [`RpcModules`] by adding all [`Method`]s from `other` into `self`. Fails if any of the methods in `other` is present already.
 	pub fn merge(&mut self, other: RpcModule) -> Result<(), Error> {
 		for name in other.methods.keys() {
 			self.verify_method_name(name)?;
