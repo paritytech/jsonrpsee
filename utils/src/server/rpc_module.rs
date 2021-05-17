@@ -215,7 +215,7 @@ pub struct SubscriptionSink {
 }
 
 impl SubscriptionSink {
-	/// Send.
+	/// Send data back to subscribers. If a send fails (likely a broken connection) the subscriber is removed from the sink. O(n) in the number of subscribers.
 	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
