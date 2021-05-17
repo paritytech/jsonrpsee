@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 /// A `Method` is an RPC endpoint,  callable with a standard JSON-RPC request, implemented as a function pointer to a `Fn` function taking four arguments: the `id`, `params`, a channel the function uses to communicate the result (or error) back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
-/// Methods registered.
+/// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
 /// Connection ID.
 pub type ConnectionId = usize;
