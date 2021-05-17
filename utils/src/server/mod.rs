@@ -2,7 +2,7 @@
 
 /// Helpers.
 pub mod helpers;
-/// Abstract JSON-RPC modules that can be used to register methods on a server.
+/// JSON-RPC "modules" groups sets of methods that belong together and handles method/subscription registration.
 pub mod rpc_module;
 
 /// Sender.
