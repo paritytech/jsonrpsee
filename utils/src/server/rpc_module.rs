@@ -163,7 +163,7 @@ impl RpcModule {
 	}
 }
 
-/// Similar to [`RpcModule`] but it wraps an additional context argument that can be used
+/// Similar to [`RpcModule`] but wraps an additional context argument that can be used
 /// to access data during call execution.
 pub struct RpcContextModule<Context> {
 	ctx: Arc<Context>,
