@@ -194,20 +194,11 @@ impl<'a> Id<'a> {
 		}
 	}
 
-	/// Creates owned data from borrowed data, allocates only for Strings.
-	pub fn to_owned(&self) -> Id<'static> {
-		match self {
-			Id::Null => Id::Null,
-			Id::Number(n) => Id::Number(*n),
-			Id::Str(Cow::Borrowed(s)) => Id::Str(Cow::Owned(s.to_string())),
-			Id::Str(Cow::Owned(s)) => Id::Str(Cow::Owned(s.clone())),
-		}
-	}
 }
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id};
+	use super::{Cow, Id, RpcParams, JsonValue};
 
 	#[test]
 	fn id_deserialization() {
@@ -237,5 +228,27 @@ mod test {
 			vec![Id::Null, Id::Number(0), Id::Number(2), Id::Number(3), Id::Str("3".into()), Id::Str("test".into())];
 		let serialized = serde_json::to_string(&d).unwrap();
 		assert_eq!(serialized, r#"[null,0,2,3,"3","test"]"#);
+	}
+
+
+	#[test]
+	fn params_parse() {
+		let none = RpcParams::new(None);
+		assert!(none.one::<u64>().is_err());
+
+		let array_params = RpcParams::new(Some("[1, 2, 3]"));
+		let arr: Result<[u64; 3], _> = array_params.parse();
+		assert!(arr.is_ok());
+
+		let arr: Result<(u64, u64, u64), _> = array_params.parse();
+		assert!(arr.is_ok());
+
+		let array_one = RpcParams::new(Some("[1]"));
+		let one: Result<u64, _> = array_one.one();
+		assert!(one.is_ok());
+
+		let object_params = RpcParams::new(Some(r#"{"beef":99,"dinner":0}"#));
+		let obj: Result<JsonValue, _> = object_params.parse();
+		assert!(obj.is_ok());
 	}
 }
