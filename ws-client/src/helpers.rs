@@ -3,7 +3,7 @@ use crate::transport::Sender as WsSender;
 use futures::channel::mpsc;
 use jsonrpsee_types::v2::params::{Id, JsonRpcParams, SubscriptionId};
 use jsonrpsee_types::v2::request::JsonRpcCallSer;
-use jsonrpsee_types::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponse};
+use jsonrpsee_types::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponseAlloc};
 use jsonrpsee_types::{v2::error::JsonRpcError, Error, RequestMessage};
 use serde_json::Value as JsonValue;
 
@@ -46,7 +46,7 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<JsonRpcResp
 /// Returns `Err(Some(msg))` if the subscription was full.
 pub fn process_subscription_response(
 	manager: &mut RequestManager,
-	notif: JsonRpcSubscriptionResponse<JsonValue>,
+	notif: JsonRpcSubscriptionResponseAlloc<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
 	let sub_id = notif.params.subscription;
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
