@@ -36,8 +36,8 @@ use hyper::{
 use jsonrpsee_types::error::{CallError, Error, GenericTransportError};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_utils::hyper_helpers::read_response_to_body;
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcNotification};
+use jsonrpsee_utils::{hyper_helpers::read_response_to_body, server::helpers::send_response};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
 
@@ -212,6 +212,8 @@ impl Server {
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
 							execute(&tx, req);
+						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification>(&body) {
+							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
 								single = false;
@@ -221,6 +223,8 @@ impl Server {
 							} else {
 								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
+						} else if let Ok(_batch) = serde_json::from_slice::<Vec<JsonRpcNotification>>(&body) {
+							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else {
 							log::error!(
 								"[service_fn], Cannot parse request body={:?}",
