@@ -221,6 +221,9 @@ mod test {
 		let deserialized: Id = serde_json::from_str(s).unwrap();
 		assert_eq!(deserialized, Id::Str(Cow::Borrowed("2x")));
 
+		let s = r#"[1337]"#;
+		assert!(serde_json::from_str::<Id>(s).is_err());
+
 		let s = r#"[null, 0, 2, "3"]"#;
 		let deserialized: Vec<Id> = serde_json::from_str(s).unwrap();
 		assert_eq!(deserialized, vec![Id::Null, Id::Number(0), Id::Number(2), Id::Str("3".into())]);
