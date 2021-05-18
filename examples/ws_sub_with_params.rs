@@ -25,12 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
+	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
 	ws_server::WsServer,
 };
 use std::net::SocketAddr;
-
-const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,26 +37,43 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await?;
 
-	let mut i = 0;
-	while i <= NUM_SUBSCRIPTION_RESPONSES {
-		let r = subscribe_hello.next().await;
-		log::debug!("received {:?}", r);
-		i += 1;
-	}
+	// Subscription with a single parameter
+	let params = JsonRpcParams::Array(vec![3.into()]);
+	let mut sub_params_one = client.subscribe::<Option<char>>("sub_one_param", params, "unsub_one_param").await?;
+	println!("subscription with one param: {:?}", sub_params_one.next().await);
+
+	// Subscription with multiple parameters
+	let params = JsonRpcParams::Array(vec![2.into(), 5.into()]);
+	let mut sub_params_two = client.subscribe::<String>("sub_params_two", params, "unsub_params_two").await?;
+	println!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
+	const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
 	let mut server = WsServer::new("127.0.0.1:0").await?;
-	let mut subscription = server.register_subscription::<String>("subscribe_hello", "unsubscribe_hello").unwrap();
+	let one_param = server.register_subscription("sub_one_param", "unsub_one_param").unwrap();
+	let two_params = server.register_subscription("sub_params_two", "unsub_params_two").unwrap();
 
 	std::thread::spawn(move || loop {
-		subscription.send_all(&"hello my friend").unwrap();
-		std::thread::sleep(std::time::Duration::from_secs(1));
+		for sink_params in one_param.extract_with_input().iter() {
+			let idx = *sink_params.params();
+			let result = LETTERS.chars().nth(idx);
+			let _ = sink_params.send(&result);
+		}
+		std::thread::sleep(std::time::Duration::from_millis(50));
+	});
+
+	std::thread::spawn(move || loop {
+		for sink_params in two_params.extract_with_input().iter() {
+			let params: &Vec<usize> = sink_params.params();
+			// Validate your params here: check len, check > 0 etc
+			let result = LETTERS[params[0]..params[1]].to_string();
+			let _ = sink_params.send(&result);
+		}
+		std::thread::sleep(std::time::Duration::from_millis(100));
 	});
 
 	let addr = server.local_addr();

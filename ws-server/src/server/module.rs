@@ -86,7 +86,7 @@ impl RpcModule {
 			self.methods.insert(
 				subscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					let params = params.parse().ok();
+					let params = params.parse().or_else(|_| params.one().map_err(|_| CallError::InvalidParams)).ok();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 
