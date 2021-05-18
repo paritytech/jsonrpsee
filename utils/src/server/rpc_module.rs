@@ -4,7 +4,7 @@ use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::traits::RpcMethod;
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, RpcParams, TwoPointZero};
-use jsonrpsee_types::v2::request::JsonRpcNotification;
+use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -236,7 +236,7 @@ impl SubscriptionSink {
 		let mut subs = self.subscribers.lock();
 
 		for ((conn_id, sub_id), sender) in subs.iter() {
-			let msg = serde_json::to_string(&JsonRpcNotification {
+			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 				jsonrpc: TwoPointZero,
 				method: self.method,
 				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
