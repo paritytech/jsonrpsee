@@ -191,3 +191,7 @@ impl Id {
 		}
 	}
 }
+
+/// Untyped JSON-RPC ID.
+// TODO(niklasad1): this should be enforced to only accept: String, Number, or Null.
+pub type JsonRpcRawId<'a> = Option<&'a serde_json::value::RawValue>;

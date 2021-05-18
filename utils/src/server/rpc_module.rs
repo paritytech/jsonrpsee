@@ -1,10 +1,9 @@
 use crate::server::helpers::{send_error, send_response};
-use crate::server::{RpcId, RpcSender};
 use futures_channel::mpsc;
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::traits::RpcMethod;
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
-use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, JsonRpcRawId, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::JsonRpcNotification;
 
 use parking_lot::Mutex;
@@ -13,15 +12,22 @@ use serde::Serialize;
 use serde_json::value::to_raw_value;
 use std::sync::Arc;
 
-/// A `Method` is an RPC endpoint,  callable with a standard JSON-RPC request, implemented as a function pointer to a `Fn` function taking four arguments: the `id`, `params`, a channel the function uses to communicate the result (or error) back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type Method = Box<dyn Send + Sync + Fn(RpcId, RpcParams, RpcSender, ConnectionId) -> anyhow::Result<()>>;
+/// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
+/// implemented as a function pointer to a `Fn` function taking four arguments:
+/// the `id`, `params`, a channel the function uses to communicate the result (or error)
+/// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
+pub type Method = Box<dyn Send + Sync + Fn(JsonRpcRawId, RpcParams, InnerSink, ConnectionId) -> anyhow::Result<()>>;
 /// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
-/// Connection ID. Set to `0` for http and to the connection ID for websockets.
+/// Connection ID, used for stateful protocol such as WebSockets.
+/// For stateless protocols it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
 /// Subscription ID.
 pub type SubscriptionId = u64;
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), mpsc::UnboundedSender<String>>>>;
+
+/// Sink that is used to send back the result to the server that registered this module.
+type InnerSink<'a> = &'a mpsc::UnboundedSender<String>;
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), InnerSink>>>;
 
 /// Sets of JSON-RPC methods can be organized into "module" that are in turn registered on server or, alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]
