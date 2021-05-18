@@ -1,15 +1,36 @@
-use crate::server::{RpcParams, SubscriptionId, SubscriptionSink};
-use jsonrpsee_types::{
-	error::{CallError, Error},
-	v2::error::{JsonRpcErrorCode, JsonRpcErrorObject},
-};
-use jsonrpsee_types::{traits::RpcMethod, v2::error::CALL_EXECUTION_FAILED_CODE};
-use jsonrpsee_utils::server::{send_error, send_response, Methods};
+use crate::server::helpers::{send_error, send_response};
+use futures_channel::mpsc;
+use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::traits::RpcMethod;
+use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, JsonRpcRawId, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::request::JsonRpcNotification;
+
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
+use serde_json::value::to_raw_value;
 use std::sync::Arc;
 
+/// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
+/// implemented as a function pointer to a `Fn` function taking four arguments:
+/// the `id`, `params`, a channel the function uses to communicate the result (or error)
+/// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
+pub type Method = Box<dyn Send + Sync + Fn(JsonRpcRawId, RpcParams, &MethodSink, ConnectionId) -> anyhow::Result<()>>;
+/// A collection of registered [`Method`]s.
+pub type Methods = FxHashMap<&'static str, Method>;
+/// Connection ID, used for stateful protocol such as WebSockets.
+/// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
+pub type ConnectionId = usize;
+/// Subscription ID.
+pub type SubscriptionId = u64;
+/// Sink that is used to send back the result to the server for a specific method.
+pub type MethodSink = mpsc::UnboundedSender<String>;
+
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), MethodSink>>>;
+
+/// Sets of JSON-RPC methods can be organized into a "module" that are in turn registered on server or,
+/// alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]
 pub struct RpcModule {
 	methods: Methods,
@@ -122,11 +143,14 @@ impl RpcModule {
 		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
 	}
 
-	pub(crate) fn into_methods(self) -> Methods {
+	/// Convert a module into methods.
+	pub fn into_methods(self) -> Methods {
 		self.methods
 	}
 
-	pub(crate) fn merge(&mut self, other: RpcModule) -> Result<(), Error> {
+	/// Merge two [`RpcModule`]'s by adding all [`Method`]s from `other` into `self`.
+	/// Fails if any of the methods in `other` is present already.
+	pub fn merge(&mut self, other: RpcModule) -> Result<(), Error> {
 		for name in other.methods.keys() {
 			self.verify_method_name(name)?;
 		}
@@ -139,6 +163,8 @@ impl RpcModule {
 	}
 }
 
+/// Similar to [`RpcModule`] but wraps an additional context argument that can be used
+/// to access data during call execution.
 pub struct RpcContextModule<Context> {
 	ctx: Arc<Context>,
 	module: RpcModule,
@@ -186,5 +212,46 @@ impl<Context> RpcContextModule<Context> {
 	/// Convert this `RpcContextModule` into a regular `RpcModule` that can be registered on the `Server`.
 	pub fn into_module(self) -> RpcModule {
 		self.module
+	}
+}
+
+/// Used by the server to send data back to subscribers.
+#[derive(Clone)]
+pub struct SubscriptionSink {
+	method: &'static str,
+	subscribers: Subscribers,
+}
+
+impl SubscriptionSink {
+	/// Send data back to subscribers.
+	/// If a send fails (likely a broken connection) the subscriber is removed from the sink.
+	/// O(n) in the number of subscribers.
+	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
+	where
+		T: Serialize,
+	{
+		let result = to_raw_value(result)?;
+
+		let mut errored = Vec::new();
+		let mut subs = self.subscribers.lock();
+
+		for ((conn_id, sub_id), sender) in subs.iter() {
+			let msg = serde_json::to_string(&JsonRpcNotification {
+				jsonrpc: TwoPointZero,
+				method: self.method,
+				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
+			})?;
+
+			// Track broken connections
+			if sender.unbounded_send(msg).is_err() {
+				errored.push((*conn_id, *sub_id));
+			}
+		}
+
+		// Remove broken connections
+		for entry in errored {
+			subs.remove(&entry);
+		}
+		Ok(())
 	}
 }
