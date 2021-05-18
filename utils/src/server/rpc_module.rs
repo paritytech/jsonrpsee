@@ -29,7 +29,8 @@ pub type MethodSink = mpsc::UnboundedSender<String>;
 
 type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), MethodSink>>>;
 
-/// Sets of JSON-RPC methods can be organized into "module" that are in turn registered on server or, alternatively, merged with other modules to construct a cohesive API.
+/// Sets of JSON-RPC methods can be organized into "module" that are in turn registered on server or,
+/// alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]
 pub struct RpcModule {
 	methods: Methods,
@@ -147,7 +148,8 @@ impl RpcModule {
 		self.methods
 	}
 
-	/// Merge two [`RpcModules`] by adding all [`Method`]s from `other` into `self`. Fails if any of the methods in `other` is present already.
+	/// Merge two [`RpcModule`]'s by adding all [`Method`]s from `other` into `self`.
+	/// Fails if any of the methods in `other` is present already.
 	pub fn merge(&mut self, other: RpcModule) -> Result<(), Error> {
 		for name in other.methods.keys() {
 			self.verify_method_name(name)?;
@@ -221,7 +223,9 @@ pub struct SubscriptionSink {
 }
 
 impl SubscriptionSink {
-	/// Send data back to subscribers. If a send fails (likely a broken connection) the subscriber is removed from the sink. O(n) in the number of subscribers.
+	/// Send data back to subscribers.
+	/// If a send fails (likely a broken connection) the subscriber is removed from the sink.
+	/// O(n) in the number of subscribers.
 	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
