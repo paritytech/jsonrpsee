@@ -16,7 +16,7 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type Method = Box<dyn Send + Sync + Fn(JsonRpcRawId, RpcParams, InnerSink, ConnectionId) -> anyhow::Result<()>>;
+pub type Method = Box<dyn Send + Sync + Fn(JsonRpcRawId, RpcParams, &MethodSink, ConnectionId) -> anyhow::Result<()>>;
 /// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
 /// Connection ID, used for stateful protocol such as WebSockets.
@@ -24,10 +24,10 @@ pub type Methods = FxHashMap<&'static str, Method>;
 pub type ConnectionId = usize;
 /// Subscription ID.
 pub type SubscriptionId = u64;
+/// Sink that is used to send back the result to the server for a specific method.
+pub type MethodSink = mpsc::UnboundedSender<String>;
 
-/// Sink that is used to send back the result to the server that registered this module.
-type InnerSink<'a> = &'a mpsc::UnboundedSender<String>;
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), InnerSink>>>;
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), MethodSink>>>;
 
 /// Sets of JSON-RPC methods can be organized into "module" that are in turn registered on server or, alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]

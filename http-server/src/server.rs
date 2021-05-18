@@ -38,8 +38,7 @@ use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::RpcModule;
-use jsonrpsee_utils::server::RpcSender;
+use jsonrpsee_utils::server::rpc_module::{RpcModule, MethodSink};
 
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};
@@ -159,7 +158,7 @@ impl Server {
 					// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
 					// the params from the request. The result of the computation is sent back over the `tx` channel and
 					// the result(s) are collected into a `String` and sent back over the wire.
-					let execute = move |tx: RpcSender, req: JsonRpcRequest| {
+					let execute = move |tx: &MethodSink, req: JsonRpcRequest| {
 						if let Some(method) = methods.get(&*req.method) {
 							let params = RpcParams::new(req.params.map(|params| params.get()));
 							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
