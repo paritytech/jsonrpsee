@@ -20,7 +20,7 @@ pub type Method = Box<dyn Send + Sync + Fn(JsonRpcRawId, RpcParams, &MethodSink,
 /// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
 /// Connection ID, used for stateful protocol such as WebSockets.
-/// For stateless protocols it's unused, so feel free to set it some hardcoded value.
+/// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
 /// Subscription ID.
 pub type SubscriptionId = u64;
