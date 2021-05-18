@@ -38,7 +38,7 @@ use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{RpcModule, MethodSink};
+use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
 
 use serde::Serialize;
 use socket2::{Domain, Socket, Type};

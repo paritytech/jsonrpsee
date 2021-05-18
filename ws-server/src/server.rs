@@ -40,7 +40,7 @@ use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::RpcParams;
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule, SubscriptionSink, MethodSink};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule, SubscriptionSink};
 
 pub struct Server {
 	root: RpcModule,
