@@ -29,7 +29,7 @@ pub type MethodSink = mpsc::UnboundedSender<String>;
 
 type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), MethodSink>>>;
 
-/// Sets of JSON-RPC methods can be organized into "module" that are in turn registered on server or,
+/// Sets of JSON-RPC methods can be organized into a "module" that are in turn registered on server or,
 /// alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]
 pub struct RpcModule {
