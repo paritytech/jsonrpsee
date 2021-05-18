@@ -24,7 +24,7 @@ impl<'a> fmt::Display for JsonRpcError<'a> {
 	}
 }
 
-/// JSON-RPC error object with no extra allocations.
+/// JSON-RPC error object.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct JsonRpcErrorObject<'a> {
