@@ -1,4 +1,4 @@
-use crate::v2::params::{Id, JsonRpcNotificationParamsAlloc, JsonRpcNotificationParams, TwoPointZero};
+use crate::v2::params::{Id, JsonRpcNotificationParams, JsonRpcNotificationParamsAlloc, TwoPointZero};
 use serde::{Deserialize, Serialize};
 
 /// JSON-RPC successful response object.

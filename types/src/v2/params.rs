@@ -193,12 +193,11 @@ impl<'a> Id<'a> {
 			_ => None,
 		}
 	}
-
 }
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id, RpcParams, JsonValue};
+	use super::{Cow, Id, JsonValue, RpcParams};
 
 	#[test]
 	fn id_deserialization() {
@@ -229,7 +228,6 @@ mod test {
 		let serialized = serde_json::to_string(&d).unwrap();
 		assert_eq!(serialized, r#"[null,0,2,3,"3","test"]"#);
 	}
-
 
 	#[test]
 	fn params_parse() {

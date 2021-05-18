@@ -81,8 +81,9 @@ impl<'a> JsonRpcNotificationSer<'a> {
 
 #[cfg(test)]
 mod test {
-	use super::{JsonRpcRequest, JsonRpcNotification, JsonRpcInvalidRequest, TwoPointZero, Id,
-		JsonRpcCallSer, JsonRpcNotificationSer
+	use super::{
+		Id, JsonRpcCallSer, JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcNotificationSer, JsonRpcRequest,
+		TwoPointZero,
 	};
 
 	#[test]

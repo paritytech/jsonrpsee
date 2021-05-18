@@ -36,7 +36,7 @@ use hyper::{
 use jsonrpsee_types::error::{CallError, Error, GenericTransportError};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest, JsonRpcNotification};
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
