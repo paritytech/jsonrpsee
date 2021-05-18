@@ -83,7 +83,7 @@ async fn invalid_single_method_call() {
 	let req = r#"{"jsonrpc":"2.0","method":1, "params": "bar"}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, invalid_request(Id::Null));
+	assert_eq!(response.body, parse_error(Id::Null));
 }
 
 #[tokio::test]

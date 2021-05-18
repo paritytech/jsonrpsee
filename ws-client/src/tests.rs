@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::v2::{
-	error::{JsonRpcErrorCode, JsonRpcErrorObjectAlloc},
+	error::{JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject},
 	params::JsonRpcParams,
 };
 use crate::{
@@ -186,9 +186,14 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 	client.request("say_hello", JsonRpcParams::NoParams).await
 }
 
-fn assert_error_response(error: Error, code: JsonRpcErrorObjectAlloc) {
-	match &error {
-		Error::Request(e) => assert_eq!(e.error, code),
-		e => panic!("Expected error: \"{}\", got: {:?}", error, e),
+fn assert_error_response(err: Error, exp: JsonRpcErrorObject) {
+	match &err {
+		Error::Request(e) => {
+			let this: JsonRpcError = serde_json::from_str(&e).unwrap();
+			// NOTE: `RawValue` doesn't implement PartialEq.
+			assert_eq!(this.error.code, exp.code);
+			assert_eq!(this.error.message, exp.message);
+		}
+		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
 	};
 }

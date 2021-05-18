@@ -3,7 +3,7 @@ use futures_channel::mpsc;
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::traits::RpcMethod;
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
-use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, JsonRpcRawId, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::JsonRpcNotification;
 
 use parking_lot::Mutex;
@@ -16,7 +16,7 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type Method = Box<dyn Send + Sync + Fn(JsonRpcRawId, RpcParams, &MethodSink, ConnectionId) -> anyhow::Result<()>>;
+pub type Method = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> anyhow::Result<()>>;
 /// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
 /// Connection ID, used for stateful protocol such as WebSockets.

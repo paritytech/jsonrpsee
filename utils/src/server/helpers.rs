@@ -2,13 +2,13 @@ use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::v2::error::{JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject};
-use jsonrpsee_types::v2::params::{JsonRpcRawId, TwoPointZero};
+use jsonrpsee_types::v2::params::{Id, TwoPointZero};
 use jsonrpsee_types::v2::response::JsonRpcResponse;
 use serde::Serialize;
 
 /// Helper for sending JSON-RPC responses to the client
-pub fn send_response(id: JsonRpcRawId, tx: &MethodSink, result: impl Serialize) {
-	let json = match serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id, result }) {
+pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize) {
+	let json = match serde_json::to_string(&JsonRpcResponse { jsonrpc: TwoPointZero, id: id.clone(), result }) {
 		Ok(json) => json,
 		Err(err) => {
 			log::error!("Error serializing response: {:?}", err);
@@ -23,7 +23,7 @@ pub fn send_response(id: JsonRpcRawId, tx: &MethodSink, result: impl Serialize) 
 }
 
 /// Helper for sending JSON-RPC errors to the client
-pub fn send_error(id: JsonRpcRawId, tx: &MethodSink, error: JsonRpcErrorObject) {
+pub fn send_error(id: Id, tx: &MethodSink, error: JsonRpcErrorObject) {
 	let json = match serde_json::to_string(&JsonRpcError { jsonrpc: TwoPointZero, error, id }) {
 		Ok(json) => json,
 		Err(err) => {

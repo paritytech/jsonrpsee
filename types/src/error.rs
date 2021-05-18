@@ -1,6 +1,4 @@
-use crate::v2::error::JsonRpcErrorAlloc;
 use std::fmt;
-
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
@@ -48,7 +46,7 @@ pub enum Error {
 	Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
 	/// JSON-RPC request error.
 	#[error("JSON-RPC request error: {0:?}")]
-	Request(#[source] JsonRpcErrorAlloc),
+	Request(String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	Internal(#[source] futures_channel::mpsc::SendError),

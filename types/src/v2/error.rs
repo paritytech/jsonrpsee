@@ -2,57 +2,30 @@ use crate::v2::params::{Id, TwoPointZero};
 use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use serde_json::value::{RawValue, Value as JsonValue};
+use serde_json::value::RawValue;
 use std::fmt;
 use thiserror::Error;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct JsonRpcError<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Error.
+	#[serde(borrow)]
 	pub error: JsonRpcErrorObject<'a>,
 	/// Request ID
-	pub id: Option<&'a RawValue>,
-}
-/// [Failed JSON-RPC response object with allocations](https://www.jsonrpc.org/specification#response_object).
-#[derive(Error, Debug, Deserialize, PartialEq)]
-pub struct JsonRpcErrorAlloc {
-	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
-	/// JSON-RPC error object.
-	pub error: JsonRpcErrorObjectAlloc,
-	/// Request ID.
-	pub id: Id,
+	pub id: Id<'a>,
 }
 
-impl fmt::Display for JsonRpcErrorAlloc {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{:?}: {:?}: {:?}", self.jsonrpc, self.error, self.id)
-	}
-}
-
-/// JSON-RPC error object.
-#[derive(Debug, PartialEq, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct JsonRpcErrorObjectAlloc {
-	/// Code
-	pub code: JsonRpcErrorCode,
-	/// Message
-	pub message: String,
-	/// Optional data
-	pub data: Option<JsonValue>,
-}
-
-impl From<JsonRpcErrorCode> for JsonRpcErrorObjectAlloc {
-	fn from(code: JsonRpcErrorCode) -> Self {
-		Self { code, message: code.message().to_owned(), data: None }
+impl<'a> fmt::Display for JsonRpcError<'a> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
 	}
 }
 
 /// JSON-RPC error object with no extra allocations.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct JsonRpcErrorObject<'a> {
 	/// Code
@@ -61,6 +34,7 @@ pub struct JsonRpcErrorObject<'a> {
 	pub message: &'a str,
 	/// Optional data
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[serde(borrow)]
 	pub data: Option<&'a RawValue>,
 }
 
@@ -180,47 +154,15 @@ impl serde::Serialize for JsonRpcErrorCode {
 
 #[cfg(test)]
 mod tests {
-	use super::{
-		Id, JsonRpcError, JsonRpcErrorAlloc, JsonRpcErrorCode, JsonRpcErrorObject, JsonRpcErrorObjectAlloc,
-		TwoPointZero,
-	};
-
-	#[test]
-	fn deserialize_works() {
-		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
-		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
-		assert_eq!(err.jsonrpc, TwoPointZero);
-		assert_eq!(
-			err.error,
-			JsonRpcErrorObjectAlloc { code: JsonRpcErrorCode::ParseError, message: "Parse error".into(), data: None }
-		);
-		assert_eq!(err.id, Id::Null);
-	}
-
-	#[test]
-	fn deserialize_with_optional_data() {
-		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
-		let err: JsonRpcErrorAlloc = serde_json::from_str(ser).unwrap();
-		assert_eq!(err.jsonrpc, TwoPointZero);
-		assert_eq!(
-			err.error,
-			JsonRpcErrorObjectAlloc {
-				code: JsonRpcErrorCode::ParseError,
-				message: "Parse error".into(),
-				data: Some("vegan".into())
-			}
-		);
-		assert_eq!(err.id, Id::Null);
-	}
+	use super::{Id, JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject, TwoPointZero};
 
 	#[test]
 	fn serialize_works() {
 		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
-		let raw_id = serde_json::value::to_raw_value(&1337).unwrap();
 		let err = JsonRpcError {
 			jsonrpc: TwoPointZero,
 			error: JsonRpcErrorObject { code: JsonRpcErrorCode::InternalError, message: "Internal error", data: None },
-			id: Some(&*raw_id),
+			id: Id::Number(1337),
 		};
 		let ser = serde_json::to_string(&err).unwrap();
 		assert_eq!(exp, ser);

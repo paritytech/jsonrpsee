@@ -37,7 +37,7 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::RpcParams;
+use jsonrpsee_types::v2::params::{Id, RpcParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule, SubscriptionSink};
@@ -141,12 +141,12 @@ async fn background_task(
 	let execute = move |tx: &MethodSink, req: JsonRpcRequest| {
 		if let Some(method) = methods.get(&*req.method) {
 			let params = RpcParams::new(req.params.map(|params| params.get()));
-			if let Err(err) = (method)(req.id, params, &tx, conn_id) {
+			if let Err(err) = (method)(req.id.to_owned(), params, &tx, conn_id) {
 				log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
-				send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+				send_error(req.id.to_owned(), &tx, JsonRpcErrorCode::ServerError(-1).into());
 			}
 		} else {
-			send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+			send_error(req.id.to_owned(), &tx, JsonRpcErrorCode::MethodNotFound.into());
 		}
 	};
 
@@ -180,12 +180,12 @@ async fn background_task(
 					log::error!("Error sending batch response to the client: {:?}", err)
 				}
 			} else {
-				send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
+				send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 			}
 		} else {
 			let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
 				Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-				Err(_) => (None, JsonRpcErrorCode::ParseError),
+				Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
 			};
 
 			send_error(id, &tx, code.into());

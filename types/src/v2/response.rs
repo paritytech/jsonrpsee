@@ -1,6 +1,5 @@
-use crate::v2::params::{JsonRpcNotificationParamsAlloc, TwoPointZero};
+use crate::v2::params::{Id, JsonRpcNotificationParamsAlloc, TwoPointZero};
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
 
 /// JSON-RPC successful response object.
 #[derive(Serialize, Deserialize, Debug)]
@@ -11,7 +10,7 @@ pub struct JsonRpcResponse<'a, T> {
 	pub result: T,
 	/// Request ID
 	#[serde(borrow)]
-	pub id: Option<&'a RawValue>,
+	pub id: Id<'a>,
 }
 
 /// JSON-RPC subscription response.

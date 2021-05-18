@@ -2,10 +2,9 @@ use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use futures::channel::mpsc;
 use jsonrpsee_types::v2::params::{Id, JsonRpcParams, SubscriptionId};
-use jsonrpsee_types::v2::parse_request_id;
 use jsonrpsee_types::v2::request::JsonRpcCallSer;
 use jsonrpsee_types::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponse};
-use jsonrpsee_types::{v2::error::JsonRpcErrorAlloc, Error, RequestMessage};
+use jsonrpsee_types::{v2::error::JsonRpcError, Error, RequestMessage};
 use serde_json::Value as JsonValue;
 
 /// Attempts to process a batch response.
@@ -17,7 +16,7 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<JsonRpcResp
 	let mut rps_unordered: Vec<_> = Vec::with_capacity(rps.len());
 
 	for rp in rps {
-		let id = parse_request_id(rp.id)?;
+		let id = rp.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 		digest.push(id);
 		rps_unordered.push((id, rp.result));
 	}
@@ -103,7 +102,7 @@ pub fn process_single_response(
 	response: JsonRpcResponse<JsonValue>,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
-	let response_id = parse_request_id(response.id)?;
+	let response_id = response.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back_oneshot = match manager.complete_pending_call(response_id) {
@@ -173,17 +172,17 @@ pub fn build_unsubscribe_message(
 ///
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
-pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcErrorAlloc) -> Result<(), Error> {
+pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcError) -> Result<(), Error> {
 	let id = err.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back = manager.complete_pending_call(id).expect("State checked above; qed");
-			let _ = send_back.map(|s| s.send(Err(Error::Request(err))));
+			let _ = send_back.map(|s| s.send(Err(Error::Request(err.to_string()))));
 			Ok(())
 		}
 		RequestStatus::PendingSubscription => {
 			let (_, send_back, _) = manager.complete_pending_subscription(id).expect("State checked above; qed");
-			let _ = send_back.send(Err(Error::Request(err)));
+			let _ = send_back.send(Err(Error::Request(err.to_string())));
 			Ok(())
 		}
 		_ => Err(Error::InvalidRequestId),

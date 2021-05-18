@@ -4,6 +4,7 @@ use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value as JsonValue};
+use std::borrow::Cow;
 use std::fmt;
 
 /// JSON-RPC parameter values for subscriptions.
@@ -26,7 +27,7 @@ pub struct JsonRpcNotificationParamsAlloc<T> {
 }
 
 /// JSON-RPC v2 marker type.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TwoPointZero;
 
 struct TwoPointZeroVisitor;
@@ -157,16 +158,16 @@ impl From<SubscriptionId> for JsonValue {
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
-pub enum Id {
+pub enum Id<'a> {
 	/// Null
 	Null,
 	/// Numeric id
 	Number(u64),
 	/// String id
-	Str(String),
+	Str(Cow<'a, str>),
 }
 
-impl Id {
+impl<'a> Id<'a> {
 	/// If the Id is a number, returns the associated number. Returns None otherwise.
 	pub fn as_number(&self) -> Option<&u64> {
 		match self {
@@ -190,8 +191,46 @@ impl Id {
 			_ => None,
 		}
 	}
+
+	/// Creates owned data from borrowed data, allocates only for Strings.
+	pub fn to_owned(&self) -> Id<'static> {
+		match self {
+			Id::Null => Id::Null,
+			Id::Number(n) => Id::Number(*n),
+			Id::Str(Cow::Borrowed(s)) => Id::Str(Cow::Owned(s.to_string())),
+			Id::Str(Cow::Owned(s)) => Id::Str(Cow::Owned(s.clone())),
+		}
+	}
 }
 
-/// Untyped JSON-RPC ID.
-// TODO(niklasad1): this should be enforced to only accept: String, Number, or Null.
-pub type JsonRpcRawId<'a> = Option<&'a serde_json::value::RawValue>;
+#[cfg(test)]
+mod test {
+	use super::{Cow, Id};
+
+	#[test]
+	fn id_deserialization() {
+		let s = r#""2""#;
+		let deserialized: Id = serde_json::from_str(s).unwrap();
+		assert_eq!(deserialized, Id::Str("2".into()));
+
+		let s = r#"2"#;
+		let deserialized: Id = serde_json::from_str(s).unwrap();
+		assert_eq!(deserialized, Id::Number(2));
+
+		let s = r#""2x""#;
+		let deserialized: Id = serde_json::from_str(s).unwrap();
+		assert_eq!(deserialized, Id::Str(Cow::Borrowed("2x")));
+
+		let s = r#"[null, 0, 2, "3"]"#;
+		let deserialized: Vec<Id> = serde_json::from_str(s).unwrap();
+		assert_eq!(deserialized, vec![Id::Null, Id::Number(0), Id::Number(2), Id::Str("3".into())]);
+	}
+
+	#[test]
+	fn id_serialization() {
+		let d =
+			vec![Id::Null, Id::Number(0), Id::Number(2), Id::Number(3), Id::Str("3".into()), Id::Str("test".into())];
+		let serialized = serde_json::to_string(&d).unwrap();
+		assert_eq!(serialized, r#"[null,0,2,3,"3","test"]"#);
+	}
+}

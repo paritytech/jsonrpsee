@@ -26,7 +26,7 @@
 
 use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
-use crate::v2::error::JsonRpcErrorAlloc;
+use crate::v2::error::JsonRpcError;
 use crate::v2::params::{Id, JsonRpcParams};
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
 use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponse};
@@ -651,7 +651,7 @@ async fn background_task(
 					}
 				}
 				// Error response
-				else if let Ok(err) = serde_json::from_slice::<JsonRpcErrorAlloc>(&raw) {
+				else if let Ok(err) = serde_json::from_slice::<JsonRpcError>(&raw) {
 					log::debug!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);

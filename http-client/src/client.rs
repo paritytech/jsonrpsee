@@ -2,11 +2,11 @@ use crate::traits::Client;
 use crate::transport::HttpTransportClient;
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
 use crate::v2::{
-	error::JsonRpcErrorAlloc,
+	error::JsonRpcError,
 	params::{Id, JsonRpcParams},
 	response::JsonRpcResponse,
 };
-use crate::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
+use crate::{Error, TEN_MB_SIZE_BYTES};
 use async_trait::async_trait;
 use fnv::FnvHashMap;
 use serde::de::DeserializeOwned;
@@ -76,12 +76,12 @@ impl Client for HttpClient {
 		let response: JsonRpcResponse<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: JsonRpcErrorAlloc = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-				return Err(Error::Request(err));
+				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				return Err(Error::Request(err.to_string()));
 			}
 		};
 
-		let response_id = parse_request_id(response.id)?;
+		let response_id = response.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 
 		if response_id == id {
 			Ok(response.result)
@@ -115,15 +115,15 @@ impl Client for HttpClient {
 		let rps: Vec<JsonRpcResponse<_>> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: JsonRpcErrorAlloc = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-				return Err(Error::Request(err));
+				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				return Err(Error::Request(err.to_string()));
 			}
 		};
 
 		// NOTE: `R::default` is placeholder and will be replaced in loop below.
 		let mut responses = vec![R::default(); ordered_requests.len()];
 		for rp in rps {
-			let response_id = parse_request_id(rp.id)?;
+			let response_id = rp.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 			let pos = match request_set.get(&response_id) {
 				Some(pos) => *pos,
 				None => return Err(Error::InvalidRequestId),
@@ -131,15 +131,5 @@ impl Client for HttpClient {
 			responses[pos] = rp.result
 		}
 		Ok(responses)
-	}
-}
-
-fn parse_request_id(raw: Option<&JsonRawValue>) -> Result<u64, Error> {
-	match raw {
-		None => Err(Error::InvalidRequestId),
-		Some(id) => {
-			let id = serde_json::from_str(id.get()).map_err(Error::ParseError)?;
-			Ok(id)
-		}
 	}
 }

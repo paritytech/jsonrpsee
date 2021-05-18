@@ -34,8 +34,9 @@ use hyper::{
 	Error as HyperError,
 };
 use jsonrpsee_types::error::{CallError, Error, GenericTransportError};
+use jsonrpsee_types::v2::error::JsonRpcErrorCode;
+use jsonrpsee_types::v2::params::{Id, RpcParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
@@ -162,17 +163,17 @@ impl Server {
 						if let Some(method) = methods.get(&*req.method) {
 							let params = RpcParams::new(req.params.map(|params| params.get()));
 							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (method)(req.id, params, &tx, 0) {
+							if let Err(err) = (method)(req.id.to_owned(), params, &tx, 0) {
 								log::error!(
 									"execution of method call '{}' failed: {:?}, request id={:?}",
 									req.method,
 									err,
 									req.id
 								);
-								send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+								send_error(req.id.to_owned(), &tx, JsonRpcErrorCode::ServerError(-1).into());
 							}
 						} else {
-							send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+							send_error(req.id.to_owned(), &tx, JsonRpcErrorCode::MethodNotFound.into());
 						}
 					};
 
@@ -218,7 +219,7 @@ impl Server {
 									execute(&tx, req);
 								}
 							} else {
-								send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
+								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
 						} else {
 							log::error!(
@@ -227,7 +228,7 @@ impl Server {
 							);
 							let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
 								Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-								Err(_) => (None, JsonRpcErrorCode::ParseError),
+								Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
 							};
 							send_error(id, &tx, code.into());
 						}
