@@ -5,7 +5,6 @@ use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value as JsonValue};
 use std::borrow::Cow;
-
 use std::fmt;
 
 /// JSON-RPC parameter values for subscriptions.
