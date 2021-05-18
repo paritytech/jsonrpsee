@@ -2,5 +2,5 @@
 
 /// Helpers.
 pub mod helpers;
-/// JSON-RPC "modules" groups sets of methods that belong together and handles method/subscription registration.
+/// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 pub mod rpc_module;
