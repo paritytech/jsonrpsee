@@ -163,17 +163,17 @@ impl Server {
 						if let Some(method) = methods.get(&*req.method) {
 							let params = RpcParams::new(req.params.map(|params| params.get()));
 							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (method)(req.id.to_owned(), params, &tx, 0) {
+							if let Err(err) = (method)(req.id.clone(), params, &tx, 0) {
 								log::error!(
 									"execution of method call '{}' failed: {:?}, request id={:?}",
 									req.method,
 									err,
 									req.id
 								);
-								send_error(req.id.to_owned(), &tx, JsonRpcErrorCode::ServerError(-1).into());
+								send_error(req.id.clone(), &tx, JsonRpcErrorCode::ServerError(-1).into());
 							}
 						} else {
-							send_error(req.id.to_owned(), &tx, JsonRpcErrorCode::MethodNotFound.into());
+							send_error(req.id.clone(), &tx, JsonRpcErrorCode::MethodNotFound.into());
 						}
 					};
 

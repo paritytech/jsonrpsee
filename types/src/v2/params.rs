@@ -1,10 +1,11 @@
 use crate::error::InvalidParams;
 use alloc::collections::BTreeMap;
+use std::borrow::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value as JsonValue};
-use std::borrow::Cow;
+
 use std::fmt;
 
 /// JSON-RPC parameter values for subscriptions.
@@ -164,6 +165,7 @@ pub enum Id<'a> {
 	/// Numeric id
 	Number(u64),
 	/// String id
+	#[serde(borrow)]
 	Str(Cow<'a, str>),
 }
 
