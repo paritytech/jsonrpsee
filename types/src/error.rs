@@ -14,10 +14,6 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 	}
 }
 
-/// Invalid params.
-#[derive(Debug)]
-pub struct InvalidParams;
-
 /// Error that occurs when a call failed.
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
@@ -27,12 +23,6 @@ pub enum CallError {
 	#[error("RPC Call failed: {0}")]
 	/// The call failed.
 	Failed(#[source] Box<dyn std::error::Error + Send + Sync>),
-}
-
-impl From<InvalidParams> for CallError {
-	fn from(_params: InvalidParams) -> Self {
-		Self::InvalidParams
-	}
 }
 
 /// Error type.

@@ -1,4 +1,4 @@
-use crate::error::InvalidParams;
+use crate::error::CallError;
 use alloc::collections::BTreeMap;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
@@ -79,18 +79,18 @@ impl<'a> RpcParams<'a> {
 	}
 
 	/// Attempt to parse all parameters as array or map into type T
-	pub fn parse<T>(self) -> Result<T, InvalidParams>
+	pub fn parse<T>(self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
 	{
 		match self.0 {
-			None => Err(InvalidParams),
-			Some(params) => serde_json::from_str(params).map_err(|_| InvalidParams),
+			None => Err(CallError::InvalidParams),
+			Some(params) => serde_json::from_str(params).map_err(|_| CallError::InvalidParams),
 		}
 	}
 
 	/// Attempt to parse only the first parameter from an array into type T
-	pub fn one<T>(self) -> Result<T, InvalidParams>
+	pub fn one<T>(self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
 	{
