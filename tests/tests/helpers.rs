@@ -41,8 +41,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
 		let sub_hello: SubscriptionSink<()> =
 			server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
-		let sub_foo: SubscriptionSink<()> =
-			server.register_subscription("subscribe_foo", "unsubscribe_foo").unwrap();
+		let sub_foo: SubscriptionSink<()> = server.register_subscription("subscribe_foo", "unsubscribe_foo").unwrap();
 		let sub_add_one: SubscriptionSink<u64> =
 			server.register_subscription("subscribe_add_one", "unsubscribe_add_one").unwrap();
 

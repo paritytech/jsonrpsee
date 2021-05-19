@@ -68,7 +68,6 @@ async fn ws_subscription_with_input_works() {
 	}
 }
 
-
 #[tokio::test]
 async fn ws_method_call_works() {
 	let server_addr = websocket_server().await;
