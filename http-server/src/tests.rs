@@ -172,7 +172,7 @@ async fn batched_notifications() {
 	let req = r#"[{"jsonrpc": "2.0", "method": "notif", "params": [1,2,4]},{"jsonrpc": "2.0", "method": "notif", "params": [7]}]"#;
 	let response = http_request(req.into(), uri).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	// Note: on HTTP we ack the notification with an empty response.
+	// Note: on HTTP acknowledge the notification with an empty response.
 	assert_eq!(response.body, "");
 }
 
