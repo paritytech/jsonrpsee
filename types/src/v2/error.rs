@@ -7,7 +7,7 @@ use std::fmt;
 use thiserror::Error;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct JsonRpcError<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -41,6 +41,14 @@ pub struct JsonRpcErrorObject<'a> {
 impl<'a> From<JsonRpcErrorCode> for JsonRpcErrorObject<'a> {
 	fn from(code: JsonRpcErrorCode) -> Self {
 		Self { code, message: code.message(), data: None }
+	}
+}
+
+impl<'a> PartialEq for JsonRpcErrorObject<'a> {
+	fn eq(&self, other: &Self) -> bool {
+		let this_raw = self.data.map(|r| r.get());
+		let other_raw = self.data.map(|r| r.get());
+		self.code == other.code && self.message == other.message && this_raw == other_raw
 	}
 }
 
@@ -155,6 +163,35 @@ impl serde::Serialize for JsonRpcErrorCode {
 #[cfg(test)]
 mod tests {
 	use super::{Id, JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject, TwoPointZero};
+
+	#[test]
+	fn deserialize_works() {
+		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
+		let exp = JsonRpcError {
+			jsonrpc: TwoPointZero,
+			error: JsonRpcErrorObject { code: JsonRpcErrorCode::ParseError, message: "Parse error".into(), data: None },
+			id: Id::Null,
+		};
+		let err: JsonRpcError = serde_json::from_str(ser).unwrap();
+		assert_eq!(exp, err);
+	}
+
+	#[test]
+	fn deserialize_with_optional_data() {
+		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
+		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
+		let exp = JsonRpcError {
+			jsonrpc: TwoPointZero,
+			error: JsonRpcErrorObject {
+				code: JsonRpcErrorCode::ParseError,
+				message: "Parse error".into(),
+				data: Some(&*data),
+			},
+			id: Id::Null,
+		};
+		let err: JsonRpcError = serde_json::from_str(ser).unwrap();
+		assert_eq!(exp, err);
+	}
 
 	#[test]
 	fn serialize_works() {

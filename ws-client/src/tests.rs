@@ -190,9 +190,7 @@ fn assert_error_response(err: Error, exp: JsonRpcErrorObject) {
 	match &err {
 		Error::Request(e) => {
 			let this: JsonRpcError = serde_json::from_str(&e).unwrap();
-			// NOTE: `RawValue` doesn't implement PartialEq.
-			assert_eq!(this.error.code, exp.code);
-			assert_eq!(this.error.message, exp.message);
+			assert_eq!(this.error, exp);
 		}
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
 	};
