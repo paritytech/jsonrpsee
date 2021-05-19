@@ -1,5 +1,6 @@
-use crate::error::InvalidParams;
+use crate::error::CallError;
 use alloc::collections::BTreeMap;
+use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
@@ -26,7 +27,7 @@ pub struct JsonRpcNotificationParamsAlloc<T> {
 }
 
 /// JSON-RPC v2 marker type.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TwoPointZero;
 
 struct TwoPointZeroVisitor;
@@ -78,18 +79,18 @@ impl<'a> RpcParams<'a> {
 	}
 
 	/// Attempt to parse all parameters as array or map into type T
-	pub fn parse<T>(self) -> Result<T, InvalidParams>
+	pub fn parse<T>(self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
 	{
 		match self.0 {
-			None => Err(InvalidParams),
-			Some(params) => serde_json::from_str(params).map_err(|_| InvalidParams),
+			None => Err(CallError::InvalidParams),
+			Some(params) => serde_json::from_str(params).map_err(|_| CallError::InvalidParams),
 		}
 	}
 
 	/// Attempt to parse only the first parameter from an array into type T
-	pub fn one<T>(self) -> Result<T, InvalidParams>
+	pub fn one<T>(self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
 	{
@@ -157,16 +158,17 @@ impl From<SubscriptionId> for JsonValue {
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
-pub enum Id {
+pub enum Id<'a> {
 	/// Null
 	Null,
 	/// Numeric id
 	Number(u64),
 	/// String id
-	Str(String),
+	#[serde(borrow)]
+	Str(Cow<'a, str>),
 }
 
-impl Id {
+impl<'a> Id<'a> {
 	/// If the Id is a number, returns the associated number. Returns None otherwise.
 	pub fn as_number(&self) -> Option<&u64> {
 		match self {
@@ -189,5 +191,61 @@ impl Id {
 			Id::Null => Some(()),
 			_ => None,
 		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::{Cow, Id, JsonValue, RpcParams};
+
+	#[test]
+	fn id_deserialization() {
+		let s = r#""2""#;
+		let deserialized: Id = serde_json::from_str(s).unwrap();
+		assert_eq!(deserialized, Id::Str("2".into()));
+
+		let s = r#"2"#;
+		let deserialized: Id = serde_json::from_str(s).unwrap();
+		assert_eq!(deserialized, Id::Number(2));
+
+		let s = r#""2x""#;
+		let deserialized: Id = serde_json::from_str(s).unwrap();
+		assert_eq!(deserialized, Id::Str(Cow::const_str("2x")));
+
+		let s = r#"[1337]"#;
+		assert!(serde_json::from_str::<Id>(s).is_err());
+
+		let s = r#"[null, 0, 2, "3"]"#;
+		let deserialized: Vec<Id> = serde_json::from_str(s).unwrap();
+		assert_eq!(deserialized, vec![Id::Null, Id::Number(0), Id::Number(2), Id::Str("3".into())]);
+	}
+
+	#[test]
+	fn id_serialization() {
+		let d =
+			vec![Id::Null, Id::Number(0), Id::Number(2), Id::Number(3), Id::Str("3".into()), Id::Str("test".into())];
+		let serialized = serde_json::to_string(&d).unwrap();
+		assert_eq!(serialized, r#"[null,0,2,3,"3","test"]"#);
+	}
+
+	#[test]
+	fn params_parse() {
+		let none = RpcParams::new(None);
+		assert!(none.one::<u64>().is_err());
+
+		let array_params = RpcParams::new(Some("[1, 2, 3]"));
+		let arr: Result<[u64; 3], _> = array_params.parse();
+		assert!(arr.is_ok());
+
+		let arr: Result<(u64, u64, u64), _> = array_params.parse();
+		assert!(arr.is_ok());
+
+		let array_one = RpcParams::new(Some("[1]"));
+		let one: Result<u64, _> = array_one.one();
+		assert!(one.is_ok());
+
+		let object_params = RpcParams::new(Some(r#"{"beef":99,"dinner":0}"#));
+		let obj: Result<JsonValue, _> = object_params.parse();
+		assert!(obj.is_ok());
 	}
 }

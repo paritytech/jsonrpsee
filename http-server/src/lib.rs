@@ -25,13 +25,12 @@
 // DEALINGS IN THE SOFTWARE.
 
 mod access_control;
-mod module;
 mod response;
 mod server;
 
 pub use access_control::{AccessControl, AccessControlBuilder, AllowHosts, Host};
 pub use jsonrpsee_types::{Error, TEN_MB_SIZE_BYTES};
-pub use module::{RpcContextModule, RpcModule};
+pub use jsonrpsee_utils::server::rpc_module::{Methods, RpcContextModule, RpcModule};
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
 
 #[cfg(test)]

@@ -27,151 +27,19 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
-use serde::{de::DeserializeOwned, Serialize};
-use serde_json::value::to_raw_value;
+use serde::{Serialize, de::DeserializeOwned};
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
-use std::convert::{TryFrom, TryInto};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::{JsonRpcNotificationParams, RpcParams, TwoPointZero};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
-use jsonrpsee_utils::server::{collect_batch_response, send_error, ConnectionId, Methods, RpcSender};
-
-mod module;
-
-pub use module::{RpcContextModule, RpcModule};
-
-type SubscriptionId = u64;
-type Subscribers<P> = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), InnerSink<P>>>>;
-
-#[derive(Clone)]
-pub struct SubscriptionSink<P> {
-	method: &'static str,
-	subscribers: Subscribers<P>,
-}
-
-impl<P> SubscriptionSink<P> {
-	/// Send a message on all the subscriptions
-	///
-	/// If you have subscriptions with params/input you should most likely
-	/// call `extract_with_input` to the process the input/params and send out
-	/// the result on each subscription individually instead.
-	pub fn send_all<T>(&mut self, result: &T) -> anyhow::Result<()>
-	where
-		T: Serialize,
-	{
-		let result = to_raw_value(result)?;
-
-		let mut errored = Vec::new();
-		let mut subs = self.subscribers.lock();
-
-		for ((conn_id, sub_id), sender) in subs.iter() {
-			let msg = serde_json::to_string(&JsonRpcNotification {
-				jsonrpc: TwoPointZero,
-				method: self.method,
-				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
-			})?;
-
-			// Log broken connections
-			if sender.sink.unbounded_send(msg).is_err() {
-				errored.push((*conn_id, *sub_id));
-			}
-		}
-
-		// Remove broken connections
-		for entry in errored {
-			subs.remove(&entry);
-		}
-
-		Ok(())
-	}
-
-	/// Extract subscriptions with input.
-	/// Usually, you want process the input before sending back
-	/// data on that subscription.
-	pub fn extract_with_input(&self) -> Vec<InnerSinkWithParams<P>> {
-		let mut subs = self.subscribers.lock();
-
-		let mut input = Vec::new();
-		*subs = std::mem::take(&mut *subs)
-			.into_iter()
-			.filter_map(|(k, v)| {
-				if v.params.is_some() {
-					let with_input = v.try_into().expect("is Some checked above; qed");
-					input.push(with_input);
-					None
-				} else {
-					Some((k, v))
-				}
-			})
-			.collect();
-		input
-	}
-}
-
-pub struct InnerSink<P> {
-	/// Sink.
-	sink: mpsc::UnboundedSender<String>,
-	/// Params.
-	params: Option<P>,
-	/// Subscription ID.
-	sub_id: SubscriptionId,
-	/// Method name
-	method: &'static str,
-}
-
-pub struct InnerSinkWithParams<P> {
-	/// Sink.
-	sink: mpsc::UnboundedSender<String>,
-	/// Params.
-	params: P,
-	/// Subscription ID.
-	sub_id: SubscriptionId,
-	/// Method name
-	method: &'static str,
-}
-
-impl<P> TryFrom<InnerSink<P>> for InnerSinkWithParams<P> {
-	type Error = ();
-
-	fn try_from(other: InnerSink<P>) -> Result<Self, Self::Error> {
-		match other.params {
-			Some(params) => Ok(InnerSinkWithParams { sink: other.sink, params, sub_id: other.sub_id, method: other.method }),
-			None => Err(())
-		}
-	}
-}
-
-impl<P> InnerSinkWithParams<P> {
-	/// Send data on a specific subscription
-	/// Note: a subscription can be "subscribed" to arbitary number of times with
-	/// diffrent input/params.
-	pub fn send<T>(&self, result: &T) -> anyhow::Result<()>
-	where
-		T: Serialize,
-	{
-		let result = to_raw_value(result)?;
-		let msg = serde_json::to_string(&JsonRpcNotification {
-			jsonrpc: TwoPointZero,
-			method: self.method,
-			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
-		})?;
-
-		self.sink.unbounded_send(msg).map_err(|e| anyhow::anyhow!("{:?}", e))
-	}
-
-	/// Get the input/params of the subscrption.
-	pub fn params(&self) -> &P {
-		&self.params
-	}
-}
+use jsonrpsee_types::v2::params::{Id, RpcParams};
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
+use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule, SubscriptionSink};
 
 pub struct Server {
 	root: RpcModule,
@@ -268,10 +136,10 @@ async fn background_task(
 	// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
 	// the params from the request. The result of the computation is sent back over the `tx` channel and
 	// the result(s) are collected into a `String` and sent back over the wire.
-	let execute = move |tx: RpcSender, req: JsonRpcRequest| {
+	let execute = move |tx: &MethodSink, req: JsonRpcRequest| {
 		if let Some(method) = methods.get(&*req.method) {
 			let params = RpcParams::new(req.params.map(|params| params.get()));
-			if let Err(err) = (method)(req.id, params, &tx, conn_id) {
+			if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
 				log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
 				send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 			}
@@ -310,12 +178,12 @@ async fn background_task(
 					log::error!("Error sending batch response to the client: {:?}", err)
 				}
 			} else {
-				send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
+				send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 			}
 		} else {
 			let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
 				Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-				Err(_) => (None, JsonRpcErrorCode::ParseError),
+				Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
 			};
 
 			send_error(id, &tx, code.into());
