@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = WsServer::new("127.0.0.1:0").await?;
-	let mut subscription = server.register_subscription::<String>("subscribe_hello", "unsubscribe_hello").unwrap();
+	let subscription = server.register_subscription::<String>("subscribe_hello", "unsubscribe_hello").unwrap();
 
 	std::thread::spawn(move || loop {
 		subscription.send_all(&"hello my friend").unwrap();

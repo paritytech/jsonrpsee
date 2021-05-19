@@ -230,7 +230,7 @@ impl<P> SubscriptionSink<P> {
 	/// If you have subscriptions with params/input you should most likely
 	/// call `call_with_params` to the process the input/params and send out
 	/// the result on each subscription individually instead.
-	pub fn send_all<T>(&mut self, result: &T) -> anyhow::Result<()>
+	pub fn send_all<T>(&self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
 	{

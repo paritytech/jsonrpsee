@@ -55,6 +55,21 @@ async fn ws_subscription_works() {
 }
 
 #[tokio::test]
+async fn ws_subscription_with_input_works() {
+	let server_addr = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let mut add_one: Subscription<u64> =
+		client.subscribe("subscribe_add_one", vec![1.into()].into(), "unsubscribe_add_one").await.unwrap();
+
+	for _ in 0..10 {
+		let two = add_one.next().await.unwrap();
+		assert_eq!(two, 2);
+	}
+}
+
+
+#[tokio::test]
 async fn ws_method_call_works() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
