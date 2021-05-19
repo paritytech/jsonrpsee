@@ -58,21 +58,12 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let two_params = server.register_subscription("sub_params_two", "unsub_params_two").unwrap();
 
 	std::thread::spawn(move || loop {
-		for sink_params in one_param.extract_with_input().iter() {
-			let idx = *sink_params.params();
-			let result = LETTERS.chars().nth(idx);
-			let _ = sink_params.send(&result);
-		}
+		let _ = one_param.send_all_with_params(|idx: &usize| LETTERS.chars().nth(*idx));
 		std::thread::sleep(std::time::Duration::from_millis(50));
 	});
 
 	std::thread::spawn(move || loop {
-		for sink_params in two_params.extract_with_input().iter() {
-			let params: &Vec<usize> = sink_params.params();
-			// Validate your params here: check len, check > 0 etc
-			let result = LETTERS[params[0]..params[1]].to_string();
-			let _ = sink_params.send(&result);
-		}
+		let _ = two_params.send_all_with_params(|params: &Vec<usize>| LETTERS[params[0]..params[1]].to_string());
 		std::thread::sleep(std::time::Duration::from_millis(100));
 	});
 

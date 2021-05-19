@@ -11,7 +11,6 @@ use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::value::to_raw_value;
 use std::sync::Arc;
-use std::convert::{TryFrom, TryInto};
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -114,7 +113,7 @@ impl RpcModule {
 
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						let inner = InnerSink { sink: tx.clone(), sub_id, params, method: subscribe_method_name };
+						let inner = InnerSink { sink: tx.clone(), params };
 						subscribers.lock().insert((conn, sub_id), inner);
 
 						sub_id
@@ -218,6 +217,7 @@ impl<Context> RpcContextModule<Context> {
 	}
 }
 
+/// Used by the server to send data back to subscribers.
 #[derive(Clone)]
 pub struct SubscriptionSink<P> {
 	method: &'static str,
@@ -228,7 +228,7 @@ impl<P> SubscriptionSink<P> {
 	/// Send a message on all the subscriptions
 	///
 	/// If you have subscriptions with params/input you should most likely
-	/// call `extract_with_input` to the process the input/params and send out
+	/// call `call_with_params` to the process the input/params and send out
 	/// the result on each subscription individually instead.
 	pub fn send_all<T>(&mut self, result: &T) -> anyhow::Result<()>
 	where
@@ -260,82 +260,47 @@ impl<P> SubscriptionSink<P> {
 		Ok(())
 	}
 
-	/// Extract subscriptions with input.
-	/// Usually, you want process the input before sending back
-	/// data on that subscription.
-	pub fn extract_with_input(&self) -> Vec<InnerSinkWithParams<P>> {
+	/// Send a message to all subscriptions that could parse `P` as input.
+	///
+	/// F: is closure that you need to provide to apply on the input P.
+	pub fn send_all_with_params<T, F>(&self, f: F) -> anyhow::Result<()>
+	where
+		F: Fn(&P) -> T,
+		T: Serialize,
+	{
 		let mut subs = self.subscribers.lock();
+		let mut errored = Vec::new();
 
-		let mut input = Vec::new();
-		*subs = std::mem::take(&mut *subs)
-			.into_iter()
-			.filter_map(|(k, v)| {
-				if v.params.is_some() {
-					let with_input = v.try_into().expect("is Some checked above; qed");
-					input.push(with_input);
-					None
-				} else {
-					Some((k, v))
-				}
-			})
-			.collect();
-		input
+		for ((conn_id, sub_id), sender) in subs.iter() {
+			let result = match sender.params.as_ref().map(|p| to_raw_value(&f(p))) {
+				Some(Ok(res)) => res,
+				_ => continue,
+			};
+
+			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+				jsonrpc: TwoPointZero,
+				method: self.method,
+				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
+			})?;
+
+			// Log broken connections
+			if sender.sink.unbounded_send(msg).is_err() {
+				errored.push((*conn_id, *sub_id));
+			}
+		}
+
+		// Remove broken connections
+		for entry in errored {
+			subs.remove(&entry);
+		}
+
+		Ok(())
 	}
 }
 
-pub struct InnerSink<P> {
+struct InnerSink<P> {
 	/// Sink.
 	sink: mpsc::UnboundedSender<String>,
 	/// Params.
 	params: Option<P>,
-	/// Subscription ID.
-	sub_id: SubscriptionId,
-	/// Method name
-	method: &'static str,
-}
-
-pub struct InnerSinkWithParams<P> {
-	/// Sink.
-	sink: mpsc::UnboundedSender<String>,
-	/// Params.
-	params: P,
-	/// Subscription ID.
-	sub_id: SubscriptionId,
-	/// Method name
-	method: &'static str,
-}
-
-impl<P> TryFrom<InnerSink<P>> for InnerSinkWithParams<P> {
-	type Error = ();
-
-	fn try_from(other: InnerSink<P>) -> Result<Self, Self::Error> {
-		match other.params {
-			Some(params) => Ok(InnerSinkWithParams { sink: other.sink, params, sub_id: other.sub_id, method: other.method }),
-			None => Err(())
-		}
-	}
-}
-
-impl<P> InnerSinkWithParams<P> {
-	/// Send data on a specific subscription
-	/// Note: a subscription can be "subscribed" to arbitary number of times with
-	/// diffrent input/params.
-	pub fn send<T>(&self, result: &T) -> anyhow::Result<()>
-	where
-		T: Serialize,
-	{
-		let result = to_raw_value(result)?;
-		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
-			jsonrpc: TwoPointZero,
-			method: self.method,
-			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
-		})?;
-
-		self.sink.unbounded_send(msg).map_err(|e| anyhow::anyhow!("{:?}", e))
-	}
-
-	/// Get the input/params of the subscrption.
-	pub fn params(&self) -> &P {
-		&self.params
-	}
 }
