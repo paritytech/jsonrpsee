@@ -170,10 +170,10 @@ impl Server {
 									err,
 									req.id
 								);
-								send_error(req.id.clone(), &tx, JsonRpcErrorCode::ServerError(-1).into());
+								send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 							}
 						} else {
-							send_error(req.id.clone(), &tx, JsonRpcErrorCode::MethodNotFound.into());
+							send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 						}
 					};
 

@@ -143,10 +143,10 @@ async fn background_task(
 			let params = RpcParams::new(req.params.map(|params| params.get()));
 			if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
 				log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
-				send_error(req.id.clone(), &tx, JsonRpcErrorCode::ServerError(-1).into());
+				send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 			}
 		} else {
-			send_error(req.id.clone(), &tx, JsonRpcErrorCode::MethodNotFound.into());
+			send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 		}
 	};
 
