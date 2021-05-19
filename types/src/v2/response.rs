@@ -1,9 +1,9 @@
-use crate::v2::params::{JsonRpcNotificationParamsAlloc, TwoPointZero};
+use crate::v2::params::{Id, JsonRpcNotificationParams, JsonRpcNotificationParamsAlloc, TwoPointZero};
 use serde::{Deserialize, Serialize};
-use serde_json::value::RawValue;
 
 /// JSON-RPC successful response object.
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct JsonRpcResponse<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -11,20 +11,35 @@ pub struct JsonRpcResponse<'a, T> {
 	pub result: T,
 	/// Request ID
 	#[serde(borrow)]
-	pub id: Option<&'a RawValue>,
+	pub id: Id<'a>,
+}
+
+/// JSON-RPC subscription response.
+#[derive(Serialize)]
+pub struct JsonRpcSubscriptionResponse<'a> {
+	/// JSON-RPC version.
+	pub jsonrpc: TwoPointZero,
+	/// Method
+	pub method: &'a str,
+	/// Params.
+	pub params: JsonRpcNotificationParams<'a>,
 }
 
 /// JSON-RPC subscription response.
 #[derive(Deserialize, Debug)]
-pub struct JsonRpcSubscriptionResponse<T> {
+#[serde(deny_unknown_fields)]
+pub struct JsonRpcSubscriptionResponseAlloc<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
+	/// Method
+	pub method: &'a str,
 	/// Params.
 	pub params: JsonRpcNotificationParamsAlloc<T>,
 }
 
 /// JSON-RPC notification response.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct JsonRpcNotifResponse<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,

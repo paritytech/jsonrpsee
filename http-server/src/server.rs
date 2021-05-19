@@ -34,8 +34,9 @@ use hyper::{
 	Error as HyperError,
 };
 use jsonrpsee_types::error::{CallError, Error, GenericTransportError};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_types::v2::{error::JsonRpcErrorCode, params::RpcParams};
+use jsonrpsee_types::v2::error::JsonRpcErrorCode;
+use jsonrpsee_types::v2::params::{Id, RpcParams};
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
@@ -162,7 +163,7 @@ impl Server {
 						if let Some(method) = methods.get(&*req.method) {
 							let params = RpcParams::new(req.params.map(|params| params.get()));
 							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (method)(req.id, params, &tx, 0) {
+							if let Err(err) = (method)(req.id.clone(), params, &tx, 0) {
 								log::error!(
 									"execution of method call '{}' failed: {:?}, request id={:?}",
 									req.method,
@@ -211,6 +212,8 @@ impl Server {
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
 							execute(&tx, req);
+						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification>(&body) {
+							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
 								single = false;
@@ -218,8 +221,10 @@ impl Server {
 									execute(&tx, req);
 								}
 							} else {
-								send_error(None, &tx, JsonRpcErrorCode::InvalidRequest.into());
+								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
+						} else if let Ok(_batch) = serde_json::from_slice::<Vec<JsonRpcNotification>>(&body) {
+							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else {
 							log::error!(
 								"[service_fn], Cannot parse request body={:?}",
@@ -227,7 +232,7 @@ impl Server {
 							);
 							let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
 								Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-								Err(_) => (None, JsonRpcErrorCode::ParseError),
+								Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
 							};
 							send_error(id, &tx, code.into());
 						}

@@ -83,7 +83,7 @@ async fn invalid_single_method_call() {
 	let req = r#"{"jsonrpc":"2.0","method":1, "params": "bar"}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, invalid_request(Id::Null));
+	assert_eq!(response.body, parse_error(Id::Null));
 }
 
 #[tokio::test]
@@ -169,14 +169,11 @@ async fn batched_notifications() {
 	let addr = server().await;
 	let uri = to_http_uri(addr);
 
-	let req = r#"[
-        {"jsonrpc": "2.0", "method": "notif", "params": [1,2,4]},
-        {"jsonrpc": "2.0", "method": "notif", "params": [7]}
-	]"#;
+	let req = r#"[{"jsonrpc": "2.0", "method": "notif", "params": [1,2,4]},{"jsonrpc": "2.0", "method": "notif", "params": [7]}]"#;
 	let response = http_request(req.into(), uri).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	// Note: this is *not* according to spec. Response should be the empty string, `""`.
-	assert_eq!(response.body, r#"[{"jsonrpc":"2.0","result":"","id":null},{"jsonrpc":"2.0","result":"","id":null}]"#);
+	// Note: on HTTP acknowledge the notification with an empty response.
+	assert_eq!(response.body, "");
 }
 
 #[tokio::test]
@@ -247,4 +244,15 @@ async fn invalid_request_object() {
 	let response = http_request(req.into(), uri).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, invalid_request(Id::Num(1)));
+}
+
+#[tokio::test]
+async fn notif_works() {
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":"bar"}"#;
+	let response = http_request(req.into(), uri).await.unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, "");
 }
