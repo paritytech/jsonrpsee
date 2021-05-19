@@ -1,10 +1,10 @@
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
+use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value as JsonValue};
-use std::borrow::Cow;
 use std::fmt;
 
 /// JSON-RPC parameter values for subscriptions.
@@ -210,7 +210,7 @@ mod test {
 
 		let s = r#""2x""#;
 		let deserialized: Id = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized, Id::Str(Cow::Borrowed("2x")));
+		assert_eq!(deserialized, Id::Str(Cow::const_str("2x")));
 
 		let s = r#"[1337]"#;
 		assert!(serde_json::from_str::<Id>(s).is_err());
