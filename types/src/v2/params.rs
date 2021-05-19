@@ -196,7 +196,7 @@ impl<'a> Id<'a> {
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id, JsonValue, RpcParams};
+	use super::{Cow, Id, JsonRpcParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero};
 
 	#[test]
 	fn id_deserialization() {
@@ -229,6 +229,23 @@ mod test {
 	}
 
 	#[test]
+	fn params_serialize() {
+		let test_vector = &[
+			("null", JsonRpcParams::NoParams),
+			("[42,23]", JsonRpcParams::Array(serde_json::from_str("[42,23]").unwrap())),
+			(
+				r#"{"a":42,"b":null,"c":"aa"}"#,
+				JsonRpcParams::Map(serde_json::from_str(r#"{"a":42,"b":null,"c":"aa"}"#).unwrap()),
+			),
+		];
+
+		for (initial_ser, params) in test_vector {
+			let serialized = serde_json::to_string(params).unwrap();
+			assert_eq!(&serialized, initial_ser);
+		}
+	}
+
+	#[test]
 	fn params_parse() {
 		let none = RpcParams::new(None);
 		assert!(none.one::<u64>().is_err());
@@ -247,5 +264,26 @@ mod test {
 		let object_params = RpcParams::new(Some(r#"{"beef":99,"dinner":0}"#));
 		let obj: Result<JsonValue, _> = object_params.parse();
 		assert!(obj.is_ok());
+	}
+
+	#[test]
+	fn two_point_zero_serde_works() {
+		let initial_ser = r#""2.0""#;
+		// The fact that it was deserialized is enough.
+		let two_point_zero: TwoPointZero = serde_json::from_str(initial_ser).unwrap();
+		let serialized = serde_json::to_string(&two_point_zero).unwrap();
+		assert_eq!(serialized, initial_ser);
+	}
+
+	#[test]
+	fn subscription_id_serde_works() {
+		let test_vector = &[("42", SubscriptionId::Num(42)), (r#""one""#, SubscriptionId::Str("one".into()))];
+
+		for (initial_ser, expected) in test_vector {
+			let id: SubscriptionId = serde_json::from_str(initial_ser).unwrap();
+			assert_eq!(&id, expected);
+			let serialized = serde_json::to_string(&id).unwrap();
+			assert_eq!(&serialized, initial_ser);
+		}
 	}
 }

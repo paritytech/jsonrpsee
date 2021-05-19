@@ -82,30 +82,41 @@ impl<'a> JsonRpcNotificationSer<'a> {
 #[cfg(test)]
 mod test {
 	use super::{
-		Id, JsonRpcCallSer, JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcNotificationSer, JsonRpcRequest,
-		TwoPointZero,
+		Id, JsonRpcCallSer, JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcNotificationSer, JsonRpcParams,
+		JsonRpcRequest, TwoPointZero,
 	};
+	use serde_json::{value::RawValue, Value};
 
+	fn assert_request<'a>(request: JsonRpcRequest<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
+		assert_eq!(request.jsonrpc, TwoPointZero);
+		assert_eq!(request.id, id);
+		assert_eq!(request.method, method);
+		assert_eq!(request.params.map(RawValue::get), params);
+	}
+
+	/// Checks that we can deserialize the object with or without non-mandatory fields.
 	#[test]
-	fn deserialize_valid_call_works() {
-		let ser = r#"{"jsonrpc":"2.0","method":"say_hello","params":[1,"bar"],"id":1}"#;
-		let dsr: JsonRpcRequest = serde_json::from_str(ser).unwrap();
-		assert_eq!(dsr.method, "say_hello");
-		assert_eq!(dsr.jsonrpc, TwoPointZero);
+	fn deserialize_request() {
+		let method = "subtract";
+		let params = "[42, 23]";
+
+		let test_vector = vec![
+			// With all fields set.
+			(r#"{"jsonrpc":"2.0", "method":"subtract", "params":[42, 23], "id":1}"#, Id::Number(1), Some(params)),
+			// Without params field
+			(r#"{"jsonrpc":"2.0", "method":"subtract", "id":null}"#, Id::Null, None),
+		];
+
+		for (ser, id, params) in test_vector.into_iter() {
+			let request = serde_json::from_str(ser).unwrap();
+			assert_request(request, id, method, params);
+		}
 	}
 
 	#[test]
 	fn deserialize_valid_notif_works() {
 		let ser = r#"{"jsonrpc":"2.0","method":"say_hello","params":[]}"#;
 		let dsr: JsonRpcNotification = serde_json::from_str(ser).unwrap();
-		assert_eq!(dsr.method, "say_hello");
-		assert_eq!(dsr.jsonrpc, TwoPointZero);
-	}
-
-	#[test]
-	fn deserialize_valid_call_without_params_works() {
-		let ser = r#"{"jsonrpc":"2.0","method":"say_hello", "id":1}"#;
-		let dsr: JsonRpcRequest = serde_json::from_str(ser).unwrap();
 		assert_eq!(dsr.method, "say_hello");
 		assert_eq!(dsr.jsonrpc, TwoPointZero);
 	}
@@ -131,12 +142,38 @@ mod test {
 		assert_eq!(deserialized, JsonRpcInvalidRequest { id: Id::Number(120) });
 	}
 
+	/// Checks that we can serialize the object with or without non-mandatory fields.
 	#[test]
 	fn serialize_call() {
-		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","id":"bar","params":[]}"#;
-		let req = JsonRpcCallSer::new(Id::Str("bar".into()), "say_hello", vec![].into());
-		let ser = serde_json::to_string(&req).unwrap();
-		assert_eq!(exp, ser);
+		let method = "subtract";
+		let id = Id::Number(1); // It's enough to check one variant, since the type itself also has tests.
+		let params: JsonRpcParams = vec![Value::Number(42.into()), Value::Number(23.into())].into(); // Same as above.
+		let test_vector = &[
+			// With all fields set.
+			(
+				r#"{"jsonrpc":"2.0","method":"subtract","id":1,"params":[42,23]}"#,
+				Some(id.clone()),
+				Some(params.clone()),
+			),
+			// Without ID field.
+			(r#"{"jsonrpc":"2.0","method":"subtract","id":null,"params":[42,23]}"#, None, Some(params)),
+			// Without params field
+			(r#"{"jsonrpc":"2.0","method":"subtract","id":1,"params":null}"#, Some(id), None),
+			// Without params and ID.
+			(r#"{"jsonrpc":"2.0","method":"subtract","id":null,"params":null}"#, None, None),
+		];
+
+		for (ser, id, params) in test_vector.iter().cloned() {
+			let request = serde_json::to_string(&JsonRpcCallSer {
+				jsonrpc: TwoPointZero,
+				method,
+				id: id.unwrap_or(Id::Null),
+				params: params.unwrap_or(JsonRpcParams::NoParams),
+			})
+			.unwrap();
+
+			assert_eq!(&request, ser);
+		}
 	}
 
 	#[test]
