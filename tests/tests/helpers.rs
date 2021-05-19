@@ -25,7 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::oneshot;
-use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServer};
+use jsonrpsee::{
+	http_server::HttpServerBuilder,
+	ws_server::{SubscriptionSink, WsServer},
+};
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -36,8 +39,10 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
-		let mut sub_hello = server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
-		let mut sub_foo = server.register_subscription("subscribe_foo", "unsubscribe_foo").unwrap();
+		let mut sub_hello: SubscriptionSink<()> =
+			server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
+		let mut sub_foo: SubscriptionSink<()> =
+			server.register_subscription("subscribe_foo", "unsubscribe_foo").unwrap();
 
 		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
@@ -49,8 +54,8 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			loop {
 				tokio::time::sleep(Duration::from_millis(100)).await;
 
-				sub_hello.send(&"hello from subscription").unwrap();
-				sub_foo.send(&1337_u64).unwrap();
+				sub_hello.send_all(&"hello from subscription").unwrap();
+				sub_foo.send_all(&1337_u64).unwrap();
 			}
 		});
 	});
