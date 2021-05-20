@@ -34,12 +34,18 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use jsonrpsee_types::error::{CallError, Error};
-use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule, SubscriptionSink};
+use jsonrpsee_types::v2::{error::JsonRpcErrorCode, request::OwnedJsonRpcRequest};
+use jsonrpsee_types::{
+	error::{CallError, Error},
+	traits::AsyncRpcMethod,
+};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, RpcModule, SubscriptionSink};
+use jsonrpsee_utils::server::{
+	helpers::{collect_batch_response, send_error},
+	rpc_module::MethodType,
+};
 
 pub struct Server {
 	root: RpcModule,
@@ -61,6 +67,15 @@ impl Server {
 		F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,
 	{
 		self.root.register_method(method_name, callback)
+	}
+
+	/// Register a new RPC method, which responds with a given callback.
+	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	where
+		R: Serialize + Send + Sync + 'static,
+		F: AsyncRpcMethod<R, CallError> + Copy + Send + Sync + 'static,
+	{
+		self.root.register_async_method(method_name, callback)
 	}
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
@@ -89,7 +104,7 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
-		let methods = Arc::new(self.root.into_methods());
+		let methods = Arc::new(self.root);
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
@@ -108,7 +123,7 @@ impl Server {
 
 async fn background_task(
 	socket: tokio::net::TcpStream,
-	methods: Arc<Methods>,
+	methods: Arc<RpcModule>,
 	conn_id: ConnectionId,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
@@ -141,15 +156,47 @@ async fn background_task(
 	// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
 	// the params from the request. The result of the computation is sent back over the `tx` channel and
 	// the result(s) are collected into a `String` and sent back over the wire.
-	let execute = move |tx: &MethodSink, req: JsonRpcRequest| {
-		if let Some(method) = methods.get(&*req.method) {
+	//
+	// Note: This handler expects method existence to be checked prior to the call and will panic if
+	// method does not exist.
+	let sync_methods = methods.clone();
+	let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest| {
+		let method = sync_methods.method(&*req.method).unwrap();
+		let params = RpcParams::new(req.params.map(|params| params.get()));
+		if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
+			log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
+			send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+		}
+
+		// if let Some(method) = sync_methods.method(&*req.method) {
+		// 	let params = RpcParams::new(req.params.map(|params| params.get()));
+		// 	if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
+		// 		log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
+		// 		send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+		// 	}
+		// } else {
+		// 	send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+		// }
+	};
+
+	// Similar to `execute_sync`, but uses an asyncrhonous context.
+	// Unfortunately, we have to use owned versions of objects due to heavy lifetime
+	// usage in borrowed ones.
+	// Probably there is a chance to avoid using the heap here through some `Pin` magic,
+	// but several simple attempts to do so were failed.
+	//
+	// Note: This handler expects method existence to be checked prior to the call and will panic if
+	// method does not exist.
+	let execute_async = |tx: MethodSink, req: OwnedJsonRpcRequest| {
+		let async_methods = methods.clone();
+		async move {
+			let req = req.borrowed();
+			let method = async_methods.async_method(&*req.method).unwrap();
 			let params = RpcParams::new(req.params.map(|params| params.get()));
-			if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
+			if let Err(err) = (method)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
 				log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
 				send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 			}
-		} else {
-			send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 		}
 	};
 
@@ -165,7 +212,13 @@ async fn background_task(
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			log::debug!("recv: {:?}", req);
-			execute(&tx, req);
+			match methods.method_type(&*req.method) {
+				Some(MethodType::Sync) => execute_sync(&tx, req),
+				Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
+				None => {
+					send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+				}
+			}
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
 				// Batch responses must be sent back as a single message so we read the results from each request in the
@@ -173,7 +226,13 @@ async fn background_task(
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 				for req in batch {
-					execute(&tx_batch, req);
+					match methods.method_type(&*req.method) {
+						Some(MethodType::Sync) => execute_sync(&tx_batch, req),
+						Some(MethodType::Async) => execute_async(tx_batch.clone(), req.into()).await,
+						None => {
+							send_error(req.id, &tx_batch, JsonRpcErrorCode::MethodNotFound.into());
+						}
+					}
 				}
 				// Closes the receiving half of a channel without dropping it. This prevents any further messages from
 				// being sent on the channel.
