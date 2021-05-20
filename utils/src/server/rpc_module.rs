@@ -195,6 +195,8 @@ impl RpcModule {
 
 		self.verify_method_name(subscribe_method_name)?;
 		self.verify_method_name(unsubscribe_method_name)?;
+		self.method_types.insert(subscribe_method_name, MethodType::Sync);
+		self.method_types.insert(unsubscribe_method_name, MethodType::Sync);
 
 		{
 			let subscribers = self.subscribers.clone();
