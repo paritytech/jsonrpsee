@@ -223,7 +223,7 @@ impl<Context> RpcContextModule<Context> {
 
 /// Used by the server to send data back to subscribers.
 #[derive(Clone)]
-pub struct SubscriptionSink<Params> {
+pub struct SubscriptionSink<Params = ()> {
 	method: &'static str,
 	subscribers: Subscribers<Params>,
 }
