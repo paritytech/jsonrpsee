@@ -43,7 +43,12 @@ impl OwnedJsonRpcRequest {
 			jsonrpc: self.jsonrpc,
 			id: self.id.borrowed(),
 			method: Cow::borrowed(self.method.as_ref()),
-			params: self.params.as_ref().map(|s| serde_json::from_str(&s).unwrap()),
+			params: self.params.as_ref().map(|s| {
+				// Note: while this object *may* be created not from the `JsonRpcRequest` object,
+				// using an invalid field to construct it would be a logical invariant break.
+				serde_json::from_str(&s)
+					.expect("OwnedJsonRpcRequest is only created from JsonRpcRequest, so this conversion must be safe")
+			}),
 		}
 	}
 }
