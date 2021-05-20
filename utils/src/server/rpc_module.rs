@@ -229,7 +229,7 @@ pub struct SubscriptionSink<P> {
 }
 
 impl<P> SubscriptionSink<P> {
-	/// Send a message on all the subscriptions
+	/// Send a message on all the subscribers.
 	///
 	/// If you have subscriptions with params/input you should most likely
 	/// call `call_with_params` to the process the input/params and send out
