@@ -266,7 +266,7 @@ impl<P> SubscriptionSink<P> {
 
 	/// Send a message to all subscriptions that could parse `P` as input.
 	///
-	/// F: is closure that you need to provide to apply on the input P.
+	/// F: is a closure that you need to provide to apply on the input P.
 	pub fn send_all_with_params<T, F>(&self, f: F) -> anyhow::Result<()>
 	where
 		F: Fn(&P) -> T,
