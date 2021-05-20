@@ -1,9 +1,10 @@
 use crate::server::helpers::{send_error, send_response};
 use futures_channel::{mpsc, oneshot};
+use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error};
-use jsonrpsee_types::traits::RpcMethod;
+use jsonrpsee_types::traits::{AsyncRpcMethod, RpcMethod};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
-use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, OwnedId, OwnedRpcParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 
 use parking_lot::Mutex;
@@ -18,8 +19,14 @@ use std::sync::Arc;
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type Method = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
+/// Similar to [`Method`], but represents an asynchronous handler.
+pub type AsyncMethod = Box<
+	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
+>;
 /// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
+/// A collection of registered [`AsyncMethod`]s.
+pub type AsyncMethods = FxHashMap<&'static str, AsyncMethod>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -30,18 +37,29 @@ pub type MethodSink = mpsc::UnboundedSender<String>;
 
 type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), (MethodSink, oneshot::Receiver<()>)>>>;
 
+/// Identifier of the method type.
+#[derive(Debug, Copy, Clone)]
+pub enum MethodType {
+	/// Synchronous method handler.
+	Sync,
+	/// Asynchronous method handler.
+	Async,
+}
+
 /// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]
 pub struct RpcModule {
+	method_types: FxHashMap<&'static str, MethodType>,
 	methods: Methods,
+	async_methods: AsyncMethods,
 	subscribers: Subscribers,
 }
 
 impl RpcModule {
 	/// Instantiate a new `RpcModule`.
 	pub fn new() -> Self {
-		RpcModule { methods: Methods::default(), subscribers: Subscribers::default() }
+		Self::default()
 	}
 
 	/// Add context for this module, turning it into an `RpcContextModule`.
@@ -50,11 +68,26 @@ impl RpcModule {
 	}
 
 	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
-		if self.methods.get(name).is_some() {
+		if self.methods.get(name).is_some() || self.async_methods.get(name).is_some() {
 			return Err(Error::MethodAlreadyRegistered(name.into()));
 		}
 
 		Ok(())
+	}
+
+	/// Returns the type of the method handler, if any.
+	pub fn method_type(&self, method_name: &str) -> Option<MethodType> {
+		self.method_types.get(method_name).copied()
+	}
+
+	/// Returns the synchronous method.
+	pub fn method(&self, method_name: &str) -> Option<&Method> {
+		self.methods.get(method_name)
+	}
+
+	/// Returns the asynchronous method.
+	pub fn async_method(&self, method_name: &str) -> Option<&AsyncMethod> {
+		self.async_methods.get(method_name)
 	}
 
 	/// Register a new RPC method, which responds with a given callback.
@@ -85,6 +118,44 @@ impl RpcModule {
 				Ok(())
 			}),
 		);
+		self.method_types.insert(method_name, MethodType::Sync);
+
+		Ok(())
+	}
+
+	/// Register a new asynchronous RPC method, which responds with a given callback.
+	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	where
+		R: Serialize + Send + Sync + 'static,
+		F: AsyncRpcMethod<R, CallError> + Copy + Send + Sync + 'static,
+	{
+		self.verify_method_name(method_name)?;
+
+		self.async_methods.insert(
+			method_name,
+			Box::new(move |id, params, tx, _| {
+				let future = async move {
+					let params = params.borrowed();
+					let id = id.borrowed();
+					match callback(params).await {
+						Ok(res) => send_response(id, &tx, res),
+						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
+						Err(CallError::Failed(err)) => {
+							log::error!("Call failed with: {}", err);
+							let err = JsonRpcErrorObject {
+								code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
+								message: &err.to_string(),
+								data: None,
+							};
+							send_error(id, &tx, err)
+						}
+					};
+					Ok(())
+				};
+				future.boxed()
+			}),
+		);
+		self.method_types.insert(method_name, MethodType::Async);
 
 		Ok(())
 	}
@@ -169,20 +240,21 @@ impl RpcModule {
 		Ok(())
 	}
 
-	/// Convert a module into methods.
-	pub fn into_methods(self) -> Methods {
-		self.methods
-	}
-
 	/// Merge two [`RpcModule`]'s by adding all [`Method`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
 	pub fn merge(&mut self, other: RpcModule) -> Result<(), Error> {
-		for name in other.methods.keys() {
+		for name in other.method_types.keys() {
 			self.verify_method_name(name)?;
 		}
 
 		for (name, callback) in other.methods {
 			self.methods.insert(name, callback);
+			self.method_types.insert(name, MethodType::Sync);
+		}
+
+		for (name, callback) in other.async_methods {
+			self.async_methods.insert(name, callback);
+			self.method_types.insert(name, MethodType::Async);
 		}
 
 		Ok(())
@@ -214,6 +286,7 @@ impl<Context> RpcContextModule<Context> {
 
 		let ctx = self.ctx.clone();
 
+		self.module.method_types.insert(method_name, MethodType::Async);
 		self.module.methods.insert(
 			method_name,
 			Box::new(move |id, params, tx, _| {
@@ -233,6 +306,47 @@ impl<Context> RpcContextModule<Context> {
 				Ok(())
 			}),
 		);
+
+		Ok(())
+	}
+
+	/// Register a new asynchronous RPC method, which responds with a given callback.
+	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	where
+		R: Serialize + Send + Sync + 'static,
+		F: Fn(RpcParams, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>> + Copy + Send + Sync + 'static,
+		Context: Sync + Send + 'static,
+	{
+		self.module.verify_method_name(method_name)?;
+		let ctx = self.ctx.clone();
+
+		self.module.method_types.insert(method_name, MethodType::Async);
+		self.module.async_methods.insert(
+			method_name,
+			Box::new(move |id, params, tx, _| {
+				let ctx = ctx.clone();
+				let future = async move {
+					let params = params.borrowed();
+					let id = id.borrowed();
+					match callback(params, ctx).await {
+						Ok(res) => send_response(id, &tx, res),
+						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
+						Err(CallError::Failed(err)) => {
+							log::error!("Call failed with: {}", err);
+							let err = JsonRpcErrorObject {
+								code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
+								message: &err.to_string(),
+								data: None,
+							};
+							send_error(id, &tx, err)
+						}
+					};
+					Ok(())
+				};
+				future.boxed()
+			}),
+		);
+
 		Ok(())
 	}
 
@@ -324,11 +438,6 @@ impl<Context> RpcContextModule<Context> {
 	pub fn into_module(self) -> RpcModule {
 		self.module
 	}
-
-	/// Convert a module into methods. Consumes self.
-	pub fn into_methods(self) -> Methods {
-		self.into_module().into_methods()
-	}
 }
 
 impl<Cx> Deref for RpcContextModule<Cx> {
@@ -400,9 +509,9 @@ mod tests {
 
 		// `merge` is a method on `RpcModule` => deref works
 		cxmodule.merge(module).unwrap();
-		let mut cx_methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
-		cx_methods.sort();
-		assert_eq!(cx_methods, vec!["bla", "bla with context"]);
+
+		assert!(cxmodule.method(&"bla").is_some());
+		assert!(cxmodule.method(&"bla with context").is_some());
 	}
 
 	#[test]
@@ -411,8 +520,7 @@ mod tests {
 		let mut cxmodule = RpcContextModule::new(cx);
 		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _| Ok(()));
 
-		let methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
-		assert!(methods.contains(&"hi"));
-		assert!(methods.contains(&"goodbye"));
+		assert!(cxmodule.method(&"hi").is_some());
+		assert!(cxmodule.method(&"goodbye").is_some());
 	}
 }

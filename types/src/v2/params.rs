@@ -96,6 +96,23 @@ impl<'a> RpcParams<'a> {
 	}
 }
 
+/// Owned version of [`RpcParams`].
+#[derive(Clone, Debug)]
+pub struct OwnedRpcParams(Option<String>);
+
+impl OwnedRpcParams {
+	/// Converts `OwnedRpcParams` into borrowed [`RpcParams`].
+	pub fn borrowed(&self) -> RpcParams<'_> {
+		RpcParams(self.0.as_ref().map(|s| s.as_ref()))
+	}
+}
+
+impl<'a> From<RpcParams<'a>> for OwnedRpcParams {
+	fn from(borrowed: RpcParams<'a>) -> Self {
+		Self(borrowed.0.map(Into::into))
+	}
+}
+
 /// [Serializable JSON-RPC parameters](https://www.jsonrpc.org/specification#parameter_structures)
 ///
 /// If your type implement `Into<JsonValue>` call that favor of `serde_json::to:value` to
@@ -112,6 +129,46 @@ pub enum JsonRpcParams<'a> {
 	ArrayRef(&'a [JsonValue]),
 	/// Params by name.
 	Map(BTreeMap<&'a str, JsonValue>),
+}
+
+/// Owned version of [`JsonRpcParams`].
+#[derive(Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum OwnedJsonRpcParams {
+	/// No params.
+	NoParams,
+	/// Positional params (heap allocated)
+	Array(Vec<JsonValue>),
+	/// Params by name.
+	Map(BTreeMap<String, JsonValue>),
+}
+
+impl OwnedJsonRpcParams {
+	/// Converts `OwnedJsonRpcParams` into borrowed [`JsonRpcParams`].
+	pub fn borrowed(&self) -> JsonRpcParams<'_> {
+		match self {
+			OwnedJsonRpcParams::NoParams => JsonRpcParams::NoParams,
+			OwnedJsonRpcParams::Array(arr) => JsonRpcParams::ArrayRef(arr.as_ref()),
+			OwnedJsonRpcParams::Map(map) => {
+				let map = map.iter().map(|(k, v)| (k.as_ref(), v.clone())).collect();
+				JsonRpcParams::Map(map)
+			}
+		}
+	}
+}
+
+impl<'a> From<JsonRpcParams<'a>> for OwnedJsonRpcParams {
+	fn from(borrowed: JsonRpcParams<'a>) -> Self {
+		match borrowed {
+			JsonRpcParams::NoParams => Self::NoParams,
+			JsonRpcParams::Array(arr) => Self::Array(arr),
+			JsonRpcParams::ArrayRef(slice) => Self::Array(slice.to_vec()),
+			JsonRpcParams::Map(map) => {
+				let map = map.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
+				Self::Map(map)
+			}
+		}
+	}
 }
 
 impl<'a> From<BTreeMap<&'a str, JsonValue>> for JsonRpcParams<'a> {
@@ -170,7 +227,7 @@ impl<'a> Id<'a> {
 	/// If the Id is a number, returns the associated number. Returns None otherwise.
 	pub fn as_number(&self) -> Option<&u64> {
 		match self {
-			Id::Number(n) => Some(n),
+			Self::Number(n) => Some(n),
 			_ => None,
 		}
 	}
@@ -178,7 +235,7 @@ impl<'a> Id<'a> {
 	/// If the Id is a String, returns the associated str. Returns None otherwise.
 	pub fn as_str(&self) -> Option<&str> {
 		match self {
-			Id::Str(s) => Some(s),
+			Self::Str(s) => Some(s.as_ref()),
 			_ => None,
 		}
 	}
@@ -186,8 +243,42 @@ impl<'a> Id<'a> {
 	/// If the ID is Null, returns (). Returns None otherwise.
 	pub fn as_null(&self) -> Option<()> {
 		match self {
-			Id::Null => Some(()),
+			Self::Null => Some(()),
 			_ => None,
+		}
+	}
+}
+
+/// Owned version of [`Id`] that always allocates memory for its members.
+#[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+#[serde(untagged)]
+pub enum OwnedId {
+	/// Null
+	Null,
+	/// Numeric id
+	Number(u64),
+	/// String id
+	Str(String),
+}
+
+impl OwnedId {
+	/// Converts `OwnedId` into borrowed `Id`.
+	pub fn borrowed(&self) -> Id<'_> {
+		match self {
+			Self::Null => Id::Null,
+			Self::Number(num) => Id::Number(*num),
+			Self::Str(str) => Id::Str(Cow::borrowed(str.as_ref())),
+		}
+	}
+}
+
+impl<'a> From<Id<'a>> for OwnedId {
+	fn from(borrowed: Id<'a>) -> Self {
+		match borrowed {
+			Id::Null => Self::Null,
+			Id::Number(num) => Self::Number(num),
+			Id::Str(num) => Self::Str(num.as_ref().to_owned()),
 		}
 	}
 }
