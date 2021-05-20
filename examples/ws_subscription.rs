@@ -57,7 +57,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let subscription = server.register_subscription::<()>("subscribe_hello", "unsubscribe_hello").unwrap();
 
 	std::thread::spawn(move || loop {
-		subscription.send_all(&"hello my friend").unwrap();
+		subscription.broadcast(&"hello my friend").unwrap();
 		std::thread::sleep(std::time::Duration::from_secs(1));
 	});
 

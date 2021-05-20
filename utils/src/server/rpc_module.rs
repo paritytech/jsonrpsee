@@ -28,7 +28,7 @@ pub type SubscriptionId = u64;
 pub type MethodSink = mpsc::UnboundedSender<String>;
 
 /// Map of subscribers keyed by the connection and subscription ids to an [`InnerSink`] that contains the parameters
-/// they used to subscribe and the tx side of a channel used to convey results&errors back.
+/// they used to subscribe and the tx side of a channel used to convey results and errors back.
 type Subscribers<P> = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), InnerSink<P>>>>;
 
 /// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
@@ -91,12 +91,12 @@ impl RpcModule {
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods. Returns a [`SubscriptionSink`]. If a
 	/// method with the same name is already registered, an [`Error::MethodAlreadyRegistered`] is returned.
-    /// If the subscription does not take any parameters, set `P` to `()`.
-	pub fn register_subscription<P: DeserializeOwned + Send + Sync + 'static>(
+	/// If the subscription does not take any parameters, set `Params` to `()`.
+	pub fn register_subscription<Params: DeserializeOwned + Send + Sync + 'static>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink<P>, Error> {
+	) -> Result<SubscriptionSink<Params>, Error> {
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
@@ -223,18 +223,18 @@ impl<Context> RpcContextModule<Context> {
 
 /// Used by the server to send data back to subscribers.
 #[derive(Clone)]
-pub struct SubscriptionSink<P> {
+pub struct SubscriptionSink<Params> {
 	method: &'static str,
-	subscribers: Subscribers<P>,
+	subscribers: Subscribers<Params>,
 }
 
-impl<P> SubscriptionSink<P> {
-	/// Send a message on all the subscribers.
+impl<Params> SubscriptionSink<Params> {
+	/// Send a message on the all the subscribers.
 	///
 	/// If you have subscriptions with params/input you should most likely
-	/// call `call_with_params` to the process the input/params and send out
+	/// call `send_each` to the process the input/params and send out
 	/// the result on each subscription individually instead.
-	pub fn send_all<T>(&self, result: &T) -> anyhow::Result<()>
+	pub fn broadcast<T>(&self, result: &T) -> anyhow::Result<()>
 	where
 		T: Serialize,
 	{
@@ -250,7 +250,7 @@ impl<P> SubscriptionSink<P> {
 				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
 			})?;
 
-			// Log broken connections
+			// Mark broken connections, to be removed.
 			if sender.sink.unbounded_send(msg).is_err() {
 				errored.push((*conn_id, *sub_id));
 			}
@@ -267,16 +267,16 @@ impl<P> SubscriptionSink<P> {
 	/// Send a message to all subscriptions that could parse `P` as input.
 	///
 	/// F: is a closure that you need to provide to apply on the input P.
-	pub fn send_all_with_params<T, F>(&self, f: F) -> anyhow::Result<()>
+	pub fn send_each<T, F>(&self, f: F) -> anyhow::Result<()>
 	where
-		F: Fn(&P) -> T,
+		F: Fn(&mut Params) -> T,
 		T: Serialize,
 	{
 		let mut subs = self.subscribers.lock();
 		let mut errored = Vec::new();
 
-		for ((conn_id, sub_id), sender) in subs.iter() {
-			let result = match sender.params.as_ref().map(|p| to_raw_value(&f(p))) {
+		for ((conn_id, sub_id), sender) in subs.iter_mut() {
+			let result = match sender.params.as_mut().map(|p| to_raw_value(&f(p))) {
 				Some(Ok(res)) => res,
 				_ => continue,
 			};
@@ -287,7 +287,7 @@ impl<P> SubscriptionSink<P> {
 				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
 			})?;
 
-			// Log broken connections
+			// Mark broken connections, to be removed.
 			if sender.sink.unbounded_send(msg).is_err() {
 				errored.push((*conn_id, *sub_id));
 			}
@@ -302,9 +302,9 @@ impl<P> SubscriptionSink<P> {
 	}
 }
 
-struct InnerSink<P> {
+struct InnerSink<Params> {
 	/// Sink.
 	sink: mpsc::UnboundedSender<String>,
 	/// Params.
-	params: Option<P>,
+	params: Option<Params>,
 }
