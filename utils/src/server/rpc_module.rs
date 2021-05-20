@@ -111,7 +111,13 @@ impl RpcModule {
 			self.methods.insert(
 				subscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					let params = params.parse().or_else(|_| params.one().map_err(|_| CallError::InvalidParams)).ok();
+					let params = match params.parse().or_else(|_| params.one()) {
+						Ok(p) => p,
+						Err(err) => {
+							log::error!("Params={:?}, in subscription couldn't be parsed: {:?}", params, err);
+							return Err(err.into());
+						}
+					};
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 
@@ -223,7 +229,7 @@ impl<Context> RpcContextModule<Context> {
 
 /// Used by the server to send data back to subscribers.
 #[derive(Clone)]
-pub struct SubscriptionSink<Params> {
+pub struct SubscriptionSink<Params = ()> {
 	method: &'static str,
 	subscribers: Subscribers<Params>,
 }
@@ -243,7 +249,7 @@ impl<Params> SubscriptionSink<Params> {
 		let mut errored = Vec::new();
 		let mut subs = self.subscribers.lock();
 
-		for ((conn_id, sub_id), sender) in subs.iter() {
+		for ((conn_id, sub_id), sink) in subs.iter() {
 			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 				jsonrpc: TwoPointZero,
 				method: self.method,
@@ -251,7 +257,7 @@ impl<Params> SubscriptionSink<Params> {
 			})?;
 
 			// Mark broken connections, to be removed.
-			if sender.sink.unbounded_send(msg).is_err() {
+			if sink.send(msg).is_err() {
 				errored.push((*conn_id, *sub_id));
 			}
 		}
@@ -269,27 +275,40 @@ impl<Params> SubscriptionSink<Params> {
 	/// F: is a closure that you need to provide to apply on the input P.
 	pub fn send_each<T, F>(&self, f: F) -> anyhow::Result<()>
 	where
-		F: Fn(&mut Params) -> T,
+		F: Fn(&Params) -> anyhow::Result<Option<T>>,
 		T: Serialize,
 	{
 		let mut subs = self.subscribers.lock();
 		let mut errored = Vec::new();
 
-		for ((conn_id, sub_id), sender) in subs.iter_mut() {
-			let result = match sender.params.as_mut().map(|p| to_raw_value(&f(p))) {
-				Some(Ok(res)) => res,
-				_ => continue,
-			};
+		for ((conn_id, sub_id), sink) in subs.iter() {
+			match f(&sink.params) {
+				Ok(Some(res)) => {
+					let result = match to_raw_value(&res) {
+						Ok(res) => res,
+						Err(err) => {
+							log::error!("Subscription: {} failed to serialize message: {:?}; ignoring", sub_id, err);
+							continue;
+						}
+					};
 
-			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
-				jsonrpc: TwoPointZero,
-				method: self.method,
-				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
-			})?;
+					let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+						jsonrpc: TwoPointZero,
+						method: self.method,
+						params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
+					})?;
 
-			// Mark broken connections, to be removed.
-			if sender.sink.unbounded_send(msg).is_err() {
-				errored.push((*conn_id, *sub_id));
+					if sink.send(msg).is_err() {
+						errored.push((*conn_id, *sub_id));
+					}
+				}
+				// NOTE(niklasad1): This might be used to fetch data in closure.
+				Ok(None) => (),
+				Err(e) => {
+					if sink.send(format!("Error: {:?}", e)).is_err() {
+						errored.push((*conn_id, *sub_id));
+					}
+				}
 			}
 		}
 
@@ -306,5 +325,11 @@ struct InnerSink<Params> {
 	/// Sink.
 	sink: mpsc::UnboundedSender<String>,
 	/// Params.
-	params: Option<Params>,
+	params: Params,
+}
+
+impl<Params> InnerSink<Params> {
+	fn send(&self, msg: String) -> anyhow::Result<()> {
+		self.sink.unbounded_send(msg).map_err(Into::into)
+	}
 }

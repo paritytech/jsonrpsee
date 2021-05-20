@@ -58,12 +58,12 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let two_params = server.register_subscription("sub_params_two", "unsub_params_two").unwrap();
 
 	std::thread::spawn(move || loop {
-		let _ = one_param.send_each(|idx| LETTERS.chars().nth(*idx));
+		let _ = one_param.send_each(|idx| Ok(LETTERS.chars().nth(*idx)));
 		std::thread::sleep(std::time::Duration::from_millis(50));
 	});
 
 	std::thread::spawn(move || loop {
-		let _ = two_params.send_each(|params: &mut Vec<usize>| LETTERS[params[0]..params[1]].to_string());
+		let _ = two_params.send_each(|params: &Vec<usize>| Ok(Some(LETTERS[params[0]..params[1]].to_string())));
 		std::thread::sleep(std::time::Duration::from_millis(100));
 	});
 

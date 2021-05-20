@@ -42,9 +42,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 		let sub_hello: SubscriptionSink<()> =
 			server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
 		let sub_foo: SubscriptionSink<()> = server.register_subscription("subscribe_foo", "unsubscribe_foo").unwrap();
-		let sub_stateless_add_one: SubscriptionSink<u64> =
-			server.register_subscription("subscribe_stateless_add_one", "unsubscribe_stateless_add_one").unwrap();
-		let sub_state_add_one: SubscriptionSink<u64> =
+		let sub_add_one: SubscriptionSink<u64> =
 			server.register_subscription("subscribe_add_one", "unsubscribe_add_one").unwrap();
 		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
@@ -58,13 +56,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 
 				sub_hello.broadcast(&"hello from subscription").unwrap();
 				sub_foo.broadcast(&1337_u64).unwrap();
-				sub_stateless_add_one.send_each(|p| *p + 1).unwrap();
-				sub_state_add_one
-					.send_each(|p| {
-						*p += 1;
-						*p
-					})
-					.unwrap();
+				sub_add_one.send_each(|p| Ok(Some(*p + 1))).unwrap();
 			}
 		});
 	});
