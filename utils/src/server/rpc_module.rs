@@ -89,7 +89,9 @@ impl RpcModule {
 		Ok(())
 	}
 
-	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
+	/// Register a new RPC subscription, with subscribe and unsubscribe methods. Returns a [`SubscriptionSink`]. If a
+	/// method with the same name is already registered, an [`Error::MethodAlreadyRegistered`] is returned.
+    /// If the subscription does not take any parameters, set `P` to `()`.
 	pub fn register_subscription<P: DeserializeOwned + Send + Sync + 'static>(
 		&mut self,
 		subscribe_method_name: &'static str,
