@@ -264,7 +264,8 @@ impl<Params> SubscriptionSink<Params> {
 		Ok(())
 	}
 
-	/// Send a message to all subscriptions that could parse `P` as input.
+	/// Send a message to all subscribers one by one, parsing the params they sent with the provided closure. If the
+	/// closure `F` fails to parse the params the message is not sent.
 	///
 	/// F: is a closure that you need to provide to apply on the input P.
 	pub fn send_each<T, F>(&self, f: F) -> anyhow::Result<()>
