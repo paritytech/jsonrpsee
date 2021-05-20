@@ -131,46 +131,6 @@ pub enum JsonRpcParams<'a> {
 	Map(BTreeMap<&'a str, JsonValue>),
 }
 
-/// Owned version of [`JsonRpcParams`].
-#[derive(Serialize, Debug, Clone)]
-#[serde(untagged)]
-pub enum OwnedJsonRpcParams {
-	/// No params.
-	NoParams,
-	/// Positional params (heap allocated)
-	Array(Vec<JsonValue>),
-	/// Params by name.
-	Map(BTreeMap<String, JsonValue>),
-}
-
-impl OwnedJsonRpcParams {
-	/// Converts `OwnedJsonRpcParams` into borrowed [`JsonRpcParams`].
-	pub fn borrowed(&self) -> JsonRpcParams<'_> {
-		match self {
-			OwnedJsonRpcParams::NoParams => JsonRpcParams::NoParams,
-			OwnedJsonRpcParams::Array(arr) => JsonRpcParams::ArrayRef(arr.as_ref()),
-			OwnedJsonRpcParams::Map(map) => {
-				let map = map.iter().map(|(k, v)| (k.as_ref(), v.clone())).collect();
-				JsonRpcParams::Map(map)
-			}
-		}
-	}
-}
-
-impl<'a> From<JsonRpcParams<'a>> for OwnedJsonRpcParams {
-	fn from(borrowed: JsonRpcParams<'a>) -> Self {
-		match borrowed {
-			JsonRpcParams::NoParams => Self::NoParams,
-			JsonRpcParams::Array(arr) => Self::Array(arr),
-			JsonRpcParams::ArrayRef(slice) => Self::Array(slice.to_vec()),
-			JsonRpcParams::Map(map) => {
-				let map = map.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
-				Self::Map(map)
-			}
-		}
-	}
-}
-
 impl<'a> From<BTreeMap<&'a str, JsonValue>> for JsonRpcParams<'a> {
 	fn from(map: BTreeMap<&'a str, JsonValue>) -> Self {
 		Self::Map(map)
