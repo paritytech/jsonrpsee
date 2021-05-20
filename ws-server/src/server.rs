@@ -167,16 +167,6 @@ async fn background_task(
 			log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
 			send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 		}
-
-		// if let Some(method) = sync_methods.method(&*req.method) {
-		// 	let params = RpcParams::new(req.params.map(|params| params.get()));
-		// 	if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
-		// 		log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
-		// 		send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-		// 	}
-		// } else {
-		// 	send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-		// }
 	};
 
 	// Similar to `execute_sync`, but uses an asyncrhonous context.
