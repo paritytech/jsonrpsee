@@ -27,6 +27,8 @@ pub type SubscriptionId = u64;
 /// Sink that is used to send back the result to the server for a specific method.
 pub type MethodSink = mpsc::UnboundedSender<String>;
 
+/// Map of subscribers keyed by the connection and subscription ids to an [`InnerSink`] that contains the parameters
+/// they used to subscribe and the tx side of a channel used to convey results&errors back.
 type Subscribers<P> = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), InnerSink<P>>>>;
 
 /// Sets of JSON-RPC methods can be organized into a "module" that are in turn registered on server or,
