@@ -124,9 +124,9 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 	// The same subscription should be possible to register again.
 	let mut other_nh: NotificationHandler<String> = client.register_notification("test").await.unwrap();
 
-	// check that the new subscription works and the old one is still closed
+	// check that the new subscription works.
 	assert!(other_nh.next().await.is_some());
-	assert!(nh.next().await.is_none());
+	assert!(client.is_connected());
 }
 
 #[tokio::test]

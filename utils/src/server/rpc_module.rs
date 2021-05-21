@@ -9,7 +9,8 @@ use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use serde_json::value::to_raw_value;
+use serde_json::value::{to_raw_value, RawValue};
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
@@ -123,7 +124,7 @@ impl RpcModule {
 
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						let inner = InnerSink { sink: tx.clone(), params };
+						let inner = InnerSink { sink: tx.clone(), params, method: subscribe_method_name, sub_id };
 						subscribers.lock().insert((conn, sub_id), inner);
 
 						sub_id
@@ -225,8 +226,25 @@ impl<Context> RpcContextModule<Context> {
 	pub fn into_module(self) -> RpcModule {
 		self.module
 	}
+
+	/// Convert a module into methods. Consumes self.
+	pub fn into_methods(self) -> Methods {
+		self.into_module().into_methods()
+	}
 }
 
+impl<Cx> Deref for RpcContextModule<Cx> {
+	type Target = RpcModule;
+	fn deref(&self) -> &Self::Target {
+		&self.module
+	}
+}
+
+impl<Cx> DerefMut for RpcContextModule<Cx> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.module
+	}
+}
 /// Used by the server to send data back to subscribers.
 #[derive(Clone)]
 pub struct SubscriptionSink<Params = ()> {
@@ -250,14 +268,8 @@ impl<Params> SubscriptionSink<Params> {
 		let mut subs = self.subscribers.lock();
 
 		for ((conn_id, sub_id), sink) in subs.iter() {
-			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
-				jsonrpc: TwoPointZero,
-				method: self.method,
-				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
-			})?;
-
 			// Mark broken connections, to be removed.
-			if sink.send(msg).is_err() {
+			if sink.send_subscription_message(&result).is_err() {
 				errored.push((*conn_id, *sub_id));
 			}
 		}
@@ -293,13 +305,7 @@ impl<Params> SubscriptionSink<Params> {
 						}
 					};
 
-					let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
-						jsonrpc: TwoPointZero,
-						method: self.method,
-						params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
-					})?;
-
-					if sink.send(msg).is_err() {
+					if sink.send_subscription_message(&result).is_err() {
 						errored.push((*conn_id, *sub_id));
 					}
 				}
@@ -327,10 +333,55 @@ struct InnerSink<Params> {
 	sink: mpsc::UnboundedSender<String>,
 	/// Params.
 	params: Params,
+	/// Method.
+	method: &'static str,
+	/// Subscription ID.
+	sub_id: SubscriptionId,
 }
 
 impl<Params> InnerSink<Params> {
+	fn send_subscription_message(&self, result: &RawValue) -> anyhow::Result<()> {
+		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+			jsonrpc: TwoPointZero,
+			method: self.method,
+			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
+		})?;
+
+		self.send(msg).map_err(Into::into)
+	}
+
 	fn send(&self, msg: String) -> anyhow::Result<()> {
 		self.sink.unbounded_send(msg).map_err(Into::into)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	#[test]
+	fn rpc_context_modules_can_merge_with_rpc_module() {
+		// Prove that we can merge an RpcContextModule with a RpcModule.
+		let cx = Vec::<u8>::new();
+		let mut cxmodule = RpcContextModule::new(cx);
+		cxmodule.register_method("bla with context", |_: RpcParams, _| Ok(())).unwrap();
+		let mut module = RpcModule::new();
+		module.register_method("bla", |_: RpcParams| Ok(())).unwrap();
+
+		// `merge` is a method on `RpcModule` => deref works
+		cxmodule.merge(module).unwrap();
+		let mut cx_methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
+		cx_methods.sort();
+		assert_eq!(cx_methods, vec!["bla", "bla with context"]);
+	}
+
+	#[test]
+	fn rpc_context_modules_can_register_subscriptions() {
+		let cx = ();
+		let mut cxmodule = RpcContextModule::new(cx);
+		let _subscription = cxmodule.register_subscription::<()>("hi", "goodbye");
+
+		let methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
+		assert!(methods.contains(&"hi"));
+		assert!(methods.contains(&"goodbye"));
 	}
 }
