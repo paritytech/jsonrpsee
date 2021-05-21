@@ -269,7 +269,7 @@ impl<Params> SubscriptionSink<Params> {
 
 		for ((conn_id, sub_id), sink) in subs.iter() {
 			// Mark broken connections, to be removed.
-			if sink.send_subscription_message(&result).is_err() {
+			if sink.send_raw_value(&result).is_err() {
 				errored.push((*conn_id, *sub_id));
 			}
 		}
@@ -305,14 +305,14 @@ impl<Params> SubscriptionSink<Params> {
 						}
 					};
 
-					if sink.send_subscription_message(&result).is_err() {
+					if sink.send_raw_value(&result).is_err() {
 						errored.push((*conn_id, *sub_id));
 					}
 				}
 				// NOTE(niklasad1): This might be used to fetch data in closure.
 				Ok(None) => (),
 				Err(e) => {
-					if sink.send(format!("Error: {:?}", e)).is_err() {
+					if sink.inner_send(format!("Error: {:?}", e)).is_err() {
 						errored.push((*conn_id, *sub_id));
 					}
 				}
@@ -326,9 +326,19 @@ impl<Params> SubscriptionSink<Params> {
 
 		Ok(())
 	}
+
+	/// Consumes the current subscriptions at the given time to get access to the inner Sinks.
+	/// The SubscriptionSink will accept new subscriptions after this occurs.
+	// TODO: we should get rid of this if possible.
+	pub fn into_sinks(&self) -> impl IntoIterator<Item = InnerSink<Params>> {
+		let mut subs = self.subscribers.lock();
+		let take = std::mem::replace(&mut *subs, FxHashMap::default());
+		take.into_iter().map(|(_, v)| v)
+	}
 }
 
-struct InnerSink<Params> {
+/// Represents a single subscription.
+pub struct InnerSink<Params> {
 	/// Sink.
 	sink: mpsc::UnboundedSender<String>,
 	/// Params.
@@ -340,18 +350,29 @@ struct InnerSink<Params> {
 }
 
 impl<Params> InnerSink<Params> {
-	fn send_subscription_message(&self, result: &RawValue) -> anyhow::Result<()> {
+	/// Send message on this subscription.
+	pub fn send<T: Serialize>(&self, result: &T) -> anyhow::Result<()> {
+		let result = to_raw_value(result)?;
+		self.send_raw_value(&result)
+	}
+
+	fn send_raw_value(&self, result: &RawValue) -> anyhow::Result<()> {
 		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,
 			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
 		})?;
 
-		self.send(msg).map_err(Into::into)
+		self.inner_send(msg).map_err(Into::into)
 	}
 
-	fn send(&self, msg: String) -> anyhow::Result<()> {
+	fn inner_send(&self, msg: String) -> anyhow::Result<()> {
 		self.sink.unbounded_send(msg).map_err(Into::into)
+	}
+
+	/// Get params of the subscription.
+	pub fn params(&self) -> &Params {
+		&self.params
 	}
 }
 
