@@ -276,6 +276,7 @@ impl<Params> SubscriptionSink<Params> {
 
 		// Remove broken connections
 		for entry in errored {
+			log::debug!("Dropping subscription on method: {}, id: {}", self.method, entry.1);
 			subs.remove(&entry);
 		}
 
@@ -321,16 +322,17 @@ impl<Params> SubscriptionSink<Params> {
 
 		// Remove broken connections
 		for entry in errored {
+			log::debug!("Dropping subscription on method: {}, id: {}", self.method, entry.1);
 			subs.remove(&entry);
 		}
 
 		Ok(())
 	}
 
-	/// Consumes the current subscriptions at the given time to get access to the inner Sinks.
-	/// The SubscriptionSink will accept new subscriptions after this occurs.
-	// TODO: we should get rid of this if possible.
-	pub fn into_sinks(&self) -> impl IntoIterator<Item = InnerSink<Params>> {
+	/// Consumes the current subscriptions at the given time to get access to the individual subscribers.
+	/// The [`SubscriptionSink`] will accept new subscriptions after this is called.
+	// TODO(niklasad1): get rid of this if possible.
+	pub fn to_sinks(&self) -> impl IntoIterator<Item = InnerSink<Params>> {
 		let mut subs = self.subscribers.lock();
 		let sinks = std::mem::take(&mut *subs);
 		sinks.into_iter().map(|(_, v)| v)
