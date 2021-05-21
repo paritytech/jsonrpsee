@@ -290,7 +290,6 @@ mod tests {
 		cxmodule.merge(module).unwrap();
 		let mut cx_methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
 		cx_methods.sort();
-		println!("cx_methods: {:?}", cx_methods);
 		assert_eq!(cx_methods, vec!["bla", "bla with context"]);
 	}
 
