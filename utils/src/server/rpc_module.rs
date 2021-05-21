@@ -332,8 +332,8 @@ impl<Params> SubscriptionSink<Params> {
 	// TODO: we should get rid of this if possible.
 	pub fn into_sinks(&self) -> impl IntoIterator<Item = InnerSink<Params>> {
 		let mut subs = self.subscribers.lock();
-		let take = std::mem::replace(&mut *subs, FxHashMap::default());
-		take.into_iter().map(|(_, v)| v)
+		let sinks = std::mem::take(&mut *subs);
+		sinks.into_iter().map(|(_, v)| v)
 	}
 }
 
