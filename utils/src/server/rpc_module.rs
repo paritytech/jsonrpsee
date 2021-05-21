@@ -10,6 +10,7 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::to_raw_value;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
@@ -213,8 +214,25 @@ impl<Context> RpcContextModule<Context> {
 	pub fn into_module(self) -> RpcModule {
 		self.module
 	}
+
+	/// Convert a module into methods. Consumes self.
+	pub fn into_methods(self) -> Methods {
+		self.into_module().into_methods()
+	}
 }
 
+impl<Cx> Deref for RpcContextModule<Cx> {
+	type Target = RpcModule;
+	fn deref(&self) -> &Self::Target {
+		&self.module
+	}
+}
+
+impl<Cx> DerefMut for RpcContextModule<Cx> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.module
+	}
+}
 /// Used by the server to send data back to subscribers.
 #[derive(Clone)]
 pub struct SubscriptionSink {
@@ -253,5 +271,36 @@ impl SubscriptionSink {
 			subs.remove(&entry);
 		}
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	#[test]
+	fn rpc_context_modules_can_merge_with_rpc_module() {
+		// Prove that we can merge an RpcContextModule with a RpcModule.
+		let cx = Vec::<u8>::new();
+		let mut cxmodule = RpcContextModule::new(cx);
+		cxmodule.register_method("bla with context", |_: RpcParams, _| Ok(())).unwrap();
+		let mut module = RpcModule::new();
+		module.register_method("bla", |_: RpcParams| Ok(())).unwrap();
+
+		// `merge` is a method on `RpcModule` => deref works
+		cxmodule.merge(module).unwrap();
+		let mut cx_methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
+		cx_methods.sort();
+		assert_eq!(cx_methods, vec!["bla", "bla with context"]);
+	}
+
+	#[test]
+	fn rpc_context_modules_can_register_subscriptions() {
+		let cx = ();
+		let mut cxmodule = RpcContextModule::new(cx);
+		let _subscription = cxmodule.register_subscription("hi", "goodbye");
+
+		let methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
+		assert!(methods.contains(&"hi"));
+		assert!(methods.contains(&"goodbye"));
 	}
 }
