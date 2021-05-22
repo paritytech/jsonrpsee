@@ -10,56 +10,62 @@ use crate::{
 };
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
+use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]
 async fn method_call_works() {
-	let result = run_request_with_response(ok_response("hello".into(), Id::Num(0))).await.unwrap();
+	let result =
+		run_request_with_response(ok_response("hello".into(), Id::Num(0))).with_timeout().await.unwrap().unwrap();
 	assert_eq!(JsonValue::String("hello".into()), result);
 }
 
 #[tokio::test]
 async fn notif_works() {
 	// this empty string shouldn't be read because the server shouldn't respond to notifications.
-	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), String::new()).await;
+	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), String::new())
+		.with_timeout()
+		.await
+		.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).await.unwrap();
-	assert!(client.notification("notif", JsonRpcParams::NoParams).await.is_ok());
+	let client = WsClientBuilder::default().build(&uri).with_timeout().await.unwrap().unwrap();
+	assert!(client.notification("notif", JsonRpcParams::NoParams).with_timeout().await.unwrap().is_ok());
 }
 
 #[tokio::test]
 async fn response_with_wrong_id() {
-	let err = run_request_with_response(ok_response("hello".into(), Id::Num(99))).await.unwrap_err();
+	let err =
+		run_request_with_response(ok_response("hello".into(), Id::Num(99))).with_timeout().await.unwrap().unwrap_err();
 	assert!(matches!(err, Error::RestartNeeded(_)));
 }
 
 #[tokio::test]
 async fn response_method_not_found() {
-	let err = run_request_with_response(method_not_found(Id::Num(0))).await.unwrap_err();
+	let err = run_request_with_response(method_not_found(Id::Num(0))).with_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::MethodNotFound.into());
 }
 
 #[tokio::test]
 async fn parse_error_works() {
-	let err = run_request_with_response(parse_error(Id::Num(0))).await.unwrap_err();
+	let err = run_request_with_response(parse_error(Id::Num(0))).with_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::ParseError.into());
 }
 
 #[tokio::test]
 async fn invalid_request_works() {
-	let err = run_request_with_response(invalid_request(Id::Num(0_u64))).await.unwrap_err();
+	let err = run_request_with_response(invalid_request(Id::Num(0_u64))).with_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::InvalidRequest.into());
 }
 
 #[tokio::test]
 async fn invalid_params_works() {
-	let err = run_request_with_response(invalid_params(Id::Num(0_u64))).await.unwrap_err();
+	let err = run_request_with_response(invalid_params(Id::Num(0_u64))).with_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::InvalidParams.into());
 }
 
 #[tokio::test]
 async fn internal_error_works() {
-	let err = run_request_with_response(internal_error(Id::Num(0_u64))).await.unwrap_err();
+	let err = run_request_with_response(internal_error(Id::Num(0_u64))).with_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::InternalError.into());
 }
 
@@ -70,13 +76,19 @@ async fn subscription_works() {
 		server_subscription_id_response(Id::Num(0)),
 		server_subscription_response(JsonValue::String("hello my friend".to_owned())),
 	)
-	.await;
+	.with_timeout()
+	.await
+	.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).await.unwrap();
+	let client = WsClientBuilder::default().build(&uri).with_timeout().await.unwrap().unwrap();
 	{
-		let mut sub: Subscription<String> =
-			client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
-		let response: String = sub.next().await.unwrap();
+		let mut sub: Subscription<String> = client
+			.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello")
+			.with_timeout()
+			.await
+			.unwrap()
+			.unwrap();
+		let response: String = sub.next().with_timeout().await.unwrap().unwrap();
 		assert_eq!("hello my friend".to_owned(), response);
 	}
 }
@@ -87,13 +99,16 @@ async fn notification_handler_works() {
 		"127.0.0.1:0".parse().unwrap(),
 		server_notification("test", "server originated notification works".into()),
 	)
-	.await;
+	.with_timeout()
+	.await
+	.unwrap();
 
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).await.unwrap();
+	let client = WsClientBuilder::default().build(&uri).with_timeout().await.unwrap().unwrap();
 	{
-		let mut nh: NotificationHandler<String> = client.register_notification("test").await.unwrap();
-		let response: String = nh.next().await.unwrap();
+		let mut nh: NotificationHandler<String> =
+			client.register_notification("test").with_timeout().await.unwrap().unwrap();
+		let response: String = nh.next().with_timeout().await.unwrap().unwrap();
 		assert_eq!("server originated notification works".to_owned(), response);
 	}
 }
@@ -104,28 +119,33 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 		"127.0.0.1:0".parse().unwrap(),
 		server_notification("test", "server originated notification".into()),
 	)
-	.await;
+	.with_timeout()
+	.await
+	.unwrap();
 
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&uri).await.unwrap();
-	let mut nh: NotificationHandler<String> = client.register_notification("test").await.unwrap();
+	let client =
+		WsClientBuilder::default().max_notifs_per_subscription(4).build(&uri).with_timeout().await.unwrap().unwrap();
+	let mut nh: NotificationHandler<String> =
+		client.register_notification("test").with_timeout().await.unwrap().unwrap();
 
 	// don't poll the notification stream for 2 seconds, should be full now.
 	std::thread::sleep(std::time::Duration::from_secs(2));
 
 	// Capacity is `num_sender` + `capacity`
 	for _ in 0..5 {
-		assert!(nh.next().await.is_some());
+		assert!(nh.next().with_timeout().await.unwrap().is_some());
 	}
 
 	// NOTE: this is now unuseable and unregistered.
-	assert!(nh.next().await.is_none());
+	assert!(nh.next().with_timeout().await.unwrap().is_none());
 
 	// The same subscription should be possible to register again.
-	let mut other_nh: NotificationHandler<String> = client.register_notification("test").await.unwrap();
+	let mut other_nh: NotificationHandler<String> =
+		client.register_notification("test").with_timeout().await.unwrap().unwrap();
 
 	// check that the new subscription works.
-	assert!(other_nh.next().await.is_some());
+	assert!(other_nh.next().with_timeout().await.unwrap().is_some());
 	assert!(client.is_connected());
 }
 
@@ -137,7 +157,8 @@ async fn batch_request_works() {
 		("get_swag", JsonRpcParams::NoParams),
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
-	let response = run_batch_request_with_response(batch_request, server_response).await.unwrap();
+	let response =
+		run_batch_request_with_response(batch_request, server_response).with_timeout().await.unwrap().unwrap();
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
@@ -149,7 +170,8 @@ async fn batch_request_out_of_order_response() {
 		("get_swag", JsonRpcParams::NoParams),
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
-	let response = run_batch_request_with_response(batch_request, server_response).await.unwrap();
+	let response =
+		run_batch_request_with_response(batch_request, server_response).with_timeout().await.unwrap().unwrap();
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
@@ -159,11 +181,13 @@ async fn is_connected_works() {
 		"127.0.0.1:0".parse().unwrap(),
 		ok_response(JsonValue::String("foo".into()), Id::Num(99_u64)),
 	)
-	.await;
+	.with_timeout()
+	.await
+	.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).await.unwrap();
+	let client = WsClientBuilder::default().build(&uri).with_timeout().await.unwrap().unwrap();
 	assert!(client.is_connected());
-	client.request::<String>("say_hello", JsonRpcParams::NoParams).await.unwrap_err();
+	client.request::<String>("say_hello", JsonRpcParams::NoParams).with_timeout().await.unwrap().unwrap_err();
 	// give the background thread some time to terminate.
 	std::thread::sleep(std::time::Duration::from_millis(100));
 	assert!(!client.is_connected())
@@ -173,17 +197,23 @@ async fn run_batch_request_with_response<'a>(
 	batch: Vec<(&'a str, JsonRpcParams<'a>)>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
-	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response).await;
+	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
+		.with_timeout()
+		.await
+		.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).await.unwrap();
-	client.batch_request(batch).await
+	let client = WsClientBuilder::default().build(&uri).with_timeout().await.unwrap().unwrap();
+	client.batch_request(batch).with_timeout().await.unwrap()
 }
 
 async fn run_request_with_response(response: String) -> Result<JsonValue, Error> {
-	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response).await;
+	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
+		.with_timeout()
+		.await
+		.unwrap();
 	let uri = format!("ws://{}", server.local_addr());
-	let client = WsClientBuilder::default().build(&uri).await.unwrap();
-	client.request("say_hello", JsonRpcParams::NoParams).await
+	let client = WsClientBuilder::default().build(&uri).with_timeout().await.unwrap().unwrap();
+	client.request("say_hello", JsonRpcParams::NoParams).with_timeout().await.unwrap()
 }
 
 fn assert_error_response(err: Error, exp: JsonRpcErrorObject) {
