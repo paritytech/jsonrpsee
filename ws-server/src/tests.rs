@@ -22,7 +22,7 @@ impl std::error::Error for MyAppError {}
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
 pub async fn server() -> SocketAddr {
-	let mut server = WsServer::new("127.0.0.1:0").with_timeout().await.unwrap().unwrap();
+	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	server
 		.register_method("say_hello", |_| {
@@ -55,7 +55,7 @@ pub async fn server() -> SocketAddr {
 
 /// Run server with user provided context.
 pub async fn server_with_context() -> SocketAddr {
-	let mut server = WsServer::new("127.0.0.1:0").with_timeout().await.unwrap().unwrap();
+	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let ctx = TestContext;
 	let mut rpc_ctx = RpcContextModule::new(ctx);
@@ -85,11 +85,11 @@ pub async fn server_with_context() -> SocketAddr {
 #[tokio::test]
 async fn single_method_calls_works() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	for i in 0..10 {
 		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
-		let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+		let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 
 		assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(i)));
 	}
@@ -98,10 +98,10 @@ async fn single_method_calls_works() {
 #[tokio::test]
 async fn slow_method_calls_works() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"sleep_for","params":[1000],"id":123}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 
 	assert_eq!(response, ok_response(JsonValue::String("Yawn!".to_owned()), Id::Num(123)));
 }
@@ -109,14 +109,14 @@ async fn slow_method_calls_works() {
 #[tokio::test]
 async fn batch_method_call_works() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let mut batch = vec![r#"{"jsonrpc":"2.0","method":"sleep_for","params":[1000],"id":123}"#.to_string()];
 	for i in 1..4 {
 		batch.push(format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i));
 	}
 	let batch = format!("[{}]", batch.join(","));
-	let response = client.send_request_text(batch).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(batch).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(
 		response,
 		r#"[{"jsonrpc":"2.0","result":"Yawn!","id":123},{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","result":"hello","id":2},{"jsonrpc":"2.0","result":"hello","id":3}]"#
@@ -126,7 +126,7 @@ async fn batch_method_call_works() {
 #[tokio::test]
 async fn batch_method_call_where_some_calls_fail() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let batch = vec![
 		r#"{"jsonrpc":"2.0","method":"say_hello","id":1}"#,
@@ -135,7 +135,7 @@ async fn batch_method_call_where_some_calls_fail() {
 	];
 	let batch = format!("[{}]", batch.join(","));
 
-	let response = client.send_request_text(batch).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(batch).with_default_timeout().await.unwrap().unwrap();
 
 	assert_eq!(
 		response,
@@ -146,10 +146,10 @@ async fn batch_method_call_where_some_calls_fail() {
 #[tokio::test]
 async fn single_method_call_with_params_works() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
 
@@ -157,60 +157,60 @@ async fn single_method_call_with_params_works() {
 async fn single_method_call_with_faulty_params_returns_err() {
 	let _ = env_logger::try_init();
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, invalid_params(Id::Num(1)));
 }
 
 #[tokio::test]
 async fn single_method_call_with_faulty_context() {
 	let addr = server_with_context().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, invalid_context("RPC context failed", Id::Num(1)));
 }
 
 #[tokio::test]
 async fn single_method_call_with_ok_context() {
 	let addr = server_with_context().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, ok_response("ok".into(), Id::Num(1)));
 }
 
 #[tokio::test]
 async fn single_method_send_binary() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-	let response = client.send_request_binary(req.as_bytes()).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_binary(req.as_bytes()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
 
 #[tokio::test]
 async fn should_return_method_not_found() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":"foo"}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, method_not_found(Id::Str("foo".into())));
 }
 
 #[tokio::test]
 async fn invalid_json_id_missing_value() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
 	assert_eq!(response, parse_error(Id::Null));
 }
@@ -218,16 +218,16 @@ async fn invalid_json_id_missing_value() {
 #[tokio::test]
 async fn invalid_request_object() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, invalid_request(Id::Num(1)));
 }
 
 #[tokio::test]
 async fn register_methods_works() {
-	let mut server = WsServer::new("127.0.0.1:0").with_timeout().await.unwrap().unwrap();
+	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	assert!(server.register_method("say_hello", |_| Ok("lo")).is_ok());
 	assert!(server.register_method("say_hello", |_| Ok("lo")).is_err());
 	assert!(server.register_subscription("subscribe_hello", "unsubscribe_hello").is_ok());
@@ -240,7 +240,7 @@ async fn register_methods_works() {
 
 #[tokio::test]
 async fn register_same_subscribe_unsubscribe_is_err() {
-	let mut server = WsServer::new("127.0.0.1:0").with_timeout().await.unwrap().unwrap();
+	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	assert!(matches!(
 		server.register_subscription("subscribe_hello", "subscribe_hello"),
 		Err(Error::SubscriptionNameConflict(_))
@@ -250,46 +250,46 @@ async fn register_same_subscribe_unsubscribe_is_err() {
 #[tokio::test]
 async fn parse_error_request_should_not_close_connection() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let invalid_request = r#"{"jsonrpc":"2.0","method":"bar","params":[1,"id":99}"#;
-	let response1 = client.send_request_text(invalid_request).with_timeout().await.unwrap().unwrap();
+	let response1 = client.send_request_text(invalid_request).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response1, parse_error(Id::Null));
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
-	let response2 = client.send_request_text(request).with_timeout().await.unwrap().unwrap();
+	let response2 = client.send_request_text(request).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response2, ok_response(JsonValue::String("hello".to_owned()), Id::Num(33)));
 }
 
 #[tokio::test]
 async fn invalid_request_should_not_close_connection() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let req = r#"{"jsonrpc":"2.0","method":"bar","id":1,"is_not_request_object":1}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, invalid_request(Id::Num(1)));
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
-	let response = client.send_request_text(request).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(request).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(33)));
 }
 
 #[tokio::test]
 async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	let addr = server().await;
-	let mut client = WebSocketTestClient::new(addr).with_timeout().await.unwrap().unwrap();
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	// Good request, executes fine
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":33}"#;
-	let response = client.send_request_text(request).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(request).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(33)));
 
 	// Good request, but causes error.
 	let req = r#"{"jsonrpc":"2.0","method":"call_fail","params":[],"id":123}"#;
-	let response = client.send_request_text(req).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":123}"#);
 
 	// Connection is still good.
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;
-	let response = client.send_request_text(request).with_timeout().await.unwrap().unwrap();
+	let response = client.send_request_text(request).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(333)));
 }
