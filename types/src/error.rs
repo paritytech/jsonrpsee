@@ -31,7 +31,7 @@ pub enum CallError {
 pub enum Error {
 	/// Error that occurs when a call failed.
 	#[error("Server call failed: {0}")]
-	Call(CallError),
+	Call(#[from] CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -49,7 +49,7 @@ pub enum Error {
 	RestartNeeded(String),
 	/// Failed to parse the data.
 	#[error("Parse error: {0}")]
-	ParseError(#[source] serde_json::Error),
+	ParseError(#[from] serde_json::Error),
 	/// Invalid subscription ID.
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionId,
@@ -88,18 +88,6 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 	/// Concrete transport error.
 	#[error("Transport error: {0}")]
 	Inner(T),
-}
-
-impl From<CallError> for Error {
-	fn from(call_err: CallError) -> Error {
-		Error::Call(call_err)
-	}
-}
-
-impl From<serde_json::Error> for Error {
-	fn from(json_err: serde_json::Error) -> Error {
-		Error::ParseError(json_err)
-	}
 }
 
 impl From<std::io::Error> for Error {
