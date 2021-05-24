@@ -46,6 +46,17 @@ impl Host {
 	}
 }
 
+/// String representation of the path of the URL.
+#[derive(Clone, Debug)]
+pub struct Path(String);
+
+impl Path {
+	/// Extracts a string slice from the inner String.
+	pub fn as_str(&self) -> &str {
+		self.0.as_str()
+	}
+}
+
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
 pub struct Sender {
@@ -69,13 +80,13 @@ pub struct WsTransportClientBuilder<'a> {
 	pub host: Host,
 	/// Stream mode, either plain TCP or TLS.
 	pub mode: Mode,
-	/// Url to send during the HTTP handshake.
-	pub handshake_url: Cow<'a, str>,
+	/// The HTTP host resource path.
+	pub path: Path,
 	/// Timeout for the connection.
 	pub timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header is passed.
-	pub origin: Option<Cow<'a, str>>,
+	pub origin_header: Option<Cow<'a, str>>,
 	/// Max payload size
 	pub max_request_body_size: u32,
 }
@@ -191,30 +202,6 @@ impl Receiver {
 }
 
 impl<'a> WsTransportClientBuilder<'a> {
-	/// Sets the URL to pass during the HTTP handshake.
-	///
-	/// The default URL is `/`.
-	pub fn with_handshake_url(mut self, url: impl Into<Cow<'a, str>>) -> Self {
-		self.handshake_url = url.into();
-		self
-	}
-
-	/// Sets the `Origin` header to pass during the HTTP handshake.
-	///
-	/// By default, no `Origin` header is sent.
-	pub fn with_origin_header(mut self, origin: impl Into<Cow<'a, str>>) -> Self {
-		self.origin = Some(origin.into());
-		self
-	}
-
-	/// Sets the timeout to use when establishing the TCP connection.
-	///
-	/// The default timeout is 10 seconds.
-	pub fn with_timeout(mut self, timeout: Duration) -> Self {
-		self.timeout = timeout;
-		self
-	}
-
 	/// Try to establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let connector = match self.mode {
@@ -270,8 +257,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 		};
 
 		let mut client =
-			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), self.host.as_str(), &self.handshake_url);
-		if let Some(origin) = self.origin.as_ref() {
+			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), self.host.as_str(), self.path.as_str());
+		if let Some(origin) = self.origin_header.as_ref() {
 			client.set_origin(origin);
 		}
 
@@ -323,7 +310,7 @@ impl From<soketto::connection::Error> for WsConnectError {
 }
 
 /// Helper to parse an URL to a WebSocket address.
-pub fn parse_url(url: impl AsRef<str>) -> Result<(Vec<SocketAddr>, Host, Mode), WsHandshakeError> {
+pub fn parse_url(url: impl AsRef<str>) -> Result<(Vec<SocketAddr>, Host, Mode, Path), WsHandshakeError> {
 	let url = url::Url::parse(url.as_ref()).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
 	let mode = match url.scheme() {
 		"ws" => Mode::Plain,
@@ -333,7 +320,8 @@ pub fn parse_url(url: impl AsRef<str>) -> Result<(Vec<SocketAddr>, Host, Mode), 
 	let host = Host(url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?.into());
 	// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
 	let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-	Ok((sockaddrs, host, mode))
+	let path = Path(url.path().into());
+	Ok((sockaddrs, host, mode, path))
 }
 
 #[cfg(test)]
@@ -342,16 +330,18 @@ mod tests {
 
 	#[test]
 	fn ws_works() {
-		let (_sockaddrs, host, mode) = parse_url("ws://127.0.0.1:9933").unwrap();
+		let (_sockaddrs, host, mode, path) = parse_url("ws://127.0.0.1:9933").unwrap();
 		assert_eq!(host.as_str(), "127.0.0.1");
 		assert_eq!(mode, Mode::Plain);
+		assert_eq!(path.as_str(), "/");
 	}
 
 	#[test]
 	fn wss_works() {
-		let (_sockaddrs, host, mode) = parse_url("wss://kusama-rpc.polkadot.io:443").unwrap();
+		let (_sockaddrs, host, mode, path) = parse_url("wss://kusama-rpc.polkadot.io:443").unwrap();
 		assert_eq!(host.as_str(), "kusama-rpc.polkadot.io");
 		assert_eq!(mode, Mode::Tls);
+		assert_eq!(path.as_str(), "/");
 	}
 
 	#[test]
@@ -370,8 +360,17 @@ mod tests {
 
 	#[test]
 	fn default_port_works() {
-		let (_sockaddr, host, mode) = parse_url("ws://127.0.0.1").unwrap();
+		let (_sockaddr, host, mode, path) = parse_url("ws://127.0.0.1").unwrap();
 		assert_eq!(host.as_str(), "127.0.0.1");
 		assert_eq!(mode, Mode::Plain);
+		assert_eq!(path.as_str(), "/");
+	}
+
+	#[test]
+	fn url_with_path_works() {
+		let (_sockaddr, host, mode, path) = parse_url("ws://127.0.0.1/my-special-path").unwrap();
+		assert_eq!(host.as_str(), "127.0.0.1");
+		assert_eq!(mode, Mode::Plain);
+		assert_eq!(path.as_str(), "/my-special-path");
 	}
 }
