@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type Method = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> anyhow::Result<()>>;
+pub type Method = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
 /// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
 /// Connection ID, used for stateful protocol such as WebSockets.
@@ -130,7 +130,8 @@ impl RpcModule {
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+					// let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+					let sub_id = params.one()?;
 
 					subscribers.lock().remove(&(conn, sub_id));
 
@@ -244,7 +245,7 @@ impl SubscriptionSink {
 	/// Send data back to subscribers.
 	/// If a send fails (likely a broken connection) the subscriber is removed from the sink.
 	/// O(n) in the number of subscribers.
-	pub fn send<T>(&mut self, result: &T) -> anyhow::Result<()>
+	pub fn send<T>(&mut self, result: &T) -> Result<(), Error>
 	where
 		T: Serialize,
 	{

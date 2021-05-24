@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{response, AccessControl, TEN_MB_SIZE_BYTES};
-use anyhow::anyhow;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
 use hyper::{
@@ -77,7 +76,7 @@ impl Builder {
 		self
 	}
 
-	pub fn build(self, addr: SocketAddr) -> anyhow::Result<Server> {
+	pub fn build(self, addr: SocketAddr) -> Result<Server, Error> {
 		let domain = Domain::for_address(addr);
 		let socket = Socket::new(domain, Type::STREAM, None)?;
 		socket.set_nodelay(true)?;
@@ -137,12 +136,12 @@ impl Server {
 	}
 
 	/// Returns socket address to which the server is bound.
-	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
-		self.local_addr.ok_or_else(|| anyhow!("Local address not found"))
+	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
+		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
 	}
 
 	/// Start the server.
-	pub async fn start(self) -> anyhow::Result<()> {
+	pub async fn start(self) -> Result<(), Error> {
 		let methods = Arc::new(self.root.into_methods());
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;

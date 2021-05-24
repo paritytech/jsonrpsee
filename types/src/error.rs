@@ -1,4 +1,5 @@
 use std::fmt;
+
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
@@ -87,4 +88,41 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 	/// Concrete transport error.
 	#[error("Transport error: {0}")]
 	Inner(T),
+}
+
+
+impl From<CallError> for Error {
+	fn from(call_err: CallError) -> Error {
+		Error::Call(call_err)
+	}
+}
+
+impl From<serde_json::Error> for Error {
+	fn from(json_err: serde_json::Error) -> Error {
+		Error::ParseError(json_err)
+	}
+}
+
+impl From<std::io::Error> for Error {
+	fn from(io_err: std::io::Error) -> Error {
+		Error::Transport(Box::new(io_err))
+	}
+}
+
+impl From<soketto::handshake::Error> for Error {
+	fn from(handshake_err: soketto::handshake::Error) -> Error {
+		Error::Transport(Box::new(handshake_err))
+	}
+}
+
+impl From<soketto::connection::Error> for Error {
+	fn from(conn_err: soketto::connection::Error) -> Error {
+		Error::Transport(Box::new(conn_err))
+	}
+}
+
+impl From<hyper::Error> for Error {
+	fn from(hyper_err: hyper::Error) -> Error {
+		Error::Transport(Box::new(hyper_err))
+	}
 }
