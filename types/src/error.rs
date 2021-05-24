@@ -90,7 +90,6 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 	Inner(T),
 }
 
-
 impl From<CallError> for Error {
 	fn from(call_err: CallError) -> Error {
 		Error::Call(call_err)
