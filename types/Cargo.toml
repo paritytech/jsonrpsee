@@ -18,7 +18,5 @@ log = { version = "0.4", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value", "std"] }
 thiserror = "1.0"
-# TODO: a bit sad to have to pull in soketto to handle errors
 soketto = "0.4"
-# TODO: a bit sad to have to pull in soketto to handle errors
 hyper = "0.14"
