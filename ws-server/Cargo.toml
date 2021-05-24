@@ -10,7 +10,7 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-server"
 
 [dependencies]
-anyhow = "1.0.34"
+thiserror = "1"
 futures-channel = "0.3"
 futures-util = { version = "0.3", default-features = false, features = ["io"] }
 jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.6" }

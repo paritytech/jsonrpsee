@@ -61,7 +61,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		std::thread::sleep(std::time::Duration::from_secs(1));
 	});
 
-	let addr = server.local_addr();
+	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
-	addr
+	Ok(addr)
 }

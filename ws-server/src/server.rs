@@ -48,7 +48,7 @@ pub struct Server {
 
 impl Server {
 	/// Create a new WebSocket RPC server, bound to the `addr`.
-	pub async fn new(addr: impl ToSocketAddrs) -> anyhow::Result<Self> {
+	pub async fn new(addr: impl ToSocketAddrs) -> Result<Self, Error> {
 		let listener = TcpListener::bind(addr).await?;
 
 		Ok(Server { listener, root: RpcModule::new() })
@@ -77,7 +77,7 @@ impl Server {
 	}
 
 	/// Returns socket address to which the server is bound.
-	pub fn local_addr(&self) -> anyhow::Result<SocketAddr> {
+	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
 	}
 
@@ -105,7 +105,7 @@ async fn background_task(
 	socket: tokio::net::TcpStream,
 	methods: Arc<Methods>,
 	conn_id: ConnectionId,
-) -> anyhow::Result<()> {
+) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 

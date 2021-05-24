@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type Method = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> anyhow::Result<()>>;
+pub type Method = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
 /// A collection of registered [`Method`]s.
 pub type Methods = FxHashMap<&'static str, Method>;
 /// Connection ID, used for stateful protocol such as WebSockets.
@@ -142,7 +142,8 @@ impl RpcModule {
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+					// let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+					let sub_id = params.one()?;
 
 					subscribers.lock().remove(&(conn, sub_id));
 
@@ -258,7 +259,7 @@ impl<Params> SubscriptionSink<Params> {
 	/// If you have subscriptions with params/input you should most likely
 	/// call `send_each` to the process the input/params and send out
 	/// the result on each subscription individually instead.
-	pub fn broadcast<T>(&self, result: &T) -> anyhow::Result<()>
+	pub fn broadcast<T>(&self, result: &T) -> Result<(), Error>
 	where
 		T: Serialize,
 	{
@@ -287,9 +288,9 @@ impl<Params> SubscriptionSink<Params> {
 	/// closure `F` fails to parse the params the message is not sent.
 	///
 	/// F: is a closure that you need to provide to apply on the input P.
-	pub fn send_each<T, F>(&self, f: F) -> anyhow::Result<()>
+	pub fn send_each<T, F>(&self, f: F) -> Result<(), Error>
 	where
-		F: Fn(&Params) -> anyhow::Result<Option<T>>,
+		F: Fn(&Params) -> Result<Option<T>, Error>,
 		T: Serialize,
 	{
 		let mut subs = self.subscribers.lock();
@@ -353,12 +354,12 @@ pub struct InnerSink<Params> {
 
 impl<Params> InnerSink<Params> {
 	/// Send message on this subscription.
-	pub fn send<T: Serialize>(&self, result: &T) -> anyhow::Result<()> {
+	pub fn send<T: Serialize>(&self, result: &T) -> Result<(), Error> {
 		let result = to_raw_value(result)?;
 		self.send_raw_value(&result)
 	}
 
-	fn send_raw_value(&self, result: &RawValue) -> anyhow::Result<()> {
+	fn send_raw_value(&self, result: &RawValue) -> Result<(), Error> {
 		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,
@@ -368,8 +369,8 @@ impl<Params> InnerSink<Params> {
 		self.inner_send(msg).map_err(Into::into)
 	}
 
-	fn inner_send(&self, msg: String) -> anyhow::Result<()> {
-		self.sink.unbounded_send(msg).map_err(Into::into)
+	fn inner_send(&self, msg: String) -> Result<(), Error> {
+		self.sink.unbounded_send(msg).map_err(|e| Error::Internal(e.into_send_error()))
 	}
 
 	/// Get params of the subscription.

@@ -1,4 +1,5 @@
 use std::fmt;
+
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
@@ -30,7 +31,7 @@ pub enum CallError {
 pub enum Error {
 	/// Error that occurs when a call failed.
 	#[error("Server call failed: {0}")]
-	Call(CallError),
+	Call(#[from] CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -39,7 +40,7 @@ pub enum Error {
 	Request(String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
-	Internal(#[source] futures_channel::mpsc::SendError),
+	Internal(#[from] futures_channel::mpsc::SendError),
 	/// Invalid response,
 	#[error("Invalid response: {0}")]
 	InvalidResponse(Mismatch<String>),
@@ -48,7 +49,7 @@ pub enum Error {
 	RestartNeeded(String),
 	/// Failed to parse the data.
 	#[error("Parse error: {0}")]
-	ParseError(#[source] serde_json::Error),
+	ParseError(#[from] serde_json::Error),
 	/// Invalid subscription ID.
 	#[error("Invalid subscription ID")]
 	InvalidSubscriptionId,
@@ -87,4 +88,28 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 	/// Concrete transport error.
 	#[error("Transport error: {0}")]
 	Inner(T),
+}
+
+impl From<std::io::Error> for Error {
+	fn from(io_err: std::io::Error) -> Error {
+		Error::Transport(Box::new(io_err))
+	}
+}
+
+impl From<soketto::handshake::Error> for Error {
+	fn from(handshake_err: soketto::handshake::Error) -> Error {
+		Error::Transport(Box::new(handshake_err))
+	}
+}
+
+impl From<soketto::connection::Error> for Error {
+	fn from(conn_err: soketto::connection::Error) -> Error {
+		Error::Transport(Box::new(conn_err))
+	}
+}
+
+impl From<hyper::Error> for Error {
+	fn from(hyper_err: hyper::Error) -> Error {
+		Error::Transport(Box::new(hyper_err))
+	}
 }
