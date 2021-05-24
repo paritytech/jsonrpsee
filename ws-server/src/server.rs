@@ -42,6 +42,8 @@ use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule, SubscriptionSink};
 
+use crate::WsError;
+
 pub struct Server {
 	root: RpcModule,
 	listener: TcpListener,
@@ -107,7 +109,7 @@ async fn background_task(
 	socket: tokio::net::TcpStream,
 	methods: Arc<Methods>,
 	conn_id: ConnectionId,
-) -> Result<(), Error> {
+) -> Result<(), WsError> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 

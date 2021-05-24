@@ -28,6 +28,8 @@ mod access_control;
 mod response;
 mod server;
 
+use std::fmt::{self, Debug, Display};
+
 pub use access_control::{AccessControl, AccessControlBuilder, AllowHosts, Host};
 pub use jsonrpsee_types::{Error, TEN_MB_SIZE_BYTES};
 pub use jsonrpsee_utils::server::rpc_module::{Methods, RpcContextModule, RpcModule};
@@ -35,3 +37,31 @@ pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Debug, thiserror::Error)]
+/// Http-specific error type.
+pub struct HttpError(Error);
+
+impl Display for HttpError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		Display::fmt(&self.0, f)
+	}
+}
+
+impl From<hyper::Error> for HttpError {
+	fn from(hyper_err: hyper::Error) -> HttpError {
+		HttpError(Error::Transport(Box::new(hyper_err)))
+	}
+}
+
+impl From<std::io::Error> for HttpError {
+	fn from(io_err: std::io::Error) -> HttpError {
+		HttpError(Error::Transport(Box::new(io_err)))
+	}
+}
+
+impl From<HttpError> for Error {
+	fn from(http_err: HttpError) -> Error {
+		http_err.0
+	}
+}

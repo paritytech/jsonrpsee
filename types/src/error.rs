@@ -95,21 +95,3 @@ impl From<std::io::Error> for Error {
 		Error::Transport(Box::new(io_err))
 	}
 }
-
-impl From<soketto::handshake::Error> for Error {
-	fn from(handshake_err: soketto::handshake::Error) -> Error {
-		Error::Transport(Box::new(handshake_err))
-	}
-}
-
-impl From<soketto::connection::Error> for Error {
-	fn from(conn_err: soketto::connection::Error) -> Error {
-		Error::Transport(Box::new(conn_err))
-	}
-}
-
-impl From<hyper::Error> for Error {
-	fn from(hyper_err: hyper::Error) -> Error {
-		Error::Transport(Box::new(hyper_err))
-	}
-}

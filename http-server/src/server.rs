@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{response, AccessControl, TEN_MB_SIZE_BYTES};
+use crate::{response, AccessControl, HttpError, TEN_MB_SIZE_BYTES};
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
 use hyper::{
@@ -76,7 +76,7 @@ impl Builder {
 		self
 	}
 
-	pub fn build(self, addr: SocketAddr) -> Result<Server, Error> {
+	pub fn build(self, addr: SocketAddr) -> Result<Server, HttpError> {
 		let domain = Domain::for_address(addr);
 		let socket = Socket::new(domain, Type::STREAM, None)?;
 		socket.set_nodelay(true)?;
@@ -141,7 +141,7 @@ impl Server {
 	}
 
 	/// Start the server.
-	pub async fn start(self) -> Result<(), Error> {
+	pub async fn start(self) -> Result<(), HttpError> {
 		let methods = Arc::new(self.root.into_methods());
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;

@@ -26,6 +26,8 @@
 
 extern crate alloc;
 
+use std::fmt::{self, Debug, Display};
+
 mod server;
 
 #[cfg(test)]
@@ -34,3 +36,31 @@ mod tests;
 pub use jsonrpsee_types::error::Error;
 pub use jsonrpsee_utils::server::rpc_module::{Methods, RpcContextModule, RpcModule, SubscriptionSink};
 pub use server::Server as WsServer;
+
+#[derive(Debug, thiserror::Error)]
+/// Websocket-specific error type.
+pub struct WsError(Error);
+
+impl Display for WsError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		Display::fmt(&self.0, f)
+	}
+}
+
+impl From<WsError> for Error {
+	fn from(ws_err: WsError) -> Error {
+		ws_err.0
+	}
+}
+
+impl From<soketto::handshake::Error> for WsError {
+	fn from(handshake_err: soketto::handshake::Error) -> WsError {
+		WsError(Error::Transport(Box::new(handshake_err)))
+	}
+}
+
+impl From<soketto::connection::Error> for WsError {
+	fn from(conn_err: soketto::connection::Error) -> WsError {
+		WsError(Error::Transport(Box::new(conn_err)))
+	}
+}
