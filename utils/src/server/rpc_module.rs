@@ -130,7 +130,6 @@ impl RpcModule {
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					// let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
 					let sub_id = params.one()?;
 
 					subscribers.lock().remove(&(conn, sub_id));
