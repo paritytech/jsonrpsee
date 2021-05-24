@@ -10,7 +10,7 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-http-server"
 
 [dependencies]
-anyhow = "1"
+thiserror = "1"
 hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
 futures-channel = "0.3"
 futures-util = { version = "0.3", default-features = false }

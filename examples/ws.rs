@@ -47,7 +47,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = WsServer::new("127.0.0.1:0").await?;
 	server.register_method("say_hello", |_| Ok("lo"))?;
 
-	let addr = server.local_addr();
+	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
-	addr
+	Ok(addr)
 }
