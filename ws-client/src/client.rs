@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::traits::{Client, SubscriptionClient};
-use crate::transport::{Receiver as WsReceiver, RemoteWsTarget, Sender as WsSender, WsTransportClientBuilder};
+use crate::transport::{Receiver as WsReceiver, Target, Sender as WsSender, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcError;
 use crate::v2::params::{Id, JsonRpcParams};
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
@@ -261,7 +261,7 @@ impl<'a> WsClientBuilder<'a> {
 
 		let builder = WsTransportClientBuilder {
 			certificate_store,
-			target: RemoteWsTarget::parse(url).map_err(|e| Error::Transport(Box::new(e)))?,
+			target: Target::parse(url).map_err(|e| Error::Transport(Box::new(e)))?,
 			timeout: self.connection_timeout,
 			origin_header: self.origin_header,
 			max_request_body_size: self.max_request_body_size,
