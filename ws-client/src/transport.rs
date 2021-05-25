@@ -188,15 +188,17 @@ impl<'a> WsTransportClientBuilder<'a> {
 			Mode::Plain => None,
 		};
 
+		let mut err = Err(WsHandshakeError::NoAddressFound);
 		for sockaddr in &self.target.sockaddrs {
 			match self.try_connect(*sockaddr, &connector).await {
 				Ok(res) => return Ok(res),
 				Err(e) => {
 					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
+					err = Err(e.into());
 				}
 			}
 		}
-		Err(WsHandshakeError::NoAddressFound)
+		err
 	}
 
 	async fn try_connect(
