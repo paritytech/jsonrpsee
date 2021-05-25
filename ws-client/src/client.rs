@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::traits::{Client, SubscriptionClient};
-use crate::transport::{parse_url, Receiver as WsReceiver, Sender as WsSender, WsTransportClientBuilder};
+use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcError;
 use crate::v2::params::{Id, JsonRpcParams};
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
@@ -175,8 +175,7 @@ pub struct WsClientBuilder<'a> {
 	max_request_body_size: u32,
 	request_timeout: Option<Duration>,
 	connection_timeout: Duration,
-	origin: Option<Cow<'a, str>>,
-	handshake_url: Cow<'a, str>,
+	origin_header: Option<Cow<'a, str>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 }
@@ -188,8 +187,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: None,
 			connection_timeout: Duration::from_secs(10),
-			origin: None,
-			handshake_url: From::from("/"),
+			origin_header: None,
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 4,
 		}
@@ -197,7 +195,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 }
 
 impl<'a> WsClientBuilder<'a> {
-	/// Set wheather to use system certificates
+	/// Set whether to use system certificates
 	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
 		self.certificate_store = certificate_store;
 		self
@@ -210,8 +208,8 @@ impl<'a> WsClientBuilder<'a> {
 	}
 
 	/// Set request timeout.
-	pub fn request_timeout(mut self, timeout: Option<Duration>) -> Self {
-		self.request_timeout = timeout;
+	pub fn request_timeout(mut self, timeout: Duration) -> Self {
+		self.request_timeout = Some(timeout);
 		self
 	}
 
@@ -222,14 +220,8 @@ impl<'a> WsClientBuilder<'a> {
 	}
 
 	/// Set origin header to pass during the handshake.
-	pub fn origin_header(mut self, origin: Option<Cow<'a, str>>) -> Self {
-		self.origin = origin;
-		self
-	}
-
-	/// Set URL to send during the handshake.
-	pub fn handshake_url(mut self, url: Cow<'a, str>) -> Self {
-		self.handshake_url = url;
+	pub fn origin_header(mut self, origin: &'a str) -> Self {
+		self.origin_header = Some(Cow::Borrowed(origin));
 		self
 	}
 
@@ -267,16 +259,11 @@ impl<'a> WsClientBuilder<'a> {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 
-		let (sockaddrs, host, mode) = parse_url(url).map_err(|e| Error::Transport(Box::new(e)))?;
-
 		let builder = WsTransportClientBuilder {
 			certificate_store,
-			sockaddrs,
-			mode,
-			host,
-			handshake_url: self.handshake_url,
+			target: Target::parse(url).map_err(|e| Error::Transport(Box::new(e)))?,
 			timeout: self.connection_timeout,
-			origin: None,
+			origin_header: self.origin_header,
 			max_request_body_size: self.max_request_body_size,
 		};
 
