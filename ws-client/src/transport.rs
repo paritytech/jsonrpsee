@@ -35,28 +35,6 @@ use thiserror::Error;
 
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
-/// String representation of the host (domain or IP address) of an URL.
-#[derive(Clone, Debug)]
-pub struct Host(String);
-
-impl Host {
-	/// Extracts a string slice from the inner String.
-	pub fn as_str(&self) -> &str {
-		self.0.as_str()
-	}
-}
-
-/// String representation of the path of the URL.
-#[derive(Clone, Debug)]
-pub struct Path(String);
-
-impl Path {
-	/// Extracts a string slice from the inner String.
-	pub fn as_str(&self) -> &str {
-		self.0.as_str()
-	}
-}
-
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
 pub struct Sender {
@@ -74,14 +52,8 @@ pub struct Receiver {
 pub struct WsTransportClientBuilder<'a> {
 	/// What certificate store to use
 	pub certificate_store: CertificateStore,
-	/// Socket addresses to try to connect to.
-	pub sockaddrs: Vec<SocketAddr>,
-	/// Host.
-	pub host: Host,
-	/// Stream mode, either plain TCP or TLS.
-	pub mode: Mode,
-	/// The HTTP host resource path.
-	pub path: Path,
+	/// Remote WebSocket target.
+	pub target: RemoteWsTarget,
 	/// Timeout for the connection.
 	pub timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
@@ -204,7 +176,7 @@ impl Receiver {
 impl<'a> WsTransportClientBuilder<'a> {
 	/// Try to establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let connector = match self.mode {
+		let connector = match self.target.mode {
 			Mode::Tls => {
 				let mut client_config = rustls::ClientConfig::default();
 				if let CertificateStore::Native = self.certificate_store {
@@ -216,7 +188,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 			Mode::Plain => None,
 		};
 
-		for sockaddr in &self.sockaddrs {
+		for sockaddr in &self.target.sockaddrs {
 			match self.try_connect(*sockaddr, &connector).await {
 				Ok(res) => return Ok(res),
 				Err(e) => {
@@ -246,7 +218,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 					match tls_connector {
 						None => TlsOrPlain::Plain(socket),
 						Some(connector) => {
-							let dns_name: &str = webpki::DnsNameRef::try_from_ascii_str(self.host.as_str())?.into();
+							let dns_name: &str =
+								webpki::DnsNameRef::try_from_ascii_str(self.target.host.as_str())?.into();
 							let tls_stream = connector.connect(dns_name, socket).await?;
 							TlsOrPlain::Tls(tls_stream)
 						}
@@ -257,7 +230,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		};
 
 		let mut client =
-			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), self.host.as_str(), self.path.as_str());
+			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.target.host, &self.target.path);
 		if let Some(origin) = self.origin_header.as_ref() {
 			client.set_origin(origin);
 		}
@@ -309,68 +282,82 @@ impl From<soketto::connection::Error> for WsConnectError {
 	}
 }
 
-/// Helper to parse an URL to a WebSocket address.
-pub fn parse_url(url: impl AsRef<str>) -> Result<(Vec<SocketAddr>, Host, Mode, Path), WsHandshakeError> {
-	let url = url::Url::parse(url.as_ref()).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
-	let mode = match url.scheme() {
-		"ws" => Mode::Plain,
-		"wss" => Mode::Tls,
-		_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
-	};
-	let host = Host(url.host_str().ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?.into());
-	// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
-	let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-	let path = Path(url.path().into());
-	Ok((sockaddrs, host, mode, path))
+/// Represents a verified remote WebSocket address.
+#[derive(Debug, Clone)]
+pub struct RemoteWsTarget {
+	/// Socket addresses resolved the host name.
+	sockaddrs: Vec<SocketAddr>,
+	/// The host name (domain or IP address).
+	host: String,
+	/// WebSocket stream mode, see [`Mode`] for further documentation.
+	mode: Mode,
+	/// The HTTP host resource path.
+	path: String,
+}
+
+impl RemoteWsTarget {
+	/// Parse an URL String to a WebSocket address.
+	pub fn parse(url: impl AsRef<str>) -> Result<Self, WsHandshakeError> {
+		let url =
+			url::Url::parse(url.as_ref()).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
+		let mode = match url.scheme() {
+			"ws" => Mode::Plain,
+			"wss" => Mode::Tls,
+			_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
+		};
+		let host =
+			url.host_str().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
+		// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
+		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
+		Ok(RemoteWsTarget { sockaddrs, host, mode, path: url.path().to_owned() })
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{parse_url, Mode, WsHandshakeError};
+	use super::{Mode, RemoteWsTarget, WsHandshakeError};
+
+	fn assert_ws_target(target: RemoteWsTarget, host: &str, mode: Mode, path: &str) {
+		assert_eq!(&target.host, host);
+		assert_eq!(target.mode, mode);
+		assert_eq!(&target.path, path);
+	}
 
 	#[test]
 	fn ws_works() {
-		let (_sockaddrs, host, mode, path) = parse_url("ws://127.0.0.1:9933").unwrap();
-		assert_eq!(host.as_str(), "127.0.0.1");
-		assert_eq!(mode, Mode::Plain);
-		assert_eq!(path.as_str(), "/");
+		let target = RemoteWsTarget::parse("ws://127.0.0.1:9933").unwrap();
+		assert_ws_target(target, "127.0.0.1", Mode::Plain, "/");
 	}
 
 	#[test]
 	fn wss_works() {
-		let (_sockaddrs, host, mode, path) = parse_url("wss://kusama-rpc.polkadot.io:443").unwrap();
-		assert_eq!(host.as_str(), "kusama-rpc.polkadot.io");
-		assert_eq!(mode, Mode::Tls);
-		assert_eq!(path.as_str(), "/");
+		let target = RemoteWsTarget::parse("wss://kusama-rpc.polkadot.io:443").unwrap();
+		assert_ws_target(target, "kusama-rpc.polkadot.io", Mode::Tls, "/");
 	}
 
 	#[test]
 	fn faulty_url_scheme() {
-		let err = parse_url("http://kusama-rpc.polkadot.io:443").unwrap_err();
+		let err = RemoteWsTarget::parse("http://kusama-rpc.polkadot.io:443").unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
 	#[test]
 	fn faulty_port() {
-		let err = parse_url("ws://127.0.0.1:-43").unwrap_err();
+		let err = RemoteWsTarget::parse("ws://127.0.0.1:-43").unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Url(_)));
-		let err = parse_url("ws://127.0.0.1:99999").unwrap_err();
+		let err = RemoteWsTarget::parse("ws://127.0.0.1:99999").unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
 	#[test]
 	fn default_port_works() {
-		let (_sockaddr, host, mode, path) = parse_url("ws://127.0.0.1").unwrap();
-		assert_eq!(host.as_str(), "127.0.0.1");
-		assert_eq!(mode, Mode::Plain);
-		assert_eq!(path.as_str(), "/");
+		let target = RemoteWsTarget::parse("ws://127.0.0.1").unwrap();
+		assert_ws_target(target, "127.0.0.1", Mode::Plain, "/");
 	}
 
 	#[test]
 	fn url_with_path_works() {
-		let (_sockaddr, host, mode, path) = parse_url("ws://127.0.0.1/my-special-path").unwrap();
-		assert_eq!(host.as_str(), "127.0.0.1");
-		assert_eq!(mode, Mode::Plain);
-		assert_eq!(path.as_str(), "/my-special-path");
+		let target = RemoteWsTarget::parse("ws://127.0.0.1/my-special-path").unwrap();
+		assert_ws_target(target, "127.0.0.1", Mode::Plain, "/my-special-path");
 	}
 }
