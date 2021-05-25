@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::traits::{Client, SubscriptionClient};
-use crate::transport::{Receiver as WsReceiver, Target, Sender as WsSender, WsTransportClientBuilder};
+use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcError;
 use crate::v2::params::{Id, JsonRpcParams};
 use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
