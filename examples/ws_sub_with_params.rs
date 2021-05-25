@@ -54,18 +54,26 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
 	let mut server = WsServer::new("127.0.0.1:0").await?;
-	let one_param = server.register_subscription("sub_one_param", "unsub_one_param").unwrap();
-	let two_params = server.register_subscription("sub_params_two", "unsub_params_two").unwrap();
-
-	std::thread::spawn(move || loop {
-		let _ = one_param.send_each(|idx| Ok(LETTERS.chars().nth(*idx)));
-		std::thread::sleep(std::time::Duration::from_millis(50));
-	});
-
-	std::thread::spawn(move || loop {
-		let _ = two_params.send_each(|params: &Vec<usize>| Ok(Some(LETTERS[params[0]..params[1]].to_string())));
-		std::thread::sleep(std::time::Duration::from_millis(100));
-	});
+	server
+		.register_subscription("sub_one_param", "unsub_one_param", |params, sink| {
+			let idx: usize = params.one()?;
+			std::thread::spawn(move || loop {
+				let _ = sink.send(&LETTERS.chars().nth(idx));
+				std::thread::sleep(std::time::Duration::from_millis(50));
+			});
+			Ok(())
+		})
+		.unwrap();
+	server
+		.register_subscription("sub_params_two", "unsub_params_two", |params, sink| {
+			let (one, two): (usize, usize) = params.parse()?;
+			std::thread::spawn(move || loop {
+				let _ = sink.send(&LETTERS[one..two].to_string());
+				std::thread::sleep(std::time::Duration::from_millis(100));
+			});
+			Ok(())
+		})
+		.unwrap();
 
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });

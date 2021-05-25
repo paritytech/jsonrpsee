@@ -230,8 +230,8 @@ async fn register_methods_works() {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	assert!(server.register_method("say_hello", |_| Ok("lo")).is_ok());
 	assert!(server.register_method("say_hello", |_| Ok("lo")).is_err());
-	assert!(server.register_subscription::<()>("subscribe_hello", "unsubscribe_hello").is_ok());
-	assert!(server.register_subscription::<()>("subscribe_hello_again", "unsubscribe_hello").is_err());
+	assert!(server.register_subscription("subscribe_hello", "unsubscribe_hello", |_, _| Ok(())).is_ok());
+	assert!(server.register_subscription("subscribe_hello_again", "unsubscribe_hello", |_, _| Ok(())).is_err());
 	assert!(
 		server.register_method("subscribe_hello_again", |_| Ok("lo")).is_ok(),
 		"Failed register_subscription should not have side-effects"
@@ -242,7 +242,7 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	assert!(matches!(
-		server.register_subscription::<()>("subscribe_hello", "subscribe_hello"),
+		server.register_subscription("subscribe_hello", "subscribe_hello", |_, _| Ok(())),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }

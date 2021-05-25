@@ -8,7 +8,7 @@ use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use serde_json::value::{to_raw_value, RawValue};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -30,7 +30,7 @@ pub type MethodSink = mpsc::UnboundedSender<String>;
 
 /// Map of subscribers keyed by the connection and subscription ids to an [`InnerSink`] that contains the parameters
 /// they used to subscribe and the tx side of a channel used to convey results and errors back.
-type Subscribers<P> = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), InnerSink<P>>>>;
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), MethodSink>>>;
 
 /// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API.
@@ -93,11 +93,15 @@ impl RpcModule {
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods. Returns a [`SubscriptionSink`]. If a
 	/// method with the same name is already registered, an [`Error::MethodAlreadyRegistered`] is returned.
 	/// If the subscription does not take any parameters, set `Params` to `()`.
-	pub fn register_subscription<Params: DeserializeOwned + Send + Sync + 'static>(
+	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink<Params>, Error> {
+		callback: F,
+	) -> Result<(), Error>
+	where
+		F: Fn(RpcParams, SubscriptionSink) -> Result<(), Error> + Send + Sync + 'static,
+	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
@@ -112,27 +116,18 @@ impl RpcModule {
 			self.methods.insert(
 				subscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					let params = match params.parse().or_else(|_| params.one()) {
-						Ok(p) => p,
-						Err(err) => {
-							log::error!("Params={:?}, in subscription couldn't be parsed: {:?}", params, err);
-							return Err(err.into());
-						}
-					};
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
-
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						let inner = InnerSink { sink: tx.clone(), params, method: subscribe_method_name, sub_id };
-						subscribers.lock().insert((conn, sub_id), inner);
+						subscribers.lock().insert((conn, sub_id), tx.clone());
 
 						sub_id
 					};
 
 					send_response(id, tx, sub_id);
-
-					Ok(())
+					let sink = SubscriptionSink { inner: tx.clone(), method: subscribe_method_name, sub_id };
+					callback(params, sink)
 				}),
 			);
 		}
@@ -142,11 +137,8 @@ impl RpcModule {
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					// let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
 					let sub_id = params.one()?;
-
 					subscribers.lock().remove(&(conn, sub_id));
-
 					send_response(id, tx, "Unsubscribed");
 
 					Ok(())
@@ -154,7 +146,7 @@ impl RpcModule {
 			);
 		}
 
-		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
+		Ok(())
 	}
 
 	/// Convert a module into methods.
@@ -246,113 +238,18 @@ impl<Cx> DerefMut for RpcContextModule<Cx> {
 		&mut self.module
 	}
 }
-/// Used by the server to send data back to subscribers.
-#[derive(Clone)]
-pub struct SubscriptionSink<Params = ()> {
-	method: &'static str,
-	subscribers: Subscribers<Params>,
-}
-
-impl<Params> SubscriptionSink<Params> {
-	/// Send a message to all subscribers.
-	///
-	/// If you have subscriptions with params/input you should most likely
-	/// call `send_each` to the process the input/params and send out
-	/// the result on each subscription individually instead.
-	pub fn broadcast<T>(&self, result: &T) -> Result<(), Error>
-	where
-		T: Serialize,
-	{
-		let result = to_raw_value(result)?;
-
-		let mut errored = Vec::new();
-		let mut subs = self.subscribers.lock();
-
-		for ((conn_id, sub_id), sink) in subs.iter() {
-			// Mark broken connections, to be removed.
-			if sink.send_raw_value(&result).is_err() {
-				errored.push((*conn_id, *sub_id));
-			}
-		}
-
-		// Remove broken connections
-		for entry in errored {
-			log::debug!("Dropping subscription on method: {}, id: {}", self.method, entry.1);
-			subs.remove(&entry);
-		}
-
-		Ok(())
-	}
-
-	/// Send a message to all subscribers one by one, parsing the params they sent with the provided closure. If the
-	/// closure `F` fails to parse the params the message is not sent.
-	///
-	/// F: is a closure that you need to provide to apply on the input P.
-	pub fn send_each<T, F>(&self, f: F) -> Result<(), Error>
-	where
-		F: Fn(&Params) -> Result<Option<T>, Error>,
-		T: Serialize,
-	{
-		let mut subs = self.subscribers.lock();
-		let mut errored = Vec::new();
-
-		for ((conn_id, sub_id), sink) in subs.iter() {
-			match f(&sink.params) {
-				Ok(Some(res)) => {
-					let result = match to_raw_value(&res) {
-						Ok(res) => res,
-						Err(err) => {
-							log::error!("Subscription: {} failed to serialize message: {:?}; ignoring", sub_id, err);
-							continue;
-						}
-					};
-
-					if sink.send_raw_value(&result).is_err() {
-						errored.push((*conn_id, *sub_id));
-					}
-				}
-				// NOTE(niklasad1): This might be used to fetch data in closure.
-				Ok(None) => (),
-				Err(e) => {
-					if sink.inner_send(format!("Error: {:?}", e)).is_err() {
-						errored.push((*conn_id, *sub_id));
-					}
-				}
-			}
-		}
-
-		// Remove broken connections
-		for entry in errored {
-			log::debug!("Dropping subscription on method: {}, id: {}", self.method, entry.1);
-			subs.remove(&entry);
-		}
-
-		Ok(())
-	}
-
-	/// Consumes the current subscriptions at the given time to get access to the individual subscribers.
-	/// The [`SubscriptionSink`] will accept new subscriptions after this is called.
-	// TODO(niklasad1): get rid of this if possible.
-	pub fn to_sinks(&self) -> impl IntoIterator<Item = InnerSink<Params>> {
-		let mut subs = self.subscribers.lock();
-		let sinks = std::mem::take(&mut *subs);
-		sinks.into_iter().map(|(_, v)| v)
-	}
-}
 
 /// Represents a single subscription.
-pub struct InnerSink<Params> {
+pub struct SubscriptionSink {
 	/// Sink.
-	sink: mpsc::UnboundedSender<String>,
-	/// Params.
-	params: Params,
+	inner: mpsc::UnboundedSender<String>,
 	/// Method.
 	method: &'static str,
-	/// Subscription ID.
+	/// SubscriptionID,
 	sub_id: SubscriptionId,
 }
 
-impl<Params> InnerSink<Params> {
+impl SubscriptionSink {
 	/// Send message on this subscription.
 	pub fn send<T: Serialize>(&self, result: &T) -> Result<(), Error> {
 		let result = to_raw_value(result)?;
@@ -370,12 +267,8 @@ impl<Params> InnerSink<Params> {
 	}
 
 	fn inner_send(&self, msg: String) -> Result<(), Error> {
-		self.sink.unbounded_send(msg).map_err(|e| Error::Internal(e.into_send_error()))
-	}
-
-	/// Get params of the subscription.
-	pub fn params(&self) -> &Params {
-		&self.params
+		log::debug!("subscription send: {}", msg);
+		self.inner.unbounded_send(msg).map_err(|e| Error::Internal(e.into_send_error()))
 	}
 }
 
@@ -402,7 +295,7 @@ mod tests {
 	fn rpc_context_modules_can_register_subscriptions() {
 		let cx = ();
 		let mut cxmodule = RpcContextModule::new(cx);
-		let _subscription = cxmodule.register_subscription::<()>("hi", "goodbye");
+		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _| Ok(()));
 
 		let methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
 		assert!(methods.contains(&"hi"));

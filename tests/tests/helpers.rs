@@ -39,28 +39,39 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
 		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
-		let sub_hello: SubscriptionSink<()> =
-			server.register_subscription("subscribe_hello", "unsubscribe_hello").unwrap();
-		let sub_foo: SubscriptionSink<()> = server.register_subscription("subscribe_foo", "unsubscribe_foo").unwrap();
-		let sub_add_one: SubscriptionSink<u64> =
-			server.register_subscription("subscribe_add_one", "unsubscribe_add_one").unwrap();
+		server
+			.register_subscription("subscribe_hello", "unsubscribe_hello", |_params, sink| {
+				std::thread::spawn(move || loop {
+					let _ = sink.send(&"hello from subscription");
+				});
+				Ok(())
+			})
+			.unwrap();
+		server
+			.register_subscription("subscribe_foo", "unsubscribe_foo", |__params, sink| {
+				std::thread::spawn(move || loop {
+					let _ = sink.send(&1337);
+				});
+				Ok(())
+			})
+			.unwrap();
+
+		server
+			.register_subscription("subscribe_add_one", "unsubscribe_add_one", |params, sink| {
+				let mut count: usize = params.one()?;
+				std::thread::spawn(move || loop {
+					count += 1;
+					let _ = sink.send(&count);
+				});
+				Ok(())
+			})
+			.unwrap();
 		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
 		server_started_tx.send(server.local_addr().unwrap()).unwrap();
 
 		rt.spawn(server.start());
-
-		rt.block_on(async move {
-			loop {
-				tokio::time::sleep(Duration::from_millis(100)).await;
-
-				sub_hello.broadcast(&"hello from subscription").unwrap();
-				sub_foo.broadcast(&1337_u64).unwrap();
-				sub_add_one.send_each(|p| Ok(Some(*p + 1))).unwrap();
-			}
-		});
 	});
-
 	server_started_rx.await.unwrap()
 }
 

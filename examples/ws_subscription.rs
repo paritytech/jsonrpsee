@@ -39,6 +39,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
+
 	let mut subscribe_hello: Subscription<String> =
 		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await?;
 
@@ -54,12 +55,15 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = WsServer::new("127.0.0.1:0").await?;
-	let subscription = server.register_subscription::<()>("subscribe_hello", "unsubscribe_hello").unwrap();
-
-	std::thread::spawn(move || loop {
-		subscription.broadcast(&"hello my friend").unwrap();
-		std::thread::sleep(std::time::Duration::from_secs(1));
-	});
+	server
+		.register_subscription("subscribe_hello", "unsubscribe_hello", |_, sink| {
+			std::thread::spawn(move || loop {
+				sink.send(&"hello my friend").unwrap();
+				std::thread::sleep(std::time::Duration::from_secs(1));
+			});
+			Ok(())
+		})
+		.unwrap();
 
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });

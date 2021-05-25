@@ -64,12 +64,16 @@ impl Server {
 	}
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription<P: DeserializeOwned + Send + Sync + 'static>(
+	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink<P>, Error> {
-		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name)
+		callback: F,
+	) -> Result<(), Error>
+	where
+		F: Fn(RpcParams, SubscriptionSink) -> Result<(), Error> + Send + Sync + 'static,
+	{
+		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name, callback)
 	}
 	/// Register all methods from a module on this server.
 	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
