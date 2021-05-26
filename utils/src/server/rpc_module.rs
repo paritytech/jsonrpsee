@@ -7,7 +7,7 @@ use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, RpcParams, TwoP
 use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 
 use parking_lot::Mutex;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::{to_raw_value, RawValue};
 use std::ops::{Deref, DerefMut};
@@ -91,8 +91,8 @@ impl RpcModule {
 
 	/// Register a new RPC subscription that invokes callback on every subscription request.
 	/// The callback itself takes two parameters:
-	///   - RpcParams: JSONRPC parameters in the subscription request.
-	///   - SubscriptionSink: A sink to send messages to the subscriber.
+	///     - RpcParams: JSONRPC parameters in the subscription request.
+	///     - SubscriptionSink: A sink to send messages to the subscriber.
 	///
 	/// # Examples
 	///
@@ -102,11 +102,11 @@ impl RpcModule {
 	///
 	/// let mut rpc_module = RpcModule::new();
 	/// rpc_module.register_subscription("sub", "unsub", |params, sink| {
-	///	  let x: usize = params.one()?;
-	///	  std::thread::spawn(move || {
-	///	    sink.send(&x)
-	///	  });
-	///	  Ok(())
+	///     let x: usize = params.one()?;
+	///     std::thread::spawn(move || {
+	///         sink.send(&x)
+	///     });
+	///     Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription<F>(
@@ -232,9 +232,9 @@ impl<Context> RpcContextModule<Context> {
 
 	/// Register a new RPC subscription that invokes callback on every subscription request.
 	/// The callback itself takes three parameters:
-	///   - RpcParams: JSONRPC parameters in the subscription request.
-	///   - SubscriptionSink: A sink to send messages to the subscriber.
-	///   - Context: Any type that can be embedded into the RpcContextModule.
+	///     - RpcParams: JSONRPC parameters in the subscription request.
+	///     - SubscriptionSink: A sink to send messages to the subscriber.
+	///     - Context: Any type that can be embedded into the RpcContextModule.
 	///
 	/// # Examples
 	///
@@ -244,12 +244,12 @@ impl<Context> RpcContextModule<Context> {
 	///
 	/// let mut ctx = RpcContextModule::new(99_usize);
 	/// ctx.register_subscription_with_context("sub", "unsub", |params, sink, ctx| {
-	///	  let x: usize = params.one()?;
-	///	  std::thread::spawn(move || {
-	///	    let sum = x + (*ctx);
-	///		sink.send(&sum)
-	///	  });
-	///	  Ok(())
+	///     let x: usize = params.one()?;
+	///     std::thread::spawn(move || {
+	///         let sum = x + (*ctx);
+	///         sink.send(&sum)
+	///     });
+	///     Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription_with_context<F>(
