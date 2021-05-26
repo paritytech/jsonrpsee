@@ -232,7 +232,7 @@ impl<Context> RpcContextModule<Context> {
 	/// The callback itself takes three parameters:
 	/// 	- RpcParams: JSONRPC parameters in the subscription request.
 	/// 	- SubscriptionSink: A sink to send messages to the subscriber.
-	/// 	- Context: Any data that can be embedded into the RpcContextModule.
+	/// 	- Context: Any type that can be embedded into the RpcContextModule.
 	///
 	/// # Examples
 	///
@@ -242,12 +242,12 @@ impl<Context> RpcContextModule<Context> {
 	///
 	/// let mut ctx = RpcContextModule::new(99_usize);
 	/// ctx.register_subscription_with_context("sub", "unsub", |params, sink, ctx| {
-	///     let x: usize = params.one()?;
-	/// 	std::thread::spawn(move || {
-	/// 		let sum = x + (*ctx);
+	///		let x: usize = params.one()?;
+	///		std::thread::spawn(move || {
+	///			let sum = x + (*ctx);
 	///			sink.send(&sum)
-	///     });
-	///     Ok(())
+	///		});
+	///		Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription_with_context<F>(
