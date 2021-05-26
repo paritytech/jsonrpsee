@@ -27,7 +27,7 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
@@ -75,6 +75,7 @@ impl Server {
 	{
 		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name, callback)
 	}
+
 	/// Register all methods from a module on this server.
 	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
 		self.root.merge(module)
@@ -87,6 +88,7 @@ impl Server {
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
+		log::info!("server start listen: {:?}", self.local_addr());
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.root.into_methods());
 		let mut id = 0;

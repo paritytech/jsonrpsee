@@ -62,9 +62,9 @@ async fn ws_subscription_with_input_works() {
 	let mut add_one: Subscription<u64> =
 		client.subscribe("subscribe_add_one", vec![1.into()].into(), "unsubscribe_add_one").await.unwrap();
 
-	for _ in 0..2 {
-		let two = add_one.next().await.unwrap();
-		assert_eq!(two, 2);
+	for i in 2..4 {
+		let next = add_one.next().await.unwrap();
+		assert_eq!(next, i);
 	}
 }
 
