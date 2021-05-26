@@ -30,7 +30,7 @@ use jsonrpsee::{
 };
 use std::net::SocketAddr;
 
-const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
+const NUM_SUBSCRIPTION_RESPONSES: usize = 3;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -40,15 +40,20 @@ async fn main() -> anyhow::Result<()> {
 
 	let client = WsClientBuilder::default().build(&url).await?;
 
-	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await?;
+	let mut subs: Vec<Subscription<String>> = Vec::new();
 
-	let mut i = 0;
-	while i <= NUM_SUBSCRIPTION_RESPONSES {
-		let r = subscribe_hello.next().await;
-		log::debug!("received {:?}", r);
-		i += 1;
+	for _ in 0..5 {
+		subs.push(client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await?);
 	}
+
+	for sub in subs.iter_mut() {
+		let r = sub.next().await;
+		println!("received {:?}", r);
+	}
+
+	drop(subs);
+
+	loop {}
 
 	Ok(())
 }

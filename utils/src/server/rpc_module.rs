@@ -1,5 +1,5 @@
 use crate::server::helpers::{send_error, send_response};
-use futures_channel::mpsc;
+use futures_channel::{mpsc, oneshot};
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::traits::RpcMethod;
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
@@ -28,7 +28,7 @@ pub type SubscriptionId = u64;
 /// Sink that is used to send back the result to the server for a specific method.
 pub type MethodSink = mpsc::UnboundedSender<String>;
 
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), MethodSink>>>;
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), (MethodSink, oneshot::Receiver<()>)>>>;
 
 /// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API.
@@ -129,18 +129,24 @@ impl RpcModule {
 			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
-				Box::new(move |id, params, tx, conn| {
+				Box::new(move |id, params, method_sink, conn| {
+					let (online_tx, online_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						subscribers.lock().insert((conn, sub_id), tx.clone());
+						subscribers.lock().insert((conn, sub_id), (method_sink.clone(), online_rx));
 
 						sub_id
 					};
 
-					send_response(id, tx, sub_id);
-					let sink = SubscriptionSink { inner: tx.clone(), method: subscribe_method_name, sub_id };
+					send_response(id, method_sink, sub_id);
+					let sink = SubscriptionSink {
+						inner: method_sink.clone(),
+						method: subscribe_method_name,
+						sub_id,
+						is_online: online_tx,
+					};
 					callback(params, sink)
 				}),
 			);
@@ -274,18 +280,24 @@ impl<Context> RpcContextModule<Context> {
 			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
-				Box::new(move |id, params, tx, conn| {
+				Box::new(move |id, params, method_sink, conn| {
+					let (online_tx, online_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						subscribers.lock().insert((conn, sub_id), tx.clone());
+						subscribers.lock().insert((conn, sub_id), (method_sink.clone(), online_rx));
 
 						sub_id
 					};
 
-					send_response(id, tx, sub_id);
-					let sink = SubscriptionSink { inner: tx.clone(), method: subscribe_method_name, sub_id };
+					send_response(id, method_sink, sub_id);
+					let sink = SubscriptionSink {
+						inner: method_sink.clone(),
+						method: subscribe_method_name,
+						sub_id,
+						is_online: online_tx,
+					};
 					callback(params, sink, ctx.clone())
 				}),
 			);
@@ -340,6 +352,8 @@ pub struct SubscriptionSink {
 	method: &'static str,
 	/// SubscriptionID,
 	sub_id: SubscriptionId,
+	/// Whether the subscriber is still alive (to avoid send messages that the subscriber is not interested in).
+	is_online: oneshot::Sender<()>,
 }
 
 impl SubscriptionSink {
@@ -360,7 +374,15 @@ impl SubscriptionSink {
 	}
 
 	fn inner_send(&self, msg: String) -> Result<(), Error> {
-		self.inner.unbounded_send(msg).map_err(|e| Error::Internal(e.into_send_error()))
+		if self.is_online() {
+			self.inner.unbounded_send(msg).map_err(|e| Error::Internal(e.into_send_error()))
+		} else {
+			Err(Error::Custom("Subscription canceled".into()))
+		}
+	}
+
+	fn is_online(&self) -> bool {
+		!self.is_online.is_canceled()
 	}
 }
 
