@@ -86,9 +86,26 @@ impl RpcModule {
 		Ok(())
 	}
 
-	/// Register a new RPC subscription, with subscribe and unsubscribe methods. Returns a [`SubscriptionSink`]. If a
-	/// method with the same name is already registered, an [`Error::MethodAlreadyRegistered`] is returned.
-	/// If the subscription does not take any parameters, set `Params` to `()`.
+	/// Register a new RPC subscription, with subscribe method, unsubscribe method and callback.
+	/// The callback is invoked on every subscription request and takes two parameters:
+	/// 	- RpcParams: JSONRPC parameters in the subscription request.
+	/// 	- SubscriptionSink: A sink to send messages to the subscriber.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
+	///
+	/// let mut rpc_module = RpcModule::new();
+	/// rpc_module.register_subscription("sub", "unsub", |params, sink| {
+	///     let x: usize = params.one()?;
+	/// 	std::thread::spawn(move || {
+	///			sink.send(&x)
+	///     });
+	///     Ok(())
+	/// });
+	/// ```
 	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
@@ -208,6 +225,86 @@ impl<Context> RpcContextModule<Context> {
 				Ok(())
 			}),
 		);
+		Ok(())
+	}
+
+	/// Register a new RPC subscription, with subscribe method, unsubscribe method and callback.
+	/// The callback is invoked on every subscription request and takes three parameters:
+	/// 	- RpcParams: JSONRPC parameters in the subscription request.
+	/// 	- SubscriptionSink: A sink to send messages to the subscriber.
+	/// 	- Context: Any data that can be embedded into the RpcContextModule.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_utils::server::rpc_module::RpcContextModule;
+	///
+	/// let mut ctx = RpcContextModule::new(99_usize);
+	/// ctx.register_subscription_with_context("sub", "unsub", |params, sink, ctx| {
+	///     let x: usize = params.one()?;
+	/// 	std::thread::spawn(move || {
+	/// 		let sum = x + (*ctx);
+	///			sink.send(&sum)
+	///     });
+	///     Ok(())
+	/// });
+	/// ```
+	pub fn register_subscription_with_context<F>(
+		&mut self,
+		subscribe_method_name: &'static str,
+		unsubscribe_method_name: &'static str,
+		callback: F,
+	) -> Result<(), Error>
+	where
+		Context: Send + Sync + 'static,
+		F: Fn(RpcParams, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
+	{
+		if subscribe_method_name == unsubscribe_method_name {
+			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
+		}
+
+		self.verify_method_name(subscribe_method_name)?;
+		self.verify_method_name(unsubscribe_method_name)?;
+		let ctx = self.ctx.clone();
+
+		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
+
+		{
+			let subscribers = subscribers.clone();
+			self.methods.insert(
+				subscribe_method_name,
+				Box::new(move |id, params, tx, conn| {
+					let sub_id = {
+						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
+						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
+
+						subscribers.lock().insert((conn, sub_id), tx.clone());
+
+						sub_id
+					};
+
+					send_response(id, tx, sub_id);
+					let sink = SubscriptionSink { inner: tx.clone(), method: subscribe_method_name, sub_id };
+					callback(params, sink, ctx.clone())
+				}),
+			);
+		}
+
+		{
+			let subscribers = subscribers.clone();
+			self.methods.insert(
+				unsubscribe_method_name,
+				Box::new(move |id, params, tx, conn| {
+					let sub_id = params.one()?;
+					subscribers.lock().remove(&(conn, sub_id));
+					send_response(id, tx, "Unsubscribed");
+
+					Ok(())
+				}),
+			);
+		}
+
 		Ok(())
 	}
 
