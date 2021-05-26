@@ -311,7 +311,6 @@ impl<Params> SubscriptionSink<Params> {
 						errored.push((*conn_id, *sub_id));
 					}
 				}
-				// NOTE(niklasad1): This might be used to fetch data in closure.
 				Ok(None) => (),
 				Err(e) => {
 					if sink.inner_send(format!("Error: {:?}", e)).is_err() {
