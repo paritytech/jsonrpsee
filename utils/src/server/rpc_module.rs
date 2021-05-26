@@ -7,7 +7,7 @@ use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, RpcParams, TwoP
 use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 
 use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Serialize;
 use serde_json::value::{to_raw_value, RawValue};
 use std::ops::{Deref, DerefMut};
@@ -28,22 +28,25 @@ pub type SubscriptionId = u64;
 /// Sink that is used to send back the result to the server for a specific method.
 pub type MethodSink = mpsc::UnboundedSender<String>;
 
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), MethodSink>>>;
+
 /// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]
 pub struct RpcModule {
 	methods: Methods,
+	subscribers: Subscribers,
 }
 
 impl RpcModule {
 	/// Instantiate a new `RpcModule`.
 	pub fn new() -> Self {
-		RpcModule { methods: Methods::default() }
+		RpcModule { methods: Methods::default(), subscribers: Subscribers::default() }
 	}
 
 	/// Add context for this module, turning it into an `RpcContextModule`.
 	pub fn with_context<Context>(self, ctx: Context) -> RpcContextModule<Context> {
-		RpcContextModule { ctx: Arc::new(ctx), module: self }
+		RpcContextModule { ctx: Arc::new(ctx), module: self, subscribers: Subscribers::default() }
 	}
 
 	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
@@ -88,8 +91,8 @@ impl RpcModule {
 
 	/// Register a new RPC subscription that invokes callback on every subscription request.
 	/// The callback itself takes two parameters:
-	/// 	- RpcParams: JSONRPC parameters in the subscription request.
-	/// 	- SubscriptionSink: A sink to send messages to the subscriber.
+	///   - RpcParams: JSONRPC parameters in the subscription request.
+	///   - SubscriptionSink: A sink to send messages to the subscriber.
 	///
 	/// # Examples
 	///
@@ -99,11 +102,11 @@ impl RpcModule {
 	///
 	/// let mut rpc_module = RpcModule::new();
 	/// rpc_module.register_subscription("sub", "unsub", |params, sink| {
-	///		let x: usize = params.one()?;
-	///		std::thread::spawn(move || {
-	///			sink.send(&x)
-	///		});
-	///		Ok(())
+	///	  let x: usize = params.one()?;
+	///	  std::thread::spawn(move || {
+	///	    sink.send(&x)
+	///	  });
+	///	  Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription<F>(
@@ -122,10 +125,8 @@ impl RpcModule {
 		self.verify_method_name(subscribe_method_name)?;
 		self.verify_method_name(unsubscribe_method_name)?;
 
-		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
-
 		{
-			let subscribers = subscribers.clone();
+			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
@@ -146,7 +147,7 @@ impl RpcModule {
 		}
 
 		{
-			let subscribers = subscribers.clone();
+			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
@@ -187,12 +188,13 @@ impl RpcModule {
 pub struct RpcContextModule<Context> {
 	ctx: Arc<Context>,
 	module: RpcModule,
+	subscribers: Subscribers,
 }
 
 impl<Context> RpcContextModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		RpcContextModule { ctx: Arc::new(ctx), module: RpcModule::new() }
+		RpcContextModule { ctx: Arc::new(ctx), module: RpcModule::new(), subscribers: Subscribers::default() }
 	}
 
 	/// Register a new RPC method, which responds with a given callback.
@@ -230,9 +232,9 @@ impl<Context> RpcContextModule<Context> {
 
 	/// Register a new RPC subscription that invokes callback on every subscription request.
 	/// The callback itself takes three parameters:
-	/// 	- RpcParams: JSONRPC parameters in the subscription request.
-	/// 	- SubscriptionSink: A sink to send messages to the subscriber.
-	/// 	- Context: Any type that can be embedded into the RpcContextModule.
+	///   - RpcParams: JSONRPC parameters in the subscription request.
+	///   - SubscriptionSink: A sink to send messages to the subscriber.
+	///   - Context: Any type that can be embedded into the RpcContextModule.
 	///
 	/// # Examples
 	///
@@ -242,12 +244,12 @@ impl<Context> RpcContextModule<Context> {
 	///
 	/// let mut ctx = RpcContextModule::new(99_usize);
 	/// ctx.register_subscription_with_context("sub", "unsub", |params, sink, ctx| {
-	///		let x: usize = params.one()?;
-	///		std::thread::spawn(move || {
-	///			let sum = x + (*ctx);
-	///			sink.send(&sum)
-	///		});
-	///		Ok(())
+	///	  let x: usize = params.one()?;
+	///	  std::thread::spawn(move || {
+	///	    let sum = x + (*ctx);
+	///		sink.send(&sum)
+	///	  });
+	///	  Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription_with_context<F>(
@@ -268,10 +270,8 @@ impl<Context> RpcContextModule<Context> {
 		self.verify_method_name(unsubscribe_method_name)?;
 		let ctx = self.ctx.clone();
 
-		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
-
 		{
-			let subscribers = subscribers.clone();
+			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
@@ -292,7 +292,7 @@ impl<Context> RpcContextModule<Context> {
 		}
 
 		{
-			let subscribers = subscribers.clone();
+			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
