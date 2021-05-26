@@ -86,8 +86,8 @@ impl RpcModule {
 		Ok(())
 	}
 
-	/// Register a new RPC subscription, with subscribe method, unsubscribe method and callback.
-	/// The callback is invoked on every subscription request and takes two parameters:
+	/// Register a new RPC subscription that invokes callback on every subscription request.
+	/// The callback itself takes two parameters:
 	/// 	- RpcParams: JSONRPC parameters in the subscription request.
 	/// 	- SubscriptionSink: A sink to send messages to the subscriber.
 	///
@@ -99,11 +99,11 @@ impl RpcModule {
 	///
 	/// let mut rpc_module = RpcModule::new();
 	/// rpc_module.register_subscription("sub", "unsub", |params, sink| {
-	///     let x: usize = params.one()?;
-	/// 	std::thread::spawn(move || {
+	///		let x: usize = params.one()?;
+	///		std::thread::spawn(move || {
 	///			sink.send(&x)
-	///     });
-	///     Ok(())
+	///		});
+	///		Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription<F>(
@@ -228,8 +228,8 @@ impl<Context> RpcContextModule<Context> {
 		Ok(())
 	}
 
-	/// Register a new RPC subscription, with subscribe method, unsubscribe method and callback.
-	/// The callback is invoked on every subscription request and takes three parameters:
+	/// Register a new RPC subscription that invokes callback on every subscription request.
+	/// The callback itself takes three parameters:
 	/// 	- RpcParams: JSONRPC parameters in the subscription request.
 	/// 	- SubscriptionSink: A sink to send messages to the subscriber.
 	/// 	- Context: Any data that can be embedded into the RpcContextModule.
