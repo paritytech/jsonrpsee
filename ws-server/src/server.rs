@@ -88,7 +88,6 @@ impl Server {
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
-		log::info!("server start listen: {:?}", self.local_addr());
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.root.into_methods());
 		let mut id = 0;
