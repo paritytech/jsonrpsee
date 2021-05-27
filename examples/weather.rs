@@ -24,15 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::net::SocketAddr;
-use std::sync::Mutex;
-use restson::{Error as RestsonError, RestPath};
-use serde::{Deserialize, Serialize};
 use jsonrpsee::{
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
-	ws_server::WsServer,
 	ws_server::RpcContextModule,
+	ws_server::WsServer,
 };
+use restson::{Error as RestsonError, RestPath};
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use std::sync::Mutex;
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
 struct Weather {
@@ -57,19 +57,10 @@ struct Wind {
 	deg: usize,
 }
 
-
 impl RestPath<&(String, String)> for Weather {
 	fn get_path(params: &(String, String)) -> Result<String, RestsonError> {
 		const API_KEY: &'static str = "f6ba475df300d5f91135550da0f4a867";
-		Ok(
-			String::from(
-				format!("data/2.5/weather?q={}&units={}&appid={}",
-					params.0,
-					params.1,
-					API_KEY,
-				)
-			)
-		)
+		Ok(String::from(format!("data/2.5/weather?q={}&units={}&appid={}", params.0, params.1, API_KEY,)))
 	}
 }
 
