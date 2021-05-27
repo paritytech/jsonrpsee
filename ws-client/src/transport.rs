@@ -82,34 +82,10 @@ pub enum CertificateStore {
 	WebPki,
 }
 
-/// Error that can happen during the initial handshake.
-#[derive(Debug, Error)]
-pub enum WsNewError {
-	/// Error when opening the TCP socket.
-	#[error("Error when opening the TCP socket: {}", 0)]
-	Io(io::Error),
-
-	/// Error in the WebSocket handshake.
-	#[error("Error in the WebSocket handshake: {}", 0)]
-	Handshake(#[source] soketto::handshake::Error),
-
-	/// Invalid DNS name error for TLS
-	#[error("Invalid DNS name: {}", 0)]
-	InvalidDnsName(#[source] webpki::InvalidDnsNameError),
-
-	/// RawServer rejected our handshake.
-	#[error("Server returned an error status code: {}", status_code)]
-	Rejected {
-		/// HTTP status code that the server returned.
-		status_code: u16,
-	},
-
-	/// Timeout while trying to connect.
-	#[error("Timeout when trying to connect")]
-	Timeout,
-}
-
-/// Error that can happen during the initial handshake.
+/// Error that can happen during the WebSocket handshake.
+///
+/// If multiple IP addresses are attempted, only the last error is returned, similar to how
+/// [`std::net::TcpStream::connect`] behaves.
 #[derive(Debug, Error)]
 pub enum WsHandshakeError {
 	/// Failed to load system certs
@@ -120,43 +96,54 @@ pub enum WsHandshakeError {
 	#[error("Invalid url: {}", 0)]
 	Url(Cow<'static, str>),
 
-	/// Error when trying to connect.
-	///
-	/// If multiple IP addresses are attempted, only the last error is returned, similar to how
-	/// [`std::net::TcpStream::connect`] behaves.
-	#[error("Error when trying to connect: {}", 0)]
-	Connect(WsNewError),
+	/// Error when opening the TCP socket.
+	#[error("Error when opening the TCP socket: {}", 0)]
+	Io(io::Error),
+
+	/// Error in the transport layer.
+	#[error("Error in the WebSocket handshake: {}", 0)]
+	Transport(#[source] soketto::handshake::Error),
+
+	/// Invalid DNS name error for TLS
+	#[error("Invalid DNS name: {}", 0)]
+	InvalidDnsName(#[source] webpki::InvalidDnsNameError),
+
+	/// RawServer rejected our handshake.
+	#[error("Connection rejected with status code: {}", status_code)]
+	Rejected {
+		/// HTTP status code that the server returned.
+		status_code: u16,
+	},
+
+	/// Timeout while trying to connect.
+	#[error("Connection timeout exceeded: {}", 0)]
+	Timeout(Duration),
 
 	/// Failed to resolve IP addresses for this hostname.
 	#[error("Failed to resolve IP addresses for this hostname: {}", 0)]
 	ResolutionFailed(io::Error),
 
 	/// Couldn't find any IP address for this hostname.
-	#[error("Couldn't find any IP address for this hostname")]
-	NoAddressFound,
+	#[error("No IP address found for this hostname: {}", 0)]
+	NoAddressFound(String),
 }
 
-/// Error that can happen during a request.
+/// Error that can occur when reading or sending messages on an established connection.
 #[derive(Debug, Error)]
-pub enum WsConnectError {
-	/// Error while serializing the request.
-	// TODO: can that happen?
-	#[error("error while serializing the request")]
-	Serialization(#[source] serde_json::error::Error),
-
+pub enum WsError {
 	/// Error in the WebSocket connection.
-	#[error("error in the WebSocket connection")]
-	Ws(#[source] soketto::connection::Error),
+	#[error("WebSocket connection error: {}", 0)]
+	Connection(#[source] soketto::connection::Error),
 
-	/// Failed to parse the JSON returned by the server into a JSON-RPC response.
-	#[error("error while parsing the response body")]
+	/// Failed to parse the message in JSON.
+	#[error("Failed to parse message in JSON: {}", 0)]
 	ParseError(#[source] serde_json::error::Error),
 }
 
 impl Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub async fn send(&mut self, body: String) -> Result<(), WsConnectError> {
+	pub async fn send(&mut self, body: String) -> Result<(), WsError> {
 		log::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
@@ -166,7 +153,7 @@ impl Sender {
 
 impl Receiver {
 	/// Returns a `Future` resolving when the server sent us something back.
-	pub async fn next_response(&mut self) -> Result<Vec<u8>, WsConnectError> {
+	pub async fn next_response(&mut self) -> Result<Vec<u8>, WsError> {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
 		Ok(message)
@@ -188,22 +175,26 @@ impl<'a> WsTransportClientBuilder<'a> {
 			Mode::Plain => None,
 		};
 
+		let mut err = None;
 		for sockaddr in &self.target.sockaddrs {
 			match self.try_connect(*sockaddr, &connector).await {
 				Ok(res) => return Ok(res),
 				Err(e) => {
 					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
+					err = Some(Err(e));
 				}
 			}
 		}
-		Err(WsHandshakeError::NoAddressFound)
+		// NOTE(niklasad1): this is most likely unreachable because [`Url::socket_addrs`] doesn't
+		// return an empty `Vec` if no socket address was found for the host name.
+		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(self.target.host)))
 	}
 
 	async fn try_connect(
 		&self,
 		sockaddr: SocketAddr,
 		tls_connector: &Option<async_tls::TlsConnector>,
-	) -> Result<(Sender, Receiver), WsNewError> {
+	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
 			let socket = TcpStream::connect(sockaddr);
@@ -225,7 +216,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 						}
 					}
 				}
-				future::Either::Right((_, _)) => return Err(WsNewError::Timeout),
+				future::Either::Right((_, _)) => return Err(WsHandshakeError::Timeout(self.timeout)),
 			}
 		};
 
@@ -239,8 +230,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 		match client.handshake().await? {
 			ServerResponse::Accepted { .. } => {}
 			ServerResponse::Rejected { status_code } | ServerResponse::Redirect { status_code, .. } => {
-				// TODO: HTTP redirects also lead here
-				return Err(WsNewError::Rejected { status_code });
+				// TODO: HTTP redirects also lead here #339.
+				return Err(WsHandshakeError::Rejected { status_code });
 			}
 		}
 
@@ -252,33 +243,27 @@ impl<'a> WsTransportClientBuilder<'a> {
 	}
 }
 
-impl From<io::Error> for WsNewError {
-	fn from(err: io::Error) -> WsNewError {
-		WsNewError::Io(err)
+impl From<io::Error> for WsHandshakeError {
+	fn from(err: io::Error) -> WsHandshakeError {
+		WsHandshakeError::Io(err)
 	}
 }
 
-impl From<webpki::InvalidDnsNameError> for WsNewError {
-	fn from(err: webpki::InvalidDnsNameError) -> WsNewError {
-		WsNewError::InvalidDnsName(err)
+impl From<webpki::InvalidDnsNameError> for WsHandshakeError {
+	fn from(err: webpki::InvalidDnsNameError) -> WsHandshakeError {
+		WsHandshakeError::InvalidDnsName(err)
 	}
 }
 
-impl From<soketto::handshake::Error> for WsNewError {
-	fn from(err: soketto::handshake::Error) -> WsNewError {
-		WsNewError::Handshake(err)
+impl From<soketto::handshake::Error> for WsHandshakeError {
+	fn from(err: soketto::handshake::Error) -> WsHandshakeError {
+		WsHandshakeError::Transport(err)
 	}
 }
 
-impl From<WsNewError> for WsHandshakeError {
-	fn from(err: WsNewError) -> WsHandshakeError {
-		WsHandshakeError::Connect(err)
-	}
-}
-
-impl From<soketto::connection::Error> for WsConnectError {
+impl From<soketto::connection::Error> for WsError {
 	fn from(err: soketto::connection::Error) -> Self {
-		WsConnectError::Ws(err)
+		WsError::Connection(err)
 	}
 }
 
