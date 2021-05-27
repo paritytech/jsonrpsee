@@ -135,7 +135,7 @@ pub enum WsError {
 	#[error("WebSocket connection error: {}", 0)]
 	Connection(#[source] soketto::connection::Error),
 
-	/// Failed to parse message in JSON.
+	/// Failed to parse the message in JSON.
 	#[error("Failed to parse message in JSON: {}", 0)]
 	ParseError(#[source] serde_json::error::Error),
 }
