@@ -11,7 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 async-trait = "0.1"
-async-std = "1.9"
+async-std = "1"
 async-tls = "0.11"
 fnv = "1"
 futures = { version = "0.3", default-features = false, features = ["std"] }
