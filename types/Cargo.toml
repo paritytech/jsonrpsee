@@ -12,8 +12,8 @@ documentation = "https://docs.rs/jsonrpsee-types"
 [dependencies]
 async-trait = "0.1"
 beef = { version = "0.5", features = ["impl_serde"] }
-futures-channel = { version = "0.3", features = ["sink"] }
-futures-util = { version = "0.3", default-features = false, features = ["std", "sink", "channel"] }
+futures-channel = { version = "0.3.14", features = ["sink"] }
+futures-util = { version = "0.3.14", default-features = false, features = ["std", "sink", "channel"] }
 log = { version = "0.4", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value", "std"] }
