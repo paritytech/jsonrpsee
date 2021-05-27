@@ -9,6 +9,6 @@ publish = false
 
 [dev-dependencies]
 env_logger = "0.8"
-futures-channel = { version = "0.3", default-features = false }
+futures-channel = { version = "0.3.14", default-features = false }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
