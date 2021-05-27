@@ -125,7 +125,8 @@ async fn main() -> anyhow::Result<()> {
 	// Subscription to the london weather
 	let params = JsonRpcParams::Array(vec!["London,uk".into(), "metric".into()]);
 	let mut weather_sub = client.subscribe::<String>("weather_sub", params, "weather_unsub").await?;
-	println!("London weather: {:?}", weather_sub.next().await);
+	// NOTE: this is never printed.
+	println!("[client] London weather: {:?}", weather_sub.next().await);
 
 
 	Ok(())
@@ -142,13 +143,13 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			std::thread::spawn(move || loop {
 					// println!("[server] taking lock");
 					let mut api = api_client.lock().unwrap();
-					println!("[server] took lock");
+					// println!("[server] took lock");
 					let out: Weather = api.get(("London,uk", "imperial")).unwrap();
 					println!("[server] got london weather: {:?}, sending", out);
 					sink.send(&out).expect("Sending should work yes?");
 					drop(api);
 					// println!("[server] released lock; sleeping");
-					std::thread::sleep(std::time::Duration::from_millis(50));
+					std::thread::sleep(std::time::Duration::from_millis(150));
 					// println!("[server] slept");
 			});
 			Ok(())
