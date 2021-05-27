@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use restson::{Error as RestsonError, RestPath};
 use serde::{Deserialize, Serialize};
 use jsonrpsee::{
@@ -34,85 +34,47 @@ use jsonrpsee::{
 	ws_server::RpcContextModule,
 };
 
-//API response:
-// ```
-//	{
-//	"coord": {
-//	  "lon": 145.77,
-//	  "lat": -16.92
-//	},
-//	"weather": [
-//	  {
-//		"id": 802,
-//		"main": "Clouds",
-//		"description": "scattered clouds",
-//		"icon": "03n"
-//	  }
-//	],
-//	"base": "stations",
-//	"main": {
-//	  "temp": 300.15,
-//	  "pressure": 1007,
-//	  "humidity": 74,
-//	  "temp_min": 300.15,
-//	  "temp_max": 300.15
-//	},
-//	"visibility": 10000,
-//	"wind": {
-//	  "speed": 3.6,
-//	  "deg": 160
-//	},
-//	"clouds": {
-//	  "all": 40
-//	},
-//	"dt": 1485790200,
-//	"sys": {
-//	  "type": 1,
-//	  "id": 8166,
-//	  "message": 0.2064,
-//	  "country": "AU",
-//	  "sunrise": 1485720272,
-//	  "sunset": 1485766550
-//	},
-//	"id": 2172797,
-//	"name": "Cairns",
-//	"cod": 200
-//	}
-//```
-
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
 struct Weather {
-	base: String,
-	id: usize,
 	name: String,
 	wind: Wind,
 	clouds: Clouds,
 	main: Main,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
 struct Clouds {
 	all: usize,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
 struct Main {
 	temp: f64,
 	pressure: usize,
 	humidity: usize,
 }
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
 struct Wind {
 	speed: f64,
 	deg: usize,
 }
 
 
-impl RestPath<(&str, &str)> for Weather {
-	fn get_path(params: (&str, &str)) -> Result< String, RestsonError> {
-		let city = params.0;
-		let units = params.1;
-		Ok(String::from(format!("data/2.5/weather?q={}&units={}&appid=f6ba475df300d5f91135550da0f4a867", city, units)))
+impl RestPath<&(String, String)> for Weather {
+	fn get_path(params: &(String, String)) -> Result<String, RestsonError> {
+		const API_KEY: &'static str = "f6ba475df300d5f91135550da0f4a867";
+		Ok(
+			String::from(
+				format!("data/2.5/weather?q={}&units={}&appid={}",
+					params.0,
+					params.1,
+					API_KEY,
+				)
+			)
+		)
 	}
 }
+
+/// Example of setting up a subscription that polls a remote API, in this case the api.openweathermap.org/weather, and
+/// sends the data back to the subscriber whenever the weather in London changes.
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -124,39 +86,47 @@ async fn main() -> anyhow::Result<()> {
 
 	// Subscription to the london weather
 	let params = JsonRpcParams::Array(vec!["London,uk".into(), "metric".into()]);
-	let mut weather_sub = client.subscribe::<String>("weather_sub", params, "weather_unsub").await?;
-	// NOTE: this is never printed.
-	println!("[client] London weather: {:?}", weather_sub.next().await);
-
+	let mut weather_sub = client.subscribe::<Weather>("weather_sub", params, "weather_unsub").await?;
+	while let Some(w) = weather_sub.next().await {
+		println!("[client] London weather: {:?}", w);
+	}
 
 	Ok(())
 }
+
+struct WeatherApiCx {
+	api_client: restson::RestClient,
+	last_weather: Weather,
+}
+
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = WsServer::new("127.0.0.1:0").await?;
+
 	let api_client = restson::RestClient::new("http://api.openweathermap.org").unwrap();
-	let mut module = RpcContextModule::new(Mutex::new(api_client));
+	let last_weather = Weather::default();
+	let cx = Mutex::new(WeatherApiCx { api_client, last_weather });
+	let mut module = RpcContextModule::new(cx);
 	module
-		.register_subscription_with_context("weather_sub", "weather_unsub", |params, sink, api_client| {
-			println!("[server] raw params={:?}", params);
+		.register_subscription_with_context("weather_sub", "weather_unsub", |params, sink, cx| {
 			let params: (String, String) = params.parse()?;
-			println!("[server] subscribed with params={:?}", params);
+			log::debug!(target: "server", "subscribed with params={:?}", params);
 			std::thread::spawn(move || loop {
-					// println!("[server] taking lock");
-					let mut api = api_client.lock().unwrap();
-					// println!("[server] took lock");
-					let out: Weather = api.get(("London,uk", "imperial")).unwrap();
-					println!("[server] got london weather: {:?}, sending", out);
-					sink.send(&out).expect("Sending should work yes?");
-					drop(api);
-					// println!("[server] released lock; sleeping");
-					std::thread::sleep(std::time::Duration::from_millis(150));
-					// println!("[server] slept");
+				let mut cx = cx.lock().unwrap();
+				let current_weather: Weather = cx.api_client.get(&params).unwrap();
+				if current_weather != cx.last_weather {
+					log::debug!(target: "server", "Fetched London weather: {:?}, sending", current_weather);
+					sink.send(&current_weather).expect("Sending should work yes?");
+					cx.last_weather = current_weather;
+				} else {
+					log::trace!(target: "server", "Same weather as before")
+				}
+				std::thread::sleep(std::time::Duration::from_millis(500));
 			});
 			Ok(())
 		})
 		.unwrap();
 
-	server.register_module(module.into_module());
+	server.register_module(module.into_module()).unwrap();
 
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
