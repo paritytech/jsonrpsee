@@ -185,9 +185,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 				}
 			}
 		}
-		// NOTE(niklasad1): this is most likely unreachable because `Url::socket_addrs` doesn't
-		// return an empty `Vec` if no socket addresses were found for this host.
-		err.unwrap_or_else(|| Err(WsHandshakeError::NoAddressFound(self.target.host)))
+		// NOTE(niklasad1): this is most likely unreachable because [`Url::socket_addrs`] doesn't
+		// return an empty `Vec` if no socket address was found for the host name.
+		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(self.target.host)))
 	}
 
 	async fn try_connect(
