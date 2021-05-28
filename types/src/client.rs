@@ -118,7 +118,7 @@ where
 					Ok(parsed) => return Some(parsed),
 					Err(e) => {
 						log::error!("Subscription response error: {:?}", e);
-						return None
+						return None;
 					}
 				},
 				None => return None,
