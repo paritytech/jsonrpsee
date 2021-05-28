@@ -24,7 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{http_client::{traits::Client, HttpClientBuilder, JsonValue}, http_server::{HttpServerBuilder, RpcModule}};
+use jsonrpsee::{
+	http_client::{traits::Client, HttpClientBuilder, JsonValue},
+	http_server::{HttpServerBuilder, RpcModule},
+};
 use std::net::SocketAddr;
 
 #[tokio::main]

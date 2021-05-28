@@ -40,7 +40,7 @@ pub async fn server() -> SocketAddr {
 	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
 	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
 	module
-		.register_method("sleep_for", |params , _| {
+		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
 			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
 			Ok("Yawn!")

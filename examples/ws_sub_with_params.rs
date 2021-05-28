@@ -24,7 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder}, ws_server::{RpcModule, WsServer}};
+use jsonrpsee::{
+	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
+	ws_server::{RpcModule, WsServer},
+};
 use std::net::SocketAddr;
 
 #[tokio::main]
