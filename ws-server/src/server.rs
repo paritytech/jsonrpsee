@@ -54,7 +54,7 @@ impl Server {
 	}
 
 	/// Register all methods from a module on this server.
-	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
 		// TODO: must check for duplicate method names
 		self.methods.extend(module.into_methods());
 		Ok(())
