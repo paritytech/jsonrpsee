@@ -83,10 +83,8 @@ impl<'a> RpcParams<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		match self.0 {
-			None => Err(CallError::InvalidParams),
-			Some(params) => serde_json::from_str(params).map_err(|_| CallError::InvalidParams),
-		}
+		let params = self.0.unwrap_or("null");
+		serde_json::from_str(params).map_err(|_| CallError::InvalidParams)
 	}
 
 	/// Attempt to parse only the first parameter from an array into type T

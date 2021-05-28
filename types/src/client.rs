@@ -116,7 +116,9 @@ where
 			match self.notifs_rx.next().await {
 				Some(n) => match serde_json::from_value(n) {
 					Ok(parsed) => return Some(parsed),
-					Err(e) => log::debug!("Subscription response error: {:?}", e),
+					Err(e) => {
+						log::error!("Subscription response error: {:?}", e);
+					}
 				},
 				None => return None,
 			}

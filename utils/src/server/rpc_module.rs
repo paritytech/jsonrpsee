@@ -1,5 +1,5 @@
 use crate::server::helpers::{send_error, send_response};
-use futures_channel::mpsc;
+use futures_channel::{mpsc, oneshot};
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::traits::RpcMethod;
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
@@ -9,7 +9,7 @@ use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use serde_json::value::to_raw_value;
+use serde_json::value::{to_raw_value, RawValue};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -28,24 +28,25 @@ pub type SubscriptionId = u64;
 /// Sink that is used to send back the result to the server for a specific method.
 pub type MethodSink = mpsc::UnboundedSender<String>;
 
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), MethodSink>>>;
+type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), (MethodSink, oneshot::Receiver<()>)>>>;
 
-/// Sets of JSON-RPC methods can be organized into a "module" that are in turn registered on server or,
+/// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API.
 #[derive(Default)]
 pub struct RpcModule {
 	methods: Methods,
+	subscribers: Subscribers,
 }
 
 impl RpcModule {
 	/// Instantiate a new `RpcModule`.
 	pub fn new() -> Self {
-		RpcModule { methods: Methods::default() }
+		RpcModule { methods: Methods::default(), subscribers: Subscribers::default() }
 	}
 
 	/// Add context for this module, turning it into an `RpcContextModule`.
 	pub fn with_context<Context>(self, ctx: Context) -> RpcContextModule<Context> {
-		RpcContextModule { ctx: Arc::new(ctx), module: self }
+		RpcContextModule { ctx: Arc::new(ctx), module: self, subscribers: Subscribers::default() }
 	}
 
 	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
@@ -88,12 +89,35 @@ impl RpcModule {
 		Ok(())
 	}
 
-	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription(
+	/// Register a new RPC subscription that invokes callback on every subscription request.
+	/// The callback itself takes two parameters:
+	///     - RpcParams: JSONRPC parameters in the subscription request.
+	///     - SubscriptionSink: A sink to send messages to the subscriber.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
+	///
+	/// let mut rpc_module = RpcModule::new();
+	/// rpc_module.register_subscription("sub", "unsub", |params, sink| {
+	///     let x: usize = params.one()?;
+	///     std::thread::spawn(move || {
+	///         sink.send(&x)
+	///     });
+	///     Ok(())
+	/// });
+	/// ```
+	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink, Error> {
+		callback: F,
+	) -> Result<(), Error>
+	where
+		F: Fn(RpcParams, SubscriptionSink) -> Result<(), Error> + Send + Sync + 'static,
+	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
@@ -101,40 +125,40 @@ impl RpcModule {
 		self.verify_method_name(subscribe_method_name)?;
 		self.verify_method_name(unsubscribe_method_name)?;
 
-		let subscribers = Arc::new(Mutex::new(FxHashMap::default()));
-
 		{
-			let subscribers = subscribers.clone();
+			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
-				Box::new(move |id, _, tx, conn| {
+				Box::new(move |id, params, method_sink, conn| {
+					let (online_tx, online_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
-
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						subscribers.lock().insert((conn, sub_id), tx.clone());
+						subscribers.lock().insert((conn, sub_id), (method_sink.clone(), online_rx));
 
 						sub_id
 					};
 
-					send_response(id, tx, sub_id);
-
-					Ok(())
+					send_response(id, method_sink, sub_id);
+					let sink = SubscriptionSink {
+						inner: method_sink.clone(),
+						method: subscribe_method_name,
+						sub_id,
+						is_online: online_tx,
+					};
+					callback(params, sink)
 				}),
 			);
 		}
 
 		{
-			let subscribers = subscribers.clone();
+			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
-					// let sub_id = params.one().map_err(|e| anyhow::anyhow!("{:?}", e))?;
 					let sub_id = params.one()?;
-
 					subscribers.lock().remove(&(conn, sub_id));
-
 					send_response(id, tx, "Unsubscribed");
 
 					Ok(())
@@ -142,7 +166,7 @@ impl RpcModule {
 			);
 		}
 
-		Ok(SubscriptionSink { method: subscribe_method_name, subscribers })
+		Ok(())
 	}
 
 	/// Convert a module into methods.
@@ -170,12 +194,13 @@ impl RpcModule {
 pub struct RpcContextModule<Context> {
 	ctx: Arc<Context>,
 	module: RpcModule,
+	subscribers: Subscribers,
 }
 
 impl<Context> RpcContextModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		RpcContextModule { ctx: Arc::new(ctx), module: RpcModule::new() }
+		RpcContextModule { ctx: Arc::new(ctx), module: RpcModule::new(), subscribers: Subscribers::default() }
 	}
 
 	/// Register a new RPC method, which responds with a given callback.
@@ -211,6 +236,90 @@ impl<Context> RpcContextModule<Context> {
 		Ok(())
 	}
 
+	/// Register a new RPC subscription that invokes callback on every subscription request.
+	/// The callback itself takes three parameters:
+	///     - RpcParams: JSONRPC parameters in the subscription request.
+	///     - SubscriptionSink: A sink to send messages to the subscriber.
+	///     - Context: Any type that can be embedded into the RpcContextModule.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_utils::server::rpc_module::RpcContextModule;
+	///
+	/// let mut ctx = RpcContextModule::new(99_usize);
+	/// ctx.register_subscription_with_context("sub", "unsub", |params, sink, ctx| {
+	///     let x: usize = params.one()?;
+	///     std::thread::spawn(move || {
+	///         let sum = x + (*ctx);
+	///         sink.send(&sum)
+	///     });
+	///     Ok(())
+	/// });
+	/// ```
+	pub fn register_subscription_with_context<F>(
+		&mut self,
+		subscribe_method_name: &'static str,
+		unsubscribe_method_name: &'static str,
+		callback: F,
+	) -> Result<(), Error>
+	where
+		Context: Send + Sync + 'static,
+		F: Fn(RpcParams, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
+	{
+		if subscribe_method_name == unsubscribe_method_name {
+			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
+		}
+
+		self.verify_method_name(subscribe_method_name)?;
+		self.verify_method_name(unsubscribe_method_name)?;
+		let ctx = self.ctx.clone();
+
+		{
+			let subscribers = self.subscribers.clone();
+			self.methods.insert(
+				subscribe_method_name,
+				Box::new(move |id, params, method_sink, conn| {
+					let (online_tx, online_rx) = oneshot::channel::<()>();
+					let sub_id = {
+						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
+						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
+
+						subscribers.lock().insert((conn, sub_id), (method_sink.clone(), online_rx));
+
+						sub_id
+					};
+
+					send_response(id, method_sink, sub_id);
+					let sink = SubscriptionSink {
+						inner: method_sink.clone(),
+						method: subscribe_method_name,
+						sub_id,
+						is_online: online_tx,
+					};
+					callback(params, sink, ctx.clone())
+				}),
+			);
+		}
+
+		{
+			let subscribers = self.subscribers.clone();
+			self.methods.insert(
+				unsubscribe_method_name,
+				Box::new(move |id, params, tx, conn| {
+					let sub_id = params.one()?;
+					subscribers.lock().remove(&(conn, sub_id));
+					send_response(id, tx, "Unsubscribed");
+
+					Ok(())
+				}),
+			);
+		}
+
+		Ok(())
+	}
+
 	/// Convert this `RpcContextModule` into a regular `RpcModule` that can be registered on the `Server`.
 	pub fn into_module(self) -> RpcModule {
 		self.module
@@ -234,44 +343,46 @@ impl<Cx> DerefMut for RpcContextModule<Cx> {
 		&mut self.module
 	}
 }
-/// Used by the server to send data back to subscribers.
-#[derive(Clone)]
+
+/// Represents a single subscription.
 pub struct SubscriptionSink {
+	/// Sink.
+	inner: mpsc::UnboundedSender<String>,
+	/// Method.
 	method: &'static str,
-	subscribers: Subscribers,
+	/// SubscriptionID,
+	sub_id: SubscriptionId,
+	/// Whether the subscriber is still alive (to avoid send messages that the subscriber is not interested in).
+	is_online: oneshot::Sender<()>,
 }
 
 impl SubscriptionSink {
-	/// Send data back to subscribers.
-	/// If a send fails (likely a broken connection) the subscriber is removed from the sink.
-	/// O(n) in the number of subscribers.
-	pub fn send<T>(&mut self, result: &T) -> Result<(), Error>
-	where
-		T: Serialize,
-	{
+	/// Send message on this subscription.
+	pub fn send<T: Serialize>(&self, result: &T) -> Result<(), Error> {
 		let result = to_raw_value(result)?;
+		self.send_raw_value(&result)
+	}
 
-		let mut errored = Vec::new();
-		let mut subs = self.subscribers.lock();
+	fn send_raw_value(&self, result: &RawValue) -> Result<(), Error> {
+		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+			jsonrpc: TwoPointZero,
+			method: self.method,
+			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
+		})?;
 
-		for ((conn_id, sub_id), sender) in subs.iter() {
-			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
-				jsonrpc: TwoPointZero,
-				method: self.method,
-				params: JsonRpcNotificationParams { subscription: *sub_id, result: &*result },
-			})?;
+		self.inner_send(msg).map_err(Into::into)
+	}
 
-			// Track broken connections
-			if sender.unbounded_send(msg).is_err() {
-				errored.push((*conn_id, *sub_id));
-			}
+	fn inner_send(&self, msg: String) -> Result<(), Error> {
+		if self.is_online() {
+			self.inner.unbounded_send(msg).map_err(|e| Error::Internal(e.into_send_error()))
+		} else {
+			Err(Error::Custom("Subscription canceled".into()))
 		}
+	}
 
-		// Remove broken connections
-		for entry in errored {
-			subs.remove(&entry);
-		}
-		Ok(())
+	fn is_online(&self) -> bool {
+		!self.is_online.is_canceled()
 	}
 }
 
@@ -298,7 +409,7 @@ mod tests {
 	fn rpc_context_modules_can_register_subscriptions() {
 		let cx = ();
 		let mut cxmodule = RpcContextModule::new(cx);
-		let _subscription = cxmodule.register_subscription("hi", "goodbye");
+		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _| Ok(()));
 
 		let methods = cxmodule.into_methods().keys().cloned().collect::<Vec<&str>>();
 		assert!(methods.contains(&"hi"));

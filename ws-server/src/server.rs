@@ -29,8 +29,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use serde::Serialize;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use std::net::SocketAddr;
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -65,12 +64,16 @@ impl Server {
 	}
 
 	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription(
+	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
-	) -> Result<SubscriptionSink, Error> {
-		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name)
+		callback: F,
+	) -> Result<(), Error>
+	where
+		F: Fn(RpcParams, SubscriptionSink) -> Result<(), Error> + Send + Sync + 'static,
+	{
+		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name, callback)
 	}
 
 	/// Register all methods from a module on this server.

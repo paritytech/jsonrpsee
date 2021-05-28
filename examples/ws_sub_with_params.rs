@@ -25,12 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
+	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
 	ws_server::WsServer,
 };
 use std::net::SocketAddr;
-
-const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,28 +37,43 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await?;
 
-	let mut i = 0;
-	while i <= NUM_SUBSCRIPTION_RESPONSES {
-		let r = subscribe_hello.next().await;
-		log::debug!("received {:?}", r);
-		i += 1;
-	}
+	// Subscription with a single parameter
+	let params = JsonRpcParams::Array(vec![3.into()]);
+	let mut sub_params_one = client.subscribe::<Option<char>>("sub_one_param", params, "unsub_one_param").await?;
+	println!("subscription with one param: {:?}", sub_params_one.next().await);
+
+	// Subscription with multiple parameters
+	let params = JsonRpcParams::Array(vec![2.into(), 5.into()]);
+	let mut sub_params_two = client.subscribe::<String>("sub_params_two", params, "unsub_params_two").await?;
+	println!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
+	const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
 	let mut server = WsServer::new("127.0.0.1:0").await?;
-	server.register_subscription("subscribe_hello", "unsubscribe_hello", |_, sink| {
-		std::thread::spawn(move || loop {
-			sink.send(&"hello my friend").unwrap();
-			std::thread::sleep(std::time::Duration::from_secs(1));
-		});
-		Ok(())
-	})?;
+	server
+		.register_subscription("sub_one_param", "unsub_one_param", |params, sink| {
+			let idx: usize = params.one()?;
+			std::thread::spawn(move || loop {
+				let _ = sink.send(&LETTERS.chars().nth(idx));
+				std::thread::sleep(std::time::Duration::from_millis(50));
+			});
+			Ok(())
+		})
+		.unwrap();
+	server
+		.register_subscription("sub_params_two", "unsub_params_two", |params, sink| {
+			let (one, two): (usize, usize) = params.parse()?;
+			std::thread::spawn(move || loop {
+				let _ = sink.send(&LETTERS[one..two].to_string());
+				std::thread::sleep(std::time::Duration::from_millis(100));
+			});
+			Ok(())
+		})
+		.unwrap();
 
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
