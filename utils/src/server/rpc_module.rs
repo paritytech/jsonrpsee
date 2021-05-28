@@ -176,7 +176,7 @@ impl<Context> RpcModule<Context> {
 
 	/// Merge two [`RpcModule`]'s by adding all [`Method`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
-	pub fn merge(&mut self, other: Self) -> Result<(), Error> {
+	pub fn merge<Context2>(&mut self, other: RpcModule<Context2>) -> Result<(), Error> {
 		for name in other.methods.keys() {
 			self.verify_method_name(name)?;
 		}
@@ -235,21 +235,17 @@ impl SubscriptionSink {
 mod tests {
 	use super::*;
 	#[test]
-	// TODO: does it make sense to merge two RpcModules with the same context? Previously this worked because an
-	// RpcContextModule was cast to an RpcModule and then merged (so the `Context` type param was tossed away). Now that
-	// they are the same they can't be cast. But their methods can still have different contexts. Maybe the RpcModule
-	// should not have a type param at all, and instead only the register_method/register_subscription functions?
-	fn rpc_modules_can_be_merged() {
+	fn rpc_modules_with_different_contexts_can_be_merged() {
 		let cx = Vec::<u8>::new();
 		let mut mod1 = RpcModule::new(cx);
 		mod1.register_method("bla with Vec context", |_: RpcParams, _| Ok(())).unwrap();
-		let mut mod2 = RpcModule::new(Vec::new());
-		mod2.register_method("bla", |_: RpcParams, _| Ok(())).unwrap();
+		let mut mod2 = RpcModule::new(String::new());
+		mod2.register_method("bla with String context", |_: RpcParams, _| Ok(())).unwrap();
 
 		mod1.merge(mod2).unwrap();
 		let mut methods = mod1.into_methods().keys().cloned().collect::<Vec<&str>>();
 		methods.sort();
-		assert_eq!(methods, vec!["bla", "bla with Vec context"]);
+		assert_eq!(methods, vec!["bla with String context", "bla with Vec context"]);
 	}
 
 	#[test]
