@@ -27,22 +27,24 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use serde::Serialize;
+// use serde::Serialize;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use jsonrpsee_types::error::{CallError, Error};
+// use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::error::Error;
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule, SubscriptionSink};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule};
+// use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule, SubscriptionSink};
 
 pub struct Server {
-	root: RpcModule,
+	methods: Methods,
 	listener: TcpListener,
 }
 
@@ -51,12 +53,14 @@ impl Server {
 	pub async fn new(addr: impl ToSocketAddrs) -> Result<Self, Error> {
 		let listener = TcpListener::bind(addr).await?;
 
-		Ok(Server { listener, root: RpcModule::new() })
+		Ok(Server { listener, methods: Methods::default() })
 	}
 
 	/// Register all methods from a module on this server.
-	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
-		self.root.merge(module)
+	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+		// TODO: must check for duplicate method names
+		self.methods.extend(module.into_methods());
+		Ok(())
 	}
 
 	/// Returns socket address to which the server is bound.
@@ -67,7 +71,7 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
-		let methods = Arc::new(self.root.into_methods());
+		let methods = Arc::new(self.methods);
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {

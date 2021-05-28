@@ -32,15 +32,14 @@ use hyper::{
 	service::{make_service_fn, service_fn},
 	Error as HyperError,
 };
-use jsonrpsee_types::error::{CallError, Error, GenericTransportError};
+use jsonrpsee_types::error::{Error, GenericTransportError};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
+use jsonrpsee_utils::server::rpc_module::{MethodSink, Methods, RpcModule};
 
-use serde::Serialize;
 use socket2::{Domain, Socket, Type};
 use std::{
 	cmp,
@@ -94,7 +93,7 @@ impl Builder {
 		Ok(Server {
 			listener,
 			local_addr,
-			root: RpcModule::new(),
+			methods: Methods::default(),
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 		})
@@ -113,7 +112,7 @@ pub struct Server {
 	/// Local address
 	local_addr: Option<SocketAddr>,
 	/// Registered methods.
-	root: RpcModule,
+	methods: Methods,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Access control
@@ -122,17 +121,20 @@ pub struct Server {
 
 impl Server {
 	/// Register a new RPC method, which responds with a given callback.
-	pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
-	where
-		R: Serialize,
-		F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,
-	{
-		self.root.register_method(method_name, callback)
-	}
+	// pub fn register_method<F, R>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	// where
+	// 	R: Serialize,
+	// 	F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,
+	// {
+	// 	self.root.register_method(method_name, callback)
+	// }
 
 	/// Register all methods from a module on this server.
-	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
-		self.root.merge(module)
+	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+		// self.root.merge(module)
+		// TODO: must check for duplicate method names
+		self.methods.extend(module.into_methods());
+		Ok(())
 	}
 
 	/// Returns socket address to which the server is bound.
@@ -142,7 +144,7 @@ impl Server {
 
 	/// Start the server.
 	pub async fn start(self) -> Result<(), Error> {
-		let methods = Arc::new(self.root.into_methods());
+		let methods = Arc::new(self.methods);
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
 

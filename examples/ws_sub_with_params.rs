@@ -24,10 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
-	ws_server::WsServer,
-};
+use jsonrpsee::{ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder}, ws_server::{RpcModule, WsServer}};
 use std::net::SocketAddr;
 
 #[tokio::main]
@@ -54,8 +51,9 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
 	let mut server = WsServer::new("127.0.0.1:0").await?;
-	server
-		.register_subscription("sub_one_param", "unsub_one_param", |params, sink| {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("sub_one_param", "unsub_one_param", |params, sink, _| {
 			let idx: usize = params.one()?;
 			std::thread::spawn(move || loop {
 				let _ = sink.send(&LETTERS.chars().nth(idx));
@@ -64,8 +62,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			Ok(())
 		})
 		.unwrap();
-	server
-		.register_subscription("sub_params_two", "unsub_params_two", |params, sink| {
+	module
+		.register_subscription("sub_params_two", "unsub_params_two", |params, sink, _| {
 			let (one, two): (usize, usize) = params.parse()?;
 			std::thread::spawn(move || loop {
 				let _ = sink.send(&LETTERS[one..two].to_string());
@@ -75,6 +73,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		})
 		.unwrap();
 
+	server.register_module(module).unwrap();
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
 	Ok(addr)

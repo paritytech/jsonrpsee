@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use crate::{HttpServerBuilder, RpcContextModule};
+use crate::{HttpServerBuilder, RpcModule};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -11,23 +11,25 @@ use serde_json::Value as JsonValue;
 
 async fn server() -> SocketAddr {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
-	server.register_method("say_hello", |_| Ok("lo")).unwrap();
-	server
-		.register_method("add", |params| {
+	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+	module
+		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
 			Ok(sum)
 		})
 		.unwrap();
-	server
-		.register_method("multiparam", |params| {
+	module
+		.register_method("multiparam", |params, _| {
 			let params: (String, String, Vec<u8>) = params.parse()?;
 			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
 			Ok(r)
 		})
 		.unwrap();
-	server.register_method("notif", |_| Ok("")).unwrap();
+	module.register_method("notif", |_, _| Ok("")).unwrap();
+	server.register_module(module).unwrap();
 	tokio::spawn(async move { server.start().await.unwrap() });
 	addr
 }
@@ -37,23 +39,22 @@ pub async fn server_with_context() -> SocketAddr {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 
 	let ctx = TestContext;
-	let mut rpc_ctx = RpcContextModule::new(ctx);
+	let mut rpc_module = RpcModule::new(ctx);
 
-	rpc_ctx
+	rpc_module
 		.register_method("should_err", |_p, ctx| {
 			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("err")
 		})
 		.unwrap();
 
-	rpc_ctx
+	rpc_module
 		.register_method("should_ok", |_p, ctx| {
 			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("ok")
 		})
 		.unwrap();
 
-	let rpc_module = rpc_ctx.into_module();
 	server.register_module(rpc_module).unwrap();
 	let addr = server.local_addr().unwrap();
 

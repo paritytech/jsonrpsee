@@ -52,6 +52,7 @@ pub trait SubscriptionClient: Client {
 }
 
 /// JSON-RPC server interface for managing method calls.
+// TODO: do we need this?
 pub trait RpcMethod<R, E>: Fn(RpcParams) -> Result<R, E> + Send + Sync + 'static {}
 
 impl<R, T, E> RpcMethod<R, E> for T where T: Fn(RpcParams) -> Result<R, E> + Send + Sync + 'static {}

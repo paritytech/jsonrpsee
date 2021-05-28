@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{http_client::HttpClientBuilder, http_server::HttpServerBuilder};
+use jsonrpsee::{http_client::HttpClientBuilder, http_server::{HttpServerBuilder, RpcModule}};
 use std::net::SocketAddr;
 
 jsonrpsee::proc_macros::rpc_client_api! {
@@ -50,7 +50,10 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
-	server.register_method("state_getPairs", |_| Ok(vec![1, 2, 3]))?;
+	let mut module = RpcModule::new(());
+	module.register_method("state_getPairs", |_, _| Ok(vec![1, 2, 3]))?;
+	server.register_module(module).unwrap();
+
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
 	Ok(addr)
