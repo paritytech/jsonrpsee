@@ -54,28 +54,6 @@ impl Server {
 		Ok(Server { listener, root: RpcModule::new() })
 	}
 
-	/// Register a new RPC method, which responds with a given callback.
-	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
-	where
-		R: Serialize,
-		F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,
-	{
-		self.root.register_method(method_name, callback)
-	}
-
-	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription<F>(
-		&mut self,
-		subscribe_method_name: &'static str,
-		unsubscribe_method_name: &'static str,
-		callback: F,
-	) -> Result<(), Error>
-	where
-		F: Fn(RpcParams, SubscriptionSink) -> Result<(), Error> + Send + Sync + 'static,
-	{
-		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name, callback)
-	}
-
 	/// Register all methods from a module on this server.
 	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
 		self.root.merge(module)

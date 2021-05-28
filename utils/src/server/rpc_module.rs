@@ -61,7 +61,7 @@ impl RpcModule {
 	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize,
-		F: RpcMethod<R, CallError>,
+		F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,
 	{
 		self.verify_method_name(method_name)?;
 

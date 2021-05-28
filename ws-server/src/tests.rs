@@ -1,10 +1,11 @@
 #![cfg(test)]
 
-use crate::{RpcContextModule, WsServer};
+use crate::{RpcContextModule, RpcModule, WsServer};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, Error};
+use serde::ser;
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
@@ -23,23 +24,23 @@ impl std::error::Error for MyAppError {}
 /// It has two hardcoded methods: "say_hello" and "add"
 pub async fn server() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-
-	server
+	let mut module = RpcModule::new();
+	module
 		.register_method("say_hello", |_| {
 			log::debug!("server respond to hello");
 			Ok("hello")
 		})
 		.unwrap();
-	server
+	module
 		.register_method("add", |params| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
 			Ok(sum)
 		})
 		.unwrap();
-	server.register_method("invalid_params", |_params| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	server.register_method("call_fail", |_params| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
-	server
+	module.register_method("invalid_params", |_params| Err::<(), _>(CallError::InvalidParams)).unwrap();
+	module.register_method("call_fail", |_params| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	module
 		.register_method("sleep_for", |params| {
 			let sleep: Vec<u64> = params.parse()?;
 			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
@@ -48,7 +49,7 @@ pub async fn server() -> SocketAddr {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-
+	server.register_module(module);
 	tokio::spawn(async { server.start().await });
 	addr
 }
@@ -227,22 +228,22 @@ async fn invalid_request_object() {
 
 #[tokio::test]
 async fn register_methods_works() {
-	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-	assert!(server.register_method("say_hello", |_| Ok("lo")).is_ok());
-	assert!(server.register_method("say_hello", |_| Ok("lo")).is_err());
-	assert!(server.register_subscription("subscribe_hello", "unsubscribe_hello", |_, _| Ok(())).is_ok());
-	assert!(server.register_subscription("subscribe_hello_again", "unsubscribe_hello", |_, _| Ok(())).is_err());
+	let mut module = RpcModule::new();
+	assert!(module.register_method("say_hello", |_| Ok("lo")).is_ok());
+	assert!(module.register_method("say_hello", |_| Ok("lo")).is_err());
+	assert!(module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, _| Ok(())).is_ok());
+	assert!(module.register_subscription("subscribe_hello_again", "unsubscribe_hello", |_, _| Ok(())).is_err());
 	assert!(
-		server.register_method("subscribe_hello_again", |_| Ok("lo")).is_ok(),
+		module.register_method("subscribe_hello_again", |_| Ok("lo")).is_ok(),
 		"Failed register_subscription should not have side-effects"
 	);
 }
 
 #[tokio::test]
 async fn register_same_subscribe_unsubscribe_is_err() {
-	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let mut module = RpcModule::new();
 	assert!(matches!(
-		server.register_subscription("subscribe_hello", "subscribe_hello", |_, _| Ok(())),
+		module.register_subscription("subscribe_hello", "subscribe_hello", |_, _| Ok(())),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
