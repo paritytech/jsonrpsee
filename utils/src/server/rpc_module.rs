@@ -1,7 +1,6 @@
 use crate::server::helpers::{send_error, send_response};
 use futures_channel::{mpsc, oneshot};
 use jsonrpsee_types::error::{CallError, Error};
-// use jsonrpsee_types::traits::RpcMethod;
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
@@ -10,7 +9,6 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::{to_raw_value, RawValue};
-// use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
@@ -171,11 +169,6 @@ impl<Context> RpcModule<Context> {
 		Ok(())
 	}
 
-	// /// Convert this `RpcContextModule` into a regular `RpcModule` that can be registered on the `Server`.
-	// pub fn into_module(self) -> RpcModule {
-	// 	self.module
-	// }
-
 	/// Convert a module into methods. Consumes self.
 	pub fn into_methods(self) -> Methods {
 		self.methods
@@ -195,19 +188,6 @@ impl<Context> RpcModule<Context> {
 		Ok(())
 	}
 }
-
-// impl<Cx> Deref for RpcModule<Cx> {
-// 	type Target = RpcModule;
-// 	fn deref(&self) -> &Self::Target {
-// 		&self.module
-// 	}
-// }
-
-// impl<Cx> DerefMut for RpcModule<Cx> {
-// 	fn deref_mut(&mut self) -> &mut Self::Target {
-// 		&mut self.module
-// 	}
-// }
 
 /// Represents a single subscription.
 pub struct SubscriptionSink {
