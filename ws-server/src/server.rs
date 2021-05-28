@@ -27,21 +27,18 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-// use serde::Serialize;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-// use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::error::Error;
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule};
-// use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule, SubscriptionSink};
 
 pub struct Server {
 	methods: Methods,
