@@ -48,7 +48,7 @@ pub async fn server() -> SocketAddr {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	server.register_module(module).unwrap();
+	server.register_module(module);
 	tokio::spawn(async { server.start().await });
 	addr
 }
@@ -74,7 +74,7 @@ pub async fn server_with_context() -> SocketAddr {
 		})
 		.unwrap();
 
-	server.register_module(rpc_module).unwrap();
+	server.register_module(rpc_module);
 	let addr = server.local_addr().unwrap();
 
 	tokio::spawn(async { server.start().await });
@@ -291,4 +291,28 @@ async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;
 	let response = client.send_request_text(request).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(333)));
+}
+
+
+#[tokio::test]
+async fn can_register_modules() {
+	let cx = String::new();
+	let mut mod1 = RpcModule::new(cx);
+
+	let cx2 = Vec::<u8>::new();
+	let mut mod2 = RpcModule::new(cx2);
+
+	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(server.methods().len(), 0);
+	mod1.register_method("bla", |_, cx| { Ok( format!("Gave me {}", cx))}).unwrap();
+	mod1.register_method("bla2", |_, cx| { Ok( format!("Gave me {}", cx))}).unwrap();
+	mod2.register_method("yada", |_, cx| { Ok( format!("Gave me {:?}", cx))}).unwrap();
+
+	// Won't register, name clashes
+	mod2.register_method("bla", |_, cx| { Ok( format!("Gave me {:?}", cx))}).unwrap();
+
+	server.register_module(mod1);
+	assert_eq!(server.methods().len(), 2);
+	server.register_module(mod2);
+	assert_eq!(server.methods().len(), 3);
 }

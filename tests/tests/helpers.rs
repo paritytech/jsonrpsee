@@ -76,7 +76,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			})
 			.unwrap();
 
-		server.register_module(module).unwrap();
+		server.register_module(module);
 		rt.block_on(async move {
 			server_started_tx.send(server.local_addr().unwrap()).unwrap();
 
@@ -96,7 +96,7 @@ pub async fn websocket_server() -> SocketAddr {
 		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
 		let mut module = RpcModule::new(());
 		module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
-		server.register_module(module).unwrap();
+		server.register_module(module);
 
 		rt.block_on(async move {
 			server_started_tx.send(server.local_addr().unwrap()).unwrap();
@@ -114,7 +114,7 @@ pub async fn http_server() -> SocketAddr {
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 	module.register_method("notif", |_, _| Ok("")).unwrap();
-	server.register_module(module).unwrap();
+	server.register_module(module);
 
 	tokio::spawn(async move { server.start().await.unwrap() });
 	addr

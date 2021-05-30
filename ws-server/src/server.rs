@@ -53,11 +53,23 @@ impl Server {
 		Ok(Server { listener, methods: Methods::default() })
 	}
 
-	/// Register all methods from a module on this server.
-	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
-		// TODO: must check for duplicate method names
-		self.methods.extend(module.into_methods());
-		Ok(())
+	/// Register all [`Methods`] from an [`RpcModule`] on this server. In case a method already is registered with the same name,
+	/// the method is not added. Returns the number of methods registered on the server after the new module's methods
+	/// were added.
+	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> usize {
+		for (name, method) in module.into_methods() {
+			if !self.methods.contains_key(name) {
+				self.methods.insert(name, method);
+			} else {
+				log::warn!("Can't add method `{}`: already exists. Skipping", name);
+			}
+		}
+		self.methods.len()
+	}
+
+	/// Returns a reference to the [`Methods`] registered on the server.
+	pub fn methods(&self) -> &Methods {
+		&self.methods
 	}
 
 	/// Returns socket address to which the server is bound.

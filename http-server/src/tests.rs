@@ -11,7 +11,8 @@ use serde_json::Value as JsonValue;
 
 async fn server() -> SocketAddr {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
-	let mut module = RpcModule::new(());
+	let ctx = TestContext;
+	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 	module
@@ -29,36 +30,23 @@ async fn server() -> SocketAddr {
 		})
 		.unwrap();
 	module.register_method("notif", |_, _| Ok("")).unwrap();
-	server.register_module(module).unwrap();
-	tokio::spawn(async move { server.start().await.unwrap() });
-	addr
-}
-
-/// Run server with user provided context.
-pub async fn server_with_context() -> SocketAddr {
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
-
-	let ctx = TestContext;
-	let mut rpc_module = RpcModule::new(ctx);
-
-	rpc_module
-		.register_method("should_err", |_p, ctx| {
+	module
+		.register_method("should_err", |_, ctx| {
 			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("err")
 		})
 		.unwrap();
 
-	rpc_module
-		.register_method("should_ok", |_p, ctx| {
+	module
+		.register_method("should_ok", |_, ctx| {
 			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("ok")
 		})
 		.unwrap();
 
-	server.register_module(rpc_module).unwrap();
-	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(async { server.start().with_default_timeout().await.unwrap() });
+	server.register_module(module);
+	tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
 	addr
 }
 
@@ -123,7 +111,7 @@ async fn single_method_call_with_faulty_params_returns_err() {
 
 #[tokio::test]
 async fn single_method_call_with_faulty_context() {
-	let addr = server_with_context().with_default_timeout().await.unwrap();
+	let addr = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
@@ -134,7 +122,7 @@ async fn single_method_call_with_faulty_context() {
 
 #[tokio::test]
 async fn single_method_call_with_ok_context() {
-	let addr = server_with_context().with_default_timeout().await.unwrap();
+	let addr = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1}"#;
@@ -257,4 +245,28 @@ async fn notif_works() {
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, "");
+}
+
+
+#[tokio::test]
+async fn can_register_modules() {
+	let cx = String::new();
+	let mut mod1 = RpcModule::new(cx);
+
+	let cx2 = Vec::<u8>::new();
+	let mut mod2 = RpcModule::new(cx2);
+
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	assert_eq!(server.methods().len(), 0);
+	mod1.register_method("bla", |_, cx| { Ok( format!("Gave me {}", cx))}).unwrap();
+	mod1.register_method("bla2", |_, cx| { Ok( format!("Gave me {}", cx))}).unwrap();
+	mod2.register_method("yada", |_, cx| { Ok( format!("Gave me {:?}", cx))}).unwrap();
+
+	// Won't register, name clashes
+	mod2.register_method("bla", |_, cx| { Ok( format!("Gave me {:?}", cx))}).unwrap();
+
+	server.register_module(mod1);
+	assert_eq!(server.methods().len(), 2);
+	server.register_module(mod2);
+	assert_eq!(server.methods().len(), 3);
 }

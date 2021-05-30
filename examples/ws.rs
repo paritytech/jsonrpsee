@@ -47,7 +47,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = WsServer::new("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
-	server.register_module(module).unwrap();
+	server.register_module(module);
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
 	Ok(addr)
