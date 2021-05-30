@@ -25,12 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::oneshot;
-// TODO: a bit annoying to import ws_server::RpcModule when in truth it's available from both http and ws servers.
-// Export it directly from the façade crate?
-use jsonrpsee::{
-	http_server::HttpServerBuilder,
-	ws_server::{RpcModule, WsServer},
-};
+use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServer, RpcModule};
 use std::net::SocketAddr;
 use std::time::Duration;
 

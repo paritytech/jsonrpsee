@@ -44,7 +44,6 @@ async fn server() -> SocketAddr {
 		})
 		.unwrap();
 
-
 	server.register_module(module);
 	tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
 	addr
@@ -247,7 +246,6 @@ async fn notif_works() {
 	assert_eq!(response.body, "");
 }
 
-
 #[tokio::test]
 async fn can_register_modules() {
 	let cx = String::new();
@@ -258,12 +256,12 @@ async fn can_register_modules() {
 
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	assert_eq!(server.methods().len(), 0);
-	mod1.register_method("bla", |_, cx| { Ok( format!("Gave me {}", cx))}).unwrap();
-	mod1.register_method("bla2", |_, cx| { Ok( format!("Gave me {}", cx))}).unwrap();
-	mod2.register_method("yada", |_, cx| { Ok( format!("Gave me {:?}", cx))}).unwrap();
+	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
 	// Won't register, name clashes
-	mod2.register_method("bla", |_, cx| { Ok( format!("Gave me {:?}", cx))}).unwrap();
+	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
 	server.register_module(mod1);
 	assert_eq!(server.methods().len(), 2);
