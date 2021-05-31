@@ -146,7 +146,6 @@ impl<Context> RpcModule<Context> {
 						sub_id,
 						is_online: online_tx,
 					};
-					// TODO: maybe params, context, sink is a more natural order?
 					callback(params, sink, ctx.clone())
 				}),
 			);
