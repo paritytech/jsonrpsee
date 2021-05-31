@@ -136,7 +136,7 @@ impl Server {
 
 	/// Returns a `Vec` with all the method names registered on this server.
 	pub fn method_names(&self) -> Vec<String> {
-		self.methods.keys().map(|name| name.to_string() ).collect()
+		self.methods.keys().map(|name| name.to_string()).collect()
 	}
 
 	/// Returns socket address to which the server is bound.
