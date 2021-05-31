@@ -68,6 +68,9 @@ pub enum Error {
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
+	/// Subscription has been closed.
+	#[error("Subscription was closed by the server or client")]
+	SubscriptionClosed,
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,

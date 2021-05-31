@@ -101,7 +101,7 @@ impl RpcModule {
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut rpc_module = RpcModule::new();
-	/// rpc_module.register_subscription("sub", "unsub", |params, sink| {
+	/// rpc_module.register_subscription("sub", "unsub", |params, mut sink| {
 	///     let x: usize = params.one()?;
 	///     std::thread::spawn(move || {
 	///         sink.send(&x)
@@ -129,13 +129,13 @@ impl RpcModule {
 			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
-				Box::new(move |id, params, method_sink, conn| {
-					let (online_tx, online_rx) = oneshot::channel::<()>();
+				Box::new(move |id, params, method_sink, conn_id| {
+					let (keep_alive_tx, keep_alive_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						subscribers.lock().insert((conn, sub_id), (method_sink.clone(), online_rx));
+						subscribers.lock().insert((conn_id, sub_id), (method_sink.clone(), keep_alive_rx));
 
 						sub_id
 					};
@@ -145,7 +145,12 @@ impl RpcModule {
 						inner: method_sink.clone(),
 						method: subscribe_method_name,
 						sub_id,
-						is_online: online_tx,
+						keep_alive: Some(KeepAlive {
+							subscribers: subscribers.clone(),
+							sub_id,
+							conn_id,
+							keep_alive: keep_alive_tx,
+						}),
 					};
 					callback(params, sink)
 				}),
@@ -249,7 +254,7 @@ impl<Context> RpcContextModule<Context> {
 	/// use jsonrpsee_utils::server::rpc_module::RpcContextModule;
 	///
 	/// let mut ctx = RpcContextModule::new(99_usize);
-	/// ctx.register_subscription_with_context("sub", "unsub", |params, sink, ctx| {
+	/// ctx.register_subscription_with_context("sub", "unsub", |params, mut sink, ctx| {
 	///     let x: usize = params.one()?;
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
@@ -280,13 +285,13 @@ impl<Context> RpcContextModule<Context> {
 			let subscribers = self.subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
-				Box::new(move |id, params, method_sink, conn| {
-					let (online_tx, online_rx) = oneshot::channel::<()>();
+				Box::new(move |id, params, method_sink, conn_id| {
+					let (keep_alive_tx, keep_alive_rx) = oneshot::channel();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
 
-						subscribers.lock().insert((conn, sub_id), (method_sink.clone(), online_rx));
+						subscribers.lock().insert((conn_id, sub_id), (method_sink.clone(), keep_alive_rx));
 
 						sub_id
 					};
@@ -296,7 +301,12 @@ impl<Context> RpcContextModule<Context> {
 						inner: method_sink.clone(),
 						method: subscribe_method_name,
 						sub_id,
-						is_online: online_tx,
+						keep_alive: Some(KeepAlive {
+							subscribers: subscribers.clone(),
+							sub_id,
+							conn_id,
+							keep_alive: keep_alive_tx,
+						}),
 					};
 					callback(params, sink, ctx.clone())
 				}),
@@ -350,20 +360,25 @@ pub struct SubscriptionSink {
 	inner: mpsc::UnboundedSender<String>,
 	/// Method.
 	method: &'static str,
-	/// SubscriptionID,
+	/// Subscription ID.
 	sub_id: SubscriptionId,
-	/// Whether the subscriber is still alive (to avoid send messages that the subscriber is not interested in).
-	is_online: oneshot::Sender<()>,
+	/// Whether the subscription is still connected or not.
+	keep_alive: Option<KeepAlive>,
 }
 
 impl SubscriptionSink {
 	/// Send message on this subscription.
-	pub fn send<T: Serialize>(&self, result: &T) -> Result<(), Error> {
+	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), Error> {
 		let result = to_raw_value(result)?;
 		self.send_raw_value(&result)
 	}
 
-	fn send_raw_value(&self, result: &RawValue) -> Result<(), Error> {
+	/// Close down the subscription if it's still online.
+	pub fn close(&mut self) {
+		self.keep_alive.as_mut().map(|k| k.close());
+	}
+
+	fn send_raw_value(&mut self, result: &RawValue) -> Result<(), Error> {
 		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,
@@ -373,16 +388,56 @@ impl SubscriptionSink {
 		self.inner_send(msg).map_err(Into::into)
 	}
 
-	fn inner_send(&self, msg: String) -> Result<(), Error> {
-		if self.is_online() {
-			self.inner.unbounded_send(msg).map_err(|e| Error::Internal(e.into_send_error()))
+	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
+		let res = if let Some(online) = self.keep_alive.as_ref() {
+			if online.is_canceled() {
+				return Err(Error::SubscriptionClosed);
+			}
+			match self.inner.unbounded_send(msg) {
+				Ok(()) => Ok(()),
+				// Unbounded channel can only fail when the receiver has been dropped.
+				Err(_e) => Err(Error::SubscriptionClosed),
+			}
 		} else {
-			Err(Error::Custom("Subscription canceled".into()))
+			Err(Error::SubscriptionClosed)
+		};
+
+		if res.is_err() {
+			self.keep_alive.take();
 		}
+
+		res
+	}
+}
+
+/// A type to keep tracks whether the subscription has been canceled.
+struct KeepAlive {
+	subscribers: Subscribers,
+	keep_alive: oneshot::Sender<()>,
+	conn_id: ConnectionId,
+	sub_id: SubscriptionId,
+}
+
+impl KeepAlive {
+	fn is_canceled(&self) -> bool {
+		self.keep_alive.is_canceled()
 	}
 
-	fn is_online(&self) -> bool {
-		!self.is_online.is_canceled()
+	/// Close down the subscription by removing it from shared [`Subscribers`]
+	/// and sends an unsubscribe response similar to how un-subscription requests are handled
+	/// in the [`RpcModule`]
+	///
+	/// Doesn't do anything if the subscription has already been closed.
+	fn close(&mut self) {
+		if let Some(sink) = self.subscribers.lock().remove(&(self.conn_id, self.sub_id)) {
+			send_response(Id::Number(self.sub_id), &sink.0, "Unsubscribed");
+		}
+	}
+}
+
+impl Drop for KeepAlive {
+	fn drop(&mut self) {
+		self.close();
 	}
 }
 

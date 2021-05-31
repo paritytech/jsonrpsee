@@ -40,7 +40,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 		server.register_method("say_hello", |_| Ok("hello")).unwrap();
 
 		server
-			.register_subscription("subscribe_hello", "unsubscribe_hello", |_, sink| {
+			.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink| {
 				std::thread::spawn(move || loop {
 					let _ = sink.send(&"hello from subscription");
 					std::thread::sleep(Duration::from_millis(50));
@@ -50,7 +50,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			.unwrap();
 
 		server
-			.register_subscription("subscribe_foo", "unsubscribe_foo", |_, sink| {
+			.register_subscription("subscribe_foo", "unsubscribe_foo", |_, mut sink| {
 				std::thread::spawn(move || loop {
 					let _ = sink.send(&1337);
 					std::thread::sleep(Duration::from_millis(100));
@@ -60,7 +60,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			.unwrap();
 
 		server
-			.register_subscription("subscribe_add_one", "unsubscribe_add_one", |params, sink| {
+			.register_subscription("subscribe_add_one", "unsubscribe_add_one", |params, mut sink| {
 				let mut count: usize = params.one()?;
 				std::thread::spawn(move || loop {
 					count = count.wrapping_add(1);
@@ -70,6 +70,8 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 				Ok(())
 			})
 			.unwrap();
+
+		server.register_subscription("subscribe_noop", "unsubscribe_noop", |_, _| Ok(())).unwrap();
 
 		rt.block_on(async move {
 			server_started_tx.send(server.local_addr().unwrap()).unwrap();

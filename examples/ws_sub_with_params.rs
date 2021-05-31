@@ -55,7 +55,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
 	let mut server = WsServer::new("127.0.0.1:0").await?;
 	server
-		.register_subscription("sub_one_param", "unsub_one_param", |params, sink| {
+		.register_subscription("sub_one_param", "unsub_one_param", |params, mut sink| {
 			let idx: usize = params.one()?;
 			std::thread::spawn(move || loop {
 				let _ = sink.send(&LETTERS.chars().nth(idx));
@@ -65,7 +65,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		})
 		.unwrap();
 	server
-		.register_subscription("sub_params_two", "unsub_params_two", |params, sink| {
+		.register_subscription("sub_params_two", "unsub_params_two", |params, mut sink| {
 			let (one, two): (usize, usize) = params.parse()?;
 			std::thread::spawn(move || loop {
 				let _ = sink.send(&LETTERS[one..two].to_string());
