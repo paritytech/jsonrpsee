@@ -6,7 +6,7 @@ use crate::{HttpServerBuilder, RpcModule};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::error::CallError;
+use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
 
 async fn server() -> SocketAddr {
@@ -44,7 +44,7 @@ async fn server() -> SocketAddr {
 		})
 		.unwrap();
 
-	server.register_module(module);
+	server.register_module(module).unwrap();
 	tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
 	addr
 }
@@ -263,8 +263,10 @@ async fn can_register_modules() {
 	// Won't register, name clashes
 	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
-	server.register_module(mod1);
+	server.register_module(mod1).unwrap();
 	assert_eq!(server.methods().len(), 2);
-	server.register_module(mod2);
-	assert_eq!(server.methods().len(), 3);
+	let err = server.register_module(mod2).unwrap_err();
+	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
+	assert!(matches!(err, _expected_err));
+	assert_eq!(server.methods().len(), 2);
 }

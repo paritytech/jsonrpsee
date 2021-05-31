@@ -53,17 +53,23 @@ impl Server {
 		Ok(Server { listener, methods: Methods::default() })
 	}
 
-	/// Register all [`Methods`] from an [`RpcModule`] on this server. In case a method already is registered with the same name,
-	/// no method is added and a [`Error::MethodAlreadyRegistered`] is returned. Note that the [`RpcModule`] is consumed after this call.
+	/// Register all [`Methods`] from an [`RpcModule`] on this server. In case a method already is registered with the
+	/// same name, no method is added and a [`Error::MethodAlreadyRegistered`] is returned. Note that the [`RpcModule`]
+	/// is consumed after this call.
 	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
 		let methods = module.into_methods();
 		for (name, _) in &methods {
-			if self.methods().contains_key(name) {
+			if self.methods.contains_key(name) {
 				return Err(Error::MethodAlreadyRegistered(name.to_string()));
 			}
 		}
 		self.methods.extend(methods);
 		Ok(())
+	}
+
+	/// Returns a reference to the [`Methods`] registered on this server
+	pub fn methods(&self) -> &Methods {
+		&self.methods
 	}
 
 	/// Returns socket address to which the server is bound.

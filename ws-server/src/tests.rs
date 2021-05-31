@@ -48,7 +48,7 @@ pub async fn server() -> SocketAddr {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	server.register_module(module);
+	server.register_module(module).unwrap();
 	tokio::spawn(async { server.start().await });
 	addr
 }
@@ -74,7 +74,7 @@ pub async fn server_with_context() -> SocketAddr {
 		})
 		.unwrap();
 
-	server.register_module(rpc_module);
+	server.register_module(rpc_module).unwrap();
 	let addr = server.local_addr().unwrap();
 
 	tokio::spawn(async { server.start().await });
@@ -310,10 +310,10 @@ async fn can_register_modules() {
 	// Won't register, name clashes
 	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
-	server.register_module(mod1);
+	server.register_module(mod1).unwrap();
 	assert_eq!(server.methods().len(), 2);
 	let err = server.register_module(mod2).unwrap_err();
-	let expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
-	assert!(matches!(err, expected_err));
+	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
+	assert!(matches!(err, _expected_err));
 	assert_eq!(server.methods().len(), 2);
 }
