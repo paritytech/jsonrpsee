@@ -12,7 +12,7 @@ futures-channel = { version = "0.3.14", default-features = false, optional = tru
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper13 = { package = "hyper", version = "0.13", default-features = false, features = ["stream"], optional = true }
 hyper14 = { package = "hyper", version = "0.14", default-features = false, features = ["stream"], optional = true }
-jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.7", optional = true }
+jsonrpsee-types = { path = "../types", version = "=0.2.0-alpha.7", optional = true }
 log = { version = "0.4", optional = true }
 rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
