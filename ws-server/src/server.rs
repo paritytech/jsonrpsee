@@ -66,11 +66,6 @@ impl Server {
 		Ok(())
 	}
 
-	/// Returns a reference to the [`Methods`] registered on the server.
-	pub fn methods(&self) -> &Methods {
-		&self.methods
-	}
-
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
