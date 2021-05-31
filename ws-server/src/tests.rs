@@ -312,6 +312,8 @@ async fn can_register_modules() {
 
 	server.register_module(mod1);
 	assert_eq!(server.methods().len(), 2);
-	server.register_module(mod2);
-	assert_eq!(server.methods().len(), 3);
+	let err = server.register_module(mod2).unwrap_err();
+	let expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
+	assert!(matches!(err, expected_err));
+	assert_eq!(server.methods().len(), 2);
 }
