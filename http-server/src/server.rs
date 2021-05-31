@@ -134,9 +134,9 @@ impl Server {
 		Ok(())
 	}
 
-	/// Returns a reference to the [`Methods`] registered on this server
-	pub fn methods(&self) -> &Methods {
-		&self.methods
+	/// Returns a `Vec` with all the method names registered on this server.
+	pub fn method_names(&self) -> Vec<String> {
+		self.methods.keys().map(|name| name.to_string() ).collect()
 	}
 
 	/// Returns socket address to which the server is bound.

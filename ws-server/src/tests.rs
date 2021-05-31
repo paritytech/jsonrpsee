@@ -302,7 +302,7 @@ async fn can_register_modules() {
 	let mut mod2 = RpcModule::new(cx2);
 
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(server.methods().len(), 0);
+	assert_eq!(server.method_names().len(), 0);
 	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
@@ -311,9 +311,9 @@ async fn can_register_modules() {
 	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
 	server.register_module(mod1).unwrap();
-	assert_eq!(server.methods().len(), 2);
+	assert_eq!(server.method_names().len(), 2);
 	let err = server.register_module(mod2).unwrap_err();
 	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
 	assert!(matches!(err, _expected_err));
-	assert_eq!(server.methods().len(), 2);
+	assert_eq!(server.method_names().len(), 2);
 }
