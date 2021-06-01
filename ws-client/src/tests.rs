@@ -149,18 +149,18 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 
 	// Capacity is `num_sender` + `capacity`
 	for _ in 0..5 {
-		assert!(nh.next().with_default_timeout().await.unwrap().is_some());
+		assert!(nh.next().with_default_timeout().await.unwrap().unwrap().is_some());
 	}
 
 	// NOTE: this is now unuseable and unregistered.
-	assert!(nh.next().with_default_timeout().await.unwrap().is_none());
+	assert!(nh.next().with_default_timeout().await.unwrap().unwrap().is_none());
 
 	// The same subscription should be possible to register again.
 	let mut other_nh: NotificationHandler<String> =
 		client.register_notification("test").with_default_timeout().await.unwrap().unwrap();
 
 	// check that the new subscription works.
-	assert!(other_nh.next().with_default_timeout().await.unwrap().is_some());
+	assert!(other_nh.next().with_default_timeout().await.unwrap().unwrap().is_some());
 	assert!(client.is_connected());
 }
 
