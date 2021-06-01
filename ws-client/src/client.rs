@@ -39,8 +39,8 @@ use crate::{
 	transport::CertificateStore,
 };
 use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, RegisterNotificationMessage,
-	RequestMessage, Subscription, SubscriptionMessage,
+	manager::RequestManager, BatchMessage, Error, FrontToBack, Notification, RegisterNotificationMessage,
+	RequestMessage, SubscriptionMessage,
 };
 use async_std::sync::Mutex;
 use async_trait::async_trait;
@@ -51,10 +51,10 @@ use futures::{
 	sink::SinkExt,
 };
 
+use jsonrpsee_types::NotificationKind;
 use serde::de::DeserializeOwned;
 use std::{
 	borrow::Cow,
-	marker::PhantomData,
 	sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 	time::Duration,
 };
@@ -413,7 +413,7 @@ impl SubscriptionClient for WsClient {
 		subscribe_method: &'a str,
 		params: JsonRpcParams<'a>,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<N>, Error>
+	) -> Result<Notification<N>, Error>
 	where
 		N: DeserializeOwned,
 	{
@@ -455,12 +455,12 @@ impl SubscriptionClient for WsClient {
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
-		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
+		Ok(Notification::new(self.to_back.clone(), notifs_rx, NotificationKind::Subscription(id)))
 	}
 
 	/// Register a notification handler for async messages from the server.
 	///
-	async fn register_notification<'a, N>(&self, method: &'a str) -> Result<NotificationHandler<N>, Error>
+	async fn register_notification<'a, N>(&self, method: &'a str) -> Result<Notification<N>, Error>
 	where
 		N: DeserializeOwned,
 	{
@@ -487,7 +487,7 @@ impl SubscriptionClient for WsClient {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		Ok(NotificationHandler { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, method })
+		Ok(Notification::new(self.to_back.clone(), notifs_rx, NotificationKind::Method(method)))
 	}
 }
 
