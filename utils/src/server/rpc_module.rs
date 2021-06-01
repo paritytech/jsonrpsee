@@ -113,13 +113,12 @@ impl MethodsHolder {
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
 	methods: MethodsHolder,
-	subscribers: Subscribers,
 }
 
 impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		Self { ctx: Arc::new(ctx), methods: Default::default(), subscribers: Default::default() }
+		Self { ctx: Arc::new(ctx), methods: Default::default() }
 	}
 	/// Register a new RPC method, which responds with a given callback.
 	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
@@ -241,7 +240,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let subscribers = Subscribers::default();
 
 		{
-			let subscribers = self.subscribers.clone();
+			let subscribers = subscribers.clone();
 			self.methods.methods.insert(
 				subscribe_method_name,
 				Box::new(move |id, params, method_sink, conn_id| {
@@ -273,7 +272,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		}
 
 		{
-			let subscribers = subscribers.clone();
 			self.methods.methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, _, conn_id| {
@@ -323,14 +321,6 @@ impl SubscriptionSink {
 		self.send_raw_value(&result)
 	}
 
-	/// Close down the subscription if it's still online.
-	///
-	/// Note, this doesn't actual send an unsubscribe response because we can't
-	/// map it to an actual request.
-	pub fn close(&mut self) {
-		self.keep_alive.as_mut().map(|k| k.close());
-	}
-
 	fn send_raw_value(&mut self, result: &RawValue) -> Result<(), Error> {
 		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 			jsonrpc: TwoPointZero,
@@ -356,10 +346,31 @@ impl SubscriptionSink {
 		};
 
 		if res.is_err() {
-			self.keep_alive.take();
+			self.close();
 		}
 
 		res
+	}
+
+	fn close(&mut self) {
+		let result =
+			to_raw_value(&(self.method, "Subscription closed", self.sub_id)).expect("valid json infallible; qed");
+		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+			jsonrpc: TwoPointZero,
+			method: self.method,
+			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
+		})
+		.expect("valid json infallible; qed");
+
+		if let Some(mut k) = self.keep_alive.take() {
+			k.close(msg);
+		}
+	}
+}
+
+impl Drop for SubscriptionSink {
+	fn drop(&mut self) {
+		self.close();
 	}
 }
 
@@ -380,17 +391,15 @@ impl KeepAlive {
 	///
 	/// Note, this doesn't actual send an unsubscribe response because we can't
 	// map it to an actual request.
-	fn close(&mut self) {
+	fn close(&mut self, msg: String) {
 		if let Some((sink, _)) = self.subscribers.lock().remove(&(self.conn_id, self.sub_id)) {
-			// TODO: better way to handle this?!
-			let _ = sink.unbounded_send(format!("Subscription: {} is closed", self.sub_id));
+			// NOTE: this might happen if the [`SubscriptionSink`] is dropped in a background
+			// task then it's not possible propogate the error to the client if the subscription
+			// request has already been answered.
+			//
+			// Thus, we send a notication message that subscription is closed.
+			let _ = sink.unbounded_send(msg);
 		}
-	}
-}
-
-impl Drop for KeepAlive {
-	fn drop(&mut self) {
-		self.close();
 	}
 }
 
