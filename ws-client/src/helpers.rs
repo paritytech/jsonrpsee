@@ -1,11 +1,12 @@
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
-use futures::channel::mpsc;
+use futures::channel::{mpsc, oneshot};
 use jsonrpsee_types::v2::params::{Id, JsonRpcParams, SubscriptionId};
 use jsonrpsee_types::v2::request::JsonRpcCallSer;
 use jsonrpsee_types::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponseAlloc};
 use jsonrpsee_types::{v2::error::JsonRpcError, Error, RequestMessage};
 use serde_json::Value as JsonValue;
+use std::time::Duration;
 
 /// Attempts to process a batch response.
 ///
@@ -186,5 +187,22 @@ pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcError) -
 			Ok(())
 		}
 		_ => Err(Error::InvalidRequestId),
+	}
+}
+
+/// Wait for a stream to complete with optional timeout.
+pub async fn call_with_maybe_timeout<T>(
+	rx: oneshot::Receiver<Result<T, Error>>,
+	timeout: Option<Duration>,
+) -> Result<Result<T, Error>, oneshot::Canceled> {
+	if let Some(dur) = timeout {
+		let timeout = async_std::task::sleep(dur);
+		futures::pin_mut!(rx, timeout);
+		match futures::future::select(rx, timeout).await {
+			futures::future::Either::Left((res, _)) => res,
+			futures::future::Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
+		}
+	} else {
+		rx.await
 	}
 }

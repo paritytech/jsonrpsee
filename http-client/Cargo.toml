@@ -11,6 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-http-client"
 
 [dependencies]
 async-trait = "0.1"
+futures = { version = "0.3.14", default-features = false, features = ["std"] }
 hyper13-rustls = { package = "hyper-rustls", version = "0.21", optional = true }
 hyper14-rustls = { package = "hyper-rustls", version = "0.22", optional = true }
 hyper14 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2", "tcp"], optional = true }
@@ -20,14 +21,16 @@ jsonrpsee-utils = { path = "../utils", version = "=0.2.0-alpha.7", optional = tr
 log = "0.4"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
+tokio-timer = { version = "0.2", optional = true }
+tokio = { version = "1", features = ["time"], optional = true }
 thiserror = "1.0"
 url = "2.2"
 fnv = "1"
 
 [features]
 default = ["tokio1"]
-tokio1 = ["hyper14", "hyper14-rustls", "jsonrpsee-utils/hyper_14"]
-tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper_13"]
+tokio1 = ["hyper14", "hyper14-rustls", "jsonrpsee-utils/hyper_14", "tokio" ]
+tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper_13", "tokio-timer" ]
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
