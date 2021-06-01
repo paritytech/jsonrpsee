@@ -58,7 +58,7 @@ impl Server {
 	/// is consumed after this call.
 	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
 		let methods = module.into_methods();
-		for (name, _) in &methods {
+		for name in methods.keys() {
 			if self.methods.contains_key(name) {
 				return Err(Error::MethodAlreadyRegistered(name.to_string()));
 			}
