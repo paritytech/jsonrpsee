@@ -71,7 +71,15 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			})
 			.unwrap();
 
-		module.register_subscription("subscribe_noop", "unsubscribe_noop", |_, _, _| Ok(())).unwrap();
+		module
+			.register_subscription("subscribe_noop", "unsubscribe_noop", |_, sink, _| {
+				std::thread::spawn(move || {
+					std::thread::sleep(Duration::from_secs(5));
+					drop(sink);
+				});
+				Ok(())
+			})
+			.unwrap();
 
 		server.register_module(module).unwrap();
 		rt.block_on(async move {
