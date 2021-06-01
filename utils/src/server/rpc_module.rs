@@ -44,7 +44,7 @@ pub enum MethodType {
 	Async,
 }
 
-/// Collection of syncrhonous and asynchronous methods.
+/// Collection of synchronous and asynchronous methods.
 #[derive(Default)]
 pub struct MethodsHolder {
 	method_types: FxHashMap<&'static str, MethodType>,
