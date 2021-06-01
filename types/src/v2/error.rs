@@ -169,7 +169,7 @@ mod tests {
 		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
 		let exp = JsonRpcError {
 			jsonrpc: TwoPointZero,
-			error: JsonRpcErrorObject { code: JsonRpcErrorCode::ParseError, message: "Parse error".into(), data: None },
+			error: JsonRpcErrorObject { code: JsonRpcErrorCode::ParseError, message: "Parse error", data: None },
 			id: Id::Null,
 		};
 		let err: JsonRpcError = serde_json::from_str(ser).unwrap();
@@ -184,7 +184,7 @@ mod tests {
 			jsonrpc: TwoPointZero,
 			error: JsonRpcErrorObject {
 				code: JsonRpcErrorCode::ParseError,
-				message: "Parse error".into(),
+				message: "Parse error",
 				data: Some(&*data),
 			},
 			id: Id::Null,

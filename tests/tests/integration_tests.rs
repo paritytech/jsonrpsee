@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
+#![allow(clippy::blacklisted_name)]
 
 mod helpers;
 

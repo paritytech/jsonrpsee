@@ -435,7 +435,7 @@ mod tests {
 	#[test]
 	fn should_return_none_for_not_matching_origin() {
 		// given
-		let origin = Some("http://parity.io".into());
+		let origin = Some("http://parity.io");
 		let host = None;
 
 		// when
@@ -452,7 +452,7 @@ mod tests {
 	#[test]
 	fn should_return_specific_origin_if_we_allow_any() {
 		// given
-		let origin = Some("http://parity.io".into());
+		let origin = Some("http://parity.io");
 		let host = None;
 
 		// when
@@ -478,7 +478,7 @@ mod tests {
 	#[test]
 	fn should_return_null_if_origin_is_null() {
 		// given
-		let origin = Some("null".into());
+		let origin = Some("null");
 		let host = None;
 
 		// when
@@ -491,7 +491,7 @@ mod tests {
 	#[test]
 	fn should_return_specific_origin_if_there_is_a_match() {
 		// given
-		let origin = Some("http://parity.io".into());
+		let origin = Some("http://parity.io");
 		let host = None;
 
 		// when
@@ -511,9 +511,9 @@ mod tests {
 	#[test]
 	fn should_support_wildcards() {
 		// given
-		let origin1 = Some("http://parity.io".into());
-		let origin2 = Some("http://parity.iot".into());
-		let origin3 = Some("chrome-extension://test".into());
+		let origin1 = Some("http://parity.io");
+		let origin2 = Some("http://parity.iot");
+		let origin3 = Some("chrome-extension://test");
 		let host = None;
 		let allowed = Some(vec![
 			AccessControlAllowOrigin::Value("http://*.io".into()),
@@ -539,7 +539,7 @@ mod tests {
 		let requested = vec!["x-not-allowed"];
 
 		// when
-		let res = get_cors_allow_headers(headers.iter(), requested.iter(), &cors_allow_headers.into(), |x| x);
+		let res = get_cors_allow_headers(headers.iter(), requested.iter(), &cors_allow_headers, |x| x);
 
 		// then
 		assert_eq!(res, AllowCors::Invalid);
@@ -549,13 +549,12 @@ mod tests {
 	fn should_return_valid_if_header_allowed() {
 		// given
 		let allowed = vec!["x-allowed".to_owned()];
-		let cors_allow_headers = AccessControlAllowHeaders::Only(allowed.clone());
+		let cors_allow_headers = AccessControlAllowHeaders::Only(allowed);
 		let headers = vec!["Access-Control-Request-Headers"];
 		let requested = vec!["x-allowed"];
 
 		// when
-		let res =
-			get_cors_allow_headers(headers.iter(), requested.iter(), &cors_allow_headers.into(), |x| (*x).to_owned());
+		let res = get_cors_allow_headers(headers.iter(), requested.iter(), &cors_allow_headers, |x| (*x).to_owned());
 
 		// then
 		let allowed = vec!["x-allowed".to_owned()];
@@ -566,7 +565,7 @@ mod tests {
 	fn should_return_no_allowed_headers_if_none_in_request() {
 		// given
 		let allowed = vec!["x-allowed".to_owned()];
-		let cors_allow_headers = AccessControlAllowHeaders::Only(allowed.clone());
+		let cors_allow_headers = AccessControlAllowHeaders::Only(allowed);
 		let headers: Vec<String> = vec![];
 
 		// when
@@ -583,7 +582,7 @@ mod tests {
 		let headers: Vec<String> = vec![];
 
 		// when
-		let res = get_cors_allow_headers(headers.iter(), iter::empty(), &cors_allow_headers.into(), |x| x);
+		let res = get_cors_allow_headers(headers.iter(), iter::empty(), &cors_allow_headers, |x| x);
 
 		// then
 		assert_eq!(res, AllowCors::NotRequired);
