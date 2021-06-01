@@ -68,8 +68,8 @@ struct Wind {
 impl RestPath<&(String, String)> for Weather {
 	fn get_path(params: &(String, String)) -> Result<String, RestsonError> {
 		// Set up your own API key at https://openweathermap.org/current
-		const API_KEY: &'static str = "f6ba475df300d5f91135550da0f4a867";
-		Ok(String::from(format!("data/2.5/weather?q={}&units={}&appid={}", params.0, params.1, API_KEY,)))
+		const API_KEY: &str = "f6ba475df300d5f91135550da0f4a867";
+		Ok(format!("data/2.5/weather?q={}&units={}&appid={}", params.0, params.1, API_KEY,))
 	}
 }
 

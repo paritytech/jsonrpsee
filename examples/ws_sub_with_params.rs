@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	const LETTERS: &'static str = "abcdefghijklmnopqrstuvxyz";
+	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
 	let mut server = WsServer::new("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
