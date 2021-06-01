@@ -35,10 +35,13 @@ use hyper::{
 use jsonrpsee_types::error::{Error, GenericTransportError};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest, OwnedJsonRpcRequest};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
-use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{MethodSink, Methods, RpcModule};
+use jsonrpsee_utils::server::rpc_module::{MethodSink, MethodType, RpcModule};
+use jsonrpsee_utils::server::{
+	helpers::{collect_batch_response, send_error},
+	rpc_module::MethodsHolder,
+};
 
 use socket2::{Domain, Socket, Type};
 use std::{
@@ -93,7 +96,7 @@ impl Builder {
 		Ok(Server {
 			listener,
 			local_addr,
-			methods: Methods::default(),
+			methods: MethodsHolder::default(),
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 		})
@@ -112,7 +115,7 @@ pub struct Server {
 	/// Local address
 	local_addr: Option<SocketAddr>,
 	/// Registered methods.
-	methods: Methods,
+	methods: MethodsHolder,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Access control
@@ -120,23 +123,17 @@ pub struct Server {
 }
 
 impl Server {
-	/// Register all [`Methods`] from an [`RpcModule`] on this server. In case a method already is registered with the
-	/// same name, no method is added and a [`Error::MethodAlreadyRegistered`] is returned. Note that the [`RpcModule`]
-	/// is consumed after this call.
-	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
-		let methods = module.into_methods();
-		for name in methods.keys() {
-			if self.methods.contains_key(name) {
-				return Err(Error::MethodAlreadyRegistered(name.to_string()));
-			}
-		}
-		self.methods.extend(methods);
+	/// Register all methods from a [`MethodsHolder`] of provided [`RpcModule`] on this server.
+	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
+	/// is returned. Note that the [`RpcModule`] is consumed after this call.
+	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+		self.methods.merge(module.into_methods())?;
 		Ok(())
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.
 	pub fn method_names(&self) -> Vec<String> {
-		self.methods.keys().map(|name| name.to_string()).collect()
+		self.methods.method_names()
 	}
 
 	/// Returns socket address to which the server is bound.
@@ -162,11 +159,42 @@ impl Server {
 					// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
 					// the params from the request. The result of the computation is sent back over the `tx` channel and
 					// the result(s) are collected into a `String` and sent back over the wire.
-					let execute = move |tx: &MethodSink, req: JsonRpcRequest| {
-						if let Some(method) = methods.get(&*req.method) {
+					//
+					// Note: This handler expects method existence to be checked prior to the call and will panic if
+					// method does not exist.
+					let sync_methods = methods.clone();
+					let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest| {
+						let method = sync_methods.method(&*req.method).unwrap();
+						let params = RpcParams::new(req.params.map(|params| params.get()));
+						// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+						if let Err(err) = (method)(req.id.clone(), params, &tx, 0) {
+							log::error!(
+								"execution of method call '{}' failed: {:?}, request id={:?}",
+								req.method,
+								err,
+								req.id
+							);
+							send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+						}
+					};
+
+					// Similar to `execute_sync`, but uses an asyncrhonous context.
+					// Unfortunately, we have to use owned versions of objects due to heavy lifetime
+					// usage in borrowed ones.
+					// Probably there is a chance to avoid using the heap here through some `Pin` magic,
+					// but several simple attempts to do so were failed.
+					//
+					// Note: This handler expects method existence to be checked prior to the call and will panic if
+					// method does not exist.
+					let async_methods = methods.clone();
+					let execute_async = move |tx: MethodSink, req: OwnedJsonRpcRequest| {
+						let async_methods = async_methods.clone();
+						async move {
+							let req = req.borrowed();
+							let method = async_methods.async_method(&*req.method).unwrap();
 							let params = RpcParams::new(req.params.map(|params| params.get()));
 							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (method)(req.id.clone(), params, &tx, 0) {
+							if let Err(err) = (method)(req.id.clone().into(), params.into(), tx.clone(), 0).await {
 								log::error!(
 									"execution of method call '{}' failed: {:?}, request id={:?}",
 									req.method,
@@ -175,8 +203,6 @@ impl Server {
 								);
 								send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 							}
-						} else {
-							send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 						}
 					};
 
@@ -214,14 +240,26 @@ impl Server {
 						// to [`serde_json::from_slice`] which is pretty annoying.
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-							execute(&tx, req);
+							match methods.method_type(&*req.method) {
+								Some(MethodType::Sync) => execute_sync(&tx, req),
+								Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
+								None => {
+									send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+								}
+							}
 						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
 								single = false;
 								for req in batch {
-									execute(&tx, req);
+									match methods.method_type(&*req.method) {
+										Some(MethodType::Sync) => execute_sync(&tx, req),
+										Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
+										None => {
+											send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
+										}
+									}
 								}
 							} else {
 								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());

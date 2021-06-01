@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 
 use crate::{HttpServerBuilder, RpcModule};
+use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -15,6 +16,7 @@ async fn server() -> SocketAddr {
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+	module.register_async_method("say_hello_async", |_, _| async move { Ok("lo") }.boxed()).unwrap();
 	module
 		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
@@ -43,6 +45,15 @@ async fn server() -> SocketAddr {
 			Ok("ok")
 		})
 		.unwrap();
+	module
+		.register_async_method("should_ok_async", |_p, ctx| {
+			async move {
+				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				Ok("ok")
+			}
+			.boxed()
+		})
+		.unwrap();
 
 	server.register_module(module).unwrap();
 	tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
@@ -58,6 +69,20 @@ async fn single_method_call_works() {
 	for i in 0..10 {
 		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello","id":{}}}"#, i);
 		let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+		assert_eq!(response.status, StatusCode::OK);
+		assert_eq!(response.body, ok_response(JsonValue::String("lo".to_owned()), Id::Num(i)));
+	}
+}
+
+#[tokio::test]
+async fn async_method_call_works() {
+	let _ = env_logger::try_init();
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	for i in 0..10 {
+		let req = format!(r#"{{"jsonrpc":"2.0","method":"say_hello_async","id":{}}}"#, i);
+		let response = http_request(req.into(), uri.clone()).await.unwrap();
 		assert_eq!(response.status, StatusCode::OK);
 		assert_eq!(response.body, ok_response(JsonValue::String("lo".to_owned()), Id::Num(i)));
 	}
@@ -126,6 +151,17 @@ async fn single_method_call_with_ok_context() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, ok_response("ok".into(), Id::Num(1)));
+}
+
+#[tokio::test]
+async fn async_method_call_with_ok_context() {
+	let addr = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":"should_ok_async", "params":[],"id":1}"#;
+	let response = http_request(req.into(), uri).await.unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, ok_response("ok".into(), Id::Num(1)));
 }
