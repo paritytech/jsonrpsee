@@ -274,11 +274,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.methods.insert(
 				unsubscribe_method_name,
-				Box::new(move |id, params, _, conn_id| {
+				Box::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
-					if let Some(sink) = subscribers.lock().remove(&(conn_id, sub_id)) {
-						send_response(id, &sink.0, "Unsubscribe");
-					}
+					subscribers.lock().remove(&(conn_id, sub_id));
+					send_response(id, &tx, "Unsubscribe");
 
 					Ok(())
 				}),
