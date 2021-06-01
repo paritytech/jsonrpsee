@@ -209,7 +209,7 @@ impl<'a> Id<'a> {
 	}
 }
 
-/// Owned version of [`Id`] that always allocates memory for its members.
+/// Owned version of [`Id`] that allocates memory for the `Number` and `Str` variants.
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
@@ -228,7 +228,7 @@ impl OwnedId {
 		match self {
 			Self::Null => Id::Null,
 			Self::Number(num) => Id::Number(*num),
-			Self::Str(str) => Id::Str(Cow::borrowed(str.as_ref())),
+			Self::Str(str) => Id::Str(Cow::borrowed(str)),
 		}
 	}
 }
