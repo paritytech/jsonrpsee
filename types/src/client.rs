@@ -135,13 +135,15 @@ where
 	/// may happen if the channel becomes full or is dropped.
 	///
 	/// Ignores any malformed packet.
-	pub async fn next(&mut self) -> Result<Option<Notif>, Error> {
-		match self.notifs_rx.next().await {
-			Some(n) => match serde_json::from_value(n) {
-				Ok(parsed) => Ok(Some(parsed)),
-				Err(e) => Err(e.into()),
-			},
-			None => Ok(None),
+	pub async fn next(&mut self) -> Option<Notif> {
+		loop {
+			match self.notifs_rx.next().await {
+				Some(n) => match serde_json::from_value(n) {
+					Ok(parsed) => return Some(parsed),
+					Err(e) => log::debug!("NotificationHandler response error: {:?}", e),
+				},
+				None => return None,
+			}
 		}
 	}
 }
