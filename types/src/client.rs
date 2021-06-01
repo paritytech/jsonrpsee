@@ -7,7 +7,7 @@ use serde_json::Value as JsonValue;
 
 /// Notification kind
 #[non_exhaustive]
-pub enum NotificationKind {
+pub enum SubscriptionKind {
 	/// Get notifications based on Subscription ID.
 	Subscription(SubscriptionId),
 	/// Get notifications based on method name.
@@ -15,23 +15,23 @@ pub enum NotificationKind {
 }
 
 /// Active notification on the client.
-pub struct Notification<Notif> {
+pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Callback kind.
-	kind: NotificationKind,
+	kind: SubscriptionKind,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
 }
 
-impl<Notif> Notification<Notif> {
+impl<Notif> Subscription<Notif> {
 	/// Create a new notification handle.
 	pub fn new(
 		to_back: mpsc::Sender<FrontToBack>,
 		notifs_rx: mpsc::Receiver<JsonValue>,
-		kind: NotificationKind,
+		kind: SubscriptionKind,
 	) -> Self {
 		Self { to_back, notifs_rx, kind, marker: PhantomData }
 	}
@@ -110,7 +110,7 @@ pub enum FrontToBack {
 	SubscriptionClosed(SubscriptionId),
 }
 
-impl<Notif> Notification<Notif>
+impl<Notif> Subscription<Notif>
 where
 	Notif: DeserializeOwned,
 {
@@ -128,17 +128,17 @@ where
 	}
 }
 
-impl<Notif> Drop for Notification<Notif> {
+impl<Notif> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
 		// the channel's buffer will be full.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Callback` has been closed.
-		let kind = std::mem::replace(&mut self.kind, NotificationKind::Subscription(SubscriptionId::Num(0)));
+		let kind = std::mem::replace(&mut self.kind, SubscriptionKind::Subscription(SubscriptionId::Num(0)));
 
 		let msg = match kind {
-			NotificationKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
-			NotificationKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
+			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
+			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
 		};
 		let _ = self.to_back.send(msg).now_or_never();
 	}
