@@ -1,5 +1,6 @@
 use crate::server::helpers::{send_error, send_response};
 use futures_channel::{mpsc, oneshot};
+use futures_util::SinkExt;
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, RpcParams, TwoPointZero};
@@ -34,13 +35,12 @@ type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), (MethodSi
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
 	methods: Methods,
-	subscribers: Subscribers,
 }
 
 impl<Context> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		Self { ctx: Arc::new(ctx), methods: Methods::default(), subscribers: Subscribers::default() }
+		Self { ctx: Arc::new(ctx), methods: Methods::default() }
 	}
 
 	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
@@ -124,8 +124,10 @@ impl<Context> RpcModule<Context> {
 		self.verify_method_name(unsubscribe_method_name)?;
 		let ctx = self.ctx.clone();
 
+		let subscribers = Subscribers::default();
+
 		{
-			let subscribers = self.subscribers.clone();
+			let subscribers = subscribers.clone();
 			self.methods.insert(
 				subscribe_method_name,
 				Box::new(move |id, params, method_sink, conn_id| {
@@ -157,13 +159,14 @@ impl<Context> RpcModule<Context> {
 		}
 
 		{
-			let subscribers = self.subscribers.clone();
+			let subscribers = subscribers.clone();
 			self.methods.insert(
 				unsubscribe_method_name,
-				Box::new(move |id, params, tx, conn| {
+				Box::new(move |id, params, _, conn_id| {
 					let sub_id = params.one()?;
-					subscribers.lock().remove(&(conn, sub_id));
-					send_response(id, tx, "Unsubscribed");
+					if let Some(sink) = subscribers.lock().remove(&(conn_id, sub_id)) {
+						send_response(id, &sink.0, "Unsubscribe");
+					}
 
 					Ok(())
 				}),
@@ -213,6 +216,9 @@ impl SubscriptionSink {
 	}
 
 	/// Close down the subscription if it's still online.
+	///
+	/// Note, this doesn't actual send an unsubscribe response because we can't
+	/// map it to an actual request.
 	pub fn close(&mut self) {
 		self.keep_alive.as_mut().map(|k| k.close());
 	}
@@ -262,14 +268,14 @@ impl KeepAlive {
 		self.keep_alive.is_canceled()
 	}
 
-	/// Close down the subscription by removing it from shared [`Subscribers`]
-	/// and sends an unsubscribe response similar to how un-subscription requests are handled
-	/// in the [`RpcModule`]
+	/// Close down the subscription by removing it from shared [`Subscribers`].
 	///
-	/// Doesn't do anything if the subscription has already been closed.
+	/// Note, this doesn't actual send an unsubscribe response because we can't
+	// map it to an actual request.
 	fn close(&mut self) {
-		if let Some(sink) = self.subscribers.lock().remove(&(self.conn_id, self.sub_id)) {
-			send_response(Id::Number(self.sub_id), &sink.0, "Unsubscribed");
+		if let Some(mut sink) = self.subscribers.lock().remove(&(self.conn_id, self.sub_id)) {
+			// TODO: better way to handle this?!
+			let _ = sink.0.send(format!("Subscription: {} is closed", self.sub_id));
 		}
 	}
 }
