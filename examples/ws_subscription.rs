@@ -50,10 +50,6 @@ async fn main() -> anyhow::Result<()> {
 		i += 1;
 	}
 
-	drop(subscribe_hello);
-
-	loop {}
-
 	Ok(())
 }
 
