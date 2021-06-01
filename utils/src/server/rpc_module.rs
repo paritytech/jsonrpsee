@@ -374,7 +374,7 @@ impl Drop for SubscriptionSink {
 	}
 }
 
-/// A type to keep tracks whether the subscription has been canceled.
+/// A type to track whether the subscription has been canceled.
 struct KeepAlive {
 	subscribers: Subscribers,
 	keep_alive: oneshot::Sender<()>,
