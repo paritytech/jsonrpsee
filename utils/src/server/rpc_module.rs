@@ -1,6 +1,5 @@
 use crate::server::helpers::{send_error, send_response};
 use futures_channel::{mpsc, oneshot};
-use futures_util::SinkExt;
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, RpcParams, TwoPointZero};
@@ -273,9 +272,9 @@ impl KeepAlive {
 	/// Note, this doesn't actual send an unsubscribe response because we can't
 	// map it to an actual request.
 	fn close(&mut self) {
-		if let Some(mut sink) = self.subscribers.lock().remove(&(self.conn_id, self.sub_id)) {
+		if let Some((sink, _)) = self.subscribers.lock().remove(&(self.conn_id, self.sub_id)) {
 			// TODO: better way to handle this?!
-			let _ = sink.0.send(format!("Subscription: {} is closed", self.sub_id));
+			let _ = sink.unbounded_send(format!("Subscription: {} is closed", self.sub_id));
 		}
 	}
 }
