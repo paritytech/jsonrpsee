@@ -12,6 +12,9 @@ pub use http_server;
 #[cfg(feature = "server")]
 pub use ws_server;
 
+#[cfg(feature = "server")]
+pub use utils::server::rpc_module::RpcModule;
+
 #[cfg(feature = "macros")]
 pub use proc_macros;
 

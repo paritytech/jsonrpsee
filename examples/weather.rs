@@ -32,7 +32,7 @@
 
 use jsonrpsee::{
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
-	ws_server::RpcContextModule,
+	ws_server::RpcModule,
 	ws_server::WsServer,
 };
 use restson::{Error as RestsonError, RestPath};
@@ -104,9 +104,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let api_client = restson::RestClient::new("http://api.openweathermap.org").unwrap();
 	let last_weather = Weather::default();
 	let cx = Mutex::new(WeatherApiCx { api_client, last_weather });
-	let mut module = RpcContextModule::new(cx);
+	let mut module = RpcModule::new(cx);
 	module
-		.register_subscription_with_context("weather_sub", "weather_unsub", |params, mut sink, cx| {
+		.register_subscription("weather_sub", "weather_unsub", |params, mut sink, cx| {
 			let params: (String, String) = params.parse()?;
 			log::debug!(target: "server", "Subscribed with params={:?}", params);
 			std::thread::spawn(move || loop {
@@ -125,7 +125,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		})
 		.unwrap();
 
-	server.register_module(module.into_module()).unwrap();
+	server.register_module(module).unwrap();
 
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
