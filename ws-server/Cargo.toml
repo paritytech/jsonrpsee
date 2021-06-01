@@ -13,8 +13,8 @@ documentation = "https://docs.rs/jsonrpsee-ws-server"
 thiserror = "1"
 futures-channel = "0.3.14"
 futures-util = { version = "0.3.14", default-features = false, features = ["io"] }
-jsonrpsee-types = { path = "../types", version = "0.2.0-alpha.7" }
-jsonrpsee-utils = { path = "../utils", version = "0.2.0-alpha.7", features = ["server"] }
+jsonrpsee-types = { path = "../types", version = "=0.2.0-alpha.7" }
+jsonrpsee-utils = { path = "../utils", version = "=0.2.0-alpha.7", features = ["server"] }
 log = "0.4"
 rustc-hash = "1.1.0"
 serde = { version = "1", default-features = false, features = ["derive"] }

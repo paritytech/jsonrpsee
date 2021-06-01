@@ -1,7 +1,6 @@
-use crate::v2::params::{JsonRpcParams, RpcParams};
+use crate::v2::params::JsonRpcParams;
 use crate::{Error, NotificationHandler, Subscription};
 use async_trait::async_trait;
-use futures_util::future::BoxFuture;
 use serde::de::DeserializeOwned;
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
@@ -50,23 +49,4 @@ pub trait SubscriptionClient: Client {
 	async fn register_notification<'a, Notif>(&self, method: &'a str) -> Result<NotificationHandler<Notif>, Error>
 	where
 		Notif: DeserializeOwned;
-}
-
-/// JSON-RPC server interface for managing method calls.
-pub trait RpcMethod<R, E>: Fn(RpcParams) -> Result<R, E> + Send + Sync + 'static {}
-
-impl<R, T, E> RpcMethod<R, E> for T where T: Fn(RpcParams) -> Result<R, E> + Send + Sync + 'static {}
-
-/// JSON-RPC server interface for managing method calls.
-pub trait AsyncRpcMethod<R, E>: Fn(RpcParams) -> BoxFuture<'static, Result<R, E>>
-where
-	Result<R, E>: Send + Sync,
-{
-}
-
-impl<R, T, E> AsyncRpcMethod<R, E> for T
-where
-	T: Fn(RpcParams) -> BoxFuture<'static, Result<R, E>>,
-	Result<R, E>: Send + Sync,
-{
 }

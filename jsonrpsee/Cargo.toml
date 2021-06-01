@@ -10,15 +10,16 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee"
 
 [dependencies]
-http-client = { path = "../http-client", version = "0.2.0-alpha.7", package = "jsonrpsee-http-client", optional = true }
-http-server = { path = "../http-server", version = "0.2.0-alpha.7", package = "jsonrpsee-http-server", optional = true }
-ws-client = { path = "../ws-client", version = "0.2.0-alpha.7", package = "jsonrpsee-ws-client", optional = true }
-ws-server = { path = "../ws-server", version = "0.2.0-alpha.7", package = "jsonrpsee-ws-server", optional = true }
-proc-macros = { path = "../proc-macros", version = "0.2.0-alpha.7", package = "jsonrpsee-proc-macros", optional = true }
-types = { path = "../types", version = "0.2.0-alpha.7", package = "jsonrpsee-types", optional = true }
+http-client = { path = "../http-client", version = "=0.2.0-alpha.7", package = "jsonrpsee-http-client", optional = true }
+http-server = { path = "../http-server", version = "=0.2.0-alpha.7", package = "jsonrpsee-http-server", optional = true }
+ws-client = { path = "../ws-client", version = "=0.2.0-alpha.7", package = "jsonrpsee-ws-client", optional = true }
+ws-server = { path = "../ws-server", version = "=0.2.0-alpha.7", package = "jsonrpsee-ws-server", optional = true }
+proc-macros = { path = "../proc-macros", version = "=0.2.0-alpha.7", package = "jsonrpsee-proc-macros", optional = true }
+utils = { path = "../utils", version = "=0.2.0-alpha.7", package = "jsonrpsee-utils", optional = true }
+types = { path = "../types", version = "=0.2.0-alpha.7", package = "jsonrpsee-types", optional = true }
 
 [features]
 client = ["http-client", "ws-client"]
-server = ["http-server", "ws-server"]
+server = ["http-server", "ws-server", "utils"]
 macros = ["proc-macros", "types"]
-full = ["client", "server", "macros"]
+full = ["client", "server", "macros", "utils"]

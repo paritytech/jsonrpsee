@@ -27,28 +27,24 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use serde::Serialize;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
+use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_types::v2::{error::JsonRpcErrorCode, request::OwnedJsonRpcRequest};
-use jsonrpsee_types::{
-	error::{CallError, Error},
-	traits::AsyncRpcMethod,
-};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, RpcModule, SubscriptionSink};
+use jsonrpsee_types::{error::Error, v2::request::OwnedJsonRpcRequest};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, MethodsHolder, RpcModule};
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
 	rpc_module::MethodType,
 };
 
 pub struct Server {
-	root: RpcModule,
+	methods: MethodsHolder,
 	listener: TcpListener,
 }
 
@@ -57,43 +53,20 @@ impl Server {
 	pub async fn new(addr: impl ToSocketAddrs) -> Result<Self, Error> {
 		let listener = TcpListener::bind(addr).await?;
 
-		Ok(Server { listener, root: RpcModule::new() })
+		Ok(Server { listener, methods: MethodsHolder::default() })
 	}
 
-	/// Register a new RPC method, which responds with a given callback.
-	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
-	where
-		R: Serialize,
-		F: Fn(RpcParams) -> Result<R, CallError> + Send + Sync + 'static,
-	{
-		self.root.register_method(method_name, callback)
+	/// Register all methods from a [`MethodsHolder`] of provided [`RpcModule`] on this server.
+	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
+	/// is returned. Note that the [`RpcModule`] is consumed after this call.
+	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+		self.methods.merge(module.into_methods())?;
+		Ok(())
 	}
 
-	/// Register a new RPC method, which responds with a given callback.
-	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
-	where
-		R: Serialize + Send + Sync + 'static,
-		F: AsyncRpcMethod<R, CallError> + Copy + Send + Sync + 'static,
-	{
-		self.root.register_async_method(method_name, callback)
-	}
-
-	/// Register a new RPC subscription, with subscribe and unsubscribe methods.
-	pub fn register_subscription<F>(
-		&mut self,
-		subscribe_method_name: &'static str,
-		unsubscribe_method_name: &'static str,
-		callback: F,
-	) -> Result<(), Error>
-	where
-		F: Fn(RpcParams, SubscriptionSink) -> Result<(), Error> + Send + Sync + 'static,
-	{
-		self.root.register_subscription(subscribe_method_name, unsubscribe_method_name, callback)
-	}
-
-	/// Register all methods from a module on this server.
-	pub fn register_module(&mut self, module: RpcModule) -> Result<(), Error> {
-		self.root.merge(module)
+	/// Returns a `Vec` with all the method names registered on this server.
+	pub fn method_names(&self) -> Vec<String> {
+		self.methods.method_names()
 	}
 
 	/// Returns socket address to which the server is bound.
@@ -104,7 +77,7 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
-		let methods = Arc::new(self.root);
+		let methods = Arc::new(self.methods);
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
@@ -123,7 +96,7 @@ impl Server {
 
 async fn background_task(
 	socket: tokio::net::TcpStream,
-	methods: Arc<RpcModule>,
+	methods: Arc<MethodsHolder>,
 	conn_id: ConnectionId,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
