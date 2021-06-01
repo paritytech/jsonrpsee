@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{RpcContextModule, WsServer};
+use crate::{RpcModule, WsServer};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -23,24 +23,24 @@ impl std::error::Error for MyAppError {}
 /// It has two hardcoded methods: "say_hello" and "add"
 pub async fn server() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-
-	server
-		.register_method("say_hello", |_| {
+	let mut module = RpcModule::new(());
+	module
+		.register_method("say_hello", |_, _| {
 			log::debug!("server respond to hello");
 			Ok("hello")
 		})
 		.unwrap();
-	server
-		.register_method("add", |params| {
+	module
+		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
 			Ok(sum)
 		})
 		.unwrap();
-	server.register_method("invalid_params", |_params| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	server.register_method("call_fail", |_params| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
-	server
-		.register_method("sleep_for", |params| {
+	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
+	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	module
+		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
 			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
 			Ok("Yawn!")
@@ -48,7 +48,7 @@ pub async fn server() -> SocketAddr {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-
+	server.register_module(module).unwrap();
 	tokio::spawn(async { server.start().await });
 	addr
 }
@@ -58,23 +58,22 @@ pub async fn server_with_context() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let ctx = TestContext;
-	let mut rpc_ctx = RpcContextModule::new(ctx);
+	let mut rpc_module = RpcModule::new(ctx);
 
-	rpc_ctx
+	rpc_module
 		.register_method("should_err", |_p, ctx| {
 			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("err")
 		})
 		.unwrap();
 
-	rpc_ctx
+	rpc_module
 		.register_method("should_ok", |_p, ctx| {
 			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("ok")
 		})
 		.unwrap();
 
-	let rpc_module = rpc_ctx.into_module();
 	server.register_module(rpc_module).unwrap();
 	let addr = server.local_addr().unwrap();
 
@@ -227,22 +226,22 @@ async fn invalid_request_object() {
 
 #[tokio::test]
 async fn register_methods_works() {
-	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-	assert!(server.register_method("say_hello", |_| Ok("lo")).is_ok());
-	assert!(server.register_method("say_hello", |_| Ok("lo")).is_err());
-	assert!(server.register_subscription("subscribe_hello", "unsubscribe_hello", |_, _| Ok(())).is_ok());
-	assert!(server.register_subscription("subscribe_hello_again", "unsubscribe_hello", |_, _| Ok(())).is_err());
+	let mut module = RpcModule::new(());
+	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
+	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
+	assert!(module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, _, _| Ok(())).is_ok());
+	assert!(module.register_subscription("subscribe_hello_again", "unsubscribe_hello", |_, _, _| Ok(())).is_err());
 	assert!(
-		server.register_method("subscribe_hello_again", |_| Ok("lo")).is_ok(),
+		module.register_method("subscribe_hello_again", |_, _| Ok("lo")).is_ok(),
 		"Failed register_subscription should not have side-effects"
 	);
 }
 
 #[tokio::test]
 async fn register_same_subscribe_unsubscribe_is_err() {
-	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let mut module = RpcModule::new(());
 	assert!(matches!(
-		server.register_subscription("subscribe_hello", "subscribe_hello", |_, _| Ok(())),
+		module.register_subscription("subscribe_hello", "subscribe_hello", |_, _, _| Ok(())),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -292,4 +291,29 @@ async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;
 	let response = client.send_request_text(request).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(333)));
+}
+
+#[tokio::test]
+async fn can_register_modules() {
+	let cx = String::new();
+	let mut mod1 = RpcModule::new(cx);
+
+	let cx2 = Vec::<u8>::new();
+	let mut mod2 = RpcModule::new(cx2);
+
+	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(server.method_names().len(), 0);
+	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+
+	// Won't register, name clashes
+	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+
+	server.register_module(mod1).unwrap();
+	assert_eq!(server.method_names().len(), 2);
+	let err = server.register_module(mod2).unwrap_err();
+	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
+	assert!(matches!(err, _expected_err));
+	assert_eq!(server.method_names().len(), 2);
 }

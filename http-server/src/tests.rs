@@ -2,62 +2,50 @@
 
 use std::net::SocketAddr;
 
-use crate::{HttpServerBuilder, RpcContextModule};
+use crate::{HttpServerBuilder, RpcModule};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::error::CallError;
+use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
 
 async fn server() -> SocketAddr {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let ctx = TestContext;
+	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
-	server.register_method("say_hello", |_| Ok("lo")).unwrap();
-	server
-		.register_method("add", |params| {
+	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+	module
+		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
 			Ok(sum)
 		})
 		.unwrap();
-	server
-		.register_method("multiparam", |params| {
+	module
+		.register_method("multiparam", |params, _| {
 			let params: (String, String, Vec<u8>) = params.parse()?;
 			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
 			Ok(r)
 		})
 		.unwrap();
-	server.register_method("notif", |_| Ok("")).unwrap();
-	tokio::spawn(async move { server.start().await.unwrap() });
-	addr
-}
-
-/// Run server with user provided context.
-pub async fn server_with_context() -> SocketAddr {
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
-
-	let ctx = TestContext;
-	let mut rpc_ctx = RpcContextModule::new(ctx);
-
-	rpc_ctx
-		.register_method("should_err", |_p, ctx| {
+	module.register_method("notif", |_, _| Ok("")).unwrap();
+	module
+		.register_method("should_err", |_, ctx| {
 			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("err")
 		})
 		.unwrap();
 
-	rpc_ctx
-		.register_method("should_ok", |_p, ctx| {
+	module
+		.register_method("should_ok", |_, ctx| {
 			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("ok")
 		})
 		.unwrap();
 
-	let rpc_module = rpc_ctx.into_module();
-	server.register_module(rpc_module).unwrap();
-	let addr = server.local_addr().unwrap();
-
-	tokio::spawn(async { server.start().with_default_timeout().await.unwrap() });
+	server.register_module(module).unwrap();
+	tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
 	addr
 }
 
@@ -122,7 +110,7 @@ async fn single_method_call_with_faulty_params_returns_err() {
 
 #[tokio::test]
 async fn single_method_call_with_faulty_context() {
-	let addr = server_with_context().with_default_timeout().await.unwrap();
+	let addr = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
@@ -133,7 +121,7 @@ async fn single_method_call_with_faulty_context() {
 
 #[tokio::test]
 async fn single_method_call_with_ok_context() {
-	let addr = server_with_context().with_default_timeout().await.unwrap();
+	let addr = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1}"#;
@@ -256,4 +244,29 @@ async fn notif_works() {
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, "");
+}
+
+#[tokio::test]
+async fn can_register_modules() {
+	let cx = String::new();
+	let mut mod1 = RpcModule::new(cx);
+
+	let cx2 = Vec::<u8>::new();
+	let mut mod2 = RpcModule::new(cx2);
+
+	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	assert_eq!(server.method_names().len(), 0);
+	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+
+	// Won't register, name clashes
+	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+
+	server.register_module(mod1).unwrap();
+	assert_eq!(server.method_names().len(), 2);
+	let err = server.register_module(mod2).unwrap_err();
+	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
+	assert!(matches!(err, _expected_err));
+	assert_eq!(server.method_names().len(), 2);
 }

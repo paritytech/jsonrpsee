@@ -1,4 +1,4 @@
-use crate::v2::params::{JsonRpcParams, RpcParams};
+use crate::v2::params::JsonRpcParams;
 use crate::{Error, NotificationHandler, Subscription};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -50,8 +50,3 @@ pub trait SubscriptionClient: Client {
 	where
 		Notif: DeserializeOwned;
 }
-
-/// JSON-RPC server interface for managing method calls.
-pub trait RpcMethod<R, E>: Fn(RpcParams) -> Result<R, E> + Send + Sync + 'static {}
-
-impl<R, T, E> RpcMethod<R, E> for T where T: Fn(RpcParams) -> Result<R, E> + Send + Sync + 'static {}
