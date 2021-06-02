@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{RpcModule, WsServer};
+use crate::{RpcModule, WsServer, WsServerBuilder};
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
@@ -116,6 +116,32 @@ async fn server_with_context() -> SocketAddr {
 
 	tokio::spawn(async { server.start().await });
 	addr
+}
+
+#[tokio::test]
+async fn can_set_the_max_request_body_size() {
+	let addr = "127.0.0.1:0";
+	// Rejects all requests larger than 10 bytes
+	let mut server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("anything", |_p, _cx| {
+		Ok(())
+	}).unwrap();
+	server.register_module(module).unwrap();
+	let addr = server.local_addr().unwrap();
+	tokio::spawn(async { server.start().await });
+
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	// Invalid: too long
+	let req = "any string longer than 10 bytes";
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, oversized_request());
+
+	// Still invalid, but not oversized
+	let req = "shorty";
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
 }
 
 #[tokio::test]

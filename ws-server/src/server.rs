@@ -27,6 +27,7 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
+use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
@@ -45,14 +46,16 @@ use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule};
 pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
+	cfg: Builder,
 }
 
 impl Server {
+	// TODO: remove
 	/// Create a new WebSocket RPC server, bound to the `addr`.
 	pub async fn new(addr: impl ToSocketAddrs) -> Result<Self, Error> {
 		let listener = TcpListener::bind(addr).await?;
 
-		Ok(Server { listener, methods: Methods::default() })
+		Ok(Server { listener, methods: Methods::default(), cfg: Builder::default() })
 	}
 
 	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
@@ -77,6 +80,7 @@ impl Server {
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.methods);
+		let cfg = Arc::new(self.cfg);
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
@@ -84,8 +88,9 @@ impl Server {
 				socket.set_nodelay(true).unwrap();
 
 				let methods = methods.clone();
+				let cfg = cfg.clone();
 
-				tokio::spawn(async move { background_task(socket, methods, id).await });
+				tokio::spawn(async move { background_task(socket, id, methods, cfg).await });
 
 				id += 1;
 			}
@@ -95,8 +100,9 @@ impl Server {
 
 async fn background_task(
 	socket: tokio::net::TcpStream,
-	methods: Arc<Methods>,
 	conn_id: ConnectionId,
+	methods: Arc<Methods>,
+	cfg: Arc<Builder>,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
@@ -130,6 +136,12 @@ async fn background_task(
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
+
+		if data.len() > cfg.max_request_body_size as usize {
+			log::warn!("Request too big ({} bytes, max is {})", data.len(), cfg.max_request_body_size);
+			send_error(Id::Null, &tx, JsonRpcErrorCode::OversizedRequest.into());
+			continue
+		}
 
 		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be used with
 		// untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged enum here and have to try
@@ -166,5 +178,32 @@ async fn background_task(
 
 			send_error(id, &tx, code.into());
 		}
+	}
+}
+
+
+/// Builder to configure and create a JSON-RPC Websocket server
+#[derive(Debug)]
+pub struct Builder {
+	max_request_body_size: u32,
+}
+
+impl Builder {
+	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.max_request_body_size = size;
+		self
+	}
+
+	/// Finalize the configuration of the server. Consumes the [`Builder`].
+	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
+		let listener = TcpListener::bind(addr).await?;
+		Ok(Server { listener, methods: Methods::default(), cfg: self })
+	}
+}
+
+impl Default for Builder {
+	fn default() -> Self {
+		Self { max_request_body_size: TEN_MB_SIZE_BYTES }
 	}
 }
