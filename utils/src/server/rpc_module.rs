@@ -4,6 +4,7 @@ use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, OwnedId, OwnedRpcParams, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::request::JsonRpcRequest;
 use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 
 use parking_lot::Mutex;
@@ -21,6 +22,7 @@ pub type SyncMethod = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, Conne
 pub type AsyncMethod = Arc<
 	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
+
 /// A collection of registered [`SyncMethod`]s.
 pub type SyncMethods = FxHashMap<&'static str, SyncMethod>;
 /// A collection of registered [`AsyncMethod`]s.
@@ -41,6 +43,32 @@ pub enum MethodCallback {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod),
+}
+
+impl MethodCallback {
+	/// Execute the callback, sending the resulting JSON to the specified sink.
+	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
+		let id = req.id.clone();
+
+		let result = match self {
+			MethodCallback::Sync(callback) => {
+				let params = RpcParams::new(req.params.map(|params| params.get()));
+				(callback)(req.id.clone(), params, tx, conn_id)
+			}
+			MethodCallback::Async(callback) => {
+				let tx = tx.clone();
+				let params = OwnedRpcParams::from(RpcParams::new(req.params.map(|params| params.get())));
+				let id = OwnedId::from(req.id);
+
+				(callback)(id, params, tx, conn_id).await
+			}
+		};
+
+		if let Err(err) = result {
+			log::error!("execution of sync method call '{}' failed: {:?}, request id={:?}", req.method, err, id);
+			send_error(id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+		}
+	}
 }
 
 /// Collection of synchronous and asynchronous methods.

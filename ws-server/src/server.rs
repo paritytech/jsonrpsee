@@ -34,14 +34,11 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::{Id, RpcParams};
+use jsonrpsee_types::v2::params::Id;
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_types::{error::Error, v2::request::OwnedJsonRpcRequest};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule};
-use jsonrpsee_utils::server::{
-	helpers::{collect_batch_response, send_error},
-	rpc_module::{AsyncMethod, MethodCallback, SyncMethod},
-};
+use jsonrpsee_types::error::Error;
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule};
+use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 
 pub struct Server {
 	methods: Methods,
@@ -127,36 +124,6 @@ async fn background_task(
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 
-	// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in the params from
-	// the request. The result of the computation is sent back over the `tx` channel and the result(s) are collected
-	// into a `String` and sent back over the wire.
-	//
-	// Note: This handler expects method existence to be checked prior to starting the server and will panic if the
-	// method does not exist.
-	let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest, callback: &SyncMethod| {
-		let params = RpcParams::new(req.params.map(|params| params.get()));
-		if let Err(err) = (callback)(req.id.clone(), params, &tx, conn_id) {
-			log::error!("execution of sync method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
-			send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-		}
-	};
-
-	// Similar to `execute_sync`, but uses an asyncrhonous context.
-	// Unfortunately we have to use owned versions of objects due to heavy lifetime usage their borrowed equivalents.
-	// Probably there is a chance to avoid using the heap here through some `Pin` magic, but several attempts to do so
-	// have failed.
-	//
-	// Note: This handler expects method existence to be checked prior to starting the server and will panic if the
-	// method does not exist.
-	let execute_async = |tx: MethodSink, req: OwnedJsonRpcRequest, callback: AsyncMethod| async move {
-		let req = req.borrowed();
-		let params = RpcParams::new(req.params.map(|params| params.get()));
-		if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
-			log::error!("execution of async method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
-			send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-		}
-	};
-
 	loop {
 		data.clear();
 
@@ -170,8 +137,7 @@ async fn background_task(
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			log::debug!("recv: {:?}", req);
 			match methods.method(&*req.method) {
-				Some(MethodCallback::Sync(callback)) => execute_sync(&tx, req, callback),
-				Some(MethodCallback::Async(callback)) => execute_async(tx.clone(), req.into(), callback.clone()).await,
+				Some(callback) => callback.execute(&tx, req, conn_id).await,
 				None => {
 					send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 				}
@@ -184,10 +150,7 @@ async fn background_task(
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 				for req in batch {
 					match methods.method(&*req.method) {
-						Some(MethodCallback::Sync(callback)) => execute_sync(&tx_batch, req, callback),
-						Some(MethodCallback::Async(callback)) => {
-							execute_async(tx_batch.clone(), req.into(), callback.clone()).await
-						}
+						Some(callback) => callback.execute(&tx_batch, req, conn_id).await,
 						None => {
 							send_error(req.id, &tx_batch, JsonRpcErrorCode::MethodNotFound.into());
 						}
