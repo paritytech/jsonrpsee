@@ -41,15 +41,6 @@ pub enum MethodCallback {
 	Async(AsyncMethod),
 }
 
-impl Debug for MethodCallback {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Async(_) => write!(f, "Async"),
-			Self::Sync(_) => write!(f, "Sync"),
-		}
-	}
-}
-
 impl MethodCallback {
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
 	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
@@ -74,18 +65,19 @@ impl MethodCallback {
 	}
 }
 
-/// Collection of synchronous and asynchronous methods.
-#[derive(Default)]
-pub struct Methods {
-	callbacks: FxHashMap<&'static str, MethodCallback>,
+impl Debug for MethodCallback {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Async(_) => write!(f, "Async"),
+			Self::Sync(_) => write!(f, "Sync"),
+		}
+	}
 }
 
-impl std::fmt::Debug for Methods {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		// Including types only is sufficient, as it contains information
-		// about the registered methods and if they are sync or async.
-		f.debug_struct("Methods").field("callbacks", &self.callbacks).finish()
-	}
+/// Collection of synchronous and asynchronous methods.
+#[derive(Default, Debug)]
+pub struct Methods {
+	callbacks: FxHashMap<&'static str, MethodCallback>,
 }
 
 impl Methods {
