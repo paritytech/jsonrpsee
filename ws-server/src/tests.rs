@@ -124,9 +124,7 @@ async fn can_set_the_max_request_body_size() {
 	// Rejects all requests larger than 10 bytes
 	let mut server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| {
-		Ok(())
-	}).unwrap();
+	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	server.register_module(module).unwrap();
 	let addr = server.local_addr().unwrap();
 	tokio::spawn(async { server.start().await });

@@ -132,7 +132,7 @@ async fn background_task(
 		if data.len() > cfg.max_request_body_size as usize {
 			log::warn!("Request is too big ({} bytes, max is {})", data.len(), cfg.max_request_body_size);
 			send_error(Id::Null, &tx, JsonRpcErrorCode::OversizedRequest.into());
-			continue
+			continue;
 		}
 
 		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be used with
@@ -172,7 +172,6 @@ async fn background_task(
 		}
 	}
 }
-
 
 /// Builder to configure and create a JSON-RPC Websocket server
 #[derive(Debug)]
