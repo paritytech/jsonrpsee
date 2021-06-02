@@ -287,7 +287,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods
 	}
 
-	/// Merge two [`RpcModule`]'s by adding all [`SyncMethod`]s from `other` into `self`.
+	/// Merge two [`RpcModule`]'s by adding all [`Methods`] `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
 	pub fn merge<Context2>(&mut self, other: RpcModule<Context2>) -> Result<(), Error> {
 		self.methods.merge(other.methods)?;
