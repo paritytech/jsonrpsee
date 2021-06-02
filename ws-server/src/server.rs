@@ -156,9 +156,9 @@ async fn background_task(
 		let async_methods = methods.clone();
 		async move {
 			let req = req.borrowed();
-			let method = async_methods
-				.async_method(&*req.method)
-				.unwrap_or_else(|| panic!("async method '{}' is not registered on the server – this is a bug", req.method));
+			let method = async_methods.async_method(&*req.method).unwrap_or_else(|| {
+				panic!("async method '{}' is not registered on the server – this is a bug", req.method)
+			});
 			let params = RpcParams::new(req.params.map(|params| params.get()));
 			if let Err(err) = (method)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
 				log::error!(
