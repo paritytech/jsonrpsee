@@ -115,7 +115,7 @@ impl Methods {
 
 	/// Returns a `Vec` with all the method names registered on this server.
 	pub fn method_names(&self) -> Vec<&'static str> {
-		self.callbacks.keys().map(|name| *name).collect()
+		self.callbacks.keys().copied().collect()
 	}
 }
 
