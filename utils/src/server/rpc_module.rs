@@ -11,6 +11,7 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::{to_raw_value, RawValue};
+use std::fmt::Debug;
 use std::sync::Arc;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
@@ -64,18 +65,19 @@ impl MethodCallback {
 	}
 }
 
-/// Collection of synchronous and asynchronous methods.
-#[derive(Default)]
-pub struct Methods {
-	callbacks: FxHashMap<&'static str, MethodCallback>,
+impl Debug for MethodCallback {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Async(_) => write!(f, "Async"),
+			Self::Sync(_) => write!(f, "Sync"),
+		}
+	}
 }
 
-impl std::fmt::Debug for Methods {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		// Including types only is sufficient, as it contains information
-		// about the registered methods and if they are sync or async.
-		f.debug_struct("Methods").field("method_types", &self.method_types).finish()
-	}
+/// Collection of synchronous and asynchronous methods.
+#[derive(Default, Debug)]
+pub struct Methods {
+	callbacks: FxHashMap<&'static str, MethodCallback>,
 }
 
 impl Methods {
