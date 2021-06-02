@@ -154,7 +154,10 @@ async fn background_task(
 			let req = req.borrowed();
 			let callback = match async_methods.method(&*req.method) {
 				Some(MethodCallback::Async(callback)) => callback,
-				_ => panic!("async method '{}' is not registered on the server or is not async – this is a bug", req.method),
+				_ => panic!(
+					"async method '{}' is not registered on the server or is not async – this is a bug",
+					req.method
+				),
 			};
 			let params = RpcParams::new(req.params.map(|params| params.get()));
 			if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {

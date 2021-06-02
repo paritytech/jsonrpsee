@@ -40,7 +40,7 @@ use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
-	rpc_module::{Methods, SyncMethod, MethodCallback},
+	rpc_module::{MethodCallback, Methods, SyncMethod},
 };
 
 use socket2::{Domain, Socket, Type};
@@ -185,27 +185,29 @@ impl Server {
 					// Note: This handler expects method existence to be checked prior to the call and will panic if
 					// method does not exist.
 					let async_methods = methods.clone();
-					let execute_async = move |tx: MethodSink, req: OwnedJsonRpcRequest| {
-						let async_methods = async_methods.clone();
-						async move {
-							let req = req.borrowed();
-							let callback = match async_methods.method(&*req.method) {
+					let execute_async =
+						move |tx: MethodSink, req: OwnedJsonRpcRequest| {
+							let async_methods = async_methods.clone();
+							async move {
+								let req = req.borrowed();
+								let callback = match async_methods.method(&*req.method) {
 								Some(MethodCallback::Async(callback)) => callback,
 								_ => panic!("async method '{}' is not registered on the server or is not async – this is a bug", req.method),
 							};
-							let params = RpcParams::new(req.params.map(|params| params.get()));
-							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), 0).await {
-								log::error!(
-									"execution of method call '{}' failed: {:?}, request id={:?}",
-									req.method,
-									err,
-									req.id
-								);
-								send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+								let params = RpcParams::new(req.params.map(|params| params.get()));
+								// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+								if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), 0).await
+								{
+									log::error!(
+										"execution of method call '{}' failed: {:?}, request id={:?}",
+										req.method,
+										err,
+										req.id
+									);
+									send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+								}
 							}
-						}
-					};
+						};
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
