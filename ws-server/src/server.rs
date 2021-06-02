@@ -137,7 +137,7 @@ async fn background_task(
 	let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest| {
 		let method = sync_methods
 			.sync_method(&*req.method)
-			.expect(&format!("sync method '{}' is not registered on the server – this is a bug", req.method));
+			.unwrap_or_else(|| panic!("sync method '{}' is not registered on the server – this is a bug", req.method));
 		let params = RpcParams::new(req.params.map(|params| params.get()));
 		if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
 			log::error!("execution of sync method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
@@ -158,7 +158,7 @@ async fn background_task(
 			let req = req.borrowed();
 			let method = async_methods
 				.async_method(&*req.method)
-				.expect(&format!("async method '{}' is not registered on the server – this is a bug", req.method));
+				.unwrap_or_else(|| panic!("async method '{}' is not registered on the server – this is a bug", req.method));
 			let params = RpcParams::new(req.params.map(|params| params.get()));
 			if let Err(err) = (method)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
 				log::error!(
