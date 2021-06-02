@@ -44,15 +44,13 @@ impl MethodCallback {
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
 	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
 		let id = req.id.clone();
+		let params = RpcParams::new(req.params.map(|params| params.get()));
 
 		let result = match self {
-			MethodCallback::Sync(callback) => {
-				let params = RpcParams::new(req.params.map(|params| params.get()));
-				(callback)(req.id.clone(), params, tx, conn_id)
-			}
+			MethodCallback::Sync(callback) => (callback)(req.id.clone(), params, tx, conn_id),
 			MethodCallback::Async(callback) => {
 				let tx = tx.clone();
-				let params = OwnedRpcParams::from(RpcParams::new(req.params.map(|params| params.get())));
+				let params = OwnedRpcParams::from(params);
 				let id = OwnedId::from(req.id);
 
 				(callback)(id, params, tx, conn_id).await
