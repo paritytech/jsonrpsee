@@ -4,6 +4,7 @@ use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, OwnedId, OwnedRpcParams, RpcParams, TwoPointZero};
+use jsonrpsee_types::v2::request::JsonRpcRequest;
 use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
 
 use parking_lot::Mutex;
@@ -18,13 +19,9 @@ use std::sync::Arc;
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type SyncMethod = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
-pub type AsyncMethod = Box<
+pub type AsyncMethod = Arc<
 	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
-/// A collection of registered [`SyncMethod`]s.
-pub type SyncMethods = FxHashMap<&'static str, SyncMethod>;
-/// A collection of registered [`AsyncMethod`]s.
-pub type AsyncMethods = FxHashMap<&'static str, AsyncMethod>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -35,21 +32,42 @@ pub type MethodSink = mpsc::UnboundedSender<String>;
 
 type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), (MethodSink, oneshot::Receiver<()>)>>>;
 
-/// Identifier of the method type.
-#[derive(Debug, Copy, Clone)]
-pub enum MethodType {
+/// Callback wrapper that can be either sync or async.
+pub enum MethodCallback {
 	/// Synchronous method handler.
-	Sync,
+	Sync(SyncMethod),
 	/// Asynchronous method handler.
-	Async,
+	Async(AsyncMethod),
+}
+
+impl MethodCallback {
+	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
+	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
+		let id = req.id.clone();
+		let params = RpcParams::new(req.params.map(|params| params.get()));
+
+		let result = match self {
+			MethodCallback::Sync(callback) => (callback)(req.id.clone(), params, tx, conn_id),
+			MethodCallback::Async(callback) => {
+				let tx = tx.clone();
+				let params = OwnedRpcParams::from(params);
+				let id = OwnedId::from(req.id);
+
+				(callback)(id, params, tx, conn_id).await
+			}
+		};
+
+		if let Err(err) = result {
+			log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, id);
+			send_error(id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+		}
+	}
 }
 
 /// Collection of synchronous and asynchronous methods.
 #[derive(Default)]
 pub struct Methods {
-	method_types: FxHashMap<&'static str, MethodType>,
-	sync_methods: SyncMethods,
-	async_methods: AsyncMethods,
+	callbacks: FxHashMap<&'static str, MethodCallback>,
 }
 
 impl std::fmt::Debug for Methods {
@@ -67,51 +85,43 @@ impl Methods {
 	}
 
 	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
-		if self.sync_methods.contains_key(name) || self.async_methods.contains_key(name) {
+		if self.callbacks.contains_key(name) {
 			return Err(Error::MethodAlreadyRegistered(name.into()));
 		}
 
 		Ok(())
 	}
 
-	/// Merge two [`Methods`]'s by adding all [`SyncMethod`]s and [`AsyncMethod`]s from `other` into `self`.
+	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
 	pub fn merge(&mut self, other: Methods) -> Result<(), Error> {
-		for name in other.method_types.keys() {
+		for name in other.callbacks.keys() {
 			self.verify_method_name(name)?;
 		}
 
-		for (name, callback) in other.sync_methods {
-			self.sync_methods.insert(name, callback);
-			self.method_types.insert(name, MethodType::Sync);
-		}
-
-		for (name, callback) in other.async_methods {
-			self.async_methods.insert(name, callback);
-			self.method_types.insert(name, MethodType::Async);
+		for (name, callback) in other.callbacks {
+			self.callbacks.insert(name, callback);
 		}
 
 		Ok(())
 	}
 
-	/// Returns the type of the method handler, if any.
-	pub fn method_type(&self, method_name: &str) -> Option<&MethodType> {
-		self.method_types.get(method_name)
+	/// Returns the method callback.
+	pub fn method(&self, method_name: &str) -> Option<&MethodCallback> {
+		self.callbacks.get(method_name)
 	}
 
-	/// Returns the synchronous method.
-	pub fn sync_method(&self, method_name: &str) -> Option<&SyncMethod> {
-		self.sync_methods.get(method_name)
-	}
-
-	/// Returns the asynchronous method.
-	pub fn async_method(&self, method_name: &str) -> Option<&AsyncMethod> {
-		self.async_methods.get(method_name)
+	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
+	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
+		match self.callbacks.get(&*req.method) {
+			Some(callback) => callback.execute(tx, req, conn_id).await,
+			None => send_error(req.id, tx, JsonRpcErrorCode::MethodNotFound.into()),
+		}
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<String> {
-		self.method_types.keys().map(|name| name.to_string()).collect()
+	pub fn method_names(&self) -> Vec<&'static str> {
+		self.callbacks.keys().copied().collect()
 	}
 }
 
@@ -141,9 +151,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		self.methods.sync_methods.insert(
+		self.methods.callbacks.insert(
 			method_name,
-			Box::new(move |id, params, tx, _| {
+			MethodCallback::Sync(Box::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
@@ -158,9 +168,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				};
 
 				Ok(())
-			}),
+			})),
 		);
-		self.methods.method_types.insert(method_name, MethodType::Sync);
 
 		Ok(())
 	}
@@ -175,9 +184,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		self.methods.async_methods.insert(
+		self.methods.callbacks.insert(
 			method_name,
-			Box::new(move |id, params, tx, _| {
+			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
 					let params = params.borrowed();
@@ -198,9 +207,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					Ok(())
 				};
 				future.boxed()
-			}),
+			})),
 		);
-		self.methods.method_types.insert(method_name, MethodType::Async);
 
 		Ok(())
 	}
@@ -243,15 +251,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.verify_method_name(subscribe_method_name)?;
 		self.methods.verify_method_name(unsubscribe_method_name)?;
-		self.methods.method_types.insert(subscribe_method_name, MethodType::Sync);
-		self.methods.method_types.insert(unsubscribe_method_name, MethodType::Sync);
 		let ctx = self.ctx.clone();
 
 		{
 			let subscribers = self.subscribers.clone();
-			self.methods.sync_methods.insert(
+			self.methods.callbacks.insert(
 				subscribe_method_name,
-				Box::new(move |id, params, method_sink, conn| {
+				MethodCallback::Sync(Box::new(move |id, params, method_sink, conn| {
 					let (online_tx, online_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
@@ -270,21 +276,21 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						is_online: online_tx,
 					};
 					callback(params, sink, ctx.clone())
-				}),
+				})),
 			);
 		}
 
 		{
 			let subscribers = self.subscribers.clone();
-			self.methods.sync_methods.insert(
+			self.methods.callbacks.insert(
 				unsubscribe_method_name,
-				Box::new(move |id, params, tx, conn| {
+				MethodCallback::Sync(Box::new(move |id, params, tx, conn| {
 					let sub_id = params.one()?;
 					subscribers.lock().remove(&(conn, sub_id));
 					send_response(id, tx, "Unsubscribed");
 
 					Ok(())
-				}),
+				})),
 			);
 		}
 
@@ -362,8 +368,8 @@ mod tests {
 		mod1.merge(mod2).unwrap();
 
 		let methods = mod1.into_methods();
-		assert!(methods.sync_method(&"bla with Vec context").is_some());
-		assert!(methods.sync_method(&"bla with String context").is_some());
+		assert!(methods.method("bla with Vec context").is_some());
+		assert!(methods.method("bla with String context").is_some());
 	}
 
 	#[test]
@@ -373,7 +379,7 @@ mod tests {
 		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _, _| Ok(()));
 
 		let methods = cxmodule.into_methods();
-		assert!(methods.sync_method(&"hi").is_some());
-		assert!(methods.sync_method(&"goodbye").is_some());
+		assert!(methods.method("hi").is_some());
+		assert!(methods.method("goodbye").is_some());
 	}
 }

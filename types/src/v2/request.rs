@@ -1,4 +1,4 @@
-use crate::v2::params::{Id, JsonRpcParams, OwnedId, TwoPointZero};
+use crate::v2::params::{Id, JsonRpcParams, TwoPointZero};
 use beef::Cow;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -18,48 +18,6 @@ pub struct JsonRpcRequest<'a> {
 	/// Parameter values of the request.
 	#[serde(borrow)]
 	pub params: Option<&'a RawValue>,
-}
-
-/// Owned version of [`JsonRpcRequest`].
-#[derive(Deserialize, Debug, Clone)]
-#[serde(deny_unknown_fields)]
-pub struct OwnedJsonRpcRequest {
-	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
-	/// Request ID
-	pub id: OwnedId,
-	/// Name of the method to be invoked.
-	pub method: String,
-	/// Parameter values of the request.
-	pub params: Option<String>,
-}
-
-impl OwnedJsonRpcRequest {
-	/// Converts `OwnedJsonRpcRequest` into borrowed `JsonRpcRequest`.
-	pub fn borrowed(&self) -> JsonRpcRequest<'_> {
-		JsonRpcRequest {
-			jsonrpc: self.jsonrpc,
-			id: self.id.borrowed(),
-			method: Cow::borrowed(self.method.as_ref()),
-			params: self.params.as_ref().map(|s| {
-				// Note: while this object *may* be created from something that is not a `JsonRpcRequest` object, using
-				// an invalid field to construct it would be a logical invariant break.
-				serde_json::from_str(&s)
-					.expect("OwnedJsonRpcRequest is only created from JsonRpcRequest, so this conversion must be safe")
-			}),
-		}
-	}
-}
-
-impl<'a> From<JsonRpcRequest<'a>> for OwnedJsonRpcRequest {
-	fn from(borrowed: JsonRpcRequest<'a>) -> Self {
-		Self {
-			jsonrpc: borrowed.jsonrpc,
-			id: borrowed.id.into(),
-			method: borrowed.method.as_ref().to_owned(),
-			params: borrowed.params.map(|p| p.get().to_owned()),
-		}
-	}
 }
 
 /// Invalid request with known request ID.

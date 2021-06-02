@@ -34,10 +34,10 @@ use hyper::{
 };
 use jsonrpsee_types::error::{Error, GenericTransportError};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::{Id, RpcParams};
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest, OwnedJsonRpcRequest};
+use jsonrpsee_types::v2::params::Id;
+use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
-use jsonrpsee_utils::server::rpc_module::{MethodSink, MethodType, RpcModule};
+use jsonrpsee_utils::server::rpc_module::RpcModule;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
 	rpc_module::Methods,
@@ -136,7 +136,7 @@ impl Server {
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<String> {
+	pub fn method_names(&self) -> Vec<&'static str> {
 		self.methods.method_names()
 	}
 
@@ -159,56 +159,6 @@ impl Server {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
-
-					// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
-					// the params from the request. The result of the computation is sent back over the `tx` channel and
-					// the result(s) are collected into a `String` and sent back over the wire.
-					//
-					// Note: This handler expects method existence to be checked prior to the call and will panic if
-					// method does not exist.
-					let sync_methods = methods.clone();
-					let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest| {
-						let method = sync_methods.sync_method(&*req.method).unwrap();
-						let params = RpcParams::new(req.params.map(|params| params.get()));
-						// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-						if let Err(err) = (method)(req.id.clone(), params, &tx, 0) {
-							log::error!(
-								"execution of method call '{}' failed: {:?}, request id={:?}",
-								req.method,
-								err,
-								req.id
-							);
-							send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-						}
-					};
-
-					// Similar to `execute_sync`, but uses an asyncrhonous context.
-					// Unfortunately, we have to use owned versions of objects due to heavy lifetime
-					// usage in borrowed ones.
-					// Probably there is a chance to avoid using the heap here through some `Pin` magic,
-					// but several simple attempts to do so were failed.
-					//
-					// Note: This handler expects method existence to be checked prior to the call and will panic if
-					// method does not exist.
-					let async_methods = methods.clone();
-					let execute_async = move |tx: MethodSink, req: OwnedJsonRpcRequest| {
-						let async_methods = async_methods.clone();
-						async move {
-							let req = req.borrowed();
-							let method = async_methods.async_method(&*req.method).unwrap();
-							let params = RpcParams::new(req.params.map(|params| params.get()));
-							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (method)(req.id.clone().into(), params.into(), tx.clone(), 0).await {
-								log::error!(
-									"execution of method call '{}' failed: {:?}, request id={:?}",
-									req.method,
-									err,
-									req.id
-								);
-								send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-							}
-						}
-					};
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -244,26 +194,15 @@ impl Server {
 						// to [`serde_json::from_slice`] which is pretty annoying.
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-							match methods.method_type(&*req.method) {
-								Some(MethodType::Sync) => execute_sync(&tx, req),
-								Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
-								None => {
-									send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-								}
-							}
+							// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
+							methods.execute(&tx, req, 0).await;
 						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
 								single = false;
 								for req in batch {
-									match methods.method_type(&*req.method) {
-										Some(MethodType::Sync) => execute_sync(&tx, req),
-										Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
-										None => {
-											send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-										}
-									}
+									methods.execute(&tx, req, 0).await;
 								}
 							} else {
 								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
