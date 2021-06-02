@@ -136,12 +136,7 @@ async fn background_task(
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			log::debug!("recv: {:?}", req);
-			match methods.method(&*req.method) {
-				Some(callback) => callback.execute(&tx, req, conn_id).await,
-				None => {
-					send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-				}
-			}
+			methods.execute(&tx, req, conn_id).await;
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
 				// Batch responses must be sent back as a single message so we read the results from each request in the
@@ -149,12 +144,7 @@ async fn background_task(
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 				for req in batch {
-					match methods.method(&*req.method) {
-						Some(callback) => callback.execute(&tx_batch, req, conn_id).await,
-						None => {
-							send_error(req.id, &tx_batch, JsonRpcErrorCode::MethodNotFound.into());
-						}
-					}
+					methods.execute(&tx_batch, req, conn_id).await;
 				}
 				// Closes the receiving half of a channel without dropping it. This prevents any further messages from
 				// being sent on the channel.

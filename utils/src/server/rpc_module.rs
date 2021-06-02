@@ -22,11 +22,6 @@ pub type SyncMethod = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, Conne
 pub type AsyncMethod = Arc<
 	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
-
-/// A collection of registered [`SyncMethod`]s.
-pub type SyncMethods = FxHashMap<&'static str, SyncMethod>;
-/// A collection of registered [`AsyncMethod`]s.
-pub type AsyncMethods = FxHashMap<&'static str, AsyncMethod>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -46,7 +41,7 @@ pub enum MethodCallback {
 }
 
 impl MethodCallback {
-	/// Execute the callback, sending the resulting JSON to the specified sink.
+	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
 	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
 		let id = req.id.clone();
 
@@ -91,7 +86,7 @@ impl Methods {
 		Ok(())
 	}
 
-	/// Merge two [`Methods`]'s by adding all [`SyncMethod`]s and [`AsyncMethod`]s from `other` into `self`.
+	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
 	pub fn merge(&mut self, other: Methods) -> Result<(), Error> {
 		for name in other.callbacks.keys() {
@@ -108,6 +103,14 @@ impl Methods {
 	/// Returns the method callback.
 	pub fn method(&self, method_name: &str) -> Option<&MethodCallback> {
 		self.callbacks.get(method_name)
+	}
+
+	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
+	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
+		match self.callbacks.get(&*req.method) {
+			Some(callback) => callback.execute(tx, req, conn_id).await,
+			None => send_error(req.id, tx, JsonRpcErrorCode::MethodNotFound.into()),
+		}
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.

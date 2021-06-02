@@ -190,24 +190,14 @@ impl Server {
 						// to [`serde_json::from_slice`] which is pretty annoying.
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-							match methods.method(&*req.method) {
-								Some(callback) => callback.execute(&tx, req, 0).await,
-								None => {
-									send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-								}
-							}
+							methods.execute(&tx, req, 0).await;
 						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
 								single = false;
 								for req in batch {
-									match methods.method(&*req.method) {
-										Some(callback) => callback.execute(&tx, req, 0).await,
-										None => {
-											send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-										}
-									}
+									methods.execute(&tx, req, 0).await;
 								}
 							} else {
 								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
