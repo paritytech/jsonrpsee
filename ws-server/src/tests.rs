@@ -397,7 +397,6 @@ async fn can_register_modules() {
 	let cx2 = Vec::<u8>::new();
 	let mut mod2 = RpcModule::new(cx2);
 
-	// let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	assert_eq!(server.method_names().len(), 0);
 	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();

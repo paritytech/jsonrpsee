@@ -130,7 +130,7 @@ async fn background_task(
 		receiver.receive_data(&mut data).await?;
 
 		if data.len() > cfg.max_request_body_size as usize {
-			log::warn!("Request too big ({} bytes, max is {})", data.len(), cfg.max_request_body_size);
+			log::warn!("Request is too big ({} bytes, max is {})", data.len(), cfg.max_request_body_size);
 			send_error(Id::Null, &tx, JsonRpcErrorCode::OversizedRequest.into());
 			continue
 		}
