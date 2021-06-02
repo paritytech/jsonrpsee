@@ -40,7 +40,7 @@ use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
-	rpc_module::{MethodCallback, Methods, SyncMethod, AsyncMethod},
+	rpc_module::{AsyncMethod, MethodCallback, Methods, SyncMethod},
 };
 
 use socket2::{Domain, Socket, Type};
@@ -184,24 +184,22 @@ impl Server {
 					//
 					// Note: This handler expects method existence to be checked prior to the call and will panic if
 					// method does not exist.
-					let execute_async =
-						move |tx: MethodSink, req: OwnedJsonRpcRequest, callback: AsyncMethod| {
-							async move {
-								let req = req.borrowed();
-								let params = RpcParams::new(req.params.map(|params| params.get()));
-								// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-								if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), 0).await
-								{
-									log::error!(
-										"execution of method call '{}' failed: {:?}, request id={:?}",
-										req.method,
-										err,
-										req.id
-									);
-									send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-								}
+					let execute_async = move |tx: MethodSink, req: OwnedJsonRpcRequest, callback: AsyncMethod| {
+						async move {
+							let req = req.borrowed();
+							let params = RpcParams::new(req.params.map(|params| params.get()));
+							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
+							if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), 0).await {
+								log::error!(
+									"execution of method call '{}' failed: {:?}, request id={:?}",
+									req.method,
+									err,
+									req.id
+								);
+								send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 							}
-						};
+						}
+					};
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -239,7 +237,9 @@ impl Server {
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
 							match methods.method(&*req.method) {
 								Some(MethodCallback::Sync(callback)) => execute_sync(&tx, req, callback),
-								Some(MethodCallback::Async(callback)) => execute_async(tx.clone(), req.into(), callback.clone()).await,
+								Some(MethodCallback::Async(callback)) => {
+									execute_async(tx.clone(), req.into(), callback.clone()).await
+								}
 								None => {
 									send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 								}
@@ -252,7 +252,9 @@ impl Server {
 								for req in batch {
 									match methods.method(&*req.method) {
 										Some(MethodCallback::Sync(callback)) => execute_sync(&tx, req, callback),
-										Some(MethodCallback::Async(callback)) => execute_async(tx.clone(), req.into(), callback.clone()).await,
+										Some(MethodCallback::Async(callback)) => {
+											execute_async(tx.clone(), req.into(), callback.clone()).await
+										}
 										None => {
 											send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 										}

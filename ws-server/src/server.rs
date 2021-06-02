@@ -40,7 +40,7 @@ use jsonrpsee_types::{error::Error, v2::request::OwnedJsonRpcRequest};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule};
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
-	rpc_module::{MethodCallback, SyncMethod, AsyncMethod},
+	rpc_module::{AsyncMethod, MethodCallback, SyncMethod},
 };
 
 pub struct Server {
@@ -148,19 +148,12 @@ async fn background_task(
 	//
 	// Note: This handler expects method existence to be checked prior to starting the server and will panic if the
 	// method does not exist.
-	let execute_async = |tx: MethodSink, req: OwnedJsonRpcRequest, callback: AsyncMethod| {
-		async move {
-			let req = req.borrowed();
-			let params = RpcParams::new(req.params.map(|params| params.get()));
-			if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
-				log::error!(
-					"execution of async method call '{}' failed: {:?}, request id={:?}",
-					req.method,
-					err,
-					req.id
-				);
-				send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-			}
+	let execute_async = |tx: MethodSink, req: OwnedJsonRpcRequest, callback: AsyncMethod| async move {
+		let req = req.borrowed();
+		let params = RpcParams::new(req.params.map(|params| params.get()));
+		if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
+			log::error!("execution of async method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
+			send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 		}
 	};
 
@@ -192,7 +185,9 @@ async fn background_task(
 				for req in batch {
 					match methods.method(&*req.method) {
 						Some(MethodCallback::Sync(callback)) => execute_sync(&tx_batch, req, callback),
-						Some(MethodCallback::Async(callback)) => execute_async(tx_batch.clone(), req.into(), callback.clone()).await,
+						Some(MethodCallback::Async(callback)) => {
+							execute_async(tx_batch.clone(), req.into(), callback.clone()).await
+						}
 						None => {
 							send_error(req.id, &tx_batch, JsonRpcErrorCode::MethodNotFound.into());
 						}
