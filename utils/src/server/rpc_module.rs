@@ -54,8 +54,8 @@ pub struct Methods {
 
 impl std::fmt::Debug for Methods {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		// Including types only is sufficient, as it will provide information
-		// about all the stored method alongside with their types.
+		// Including types only is sufficient, as it contains information
+		// about the registered methods and if they are sync or async.
 		f.debug_struct("Methods").field("method_types", &self.method_types).finish()
 	}
 }
