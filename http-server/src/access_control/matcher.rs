@@ -29,15 +29,16 @@ use log::warn;
 use std::{fmt, hash};
 
 /// Pattern that can be matched to string.
-pub trait Pattern {
+pub(crate) trait Pattern {
 	/// Returns true if given string matches the pattern.
 	fn matches<T: AsRef<str>>(&self, other: T) -> bool;
 }
 
 #[derive(Clone)]
-pub struct Matcher(Option<GlobMatcher>, String);
+pub(crate) struct Matcher(Option<GlobMatcher>, String);
+
 impl Matcher {
-	pub fn new(string: &str) -> Matcher {
+	pub(crate) fn new(string: &str) -> Matcher {
 		Matcher(
 			GlobBuilder::new(string)
 				.case_insensitive(true)

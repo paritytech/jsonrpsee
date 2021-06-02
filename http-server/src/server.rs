@@ -51,6 +51,7 @@ use std::{
 };
 
 /// Builder to create JSON-RPC HTTP server.
+#[derive(Debug)]
 pub struct Builder {
 	access_control: AccessControl,
 	max_request_body_size: u32,
@@ -78,6 +79,7 @@ impl Builder {
 		self
 	}
 
+	/// Finalizes the configuration of the server.
 	pub fn build(self, addr: SocketAddr) -> Result<Server, Error> {
 		let domain = Domain::for_address(addr);
 		let socket = Socket::new(domain, Type::STREAM, None)?;
@@ -109,6 +111,8 @@ impl Default for Builder {
 	}
 }
 
+/// An HTTP JSON RPC server.
+#[derive(Debug)]
 pub struct Server {
 	/// Hyper server.
 	listener: HyperBuilder<AddrIncoming>,

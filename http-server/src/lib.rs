@@ -24,11 +24,22 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#![warn(missing_docs, missing_debug_implementations, unreachable_pub)]
+
+//! # jsonrpsee-http-server
+//!
+//! `jsonrpsee-http-server` is a [JSON RPC](https://www.jsonrpc.org/specification) HTTPS server library that's is built for `async/await`.
+
 mod access_control;
-mod response;
 mod server;
 
-pub use access_control::{AccessControl, AccessControlBuilder, AllowHosts, Host};
+/// Common builders for RPC responses.
+pub mod response;
+
+pub use access_control::{
+	hosts::{AllowHosts, Host},
+	AccessControl, AccessControlBuilder,
+};
 pub use jsonrpsee_types::{Error, TEN_MB_SIZE_BYTES};
 pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SyncMethods};
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer};

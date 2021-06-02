@@ -52,6 +52,14 @@ pub struct Methods {
 	async_methods: AsyncMethods,
 }
 
+impl std::fmt::Debug for Methods {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		// Including types only is sufficient, as it contains information
+		// about the registered methods and if they are sync or async.
+		f.debug_struct("Methods").field("method_types", &self.method_types).finish()
+	}
+}
+
 impl Methods {
 	/// Creates a new empty [`Methods`].
 	pub fn new() -> Self {
@@ -110,6 +118,7 @@ impl Methods {
 /// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API. [`RpcModule`] wraps an additional context
 /// argument that can be used to access data during call execution.
+#[derive(Debug)]
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
 	methods: Methods,
@@ -297,6 +306,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 }
 
 /// Represents a single subscription.
+#[derive(Debug)]
 pub struct SubscriptionSink {
 	/// Sink.
 	inner: mpsc::UnboundedSender<String>,
