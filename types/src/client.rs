@@ -6,8 +6,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
 /// Active subscription on a Client.
-#[derive(Debug)]
-pub struct Subscription<Notif: std::fmt::Debug> {
+pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	pub to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
@@ -16,6 +15,16 @@ pub struct Subscription<Notif: std::fmt::Debug> {
 	pub id: SubscriptionId,
 	/// Marker in order to pin the `Notif` parameter.
 	pub marker: PhantomData<Notif>,
+}
+
+impl<Notif> std::fmt::Debug for Subscription<Notif> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Subscription")
+			.field("to_back", &self.to_back)
+			.field("notifs_rx", &self.notifs_rx)
+			.field("id", &self.id)
+			.finish()
+	}
 }
 
 /// Active NotificationHandler on a Client.
@@ -106,7 +115,7 @@ pub enum FrontToBack {
 
 impl<Notif> Subscription<Notif>
 where
-	Notif: DeserializeOwned + std::fmt::Debug,
+	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream
 	/// This may return `None` if the subscription has been terminated,
@@ -130,7 +139,7 @@ where
 
 impl<Notif> NotificationHandler<Notif>
 where
-	Notif: DeserializeOwned + std::fmt::Debug,
+	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream
 	/// This may return `None` if the method has been unregistered,
@@ -150,7 +159,7 @@ where
 	}
 }
 
-impl<Notif: std::fmt::Debug> Drop for Subscription<Notif> {
+impl<Notif> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
 		// the channel's buffer will be full, and our unsubscription request will never make it.
