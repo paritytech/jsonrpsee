@@ -12,6 +12,7 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::{to_raw_value, RawValue};
 use std::sync::Arc;
+use std::fmt::Debug;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -38,6 +39,15 @@ pub enum MethodCallback {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod),
+}
+
+impl Debug for MethodCallback {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Async(_) => write!(f, "Async"),
+			Self::Sync(_) => write!(f, "Sync"),
+		}
+	}
 }
 
 impl MethodCallback {
@@ -74,7 +84,7 @@ impl std::fmt::Debug for Methods {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		// Including types only is sufficient, as it contains information
 		// about the registered methods and if they are sync or async.
-		f.debug_struct("Methods").field("method_types", &self.method_types).finish()
+		f.debug_struct("Methods").field("callbacks", &self.callbacks).finish()
 	}
 }
 
