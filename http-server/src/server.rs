@@ -190,6 +190,7 @@ impl Server {
 						// to [`serde_json::from_slice`] which is pretty annoying.
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
+							// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 							methods.execute(&tx, req, 0).await;
 						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
