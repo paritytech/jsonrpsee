@@ -60,7 +60,7 @@ impl MethodCallback {
 		};
 
 		if let Err(err) = result {
-			log::error!("execution of sync method call '{}' failed: {:?}, request id={:?}", req.method, err, id);
+			log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, id);
 			send_error(id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 		}
 	}
