@@ -24,14 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use async_std::net::TcpStream;
-use async_tls::client::TlsStream;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
-use std::{borrow::Cow, io, net::SocketAddr, time::Duration};
+use std::{borrow::Cow, io, net::SocketAddr, sync::Arc, time::Duration};
 use thiserror::Error;
+use tokio::net::TcpStream;
+use tokio_rustls::client::TlsStream;
 
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
@@ -106,7 +106,7 @@ pub enum WsHandshakeError {
 
 	/// Invalid DNS name error for TLS
 	#[error("Invalid DNS name: {}", 0)]
-	InvalidDnsName(#[source] webpki::InvalidDnsNameError),
+	InvalidDnsName(#[source] tokio_rustls::webpki::InvalidDNSNameError),
 
 	/// RawServer rejected our handshake.
 	#[error("Connection rejected with status code: {}", status_code)]
@@ -170,7 +170,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 					client_config.root_store = rustls_native_certs::load_native_certs()
 						.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
 				}
-				Some(client_config.into())
+				Some(Arc::new(client_config).into())
 			}
 			Mode::Plain => None,
 		};
@@ -193,12 +193,12 @@ impl<'a> WsTransportClientBuilder<'a> {
 	async fn try_connect(
 		&self,
 		sockaddr: SocketAddr,
-		tls_connector: &Option<async_tls::TlsConnector>,
+		tls_connector: &Option<tokio_rustls::TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
 			let socket = TcpStream::connect(sockaddr);
-			let timeout = async_std::task::sleep(self.timeout);
+			let timeout = tokio::time::sleep(self.timeout);
 			futures::pin_mut!(socket, timeout);
 			match future::select(socket, timeout).await {
 				future::Either::Left((socket, _)) => {
@@ -209,7 +209,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 					match tls_connector {
 						None => TlsOrPlain::Plain(socket),
 						Some(connector) => {
-							let dns_name: &str = webpki::DnsNameRef::try_from_ascii_str(&self.target.host)?.into();
+							let dns_name = tokio_rustls::webpki::DNSNameRef::try_from_ascii_str(&self.target.host)?;
 							let tls_stream = connector.connect(dns_name, socket).await?;
 							TlsOrPlain::Tls(tls_stream)
 						}
@@ -248,8 +248,8 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-impl From<webpki::InvalidDnsNameError> for WsHandshakeError {
-	fn from(err: webpki::InvalidDnsNameError) -> WsHandshakeError {
+impl From<tokio_rustls::webpki::InvalidDNSNameError> for WsHandshakeError {
+	fn from(err: tokio_rustls::webpki::InvalidDNSNameError) -> WsHandshakeError {
 		WsHandshakeError::InvalidDnsName(err)
 	}
 }

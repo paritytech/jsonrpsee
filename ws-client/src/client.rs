@@ -42,7 +42,6 @@ use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, RegisterNotificationMessage,
 	RequestMessage, Subscription, SubscriptionMessage,
 };
-use async_std::sync::Mutex;
 use async_trait::async_trait;
 use futures::{
 	channel::{mpsc, oneshot},
@@ -50,6 +49,7 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+use tokio::sync::Mutex;
 
 use serde::de::DeserializeOwned;
 use std::{
@@ -269,7 +269,7 @@ impl<'a> WsClientBuilder<'a> {
 
 		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(Box::new(e)))?;
 
-		async_std::task::spawn(async move {
+		tokio::spawn(async move {
 			background_task(sender, receiver, from_front, err_tx, max_capacity_per_subscription).await;
 		});
 		Ok(WsClient {
@@ -340,7 +340,7 @@ impl Client for WsClient {
 		}
 
 		let send_back_rx_out = if let Some(duration) = self.request_timeout {
-			let timeout = async_std::task::sleep(duration);
+			let timeout = tokio::time::sleep(duration);
 			futures::pin_mut!(send_back_rx, timeout);
 			match future::select(send_back_rx, timeout).await {
 				future::Either::Left((send_back_rx_out, _)) => send_back_rx_out,

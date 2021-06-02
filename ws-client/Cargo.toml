@@ -11,8 +11,9 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 async-trait = "0.1"
-async-std = "1"
-async-tls = "0.11"
+tokio = { version = "1", features = ["net", "time"] }
+tokio-rustls = "0.22"
+tokio-util = { version = "0.6", features = ["compat"] }
 fnv = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 jsonrpsee-types = { path = "../types", version = "=0.2.0-alpha.7" }
@@ -23,11 +24,9 @@ soketto = "0.5"
 pin-project = "1"
 thiserror = "1"
 url = "2"
-webpki = { version = "0.22", features = ["std"] }
 rustls = "0.19.1"
 rustls-native-certs = "0.5.0"
 
 [dev-dependencies]
 env_logger = "0.8"
 jsonrpsee-test-utils = { path = "../test-utils" }
-async-std = { version = "1", features = ["attributes"] }
