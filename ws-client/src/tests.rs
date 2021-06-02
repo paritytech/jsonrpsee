@@ -13,7 +13,7 @@ use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
-#[tokio::test]
+#[async_std::test]
 async fn method_call_works() {
 	let result = run_request_with_response(ok_response("hello".into(), Id::Num(0)))
 		.with_default_timeout()
@@ -23,7 +23,7 @@ async fn method_call_works() {
 	assert_eq!(JsonValue::String("hello".into()), result);
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn notif_works() {
 	// this empty string shouldn't be read because the server shouldn't respond to notifications.
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), String::new())
@@ -35,7 +35,7 @@ async fn notif_works() {
 	assert!(client.notification("notif", JsonRpcParams::NoParams).with_default_timeout().await.unwrap().is_ok());
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn response_with_wrong_id() {
 	let err = run_request_with_response(ok_response("hello".into(), Id::Num(99)))
 		.with_default_timeout()
@@ -45,41 +45,41 @@ async fn response_with_wrong_id() {
 	assert!(matches!(err, Error::RestartNeeded(_)));
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn response_method_not_found() {
 	let err =
 		run_request_with_response(method_not_found(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::MethodNotFound.into());
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn parse_error_works() {
 	let err = run_request_with_response(parse_error(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::ParseError.into());
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn invalid_request_works() {
 	let err =
 		run_request_with_response(invalid_request(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::InvalidRequest.into());
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn invalid_params_works() {
 	let err =
 		run_request_with_response(invalid_params(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::InvalidParams.into());
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn internal_error_works() {
 	let err =
 		run_request_with_response(internal_error(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
 	assert_error_response(err, JsonRpcErrorCode::InternalError.into());
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn subscription_works() {
 	let server = WebSocketTestServer::with_hardcoded_subscription(
 		"127.0.0.1:0".parse().unwrap(),
@@ -103,7 +103,7 @@ async fn subscription_works() {
 	}
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn notification_handler_works() {
 	let server = WebSocketTestServer::with_hardcoded_notification(
 		"127.0.0.1:0".parse().unwrap(),
@@ -123,7 +123,7 @@ async fn notification_handler_works() {
 	}
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn notification_without_polling_doesnt_make_client_unuseable() {
 	let server = WebSocketTestServer::with_hardcoded_notification(
 		"127.0.0.1:0".parse().unwrap(),
@@ -164,7 +164,7 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 	assert!(client.is_connected());
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn batch_request_works() {
 	let batch_request = vec![
 		("say_hello", JsonRpcParams::NoParams),
@@ -177,7 +177,7 @@ async fn batch_request_works() {
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn batch_request_out_of_order_response() {
 	let batch_request = vec![
 		("say_hello", JsonRpcParams::NoParams),
@@ -190,7 +190,7 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
-#[tokio::test]
+#[async_std::test]
 async fn is_connected_works() {
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
