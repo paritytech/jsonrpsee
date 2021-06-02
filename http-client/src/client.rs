@@ -13,7 +13,6 @@ use futures::Future;
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use tokio::time::error::Elapsed;
 
 /// Http Client Builder.
 #[derive(Debug)]
@@ -153,12 +152,25 @@ impl Client for HttpClient {
 	}
 }
 
-async fn call_with_maybe_timeout<F>(fut: F, timeout: Option<Duration>) -> Result<F::Output, Elapsed>
+#[cfg(feature = "tokio1")]
+async fn call_with_maybe_timeout<F>(fut: F, timeout: Option<Duration>) -> Result<F::Output, tokio::time::error::Elapsed>
 where
 	F: Future,
 {
 	if let Some(dur) = timeout {
 		tokio::time::timeout(dur, fut).await
+	} else {
+		Ok(fut.await)
+	}
+}
+
+#[cfg(feature = "tokio02")]
+async fn call_with_maybe_timeout<F>(fut: F, timeout: Option<Duration>) -> Result<F::Output, _tokio02::time::Elapsed>
+where
+	F: Future,
+{
+	if let Some(dur) = timeout {
+		_tokio02::time::timeout(dur, fut).await
 	} else {
 		Ok(fut.await)
 	}
