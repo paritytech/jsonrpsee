@@ -310,7 +310,20 @@ impl Client for WsClient {
 			Error::ParseError(e)
 		})?;
 		log::trace!("[frontend]: send notification: {:?}", raw);
-		let res = self.to_back.clone().send(FrontToBack::Notification(raw)).await;
+
+		let mut sender = self.to_back.clone();
+		let fut = sender.send(FrontToBack::Notification(raw));
+
+		let res = if let Some(dur) = self.request_timeout {
+			let timeout = async_std::task::sleep(dur);
+			futures::pin_mut!(fut, timeout);
+			match futures::future::select(fut, timeout).await {
+				futures::future::Either::Left((res, _)) => res,
+				futures::future::Either::Right((_, _)) => return Err(Error::RequestTimeout),
+			}
+		} else {
+			fut.await
+		};
 
 		self.id_guard.reclaim_request_id();
 		match res {
