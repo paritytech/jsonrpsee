@@ -16,13 +16,13 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type Method = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
-/// Similar to [`Method`], but represents an asynchronous handler.
+pub type SyncMethod = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
+/// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod = Box<
 	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
-/// A collection of registered [`Method`]s.
-pub type Methods = FxHashMap<&'static str, Method>;
+/// A collection of registered [`SyncMethod`]s.
+pub type SyncMethods = FxHashMap<&'static str, SyncMethod>;
 /// A collection of registered [`AsyncMethod`]s.
 pub type AsyncMethods = FxHashMap<&'static str, AsyncMethod>;
 /// Connection ID, used for stateful protocol such as WebSockets.
@@ -46,35 +46,35 @@ pub enum MethodType {
 
 /// Collection of synchronous and asynchronous methods.
 #[derive(Default)]
-pub struct MethodsHolder {
+pub struct Methods {
 	method_types: FxHashMap<&'static str, MethodType>,
-	methods: Methods,
+	sync_methods: SyncMethods,
 	async_methods: AsyncMethods,
 }
 
-impl MethodsHolder {
-	/// Creates a new empty [`MethodsHolder`].
+impl Methods {
+	/// Creates a new empty [`Methods`].
 	pub fn new() -> Self {
 		Self::default()
 	}
 
 	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
-		if self.methods.get(name).is_some() || self.async_methods.get(name).is_some() {
+		if self.sync_methods.contains_key(name) || self.async_methods.contains_key(name) {
 			return Err(Error::MethodAlreadyRegistered(name.into()));
 		}
 
 		Ok(())
 	}
 
-	/// Merge two [`MethodsHolder`]'s by adding all [`Method`]s and [`AsyncMethod`]s from `other` into `self`.
+	/// Merge two [`Methods`]'s by adding all [`SyncMethod`]s and [`AsyncMethod`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
-	pub fn merge(&mut self, other: MethodsHolder) -> Result<(), Error> {
+	pub fn merge(&mut self, other: Methods) -> Result<(), Error> {
 		for name in other.method_types.keys() {
 			self.verify_method_name(name)?;
 		}
 
-		for (name, callback) in other.methods {
-			self.methods.insert(name, callback);
+		for (name, callback) in other.sync_methods {
+			self.sync_methods.insert(name, callback);
 			self.method_types.insert(name, MethodType::Sync);
 		}
 
@@ -87,13 +87,13 @@ impl MethodsHolder {
 	}
 
 	/// Returns the type of the method handler, if any.
-	pub fn method_type(&self, method_name: &str) -> Option<MethodType> {
-		self.method_types.get(method_name).copied()
+	pub fn method_type(&self, method_name: &str) -> Option<&MethodType> {
+		self.method_types.get(method_name)
 	}
 
 	/// Returns the synchronous method.
-	pub fn method(&self, method_name: &str) -> Option<&Method> {
-		self.methods.get(method_name)
+	pub fn sync_method(&self, method_name: &str) -> Option<&SyncMethod> {
+		self.sync_methods.get(method_name)
 	}
 
 	/// Returns the asynchronous method.
@@ -112,7 +112,7 @@ impl MethodsHolder {
 /// argument that can be used to access data during call execution.
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
-	methods: MethodsHolder,
+	methods: Methods,
 	subscribers: Subscribers,
 }
 
@@ -121,7 +121,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn new(ctx: Context) -> Self {
 		Self { ctx: Arc::new(ctx), methods: Default::default(), subscribers: Default::default() }
 	}
-	/// Register a new RPC method, which responds with a given callback.
+	/// Register a new synchronous RPC method, which computes the response with the given callback.
 	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		Context: Send + Sync + 'static,
@@ -132,7 +132,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		self.methods.methods.insert(
+		self.methods.sync_methods.insert(
 			method_name,
 			Box::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
@@ -156,7 +156,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(())
 	}
 
-	/// Register a new asynchronous RPC method, which responds with a given callback.
+	/// Register a new asynchronous RPC method, which computes the response with the given callback.
 	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
@@ -240,7 +240,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		{
 			let subscribers = self.subscribers.clone();
-			self.methods.methods.insert(
+			self.methods.sync_methods.insert(
 				subscribe_method_name,
 				Box::new(move |id, params, method_sink, conn| {
 					let (online_tx, online_rx) = oneshot::channel::<()>();
@@ -267,7 +267,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		{
 			let subscribers = self.subscribers.clone();
-			self.methods.methods.insert(
+			self.methods.sync_methods.insert(
 				unsubscribe_method_name,
 				Box::new(move |id, params, tx, conn| {
 					let sub_id = params.one()?;
@@ -283,11 +283,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 
 	/// Convert a module into methods. Consumes self.
-	pub fn into_methods(self) -> MethodsHolder {
+	pub fn into_methods(self) -> Methods {
 		self.methods
 	}
 
-	/// Merge two [`RpcModule`]'s by adding all [`Method`]s from `other` into `self`.
+	/// Merge two [`RpcModule`]'s by adding all [`Methods`] `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
 	pub fn merge<Context2>(&mut self, other: RpcModule<Context2>) -> Result<(), Error> {
 		self.methods.merge(other.methods)?;
@@ -352,8 +352,8 @@ mod tests {
 		mod1.merge(mod2).unwrap();
 
 		let methods = mod1.into_methods();
-		assert!(methods.method(&"bla with Vec context").is_some());
-		assert!(methods.method(&"bla with String context").is_some());
+		assert!(methods.sync_method(&"bla with Vec context").is_some());
+		assert!(methods.sync_method(&"bla with String context").is_some());
 	}
 
 	#[test]
@@ -363,7 +363,7 @@ mod tests {
 		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _, _| Ok(()));
 
 		let methods = cxmodule.into_methods();
-		assert!(methods.method(&"hi").is_some());
-		assert!(methods.method(&"goodbye").is_some());
+		assert!(methods.sync_method(&"hi").is_some());
+		assert!(methods.sync_method(&"goodbye").is_some());
 	}
 }

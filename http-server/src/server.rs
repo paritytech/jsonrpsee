@@ -40,7 +40,7 @@ use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::rpc_module::{MethodSink, MethodType, RpcModule};
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
-	rpc_module::MethodsHolder,
+	rpc_module::Methods,
 };
 
 use socket2::{Domain, Socket, Type};
@@ -96,7 +96,7 @@ impl Builder {
 		Ok(Server {
 			listener,
 			local_addr,
-			methods: MethodsHolder::default(),
+			methods: Methods::default(),
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 		})
@@ -115,7 +115,7 @@ pub struct Server {
 	/// Local address
 	local_addr: Option<SocketAddr>,
 	/// Registered methods.
-	methods: MethodsHolder,
+	methods: Methods,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Access control
@@ -123,7 +123,7 @@ pub struct Server {
 }
 
 impl Server {
-	/// Register all methods from a [`MethodsHolder`] of provided [`RpcModule`] on this server.
+	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
 	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
 	/// is returned. Note that the [`RpcModule`] is consumed after this call.
 	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
@@ -164,7 +164,7 @@ impl Server {
 					// method does not exist.
 					let sync_methods = methods.clone();
 					let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest| {
-						let method = sync_methods.method(&*req.method).unwrap();
+						let method = sync_methods.sync_method(&*req.method).unwrap();
 						let params = RpcParams::new(req.params.map(|params| params.get()));
 						// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
 						if let Err(err) = (method)(req.id.clone(), params, &tx, 0) {

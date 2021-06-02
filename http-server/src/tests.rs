@@ -141,7 +141,7 @@ async fn single_method_call_with_faulty_context() {
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, invalid_context("RPC context failed", Id::Num(1)));
+	assert_eq!(response.body, call_execution_failed("RPC context failed", Id::Num(1)));
 }
 
 #[tokio::test]

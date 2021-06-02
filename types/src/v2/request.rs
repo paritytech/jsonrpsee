@@ -1,9 +1,7 @@
-use crate::v2::params::{Id, JsonRpcParams, TwoPointZero};
+use crate::v2::params::{Id, JsonRpcParams, OwnedId, TwoPointZero};
 use beef::Cow;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-
-use super::params::OwnedId;
 
 /// [JSON-RPC request object](https://www.jsonrpc.org/specification#request-object)
 #[derive(Deserialize, Debug)]
@@ -44,8 +42,8 @@ impl OwnedJsonRpcRequest {
 			id: self.id.borrowed(),
 			method: Cow::borrowed(self.method.as_ref()),
 			params: self.params.as_ref().map(|s| {
-				// Note: while this object *may* be created not from the `JsonRpcRequest` object,
-				// using an invalid field to construct it would be a logical invariant break.
+				// Note: while this object *may* be created from something that is not a `JsonRpcRequest` object, using
+				// an invalid field to construct it would be a logical invariant break.
 				serde_json::from_str(&s)
 					.expect("OwnedJsonRpcRequest is only created from JsonRpcRequest, so this conversion must be safe")
 			}),
