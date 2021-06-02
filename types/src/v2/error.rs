@@ -70,7 +70,7 @@ pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
 /// Oversized request message
-pub const OVERSIZED_REQUEST_MSG: &str = "Request too big";
+pub const OVERSIZED_REQUEST_MSG: &str = "Request is too big";
 /// Internal error message.
 pub const INTERNAL_ERROR_MSG: &str = "Internal error";
 /// Invalid params error message.
