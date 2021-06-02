@@ -37,10 +37,10 @@ use jsonrpsee_types::v2::error::JsonRpcErrorCode;
 use jsonrpsee_types::v2::params::{Id, RpcParams};
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest, OwnedJsonRpcRequest};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
-use jsonrpsee_utils::server::rpc_module::{MethodSink, MethodType, RpcModule};
+use jsonrpsee_utils::server::rpc_module::{MethodSink, RpcModule};
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
-	rpc_module::Methods,
+	rpc_module::{Methods, SyncMethod, MethodCallback},
 };
 
 use socket2::{Domain, Socket, Type};
@@ -132,7 +132,7 @@ impl Server {
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<String> {
+	pub fn method_names(&self) -> Vec<&'static str> {
 		self.methods.method_names()
 	}
 
@@ -162,12 +162,10 @@ impl Server {
 					//
 					// Note: This handler expects method existence to be checked prior to the call and will panic if
 					// method does not exist.
-					let sync_methods = methods.clone();
-					let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest| {
-						let method = sync_methods.sync_method(&*req.method).unwrap();
+					let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest, callback: &SyncMethod| {
 						let params = RpcParams::new(req.params.map(|params| params.get()));
 						// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-						if let Err(err) = (method)(req.id.clone(), params, &tx, 0) {
+						if let Err(err) = (callback)(req.id.clone(), params, &tx, 0) {
 							log::error!(
 								"execution of method call '{}' failed: {:?}, request id={:?}",
 								req.method,
@@ -191,10 +189,13 @@ impl Server {
 						let async_methods = async_methods.clone();
 						async move {
 							let req = req.borrowed();
-							let method = async_methods.async_method(&*req.method).unwrap();
+							let callback = match async_methods.method(&*req.method) {
+								Some(MethodCallback::Async(callback)) => callback,
+								_ => panic!("async method '{}' is not registered on the server or is not async – this is a bug", req.method),
+							};
 							let params = RpcParams::new(req.params.map(|params| params.get()));
 							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (method)(req.id.clone().into(), params.into(), tx.clone(), 0).await {
+							if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), 0).await {
 								log::error!(
 									"execution of method call '{}' failed: {:?}, request id={:?}",
 									req.method,
@@ -240,9 +241,9 @@ impl Server {
 						// to [`serde_json::from_slice`] which is pretty annoying.
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-							match methods.method_type(&*req.method) {
-								Some(MethodType::Sync) => execute_sync(&tx, req),
-								Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
+							match methods.method(&*req.method) {
+								Some(MethodCallback::Sync(callback)) => execute_sync(&tx, req, callback),
+								Some(MethodCallback::Async(_)) => execute_async(tx.clone(), req.into()).await,
 								None => {
 									send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 								}
@@ -253,9 +254,9 @@ impl Server {
 							if !batch.is_empty() {
 								single = false;
 								for req in batch {
-									match methods.method_type(&*req.method) {
-										Some(MethodType::Sync) => execute_sync(&tx, req),
-										Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
+									match methods.method(&*req.method) {
+										Some(MethodCallback::Sync(callback)) => execute_sync(&tx, req, callback),
+										Some(MethodCallback::Async(_)) => execute_async(tx.clone(), req.into()).await,
 										None => {
 											send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 										}

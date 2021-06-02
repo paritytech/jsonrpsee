@@ -40,7 +40,7 @@ use jsonrpsee_types::{error::Error, v2::request::OwnedJsonRpcRequest};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule};
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
-	rpc_module::MethodType,
+	rpc_module::{MethodCallback, SyncMethod},
 };
 
 pub struct Server {
@@ -65,7 +65,7 @@ impl Server {
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<String> {
+	pub fn method_names(&self) -> Vec<&'static str> {
 		self.methods.method_names()
 	}
 
@@ -133,13 +133,9 @@ async fn background_task(
 	//
 	// Note: This handler expects method existence to be checked prior to starting the server and will panic if the
 	// method does not exist.
-	let sync_methods = methods.clone();
-	let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest| {
-		let method = sync_methods
-			.sync_method(&*req.method)
-			.unwrap_or_else(|| panic!("sync method '{}' is not registered on the server – this is a bug", req.method));
+	let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest, callback: &SyncMethod| {
 		let params = RpcParams::new(req.params.map(|params| params.get()));
-		if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
+		if let Err(err) = (callback)(req.id.clone(), params, &tx, conn_id) {
 			log::error!("execution of sync method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
 			send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
 		}
@@ -156,11 +152,12 @@ async fn background_task(
 		let async_methods = methods.clone();
 		async move {
 			let req = req.borrowed();
-			let method = async_methods.async_method(&*req.method).unwrap_or_else(|| {
-				panic!("async method '{}' is not registered on the server – this is a bug", req.method)
-			});
+			let callback = match async_methods.method(&*req.method) {
+				Some(MethodCallback::Async(callback)) => callback,
+				_ => panic!("async method '{}' is not registered on the server or is not async – this is a bug", req.method),
+			};
 			let params = RpcParams::new(req.params.map(|params| params.get()));
-			if let Err(err) = (method)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
+			if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
 				log::error!(
 					"execution of async method call '{}' failed: {:?}, request id={:?}",
 					req.method,
@@ -184,9 +181,9 @@ async fn background_task(
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			log::debug!("recv: {:?}", req);
-			match methods.method_type(&*req.method) {
-				Some(MethodType::Sync) => execute_sync(&tx, req),
-				Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
+			match methods.method(&*req.method) {
+				Some(MethodCallback::Sync(callback)) => execute_sync(&tx, req, callback),
+				Some(MethodCallback::Async(_)) => execute_async(tx.clone(), req.into()).await,
 				None => {
 					send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
 				}
@@ -198,9 +195,9 @@ async fn background_task(
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 				for req in batch {
-					match methods.method_type(&*req.method) {
-						Some(MethodType::Sync) => execute_sync(&tx_batch, req),
-						Some(MethodType::Async) => execute_async(tx_batch.clone(), req.into()).await,
+					match methods.method(&*req.method) {
+						Some(MethodCallback::Sync(callback)) => execute_sync(&tx_batch, req, callback),
+						Some(MethodCallback::Async(_)) => execute_async(tx_batch.clone(), req.into()).await,
 						None => {
 							send_error(req.id, &tx_batch, JsonRpcErrorCode::MethodNotFound.into());
 						}
