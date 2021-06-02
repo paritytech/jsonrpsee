@@ -209,7 +209,7 @@ impl<'a> Id<'a> {
 	}
 }
 
-/// Owned version of [`Id`] that allocates memory for the `Number` and `Str` variants.
+/// Owned version of [`Id`] that allocates memory for the `Str` variant.
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
