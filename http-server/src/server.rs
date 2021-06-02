@@ -191,9 +191,9 @@ impl Server {
 							async move {
 								let req = req.borrowed();
 								let callback = match async_methods.method(&*req.method) {
-								Some(MethodCallback::Async(callback)) => callback,
-								_ => panic!("async method '{}' is not registered on the server or is not async – this is a bug", req.method),
-							};
+									Some(MethodCallback::Async(callback)) => callback,
+									_ => panic!("async method '{}' is not registered on the server or is not async – this is a bug", req.method),
+								};
 								let params = RpcParams::new(req.params.map(|params| params.get()));
 								// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
 								if let Err(err) = (callback)(req.id.clone().into(), params.into(), tx.clone(), 0).await
