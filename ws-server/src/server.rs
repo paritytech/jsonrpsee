@@ -43,6 +43,8 @@ use jsonrpsee_utils::server::{
 	rpc_module::MethodType,
 };
 
+/// A WebSocket JSON RPC server.
+#[derive(Debug)]
 pub struct Server {
 	methods: Methods,
 	listener: TcpListener,

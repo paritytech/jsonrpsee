@@ -25,7 +25,7 @@ impl std::error::Error for MyAppError {}
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
-pub async fn server() -> SocketAddr {
+async fn server() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
@@ -69,7 +69,7 @@ pub async fn server() -> SocketAddr {
 }
 
 /// Run server with user provided context.
-pub async fn server_with_context() -> SocketAddr {
+async fn server_with_context() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let ctx = TestContext;

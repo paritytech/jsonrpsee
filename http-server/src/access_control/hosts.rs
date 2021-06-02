@@ -141,7 +141,7 @@ impl std::ops::Deref for Host {
 
 /// Specifies if domains should be validated.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum DomainsValidation<T> {
+pub(crate) enum DomainsValidation<T> {
 	/// Allow only domains on the list.
 	AllowOnly(Vec<T>),
 	/// Disable domains validation completely.
@@ -158,7 +158,7 @@ impl<T> From<Option<Vec<T>>> for DomainsValidation<T> {
 }
 
 /// Returns `true` when `Host` header is whitelisted in `allow_hosts`.
-pub fn is_host_valid(host: Option<&str>, allow_hosts: &AllowHosts) -> bool {
+pub(crate) fn is_host_valid(host: Option<&str>, allow_hosts: &AllowHosts) -> bool {
 	match host {
 		None => false,
 		Some(ref host) => match allow_hosts {
@@ -169,7 +169,7 @@ pub fn is_host_valid(host: Option<&str>, allow_hosts: &AllowHosts) -> bool {
 }
 
 /// Allowed hosts for http header 'host'
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum AllowHosts {
 	/// Allow requests from any host
 	Any,

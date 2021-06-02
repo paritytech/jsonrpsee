@@ -161,7 +161,7 @@ impl<T: Into<String>> From<T> for AccessControlAllowOrigin {
 
 /// Headers allowed to access
 #[derive(Debug, Clone, PartialEq)]
-pub enum AccessControlAllowHeaders {
+pub(crate) enum AccessControlAllowHeaders {
 	/// Specific headers
 	Only(Vec<String>),
 	/// Any header
@@ -207,7 +207,7 @@ impl<T> From<AllowCors<T>> for Option<T> {
 }
 
 /// Returns correct CORS header (if any) given list of allowed origins and current origin.
-pub fn get_cors_allow_origin(
+pub(crate) fn get_cors_allow_origin(
 	origin: Option<&str>,
 	host: Option<&str>,
 	allowed: &Option<Vec<AccessControlAllowOrigin>>,
@@ -251,7 +251,7 @@ pub fn get_cors_allow_origin(
 }
 
 /// Validates if the `AccessControlAllowedHeaders` in the request are allowed.
-pub fn get_cors_allow_headers<T: AsRef<str>, O, F: Fn(T) -> O>(
+pub(crate) fn get_cors_allow_headers<T: AsRef<str>, O, F: Fn(T) -> O>(
 	mut headers: impl Iterator<Item = T>,
 	requested_headers: impl Iterator<Item = T>,
 	cors_allow_headers: &AccessControlAllowHeaders,

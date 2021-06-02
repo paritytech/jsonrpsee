@@ -6,7 +6,8 @@ use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
 /// Active subscription on a Client.
-pub struct Subscription<Notif> {
+#[derive(Debug)]
+pub struct Subscription<Notif: std::fmt::Debug> {
 	/// Channel to send requests to the background task.
 	pub to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
@@ -18,6 +19,7 @@ pub struct Subscription<Notif> {
 }
 
 /// Active NotificationHandler on a Client.
+#[derive(Debug)]
 pub struct NotificationHandler<Notif> {
 	/// Channel to send requests to the background task.
 	pub to_back: mpsc::Sender<FrontToBack>,
@@ -104,7 +106,7 @@ pub enum FrontToBack {
 
 impl<Notif> Subscription<Notif>
 where
-	Notif: DeserializeOwned,
+	Notif: DeserializeOwned + std::fmt::Debug,
 {
 	/// Returns the next notification from the stream
 	/// This may return `None` if the subscription has been terminated,
@@ -128,7 +130,7 @@ where
 
 impl<Notif> NotificationHandler<Notif>
 where
-	Notif: DeserializeOwned,
+	Notif: DeserializeOwned + std::fmt::Debug,
 {
 	/// Returns the next notification from the stream
 	/// This may return `None` if the method has been unregistered,
@@ -148,7 +150,7 @@ where
 	}
 }
 
-impl<Notif> Drop for Subscription<Notif> {
+impl<Notif: std::fmt::Debug> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
 		// the channel's buffer will be full, and our unsubscription request will never make it.

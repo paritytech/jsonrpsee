@@ -24,6 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
+
+//! # jsonrpsee-ws-server
+//!
+//! `jsonrpsee-ws-server` is a [JSON RPC](https://www.jsonrpc.org/specification) WebSocket server library that's is built for `async/await`.
+
 extern crate alloc;
 
 mod server;

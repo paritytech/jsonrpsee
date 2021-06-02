@@ -415,7 +415,7 @@ impl SubscriptionClient for WsClient {
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<N>, Error>
 	where
-		N: DeserializeOwned,
+		N: DeserializeOwned + std::fmt::Debug,
 	{
 		log::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
 

@@ -43,10 +43,10 @@ pub trait SubscriptionClient: Client {
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<Notif>, Error>
 	where
-		Notif: DeserializeOwned;
+		Notif: DeserializeOwned + std::fmt::Debug;
 
 	/// Register a NotificationHandler<Notif> that will listen for incoming JSON-RPC notifications
 	async fn register_notification<'a, Notif>(&self, method: &'a str) -> Result<NotificationHandler<Notif>, Error>
 	where
-		Notif: DeserializeOwned;
+		Notif: DeserializeOwned + std::fmt::Debug;
 }
