@@ -299,7 +299,7 @@ async fn ws_unsubscribe_releases_request_slots() {
 
 	let sub1: Subscription<JsonValue> = client
 		.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello")
-		.with_default_timeout
+		.with_default_timeout()
 		.await
 		.unwrap()
 		.unwrap();
