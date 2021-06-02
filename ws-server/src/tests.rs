@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{RpcModule, WsServer, WsServerBuilder};
+use crate::{RpcModule, WsServerBuilder};
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
@@ -26,7 +26,7 @@ impl std::error::Error for MyAppError {}
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
 async fn server() -> SocketAddr {
-	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let mut server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _| {
@@ -70,7 +70,7 @@ async fn server() -> SocketAddr {
 
 /// Run server with user provided context.
 async fn server_with_context() -> SocketAddr {
-	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let mut server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let ctx = TestContext;
 	let mut rpc_module = RpcModule::new(ctx);
@@ -397,7 +397,8 @@ async fn can_register_modules() {
 	let cx2 = Vec::<u8>::new();
 	let mut mod2 = RpcModule::new(cx2);
 
-	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	// let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	assert_eq!(server.method_names().len(), 0);
 	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();

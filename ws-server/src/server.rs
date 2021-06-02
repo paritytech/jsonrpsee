@@ -50,14 +50,6 @@ pub struct Server {
 }
 
 impl Server {
-	// TODO: remove
-	/// Create a new WebSocket RPC server, bound to the `addr`.
-	pub async fn new(addr: impl ToSocketAddrs) -> Result<Self, Error> {
-		let listener = TcpListener::bind(addr).await?;
-
-		Ok(Server { listener, methods: Methods::default(), cfg: Builder::default() })
-	}
-
 	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
 	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
 	/// is returned. Note that the [`RpcModule`] is consumed after this call.
