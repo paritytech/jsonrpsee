@@ -18,7 +18,7 @@ use std::sync::Arc;
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type SyncMethod = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
-pub type AsyncMethod = Box<
+pub type AsyncMethod = Arc<
 	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
 /// A collection of registered [`SyncMethod`]s.
@@ -148,7 +148,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.callbacks.insert(
 			method_name,
-			MethodCallback::Async(Box::new(move |id, params, tx, _| {
+			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
 					let params = params.borrowed();
