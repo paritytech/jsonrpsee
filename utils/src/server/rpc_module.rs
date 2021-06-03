@@ -294,7 +294,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				MethodCallback::Sync(Box::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
 					subscribers.lock().remove(&(conn_id, sub_id));
-					send_response(id, &tx, "Unsubscribe");
+					send_response(id, &tx, "Unsubscribed");
 
 					Ok(())
 				})),
