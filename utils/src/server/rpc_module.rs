@@ -350,13 +350,11 @@ impl SubscriptionSink {
 
 	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
 		let res = if let Some(keep_alive) = self.keep_alive.as_ref() {
-			if keep_alive.is_canceled() {
-				return Err(subscription_closed_by_client());
-			}
-			match self.inner.unbounded_send(msg) {
-				Ok(()) => Ok(()),
-				// Unbounded channel can only fail when the receiver has been dropped.
-				Err(_) => Err(subscription_closed_by_client()),
+			if !keep_alive.is_canceled() {
+				// unbounded send only fails if the receiver has been dropped.
+				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_by_client())
+			} else {
+				Err(subscription_closed_by_client())
 			}
 		} else {
 			Err(subscription_closed_by_client())
