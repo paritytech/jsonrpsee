@@ -11,14 +11,14 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 # Tokio v1 deps
-tokio1 = { package="tokio", version = "1", features = ["net", "time"], optional=true }
-tokio1-rustls = { package="tokio-rustls", version = "0.22", optional=true }
-tokio1-util = { package="tokio-util", version = "0.6", features = ["compat"], optional=true }
+tokioV1 = { package="tokio", version = "1", features = ["net", "time"], optional=true }
+tokioV1-rustls = { package="tokio-rustls", version = "0.22", optional=true }
+tokioV1-util = { package="tokio-util", version = "0.6", features = ["compat"], optional=true }
 
 # Tokio v0.2 deps
-tokio02 = { package="tokio", version = "0.2", features = ["net", "time"], optional=true }
-tokio02-rustls = { package="tokio-rustls", version = "0.15", optional=true }
-tokio02-util = { package="tokio-util", version = "0.3", features = ["compat"], optional=true }
+tokioV02 = { package="tokio", version = "0.2", features = ["net", "time"], optional=true }
+tokioV02-rustls = { package="tokio-rustls", version = "0.15", optional=true }
+tokioV02-util = { package="tokio-util", version = "0.3", features = ["compat"], optional=true }
 
 async-trait = "0.1"
 fnv = "1"
@@ -39,6 +39,6 @@ env_logger = "0.8"
 jsonrpsee-test-utils = { path = "../test-utils" }
 
 [features]
-default = ["tokioV1"]
-tokioV1 = ["tokio1", "tokio1-rustls", "tokio1-util"]
-tokioV02 = ["tokio02", "tokio02-rustls", "tokio02-util"]
+default = ["tokio1"]
+tokio1 = ["tokioV1", "tokioV1-rustls", "tokioV1-util"]
+tokio02 = ["tokioV02", "tokioV02-rustls", "tokioV02-util"]
