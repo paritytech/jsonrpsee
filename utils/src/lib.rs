@@ -1,6 +1,6 @@
 //! Shared utilities for `jsonrpsee`.
 
-#![warn(missing_docs)]
+#![warn(missing_docs, missing_debug_implementations, unreachable_pub)]
 
 #[cfg(all(feature = "hyper13", feature = "hyper14"))]
 compile_error!("feature `hyper13` and `hyper14` are mutably exclusive");

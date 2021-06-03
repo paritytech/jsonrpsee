@@ -16,7 +16,7 @@ mod helpers;
 criterion_group!(benches, http_requests, batched_http_requests, websocket_requests, jsonrpsee_types_v2);
 criterion_main!(benches);
 
-fn v2_serialize<'a>(req: JsonRpcCallSer<'a>) -> String {
+fn v2_serialize(req: JsonRpcCallSer<'_>) -> String {
 	serde_json::to_string(&req).unwrap()
 }
 
@@ -44,14 +44,14 @@ pub fn http_requests(crit: &mut Criterion) {
 	let url = rt.block_on(helpers::http_server());
 	let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
 	run_round_trip(&rt, crit, client.clone(), "http_round_trip");
-	run_concurrent_round_trip(&rt, crit, client.clone(), "http_concurrent_round_trip");
+	run_concurrent_round_trip(&rt, crit, client, "http_concurrent_round_trip");
 }
 
 pub fn batched_http_requests(crit: &mut Criterion) {
 	let rt = TokioRuntime::new().unwrap();
 	let url = rt.block_on(helpers::http_server());
 	let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
-	run_round_trip_with_batch(&rt, crit, client.clone(), "http batch requests");
+	run_round_trip_with_batch(&rt, crit, client, "http batch requests");
 }
 
 pub fn websocket_requests(crit: &mut Criterion) {
@@ -60,7 +60,7 @@ pub fn websocket_requests(crit: &mut Criterion) {
 	let client =
 		Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 	run_round_trip(&rt, crit, client.clone(), "ws_round_trip");
-	run_concurrent_round_trip(&rt, crit, client.clone(), "ws_concurrent_round_trip");
+	run_concurrent_round_trip(&rt, crit, client, "ws_concurrent_round_trip");
 }
 
 pub fn batched_ws_requests(crit: &mut Criterion) {
@@ -68,7 +68,7 @@ pub fn batched_ws_requests(crit: &mut Criterion) {
 	let url = rt.block_on(helpers::ws_server());
 	let client =
 		Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
-	run_round_trip_with_batch(&rt, crit, client.clone(), "ws batch requests");
+	run_round_trip_with_batch(&rt, crit, client, "ws batch requests");
 }
 
 fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Client>, name: &str) {

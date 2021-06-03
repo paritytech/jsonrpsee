@@ -25,7 +25,7 @@ impl std::error::Error for MyAppError {}
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
-pub async fn server() -> SocketAddr {
+async fn server() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
@@ -69,7 +69,7 @@ pub async fn server() -> SocketAddr {
 }
 
 /// Run server with user provided context.
-pub async fn server_with_context() -> SocketAddr {
+async fn server_with_context() -> SocketAddr {
 	let mut server = WsServer::new("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let ctx = TestContext;
@@ -94,8 +94,18 @@ pub async fn server_with_context() -> SocketAddr {
 			async move {
 				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 				// Call some async function inside.
-				futures_util::future::ready(()).await;
-				Ok("ok")
+				Ok(futures_util::future::ready("ok!").await)
+			}
+			.boxed()
+		})
+		.unwrap();
+
+	rpc_module
+		.register_async_method("err_async", |_p, ctx| {
+			async move {
+				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				// Async work that returns an error
+				futures_util::future::err::<(), CallError>(CallError::Failed(String::from("nah").into())).await
 			}
 			.boxed()
 		})
@@ -210,7 +220,7 @@ async fn single_method_call_with_faulty_context() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, invalid_context("RPC context failed", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("RPC context failed", Id::Num(1)));
 }
 
 #[tokio::test]
@@ -230,7 +240,17 @@ async fn async_method_call_with_ok_context() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, ok_response("ok".into(), Id::Num(1)));
+	assert_eq!(response, ok_response("ok!".into(), Id::Num(1)));
+}
+
+#[tokio::test]
+async fn async_method_call_that_fails() {
+	let addr = server_with_context().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"err_async", "params":[],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, call_execution_failed("nah".into(), Id::Num(1)));
 }
 
 #[tokio::test]

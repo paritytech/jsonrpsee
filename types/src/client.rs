@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
 /// Active subscription on a Client.
+#[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	pub to_back: mpsc::Sender<FrontToBack>,
@@ -18,6 +19,7 @@ pub struct Subscription<Notif> {
 }
 
 /// Active NotificationHandler on a Client.
+#[derive(Debug)]
 pub struct NotificationHandler<Notif> {
 	/// Channel to send requests to the background task.
 	pub to_back: mpsc::Sender<FrontToBack>,

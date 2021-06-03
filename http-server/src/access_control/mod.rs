@@ -27,17 +27,17 @@
 //! Access control based on HTTP headers
 
 mod cors;
-mod hosts;
+pub(crate) mod hosts;
 mod matcher;
 
-pub use cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
-pub use hosts::{AllowHosts, Host};
+pub(crate) use cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
+use hosts::{AllowHosts, Host};
 
 use hyper::header;
 use jsonrpsee_utils::hyper_helpers;
 
 /// Define access on control on HTTP layer.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AccessControl {
 	allow_hosts: AllowHosts,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,
@@ -100,6 +100,7 @@ impl Default for AccessControl {
 }
 
 /// Convenience builder pattern
+#[derive(Debug)]
 pub struct AccessControlBuilder {
 	allow_hosts: AllowHosts,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,

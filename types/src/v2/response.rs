@@ -15,7 +15,7 @@ pub struct JsonRpcResponse<'a, T> {
 }
 
 /// JSON-RPC subscription response.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct JsonRpcSubscriptionResponse<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,

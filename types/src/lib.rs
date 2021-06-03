@@ -1,7 +1,7 @@
 //! Shared types in `jsonrpsee` for clients, servers and utilities.
 
 #![deny(unsafe_code)]
-#![warn(missing_docs)]
+#![warn(missing_docs, missing_debug_implementations)]
 
 extern crate alloc;
 
