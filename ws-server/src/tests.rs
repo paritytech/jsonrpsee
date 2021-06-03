@@ -143,6 +143,26 @@ async fn can_set_the_max_request_body_size() {
 }
 
 #[tokio::test]
+async fn can_set_the_max_connections() {
+	let addr = "127.0.0.1:0";
+	// Server that accepts max 2 connections
+	let mut server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
+	server.register_module(module).unwrap();
+	let addr = server.local_addr().unwrap();
+
+	tokio::spawn(async { server.start().await });
+
+	assert!(WebSocketTestClient::new(addr).await.is_ok());
+	assert!(WebSocketTestClient::new(addr).await.is_ok());
+	// Third connection fails
+	assert!(WebSocketTestClient::new(addr).await.is_err());
+	let err = WebSocketTestClient::new(addr).await.unwrap_err();
+	assert_eq!(err.to_string(), "WebSocketHandshake failed: Err(Io(Os { code: 54, kind: ConnectionReset, message: \"Connection reset by peer\" }))");
+}
+
+#[tokio::test]
 async fn single_method_calls_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();

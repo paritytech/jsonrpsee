@@ -56,6 +56,12 @@ pub struct WebSocketTestClient {
 	rx: soketto::Receiver<BufReader<BufWriter<Compat<TcpStream>>>>,
 }
 
+impl std::fmt::Debug for WebSocketTestClient {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "WebSocketTestClient")
+	}
+}
+
 impl WebSocketTestClient {
 	pub async fn new(url: SocketAddr) -> Result<Self, Error> {
 		let socket = TcpStream::connect(url).await?;

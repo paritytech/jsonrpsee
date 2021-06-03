@@ -29,6 +29,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
@@ -41,12 +42,16 @@ use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule};
 
+/// Default maximum connections allowed.
+const MAX_CONNECTIONS: u64 = 100;
+
 /// A WebSocket JSON RPC server.
 #[derive(Debug)]
 pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
-	cfg: Builder,
+	cfg: Settings,
+	stats: Stats,
 }
 
 impl Server {
@@ -72,15 +77,19 @@ impl Server {
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.methods);
-		let cfg = Arc::new(self.cfg);
+		let cfg = self.cfg;
 		let mut id = 0;
 
-		while let Some(socket) = incoming.next().await {
-			if let Ok(socket) = socket {
-				socket.set_nodelay(true).unwrap();
 
+		while let Some(socket) = incoming.next().await {
+			if self.stats.connection_count.load(Ordering::Relaxed) + 1 > self.cfg.max_connections {
+				log::warn!("Too many connections. Try again in a while");
+				continue;
+			}
+			if let Ok(socket) = socket {
+				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
+				self.stats.connection_count.fetch_add(1, Ordering::Relaxed);
 				let methods = methods.clone();
-				let cfg = cfg.clone();
 
 				tokio::spawn(async move { background_task(socket, id, methods, cfg).await });
 
@@ -94,7 +103,7 @@ async fn background_task(
 	socket: tokio::net::TcpStream,
 	conn_id: ConnectionId,
 	methods: Arc<Methods>,
-	cfg: Arc<Builder>,
+	cfg: Settings,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
@@ -173,28 +182,54 @@ async fn background_task(
 	}
 }
 
+/// JSON-RPC Websocket server settings.
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+	/// Maximum size in bytes of a request.
+	max_request_body_size: u32,
+	/// Maximum number of incoming connections allowed.
+	max_connections: u64,
+}
+
+impl Default for Settings {
+	fn default() -> Self {
+		Self { max_request_body_size: TEN_MB_SIZE_BYTES, max_connections: MAX_CONNECTIONS }
+	}
+}
+
 /// Builder to configure and create a JSON-RPC Websocket server
 #[derive(Debug)]
 pub struct Builder {
-	max_request_body_size: u32,
+	settings: Settings,
 }
 
 impl Builder {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.max_request_body_size = size;
+		self.settings.max_request_body_size = size;
+		self
+	}
+
+	/// Set the maximum number of connections allowed. Default is 100.
+	pub fn max_connections(mut self, max: u64) -> Self {
+		self.settings.max_connections = max;
 		self
 	}
 
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
-		Ok(Server { listener, methods: Methods::default(), cfg: self })
+		Ok(Server { listener, methods: Methods::default(), cfg: self.settings, stats: Stats::default() })
 	}
 }
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { max_request_body_size: TEN_MB_SIZE_BYTES }
+		Self { settings: Settings::default() }
 	}
+}
+
+#[derive(Debug, Default)]
+struct Stats {
+	connection_count: AtomicU64,
 }
