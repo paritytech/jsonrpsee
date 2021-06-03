@@ -27,6 +27,7 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
+use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
@@ -40,21 +41,18 @@ use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule};
 
+/// Default maximum connections allowed.
+const MAX_CONNECTIONS: u64 = 100;
+
 /// A WebSocket JSON RPC server.
 #[derive(Debug)]
 pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
+	cfg: Settings,
 }
 
 impl Server {
-	/// Create a new WebSocket RPC server, bound to the `addr`.
-	pub async fn new(addr: impl ToSocketAddrs) -> Result<Self, Error> {
-		let listener = TcpListener::bind(addr).await?;
-
-		Ok(Server { listener, methods: Methods::default() })
-	}
-
 	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
 	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
 	/// is returned. Note that the [`RpcModule`] is consumed after this call.
@@ -77,15 +75,20 @@ impl Server {
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.methods);
+		let cfg = self.cfg;
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
 			if let Ok(socket) = socket {
-				socket.set_nodelay(true).unwrap();
+				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
 
+				if Arc::strong_count(&methods) > self.cfg.max_connections as usize {
+					log::warn!("Too many connections. Try again in a while");
+					continue;
+				}
 				let methods = methods.clone();
 
-				tokio::spawn(async move { background_task(socket, methods, id).await });
+				tokio::spawn(background_task(socket, id, methods, cfg));
 
 				id += 1;
 			}
@@ -95,8 +98,9 @@ impl Server {
 
 async fn background_task(
 	socket: tokio::net::TcpStream,
-	methods: Arc<Methods>,
 	conn_id: ConnectionId,
+	methods: Arc<Methods>,
+	cfg: Settings,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
@@ -130,6 +134,12 @@ async fn background_task(
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
+
+		if data.len() > cfg.max_request_body_size as usize {
+			log::warn!("Request is too big ({} bytes, max is {})", data.len(), cfg.max_request_body_size);
+			send_error(Id::Null, &tx, JsonRpcErrorCode::OversizedRequest.into());
+			continue;
+		}
 
 		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be used with
 		// untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged enum here and have to try
@@ -166,5 +176,52 @@ async fn background_task(
 
 			send_error(id, &tx, code.into());
 		}
+	}
+}
+
+/// JSON-RPC Websocket server settings.
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+	/// Maximum size in bytes of a request.
+	max_request_body_size: u32,
+	/// Maximum number of incoming connections allowed.
+	max_connections: u64,
+}
+
+impl Default for Settings {
+	fn default() -> Self {
+		Self { max_request_body_size: TEN_MB_SIZE_BYTES, max_connections: MAX_CONNECTIONS }
+	}
+}
+
+/// Builder to configure and create a JSON-RPC Websocket server
+#[derive(Debug)]
+pub struct Builder {
+	settings: Settings,
+}
+
+impl Builder {
+	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.settings.max_request_body_size = size;
+		self
+	}
+
+	/// Set the maximum number of connections allowed. Default is 100.
+	pub fn max_connections(mut self, max: u64) -> Self {
+		self.settings.max_connections = max;
+		self
+	}
+
+	/// Finalize the configuration of the server. Consumes the [`Builder`].
+	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
+		let listener = TcpListener::bind(addr).await?;
+		Ok(Server { listener, methods: Methods::default(), cfg: self.settings })
+	}
+}
+
+impl Default for Builder {
+	fn default() -> Self {
+		Self { settings: Settings::default() }
 	}
 }

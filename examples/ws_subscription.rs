@@ -27,7 +27,7 @@
 use jsonrpsee::{
 	types::Error,
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
-	ws_server::{RpcModule, WsServer},
+	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
 
@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let mut server = WsServer::new("127.0.0.1:0").await?;
+	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
 		std::thread::spawn(move || loop {

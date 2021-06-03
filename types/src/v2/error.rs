@@ -54,6 +54,8 @@ impl<'a> PartialEq for JsonRpcErrorObject<'a> {
 
 /// Parse error code.
 pub const PARSE_ERROR_CODE: i32 = -32700;
+/// Oversized request error code.
+pub const OVERSIZED_REQUEST_CODE: i32 = -32701;
 /// Internal error code.
 pub const INTERNAL_ERROR_CODE: i32 = -32603;
 /// Invalid params error code.
@@ -67,6 +69,8 @@ pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
+/// Oversized request message
+pub const OVERSIZED_REQUEST_MSG: &str = "Request is too big";
 /// Internal error message.
 pub const INTERNAL_ERROR_MSG: &str = "Internal error";
 /// Invalid params error message.
@@ -84,6 +88,8 @@ pub enum JsonRpcErrorCode {
 	/// Invalid JSON was received by the server.
 	/// An error occurred on the server while parsing the JSON text.
 	ParseError,
+	/// The request was too big.
+	OversizedRequest,
 	/// The JSON sent is not a valid Request object.
 	InvalidRequest,
 	/// The method does not exist / is not available.
@@ -99,25 +105,29 @@ pub enum JsonRpcErrorCode {
 impl JsonRpcErrorCode {
 	/// Returns integer code value
 	pub const fn code(&self) -> i32 {
+		use JsonRpcErrorCode::*;
 		match *self {
-			JsonRpcErrorCode::ParseError => PARSE_ERROR_CODE,
-			JsonRpcErrorCode::InvalidRequest => INVALID_REQUEST_CODE,
-			JsonRpcErrorCode::MethodNotFound => METHOD_NOT_FOUND_CODE,
-			JsonRpcErrorCode::InvalidParams => INVALID_PARAMS_CODE,
-			JsonRpcErrorCode::InternalError => INTERNAL_ERROR_CODE,
-			JsonRpcErrorCode::ServerError(code) => code,
+			ParseError => PARSE_ERROR_CODE,
+			OversizedRequest => OVERSIZED_REQUEST_CODE,
+			InvalidRequest => INVALID_REQUEST_CODE,
+			MethodNotFound => METHOD_NOT_FOUND_CODE,
+			InvalidParams => INVALID_PARAMS_CODE,
+			InternalError => INTERNAL_ERROR_CODE,
+			ServerError(code) => code,
 		}
 	}
 
 	/// Returns the message for the given error code.
 	pub const fn message(&self) -> &'static str {
+		use JsonRpcErrorCode::*;
 		match self {
-			JsonRpcErrorCode::ParseError => PARSE_ERROR_MSG,
-			JsonRpcErrorCode::InvalidRequest => INVALID_REQUEST_MSG,
-			JsonRpcErrorCode::MethodNotFound => METHOD_NOT_FOUND_MSG,
-			JsonRpcErrorCode::InvalidParams => INVALID_PARAMS_MSG,
-			JsonRpcErrorCode::InternalError => INTERNAL_ERROR_MSG,
-			JsonRpcErrorCode::ServerError(_) => SERVER_ERROR_MSG,
+			ParseError => PARSE_ERROR_MSG,
+			OversizedRequest => OVERSIZED_REQUEST_MSG,
+			InvalidRequest => INVALID_REQUEST_MSG,
+			MethodNotFound => METHOD_NOT_FOUND_MSG,
+			InvalidParams => INVALID_PARAMS_MSG,
+			InternalError => INTERNAL_ERROR_MSG,
+			ServerError(_) => SERVER_ERROR_MSG,
 		}
 	}
 }
@@ -130,13 +140,15 @@ impl fmt::Display for JsonRpcErrorCode {
 
 impl From<i32> for JsonRpcErrorCode {
 	fn from(code: i32) -> Self {
+		use JsonRpcErrorCode::*;
 		match code {
-			PARSE_ERROR_CODE => JsonRpcErrorCode::ParseError,
-			INVALID_REQUEST_CODE => JsonRpcErrorCode::InvalidRequest,
-			METHOD_NOT_FOUND_CODE => JsonRpcErrorCode::MethodNotFound,
-			INVALID_PARAMS_CODE => JsonRpcErrorCode::InvalidParams,
-			INTERNAL_ERROR_CODE => JsonRpcErrorCode::InternalError,
-			code => JsonRpcErrorCode::ServerError(code),
+			PARSE_ERROR_CODE => ParseError,
+			OVERSIZED_REQUEST_CODE => OversizedRequest,
+			INVALID_REQUEST_CODE => InvalidRequest,
+			METHOD_NOT_FOUND_CODE => MethodNotFound,
+			INVALID_PARAMS_CODE => InvalidParams,
+			INTERNAL_ERROR_CODE => InternalError,
+			code => ServerError(code),
 		}
 	}
 }

@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::oneshot;
-use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServer, RpcModule};
+use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServerBuilder, RpcModule};
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -35,7 +35,8 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
-		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
+		let mut server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
+
 		let mut module = RpcModule::new(());
 		module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
@@ -97,8 +98,7 @@ pub async fn websocket_server() -> SocketAddr {
 
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
-
-		let mut server = rt.block_on(WsServer::new("127.0.0.1:0")).unwrap();
+		let mut server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
 		let mut module = RpcModule::new(());
 		module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 		server.register_module(module).unwrap();

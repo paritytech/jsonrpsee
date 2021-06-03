@@ -463,7 +463,7 @@ impl SubscriptionClient for WsClient {
 	}
 
 	/// Subscribe to a specific method.
-	async fn subscribe_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
+	async fn subscribe_to_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
 	{

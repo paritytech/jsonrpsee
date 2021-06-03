@@ -33,7 +33,7 @@
 use jsonrpsee::{
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
 	ws_server::RpcModule,
-	ws_server::WsServer,
+	ws_server::WsServerBuilder,
 };
 use restson::{Error as RestsonError, RestPath};
 use serde::{Deserialize, Serialize};
@@ -99,7 +99,7 @@ struct WeatherApiCx {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let mut server = WsServer::new("127.0.0.1:0").await?;
+	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 
 	let api_client = restson::RestClient::new("http://api.openweathermap.org").unwrap();
 	let last_weather = Weather::default();

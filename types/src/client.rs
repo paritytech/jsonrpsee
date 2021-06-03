@@ -25,6 +25,9 @@ enum NotifResponse<Notif> {
 }
 
 /// Active subscription on the client.
+///
+/// It will automatically unsubscribe in the [`Subscription::drop`] so no need to explicitly call
+/// the `unsubscribe method` if it is an an subscription based on [`SubscriptionId`].
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
@@ -38,7 +41,7 @@ pub struct Subscription<Notif> {
 }
 
 impl<Notif> Subscription<Notif> {
-	/// Create a new notification handle.
+	/// Create a new subscription.
 	pub fn new(
 		to_back: mpsc::Sender<FrontToBack>,
 		notifs_rx: mpsc::Receiver<JsonValue>,
@@ -125,7 +128,7 @@ impl<Notif> Subscription<Notif>
 where
 	Notif: DeserializeOwned,
 {
-	/// Returns the next notification from the stream
+	/// Returns the next notification from the stream.
 	/// This may return `Ok(None)` if the subscription has been terminated,
 	/// may happen if the channel becomes full or is dropped.
 	pub async fn next(&mut self) -> Result<Option<Notif>, Error> {
