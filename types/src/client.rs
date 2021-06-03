@@ -15,9 +15,11 @@ pub enum SubscriptionKind {
 	Method(String),
 }
 
+/// Internal type to detect whether a subscription response from
+/// the server was a valid notification or should be treated as an error.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum NotifResponse<Notif> {
+enum NotifResponse<Notif> {
 	Ok(Notif),
 	Err(SubscriptionClosedError),
 }

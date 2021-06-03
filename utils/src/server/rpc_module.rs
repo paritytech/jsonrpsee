@@ -363,15 +363,16 @@ impl SubscriptionSink {
 		};
 
 		if res.is_err() {
-			self.close();
+			self.close("Subscription closed by the client".to_owned());
 		}
 
 		res
 	}
 
-	fn close(&mut self) {
-		let msg = SubscriptionClosedError { reason: "Server subscription task failed".to_owned() };
-		let result = to_raw_value(&msg).expect("valid json infallible; qed");
+	/// Close the subscription sink with customized error message.
+	pub fn close(&mut self, close_reason: String) {
+		let err: SubscriptionClosedError = close_reason.into();
+		let result = to_raw_value(&err).expect("valid json infallible; qed");
 		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,
@@ -387,7 +388,7 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		self.close();
+		self.close(format!("Subscription: {} closed by the server", self.sub_id));
 	}
 }
 
@@ -412,10 +413,10 @@ impl KeepAlive {
 	fn close(&mut self, msg: String) {
 		if let Some((sink, _)) = self.subscribers.lock().remove(&(self.conn_id, self.sub_id)) {
 			// NOTE: this might happen if the [`SubscriptionSink`] is dropped in a background
-			// task then it's not possible propogate the error to the client if the subscription
+			// task then it's not possible propagate the error to the client if the subscription
 			// request has already been answered.
 			//
-			// Thus, we send a notication message that subscription is closed.
+			// Thus, we send a notification message that subscription is closed.
 			let _ = sink.unbounded_send(msg);
 		}
 	}

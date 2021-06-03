@@ -245,7 +245,6 @@ async fn ws_unsubscribe_releases_request_slots() {
 
 #[tokio::test]
 async fn server_should_be_able_to_close_subscriptions() {
-	env_logger::try_init();
 	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -257,5 +256,8 @@ async fn server_should_be_able_to_close_subscriptions() {
 		.await
 		.unwrap()
 		.unwrap();
-	panic!("{:?}", sub.next().with_timeout(Duration::from_secs(20)).await.unwrap());
+
+	let res = sub.next().with_timeout(Duration::from_secs(20)).await.unwrap().unwrap_err();
+
+	assert!(matches!(res, Error::SubscriptionClosed(_)));
 }

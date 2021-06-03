@@ -58,7 +58,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
 		std::thread::spawn(move || loop {
-			if let Err(Error::SubscriptionClosed) = sink.send(&"hello my friend") {
+			if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello my friend") {
 				return;
 			}
 			std::thread::sleep(std::time::Duration::from_secs(1));

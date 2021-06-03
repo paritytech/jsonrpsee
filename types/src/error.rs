@@ -1,4 +1,3 @@
-use crate::v2::params::SubscriptionId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -84,10 +83,18 @@ pub enum Error {
 	Custom(String),
 }
 
-/// Error type to indicate on a notification that subscription was closed.
+/// Error type with a special `subscription_closed` field to detect that
+/// a subscription has been closed to distinguish valid items produced
+/// by the server on the subscription stream.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SubscriptionClosedError {
-	pub reason: String,
+	subscription_closed: String,
+}
+
+impl From<String> for SubscriptionClosedError {
+	fn from(msg: String) -> Self {
+		Self { subscription_closed: msg }
+	}
 }
 
 /// Generic transport error.
