@@ -26,13 +26,13 @@
 
 //! Convenience wrapper for a stream (AsyncRead + AsyncWrite) which can either be plain TCP or TLS.
 
+use crate::tokio::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use futures::{
 	io::{IoSlice, IoSliceMut},
 	prelude::*,
 };
 use pin_project::pin_project;
 use std::{io::Error as IoError, pin::Pin, task::Context, task::Poll};
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 /// Stream to represent either a unencrypted or encrypted socket stream.
 #[pin_project(project = EitherStreamProj)]
