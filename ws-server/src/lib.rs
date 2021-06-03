@@ -38,5 +38,5 @@ mod server;
 mod tests;
 
 pub use jsonrpsee_types::error::Error;
-pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SubscriptionSink, SyncMethods};
-pub use server::Server as WsServer;
+pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SubscriptionSink};
+pub use server::{Builder as WsServerBuilder, Server as WsServer};

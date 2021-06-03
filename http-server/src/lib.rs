@@ -41,7 +41,7 @@ pub use access_control::{
 	AccessControl, AccessControlBuilder,
 };
 pub use jsonrpsee_types::{Error, TEN_MB_SIZE_BYTES};
-pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SyncMethods};
+pub use jsonrpsee_utils::server::rpc_module::RpcModule;
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
 
 #[cfg(test)]

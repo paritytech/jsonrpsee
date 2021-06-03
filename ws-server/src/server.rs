@@ -27,37 +27,32 @@
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
+use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
+use jsonrpsee_types::error::Error;
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::{Id, RpcParams};
+use jsonrpsee_types::v2::params::Id;
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
-use jsonrpsee_types::{error::Error, v2::request::OwnedJsonRpcRequest};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule};
-use jsonrpsee_utils::server::{
-	helpers::{collect_batch_response, send_error},
-	rpc_module::MethodType,
-};
+use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule};
+
+/// Default maximum connections allowed.
+const MAX_CONNECTIONS: u64 = 100;
 
 /// A WebSocket JSON RPC server.
 #[derive(Debug)]
 pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
+	cfg: Settings,
 }
 
 impl Server {
-	/// Create a new WebSocket RPC server, bound to the `addr`.
-	pub async fn new(addr: impl ToSocketAddrs) -> Result<Self, Error> {
-		let listener = TcpListener::bind(addr).await?;
-
-		Ok(Server { listener, methods: Methods::default() })
-	}
-
 	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
 	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
 	/// is returned. Note that the [`RpcModule`] is consumed after this call.
@@ -67,7 +62,7 @@ impl Server {
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<String> {
+	pub fn method_names(&self) -> Vec<&'static str> {
 		self.methods.method_names()
 	}
 
@@ -80,15 +75,20 @@ impl Server {
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.methods);
+		let cfg = self.cfg;
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
 			if let Ok(socket) = socket {
-				socket.set_nodelay(true).unwrap();
+				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
 
+				if Arc::strong_count(&methods) > self.cfg.max_connections as usize {
+					log::warn!("Too many connections. Try again in a while");
+					continue;
+				}
 				let methods = methods.clone();
 
-				tokio::spawn(async move { background_task(socket, methods, id).await });
+				tokio::spawn(background_task(socket, id, methods, cfg));
 
 				id += 1;
 			}
@@ -98,8 +98,9 @@ impl Server {
 
 async fn background_task(
 	socket: tokio::net::TcpStream,
-	methods: Arc<Methods>,
 	conn_id: ConnectionId,
+	methods: Arc<Methods>,
+	cfg: Settings,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
@@ -129,55 +130,16 @@ async fn background_task(
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 
-	// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in the params from
-	// the request. The result of the computation is sent back over the `tx` channel and the result(s) are collected
-	// into a `String` and sent back over the wire.
-	//
-	// Note: This handler expects method existence to be checked prior to starting the server and will panic if the
-	// method does not exist.
-	let sync_methods = methods.clone();
-	let execute_sync = move |tx: &MethodSink, req: JsonRpcRequest| {
-		let method = sync_methods
-			.sync_method(&*req.method)
-			.unwrap_or_else(|| panic!("sync method '{}' is not registered on the server – this is a bug", req.method));
-		let params = RpcParams::new(req.params.map(|params| params.get()));
-		if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
-			log::error!("execution of sync method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
-			send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-		}
-	};
-
-	// Similar to `execute_sync`, but uses an asyncrhonous context.
-	// Unfortunately we have to use owned versions of objects due to heavy lifetime usage their borrowed equivalents.
-	// Probably there is a chance to avoid using the heap here through some `Pin` magic, but several attempts to do so
-	// have failed.
-	//
-	// Note: This handler expects method existence to be checked prior to starting the server and will panic if the
-	// method does not exist.
-	let execute_async = |tx: MethodSink, req: OwnedJsonRpcRequest| {
-		let async_methods = methods.clone();
-		async move {
-			let req = req.borrowed();
-			let method = async_methods.async_method(&*req.method).unwrap_or_else(|| {
-				panic!("async method '{}' is not registered on the server – this is a bug", req.method)
-			});
-			let params = RpcParams::new(req.params.map(|params| params.get()));
-			if let Err(err) = (method)(req.id.clone().into(), params.into(), tx.clone(), conn_id).await {
-				log::error!(
-					"execution of async method call '{}' failed: {:?}, request id={:?}",
-					req.method,
-					err,
-					req.id
-				);
-				send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-			}
-		}
-	};
-
 	loop {
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
+
+		if data.len() > cfg.max_request_body_size as usize {
+			log::warn!("Request is too big ({} bytes, max is {})", data.len(), cfg.max_request_body_size);
+			send_error(Id::Null, &tx, JsonRpcErrorCode::OversizedRequest.into());
+			continue;
+		}
 
 		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be used with
 		// untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged enum here and have to try
@@ -186,13 +148,7 @@ async fn background_task(
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			log::debug!("recv: {:?}", req);
-			match methods.method_type(&*req.method) {
-				Some(MethodType::Sync) => execute_sync(&tx, req),
-				Some(MethodType::Async) => execute_async(tx.clone(), req.into()).await,
-				None => {
-					send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-				}
-			}
+			methods.execute(&tx, req, conn_id).await;
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
 				// Batch responses must be sent back as a single message so we read the results from each request in the
@@ -200,13 +156,7 @@ async fn background_task(
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 				for req in batch {
-					match methods.method_type(&*req.method) {
-						Some(MethodType::Sync) => execute_sync(&tx_batch, req),
-						Some(MethodType::Async) => execute_async(tx_batch.clone(), req.into()).await,
-						None => {
-							send_error(req.id, &tx_batch, JsonRpcErrorCode::MethodNotFound.into());
-						}
-					}
+					methods.execute(&tx_batch, req, conn_id).await;
 				}
 				// Closes the receiving half of a channel without dropping it. This prevents any further messages from
 				// being sent on the channel.
@@ -226,5 +176,52 @@ async fn background_task(
 
 			send_error(id, &tx, code.into());
 		}
+	}
+}
+
+/// JSON-RPC Websocket server settings.
+#[derive(Debug, Clone, Copy)]
+struct Settings {
+	/// Maximum size in bytes of a request.
+	max_request_body_size: u32,
+	/// Maximum number of incoming connections allowed.
+	max_connections: u64,
+}
+
+impl Default for Settings {
+	fn default() -> Self {
+		Self { max_request_body_size: TEN_MB_SIZE_BYTES, max_connections: MAX_CONNECTIONS }
+	}
+}
+
+/// Builder to configure and create a JSON-RPC Websocket server
+#[derive(Debug)]
+pub struct Builder {
+	settings: Settings,
+}
+
+impl Builder {
+	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.settings.max_request_body_size = size;
+		self
+	}
+
+	/// Set the maximum number of connections allowed. Default is 100.
+	pub fn max_connections(mut self, max: u64) -> Self {
+		self.settings.max_connections = max;
+		self
+	}
+
+	/// Finalize the configuration of the server. Consumes the [`Builder`].
+	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
+		let listener = TcpListener::bind(addr).await?;
+		Ok(Server { listener, methods: Methods::default(), cfg: self.settings })
+	}
+}
+
+impl Default for Builder {
+	fn default() -> Self {
+		Self { settings: Settings::default() }
 	}
 }

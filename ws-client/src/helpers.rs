@@ -196,7 +196,7 @@ pub async fn call_with_maybe_timeout<T>(
 	timeout: Option<Duration>,
 ) -> Result<Result<T, Error>, oneshot::Canceled> {
 	if let Some(dur) = timeout {
-		let timeout = async_std::task::sleep(dur);
+		let timeout = crate::tokio::sleep(dur);
 		futures::pin_mut!(rx, timeout);
 		match futures::future::select(rx, timeout).await {
 			futures::future::Either::Left((res, _)) => res,

@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::tokio::Mutex;
 use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcError;
@@ -42,7 +43,6 @@ use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, RegisterNotificationMessage,
 	RequestMessage, Subscription, SubscriptionMessage,
 };
-use async_std::sync::Mutex;
 use async_trait::async_trait;
 use futures::{
 	channel::{mpsc, oneshot},
@@ -253,6 +253,10 @@ impl<'a> WsClientBuilder<'a> {
 	/// `ws://host` - port 80 is used
 	///
 	/// `wss://host` - port 443 is used
+	///
+	/// ## Panics
+	///
+	/// Panics if being called outside of `tokio` runtime context.
 	pub async fn build(self, url: &'a str) -> Result<WsClient, Error> {
 		let certificate_store = self.certificate_store;
 		let max_capacity_per_subscription = self.max_notifs_per_subscription;
@@ -271,7 +275,7 @@ impl<'a> WsClientBuilder<'a> {
 
 		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(Box::new(e)))?;
 
-		async_std::task::spawn(async move {
+		crate::tokio::spawn(async move {
 			background_task(sender, receiver, from_front, err_tx, max_capacity_per_subscription).await;
 		});
 		Ok(WsClient {
@@ -315,7 +319,7 @@ impl Client for WsClient {
 		let fut = sender.send(FrontToBack::Notification(raw));
 
 		let res = if let Some(dur) = self.request_timeout {
-			let timeout = async_std::task::sleep(dur);
+			let timeout = crate::tokio::sleep(dur);
 			futures::pin_mut!(fut, timeout);
 			match futures::future::select(fut, timeout).await {
 				futures::future::Either::Left((res, _)) => res,

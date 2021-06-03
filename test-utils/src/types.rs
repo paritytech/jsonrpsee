@@ -56,6 +56,12 @@ pub struct WebSocketTestClient {
 	rx: soketto::Receiver<BufReader<BufWriter<Compat<TcpStream>>>>,
 }
 
+impl std::fmt::Debug for WebSocketTestClient {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "WebSocketTestClient")
+	}
+}
+
 impl WebSocketTestClient {
 	pub async fn new(url: SocketAddr) -> Result<Self, Error> {
 		let socket = TcpStream::connect(url).await?;
@@ -109,7 +115,7 @@ pub struct WebSocketTestServer {
 impl WebSocketTestServer {
 	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every connection.
 	pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
-		let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
+		let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
 		let (tx, rx) = mpsc::channel::<()>(4);
 		tokio::spawn(server_backend(listener, rx, ServerMode::Response(response)));
@@ -124,7 +130,7 @@ impl WebSocketTestServer {
 
 		std::thread::spawn(move || {
 			let rt = tokio::runtime::Runtime::new().unwrap();
-			let listener = rt.block_on(async_std::net::TcpListener::bind(sockaddr)).unwrap();
+			let listener = rt.block_on(tokio::net::TcpListener::bind(sockaddr)).unwrap();
 			let local_addr = listener.local_addr().unwrap();
 
 			addr_tx.send(local_addr).unwrap();
@@ -144,7 +150,7 @@ impl WebSocketTestServer {
 		subscription_id: String,
 		subscription_response: String,
 	) -> Self {
-		let listener = async_std::net::TcpListener::bind(sockaddr).await.unwrap();
+		let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
 		let (tx, rx) = mpsc::channel::<()>(4);
 		tokio::spawn(server_backend(listener, rx, ServerMode::Subscription { subscription_id, subscription_response }));
@@ -161,7 +167,7 @@ impl WebSocketTestServer {
 	}
 }
 
-async fn server_backend(listener: async_std::net::TcpListener, mut exit: Receiver<()>, mode: ServerMode) {
+async fn server_backend(listener: tokio::net::TcpListener, mut exit: Receiver<()>, mode: ServerMode) {
 	let mut connections = Vec::new();
 
 	loop {
@@ -190,8 +196,8 @@ async fn server_backend(listener: async_std::net::TcpListener, mut exit: Receive
 	}
 }
 
-async fn connection_task(socket: async_std::net::TcpStream, mode: ServerMode, mut exit: Receiver<()>) {
-	let mut server = Server::new(socket);
+async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut exit: Receiver<()>) {
+	let mut server = Server::new(socket.compat());
 
 	let websocket_key = match server.receive_request().await {
 		Ok(req) => req.into_key(),
