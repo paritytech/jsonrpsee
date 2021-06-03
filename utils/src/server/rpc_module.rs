@@ -33,7 +33,7 @@ pub type MethodSink = mpsc::UnboundedSender<String>;
 
 type Subscribers = Arc<Mutex<FxHashMap<UniqueSubscriptionEntry, (MethodSink, oneshot::Receiver<()>)>>>;
 
-/// Represent a unique subscription entry based on [`SubscriptionID`] and [`ConnectionID`].
+/// Represent a unique subscription entry based on SubscriptionID and ConnectionID.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 struct UniqueSubscriptionEntry {
 	conn_id: ConnectionId,
@@ -329,7 +329,7 @@ pub struct SubscriptionSink {
 	inner: mpsc::UnboundedSender<String>,
 	/// Method.
 	method: &'static str,
-	/// Subscription ID.
+	/// Unique subscription.
 	uniq_sub: UniqueSubscriptionEntry,
 	/// Shared Mutex of subscriptions for this method.
 	subscribers: Subscribers,
@@ -375,7 +375,7 @@ impl SubscriptionSink {
 		res
 	}
 
-	/// Close the subscription sink with customized error message.
+	/// Close the subscription sink with a customized error message.
 	pub fn close(&mut self, close_reason: String) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
