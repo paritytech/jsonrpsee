@@ -1,7 +1,7 @@
 use crate::server::helpers::{send_error, send_response};
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt};
-use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, OwnedId, OwnedRpcParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::JsonRpcRequest;
@@ -351,15 +351,15 @@ impl SubscriptionSink {
 	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
 		let res = if let Some(online) = self.keep_alive.as_ref() {
 			if online.is_canceled() {
-				return Err(Error::SubscriptionClosed);
+				return Err(Error::SubscriptionClosed(None));
 			}
 			match self.inner.unbounded_send(msg) {
 				Ok(()) => Ok(()),
 				// Unbounded channel can only fail when the receiver has been dropped.
-				Err(_) => Err(Error::SubscriptionClosed),
+				Err(_) => Err(Error::SubscriptionClosed(None)),
 			}
 		} else {
-			Err(Error::SubscriptionClosed)
+			Err(Error::SubscriptionClosed(None))
 		};
 
 		if res.is_err() {
@@ -370,8 +370,8 @@ impl SubscriptionSink {
 	}
 
 	fn close(&mut self) {
-		let result =
-			to_raw_value(&(self.method, "Subscription closed", self.sub_id)).expect("valid json infallible; qed");
+		let msg = SubscriptionClosedError { reason: "Server subscription task failed".to_owned() };
+		let result = to_raw_value(&msg).expect("valid json infallible; qed");
 		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,

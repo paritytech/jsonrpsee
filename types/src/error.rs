@@ -1,3 +1,5 @@
+use crate::v2::params::SubscriptionId;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Convenience type for displaying errors.
@@ -69,8 +71,8 @@ pub enum Error {
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
 	/// Subscription has been closed.
-	#[error("Subscription was closed by the server or client")]
-	SubscriptionClosed,
+	#[error("Subscription was closed by the server or client: {0:?}")]
+	SubscriptionClosed(Option<SubscriptionClosedError>),
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,
@@ -80,6 +82,12 @@ pub enum Error {
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),
+}
+
+/// Error type to indicate on a notification that subscription was closed.
+#[derive(Deserialize, Serialize, Debug)]
+pub struct SubscriptionClosedError {
+	pub reason: String,
 }
 
 /// Generic transport error.

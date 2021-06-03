@@ -1,8 +1,8 @@
-use crate::{v2::params::SubscriptionId, Error};
+use crate::{error::SubscriptionClosedError, v2::params::SubscriptionId, Error};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
-use serde::de::DeserializeOwned;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 /// Subscription kind
@@ -13,6 +13,13 @@ pub enum SubscriptionKind {
 	Subscription(SubscriptionId),
 	/// Get notifications based on method name.
 	Method(String),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum NotifResponse<Notif> {
+	Ok(Notif),
+	Err(SubscriptionClosedError),
 }
 
 /// Active subscription on the client.
@@ -121,8 +128,9 @@ where
 	/// may happen if the channel becomes full or is dropped.
 	pub async fn next(&mut self) -> Result<Option<Notif>, Error> {
 		match self.notifs_rx.next().await {
-			Some(n) => match serde_json::from_value(n) {
-				Ok(parsed) => Ok(Some(parsed)),
+			Some(n) => match serde_json::from_value::<NotifResponse<Notif>>(n) {
+				Ok(NotifResponse::Ok(parsed)) => Ok(Some(parsed)),
+				Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(Some(e))),
 				Err(e) => Err(e.into()),
 			},
 			None => Ok(None),
