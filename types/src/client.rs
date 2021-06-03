@@ -37,6 +37,7 @@ impl<Notif> Subscription<Notif> {
 	) -> Self {
 		Self { to_back, notifs_rx, kind, marker: PhantomData }
 	}
+}
 
 /// Batch request message.
 #[derive(Debug)]
