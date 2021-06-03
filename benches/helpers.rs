@@ -1,7 +1,7 @@
 use futures_channel::oneshot;
 use jsonrpsee::{
 	http_server::HttpServerBuilder,
-	ws_server::{RpcModule, WsServer},
+	ws_server::{RpcModule, WsServerBuilder},
 };
 
 /// Run jsonrpsee HTTP server for benchmarks.
@@ -23,7 +23,7 @@ pub async fn http_server() -> String {
 pub async fn ws_server() -> String {
 	let (server_started_tx, server_started_rx) = oneshot::channel();
 	tokio::spawn(async move {
-		let mut server = WsServer::new("127.0.0.1:0").await.unwrap();
+		let mut server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 		let mut module = RpcModule::new(());
 		module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 		server.register_module(module).unwrap();
