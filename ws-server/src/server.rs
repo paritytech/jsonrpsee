@@ -29,7 +29,6 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
@@ -51,7 +50,6 @@ pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
 	cfg: Settings,
-	stats: Stats,
 }
 
 impl Server {
@@ -80,18 +78,17 @@ impl Server {
 		let cfg = self.cfg;
 		let mut id = 0;
 
-
 		while let Some(socket) = incoming.next().await {
-			if self.stats.connection_count.load(Ordering::Relaxed) + 1 > self.cfg.max_connections {
-				log::warn!("Too many connections. Try again in a while");
-				continue;
-			}
 			if let Ok(socket) = socket {
 				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
-				self.stats.connection_count.fetch_add(1, Ordering::Relaxed);
+
+				if Arc::strong_count(&methods) > self.cfg.max_connections as usize {
+					log::warn!("Too many connections. Try again in a while");
+					continue;
+				}
 				let methods = methods.clone();
 
-				tokio::spawn(async move { background_task(socket, id, methods, cfg).await });
+				tokio::spawn(background_task(socket, id, methods, cfg));
 
 				id += 1;
 			}
@@ -219,7 +216,7 @@ impl Builder {
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
-		Ok(Server { listener, methods: Methods::default(), cfg: self.settings, stats: Stats::default() })
+		Ok(Server { listener, methods: Methods::default(), cfg: self.settings })
 	}
 }
 
@@ -227,9 +224,4 @@ impl Default for Builder {
 	fn default() -> Self {
 		Self { settings: Settings::default() }
 	}
-}
-
-#[derive(Debug, Default)]
-struct Stats {
-	connection_count: AtomicU64,
 }

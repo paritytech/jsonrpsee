@@ -143,7 +143,7 @@ async fn can_set_the_max_request_body_size() {
 }
 
 #[tokio::test]
-async fn can_set_the_max_connections() {
+async fn can_set_max_connections() {
 	let addr = "127.0.0.1:0";
 	// Server that accepts max 2 connections
 	let mut server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();
@@ -154,12 +154,21 @@ async fn can_set_the_max_connections() {
 
 	tokio::spawn(async { server.start().await });
 
-	assert!(WebSocketTestClient::new(addr).await.is_ok());
-	assert!(WebSocketTestClient::new(addr).await.is_ok());
-	// Third connection fails
-	assert!(WebSocketTestClient::new(addr).await.is_err());
-	let err = WebSocketTestClient::new(addr).await.unwrap_err();
+	let conn1 = WebSocketTestClient::new(addr).await;
+	let conn2 = WebSocketTestClient::new(addr).await;
+	let conn3 = WebSocketTestClient::new(addr).await;
+	assert!(conn1.is_ok());
+	assert!(conn2.is_ok());
+	// Third connection is rejected
+	assert!(conn3.is_err());
+	let err = conn3.unwrap_err();
 	assert_eq!(err.to_string(), "WebSocketHandshake failed: Err(Io(Os { code: 54, kind: ConnectionReset, message: \"Connection reset by peer\" }))");
+
+	// Decrement connection count
+	drop(conn2);
+	// Can connect again
+	let conn4 = WebSocketTestClient::new(addr).await;
+	assert!(conn4.is_ok());
 }
 
 #[tokio::test]
