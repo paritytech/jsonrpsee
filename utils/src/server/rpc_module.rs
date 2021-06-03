@@ -349,8 +349,8 @@ impl SubscriptionSink {
 	}
 
 	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
-		let res = if let Some(online) = self.keep_alive.as_ref() {
-			if online.is_canceled() {
+		let res = if let Some(keep_alive) = self.keep_alive.as_ref() {
+			if keep_alive.is_canceled() {
 				return Err(subscription_closed_by_client());
 			}
 			match self.inner.unbounded_send(msg) {
