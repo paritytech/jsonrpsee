@@ -40,8 +40,8 @@ use crate::{
 	transport::CertificateStore,
 };
 use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, NotificationHandler, RegisterNotificationMessage,
-	RequestMessage, Subscription, SubscriptionMessage,
+	manager::RequestManager, BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage,
+	Subscription, SubscriptionMessage,
 };
 use async_trait::async_trait;
 use futures::{
@@ -51,10 +51,10 @@ use futures::{
 	sink::SinkExt,
 };
 
+use jsonrpsee_types::SubscriptionKind;
 use serde::de::DeserializeOwned;
 use std::{
 	borrow::Cow,
-	marker::PhantomData,
 	sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 	time::Duration,
 };
@@ -459,12 +459,11 @@ impl SubscriptionClient for WsClient {
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
-		Ok(Subscription { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, id })
+		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(id)))
 	}
 
-	/// Register a notification handler for async messages from the server.
-	///
-	async fn register_notification<'a, N>(&self, method: &'a str) -> Result<NotificationHandler<N>, Error>
+	/// Subscribe to a specific method.
+	async fn subscribe_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
 	{
@@ -491,7 +490,7 @@ impl SubscriptionClient for WsClient {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		Ok(NotificationHandler { to_back: self.to_back.clone(), notifs_rx, marker: PhantomData, method })
+		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Method(method)))
 	}
 }
 

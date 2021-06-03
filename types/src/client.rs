@@ -5,30 +5,38 @@ use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
-/// Active subscription on a Client.
+/// Subscription kind
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum SubscriptionKind {
+	/// Get notifications based on Subscription ID.
+	Subscription(SubscriptionId),
+	/// Get notifications based on method name.
+	Method(String),
+}
+
+/// Active subscription on the client.
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
-	pub to_back: mpsc::Sender<FrontToBack>,
+	to_back: mpsc::Sender<FrontToBack>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
-	pub notifs_rx: mpsc::Receiver<JsonValue>,
-	/// Subscription ID,
-	pub id: SubscriptionId,
+	notifs_rx: mpsc::Receiver<JsonValue>,
+	/// Callback kind.
+	kind: SubscriptionKind,
 	/// Marker in order to pin the `Notif` parameter.
-	pub marker: PhantomData<Notif>,
+	marker: PhantomData<Notif>,
 }
 
-/// Active NotificationHandler on a Client.
-#[derive(Debug)]
-pub struct NotificationHandler<Notif> {
-	/// Channel to send requests to the background task.
-	pub to_back: mpsc::Sender<FrontToBack>,
-	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
-	pub notifs_rx: mpsc::Receiver<JsonValue>,
-	/// Method Name
-	pub method: String,
-	/// Marker in order to pin the `Notif` parameter.
-	pub marker: PhantomData<Notif>,
+impl<Notif> Subscription<Notif> {
+	/// Create a new notification handle.
+	pub fn new(
+		to_back: mpsc::Sender<FrontToBack>,
+		notifs_rx: mpsc::Receiver<JsonValue>,
+		kind: SubscriptionKind,
+	) -> Self {
+		Self { to_back, notifs_rx, kind, marker: PhantomData }
+	}
 }
 
 /// Batch request message.
@@ -109,43 +117,15 @@ where
 	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream
-	/// This may return `None` if the subscription has been terminated,
+	/// This may return `Ok(None)` if the subscription has been terminated,
 	/// may happen if the channel becomes full or is dropped.
-	///
-	/// Ignores any malformed packet.
-	pub async fn next(&mut self) -> Option<Notif> {
-		loop {
-			match self.notifs_rx.next().await {
-				Some(n) => match serde_json::from_value(n) {
-					Ok(parsed) => return Some(parsed),
-					Err(e) => {
-						log::error!("Subscription response error: {:?}", e);
-					}
-				},
-				None => return None,
-			}
-		}
-	}
-}
-
-impl<Notif> NotificationHandler<Notif>
-where
-	Notif: DeserializeOwned,
-{
-	/// Returns the next notification from the stream
-	/// This may return `None` if the method has been unregistered,
-	/// may happen if the channel becomes full or is dropped.
-	///
-	/// Ignores any malformed packet.
-	pub async fn next(&mut self) -> Option<Notif> {
-		loop {
-			match self.notifs_rx.next().await {
-				Some(n) => match serde_json::from_value(n) {
-					Ok(parsed) => return Some(parsed),
-					Err(e) => log::debug!("NotificationHandler response error: {:?}", e),
-				},
-				None => return None,
-			}
+	pub async fn next(&mut self) -> Result<Option<Notif>, Error> {
+		match self.notifs_rx.next().await {
+			Some(n) => match serde_json::from_value(n) {
+				Ok(parsed) => Ok(Some(parsed)),
+				Err(e) => Err(e.into()),
+			},
+			None => Ok(None),
 		}
 	}
 }
@@ -153,19 +133,15 @@ where
 impl<Notif> Drop for Subscription<Notif> {
 	fn drop(&mut self) {
 		// We can't actually guarantee that this goes through. If the background task is busy, then
-		// the channel's buffer will be full, and our unsubscription request will never make it.
+		// the channel's buffer will be full.
 		// However, when a notification arrives, the background task will realize that the channel
-		// to the `Subscription` has been closed, and will perform the unsubscribe.
-		let id = std::mem::replace(&mut self.id, SubscriptionId::Num(0));
-		let _ = self.to_back.send(FrontToBack::SubscriptionClosed(id)).now_or_never();
-	}
-}
+		// to the `Callback` has been closed.
+		let kind = std::mem::replace(&mut self.kind, SubscriptionKind::Subscription(SubscriptionId::Num(0)));
 
-impl<Notif> Drop for NotificationHandler<Notif> {
-	fn drop(&mut self) {
-		// We can't actually guarantee that this goes through. If the background task is busy, then
-		// the channel's buffer will be full, and our unregister request will never make it.
-		let notif_method = std::mem::take(&mut self.method);
-		let _ = self.to_back.send(FrontToBack::UnregisterNotification(notif_method)).now_or_never();
+		let msg = match kind {
+			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
+			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
+		};
+		let _ = self.to_back.send(msg).now_or_never();
 	}
 }

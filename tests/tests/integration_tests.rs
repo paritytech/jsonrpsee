@@ -49,8 +49,8 @@ async fn ws_subscription_works() {
 		client.subscribe("subscribe_foo", JsonRpcParams::NoParams, "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
-		let hello = hello_sub.next().await.unwrap();
-		let foo = foo_sub.next().await.unwrap();
+		let hello = hello_sub.next().await.unwrap().unwrap();
+		let foo = foo_sub.next().await.unwrap().unwrap();
 		assert_eq!(&hello, "hello from subscription");
 		assert_eq!(foo, 1337);
 	}
@@ -65,7 +65,7 @@ async fn ws_subscription_with_input_works() {
 		client.subscribe("subscribe_add_one", vec![1.into()].into(), "unsubscribe_add_one").await.unwrap();
 
 	for i in 2..4 {
-		let next = add_one.next().await.unwrap();
+		let next = add_one.next().await.unwrap().unwrap();
 		assert_eq!(next, i);
 	}
 }
@@ -122,8 +122,8 @@ async fn ws_subscription_several_clients_with_drop() {
 
 	for _ in 0..10 {
 		for (_client, hello_sub, foo_sub) in &mut clients {
-			let hello = hello_sub.next().await.unwrap();
-			let foo = foo_sub.next().await.unwrap();
+			let hello = hello_sub.next().await.unwrap().unwrap();
+			let foo = foo_sub.next().await.unwrap().unwrap();
 			assert_eq!(&hello, "hello from subscription");
 			assert_eq!(foo, 1337);
 		}
@@ -144,8 +144,8 @@ async fn ws_subscription_several_clients_with_drop() {
 	// this layer.
 	for _ in 0..10 {
 		for (_client, hello_sub, foo_sub) in &mut clients {
-			let hello = hello_sub.next().await.unwrap();
-			let foo = foo_sub.next().await.unwrap();
+			let hello = hello_sub.next().await.unwrap().unwrap();
+			let foo = foo_sub.next().await.unwrap().unwrap();
 			assert_eq!(&hello, "hello from subscription");
 			assert_eq!(foo, 1337);
 		}
@@ -166,11 +166,11 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 
 	// Capacity is `num_sender` + `capacity`
 	for _ in 0..5 {
-		assert!(hello_sub.next().await.is_some());
+		assert!(hello_sub.next().await.unwrap().is_some());
 	}
 
 	// NOTE: this is now unuseable and unregistered.
-	assert!(hello_sub.next().await.is_none());
+	assert!(hello_sub.next().await.unwrap().is_none());
 
 	// The client should still be useable => make sure it still works.
 	let _hello_req: JsonValue = client.request("say_hello", JsonRpcParams::NoParams).await.unwrap();

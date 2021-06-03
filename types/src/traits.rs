@@ -1,5 +1,5 @@
 use crate::v2::params::JsonRpcParams;
-use crate::{Error, NotificationHandler, Subscription};
+use crate::{Error, Subscription};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
@@ -28,10 +28,13 @@ pub trait Client {
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
 #[async_trait]
 pub trait SubscriptionClient: Client {
-	/// Send a subscription request to the server, technically not part of the [JSON-RPC specification](https://www.jsonrpc.org/specification)
+	/// Initiate a subscription by performing a JSON-RPC method call where the server responds with
+	/// a `Subscription ID` that is used to fetch messages on that subscription,
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server.
+	///
+	/// The params may be used as input for the subscription for the server to process.
 	///
 	/// The `unsubscribe_method` is used to close the subscription.
 	///
@@ -45,8 +48,10 @@ pub trait SubscriptionClient: Client {
 	where
 		Notif: DeserializeOwned;
 
-	/// Register a NotificationHandler<Notif> that will listen for incoming JSON-RPC notifications
-	async fn register_notification<'a, Notif>(&self, method: &'a str) -> Result<NotificationHandler<Notif>, Error>
+	/// Register a method subscription, this is used to filter only server notifications that a user is interested in.
+	///
+	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`](crate::client::Subscription) for further documentation.
+	async fn subscribe_method<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
 	where
 		Notif: DeserializeOwned;
 }
