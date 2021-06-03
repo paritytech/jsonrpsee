@@ -119,7 +119,7 @@ async fn notification_handler_works() {
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
 		let mut nh: Subscription<String> =
-			client.subscribe_method("test").with_default_timeout().await.unwrap().unwrap();
+			client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 		let response: String = nh.next().with_default_timeout().await.unwrap().unwrap().unwrap();
 		assert_eq!("server originated notification works".to_owned(), response);
 	}
@@ -143,7 +143,8 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 		.await
 		.unwrap()
 		.unwrap();
-	let mut nh: Subscription<String> = client.subscribe_method("test").with_default_timeout().await.unwrap().unwrap();
+	let mut nh: Subscription<String> =
+		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
 	// don't poll the notification stream for 2 seconds, should be full now.
 	std::thread::sleep(std::time::Duration::from_secs(2));
@@ -158,7 +159,7 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 
 	// The same subscription should be possible to register again.
 	let mut other_nh: Subscription<String> =
-		client.subscribe_method("test").with_default_timeout().await.unwrap().unwrap();
+		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
 	// check that the new subscription works.
 	assert!(other_nh.next().with_default_timeout().await.unwrap().unwrap().is_some());
