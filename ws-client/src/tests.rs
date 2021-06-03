@@ -13,6 +13,8 @@ use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
+use crate::tokio;
+
 #[tokio::test]
 async fn method_call_works() {
 	let result = run_request_with_response(ok_response("hello".into(), Id::Num(0)))

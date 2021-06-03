@@ -57,7 +57,7 @@ pub fn invalid_params(id: Id) -> String {
 	)
 }
 
-pub fn invalid_context(msg: &str, id: Id) -> String {
+pub fn call_execution_failed(msg: &str, id: Id) -> String {
 	format!(
 		r#"{{"jsonrpc":"2.0","error":{{"code":-32000,"message":"{}"}},"id":{}}}"#,
 		msg,

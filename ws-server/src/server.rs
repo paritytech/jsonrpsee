@@ -35,11 +35,13 @@ use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use jsonrpsee_types::error::Error;
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::{Id, RpcParams};
+use jsonrpsee_types::v2::params::Id;
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodSink, Methods, RpcModule};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule};
 
+/// A WebSocket JSON RPC server.
+#[derive(Debug)]
 pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
@@ -53,23 +55,17 @@ impl Server {
 		Ok(Server { listener, methods: Methods::default() })
 	}
 
-	/// Register all [`Methods`] from an [`RpcModule`] on this server. In case a method already is registered with the
-	/// same name, no method is added and a [`Error::MethodAlreadyRegistered`] is returned. Note that the [`RpcModule`]
-	/// is consumed after this call.
-	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
-		let methods = module.into_methods();
-		for name in methods.keys() {
-			if self.methods.contains_key(name) {
-				return Err(Error::MethodAlreadyRegistered(name.to_string()));
-			}
-		}
-		self.methods.extend(methods);
+	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
+	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
+	/// is returned. Note that the [`RpcModule`] is consumed after this call.
+	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+		self.methods.merge(module.into_methods())?;
 		Ok(())
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<String> {
-		self.methods.keys().map(|name| name.to_string()).collect()
+	pub fn method_names(&self) -> Vec<&'static str> {
+		self.methods.method_names()
 	}
 
 	/// Returns socket address to which the server is bound.
@@ -127,22 +123,8 @@ async fn background_task(
 		}
 	});
 
+	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
-
-	// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
-	// the params from the request. The result of the computation is sent back over the `tx` channel and
-	// the result(s) are collected into a `String` and sent back over the wire.
-	let execute = move |tx: &MethodSink, req: JsonRpcRequest| {
-		if let Some(method) = methods.get(&*req.method) {
-			let params = RpcParams::new(req.params.map(|params| params.get()));
-			if let Err(err) = (method)(req.id.clone(), params, &tx, conn_id) {
-				log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, req.id);
-				send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-			}
-		} else {
-			send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-		}
-	};
 
 	loop {
 		data.clear();
@@ -156,7 +138,7 @@ async fn background_task(
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			log::debug!("recv: {:?}", req);
-			execute(&tx, req);
+			methods.execute(&tx, req, conn_id).await;
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
 				// Batch responses must be sent back as a single message so we read the results from each request in the
@@ -164,7 +146,7 @@ async fn background_task(
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 				for req in batch {
-					execute(&tx_batch, req);
+					methods.execute(&tx_batch, req, conn_id).await;
 				}
 				// Closes the receiving half of a channel without dropping it. This prevents any further messages from
 				// being sent on the channel.

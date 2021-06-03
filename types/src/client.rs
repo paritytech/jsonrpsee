@@ -5,7 +5,8 @@ use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
-/// Notification kind
+/// Subscription kind
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum SubscriptionKind {
 	/// Get notifications based on Subscription ID.
@@ -14,7 +15,8 @@ pub enum SubscriptionKind {
 	Method(String),
 }
 
-/// Active notification on the client.
+/// Active subscription on the client.
+#[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
 	to_back: mpsc::Sender<FrontToBack>,
@@ -35,7 +37,6 @@ impl<Notif> Subscription<Notif> {
 	) -> Self {
 		Self { to_back, notifs_rx, kind, marker: PhantomData }
 	}
-}
 
 /// Batch request message.
 #[derive(Debug)]

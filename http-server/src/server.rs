@@ -34,11 +34,14 @@ use hyper::{
 };
 use jsonrpsee_types::error::{Error, GenericTransportError};
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::{Id, RpcParams};
+use jsonrpsee_types::v2::params::Id;
 use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
-use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{MethodSink, Methods, RpcModule};
+use jsonrpsee_utils::server::rpc_module::RpcModule;
+use jsonrpsee_utils::server::{
+	helpers::{collect_batch_response, send_error},
+	rpc_module::Methods,
+};
 
 use socket2::{Domain, Socket, Type};
 use std::{
@@ -48,6 +51,7 @@ use std::{
 };
 
 /// Builder to create JSON-RPC HTTP server.
+#[derive(Debug)]
 pub struct Builder {
 	access_control: AccessControl,
 	max_request_body_size: u32,
@@ -75,6 +79,7 @@ impl Builder {
 		self
 	}
 
+	/// Finalizes the configuration of the server.
 	pub fn build(self, addr: SocketAddr) -> Result<Server, Error> {
 		let domain = Domain::for_address(addr);
 		let socket = Socket::new(domain, Type::STREAM, None)?;
@@ -106,6 +111,8 @@ impl Default for Builder {
 	}
 }
 
+/// An HTTP JSON RPC server.
+#[derive(Debug)]
 pub struct Server {
 	/// Hyper server.
 	listener: HyperBuilder<AddrIncoming>,
@@ -120,23 +127,17 @@ pub struct Server {
 }
 
 impl Server {
-	/// Register all [`Methods`] from an [`RpcModule`] on this server. In case a method already is registered with the
-	/// same name, no method is added and a [`Error::MethodAlreadyRegistered`] is returned. Note that the [`RpcModule`]
-	/// is consumed after this call.
-	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
-		let methods = module.into_methods();
-		for name in methods.keys() {
-			if self.methods.contains_key(name) {
-				return Err(Error::MethodAlreadyRegistered(name.to_string()));
-			}
-		}
-		self.methods.extend(methods);
+	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
+	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
+	/// is returned. Note that the [`RpcModule`] is consumed after this call.
+	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+		self.methods.merge(module.into_methods())?;
 		Ok(())
 	}
 
 	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<String> {
-		self.methods.keys().map(|name| name.to_string()).collect()
+	pub fn method_names(&self) -> Vec<&'static str> {
+		self.methods.method_names()
 	}
 
 	/// Returns socket address to which the server is bound.
@@ -158,27 +159,6 @@ impl Server {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
-
-					// Look up the "method" (i.e. function pointer) from the registered methods and run it passing in
-					// the params from the request. The result of the computation is sent back over the `tx` channel and
-					// the result(s) are collected into a `String` and sent back over the wire.
-					let execute = move |tx: &MethodSink, req: JsonRpcRequest| {
-						if let Some(method) = methods.get(&*req.method) {
-							let params = RpcParams::new(req.params.map(|params| params.get()));
-							// NOTE(niklasad1): connection ID is unused thus hardcoded to `0`.
-							if let Err(err) = (method)(req.id.clone(), params, &tx, 0) {
-								log::error!(
-									"execution of method call '{}' failed: {:?}, request id={:?}",
-									req.method,
-									err,
-									req.id
-								);
-								send_error(req.id, &tx, JsonRpcErrorCode::ServerError(-1).into());
-							}
-						} else {
-							send_error(req.id, &tx, JsonRpcErrorCode::MethodNotFound.into());
-						}
-					};
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -214,14 +194,15 @@ impl Server {
 						// to [`serde_json::from_slice`] which is pretty annoying.
 						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-							execute(&tx, req);
+							// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
+							methods.execute(&tx, req, 0).await;
 						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
 								single = false;
 								for req in batch {
-									execute(&tx, req);
+									methods.execute(&tx, req, 0).await;
 								}
 							} else {
 								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
