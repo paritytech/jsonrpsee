@@ -16,6 +16,9 @@ pub enum SubscriptionKind {
 }
 
 /// Active subscription on the client.
+///
+/// It will automatically unsubscribe in the [`Subscription::drop`] so no need to explicitly call
+/// the `unsubscribe method` if it is an an subscription based on [`SubscriptionId`].
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
@@ -29,7 +32,7 @@ pub struct Subscription<Notif> {
 }
 
 impl<Notif> Subscription<Notif> {
-	/// Create a new notification handle.
+	/// Create a new subscription.
 	pub fn new(
 		to_back: mpsc::Sender<FrontToBack>,
 		notifs_rx: mpsc::Receiver<JsonValue>,

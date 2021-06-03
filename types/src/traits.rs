@@ -38,7 +38,7 @@ pub trait SubscriptionClient: Client {
 	///
 	/// The `unsubscribe_method` is used to close the subscription
 	///
-	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`](crate::client::Subscription) for further documentation.
+	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further documentation.
 	async fn subscribe<'a, Notif>(
 		&self,
 		subscribe_method: &'a str,
@@ -50,7 +50,7 @@ pub trait SubscriptionClient: Client {
 
 	/// Register a method subscription, this is used to filter only server notifications that a user is interested in.
 	///
-	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`](crate::client::Subscription) for further documentation.
+	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further documentation.
 	async fn subscribe_to_method<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
 	where
 		Notif: DeserializeOwned;
