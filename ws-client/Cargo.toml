@@ -10,9 +10,17 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
+# Tokio v1 deps
+tokioV1 = { package="tokio", version = "1", features = ["net", "time"], optional=true }
+tokioV1-rustls = { package="tokio-rustls", version = "0.22", optional=true }
+tokioV1-util = { package="tokio-util", version = "0.6", features = ["compat"], optional=true }
+
+# Tokio v0.2 deps
+tokioV02 = { package="tokio", version = "0.2", features = ["net", "time"], optional=true }
+tokioV02-rustls = { package="tokio-rustls", version = "0.15", optional=true }
+tokioV02-util = { package="tokio-util", version = "0.3", features = ["compat"], optional=true }
+
 async-trait = "0.1"
-async-std = "1"
-async-tls = "0.11"
 fnv = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 jsonrpsee-types = { path = "../types", version = "=0.2.0-alpha.7" }
@@ -23,11 +31,14 @@ soketto = "0.5"
 pin-project = "1"
 thiserror = "1"
 url = "2"
-webpki = { version = "0.22", features = ["std"] }
 rustls = "0.19.1"
 rustls-native-certs = "0.5.0"
 
 [dev-dependencies]
 env_logger = "0.8"
 jsonrpsee-test-utils = { path = "../test-utils" }
-tokio = { version = "1", features = ["full"] }
+
+[features]
+default = ["tokio1"]
+tokio1 = ["tokioV1", "tokioV1-rustls", "tokioV1-util"]
+tokio02 = ["tokioV02", "tokioV02-rustls", "tokioV02-util"]

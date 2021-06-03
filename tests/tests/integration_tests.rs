@@ -161,7 +161,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 
 	// don't poll the subscription stream for 2 seconds, should be full now.
-	std::thread::sleep(Duration::from_secs(2));
+	tokio::time::sleep(Duration::from_secs(2)).await;
 
 	// Capacity is `num_sender` + `capacity`
 	for _ in 0..5 {
