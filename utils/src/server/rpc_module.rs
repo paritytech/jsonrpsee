@@ -351,19 +351,19 @@ impl SubscriptionSink {
 	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
 		let res = if let Some(online) = self.keep_alive.as_ref() {
 			if online.is_canceled() {
-				return Err(Error::SubscriptionClosed(None));
+				return Err(subscription_closed_by_client());
 			}
 			match self.inner.unbounded_send(msg) {
 				Ok(()) => Ok(()),
 				// Unbounded channel can only fail when the receiver has been dropped.
-				Err(_) => Err(Error::SubscriptionClosed(None)),
+				Err(_) => Err(subscription_closed_by_client()),
 			}
 		} else {
-			Err(Error::SubscriptionClosed(None))
+			Err(subscription_closed_by_client())
 		};
 
-		if res.is_err() {
-			self.close("Subscription closed by the client".to_owned());
+		if let Err(e) = &res {
+			self.close(e.to_string());
 		}
 
 		res
@@ -420,6 +420,11 @@ impl KeepAlive {
 			let _ = sink.unbounded_send(msg);
 		}
 	}
+}
+
+fn subscription_closed_by_client() -> Error {
+	const CLOSE_REASON: &str = "Subscription closed by the client";
+	Error::SubscriptionClosed(CLOSE_REASON.to_owned().into())
 }
 
 #[cfg(test)]

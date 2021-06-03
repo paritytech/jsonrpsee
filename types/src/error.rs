@@ -71,7 +71,7 @@ pub enum Error {
 	SubscriptionNameConflict(String),
 	/// Subscription has been closed.
 	#[error("Subscription was closed by the server or client: {0:?}")]
-	SubscriptionClosed(Option<SubscriptionClosedError>),
+	SubscriptionClosed(SubscriptionClosedError),
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,

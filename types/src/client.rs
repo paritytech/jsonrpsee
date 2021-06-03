@@ -132,7 +132,7 @@ where
 		match self.notifs_rx.next().await {
 			Some(n) => match serde_json::from_value::<NotifResponse<Notif>>(n) {
 				Ok(NotifResponse::Ok(parsed)) => Ok(Some(parsed)),
-				Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(Some(e))),
+				Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(e)),
 				Err(e) => Err(e.into()),
 			},
 			None => Ok(None),
