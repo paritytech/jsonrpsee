@@ -116,7 +116,7 @@ impl<Notif> Subscription<Notif>
 where
 	Notif: DeserializeOwned,
 {
-	/// Returns the next notification from the stream
+	/// Returns the next notification from the stream.
 	/// This may return `Ok(None)` if the subscription has been terminated,
 	/// may happen if the channel becomes full or is dropped.
 	pub async fn next(&mut self) -> Result<Option<Notif>, Error> {
