@@ -248,7 +248,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 	let server_addr = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
-	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	let mut sub: Subscription<String> = client
 		.subscribe("subscribe_noop", JsonRpcParams::NoParams, "unsubscribe_noop")
