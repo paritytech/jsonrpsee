@@ -2,7 +2,7 @@
 
 // Check that either v1 or v0.2 feature is enabled.
 #[cfg(not(any(feature = "tokio1", feature = "tokio02")))]
-compile_error!("Either `tokiov1` or `tokiov02` feature must be enabled");
+compile_error!("Either `tokio1` or `tokio02` feature must be enabled");
 
 // Also check that only *one* of them is enabled.
 #[cfg(all(feature = "tokio1", feature = "tokio02"))]
