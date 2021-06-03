@@ -11,5 +11,4 @@ publish = false
 env_logger = "0.8"
 futures-channel = { version = "0.3.14", default-features = false }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
-jsonrpsee-test-utils = { path = "../test-utils" }
 tokio = { version = "1", features = ["full"] }

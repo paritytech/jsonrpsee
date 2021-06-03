@@ -34,7 +34,6 @@ use jsonrpsee::{
 	http_client::{traits::Client, Error, HttpClientBuilder},
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, JsonValue, Subscription, WsClientBuilder},
 };
-use jsonrpsee_test_utils::TimeoutFutureExt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -250,14 +249,10 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<String> = client
-		.subscribe("subscribe_noop", JsonRpcParams::NoParams, "unsubscribe_noop")
-		.with_default_timeout()
-		.await
-		.unwrap()
-		.unwrap();
+	let mut sub: Subscription<String> =
+		client.subscribe("subscribe_noop", JsonRpcParams::NoParams, "unsubscribe_noop").await.unwrap();
 
-	let res = sub.next().with_timeout(Duration::from_secs(20)).await.unwrap().unwrap_err();
+	let res = sub.next().await;
 
-	assert!(matches!(res, Error::SubscriptionClosed(_)));
+	assert!(matches!(res, Err(Error::SubscriptionClosed(_))));
 }
