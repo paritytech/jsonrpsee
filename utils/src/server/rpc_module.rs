@@ -31,7 +31,14 @@ pub type SubscriptionId = u64;
 /// Sink that is used to send back the result to the server for a specific method.
 pub type MethodSink = mpsc::UnboundedSender<String>;
 
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), (MethodSink, oneshot::Receiver<()>)>>>;
+type Subscribers = Arc<Mutex<FxHashMap<UniqueSubscriptionEntry, (MethodSink, oneshot::Receiver<()>)>>>;
+
+/// Represent a unique subscription entry based on [`SubscriptionID`] and [`ConnectionID`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct UniqueSubscriptionEntry {
+	conn_id: ConnectionId,
+	sub_id: SubscriptionId,
+}
 
 /// Callback wrapper that can be either sync or async.
 pub enum MethodCallback {
@@ -261,12 +268,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			self.methods.callbacks.insert(
 				subscribe_method_name,
 				MethodCallback::Sync(Box::new(move |id, params, method_sink, conn_id| {
-					let (keep_alive_tx, keep_alive_rx) = oneshot::channel::<()>();
+					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
+						let uniq_sub = UniqueSubscriptionEntry { conn_id, sub_id };
 
-						subscribers.lock().insert((conn_id, sub_id), (method_sink.clone(), keep_alive_rx));
+						subscribers.lock().insert(uniq_sub, (method_sink.clone(), conn_rx));
 
 						sub_id
 					};
@@ -275,13 +283,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
 						method: subscribe_method_name,
-						sub_id,
-						keep_alive: Some(KeepAlive {
-							subscribers: subscribers.clone(),
-							sub_id,
-							conn_id,
-							keep_alive: keep_alive_tx,
-						}),
+						subscribers: subscribers.clone(),
+						uniq_sub: UniqueSubscriptionEntry { conn_id, sub_id },
+						is_connected: Some(conn_tx),
 					};
 					callback(params, sink, ctx.clone())
 				})),
@@ -293,7 +297,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				unsubscribe_method_name,
 				MethodCallback::Sync(Box::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
-					subscribers.lock().remove(&(conn_id, sub_id));
+					subscribers.lock().remove(&UniqueSubscriptionEntry { conn_id, sub_id });
 					send_response(id, &tx, "Unsubscribed");
 
 					Ok(())
@@ -326,9 +330,13 @@ pub struct SubscriptionSink {
 	/// Method.
 	method: &'static str,
 	/// Subscription ID.
-	sub_id: SubscriptionId,
-	/// Whether the subscription is still connected or not.
-	keep_alive: Option<KeepAlive>,
+	uniq_sub: UniqueSubscriptionEntry,
+	/// Shared Mutex of subscriptions for this method.
+	subscribers: Subscribers,
+	/// A type to track whether the subscription is active (the subscriber is connected).
+	///
+	/// None - implies that the subscription as been closed.
+	is_connected: Option<oneshot::Sender<()>>,
 }
 
 impl SubscriptionSink {
@@ -342,15 +350,15 @@ impl SubscriptionSink {
 		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,
-			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
+			params: JsonRpcNotificationParams { subscription: self.uniq_sub.sub_id, result: &*result },
 		})?;
 
 		self.inner_send(msg).map_err(Into::into)
 	}
 
 	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
-		let res = if let Some(keep_alive) = self.keep_alive.as_ref() {
-			if !keep_alive.is_canceled() {
+		let res = if let Some(conn) = self.is_connected.as_ref() {
+			if !conn.is_canceled() {
 				// unbounded send only fails if the receiver has been dropped.
 				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_by_client())
 			} else {
@@ -369,54 +377,24 @@ impl SubscriptionSink {
 
 	/// Close the subscription sink with customized error message.
 	pub fn close(&mut self, close_reason: String) {
-		let err: SubscriptionClosedError = close_reason.into();
-		let result = to_raw_value(&err).expect("valid json infallible; qed");
-		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
-			jsonrpc: TwoPointZero,
-			method: self.method,
-			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
-		})
-		.expect("valid json infallible; qed");
-
-		if let Some(mut k) = self.keep_alive.take() {
-			k.close(msg);
+		self.is_connected.take();
+		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			let result =
+				to_raw_value(&SubscriptionClosedError::from(close_reason)).expect("valid json infallible; qed");
+			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+				jsonrpc: TwoPointZero,
+				method: self.method,
+				params: JsonRpcNotificationParams { subscription: self.uniq_sub.sub_id, result: &*result },
+			})
+			.expect("valid json infallible; qed");
+			let _ = sink.unbounded_send(msg);
 		}
 	}
 }
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		self.close(format!("Subscription: {} closed by the server", self.sub_id));
-	}
-}
-
-/// A type to track whether the subscription has been canceled.
-#[derive(Debug)]
-struct KeepAlive {
-	subscribers: Subscribers,
-	keep_alive: oneshot::Sender<()>,
-	conn_id: ConnectionId,
-	sub_id: SubscriptionId,
-}
-
-impl KeepAlive {
-	fn is_canceled(&self) -> bool {
-		self.keep_alive.is_canceled()
-	}
-
-	/// Close down the subscription by removing it from shared [`Subscribers`].
-	///
-	/// Note, this doesn't actual send an unsubscribe response because we can't
-	// map it to an actual request.
-	fn close(&mut self, msg: String) {
-		if let Some((sink, _)) = self.subscribers.lock().remove(&(self.conn_id, self.sub_id)) {
-			// NOTE: this might happen if the [`SubscriptionSink`] is dropped in a background
-			// task then it's not possible propagate the error to the client if the subscription
-			// request has already been answered.
-			//
-			// Thus, we send a notification message that subscription is closed.
-			let _ = sink.unbounded_send(msg);
-		}
+		self.close(format!("Subscription: {} closed by the server", self.uniq_sub.sub_id));
 	}
 }
 
