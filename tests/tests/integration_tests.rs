@@ -48,10 +48,10 @@ async fn ws_subscription_works() {
 		client.subscribe("subscribe_foo", JsonRpcParams::NoParams, "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
-		let hello = hello_sub.next().await.unwrap().unwrap();
-		let foo = foo_sub.next().await.unwrap().unwrap();
-		assert_eq!(&hello, "hello from subscription");
-		assert_eq!(foo, 1337);
+		let hello = hello_sub.next().await.unwrap();
+		let foo = foo_sub.next().await.unwrap();
+		assert_eq!(hello, Some("hello from subscription".into()));
+		assert_eq!(foo, Some(1337));
 	}
 }
 
