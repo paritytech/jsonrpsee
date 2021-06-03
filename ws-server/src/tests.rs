@@ -162,7 +162,9 @@ async fn can_set_max_connections() {
 	// Third connection is rejected
 	assert!(conn3.is_err());
 	let err = conn3.unwrap_err();
-	assert_eq!(err.to_string(), "WebSocketHandshake failed: Err(Io(Os { code: 54, kind: ConnectionReset, message: \"Connection reset by peer\" }))");
+	assert!(err.to_string().contains("WebSocketHandshake failed"));
+	assert!(err.to_string().contains("Connection reset by peer"));
+	// Err(Io(Os { code: 54, kind: ConnectionReset, message: \"Connection reset by peer\" }))");
 
 	// Decrement connection count
 	drop(conn2);
