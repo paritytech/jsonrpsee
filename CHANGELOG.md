@@ -21,4 +21,7 @@ The format is based on [Keep a Changelog].
 [added] Support for batch requests (http/ws)
 
 [changed] the proc macros are currently limited to client side.
+
+[added] crate publication script
+
 ## [v0.1.0] - 2020-02-28
