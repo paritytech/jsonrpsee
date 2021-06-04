@@ -33,9 +33,9 @@ pub type MethodSink = mpsc::UnboundedSender<String>;
 
 type Subscribers = Arc<Mutex<FxHashMap<UniqueSubscriptionEntry, (MethodSink, oneshot::Receiver<()>)>>>;
 
-/// Represent a unique subscription entry based on SubscriptionID and ConnectionID.
+/// Represent a unique subscription entry based on [`SubscriptionId`] and [`ConnectionId`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-struct UniqueSubscriptionEntry {
+struct SubscriptionKey {
 	conn_id: ConnectionId,
 	sub_id: SubscriptionId,
 }
@@ -272,7 +272,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
-						let uniq_sub = UniqueSubscriptionEntry { conn_id, sub_id };
+						let uniq_sub = SubscriptionKey { conn_id, sub_id };
 
 						subscribers.lock().insert(uniq_sub, (method_sink.clone(), conn_rx));
 
@@ -284,7 +284,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						inner: method_sink.clone(),
 						method: subscribe_method_name,
 						subscribers: subscribers.clone(),
-						uniq_sub: UniqueSubscriptionEntry { conn_id, sub_id },
+						uniq_sub: SubscriptionKey { conn_id, sub_id },
 						is_connected: Some(conn_tx),
 					};
 					callback(params, sink, ctx.clone())

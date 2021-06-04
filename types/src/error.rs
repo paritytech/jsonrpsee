@@ -69,8 +69,8 @@ pub enum Error {
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
-	/// Subscription has been closed.
-	#[error("Subscription was closed by the server or client: {0:?}")]
+	/// Subscription got closed.
+	#[error("Subscription closed: {0:?}")]
 	SubscriptionClosed(SubscriptionClosedError),
 	/// Request timeout
 	#[error("Request timeout")]
@@ -85,7 +85,7 @@ pub enum Error {
 
 /// Error type with a special `subscription_closed` field to detect that
 /// a subscription has been closed to distinguish valid items produced
-/// by the server on the subscription stream.
+/// by the server on the subscription stream from an error.
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SubscriptionClosedError {
 	subscription_closed: String,
