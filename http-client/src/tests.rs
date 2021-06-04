@@ -2,7 +2,7 @@ use crate::v2::{
 	error::{JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject},
 	params::JsonRpcParams,
 };
-use crate::{traits::Client, Error, HttpClientBuilder, JsonValue};
+use crate::{tokio, traits::Client, Error, HttpClientBuilder, JsonValue};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;

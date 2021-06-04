@@ -152,25 +152,12 @@ impl Client for HttpClient {
 	}
 }
 
-#[cfg(feature = "tokio1")]
-async fn call_with_maybe_timeout<F>(fut: F, timeout: Option<Duration>) -> Result<F::Output, tokio::time::error::Elapsed>
+async fn call_with_maybe_timeout<F>(fut: F, timeout: Option<Duration>) -> Result<F::Output, crate::tokio::Elapsed>
 where
 	F: Future,
 {
 	if let Some(dur) = timeout {
-		tokio::time::timeout(dur, fut).await
-	} else {
-		Ok(fut.await)
-	}
-}
-
-#[cfg(feature = "tokio02")]
-async fn call_with_maybe_timeout<F>(fut: F, timeout: Option<Duration>) -> Result<F::Output, _tokio02::time::Elapsed>
-where
-	F: Future,
-{
-	if let Some(dur) = timeout {
-		_tokio02::time::timeout(dur, fut).await
+		crate::tokio::timeout(dur, fut).await
 	} else {
 		Ok(fut.await)
 	}
