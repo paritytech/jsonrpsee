@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-ws-client"
-version = "0.2.0-alpha.7"
+version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
 edition = "2018"
@@ -23,7 +23,7 @@ tokioV02-util = { package="tokio-util", version = "0.3", features = ["compat"], 
 async-trait = "0.1"
 fnv = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
-jsonrpsee-types = { path = "../types", version = "=0.2.0-alpha.7" }
+jsonrpsee-types = { path = "../types", version = "0.2.0" }
 log = "0.4"
 serde = "1"
 serde_json = "1"
