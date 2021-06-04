@@ -11,7 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 # Tokio v1 deps
-tokioV1 = { package="tokio", version = "1", features = ["net", "time"], optional=true }
+tokioV1 = { package="tokio", version = "1", features = ["net", "time", "rt"], optional=true }
 tokioV1-rustls = { package="tokio-rustls", version = "0.22", optional=true }
 tokioV1-util = { package="tokio-util", version = "0.6", features = ["compat"], optional=true }
 
