@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
 	// Subscription to the London weather
 	let params = JsonRpcParams::Array(vec!["London,uk".into(), "metric".into()]);
 	let mut weather_sub = client.subscribe::<Weather>("weather_sub", params, "weather_unsub").await?;
-	while let Some(w) = weather_sub.next().await {
+	while let Ok(Some(w)) = weather_sub.next().await {
 		println!("[client] London weather: {:?}", w);
 	}
 
