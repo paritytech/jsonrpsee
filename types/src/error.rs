@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Convenience type for displaying errors.
@@ -68,6 +69,9 @@ pub enum Error {
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
+	/// Subscription got closed.
+	#[error("Subscription closed: {0:?}")]
+	SubscriptionClosed(SubscriptionClosedError),
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,
@@ -77,6 +81,20 @@ pub enum Error {
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),
+}
+
+/// Error type with a special `subscription_closed` field to detect that
+/// a subscription has been closed to distinguish valid items produced
+/// by the server on the subscription stream from an error.
+#[derive(Deserialize, Serialize, Debug)]
+pub struct SubscriptionClosedError {
+	subscription_closed: String,
+}
+
+impl From<String> for SubscriptionClosedError {
+	fn from(msg: String) -> Self {
+		Self { subscription_closed: msg }
+	}
 }
 
 /// Generic transport error.

@@ -241,3 +241,18 @@ async fn ws_unsubscribe_releases_request_slots() {
 	let _: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
 }
+
+#[tokio::test]
+async fn server_should_be_able_to_close_subscriptions() {
+	let server_addr = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub: Subscription<String> =
+		client.subscribe("subscribe_noop", JsonRpcParams::NoParams, "unsubscribe_noop").await.unwrap();
+
+	let res = sub.next().await;
+
+	assert!(matches!(res, Err(Error::SubscriptionClosed(_))));
+}

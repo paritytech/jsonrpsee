@@ -1,7 +1,7 @@
 use crate::server::helpers::{send_error, send_response};
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt};
-use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, OwnedId, OwnedRpcParams, RpcParams, TwoPointZero};
 use jsonrpsee_types::v2::request::JsonRpcRequest;
@@ -31,7 +31,14 @@ pub type SubscriptionId = u64;
 /// Sink that is used to send back the result to the server for a specific method.
 pub type MethodSink = mpsc::UnboundedSender<String>;
 
-type Subscribers = Arc<Mutex<FxHashMap<(ConnectionId, SubscriptionId), (MethodSink, oneshot::Receiver<()>)>>>;
+type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Receiver<()>)>>>;
+
+/// Represent a unique subscription entry based on [`SubscriptionId`] and [`ConnectionId`].
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct SubscriptionKey {
+	conn_id: ConnectionId,
+	sub_id: SubscriptionId,
+}
 
 /// Callback wrapper that can be either sync or async.
 pub enum MethodCallback {
@@ -134,13 +141,12 @@ impl Methods {
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
 	methods: Methods,
-	subscribers: Subscribers,
 }
 
 impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		Self { ctx: Arc::new(ctx), methods: Default::default(), subscribers: Default::default() }
+		Self { ctx: Arc::new(ctx), methods: Default::default() }
 	}
 	/// Register a new synchronous RPC method, which computes the response with the given callback.
 	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
@@ -228,7 +234,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "unsub", |params, sink, ctx| {
+	/// ctx.register_subscription("sub", "unsub", |params, mut sink, ctx| {
 	///     let x: usize = params.one()?;
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
@@ -255,17 +261,20 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods.verify_method_name(unsubscribe_method_name)?;
 		let ctx = self.ctx.clone();
 
+		let subscribers = Subscribers::default();
+
 		{
-			let subscribers = self.subscribers.clone();
+			let subscribers = subscribers.clone();
 			self.methods.callbacks.insert(
 				subscribe_method_name,
-				MethodCallback::Sync(Box::new(move |id, params, method_sink, conn| {
-					let (online_tx, online_rx) = oneshot::channel::<()>();
+				MethodCallback::Sync(Box::new(move |id, params, method_sink, conn_id| {
+					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
 						let sub_id = rand::random::<SubscriptionId>() & JS_NUM_MASK;
+						let uniq_sub = SubscriptionKey { conn_id, sub_id };
 
-						subscribers.lock().insert((conn, sub_id), (method_sink.clone(), online_rx));
+						subscribers.lock().insert(uniq_sub, (method_sink.clone(), conn_rx));
 
 						sub_id
 					};
@@ -274,8 +283,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
 						method: subscribe_method_name,
-						sub_id,
-						is_online: online_tx,
+						subscribers: subscribers.clone(),
+						uniq_sub: SubscriptionKey { conn_id, sub_id },
+						is_connected: Some(conn_tx),
 					};
 					callback(params, sink, ctx.clone())
 				})),
@@ -283,13 +293,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		}
 
 		{
-			let subscribers = self.subscribers.clone();
 			self.methods.callbacks.insert(
 				unsubscribe_method_name,
-				MethodCallback::Sync(Box::new(move |id, params, tx, conn| {
+				MethodCallback::Sync(Box::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
-					subscribers.lock().remove(&(conn, sub_id));
-					send_response(id, tx, "Unsubscribed");
+					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
+					send_response(id, &tx, "Unsubscribed");
 
 					Ok(())
 				})),
@@ -320,40 +329,78 @@ pub struct SubscriptionSink {
 	inner: mpsc::UnboundedSender<String>,
 	/// Method.
 	method: &'static str,
-	/// SubscriptionID,
-	sub_id: SubscriptionId,
-	/// Whether the subscriber is still alive (to avoid send messages that the subscriber is not interested in).
-	is_online: oneshot::Sender<()>,
+	/// Unique subscription.
+	uniq_sub: SubscriptionKey,
+	/// Shared Mutex of subscriptions for this method.
+	subscribers: Subscribers,
+	/// A type to track whether the subscription is active (the subscriber is connected).
+	///
+	/// None - implies that the subscription as been closed.
+	is_connected: Option<oneshot::Sender<()>>,
 }
 
 impl SubscriptionSink {
 	/// Send message on this subscription.
-	pub fn send<T: Serialize>(&self, result: &T) -> Result<(), Error> {
+	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), Error> {
 		let result = to_raw_value(result)?;
 		self.send_raw_value(&result)
 	}
 
-	fn send_raw_value(&self, result: &RawValue) -> Result<(), Error> {
+	fn send_raw_value(&mut self, result: &RawValue) -> Result<(), Error> {
 		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,
-			params: JsonRpcNotificationParams { subscription: self.sub_id, result: &*result },
+			params: JsonRpcNotificationParams { subscription: self.uniq_sub.sub_id, result: &*result },
 		})?;
 
 		self.inner_send(msg).map_err(Into::into)
 	}
 
-	fn inner_send(&self, msg: String) -> Result<(), Error> {
-		if self.is_online() {
-			self.inner.unbounded_send(msg).map_err(|e| Error::Internal(e.into_send_error()))
+	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
+		let res = if let Some(conn) = self.is_connected.as_ref() {
+			if !conn.is_canceled() {
+				// unbounded send only fails if the receiver has been dropped.
+				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_by_client())
+			} else {
+				Err(subscription_closed_by_client())
+			}
 		} else {
-			Err(Error::Custom("Subscription canceled".into()))
+			Err(subscription_closed_by_client())
+		};
+
+		if let Err(e) = &res {
+			self.close(e.to_string());
 		}
+
+		res
 	}
 
-	fn is_online(&self) -> bool {
-		!self.is_online.is_canceled()
+	/// Close the subscription sink with a customized error message.
+	pub fn close(&mut self, close_reason: String) {
+		self.is_connected.take();
+		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			let result =
+				to_raw_value(&SubscriptionClosedError::from(close_reason)).expect("valid json infallible; qed");
+			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+				jsonrpc: TwoPointZero,
+				method: self.method,
+				params: JsonRpcNotificationParams { subscription: self.uniq_sub.sub_id, result: &*result },
+			})
+			.expect("valid json infallible; qed");
+			let _ = sink.unbounded_send(msg);
+		}
 	}
+}
+
+impl Drop for SubscriptionSink {
+	fn drop(&mut self) {
+		self.close(format!("Subscription: {} closed by the server", self.uniq_sub.sub_id));
+	}
+}
+
+fn subscription_closed_by_client() -> Error {
+	const CLOSE_REASON: &str = "Subscription closed by the client";
+	Error::SubscriptionClosed(CLOSE_REASON.to_owned().into())
 }
 
 #[cfg(test)]

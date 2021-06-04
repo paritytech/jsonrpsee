@@ -106,7 +106,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let cx = Mutex::new(WeatherApiCx { api_client, last_weather });
 	let mut module = RpcModule::new(cx);
 	module
-		.register_subscription("weather_sub", "weather_unsub", |params, sink, cx| {
+		.register_subscription("weather_sub", "weather_unsub", |params, mut sink, cx| {
 			let params: (String, String) = params.parse()?;
 			log::debug!(target: "server", "Subscribed with params={:?}", params);
 			std::thread::spawn(move || loop {
