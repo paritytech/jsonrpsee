@@ -209,7 +209,7 @@ impl<'a> WsClientBuilder<'a> {
 
 	/// Set request timeout (default is 60 seconds).
 	///
-	/// None - implies that no timeout is used.
+	/// None - no timeout is used.
 	pub fn request_timeout(mut self, timeout: Option<Duration>) -> Self {
 		self.request_timeout = timeout;
 		self
