@@ -31,7 +31,7 @@ pub type SubscriptionId = u64;
 /// Sink that is used to send back the result to the server for a specific method.
 pub type MethodSink = mpsc::UnboundedSender<String>;
 
-type Subscribers = Arc<Mutex<FxHashMap<UniqueSubscriptionEntry, (MethodSink, oneshot::Receiver<()>)>>>;
+type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Receiver<()>)>>>;
 
 /// Represent a unique subscription entry based on [`SubscriptionId`] and [`ConnectionId`].
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -297,7 +297,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				unsubscribe_method_name,
 				MethodCallback::Sync(Box::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
-					subscribers.lock().remove(&UniqueSubscriptionEntry { conn_id, sub_id });
+					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
 					send_response(id, &tx, "Unsubscribed");
 
 					Ok(())
@@ -330,7 +330,7 @@ pub struct SubscriptionSink {
 	/// Method.
 	method: &'static str,
 	/// Unique subscription.
-	uniq_sub: UniqueSubscriptionEntry,
+	uniq_sub: SubscriptionKey,
 	/// Shared Mutex of subscriptions for this method.
 	subscribers: Subscribers,
 	/// A type to track whether the subscription is active (the subscriber is connected).
