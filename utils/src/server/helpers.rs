@@ -44,8 +44,8 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 	let mut buf = String::with_capacity(2048);
 	buf.push('[');
 	let mut buf = rx
-		.fold(buf, |mut acc, response| async {
-			acc = [acc, response].concat();
+		.fold(buf, |mut acc, response| async move {
+			acc.push_str(&response);
 			acc.push(',');
 			acc
 		})
