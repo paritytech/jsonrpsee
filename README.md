@@ -15,7 +15,7 @@ The library is still under development; do not use in production.
 - [jsonrpsee-http-server](./http-server) [![crates.io][http-server-image]][http-server-url]
 - [jsonrpsee-proc-macros](./proc-macros) [![crates.io][proc-macros-image]][proc-macros-url]
 - [jsonrpsee-ws-client](./ws-client) [![crates.io][ws-client-image]][ws-client-url]
-- [jsonrpsee-ws-server](./http-server) [![crates.io][http-server-image]][http-server-url]
+- [jsonrpsee-ws-server](./http-server) [![crates.io][ws-server-image]][ws-server-url]
 
 [http-client-image]: https://img.shields.io/crates/v/jsonrpsee-http-client.svg
 [http-client-url]: https://crates.io/crates/jsonrpsee-http-client
