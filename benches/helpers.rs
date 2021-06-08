@@ -7,6 +7,8 @@ use jsonrpsee::{
 
 pub(crate) const SYNC_METHOD_NAME: &str = "say_hello";
 pub(crate) const ASYNC_METHOD_NAME: &str = "say_hello_async";
+pub(crate) const SUB_METHOD_NAME: &str = "sub";
+pub(crate) const UNSUB_METHOD_NAME: &str = "unsub";
 
 /// Run jsonrpsee HTTP server for benchmarks.
 pub async fn http_server() -> String {
@@ -32,6 +34,14 @@ pub async fn ws_server() -> String {
 		let mut module = RpcModule::new(());
 		module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
 		module.register_async_method(ASYNC_METHOD_NAME, |_, _| (async { Ok("lo") }).boxed()).unwrap();
+		module
+			.register_subscription(SUB_METHOD_NAME, UNSUB_METHOD_NAME, |_params, mut sink, _ctx| {
+				let x = "Hello";
+				tokio::spawn(async move { sink.send(&x) });
+				Ok(())
+			})
+			.unwrap();
+
 		server.register_module(module).unwrap();
 		server_started_tx.send(server.local_addr().unwrap()).unwrap();
 		server.start().await

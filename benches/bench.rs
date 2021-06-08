@@ -1,4 +1,5 @@
 use criterion::*;
+use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::{
 	http_client::{
 		traits::Client,
@@ -6,6 +7,7 @@ use jsonrpsee::{
 		v2::request::JsonRpcCallSer,
 		HttpClientBuilder,
 	},
+	types::traits::SubscriptionClient,
 	ws_client::WsClientBuilder,
 };
 use std::sync::Arc;
@@ -26,7 +28,8 @@ criterion_group!(
 	AsyncBencher::batched_http_requests,
 	AsyncBencher::websocket_requests
 );
-criterion_main!(types_benches, sync_benches, async_benches);
+criterion_group!(subscriptions, AsyncBencher::subscriptions);
+criterion_main!(types_benches, sync_benches, async_benches, subscriptions);
 
 #[derive(Debug, Clone, Copy)]
 enum RequestType {
@@ -108,6 +111,14 @@ trait RequestBencher {
 			Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 		run_round_trip_with_batch(&rt, crit, client, "ws batch requests", Self::REQUEST_TYPE);
 	}
+
+	fn subscriptions(crit: &mut Criterion) {
+		let rt = TokioRuntime::new().unwrap();
+		let url = rt.block_on(helpers::ws_server());
+		let client =
+			Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
+		run_sub_round_trip(&rt, crit, client, "subscriptions");
+	}
 }
 
 pub struct SyncBencher;
@@ -128,6 +139,59 @@ fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Clie
 				black_box(client.request::<String>(request.method_name(), JsonRpcParams::NoParams).await.unwrap());
 			})
 		})
+	});
+}
+
+fn run_sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl SubscriptionClient>, name: &str) {
+	let mut group = crit.benchmark_group(name);
+	group.bench_function("subscribe", |b| {
+		b.iter_with_large_drop(|| {
+			rt.block_on(async {
+				black_box(
+					client
+						.subscribe::<String>(SUB_METHOD_NAME, JsonRpcParams::NoParams, UNSUB_METHOD_NAME)
+						.await
+						.unwrap(),
+				);
+			})
+		})
+	});
+	group.bench_function("subscribe_response", |b| {
+		b.iter_with_setup(
+			|| {
+				rt.block_on(async {
+					client
+						.subscribe::<String>(SUB_METHOD_NAME, JsonRpcParams::NoParams, UNSUB_METHOD_NAME)
+						.await
+						.unwrap()
+				})
+			},
+			|mut sub| {
+				rt.block_on(async { black_box(sub.next().await.unwrap()) });
+				// Note that this benchmark will include costs for measuring `drop` for subscription,
+				// since it's not possible to combine both `iter_with_setup` and `iter_with_large_drop`.
+				// To estimate pure cost of method, one should subtract the result of `unsub` bench
+				// from this one.
+			},
+		)
+	});
+	group.bench_function("unsub", |b| {
+		b.iter_with_setup(
+			|| {
+				rt.block_on(async {
+					client
+						.subscribe::<String>(SUB_METHOD_NAME, JsonRpcParams::NoParams, UNSUB_METHOD_NAME)
+						.await
+						.unwrap()
+				})
+			},
+			|sub| {
+				// Subscription will be closed inside of the drop impl.
+				// Actually, it just sends a notification about object being closed,
+				// but it's still important to know that drop impl is not too expensive.
+				drop(black_box(sub));
+			},
+		)
 	});
 }
 
