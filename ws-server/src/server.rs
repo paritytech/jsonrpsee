@@ -75,7 +75,7 @@ impl Server {
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.methods);
-		let cfg = self.cfg;
+		// let cfg = self.cfg;
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
@@ -88,7 +88,7 @@ impl Server {
 				}
 				let methods = methods.clone();
 
-				tokio::spawn(background_task(socket, id, methods, cfg));
+				tokio::spawn(background_task(socket, id, methods, self.cfg.clone()));
 
 				id += 1;
 			}
@@ -105,13 +105,22 @@ async fn background_task(
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
-	let websocket_key = {
+	let key = {
 		let req = server.receive_request().await?;
-		req.into_key()
+
+		if let (Cors::AllowList(list), Some(origin)) = (&cfg.cors, req.headers().origin) {
+			if !list.iter().any(|o| o.as_bytes() == origin) {
+				let error = format!("Origin denied: {}", String::from_utf8_lossy(origin));
+				log::warn!("{}", error);
+				return Err(Error::Request(error));
+			}
+		}
+
+		req.key()
 	};
 
 	// Here we accept the client unconditionally.
-	let accept = Response::Accept { key: &websocket_key, protocol: None };
+	let accept = Response::Accept { key, protocol: None };
 	server.send_response(&accept).await?;
 
 	// And we can finally transition to a websocket background_task.
@@ -179,18 +188,30 @@ async fn background_task(
 	}
 }
 
+#[derive(Debug, Clone)]
+enum Cors {
+	AllowAny,
+	AllowList(Arc<[String]>),
+}
+
 /// JSON-RPC Websocket server settings.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Settings {
 	/// Maximum size in bytes of a request.
 	max_request_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
+
+	cors: Cors,
 }
 
 impl Default for Settings {
 	fn default() -> Self {
-		Self { max_request_body_size: TEN_MB_SIZE_BYTES, max_connections: MAX_CONNECTIONS }
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_connections: MAX_CONNECTIONS,
+			cors: Cors::AllowAny,
+		}
 	}
 }
 
@@ -210,6 +231,17 @@ impl Builder {
 	/// Set the maximum number of connections allowed. Default is 100.
 	pub fn max_connections(mut self, max: u64) -> Self {
 		self.settings.max_connections = max;
+		self
+	}
+
+	/// Set a list of allowet `Origin` headers, connections comming in with a different
+	/// origin will be denied.
+	///
+	/// Values should include protocol: `"protocol://hostname"`.
+	///
+	/// By default allows any Origin.
+	pub fn set_allowed_origins(mut self, list: impl AsRef<[String]>) -> Self {
+		self.settings.cors = Cors::AllowList(list.as_ref().into());
 		self
 	}
 

@@ -18,5 +18,6 @@ log = { version = "0.4", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value", "std"] }
 thiserror = "1.0"
-soketto = "0.5"
+# soketto = "0.5"
+soketto = { path = "../../soketto" }
 hyper = "0.14"
