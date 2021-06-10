@@ -250,13 +250,20 @@ impl Builder {
 	}
 
 	/// Set a list of allowet `Origin` headers, connections comming in with a different
-	/// origin will be denied.
+	/// origin will be denied. Values should include protocol.
 	///
-	/// Values should include protocol: `"protocol://hostname"`.
+	/// ```rust
+	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
+	/// builder.set_allowed_origins(vec!["https://example.com"]);
+	/// ```
 	///
-	/// By default allows any Origin.
-	pub fn set_allowed_origins(mut self, list: impl AsRef<[String]>) -> Self {
-		self.settings.cors = Cors::AllowList(list.as_ref().into());
+	/// By default allows any `Origin`.
+	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Self
+	where
+		List: IntoIterator<Item = Origin>,
+		Origin: Into<String>,
+	{
+		self.settings.cors = Cors::AllowList(list.into_iter().map(Into::into).collect());
 		self
 	}
 
