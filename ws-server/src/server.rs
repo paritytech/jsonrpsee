@@ -108,22 +108,21 @@ async fn background_task(
 	let key = {
 		let req = server.receive_request().await?;
 
-		if let (Cors::AllowList(list), Some(origin)) = (&cfg.cors, req.headers().origin) {
-			if !list.iter().any(|o| o.as_bytes() == origin) {
-				// TODO: send `Response::Reject` with an appropriate status code
-
-				let error = format!("Origin denied: {}", String::from_utf8_lossy(origin));
-				log::warn!("{}", error);
-				return Err(Error::Request(error));
-			}
-		}
-
-		req.key()
+		cfg.cors.verify_origin(req.headers().origin).map(|_| req.key())
 	};
 
-	// Here we accept the client unconditionally.
-	let accept = Response::Accept { key, protocol: None };
-	server.send_response(&accept).await?;
+	match key {
+		Ok(key) => {
+			let accept = Response::Accept { key, protocol: None };
+			server.send_response(&accept).await?;
+		},
+		Err(error) => {
+			let reject = Response::Reject { status_code: 403 };
+			server.send_response(&reject).await?;
+
+			return Err(error);
+		}
+	}
 
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
@@ -194,6 +193,20 @@ async fn background_task(
 enum Cors {
 	AllowAny,
 	AllowList(Arc<[String]>),
+}
+
+impl Cors {
+	fn verify_origin(&self, origin: Option<&[u8]>) -> Result<(), Error> {
+		if let (Cors::AllowList(list), Some(origin)) = (self, origin) {
+			if !list.iter().any(|o| o.as_bytes() == origin) {
+				let error = format!("Origin denied: {}", String::from_utf8_lossy(origin));
+				log::warn!("{}", error);
+				return Err(Error::Request(error));
+			}
+		}
+
+		Ok(())
+	}
 }
 
 /// JSON-RPC Websocket server settings.
