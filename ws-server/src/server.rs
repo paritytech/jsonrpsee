@@ -110,6 +110,8 @@ async fn background_task(
 
 		if let (Cors::AllowList(list), Some(origin)) = (&cfg.cors, req.headers().origin) {
 			if !list.iter().any(|o| o.as_bytes() == origin) {
+				// TODO: send `Response::Reject` with an appropriate status code
+
 				let error = format!("Origin denied: {}", String::from_utf8_lossy(origin));
 				log::warn!("{}", error);
 				return Err(Error::Request(error));
@@ -201,7 +203,7 @@ struct Settings {
 	max_request_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
-
+	/// Cross-origin policy by which to accept or deny incoming requests.
 	cors: Cors,
 }
 
