@@ -122,7 +122,7 @@ async fn background_task(
 	tokio::spawn(async move {
 		while let Some(response) = rx.next().await {
 			log::debug!("send: {}", response);
-			let _ = sender.send_binary_mut(response.into_bytes()).await;
+			let _ = sender.send_text(response).await;
 			let _ = sender.flush().await;
 		}
 	});
