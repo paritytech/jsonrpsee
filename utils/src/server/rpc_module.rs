@@ -82,7 +82,7 @@ impl Debug for MethodCallback {
 	}
 }
 
-/// Collection of synchronous and asynchronous methods.
+/// Reference counted collection of synchronous and asynchronous methods.
 #[derive(Default, Debug, Clone)]
 pub struct Methods {
 	callbacks: Arc<FxHashMap<&'static str, MethodCallback>>,
@@ -139,6 +139,11 @@ impl Methods {
 	/// Returns a `Vec` with all the method names registered on this server.
 	pub fn method_names(&self) -> Vec<&'static str> {
 		self.callbacks.keys().copied().collect()
+	}
+
+	/// Get the reference count this instance of `Methods`.
+	pub fn ref_count(&self) -> usize {
+		Arc::strong_count(&self.callbacks)
 	}
 }
 

@@ -29,7 +29,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -74,7 +74,7 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
-		let methods = Arc::new(self.methods);
+		let methods = self.methods;
 		let cfg = self.cfg;
 		let mut id = 0;
 
@@ -82,7 +82,7 @@ impl Server {
 			if let Ok(socket) = socket {
 				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
 
-				if Arc::strong_count(&methods) > self.cfg.max_connections as usize {
+				if methods.ref_count() > self.cfg.max_connections as usize {
 					log::warn!("Too many connections. Try again in a while");
 					continue;
 				}
@@ -99,7 +99,7 @@ impl Server {
 async fn background_task(
 	socket: tokio::net::TcpStream,
 	conn_id: ConnectionId,
-	methods: Arc<Methods>,
+	methods: Methods,
 	cfg: Settings,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
