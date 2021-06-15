@@ -83,9 +83,9 @@ impl Debug for MethodCallback {
 }
 
 /// Collection of synchronous and asynchronous methods.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Methods {
-	callbacks: FxHashMap<&'static str, MethodCallback>,
+	callbacks: Arc<FxHashMap<&'static str, MethodCallback>>,
 }
 
 impl Methods {
@@ -102,15 +102,22 @@ impl Methods {
 		Ok(())
 	}
 
+	/// Helper for obtaining a mut ref to the callbacks HashMap.
+	fn mut_callbacks(&mut self) -> &mut FxHashMap<&'static str, MethodCallback> {
+		Arc::make_mut(&mut self.callbacks)
+	}
+
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
-	pub fn merge(&mut self, other: Methods) -> Result<(), Error> {
+	pub fn merge(&mut self, mut other: Methods) -> Result<(), Error> {
 		for name in other.callbacks.keys() {
 			self.verify_method_name(name)?;
 		}
 
-		for (name, callback) in other.callbacks {
-			self.callbacks.insert(name, callback);
+		let callbacks = self.mut_callbacks();
+
+		for (name, callback) in other.mut_callbacks().drain() {
+			callbacks.insert(name, callback);
 		}
 
 		Ok(())
@@ -138,7 +145,7 @@ impl Methods {
 /// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,
 /// alternatively, merged with other modules to construct a cohesive API. [`RpcModule`] wraps an additional context
 /// argument that can be used to access data during call execution.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
 	methods: Methods,
@@ -160,7 +167,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		self.methods.callbacks.insert(
+		self.methods.mut_callbacks().insert(
 			method_name,
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
@@ -193,7 +200,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		self.methods.callbacks.insert(
+		self.methods.mut_callbacks().insert(
 			method_name,
 			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
@@ -266,7 +273,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		{
 			let subscribers = subscribers.clone();
-			self.methods.callbacks.insert(
+			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
 				MethodCallback::Sync(Arc::new(move |id, params, method_sink, conn_id| {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
@@ -294,7 +301,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		}
 
 		{
-			self.methods.callbacks.insert(
+			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
 				MethodCallback::Sync(Arc::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
