@@ -115,7 +115,7 @@ async fn background_task(
 		Ok(key) => {
 			let accept = Response::Accept { key, protocol: None };
 			server.send_response(&accept).await?;
-		},
+		}
 		Err(error) => {
 			let reject = Response::Reject { status_code: 403 };
 			server.send_response(&reject).await?;
@@ -222,11 +222,7 @@ struct Settings {
 
 impl Default for Settings {
 	fn default() -> Self {
-		Self {
-			max_request_body_size: TEN_MB_SIZE_BYTES,
-			max_connections: MAX_CONNECTIONS,
-			cors: Cors::AllowAny,
-		}
+		Self { max_request_body_size: TEN_MB_SIZE_BYTES, max_connections: MAX_CONNECTIONS, cors: Cors::AllowAny }
 	}
 }
 
