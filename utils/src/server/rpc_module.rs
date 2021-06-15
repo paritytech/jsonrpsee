@@ -141,7 +141,7 @@ impl Methods {
 		self.callbacks.keys().copied().collect()
 	}
 
-	/// Get the reference count this instance of `Methods`.
+	/// Get the reference count for this instance of `Methods`.
 	pub fn ref_count(&self) -> usize {
 		Arc::strong_count(&self.callbacks)
 	}
