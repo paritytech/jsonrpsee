@@ -249,8 +249,9 @@ impl Builder {
 		self
 	}
 
-	/// Set a list of allowet `Origin` headers, connections comming in with a different
-	/// origin will be denied. Values should include protocol.
+	/// Set a list of allowed origins. During the handshake, the `Origin` header will be
+	/// checked against the list, connections without a matching origin will be denied.
+	/// Values should include protocol.
 	///
 	/// ```rust
 	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
@@ -258,13 +259,20 @@ impl Builder {
 	/// ```
 	///
 	/// By default allows any `Origin`.
-	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Self
+	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
 	where
 		List: IntoIterator<Item = Origin>,
 		Origin: Into<String>,
 	{
-		self.settings.cors = Cors::AllowList(list.into_iter().map(Into::into).collect());
-		self
+		let list: Arc<_> = list.into_iter().map(Into::into).collect();
+
+		if list.len() == 0 {
+			return Err(Error::EmptyAllowedOrigins);
+		}
+
+		self.settings.cors = Cors::AllowList(list);
+
+		Ok(self)
 	}
 
 	/// Finalize the configuration of the server. Consumes the [`Builder`].

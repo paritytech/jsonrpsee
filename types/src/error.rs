@@ -78,6 +78,9 @@ pub enum Error {
 	/// Configured max number of request slots exceeded.
 	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,
+	/// List passed into `set_allowed_origins` was empty
+	#[error("Must set at least one allowed origin")]
+	EmptyAllowedOrigins,
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),
