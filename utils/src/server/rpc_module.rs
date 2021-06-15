@@ -343,7 +343,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let callback = match self.methods.callbacks.get(existing_method) {
 			Some(callback) => callback.clone(),
-			None => return Err(Error::MethodNotFound(existing_method.into()))
+			None => return Err(Error::MethodNotFound(existing_method.into())),
 		};
 
 		self.methods.mut_callbacks().insert(alias, callback);
