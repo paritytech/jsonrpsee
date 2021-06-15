@@ -336,6 +336,20 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		Ok(())
 	}
+
+	/// Register an `alias` name for an `existing_method`.
+	pub fn register_alias(&mut self, alias: &'static str, existing_method: &'static str) -> Result<(), Error> {
+		self.methods.verify_method_name(alias)?;
+
+		let callback = match self.methods.callbacks.get(existing_method) {
+			Some(callback) => callback.clone(),
+			None => return Err(Error::MethodNotFound(existing_method.into()))
+		};
+
+		self.methods.mut_callbacks().insert(alias, callback);
+
+		Ok(())
+	}
 }
 
 /// Represents a single subscription.
@@ -446,5 +460,18 @@ mod tests {
 		let methods = cxmodule.into_methods();
 		assert!(methods.method("hi").is_some());
 		assert!(methods.method("goodbye").is_some());
+	}
+
+	#[test]
+	fn rpc_register_alias() {
+		let mut module = RpcModule::new(());
+
+		module.register_method("hello_world", |_: RpcParams, _| Ok(())).unwrap();
+		module.register_alias("hello_foobar", "hello_world").unwrap();
+
+		let methods = module.into_methods();
+
+		assert!(methods.method("hello_world").is_some());
+		assert!(methods.method("hello_foobar").is_some());
 	}
 }
