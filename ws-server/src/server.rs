@@ -255,6 +255,8 @@ impl Builder {
 	/// ```
 	///
 	/// By default allows any `Origin`.
+	///
+	/// Will return an error if `list` is empty. Use [`allow_all_origins`](Builder::allow_all_origins) to restore the default.
 	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
 	where
 		List: IntoIterator<Item = Origin>,
@@ -269,6 +271,13 @@ impl Builder {
 		self.settings.cors = Cors::AllowList(list);
 
 		Ok(self)
+	}
+
+	/// Restores the default behavior of allowing connections with `Origin` header
+	/// containing any value. This will undo any list set by [`set_allowed_origins`](Builder::set_allowed_origins).
+	pub fn allow_all_origins(mut self) -> Self {
+		self.settings.cors = Cors::AllowAny;
+		self
 	}
 
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
