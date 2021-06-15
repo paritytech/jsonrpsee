@@ -18,7 +18,7 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Box<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod = Arc<
 	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
@@ -41,6 +41,7 @@ struct SubscriptionKey {
 }
 
 /// Callback wrapper that can be either sync or async.
+#[derive(Clone)]
 pub enum MethodCallback {
 	/// Synchronous method handler.
 	Sync(SyncMethod),
@@ -161,7 +162,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.callbacks.insert(
 			method_name,
-			MethodCallback::Sync(Box::new(move |id, params, tx, _| {
+			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
@@ -267,7 +268,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.callbacks.insert(
 				subscribe_method_name,
-				MethodCallback::Sync(Box::new(move |id, params, method_sink, conn_id| {
+				MethodCallback::Sync(Arc::new(move |id, params, method_sink, conn_id| {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
@@ -295,7 +296,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.callbacks.insert(
 				unsubscribe_method_name,
-				MethodCallback::Sync(Box::new(move |id, params, tx, conn_id| {
+				MethodCallback::Sync(Arc::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
 					send_response(id, &tx, "Unsubscribed");
