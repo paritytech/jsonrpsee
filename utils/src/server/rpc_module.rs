@@ -82,7 +82,7 @@ impl Debug for MethodCallback {
 	}
 }
 
-/// Reference counted collection of synchronous and asynchronous methods.
+/// Reference-counted, clone-on-write collection of synchronous and asynchronous methods.
 #[derive(Default, Debug, Clone)]
 pub struct Methods {
 	callbacks: Arc<FxHashMap<&'static str, MethodCallback>>,
@@ -156,11 +156,27 @@ pub struct RpcModule<Context> {
 	methods: Methods,
 }
 
-impl<Context: Send + Sync + 'static> RpcModule<Context> {
+impl<Context> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
 		Self { ctx: Arc::new(ctx), methods: Default::default() }
 	}
+
+	/// Convert a module into methods. Consumes self.
+	pub fn into_methods(self) -> Methods {
+		self.methods
+	}
+
+	/// Merge two [`RpcModule`]'s by adding all [`Methods`] `other` into `self`.
+	/// Fails if any of the methods in `other` is present already.
+	pub fn merge<Context2>(&mut self, other: RpcModule<Context2>) -> Result<(), Error> {
+		self.methods.merge(other.methods)?;
+
+		Ok(())
+	}
+}
+
+impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// Register a new synchronous RPC method, which computes the response with the given callback.
 	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
@@ -317,19 +333,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				})),
 			);
 		}
-
-		Ok(())
-	}
-
-	/// Convert a module into methods. Consumes self.
-	pub fn into_methods(self) -> Methods {
-		self.methods
-	}
-
-	/// Merge two [`RpcModule`]'s by adding all [`Methods`] `other` into `self`.
-	/// Fails if any of the methods in `other` is present already.
-	pub fn merge<Context2>(&mut self, other: RpcModule<Context2>) -> Result<(), Error> {
-		self.methods.merge(other.methods)?;
 
 		Ok(())
 	}

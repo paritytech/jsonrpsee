@@ -56,7 +56,7 @@ impl Server {
 	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
 	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
 	/// is returned. Note that the [`RpcModule`] is consumed after this call.
-	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
 		self.methods.merge(module.into_methods())?;
 		Ok(())
 	}
