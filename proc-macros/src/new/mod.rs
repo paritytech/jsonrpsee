@@ -161,6 +161,25 @@ impl RpcDescription {
 			#client_impl
 		})
 	}
+
+	/// Formats the identifier as a path relative to the resolved
+	/// `jsonrpsee` path.
+	fn jrps_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
+		let jsonrpsee = &self.jsonrpsee_path;
+		quote! { #jsonrpsee::#item }
+	}
+
+	/// Based on the namespace, renders the full name of the RPC method/subscription.
+	/// Examples:
+	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
+	/// For no namespace and method `makeSpam` it will be just `makeSpam.
+	fn rpc_identifier(&self, method: &syn::LitStr) -> String {
+		if let Some(ns) = &self.attrs.namespace {
+			format!("{}_{}", ns.value(), method.value())
+		} else {
+			method.value()
+		}
+	}
 }
 
 fn has_attr(attrs: &[Attribute], ident: &str) -> bool {
