@@ -15,7 +15,7 @@ pub struct RpcMethod {
 }
 
 impl RpcMethod {
-	pub fn from_item(method: syn::TraitItemMethod) -> Result<Self, syn::Error> {
+	pub fn from_item(mut method: syn::TraitItemMethod) -> Result<Self, syn::Error> {
 		let attributes = attributes::Method::from_attributes(&method.attrs)?;
 		let sig = method.sig.clone();
 		let name = attributes.name;
@@ -36,6 +36,9 @@ impl RpcMethod {
 			syn::ReturnType::Type(_, output) => Some(*output),
 		};
 
+		// We've analyzed attributes and don't need them anymore.
+		method.attrs.clear();
+
 		Ok(Self { name, params, returns, signature: method })
 	}
 }
@@ -50,7 +53,7 @@ pub struct RpcSubscription {
 }
 
 impl RpcSubscription {
-	pub fn from_item(sub: syn::TraitItemMethod) -> Result<Self, syn::Error> {
+	pub fn from_item(mut sub: syn::TraitItemMethod) -> Result<Self, syn::Error> {
 		let attributes = attributes::Subscription::from_attributes(&sub.attrs)?;
 		let sig = sub.sig.clone();
 		let name = attributes.name;
@@ -67,6 +70,9 @@ impl RpcSubscription {
 				},
 			})
 			.collect();
+
+		// We've analyzed attributes and don't need them anymore.
+		sub.attrs.clear();
 
 		Ok(Self { name, unsub_method, params, item, signature: sub })
 	}
@@ -97,6 +103,7 @@ impl RpcDescription {
 		for entry in item.items.iter() {
 			if let syn::TraitItem::Method(method) = entry {
 				let mut is_method = false;
+				let mut is_sub = false;
 				if has_attr(&method.attrs, "method") {
 					is_method = true;
 
@@ -104,6 +111,7 @@ impl RpcDescription {
 					methods.push(method_data);
 				}
 				if has_attr(&method.attrs, "subscription") {
+					is_sub = true;
 					if is_method {
 						return Err(syn::Error::new_spanned(
 							&method,
@@ -114,6 +122,15 @@ impl RpcDescription {
 					let sub_data = RpcSubscription::from_item(method.clone())?;
 					subscriptions.push(sub_data);
 				}
+
+				if !is_method && !is_sub {
+					return Err(syn::Error::new_spanned(
+						&method,
+						"Methods must have either 'method' or 'subscription' attribute",
+					));
+				}
+			} else {
+				return Err(syn::Error::new_spanned(&entry, "Only methods allowed in RPC traits"));
 			}
 		}
 
