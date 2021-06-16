@@ -18,3 +18,4 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "1.0", default-features = false, features = ["extra-traits", "full"] }
 proc-macro-crate = "1"
+bae = "0.1.6"
