@@ -1,4 +1,5 @@
 use criterion::*;
+use futures_util::future::join_all;
 use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::{
 	http_client::{
@@ -221,21 +222,19 @@ fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
 	let mut group = crit.benchmark_group(request.group_name(name));
 	for num_concurrent_tasks in helpers::concurrent_tasks() {
 		group.bench_function(format!("{}", num_concurrent_tasks), |b| {
-			b.to_async(rt).iter(|| async {
-				let mut tasks = Vec::new();
-				for _ in 0..num_concurrent_tasks {
-					let client_rc = client.clone();
-					let task = rt.spawn(async move {
-						let _ = black_box(
-							client_rc.request::<String>(request.method_name(), JsonRpcParams::NoParams).await.unwrap(),
-						);
+			b.to_async(rt).iter_with_setup(
+				|| (0..num_concurrent_tasks).map(|_| client.clone()),
+				|clients| async {
+					let tasks = clients.map(|client| {
+						rt.spawn(async move {
+							let _ = black_box(
+								client.request::<String>(request.method_name(), JsonRpcParams::NoParams).await.unwrap(),
+							);
+						})
 					});
-					tasks.push(task);
-				}
-				for task in tasks {
-					task.await.unwrap();
-				}
-			})
+					join_all(tasks).await;
+				},
+			)
 		});
 	}
 	group.finish();
