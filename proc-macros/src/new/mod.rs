@@ -5,6 +5,8 @@ use quote::quote;
 use syn::Attribute;
 
 mod attributes;
+mod render_client;
+mod render_server;
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
@@ -80,6 +82,9 @@ impl RpcSubscription {
 
 #[derive(Debug)]
 pub struct RpcDescription {
+	/// Path to the `jsonrpsee` types part.
+	jsonrpsee_path: TokenStream2,
+	/// Data about RPC declaration
 	attrs: attributes::Rpc,
 	/// Trait definition in which all the attributes were stripped.
 	trait_def: syn::ItemTrait,
@@ -91,6 +96,8 @@ pub struct RpcDescription {
 
 impl RpcDescription {
 	pub fn from_item(mut item: syn::ItemTrait) -> Result<Self, syn::Error> {
+		let jsonrpsee_path = crate::helpers::find_jsonrpsee_crate()?;
+
 		let attrs = attributes::Rpc::from_attributes(&item.attrs)?;
 
 		item.attrs.clear(); // Remove RPC attributes.
@@ -134,7 +141,7 @@ impl RpcDescription {
 			}
 		}
 
-		Ok(Self { attrs, trait_def: item, methods, subscriptions })
+		Ok(Self { jsonrpsee_path, attrs, trait_def: item, methods, subscriptions })
 	}
 
 	pub fn render(self) -> Result<TokenStream2, syn::Error> {
@@ -153,14 +160,6 @@ impl RpcDescription {
 			#server_impl
 			#client_impl
 		})
-	}
-
-	fn render_client(&self) -> Result<TokenStream2, syn::Error> {
-		todo!()
-	}
-
-	fn render_server(&self) -> Result<TokenStream2, syn::Error> {
-		todo!()
 	}
 }
 
