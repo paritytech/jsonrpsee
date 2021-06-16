@@ -2,15 +2,20 @@
 
 use std::net::SocketAddr;
 
-use crate::{HttpServerBuilder, RpcModule};
+use crate::{server::StopHandle, HttpServerBuilder, RpcModule};
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
+use tokio::task::JoinHandle;
 
 async fn server() -> SocketAddr {
+	server_with_handles().await.0
+}
+
+async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, StopHandle) {
 	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
@@ -56,8 +61,9 @@ async fn server() -> SocketAddr {
 		.unwrap();
 
 	server.register_module(module).unwrap();
-	tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
-	addr
+	let stop_handle = server.stop_handle();
+	let join_handle = tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
+	(addr, join_handle, stop_handle)
 }
 
 #[tokio::test]
@@ -307,4 +313,24 @@ async fn can_register_modules() {
 	let expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
 	assert_eq!(err.to_string(), expected_err.to_string());
 	assert_eq!(server.method_names().len(), 2);
+}
+
+#[tokio::test]
+async fn stop_works() {
+	let _ = env_logger::try_init();
+	let (_addr, join_handle, mut stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	stop_handle.stop().with_default_timeout().await.unwrap().unwrap();
+	stop_handle.wait_for_stop().with_default_timeout().await.unwrap();
+
+	// After that we should be able to wait for task handle to finish.
+	// First `unwrap` is timeout, second is `JoinHandle`'s one, third is the server future result.
+	join_handle
+		.with_default_timeout()
+		.await
+		.expect("Timeout")
+		.expect("Join error")
+		.expect("Server stopped with an error");
+
+	// After server was stopped, attempt to stop it again should result in an error.
+	assert!(stop_handle.stop().with_default_timeout().await.unwrap().is_err());
 }

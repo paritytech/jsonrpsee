@@ -78,6 +78,9 @@ pub enum Error {
 	/// Configured max number of request slots exceeded.
 	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,
+	/// Attempted to stop server that is already stopped.
+	#[error("Attempted to stop server that is already stopped")]
+	AlreadyStopped,
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),

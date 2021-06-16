@@ -305,7 +305,7 @@ async fn async_method_call_that_fails() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"err_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, call_execution_failed("nah".into(), Id::Num(1)));
+	assert_eq!(response, call_execution_failed("nah", Id::Num(1)));
 }
 
 #[tokio::test]
