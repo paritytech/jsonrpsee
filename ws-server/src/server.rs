@@ -75,12 +75,14 @@ impl Server {
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = Arc::new(self.methods);
-		// let cfg = self.cfg;
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
 			if let Ok(socket) = socket {
-				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
+				if let Err(e) = socket.set_nodelay(true) {
+					log::error!("Could not set NODELAY on socket: {:?}", e);
+					continue;
+				}
 
 				if Arc::strong_count(&methods) > self.cfg.max_connections as usize {
 					log::warn!("Too many connections. Try again in a while");
@@ -108,7 +110,7 @@ async fn background_task(
 	let key = {
 		let req = server.receive_request().await?;
 
-		cfg.cors.verify_origin(req.headers().origin).map(|_| req.key())
+		cfg.allowed_origins.verify(req.headers().origin).map(|()| req.key())
 	};
 
 	match key {
@@ -190,14 +192,14 @@ async fn background_task(
 }
 
 #[derive(Debug, Clone)]
-enum Cors {
-	AllowAny,
-	AllowList(Arc<[String]>),
+enum AllowedOrigins {
+	Any,
+	OneOf(Arc<[String]>),
 }
 
-impl Cors {
-	fn verify_origin(&self, origin: Option<&[u8]>) -> Result<(), Error> {
-		if let (Cors::AllowList(list), Some(origin)) = (self, origin) {
+impl AllowedOrigins {
+	fn verify(&self, origin: Option<&[u8]>) -> Result<(), Error> {
+		if let (AllowedOrigins::OneOf(list), Some(origin)) = (self, origin) {
 			if !list.iter().any(|o| o.as_bytes() == origin) {
 				let error = format!("Origin denied: {}", String::from_utf8_lossy(origin));
 				log::warn!("{}", error);
@@ -217,12 +219,16 @@ struct Settings {
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
 	/// Cross-origin policy by which to accept or deny incoming requests.
-	cors: Cors,
+	allowed_origins: AllowedOrigins,
 }
 
 impl Default for Settings {
 	fn default() -> Self {
-		Self { max_request_body_size: TEN_MB_SIZE_BYTES, max_connections: MAX_CONNECTIONS, cors: Cors::AllowAny }
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_connections: MAX_CONNECTIONS,
+			allowed_origins: AllowedOrigins::Any,
+		}
 	}
 }
 
@@ -268,7 +274,7 @@ impl Builder {
 			return Err(Error::EmptyAllowedOrigins);
 		}
 
-		self.settings.cors = Cors::AllowList(list);
+		self.settings.allowed_origins = AllowedOrigins::OneOf(list);
 
 		Ok(self)
 	}
@@ -276,7 +282,7 @@ impl Builder {
 	/// Restores the default behavior of allowing connections with `Origin` header
 	/// containing any value. This will undo any list set by [`set_allowed_origins`](Builder::set_allowed_origins).
 	pub fn allow_all_origins(mut self) -> Self {
-		self.settings.cors = Cors::AllowAny;
+		self.settings.allowed_origins = AllowedOrigins::Any;
 		self
 	}
 
