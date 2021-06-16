@@ -20,6 +20,16 @@ impl Rpc {
 	pub(crate) fn is_correct(&self) -> bool {
 		self.server.is_some() || self.client.is_some()
 	}
+
+	/// Returns `true` if server implementation was requested.
+	pub(crate) fn needs_server(&self) -> bool {
+		self.server.is_some()
+	}
+
+	/// Returns `true` if client implementation was requested.
+	pub(crate) fn needs_client(&self) -> bool {
+		self.client.is_some()
+	}
 }
 
 /// Input for the `#[method(...)]` attribute.

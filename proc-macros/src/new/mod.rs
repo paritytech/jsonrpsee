@@ -1,5 +1,7 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
+use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
 use syn::Attribute;
 
 mod attributes;
@@ -118,7 +120,7 @@ impl RpcDescription {
 		Ok(Self { attrs, trait_def: item, methods, subscriptions })
 	}
 
-	pub fn render(self) -> Result<proc_macro::TokenStream, syn::Error> {
+	pub fn render(self) -> Result<TokenStream2, syn::Error> {
 		if !self.attrs.is_correct() {
 			return Err(syn::Error::new_spanned(
 				&self.trait_def.ident,
@@ -126,6 +128,21 @@ impl RpcDescription {
 			));
 		}
 
+		let server_impl = if self.attrs.needs_server() { self.render_server()? } else { TokenStream2::new() };
+
+		let client_impl = if self.attrs.needs_client() { self.render_client()? } else { TokenStream2::new() };
+
+		Ok(quote! {
+			#server_impl
+			#client_impl
+		})
+	}
+
+	fn render_client(&self) -> Result<TokenStream2, syn::Error> {
+		todo!()
+	}
+
+	fn render_server(&self) -> Result<TokenStream2, syn::Error> {
 		todo!()
 	}
 }

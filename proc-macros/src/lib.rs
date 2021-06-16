@@ -117,12 +117,13 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
 	match rpc_impl(item) {
 		Ok(tokens) => tokens,
-		Err(err) => err.to_compile_error().into(),
+		Err(err) => err.to_compile_error(),
 	}
+	.into()
 }
 
 /// Convenience form of `rpc` that may use `?` for error handling to avoid boilerplate.
-fn rpc_impl(item: TokenStream) -> Result<TokenStream, syn::Error> {
+fn rpc_impl(item: TokenStream) -> Result<proc_macro2::TokenStream, syn::Error> {
 	let trait_data: syn::ItemTrait = syn::parse(item)?;
 	let rpc = RpcDescription::from_item(trait_data)?;
 	rpc.render()
