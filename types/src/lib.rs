@@ -30,6 +30,6 @@ pub use serde_json::{to_value as to_json_value, value::RawValue as JsonRawValue,
 /// dependencies to be explicitly added on the client side.
 #[doc(hidden)]
 pub mod __reexports {
-	pub use async_trait;
+	pub use async_trait::async_trait;
 	pub use serde_json;
 }

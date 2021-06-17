@@ -114,39 +114,38 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 
 /// Main RPC macro. TODO: Add docs
 #[proc_macro_attribute]
-pub fn rpc(_attr: TokenStream, item: TokenStream) -> TokenStream {
-	match rpc_impl(item) {
+pub fn rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
+	let attr = proc_macro2::TokenStream::from(attr);
+
+	let rebuilt_rpc_attribute = syn::Attribute {
+		pound_token: syn::token::Pound::default(),
+		style: syn::AttrStyle::Outer,
+		bracket_token: syn::token::Bracket::default(),
+		path: syn::Ident::new("rpc", proc_macro2::Span::call_site()).into(),
+		tokens: quote! { (#attr) },
+	};
+
+	match rpc_impl(rebuilt_rpc_attribute, item) {
 		Ok(tokens) => tokens,
 		Err(err) => err.to_compile_error(),
 	}
 	.into()
 }
 
+#[derive(Debug)]
+struct RpcAttributes {
+	attrs: Vec<syn::Attribute>,
+}
+
+impl syn::parse::Parse for RpcAttributes {
+	fn parse(input: syn::parse::ParseStream) -> Result<Self, syn::Error> {
+		Ok(Self { attrs: input.call(syn::Attribute::parse_outer)? })
+	}
+}
+
 /// Convenience form of `rpc` that may use `?` for error handling to avoid boilerplate.
-fn rpc_impl(item: TokenStream) -> Result<proc_macro2::TokenStream, syn::Error> {
+fn rpc_impl(attr: syn::Attribute, item: TokenStream) -> Result<proc_macro2::TokenStream, syn::Error> {
 	let trait_data: syn::ItemTrait = syn::parse(item)?;
-	let rpc = RpcDescription::from_item(trait_data)?;
+	let rpc = RpcDescription::from_item(attr, trait_data)?;
 	rpc.render()
-}
-
-/// Marker for a method in the RPC trait definition.
-#[proc_macro_attribute]
-pub fn method(_attr: TokenStream, item: TokenStream) -> TokenStream {
-	// We don't modify the input stream, since this attribute only
-	// provides additional metadata for `rpc` attribute.
-	//
-	// This however should be a `proc_macro_attribute`, so rust compiler won't complain about
-	// unknown attribute.
-	item
-}
-
-/// Marker for a subscription in the RPC trait definition.
-#[proc_macro_attribute]
-pub fn subscription(_attr: TokenStream, item: TokenStream) -> TokenStream {
-	// We don't modify the input stream, since this attribute only
-	// provides additional metadata for `rpc` attribute.
-	//
-	// This however should be a `proc_macro_attribute`, so rust compiler won't complain about
-	// unknown attribute.
-	item
 }

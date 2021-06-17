@@ -95,10 +95,10 @@ pub struct RpcDescription {
 }
 
 impl RpcDescription {
-	pub fn from_item(mut item: syn::ItemTrait) -> Result<Self, syn::Error> {
+	pub fn from_item(attr: syn::Attribute, mut item: syn::ItemTrait) -> Result<Self, syn::Error> {
 		let jsonrpsee_path = crate::helpers::find_jsonrpsee_crate()?;
 
-		let attrs = attributes::Rpc::from_attributes(&item.attrs)?;
+		let attrs = attributes::Rpc::from_attributes(&[attr])?;
 
 		item.attrs.clear(); // Remove RPC attributes.
 

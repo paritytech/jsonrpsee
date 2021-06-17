@@ -19,3 +19,6 @@ quote = "1.0"
 syn = { version = "1.0", default-features = false, features = ["extra-traits", "full"] }
 proc-macro-crate = "1"
 bae = "0.1.6"
+
+[dev-dependencies]
+jsonrpsee = { path = "../jsonrpsee"}
