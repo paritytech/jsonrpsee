@@ -163,7 +163,6 @@ impl RpcDescription {
 
 	pub fn render(self) -> Result<TokenStream2, syn::Error> {
 		let server_impl = if self.attrs.needs_server() { self.render_server()? } else { TokenStream2::new() };
-
 		let client_impl = if self.attrs.needs_client() { self.render_client()? } else { TokenStream2::new() };
 
 		Ok(quote! {
@@ -173,9 +172,16 @@ impl RpcDescription {
 	}
 
 	/// Formats the identifier as a path relative to the resolved
-	/// `jsonrpsee` path.
-	fn jrps_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
-		let jsonrpsee = &self.jsonrpsee_client_path;
+	/// `jsonrpsee` client path.
+	fn jrps_client_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
+		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
+		quote! { #jsonrpsee::#item }
+	}
+
+	/// Formats the identifier as a path relative to the resolved
+	/// `jsonrpsee` server path.
+	fn jrps_server_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
+		let jsonrpsee = self.jsonrpsee_server_path.as_ref().unwrap();
 		quote! { #jsonrpsee::#item }
 	}
 

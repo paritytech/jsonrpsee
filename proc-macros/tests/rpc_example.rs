@@ -2,8 +2,8 @@
 
 use jsonrpsee_proc_macros::rpc;
 
-#[rpc(client, namespace = "foo")]
+#[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
 	#[method(name = "foo")]
-	async fn foo(&self, param_a: u8, param_b: &str) -> u16;
+	async fn foo(&self, param_a: u8, param_b: String) -> u16;
 }

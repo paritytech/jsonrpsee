@@ -18,7 +18,7 @@ impl RpcDescription {
 			self.methods.iter().map(|method| self.render_method(method)).collect::<Result<Vec<_>, _>>()?;
 		let sub_impls = self.subscriptions.iter().map(|sub| self.render_sub(sub)).collect::<Result<Vec<_>, _>>()?;
 
-		let async_trait = self.jrps_item(quote! { __reexports::async_trait });
+		let async_trait = self.jrps_client_item(quote! { __reexports::async_trait });
 
 		// Doc-comment to be associated with the client.
 		let doc_comment = format!("Client implementation for the `{}` RPC API.", &self.trait_def.ident);
@@ -37,7 +37,7 @@ impl RpcDescription {
 
 	fn render_method(&self, method: &RpcMethod) -> Result<TokenStream2, syn::Error> {
 		// `jsonrpsee::Error`
-		let jrps_error = self.jrps_item(quote::format_ident!("Error"));
+		let jrps_error = self.jrps_client_item(quote::format_ident!("Error"));
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &method.signature.sig.ident;
 		// List of inputs to put into `JsonRpcParams` (e.g. `self.foo(<12, "baz">)`).
@@ -62,7 +62,7 @@ impl RpcDescription {
 
 		// Encoded parameters for the request.
 		let parameters = if !method.params.is_empty() {
-			let serde_json = self.jrps_item(quote! { __reexports::serde_json });
+			let serde_json = self.jrps_client_item(quote! { __reexports::serde_json });
 			let params = method.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
@@ -71,7 +71,7 @@ impl RpcDescription {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_item(quote::format_ident!("JsonRpcParams::NoParams"))
+			self.jrps_client_item(quote::format_ident!("JsonRpcParams::NoParams"))
 		};
 
 		// Doc-comment to be associated with the method.
@@ -88,7 +88,7 @@ impl RpcDescription {
 
 	fn render_sub(&self, sub: &RpcSubscription) -> Result<TokenStream2, syn::Error> {
 		// `jsonrpsee::Error`
-		let jrps_error = self.jrps_item(quote::format_ident!("Error"));
+		let jrps_error = self.jrps_client_item(quote::format_ident!("Error"));
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &sub.signature.sig.ident;
 		// List of inputs to put into `JsonRpcParams` (e.g. `self.foo(<12, "baz">)`).
@@ -100,13 +100,13 @@ impl RpcDescription {
 
 		// `returns` represent the return type of the *rust method*, which is wrapped
 		// into the `Subscription` object.
-		let sub_type = self.jrps_item(quote::format_ident!("Subscription"));
+		let sub_type = self.jrps_client_item(quote::format_ident!("Subscription"));
 		let item = &sub.item;
 		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
 
 		// Encoded parameters for the request.
 		let parameters = if !sub.params.is_empty() {
-			let serde_json = self.jrps_item(quote! { __reexports::serde_json });
+			let serde_json = self.jrps_client_item(quote! { __reexports::serde_json });
 			let params = sub.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
@@ -115,7 +115,7 @@ impl RpcDescription {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_item("JsonRpcParams::NoParams")
+			self.jrps_client_item("JsonRpcParams::NoParams")
 		};
 
 		// Doc-comment to be associated with the method.

@@ -21,4 +21,4 @@ proc-macro-crate = "1"
 bae = "0.1.6"
 
 [dev-dependencies]
-jsonrpsee = { path = "../jsonrpsee"}
+jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
