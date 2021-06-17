@@ -27,15 +27,24 @@ pub(crate) fn rpc_param_name(pat: &syn::Pat, _attrs: &[syn::Attribute]) -> syn::
 	}
 }
 
-/// Search for `jsonrpsee` in `Cargo.toml`.
-pub(crate) fn find_jsonrpsee_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
+/// Search for client-side `jsonrpsee` in `Cargo.toml`.
+pub(crate) fn find_jsonrpsee_client_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
+	find_jsonrpsee_crate("jsonrpsee-http-client", "jsonrpsee-ws-client")
+}
+
+/// Search for server-side `jsonrpsee` in `Cargo.toml`.
+pub(crate) fn find_jsonrpsee_server_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
+	find_jsonrpsee_crate("jsonrpsee-http-server", "jsonrpsee-ws-server")
+}
+
+fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::TokenStream, syn::Error> {
 	match crate_name("jsonrpsee") {
 		Ok(FoundCrate::Name(name)) => {
 			let ident = syn::Ident::new(&name, Span::call_site());
 			Ok(quote!(#ident::types))
 		}
 		Ok(FoundCrate::Itself) => panic!("Deriving RPC methods in any of the `jsonrpsee crates` is not supported"),
-		Err(_) => match (crate_name("jsonrpsee-http-client"), crate_name("jsonrpsee-ws-client")) {
+		Err(_) => match (crate_name(http_name), crate_name(ws_name)) {
 			(Ok(FoundCrate::Name(name)), _) | (_, Ok(FoundCrate::Name(name))) => {
 				let ident = syn::Ident::new(&name, Span::call_site());
 				Ok(quote!(#ident))

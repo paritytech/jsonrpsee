@@ -82,8 +82,10 @@ impl RpcSubscription {
 
 #[derive(Debug)]
 pub struct RpcDescription {
-	/// Path to the `jsonrpsee` types part.
-	jsonrpsee_path: TokenStream2,
+	/// Path to the `jsonrpsee` client types part.
+	jsonrpsee_client_path: TokenStream2,
+	/// Path to the `jsonrpsee` server types part.
+	jsonrpsee_server_path: TokenStream2,
 	/// Data about RPC declaration
 	attrs: attributes::Rpc,
 	/// Trait definition in which all the attributes were stripped.
@@ -96,7 +98,8 @@ pub struct RpcDescription {
 
 impl RpcDescription {
 	pub fn from_item(attr: syn::Attribute, mut item: syn::ItemTrait) -> Result<Self, syn::Error> {
-		let jsonrpsee_path = crate::helpers::find_jsonrpsee_crate()?;
+		let jsonrpsee_client_path = crate::helpers::find_jsonrpsee_client_crate()?;
+		let jsonrpsee_server_path = crate::helpers::find_jsonrpsee_server_crate()?;
 
 		let attrs = attributes::Rpc::from_attributes(&[attr])?;
 
@@ -145,7 +148,7 @@ impl RpcDescription {
 			}
 		}
 
-		Ok(Self { jsonrpsee_path, attrs, trait_def: item, methods, subscriptions })
+		Ok(Self { jsonrpsee_client_path, jsonrpsee_server_path, attrs, trait_def: item, methods, subscriptions })
 	}
 
 	pub fn render(self) -> Result<TokenStream2, syn::Error> {
@@ -169,7 +172,7 @@ impl RpcDescription {
 	/// Formats the identifier as a path relative to the resolved
 	/// `jsonrpsee` path.
 	fn jrps_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
-		let jsonrpsee = &self.jsonrpsee_path;
+		let jsonrpsee = &self.jsonrpsee_client_path;
 		quote! { #jsonrpsee::#item }
 	}
 

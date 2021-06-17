@@ -84,7 +84,7 @@ fn build_client_impl(api: &crate::api_def::ApiDefinition) -> Result<proc_macro2:
 fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
 	let visibility = &api.visibility;
 
-	let _crate = find_jsonrpsee_crate()?;
+	let _crate = find_jsonrpsee_client_crate()?;
 
 	let mut client_functions = Vec::new();
 	for function in &api.definitions {
