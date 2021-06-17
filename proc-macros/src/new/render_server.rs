@@ -40,7 +40,6 @@ impl RpcDescription {
 	fn render_into_rpc(&self) -> Result<TokenStream2, syn::Error> {
 		let jrps_error = self.jrps_server_item(quote! { error::Error });
 		let rpc_module = self.jrps_server_item(quote! { RpcModule });
-		let futures_ext = self.jrps_server_item(quote! { __reexports::FutureExt });
 
 		let methods = self.methods.iter().map(|method| {
 			// Rust method to invoke (e.g. `self.<foo>(...)`).
@@ -61,7 +60,7 @@ impl RpcDescription {
 							#parsing
 							Ok(context.as_ref().#rust_method_name(#params_seq).await)
 						};
-						#futures_ext::boxed(fut)
+						Box::pin(fut)
 					})?;
 				}
 			} else {
