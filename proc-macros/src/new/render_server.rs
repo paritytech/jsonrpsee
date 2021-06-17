@@ -1,6 +1,7 @@
 use super::RpcDescription;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::PatType;
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -10,7 +11,6 @@ impl RpcDescription {
 		let into_rpc_impl = self.render_into_rpc()?;
 
 		let async_trait = self.jrps_server_item(quote! { __reexports::async_trait });
-		// panic!("Parsing is {}", async_trait.to_string());
 
 		// Doc-comment to be associated with the server.
 		let doc_comment = format!("Server trait implementation for the `{}` RPC API.", &self.trait_def.ident);
@@ -29,7 +29,14 @@ impl RpcDescription {
 
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
 		let methods = self.methods.iter().map(|method| &method.signature);
-		let subscriptions = self.subscriptions.iter().map(|sub| &sub.signature);
+
+		let subscription_sink_ty = self.jrps_server_item(quote! { RpcModule });
+		let subscriptions = self.subscriptions.iter().cloned().map(|mut sub| {
+			// Add `SubscriptionSink` as the second input parameter to the signature.
+			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
+			sub.signature.sig.inputs.insert(1, subscription_sink);
+			sub.signature
+		});
 
 		Ok(quote! {
 			#(#methods)*
