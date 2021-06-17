@@ -151,7 +151,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 /// Below you can find the example of the macro usage along with the code
 /// that will be generated for it.
 ///
-/// ```no_run
+/// ```ignore
 /// #[rpc(client, server, namespace = "foo")]
 /// pub trait Rpc {
 ///     #[method(name = "foo")]
@@ -166,7 +166,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///
 /// Server code that will be generated:
 ///
-/// ```no_run
+/// ```ignore
 /// #[async_trait]
 /// pub trait RpcServer {
 ///     // RPC methods are usual methods and can be either sync or async.
@@ -185,7 +185,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///
 /// Client code that will be generated:
 ///
-/// ```no_run
+/// ```ignore
 /// #[async_trait]
 /// pub trait RpcClient: SubscriptionClient {
 ///     // In client implementation all the methods are (obviously) async.
