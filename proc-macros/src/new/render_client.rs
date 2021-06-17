@@ -20,8 +20,12 @@ impl RpcDescription {
 
 		let async_trait = self.jrps_item(quote! { __reexports::async_trait });
 
+		// Doc-comment to be associated with the client.
+		let doc_comment = format!("Client implementation for the `{}` RPC API.", &self.trait_def.ident);
+
 		let trait_impl = quote! {
 			#[#async_trait]
+			#[doc = #doc_comment]
 			pub trait #trait_name: #super_trait {
 				#(#method_impls)*
 				#(#sub_impls)*
@@ -37,6 +41,7 @@ impl RpcDescription {
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &method.signature.sig.ident;
 		// List of inputs to put into `JsonRpcParams` (e.g. `self.foo(<12, "baz">)`).
+		// Includes `&self` receiver.
 		let rust_method_params = &method.signature.sig.inputs;
 		// Name of the RPC method (e.g. `foo_makeSpam`).
 		let rpc_method_name = self.rpc_identifier(&method.name);
