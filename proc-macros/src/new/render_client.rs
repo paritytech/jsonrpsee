@@ -73,7 +73,7 @@ impl RpcDescription {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_client_item(quote::format_ident!("JsonRpcParams::NoParams"))
+			self.jrps_client_item(quote! { v2::params::JsonRpcParams::NoParams })
 		};
 
 		// Doc-comment to be associated with the method.
@@ -117,7 +117,7 @@ impl RpcDescription {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_client_item("JsonRpcParams::NoParams")
+			self.jrps_client_item(quote! { v2::params::JsonRpcParams::NoParams })
 		};
 
 		// Doc-comment to be associated with the method.
@@ -125,7 +125,7 @@ impl RpcDescription {
 
 		let method = quote! {
 			#[doc = #doc_comment]
-			async fn #rust_method_name(&self, #rust_method_params) -> #returns {
+			async fn #rust_method_name(#rust_method_params) -> #returns {
 				self.subscribe(#rpc_sub_name, #parameters, #rpc_unsub_name).await
 			}
 		};

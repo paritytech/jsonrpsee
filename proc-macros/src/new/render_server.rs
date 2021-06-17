@@ -29,7 +29,7 @@ impl RpcDescription {
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
 		let methods = self.methods.iter().map(|method| &method.signature);
 
-		let subscription_sink_ty = self.jrps_server_item(quote! { RpcModule });
+		let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
 		let subscriptions = self.subscriptions.iter().cloned().map(|mut sub| {
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
@@ -79,11 +79,36 @@ impl RpcDescription {
 			}
 		});
 
+		let subscriptions = self.subscriptions.iter().map(|sub| {
+			// Rust method to invoke (e.g. `self.<foo>(...)`).
+			let rust_method_name = &sub.signature.sig.ident;
+			// Name of the RPC method to subscribe (e.g. `foo_sub`).
+			let rpc_sub_name = self.rpc_identifier(&sub.name);
+			// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
+			let rpc_unsub_name = self.rpc_identifier(&sub.name);
+			// `parsing` is the code associated with parsing structure from the
+			// provided `RpcParams` object.
+			// `params_seq` is the comma-delimited sequence of parametsrs.
+			let (parsing, params_seq) = self.render_params_decoding(&sub.params);
+
+			quote! {
+				rpc.register_subscription(#rpc_sub_name, #rpc_unsub_name, |params, sink, context| {
+					#parsing
+					Ok(context.as_ref().#rust_method_name(sink, #params_seq))
+				})?;
+			}
+		});
+
+		let doc_comment = "Collects all the methods and subscriptions defined in the trait \
+								and adds them into a single `RpcModule`.";
+
 		Ok(quote! {
+			#[doc = #doc_comment]
 			fn into_rpc(self) -> Result<#rpc_module<Self>, #jrps_error> {
 				let mut rpc = #rpc_module::new(self);
 
 				#(#methods)*
+				#(#subscriptions)*
 
 				Ok(rpc)
 			}

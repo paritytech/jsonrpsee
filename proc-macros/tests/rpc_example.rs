@@ -6,4 +6,6 @@ use jsonrpsee_proc_macros::rpc;
 pub trait Rpc {
 	#[method(name = "foo")]
 	async fn foo(&self, param_a: u8, param_b: String) -> u16;
+	#[subscription(name = "sub", unsub = "unsub", item = String)]
+	fn sub(&self);
 }
