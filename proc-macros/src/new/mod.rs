@@ -109,6 +109,10 @@ impl RpcDescription {
 		// subscriptions.
 		for entry in item.items.iter() {
 			if let syn::TraitItem::Method(method) = entry {
+				if method.sig.receiver().is_none() {
+					return Err(syn::Error::new_spanned(&method.sig, "First argument of the trait must be '&self'"));
+				}
+
 				let mut is_method = false;
 				let mut is_sub = false;
 				if has_attr(&method.attrs, "method") {
