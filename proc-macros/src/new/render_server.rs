@@ -1,7 +1,6 @@
 use super::RpcDescription;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::PatType;
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {

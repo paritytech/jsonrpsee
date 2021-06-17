@@ -30,6 +30,8 @@ impl RpcDescription {
 				#(#method_impls)*
 				#(#sub_impls)*
 			}
+
+			impl<T> #trait_name for T where T: #super_trait {}
 		};
 
 		Ok(trait_impl)
