@@ -38,9 +38,9 @@ impl RpcDescription {
 	}
 
 	fn render_into_rpc(&self) -> Result<TokenStream2, syn::Error> {
-		let jsonrpsee = &self.jsonrpsee_server_path.as_ref().unwrap();
-		let jrps_error = self.jrps_server_item(quote! { error::CallError });
+		let jrps_error = self.jrps_server_item(quote! { error::Error });
 		let rpc_module = self.jrps_server_item(quote! { RpcModule });
+		let futures_ext = self.jrps_server_item(quote! { __reexports::FutureExt });
 
 		let methods = self.methods.iter().map(|method| {
 			// Rust method to invoke (e.g. `self.<foo>(...)`).
@@ -50,23 +50,25 @@ impl RpcDescription {
 			// `parsing` is the code associated with parsing structure from the
 			// provided `RpcParams` object.
 			// `params_seq` is the comma-delimited sequence of parametsrs.
-			let (parsing, params_seq) = self.render_params_decoding(&rpc_method_name, &method.params);
+			let (parsing, params_seq) = self.render_params_decoding(&method.params);
 
 			if method.signature.sig.asyncness.is_some() {
 				quote! {
 					rpc.register_async_method(#rpc_method_name, |params, context| {
+						let owned_params = params.owned();
 						let fut = async move {
+							let params = owned_params.borrowed();
 							#parsing
-							context.as_ref().#rust_method_name(#params_seq).await
+							Ok(context.as_ref().#rust_method_name(#params_seq).await)
 						};
-						Box::pin(fut)
+						#futures_ext::boxed(fut)
 					})?;
 				}
 			} else {
 				quote! {
 					rpc.register_method(#rpc_method_name, |params, context| {
 						#parsing
-						context.#rust_method_name(#params_seq)
+						Ok(context.#rust_method_name(#params_seq))
 					})?;
 				}
 			}
@@ -83,16 +85,12 @@ impl RpcDescription {
 		})
 	}
 
-	fn render_params_decoding(
-		&self,
-		method: &str,
-		params: &[(syn::PatIdent, syn::Type)],
-	) -> (TokenStream2, TokenStream2) {
+	fn render_params_decoding(&self, params: &[(syn::PatIdent, syn::Type)]) -> (TokenStream2, TokenStream2) {
 		if params.is_empty() {
 			return (TokenStream2::default(), TokenStream2::default());
 		}
 
-		let jrps_error = self.jrps_server_item(quote! { error::CallError });
+		let jrps_call_error = self.jrps_server_item(quote! { error::CallError });
 		let serde_json = self.jrps_server_item(quote! { __reexports::serde_json });
 
 		// Parameters encoded as a tuple (to be parsed from array).
@@ -100,19 +98,79 @@ impl RpcDescription {
 		let params_types = quote! { (#(#params_types_seq),*) };
 		let params_fields = quote! { (#(#params_fields_seq),*) };
 
-		let decode_array = quote! {};
-		let decode_map = quote! {};
-		let decode_single = if params.len() == 1 {
-			quote! {}
-		} else {
-			quote! { return Err(#jrps_error::InvalidParams);}
+		// Code to decode sequence of parameters from a JSON array.
+		let decode_array = {
+			let decode_fields = params.iter().enumerate().map(|(id, (name, ty))| {
+				if is_option(ty) {
+					quote! {
+						let #name = arr
+							.get(#id)
+							.cloned()
+							.map(#serde_json::from_value)
+							.transpose()
+							.map_err(|_| #jrps_call_error::InvalidParams)?;
+					}
+				} else {
+					quote! {
+						let #name = arr
+							.get(#id)
+							.cloned()
+							.map(#serde_json::from_value)
+							.ok_or(#jrps_call_error::InvalidParams)?
+							.map_err(|_| #jrps_call_error::InvalidParams)?;
+					}
+				}
+			});
+
+			quote! {
+				#(#decode_fields);*
+				#params_fields
+			}
 		};
 
-		// TODO: Will fail if params are represented by the array
+		// Code to decode sequence of parameters from a JSON object (aka map).
+		let decode_map = {
+			let decode_fields = params.iter().map(|(name, ty)| {
+				let name_str = name.ident.to_string();
+				if is_option(ty) {
+					quote! {
+						let #name = obj
+							.get(#name_str)
+							.cloned()
+							.map(#serde_json::from_value)
+							.transpose()
+							.map_err(|_| #jrps_call_error::InvalidParams)?;
+					}
+				} else {
+					quote! {
+						let #name = obj
+							.get(#name_str)
+							.cloned()
+							.map(#serde_json::from_value)
+							.ok_or(#jrps_call_error::InvalidParams)?
+							.map_err(|_| #jrps_call_error::InvalidParams)?;
+					}
+				}
+			});
+
+			quote! {
+				#(#decode_fields);*
+				#params_fields
+			}
+		};
+
+		// Code to decode single parameter from a JSON primitive.
+		let decode_single = if params.len() == 1 {
+			quote! { #serde_json::from_value(json).map_err(|_| #jrps_call_error::InvalidParams)? }
+		} else {
+			quote! { return Err(#jrps_call_error::InvalidParams);}
+		};
+
+		// Parsing of `serde_json::Value`.
 		let parsing = quote! {
 			let json: #serde_json::Value = params.parse()?;
 			let #params_fields: #params_types = match json {
-				#serde_json::Value::Null => return Err(#jrps_error::InvalidParams),
+				#serde_json::Value::Null => return Err(#jrps_call_error::InvalidParams),
 				#serde_json::Value::Array(arr) => {
 					#decode_array
 				}
@@ -131,4 +189,16 @@ impl RpcDescription {
 
 		(parsing, seq)
 	}
+}
+
+/// Checks whether provided type is an `Option<...>`.
+fn is_option(ty: &syn::Type) -> bool {
+	if let syn::Type::Path(path) = ty {
+		// TODO: Probably not the best way to check whether type is an `Option`.
+		if path.path.segments.iter().any(|seg| seg.ident == "Option") {
+			return true;
+		}
+	}
+
+	false
 }

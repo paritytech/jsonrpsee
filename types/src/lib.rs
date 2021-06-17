@@ -31,6 +31,7 @@ pub use serde_json::{to_value as to_json_value, value::RawValue as JsonRawValue,
 #[doc(hidden)]
 pub mod __reexports {
 	pub use async_trait::async_trait;
+	pub use futures_util::FutureExt;
 	pub use serde;
 	pub use serde_json;
 }
