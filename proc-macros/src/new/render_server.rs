@@ -37,7 +37,7 @@ impl RpcDescription {
 	}
 
 	fn render_into_rpc(&self) -> Result<TokenStream2, syn::Error> {
-		// let jsonrpsee = &self.jsonrpsee_path;
+		// let jsonrpsee = &self.jsonrpsee_server_path.as_ref().unwrap();
 		todo!()
 	}
 }

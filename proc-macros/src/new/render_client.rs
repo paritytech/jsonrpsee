@@ -4,7 +4,7 @@ use quote::quote;
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
-		let jsonrpsee = &self.jsonrpsee_client_path;
+		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
 

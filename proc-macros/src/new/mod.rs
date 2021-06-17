@@ -83,9 +83,9 @@ impl RpcSubscription {
 #[derive(Debug)]
 pub struct RpcDescription {
 	/// Path to the `jsonrpsee` client types part.
-	jsonrpsee_client_path: TokenStream2,
+	jsonrpsee_client_path: Option<TokenStream2>,
 	/// Path to the `jsonrpsee` server types part.
-	jsonrpsee_server_path: TokenStream2,
+	jsonrpsee_server_path: Option<TokenStream2>,
 	/// Data about RPC declaration
 	attrs: attributes::Rpc,
 	/// Trait definition in which all the attributes were stripped.
@@ -98,10 +98,20 @@ pub struct RpcDescription {
 
 impl RpcDescription {
 	pub fn from_item(attr: syn::Attribute, mut item: syn::ItemTrait) -> Result<Self, syn::Error> {
-		let jsonrpsee_client_path = crate::helpers::find_jsonrpsee_client_crate()?;
-		let jsonrpsee_server_path = crate::helpers::find_jsonrpsee_server_crate()?;
-
 		let attrs = attributes::Rpc::from_attributes(&[attr])?;
+		if !attrs.is_correct() {
+			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
+		}
+
+		let jsonrpsee_client_path = crate::helpers::find_jsonrpsee_client_crate().ok();
+		let jsonrpsee_server_path = crate::helpers::find_jsonrpsee_server_crate().ok();
+
+		if attrs.needs_client() && jsonrpsee_client_path.is_none() {
+			return Err(syn::Error::new_spanned(&item.ident, "Unable to locate 'jsonrpsee' client dependency"));
+		}
+		if attrs.needs_server() && jsonrpsee_server_path.is_none() {
+			return Err(syn::Error::new_spanned(&item.ident, "Unable to locate 'jsonrpsee' server dependency"));
+		}
 
 		item.attrs.clear(); // Remove RPC attributes.
 
@@ -152,13 +162,6 @@ impl RpcDescription {
 	}
 
 	pub fn render(self) -> Result<TokenStream2, syn::Error> {
-		if !self.attrs.is_correct() {
-			return Err(syn::Error::new_spanned(
-				&self.trait_def.ident,
-				"Either 'server' or 'client' attribute must be applied",
-			));
-		}
-
 		let server_impl = if self.attrs.needs_server() { self.render_server()? } else { TokenStream2::new() };
 
 		let client_impl = if self.attrs.needs_client() { self.render_client()? } else { TokenStream2::new() };
