@@ -80,7 +80,7 @@ impl Server {
 
 		loop {
 			match Pin::new(&mut driver).await {
-				DriverOut::Incoming(Ok((socket, _addr))) => {
+				Ok((socket, _addr)) => {
 					if let Err(e) = socket.set_nodelay(true) {
 						log::error!("Could not set NODELAY on socket: {:?}", e);
 						continue;
@@ -98,11 +98,8 @@ impl Server {
 
 					id += 1;
 				}
-				DriverOut::Incoming(Err(err)) => {
+				Err(err) => {
 					log::error!("Error while awaiting a new connection: {:?}", err);
-				}
-				DriverOut::Closed(_, index) => {
-					driver.connections.swap_remove(index);
 				}
 			}
 		}
@@ -127,31 +124,29 @@ impl<F> ConnDriver<F> {
 	}
 }
 
-enum DriverOut<B: Future> {
-	Incoming(std::io::Result<(TcpStream, SocketAddr)>),
-	Closed(B::Output, usize),
-}
-
 impl<F> Future for ConnDriver<F>
 where
 	F: Future + Unpin,
 {
-	type Output = DriverOut<F>;
+	type Output = std::io::Result<(TcpStream, SocketAddr)>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		for (i, task) in this.connections.iter_mut().enumerate() {
-			if let Poll::Ready(result) = task.poll_unpin(cx) {
-				return Poll::Ready(DriverOut::Closed(result, i));
+		let mut i = 0;
+
+		while i < this.connections.len() {
+			if this.connections[i].poll_unpin(cx).is_ready() {
+				this.connections.swap_remove(i);
+				// We don't increment `i` in this branch, since we now
+				// have a new length and potentially a new value at the same
+				// index
+			} else {
+				i += 1;
 			}
 		}
 
-		if let Poll::Ready(result) = this.listener.poll_accept(cx) {
-			return Poll::Ready(DriverOut::Incoming(result));
-		}
-
-		Poll::Pending
+		this.listener.poll_accept(cx)
 	}
 }
 
