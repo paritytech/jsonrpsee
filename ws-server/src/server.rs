@@ -76,12 +76,14 @@ impl Server {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = self.methods;
 		let conn_counter = Arc::new(());
-		let cfg = self.cfg;
 		let mut id = 0;
 
 		while let Some(socket) = incoming.next().await {
 			if let Ok(socket) = socket {
-				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
+				if let Err(e) = socket.set_nodelay(true) {
+					log::error!("Could not set NODELAY on socket: {:?}", e);
+					continue;
+				}
 
 				if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
 					log::warn!("Too many connections. Try again in a while");
@@ -89,6 +91,7 @@ impl Server {
 				}
 				let methods = methods.clone();
 				let counter = conn_counter.clone();
+				let cfg = self.cfg.clone();
 
 				tokio::spawn(async move {
 					let r = background_task(socket, id, methods, cfg).await;
@@ -111,14 +114,24 @@ async fn background_task(
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
-	let websocket_key = {
+	let key = {
 		let req = server.receive_request().await?;
-		req.into_key()
+
+		cfg.allowed_origins.verify(req.headers().origin).map(|()| req.key())
 	};
 
-	// Here we accept the client unconditionally.
-	let accept = Response::Accept { key: &websocket_key, protocol: None };
-	server.send_response(&accept).await?;
+	match key {
+		Ok(key) => {
+			let accept = Response::Accept { key, protocol: None };
+			server.send_response(&accept).await?;
+		}
+		Err(error) => {
+			let reject = Response::Reject { status_code: 403 };
+			server.send_response(&reject).await?;
+
+			return Err(error);
+		}
+	}
 
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
@@ -185,18 +198,44 @@ async fn background_task(
 	}
 }
 
+#[derive(Debug, Clone)]
+enum AllowedOrigins {
+	Any,
+	OneOf(Arc<[String]>),
+}
+
+impl AllowedOrigins {
+	fn verify(&self, origin: Option<&[u8]>) -> Result<(), Error> {
+		if let (AllowedOrigins::OneOf(list), Some(origin)) = (self, origin) {
+			if !list.iter().any(|o| o.as_bytes() == origin) {
+				let error = format!("Origin denied: {}", String::from_utf8_lossy(origin));
+				log::warn!("{}", error);
+				return Err(Error::Request(error));
+			}
+		}
+
+		Ok(())
+	}
+}
+
 /// JSON-RPC Websocket server settings.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Settings {
 	/// Maximum size in bytes of a request.
 	max_request_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
+	/// Cross-origin policy by which to accept or deny incoming requests.
+	allowed_origins: AllowedOrigins,
 }
 
 impl Default for Settings {
 	fn default() -> Self {
-		Self { max_request_body_size: TEN_MB_SIZE_BYTES, max_connections: MAX_CONNECTIONS }
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_connections: MAX_CONNECTIONS,
+			allowed_origins: AllowedOrigins::Any,
+		}
 	}
 }
 
@@ -216,6 +255,41 @@ impl Builder {
 	/// Set the maximum number of connections allowed. Default is 100.
 	pub fn max_connections(mut self, max: u64) -> Self {
 		self.settings.max_connections = max;
+		self
+	}
+
+	/// Set a list of allowed origins. During the handshake, the `Origin` header will be
+	/// checked against the list, connections without a matching origin will be denied.
+	/// Values should include protocol.
+	///
+	/// ```rust
+	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
+	/// builder.set_allowed_origins(vec!["https://example.com"]);
+	/// ```
+	///
+	/// By default allows any `Origin`.
+	///
+	/// Will return an error if `list` is empty. Use [`allow_all_origins`](Builder::allow_all_origins) to restore the default.
+	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
+	where
+		List: IntoIterator<Item = Origin>,
+		Origin: Into<String>,
+	{
+		let list: Arc<_> = list.into_iter().map(Into::into).collect();
+
+		if list.len() == 0 {
+			return Err(Error::EmptyAllowedOrigins);
+		}
+
+		self.settings.allowed_origins = AllowedOrigins::OneOf(list);
+
+		Ok(self)
+	}
+
+	/// Restores the default behavior of allowing connections with `Origin` header
+	/// containing any value. This will undo any list set by [`set_allowed_origins`](Builder::set_allowed_origins).
+	pub fn allow_all_origins(mut self) -> Self {
+		self.settings.allowed_origins = AllowedOrigins::Any;
 		self
 	}
 
