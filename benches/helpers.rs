@@ -1,8 +1,14 @@
 use futures_channel::oneshot;
+use futures_util::future::FutureExt;
 use jsonrpsee::{
 	http_server::HttpServerBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
+
+pub(crate) const SYNC_METHOD_NAME: &str = "say_hello";
+pub(crate) const ASYNC_METHOD_NAME: &str = "say_hello_async";
+pub(crate) const SUB_METHOD_NAME: &str = "sub";
+pub(crate) const UNSUB_METHOD_NAME: &str = "unsub";
 
 /// Run jsonrpsee HTTP server for benchmarks.
 pub async fn http_server() -> String {
@@ -11,7 +17,8 @@ pub async fn http_server() -> String {
 		let mut server =
 			HttpServerBuilder::default().max_request_body_size(u32::MAX).build("127.0.0.1:0".parse().unwrap()).unwrap();
 		let mut module = RpcModule::new(());
-		module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+		module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
+		module.register_async_method(ASYNC_METHOD_NAME, |_, _| (async { Ok("lo") }).boxed()).unwrap();
 		server.register_module(module).unwrap();
 		server_started_tx.send(server.local_addr().unwrap()).unwrap();
 		server.start().await
@@ -25,7 +32,16 @@ pub async fn ws_server() -> String {
 	tokio::spawn(async move {
 		let mut server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 		let mut module = RpcModule::new(());
-		module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+		module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
+		module.register_async_method(ASYNC_METHOD_NAME, |_, _| (async { Ok("lo") }).boxed()).unwrap();
+		module
+			.register_subscription(SUB_METHOD_NAME, UNSUB_METHOD_NAME, |_params, mut sink, _ctx| {
+				let x = "Hello";
+				tokio::spawn(async move { sink.send(&x) });
+				Ok(())
+			})
+			.unwrap();
+
 		server.register_module(module).unwrap();
 		server_started_tx.send(server.local_addr().unwrap()).unwrap();
 		server.start().await

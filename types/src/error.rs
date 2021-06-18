@@ -66,6 +66,9 @@ pub enum Error {
 	/// Method was already registered.
 	#[error("Method: {0} was already registered")]
 	MethodAlreadyRegistered(String),
+	/// Method with that name has not yet been registered.
+	#[error("Method: {0} has not yet been registered")]
+	MethodNotFound(String),
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
