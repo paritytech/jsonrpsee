@@ -106,8 +106,8 @@ impl Server {
 						continue;
 					}
 
-					let methods = methods.clone();
-					let cfg = self.cfg.clone();
+					let methods = &methods;
+					let cfg = &self.cfg;
 
 					running.push(Box::pin(background_task(socket, id, methods, cfg)));
 				},
@@ -163,8 +163,8 @@ where
 async fn background_task(
 	socket: tokio::net::TcpStream,
 	conn_id: ConnectionId,
-	methods: Methods,
-	cfg: Settings,
+	methods: &Methods,
+	cfg: &Settings,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
