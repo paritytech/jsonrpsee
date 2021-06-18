@@ -140,11 +140,6 @@ impl Methods {
 	pub fn method_names(&self) -> Vec<&'static str> {
 		self.callbacks.keys().copied().collect()
 	}
-
-	/// Get the reference count for this instance of `Methods`.
-	pub fn ref_count(&self) -> usize {
-		Arc::strong_count(&self.callbacks)
-	}
 }
 
 /// Sets of JSON-RPC methods can be organized into a "module"s that are in turn registered on the server or,

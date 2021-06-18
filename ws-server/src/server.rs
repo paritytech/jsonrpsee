@@ -29,7 +29,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -75,6 +75,7 @@ impl Server {
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = self.methods;
+		let conn_counter = Arc::new(());
 		let cfg = self.cfg;
 		let mut id = 0;
 
@@ -82,13 +83,18 @@ impl Server {
 			if let Ok(socket) = socket {
 				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
 
-				if methods.ref_count() > self.cfg.max_connections as usize {
+				if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
 					log::warn!("Too many connections. Try again in a while");
 					continue;
 				}
 				let methods = methods.clone();
+				let counter = conn_counter.clone();
 
-				tokio::spawn(background_task(socket, id, methods, cfg));
+				tokio::spawn(async move {
+					let r = background_task(socket, id, methods, cfg).await;
+					drop(counter);
+					r
+				});
 
 				id += 1;
 			}
