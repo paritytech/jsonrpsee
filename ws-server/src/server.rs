@@ -75,33 +75,88 @@ impl Server {
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = self.methods;
-		let conn_counter = Arc::new(());
 		let mut id = 0;
 
-		while let Some(socket) = incoming.next().await {
-			if let Ok(socket) = socket {
-				if let Err(e) = socket.set_nodelay(true) {
-					log::error!("Could not set NODELAY on socket: {:?}", e);
-					continue;
-				}
+		// let mut driver = ConnDriver {
+		// 	incoming: incoming.next(),
+		// 	running: Vec::new(),
+		// };
 
-				if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
-					log::warn!("Too many connections. Try again in a while");
-					continue;
-				}
-				let methods = methods.clone();
-				let counter = conn_counter.clone();
-				let cfg = self.cfg.clone();
+		let mut running = Vec::new();
+		let mut inc = incoming.next();
 
-				tokio::spawn(async move {
-					let r = background_task(socket, id, methods, cfg).await;
-					drop(counter);
-					r
-				});
+		loop {
+			let driver = ConnDriver {
+				incoming: &mut inc,
+				running: &mut running,
+			};
 
-				id += 1;
+			match driver.await {
+				DriverOut::Incoming(Some(Ok(socket))) => {
+					id += 1;
+					inc = incoming.next();
+
+					if let Err(e) = socket.set_nodelay(true) {
+						log::error!("Could not set NODELAY on socket: {:?}", e);
+						continue;
+					}
+
+					if running.len() >= self.cfg.max_connections as usize {
+						log::warn!("Too many connections. Try again in a while");
+						continue;
+					}
+
+					let methods = methods.clone();
+					let cfg = self.cfg.clone();
+
+					running.push(Box::pin(background_task(socket, id, methods, cfg)));
+				},
+				DriverOut::Incoming(_) => {
+					inc = incoming.next();
+				},
+				DriverOut::Running(_, index) => {
+					running.remove(index);
+				},
 			}
 		}
+	}
+}
+
+use std::future::Future;
+use std::task::{Context, Poll};
+use std::pin::Pin;
+
+struct ConnDriver<'a, A, B> {
+	incoming: A,
+	running: &'a mut [B],
+}
+
+enum DriverOut<A: Future, B: Future> {
+	Incoming(A::Output),
+	Running(B::Output, usize),
+}
+
+impl<A, B> Future for ConnDriver<'_, A, B>
+where
+	A: Future + Unpin,
+	B: Future + Unpin,
+{
+	type Output = DriverOut<A, B>;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		if let Poll::Ready(inc) = Pin::new(&mut this.incoming).poll(cx) {
+			return Poll::Ready(DriverOut::Incoming(inc));
+		}
+
+		for (i, run) in this.running.iter_mut().enumerate() {
+			if let Poll::Ready(run) = Pin::new(run).poll(cx) {
+				return Poll::Ready(DriverOut::Running(run, i));
+			}
+		}
+
+		Poll::Pending
 	}
 }
 
