@@ -25,13 +25,13 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::mpsc;
+use futures_util::future::{join_all, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
-use tokio::net::{TcpListener, ToSocketAddrs};
-use tokio_stream::wrappers::TcpListenerStream;
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use jsonrpsee_types::error::Error;
@@ -73,35 +73,20 @@ impl Server {
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
-		let mut incoming = TcpListenerStream::new(self.listener);
 		let methods = self.methods;
 		let mut id = 0;
 
-		// let mut driver = ConnDriver {
-		// 	incoming: incoming.next(),
-		// 	running: Vec::new(),
-		// };
-
-		let mut running = Vec::new();
-		let mut inc = incoming.next();
+		let mut driver = ConnDriver::new(self.listener);
 
 		loop {
-			let driver = ConnDriver {
-				incoming: &mut inc,
-				running: &mut running,
-			};
-
-			match driver.await {
-				DriverOut::Incoming(Some(Ok(socket))) => {
-					id += 1;
-					inc = incoming.next();
-
+			match Pin::new(&mut driver).await {
+				DriverOut::Incoming(Ok((socket, _addr))) => {
 					if let Err(e) = socket.set_nodelay(true) {
 						log::error!("Could not set NODELAY on socket: {:?}", e);
 						continue;
 					}
 
-					if running.len() >= self.cfg.max_connections as usize {
+					if driver.connections.len() >= self.cfg.max_connections as usize {
 						log::warn!("Too many connections. Try again in a while");
 						continue;
 					}
@@ -109,56 +94,68 @@ impl Server {
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					running.push(Box::pin(background_task(socket, id, methods, cfg)));
-				},
-				DriverOut::Incoming(_) => {
-					inc = incoming.next();
-				},
-				DriverOut::Running(_, index) => {
-					running.remove(index);
-				},
+					driver.connections.push(Box::pin(background_task(socket, id, methods, cfg)));
+
+					id += 1;
+				}
+				DriverOut::Incoming(Err(err)) => {
+					log::error!("Error while awaiting a new connection: {:?}", err);
+				}
+				DriverOut::Closed(_, index) => {
+					driver.connections.swap_remove(index);
+				}
 			}
 		}
 	}
 }
 
 use std::future::Future;
-use std::task::{Context, Poll};
 use std::pin::Pin;
+use std::task::{Context, Poll};
 
-struct ConnDriver<'a, A, B> {
-	incoming: A,
-	running: &'a mut [B],
+struct ConnDriver<F> {
+	listener: TcpListener,
+	connections: Vec<F>,
 }
 
-enum DriverOut<A: Future, B: Future> {
-	Incoming(A::Output),
-	Running(B::Output, usize),
+impl<F> ConnDriver<F> {
+	fn new(listener: TcpListener) -> Self {
+		ConnDriver {
+			listener,
+			connections: Vec::new(),
+		}
+	}
 }
 
-impl<A, B> Future for ConnDriver<'_, A, B>
+enum DriverOut<B: Future> {
+	Incoming(std::io::Result<(TcpStream, SocketAddr)>),
+	Closed(B::Output, usize),
+}
+
+impl<F> Future for ConnDriver<F>
 where
-	A: Future + Unpin,
-	B: Future + Unpin,
+	F: Future + Unpin,
 {
-	type Output = DriverOut<A, B>;
+	type Output = DriverOut<F>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		if let Poll::Ready(inc) = Pin::new(&mut this.incoming).poll(cx) {
-			return Poll::Ready(DriverOut::Incoming(inc));
+		for (i, task) in this.connections.iter_mut().enumerate() {
+			if let Poll::Ready(result) = task.poll_unpin(cx) {
+				return Poll::Ready(DriverOut::Closed(result, i));
+			}
 		}
 
-		for (i, run) in this.running.iter_mut().enumerate() {
-			if let Poll::Ready(run) = Pin::new(run).poll(cx) {
-				return Poll::Ready(DriverOut::Running(run, i));
-			}
+		if let Poll::Ready(result) = this.listener.poll_accept(cx) {
+			return Poll::Ready(DriverOut::Incoming(result));
 		}
 
 		Poll::Pending
 	}
 }
+
+impl<F: Unpin> Unpin for ConnDriver<F> {}
 
 async fn background_task(
 	socket: tokio::net::TcpStream,
@@ -229,9 +226,9 @@ async fn background_task(
 				// batch and read the results off of a new channel, `rx_batch`, and then send the complete batch response
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
-				for req in batch {
-					methods.execute(&tx_batch, req, conn_id).await;
-				}
+
+				join_all(batch.into_iter().map(|req| methods.execute(&tx_batch, req, conn_id))).await;
+
 				// Closes the receiving half of a channel without dropping it. This prevents any further messages from
 				// being sent on the channel.
 				rx_batch.close();
