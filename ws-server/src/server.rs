@@ -56,7 +56,7 @@ impl Server {
 	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
 	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
 	/// is returned. Note that the [`RpcModule`] is consumed after this call.
-	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
+	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
 		self.methods.merge(module.into_methods())?;
 		Ok(())
 	}
@@ -74,7 +74,8 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		let mut incoming = TcpListenerStream::new(self.listener);
-		let methods = Arc::new(self.methods);
+		let methods = self.methods;
+		let conn_counter = Arc::new(());
 		let cfg = self.cfg;
 		let mut id = 0;
 
@@ -82,13 +83,18 @@ impl Server {
 			if let Ok(socket) = socket {
 				socket.set_nodelay(true).unwrap_or_else(|e| panic!("Could not set NODELAY on socket: {:?}", e));
 
-				if Arc::strong_count(&methods) > self.cfg.max_connections as usize {
+				if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
 					log::warn!("Too many connections. Try again in a while");
 					continue;
 				}
 				let methods = methods.clone();
+				let counter = conn_counter.clone();
 
-				tokio::spawn(background_task(socket, id, methods, cfg));
+				tokio::spawn(async move {
+					let r = background_task(socket, id, methods, cfg).await;
+					drop(counter);
+					r
+				});
 
 				id += 1;
 			}
@@ -99,7 +105,7 @@ impl Server {
 async fn background_task(
 	socket: tokio::net::TcpStream,
 	conn_id: ConnectionId,
-	methods: Arc<Methods>,
+	methods: Methods,
 	cfg: Settings,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
