@@ -86,7 +86,7 @@ impl Server {
 						continue;
 					}
 
-					if driver.connections.len() >= self.cfg.max_connections as usize {
+					if driver.count() >= self.cfg.max_connections as usize {
 						log::warn!("Too many connections. Try again in a while");
 						continue;
 					}
@@ -94,7 +94,7 @@ impl Server {
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					driver.connections.push(Box::pin(background_task(socket, id, methods, cfg)));
+					driver.add(Box::pin(background_task(socket, id, methods, cfg)));
 
 					id += 1;
 				}
@@ -110,17 +110,31 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+/// This is a glorified select `Future` that will attempt to drive all
+/// connection futures `F` to completion on each `poll`, while also
+/// handling incoming connections.
 struct ConnDriver<F> {
 	listener: TcpListener,
 	connections: Vec<F>,
 }
 
-impl<F> ConnDriver<F> {
+impl<F> ConnDriver<F>
+where
+	F: Future + Unpin,
+{
 	fn new(listener: TcpListener) -> Self {
 		ConnDriver {
 			listener,
 			connections: Vec::new(),
 		}
+	}
+
+	fn count(&self) -> usize {
+		self.connections.len()
+	}
+
+	fn add(&mut self, conn: F) {
+		self.connections.push(conn);
 	}
 }
 
@@ -139,8 +153,8 @@ where
 			if this.connections[i].poll_unpin(cx).is_ready() {
 				this.connections.swap_remove(i);
 				// We don't increment `i` in this branch, since we now
-				// have a new length and potentially a new value at the same
-				// index
+				// have a shorter length, and potentially a new value at
+				// current index
 			} else {
 				i += 1;
 			}
