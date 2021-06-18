@@ -123,10 +123,7 @@ where
 	F: Future + Unpin,
 {
 	fn new(listener: TcpListener) -> Self {
-		ConnDriver {
-			listener,
-			connections: Vec::new(),
-		}
+		ConnDriver { listener, connections: Vec::new() }
 	}
 
 	fn count(&self) -> usize {
@@ -151,10 +148,10 @@ where
 
 		while i < this.connections.len() {
 			if this.connections[i].poll_unpin(cx).is_ready() {
-				this.connections.swap_remove(i);
 				// We don't increment `i` in this branch, since we now
 				// have a shorter length, and potentially a new value at
 				// current index
+				this.connections.swap_remove(i);
 			} else {
 				i += 1;
 			}
