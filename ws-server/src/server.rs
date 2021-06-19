@@ -32,7 +32,7 @@ use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio_util::compat::TokioAsyncReadCompatExt;
+use tokio_util::compat::{TokioAsyncReadCompatExt, Compat};
 
 use jsonrpsee_types::error::Error;
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
@@ -191,6 +191,17 @@ async fn background_task(
 		}
 	}
 
+	tokio::spawn(background_task_2(server, conn_id, methods.clone(), cfg.max_request_body_size));
+
+	Ok(())
+}
+
+async fn background_task_2(
+	server: SokettoServer<'_, BufReader<BufWriter<Compat<tokio::net::TcpStream>>>>,
+	conn_id: ConnectionId,
+	methods: Methods,
+	max_request_body_size: u32,
+) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
@@ -212,8 +223,8 @@ async fn background_task(
 
 		receiver.receive_data(&mut data).await?;
 
-		if data.len() > cfg.max_request_body_size as usize {
-			log::warn!("Request is too big ({} bytes, max is {})", data.len(), cfg.max_request_body_size);
+		if data.len() > max_request_body_size as usize {
+			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
 			send_error(Id::Null, &tx, JsonRpcErrorCode::OversizedRequest.into());
 			continue;
 		}
