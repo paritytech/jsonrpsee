@@ -4,22 +4,12 @@ use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
-use serde_json::{value::RawValue, Value as JsonValue};
+use serde_json::Value as JsonValue;
 use std::fmt;
 
 /// JSON-RPC parameter values for subscriptions.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct JsonRpcNotificationParams<'a> {
-	/// Subscription ID
-	pub subscription: u64,
-	/// Result.
-	#[serde(borrow)]
-	pub result: &'a RawValue,
-}
-
-/// JSON-RPC parameter values for subscriptions with support for number and strings.
-#[derive(Deserialize, Debug)]
-pub struct JsonRpcNotificationParamsAlloc<T> {
+pub struct JsonRpcSubscriptionParams<T> {
 	/// Subscription ID
 	pub subscription: SubscriptionId,
 	/// Result.
@@ -245,7 +235,9 @@ impl<'a> From<Id<'a>> for OwnedId {
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id, JsonRpcParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero};
+	use super::{
+		Cow, Id, JsonRpcParams, JsonRpcSubscriptionParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero,
+	};
 
 	#[test]
 	fn id_deserialization() {
@@ -334,5 +326,25 @@ mod test {
 			let serialized = serde_json::to_string(&id).unwrap();
 			assert_eq!(&serialized, initial_ser);
 		}
+	}
+
+	#[test]
+	fn subscription_params_serialize_work() {
+		let ser =
+			serde_json::to_string(&JsonRpcSubscriptionParams { subscription: SubscriptionId::Num(12), result: "goal" })
+				.unwrap();
+		assert_eq!(ser, r#"{"subscription":12,"result":"goal"}"#);
+	}
+
+	#[test]
+	fn subscription_params_deserialize_work() {
+		let ser = r#"{"subscription":"9","result":"offside"}"#;
+		assert!(
+			serde_json::from_str::<JsonRpcSubscriptionParams<()>>(ser).is_err(),
+			"invalid type should not be deser"
+		);
+		let dsr: JsonRpcSubscriptionParams<JsonValue> = serde_json::from_str(ser).unwrap();
+		assert_eq!(dsr.subscription, SubscriptionId::Str("9".into()));
+		assert_eq!(dsr.result, serde_json::json!("offside"));
 	}
 }

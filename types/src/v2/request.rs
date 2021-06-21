@@ -31,14 +31,13 @@ pub struct JsonRpcInvalidRequest<'a> {
 /// JSON-RPC notification (a request object without a request ID).
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct JsonRpcNotification<'a> {
+pub struct JsonRpcNotification<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
 	pub method: &'a str,
 	/// Parameter values of the request.
-	#[serde(borrow)]
-	pub params: Option<&'a RawValue>,
+	pub params: T,
 }
 
 /// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object)
@@ -116,7 +115,7 @@ mod test {
 	#[test]
 	fn deserialize_valid_notif_works() {
 		let ser = r#"{"jsonrpc":"2.0","method":"say_hello","params":[]}"#;
-		let dsr: JsonRpcNotification = serde_json::from_str(ser).unwrap();
+		let dsr: JsonRpcNotification<&RawValue> = serde_json::from_str(ser).unwrap();
 		assert_eq!(dsr.method, "say_hello");
 		assert_eq!(dsr.jsonrpc, TwoPointZero);
 	}

@@ -43,6 +43,7 @@ use jsonrpsee_utils::server::{
 	rpc_module::Methods,
 };
 
+use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
 use std::{
 	cmp,
@@ -196,7 +197,8 @@ impl Server {
 						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
 							// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 							methods.execute(&tx, req, 0).await;
-						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification>(&body) {
+						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification<Option<&RawValue>>>(&body)
+						{
 							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
@@ -207,7 +209,9 @@ impl Server {
 							} else {
 								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
-						} else if let Ok(_batch) = serde_json::from_slice::<Vec<JsonRpcNotification>>(&body) {
+						} else if let Ok(_batch) =
+							serde_json::from_slice::<Vec<JsonRpcNotification<Option<&RawValue>>>>(&body)
+						{
 							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else {
 							log::error!(
