@@ -332,5 +332,5 @@ async fn stop_works() {
 		.expect("Server stopped with an error");
 
 	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(stop_handle.stop().with_default_timeout().await.unwrap().is_err());
+	assert!(matches!(stop_handle.stop().with_default_timeout().await.unwrap(), Err(Error::AlreadyStopped)));
 }
