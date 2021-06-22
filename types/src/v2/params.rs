@@ -1,11 +1,12 @@
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
 use beef::Cow;
-use serde::de::{self, Deserializer, Unexpected, Visitor};
+use serde::de::{self, DeserializeOwned, Deserializer, SeqAccess, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value as JsonValue};
 use std::fmt;
+use std::marker::PhantomData;
 
 /// JSON-RPC parameter values for subscriptions.
 #[derive(Serialize, Deserialize, Debug)]
@@ -67,6 +68,92 @@ impl Serialize for TwoPointZero {
 		serializer.serialize_str("2.0")
 	}
 }
+/// Parsed params.
+#[derive(Debug)]
+pub struct ParamsOne<A>(A);
+/// Parsed params.
+#[derive(Debug)]
+pub struct ParamsTwo<A, B>((A, B));
+/// Parsed params.
+#[derive(Debug)]
+pub struct ParamsThree<A, B, C>((A, B, C));
+/// Parsed params.
+#[derive(Debug)]
+/// Parsed params.
+pub struct ParamsFour<A, B, C, D>((A, B, C, D));
+#[derive(Debug)]
+/// Parsed params.
+pub struct ParamsFive<A, B, C, D, E>((A, B, C, D, E));
+
+/// Marker trait to indicate that the type is optional then if it's missing just provide a default value.
+pub trait MaybeOptionalParams: Sized {
+	/// Returns whether the given type supports to be deserialized with a default value if the field is missing.
+	fn default() -> Option<Self>;
+}
+
+// TODO: write macros for this.
+impl<T> MaybeOptionalParams for Option<T> {
+	fn default() -> Option<Self> {
+		Some(None)
+	}
+}
+
+impl MaybeOptionalParams for String {
+	fn default() -> Option<String> {
+		None
+	}
+}
+
+impl<T> MaybeOptionalParams for Vec<T> {
+	fn default() -> Option<Vec<T>> {
+		None
+	}
+}
+
+#[macro_export]
+macro_rules! impl_serde_with_optional {
+	($ty:ident < $( $N:ident $(: $b0:ident $(+$b:ident)* )? ),* >) => {
+		impl<'de $(, $N: serde::Deserialize<'de> + MaybeOptionalParams $(+ $b0 $(+$b)* )? )*> serde::Deserialize<'de> for $ty< $( $N ),* > {
+			fn deserialize<DD>(deserializer: DD) -> Result<Self, DD::Error>
+			where
+				DD: serde::Deserializer<'de>,
+			{
+				struct TupleVisitor<$( $N),*>(PhantomData<($( $N),*)>);
+
+				impl<'de $(, $N: serde::Deserialize<'de> + MaybeOptionalParams $(+ $b0 $(+$b)* )? )*> Visitor<'de> for TupleVisitor<$( $N),*>
+				{
+					type Value = $ty< $( $N ),* >;
+
+					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+						formatter.write_str("JsonRpcParams")
+					}
+
+					fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+					where
+						V: SeqAccess<'de>,
+					{
+						Ok($ty(($(
+							match seq.next_element() {
+								Ok(Some(v)) => v,
+								_ => match $N::default() {
+									Some(v) => v,
+									None => return Err(de::Error::invalid_length(0, &self)),
+								}
+							}
+						),+)))
+					}
+				}
+				deserializer.deserialize_struct("JsonRpcParams", &[], TupleVisitor(PhantomData))
+			}
+		}
+	};
+}
+
+impl_serde_with_optional!(ParamsOne<A>);
+impl_serde_with_optional!(ParamsTwo<A, B>);
+impl_serde_with_optional!(ParamsThree<A, B, C>);
+impl_serde_with_optional!(ParamsFour<A, B, C, D>);
+impl_serde_with_optional!(ParamsFive<A, B, C, D, E>);
 
 /// Parameters sent with the RPC request
 #[derive(Clone, Copy, Debug)]
@@ -245,7 +332,7 @@ impl<'a> From<Id<'a>> for OwnedId {
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id, JsonRpcParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero};
+	use super::{Cow, Id, JsonRpcParams, JsonValue, ParamsFive, ParamsTwo, RpcParams, SubscriptionId, TwoPointZero};
 
 	#[test]
 	fn id_deserialization() {
@@ -334,5 +421,17 @@ mod test {
 			let serialized = serde_json::to_string(&id).unwrap();
 			assert_eq!(&serialized, initial_ser);
 		}
+	}
+
+	#[test]
+	fn special_deser_tuple() {
+		let ser = r#"["foo"]"#;
+		let dsr: ParamsTwo<String, Option<String>> = serde_json::from_str(ser).unwrap();
+		assert_eq!("foo", (dsr.0).0.as_str());
+		assert_eq!(None, (dsr.0).1);
+		assert!(serde_json::from_str::<ParamsTwo<String, String>>(ser).is_err());
+		let ser = r#"["foo", "", "", "bar"]"#;
+		let dsr: ParamsFive<String, Option<String>, Option<String>, String, Option<String>> =
+			serde_json::from_str(ser).unwrap();
 	}
 }
