@@ -20,6 +20,7 @@ mod client;
 /// Traits
 pub mod traits;
 
+pub use async_trait::async_trait;
 pub use beef::Cow;
 pub use client::*;
 pub use error::Error;

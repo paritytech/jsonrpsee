@@ -85,7 +85,7 @@ impl RpcDescription {
 			// Name of the RPC method to subscribe (e.g. `foo_sub`).
 			let rpc_sub_name = self.rpc_identifier(&sub.name);
 			// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
-			let rpc_unsub_name = self.rpc_identifier(&sub.name);
+			let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
 			// `parsing` is the code associated with parsing structure from the
 			// provided `RpcParams` object.
 			// `params_seq` is the comma-delimited sequence of parametsrs.

@@ -174,7 +174,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     fn sync_method(&self) -> String;
 ///
 ///     // Note that `subscription_sink` was added automatically.
-///     fn sub(&self, subscription_sink: SubscriptionSing);
+///     fn sub(&self, subscription_sink: SubscriptionSink);
 ///
 ///     fn into_rpc(self) -> Result<Self, jsonrpsee::types::error::Error> {
 ///         // Actual implementation stripped, but inside we will create
@@ -198,7 +198,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     }
 ///     
 ///     // Subscription method returns `Subscription` object in case of success.
-///     async fn sub(&self, subscription_sink: SubscriptionSing) -> Result<Subscription<String>, Error> {
+///     async fn sub(&self, subscription_sink: SubscriptionSink) -> Result<Subscription<String>, Error> {
 ///         // ...
 ///     }
 /// }
