@@ -434,4 +434,12 @@ mod test {
 		let dsr: ParamsFive<String, Option<String>, Option<String>, String, Option<String>> =
 			serde_json::from_str(ser).unwrap();
 	}
+
+	#[test]
+	fn show_edge_case() {
+		let ser = r#"["foo", "bar"]"#;
+		// NOTE(niklasad1): this won't work as the second already been "visited".
+		let dsr: ParamsFive<String, Option<String>, Option<String>, String, Option<String>> =
+			serde_json::from_str(ser).unwrap();
+	}
 }
