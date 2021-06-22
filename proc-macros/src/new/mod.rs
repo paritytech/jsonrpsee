@@ -1,5 +1,6 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
+use self::respan::Respan;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::Attribute;
@@ -7,6 +8,7 @@ use syn::Attribute;
 mod attributes;
 mod render_client;
 mod render_server;
+mod respan;
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
@@ -18,7 +20,7 @@ pub struct RpcMethod {
 
 impl RpcMethod {
 	pub fn from_item(mut method: syn::TraitItemMethod) -> Result<Self, syn::Error> {
-		let attributes = attributes::Method::from_attributes(&method.attrs)?;
+		let attributes = attributes::Method::from_attributes(&method.attrs).respan(&method.attrs.first())?;
 		let sig = method.sig.clone();
 		let name = attributes.name;
 		let params: Vec<_> = sig
@@ -56,7 +58,7 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(mut sub: syn::TraitItemMethod) -> Result<Self, syn::Error> {
-		let attributes = attributes::Subscription::from_attributes(&sub.attrs)?;
+		let attributes = attributes::Subscription::from_attributes(&sub.attrs).respan(&sub.attrs.first())?;
 		let sig = sub.sig.clone();
 		let name = attributes.name;
 		let unsub_method = attributes.unsub;
@@ -98,7 +100,7 @@ pub struct RpcDescription {
 
 impl RpcDescription {
 	pub fn from_item(attr: syn::Attribute, mut item: syn::ItemTrait) -> Result<Self, syn::Error> {
-		let attrs = attributes::Rpc::from_attributes(&[attr])?;
+		let attrs = attributes::Rpc::from_attributes(&[attr.clone()]).respan(&attr)?;
 		if !attrs.is_correct() {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
 		}
