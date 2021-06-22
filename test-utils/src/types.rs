@@ -199,12 +199,12 @@ async fn server_backend(listener: tokio::net::TcpListener, mut exit: Receiver<()
 async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut exit: Receiver<()>) {
 	let mut server = Server::new(socket.compat());
 
-	let websocket_key = match server.receive_request().await {
-		Ok(req) => req.into_key(),
+	let key = match server.receive_request().await {
+		Ok(req) => req.key(),
 		Err(_) => return,
 	};
 
-	let accept = server.send_response(&Response::Accept { key: &websocket_key, protocol: None }).await;
+	let accept = server.send_response(&Response::Accept { key, protocol: None }).await;
 
 	if accept.is_err() {
 		return;

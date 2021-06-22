@@ -66,6 +66,9 @@ pub enum Error {
 	/// Method was already registered.
 	#[error("Method: {0} was already registered")]
 	MethodAlreadyRegistered(String),
+	/// Method with that name has not yet been registered.
+	#[error("Method: {0} has not yet been registered")]
+	MethodNotFound(String),
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
@@ -81,6 +84,9 @@ pub enum Error {
 	/// Attempted to stop server that is already stopped.
 	#[error("Attempted to stop server that is already stopped")]
 	AlreadyStopped,
+	/// List passed into `set_allowed_origins` was empty
+	#[error("Must set at least one allowed origin")]
+	EmptyAllowedOrigins,
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),
