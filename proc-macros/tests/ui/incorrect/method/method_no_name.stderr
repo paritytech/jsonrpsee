@@ -1,0 +1,5 @@
+error: unexpected end of input, `#[method]` is missing `name` argument
+ --> $DIR/method_no_name.rs:6:2
+  |
+6 |     #[method()]
+  |     ^^^^^^^^^^^

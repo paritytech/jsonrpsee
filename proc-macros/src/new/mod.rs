@@ -144,6 +144,12 @@ impl RpcDescription {
 							"Element cannot be both subscription and method at the same time",
 						));
 					}
+					if method.sig.asyncness.is_some() {
+						return Err(syn::Error::new_spanned(&method, "Subscription methods must not be `async`"));
+					}
+					if !matches!(method.sig.output, syn::ReturnType::Default) {
+						return Err(syn::Error::new_spanned(&method, "Subscription methods must not return anything"));
+					}
 
 					let sub_data = RpcSubscription::from_item(method.clone())?;
 					subscriptions.push(sub_data);
@@ -158,6 +164,10 @@ impl RpcDescription {
 			} else {
 				return Err(syn::Error::new_spanned(&entry, "Only methods allowed in RPC traits"));
 			}
+		}
+
+		if methods.is_empty() && subscriptions.is_empty() {
+			return Err(syn::Error::new_spanned(&item, "RPC cannot be empty"));
 		}
 
 		Ok(Self { jsonrpsee_client_path, jsonrpsee_server_path, attrs, trait_def: item, methods, subscriptions })

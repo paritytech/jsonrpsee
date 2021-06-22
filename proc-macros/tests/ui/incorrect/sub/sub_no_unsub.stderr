@@ -1,0 +1,5 @@
+error: unexpected end of input, `#[subscription]` is missing `unsub` argument
+ --> $DIR/sub_no_unsub.rs:6:2
+  |
+6 |     #[subscription(name = "sub", item = String)]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
