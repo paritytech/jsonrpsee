@@ -333,7 +333,8 @@ mod test {
 		let ser =
 			serde_json::to_string(&JsonRpcSubscriptionParams { subscription: SubscriptionId::Num(12), result: "goal" })
 				.unwrap();
-		assert_eq!(ser, r#"{"subscription":12,"result":"goal"}"#);
+		let exp = r#"{"subscription":12,"result":"goal"}"#;
+		assert_eq!(ser, exp);
 	}
 
 	#[test]
@@ -341,7 +342,7 @@ mod test {
 		let ser = r#"{"subscription":"9","result":"offside"}"#;
 		assert!(
 			serde_json::from_str::<JsonRpcSubscriptionParams<()>>(ser).is_err(),
-			"invalid type should not be deser"
+			"invalid type should not be deserializable"
 		);
 		let dsr: JsonRpcSubscriptionParams<JsonValue> = serde_json::from_str(ser).unwrap();
 		assert_eq!(dsr.subscription, SubscriptionId::Str("9".into()));
