@@ -91,8 +91,8 @@ impl Server {
 		// Lock the stop mutex so existing stop handles can wait for server to stop.
 		// It will be unlocked once this function returns.
 		let _stop_handle = self.stop_handle.lock().await;
-		
-		let mut incoming = TcpListenerStream::new(self.listener);
+
+		let mut incoming = TcpListenerStream::new(self.listener).fuse();
 		let methods = self.methods;
 		let conn_counter = Arc::new(());
 		let mut id = 0;
@@ -101,12 +101,12 @@ impl Server {
 		loop {
 			futures_util::select! {
 				socket = incoming.next() => {
-					if let Ok(socket) = socket {
+					if let Some(Ok(socket)) = socket {
 						if let Err(e) = socket.set_nodelay(true) {
 							log::error!("Could not set NODELAY on socket: {:?}", e);
 							continue;
 						}
-		
+
 						if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
 							log::warn!("Too many connections. Try again in a while");
 							continue;
@@ -114,7 +114,7 @@ impl Server {
 						let methods = methods.clone();
 						let counter = conn_counter.clone();
 						let cfg = self.cfg.clone();
-		
+
 						tokio::spawn(async move {
 							let r = background_task(socket, id, methods, cfg).await;
 							drop(counter);
