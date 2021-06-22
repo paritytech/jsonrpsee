@@ -56,7 +56,6 @@ pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
 	cfg: Settings,
-
 	/// Pair of channels to stop the server.
 	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
 	/// Stop handle that indicates whether server has been stopped.

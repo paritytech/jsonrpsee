@@ -115,7 +115,7 @@ impl Default for Builder {
 	}
 }
 
-/// Handle that is able to stop the running server.
+/// Handle used to stop the running server.
 #[derive(Debug, Clone)]
 pub struct StopHandle {
 	stop_sender: mpsc::Sender<()>,
