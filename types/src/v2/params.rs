@@ -97,37 +97,6 @@ impl<T> MaybeOptionalParams for Option<T> {
 	}
 }
 
-/// Macro for mark the type to not implement `MaybeOptionalParams`
-/// Ideally, this should only be implemented for `Option<T>`
-/// but mutally exclusive trait bounds is not a thing.
-#[macro_export]
-macro_rules! impl_param_not_optional {
-	($ty:ident) => {
-		impl MaybeOptionalParams for $ty {
-			fn default() -> Option<$ty> {
-				None
-			}
-		}
-	};
-	($ty:ident < $( $N:ident),* >) => {
-		impl<$( $N ),*> MaybeOptionalParams for $ty<$( $N ),*> {
-			fn default() -> Option<$ty<$( $N ),*>> {
-				None
-			}
-		}
-	};
-}
-
-impl_param_not_optional!(String);
-impl_param_not_optional!(Vec<T>);
-impl_param_not_optional!(BTreeMap<K, V>);
-impl_param_not_optional!(bool);
-impl_param_not_optional!(u8);
-impl_param_not_optional!(u16);
-impl_param_not_optional!(u32);
-impl_param_not_optional!(u64);
-impl_param_not_optional!(JsonValue);
-
 macro_rules! impl_serde_replace_missing_optional_params {
 	// NOTE(niklasad1): this doesn't work for lifetimes
 	($ty:ident < $( $N:ident $(: $b0:ident $(+$b:ident)* )? ),* >) => {
