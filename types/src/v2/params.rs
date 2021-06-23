@@ -70,20 +70,20 @@ impl Serialize for TwoPointZero {
 }
 /// Parsed params.
 #[derive(Debug)]
-pub struct ParamsOne<A>(A);
+pub struct ParamsOne<A>(pub A);
 /// Parsed params.
 #[derive(Debug)]
-pub struct ParamsTwo<A, B>((A, B));
+pub struct ParamsTwo<A, B>(pub (A, B));
 /// Parsed params.
 #[derive(Debug)]
-pub struct ParamsThree<A, B, C>((A, B, C));
+pub struct ParamsThree<A, B, C>(pub (A, B, C));
 /// Parsed params.
 #[derive(Debug)]
 /// Parsed params.
-pub struct ParamsFour<A, B, C, D>((A, B, C, D));
+pub struct ParamsFour<A, B, C, D>(pub (A, B, C, D));
 #[derive(Debug)]
 /// Parsed params.
-pub struct ParamsFive<A, B, C, D, E>((A, B, C, D, E));
+pub struct ParamsFive<A, B, C, D, E>(pub (A, B, C, D, E));
 
 /// Marker trait to indicate that the type is optional then if it's missing just provide a default value.
 pub trait MaybeOptionalParams: Sized {
