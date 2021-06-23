@@ -32,10 +32,15 @@ mod helpers;
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::{
 	http_client::{traits::Client, Error, HttpClientBuilder},
+	types::impl_param_not_optional,
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, JsonValue, Subscription, WsClientBuilder},
 };
 use std::sync::Arc;
 use std::time::Duration;
+
+struct Foo;
+
+impl_param_not_optional!(Foo);
 
 #[tokio::test]
 async fn ws_subscription_works() {

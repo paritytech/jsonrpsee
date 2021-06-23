@@ -35,14 +35,14 @@ pub use serde_json::{to_value as to_json_value, value::RawValue as JsonRawValue,
 #[macro_export]
 macro_rules! impl_param_not_optional {
 	($ty:ident) => {
-		impl crate::MaybeOptionalParams for $ty {
+		impl $crate::MaybeOptionalParams for $ty {
 			fn default() -> Option<$ty> {
 				None
 			}
 		}
 	};
 	($ty:ident < $( $N:ident),* >) => {
-		impl<$( $N ),*> crate::MaybeOptionalParams for $ty<$( $N ),*> {
+		impl<$( $N ),*> $crate::MaybeOptionalParams for $ty<$( $N ),*> {
 			fn default() -> Option<$ty<$( $N ),*>> {
 				None
 			}
