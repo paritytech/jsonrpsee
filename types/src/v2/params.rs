@@ -99,12 +99,13 @@ impl<T> MaybeOptionalParams for Option<T> {
 
 macro_rules! impl_serde_replace_missing_optional_params {
 	// NOTE(niklasad1): this doesn't work for lifetimes
-	($ty:ident < $( $N:ident $(: $b0:ident $(+$b:ident)* )? ),* >) => {
+	($len:tt => $ty:ident < $( $N:ident $(: $b0:ident $(+$b:ident)* )? ),* >) => {
 		impl<'de $(, $N: serde::Deserialize<'de> + MaybeOptionalParams $(+ $b0 $(+$b)* )? )*> serde::Deserialize<'de> for $ty< $( $N ),* > {
 			fn deserialize<DD>(deserializer: DD) -> Result<Self, DD::Error>
 			where
 				DD: serde::Deserializer<'de>,
 			{
+				#[allow(unused_parens)]
 				struct TupleVisitor<$( $N),*>(PhantomData<($( $N),*)>);
 
 				impl<'de $(, $N: serde::Deserialize<'de> + MaybeOptionalParams $(+ $b0 $(+$b)* )? )*> Visitor<'de> for TupleVisitor<$( $N),*>
@@ -112,22 +113,27 @@ macro_rules! impl_serde_replace_missing_optional_params {
 					type Value = $ty< $( $N ),* >;
 
 					fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-						formatter.write_str("JsonRpcParams")
+						formatter.write_str(concat!("RpcParams with length: ", $len))
 					}
 
+					#[allow(non_snake_case)]
 					fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
 					where
 						V: SeqAccess<'de>,
 					{
-						Ok($ty(($(
-							match seq.next_element() {
+						let mut _i = 0;
+						$(
+                            let $N = match seq.next_element() {
 								Ok(Some(v)) => v,
 								_ => match $N::default() {
 									Some(v) => v,
-									None => return Err(de::Error::invalid_length(0, &self)),
+									None => return Err(de::Error::invalid_length(_i, &self)),
 								}
-							}
-						),+)))
+							};
+							_i += 1;
+						)+
+
+						Ok($ty(($($N),+)))
 					}
 				}
 				deserializer.deserialize_struct("JsonRpcParams", &[], TupleVisitor(PhantomData))
@@ -136,11 +142,11 @@ macro_rules! impl_serde_replace_missing_optional_params {
 	};
 }
 
-impl_serde_replace_missing_optional_params!(ParamsOne<A>);
-impl_serde_replace_missing_optional_params!(ParamsTwo<A, B>);
-impl_serde_replace_missing_optional_params!(ParamsThree<A, B, C>);
-impl_serde_replace_missing_optional_params!(ParamsFour<A, B, C, D>);
-impl_serde_replace_missing_optional_params!(ParamsFive<A, B, C, D, E>);
+impl_serde_replace_missing_optional_params!(1 => ParamsOne<A>);
+impl_serde_replace_missing_optional_params!(2 => ParamsTwo<A, B>);
+impl_serde_replace_missing_optional_params!(3 => ParamsThree<A, B, C>);
+impl_serde_replace_missing_optional_params!(4 => ParamsFour<A, B, C, D>);
+impl_serde_replace_missing_optional_params!(5 => ParamsFive<A, B, C, D, E>);
 
 /// Parameters sent with the RPC request
 #[derive(Clone, Copy, Debug)]
@@ -418,7 +424,7 @@ mod test {
 		assert_eq!(None, (dsr.0).1);
 		assert!(serde_json::from_str::<ParamsTwo<String, String>>(ser).is_err());
 		let ser = r#"["foo", "", "", "bar"]"#;
-		let dsr: ParamsFive<String, Option<String>, Option<String>, String, Option<String>> =
+		let _dsr: ParamsFive<String, Option<String>, Option<String>, String, Option<String>> =
 			serde_json::from_str(ser).unwrap();
 	}
 
@@ -426,7 +432,7 @@ mod test {
 	fn show_edge_case() {
 		let ser = r#"["foo", "bar"]"#;
 		// NOTE(niklasad1): this won't work as the second already been "visited".
-		let dsr: ParamsFive<String, Option<String>, Option<String>, String, Option<String>> =
+		let _dsr: ParamsFive<String, Option<String>, Option<String>, String, Option<String>> =
 			serde_json::from_str(ser).unwrap();
 	}
 }
