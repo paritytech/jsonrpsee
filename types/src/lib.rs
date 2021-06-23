@@ -5,6 +5,9 @@
 
 extern crate alloc;
 
+#[doc(hidden)]
+pub use v2::params::MaybeOptionalParams;
+
 /// Ten megabytes.
 pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 

@@ -1,7 +1,7 @@
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
 use beef::Cow;
-use serde::de::{self, DeserializeOwned, Deserializer, SeqAccess, Unexpected, Visitor};
+use serde::de::{self, Deserializer, SeqAccess, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::RawValue, Value as JsonValue};
@@ -91,27 +91,45 @@ pub trait MaybeOptionalParams: Sized {
 	fn default() -> Option<Self>;
 }
 
-// TODO: write macros for this.
 impl<T> MaybeOptionalParams for Option<T> {
 	fn default() -> Option<Self> {
 		Some(None)
 	}
 }
 
-impl MaybeOptionalParams for String {
-	fn default() -> Option<String> {
-		None
-	}
-}
-
-impl<T> MaybeOptionalParams for Vec<T> {
-	fn default() -> Option<Vec<T>> {
-		None
-	}
-}
-
+/// Macro for mark the type to not implement `MaybeOptionalParams`
+/// Ideally, this should only be implemented for `Option<T>`
+/// but mutally exclusive trait bounds is not a thing.
 #[macro_export]
-macro_rules! impl_serde_with_optional {
+macro_rules! impl_param_not_optional {
+	($ty:ident) => {
+		impl MaybeOptionalParams for $ty {
+			fn default() -> Option<$ty> {
+				None
+			}
+		}
+	};
+	($ty:ident < $( $N:ident),* >) => {
+		impl<$( $N ),*> MaybeOptionalParams for $ty<$( $N ),*> {
+			fn default() -> Option<$ty<$( $N ),*>> {
+				None
+			}
+		}
+	};
+}
+
+impl_param_not_optional!(String);
+impl_param_not_optional!(Vec<T>);
+impl_param_not_optional!(BTreeMap<K, V>);
+impl_param_not_optional!(bool);
+impl_param_not_optional!(u8);
+impl_param_not_optional!(u16);
+impl_param_not_optional!(u32);
+impl_param_not_optional!(u64);
+impl_param_not_optional!(JsonValue);
+
+macro_rules! impl_serde_replace_missing_optional_params {
+	// NOTE(niklasad1): this doesn't work for lifetimes
 	($ty:ident < $( $N:ident $(: $b0:ident $(+$b:ident)* )? ),* >) => {
 		impl<'de $(, $N: serde::Deserialize<'de> + MaybeOptionalParams $(+ $b0 $(+$b)* )? )*> serde::Deserialize<'de> for $ty< $( $N ),* > {
 			fn deserialize<DD>(deserializer: DD) -> Result<Self, DD::Error>
@@ -149,11 +167,11 @@ macro_rules! impl_serde_with_optional {
 	};
 }
 
-impl_serde_with_optional!(ParamsOne<A>);
-impl_serde_with_optional!(ParamsTwo<A, B>);
-impl_serde_with_optional!(ParamsThree<A, B, C>);
-impl_serde_with_optional!(ParamsFour<A, B, C, D>);
-impl_serde_with_optional!(ParamsFive<A, B, C, D, E>);
+impl_serde_replace_missing_optional_params!(ParamsOne<A>);
+impl_serde_replace_missing_optional_params!(ParamsTwo<A, B>);
+impl_serde_replace_missing_optional_params!(ParamsThree<A, B, C>);
+impl_serde_replace_missing_optional_params!(ParamsFour<A, B, C, D>);
+impl_serde_replace_missing_optional_params!(ParamsFive<A, B, C, D, E>);
 
 /// Parameters sent with the RPC request
 #[derive(Clone, Copy, Debug)]
