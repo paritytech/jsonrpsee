@@ -37,7 +37,7 @@ The library is still under development; do not use in production.
 
 ## Roadmap
 
-See [tracking issue for next stable release](https://github.com/paritytech/jsonrpsee/issues/251)
+See [tracking issue for next stable release (0.3)](https://github.com/paritytech/jsonrpsee/issues/376)
 
 ## Users
 
