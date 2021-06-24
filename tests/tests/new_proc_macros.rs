@@ -3,42 +3,44 @@
 use std::net::SocketAddr;
 
 use futures_channel::oneshot;
-use jsonrpsee::{
-	proc_macros::rpc,
-	types::async_trait,
-	ws_client::*,
-	ws_server::{SubscriptionSink, WsServerBuilder},
-};
+use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
 
-#[rpc(client, server, namespace = "foo")]
-pub trait Rpc {
-	#[method(name = "foo")]
-	async fn async_method(&self, param_a: u8, param_b: String) -> u16;
+mod rpc_impl {
+	use jsonrpsee::{proc_macros::rpc, types::async_trait, ws_server::SubscriptionSink};
 
-	#[method(name = "bar")]
-	fn sync_method(&self) -> u16;
+	#[rpc(client, server, namespace = "foo")]
+	pub trait Rpc {
+		#[method(name = "foo")]
+		async fn async_method(&self, param_a: u8, param_b: String) -> u16;
 
-	#[subscription(name = "sub", unsub = "unsub", item = String)]
-	fn sub(&self);
+		#[method(name = "bar")]
+		fn sync_method(&self) -> u16;
+
+		#[subscription(name = "sub", unsub = "unsub", item = String)]
+		fn sub(&self);
+	}
+
+	pub struct RpcServerImpl;
+
+	#[async_trait]
+	impl RpcServer for RpcServerImpl {
+		async fn async_method(&self, _param_a: u8, _param_b: String) -> u16 {
+			42u16
+		}
+
+		fn sync_method(&self) -> u16 {
+			10u16
+		}
+
+		fn sub(&self, mut sink: SubscriptionSink) {
+			sink.send(&"Response_A").unwrap();
+			sink.send(&"Response_B").unwrap();
+		}
+	}
 }
 
-pub struct RpcServerImpl;
-
-#[async_trait]
-impl RpcServer for RpcServerImpl {
-	async fn async_method(&self, _param_a: u8, _param_b: String) -> u16 {
-		42u16
-	}
-
-	fn sync_method(&self) -> u16 {
-		10u16
-	}
-
-	fn sub(&self, mut sink: SubscriptionSink) {
-		sink.send(&"Response_A").unwrap();
-		sink.send(&"Response_B").unwrap();
-	}
-}
+// Use generated implementations of server and client.
+use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
 
 pub async fn websocket_server() -> SocketAddr {
 	let (server_started_tx, server_started_rx) = oneshot::channel();

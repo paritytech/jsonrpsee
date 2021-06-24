@@ -208,7 +208,158 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///
 /// ## Attributes
 ///
-/// To be done...
+/// ### `rpc` attribute
+///
+/// `rpc` attribute is applied to a trait in order to turn it into an RPC implementation.
+///
+/// **Arguments:**
+///
+/// - `server`: generate `<Trait>Server` trait for the server implementation.
+/// - `client`: generate `<Trait>Client` extension trait that makes RPC clients to invoke a concrete RPC
+///   implementation methods conveniently.
+/// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace
+///   `foo` and method `spam`, the resulting method name will be `foo_spam`.
+///
+/// **Trait requirements:**
+///
+/// Trait wrapped with an `rfc` attribute **must not**:
+///
+/// - have associated types or constants;
+/// - have Rust methods not marked with either `method` or `subscription` attribute;
+/// - be empty.
+///
+/// At least one of the `server` or `client` flags must be provided, otherwise the compilation will err.
+///
+/// ### `method` attribute
+///
+/// `method` attribute is used to define an RPC method.
+///
+/// **Arguments:**
+///
+/// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
+///
+/// **Method requirements:**
+///
+/// Rust method marked with `method` attribute, **may**:
+///
+/// - be either `async` or not;
+/// - have input parameters or not;
+/// - have return value or not (in the latter case, it will be considered a notification method).
+///
+/// ### `subscription` attribute
+///
+/// **Arguments:**
+///
+/// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
+/// - `unsub` (mandatory): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
+/// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
+///
+/// **Method requirements:**
+///
+/// Rust method marked with `subscription` attribute **must**:
+///
+/// - be synchronous;
+/// - not have return value.
+///
+/// Rust method marked with `subscription` attribute **may**:
+///
+/// - have input parameters or not.
+///
+/// ## Full workflow example
+///
+/// ```rust
+/// //! Example of using proc macro to generate working client and server.
+///
+/// use std::net::SocketAddr;
+///
+/// use futures_channel::oneshot;
+/// use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
+///
+/// // RPC is moved into a separate module to clearly show names of generated entities.
+/// mod rpc_impl {
+///     use jsonrpsee::{proc_macros::rpc, types::async_trait, ws_server::SubscriptionSink};
+///
+///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
+///     #[rpc(client, server, namespace = "foo")]
+///     pub trait Rpc {
+///         #[method(name = "foo")]
+///         async fn async_method(&self, param_a: u8, param_b: String) -> u16;
+///
+///         #[method(name = "bar")]
+///         fn sync_method(&self) -> u16;
+///
+///         #[subscription(name = "sub", unsub = "unsub", item = String)]
+///         fn sub(&self);
+///     }
+///
+///     // Structure that will implement `RpcServer` trait.
+///     // In can have fields, if required, as long as it's still `Send + Sync + 'static`.
+///     pub struct RpcServerImpl;
+///
+///     #[async_trait]
+///     impl RpcServer for RpcServerImpl {
+///         async fn async_method(&self, _param_a: u8, _param_b: String) -> u16 {
+///             42u16
+///         }
+///
+///         fn sync_method(&self) -> u16 {
+///             10u16
+///         }
+///
+///         // We could've spawned a `tokio` future that yields values while our program works,
+///         // but for simplicity of the example we will only send two values and then close
+///         // the subscription.
+///         fn sub(&self, mut sink: SubscriptionSink) {
+///             sink.send(&"Response_A").unwrap();
+///             sink.send(&"Response_B").unwrap();
+///         }
+///     }
+/// }
+///
+/// // Use generated implementations of server and client.
+/// use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
+///
+/// pub async fn websocket_server() -> SocketAddr {
+///     let (server_started_tx, server_started_rx) = oneshot::channel();
+///
+///     std::thread::spawn(move || {
+///         let rt = tokio::runtime::Runtime::new().unwrap();
+///         let mut server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
+///         // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
+///         server.register_module(RpcServerImpl.into_rpc().unwrap()).unwrap();
+///
+///         rt.block_on(async move {
+///             server_started_tx.send(server.local_addr().unwrap()).unwrap();
+///
+///             server.start().await
+///         });
+///     });
+///
+///     server_started_rx.await.unwrap()
+/// }
+///
+/// // In the main function, we will spawn the server, create a client connected to this server,
+/// // and call all the available methods.
+/// #[tokio::main]
+/// async fn main() {
+///     let server_addr = websocket_server().await;
+///     let server_url = format!("ws://{}", server_addr);
+///     // Note that we create the client as usual, but thanks to the `use rpc_impl::RpcClient`,
+///     // the client object will have all the methods to interact with the server.
+///     let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+///
+///     // Invoke RPC methods.
+///     assert_eq!(client.async_method(10, "a".into()).await.unwrap(), 42);
+///     assert_eq!(client.sync_method().await.unwrap(), 10);
+///
+///     // Subscribe and receive messages from the subscription.
+///     let mut sub = client.sub().await.unwrap();
+///     let first_recv = sub.next().await.unwrap();
+///     assert_eq!(first_recv, Some("Response_A".to_string()));
+///     let second_recv = sub.next().await.unwrap();
+///     assert_eq!(second_recv, Some("Response_B".to_string()));
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
 	let attr = proc_macro2::TokenStream::from(attr);
