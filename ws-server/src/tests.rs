@@ -171,8 +171,12 @@ async fn can_set_max_connections() {
 	assert!(conn2.is_ok());
 	// Third connection is rejected
 	assert!(conn3.is_err());
-	let err = conn3.unwrap_err();
-	assert!(err.to_string().contains("WebSocketHandshake failed"));
+
+	let err = match conn3 {
+		Err(soketto::handshake::Error::Io(err)) => err,
+		_ => panic!("Invalid error kind; expected std::io::Error"),
+	};
+	assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset);
 
 	// Decrement connection count
 	drop(conn2);

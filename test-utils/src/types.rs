@@ -8,8 +8,8 @@ use futures_util::{
 	stream::{self, StreamExt},
 };
 use serde::{Deserialize, Serialize};
-use soketto::handshake;
-use soketto::handshake::{server::Response, Server};
+use soketto::handshake::{self, server::Response, Error as SokettoError, Server};
+use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -63,7 +63,7 @@ impl std::fmt::Debug for WebSocketTestClient {
 }
 
 impl WebSocketTestClient {
-	pub async fn new(url: SocketAddr) -> Result<Self, Error> {
+	pub async fn new(url: SocketAddr) -> Result<Self, SokettoError> {
 		let socket = TcpStream::connect(url).await?;
 		let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), "test-client", "/");
 		match client.handshake().await {
@@ -71,7 +71,13 @@ impl WebSocketTestClient {
 				let (tx, rx) = client.into_builder().finish();
 				Ok(Self { tx, rx })
 			}
-			r => Err(format!("WebSocketHandshake failed: {:?}", r).into()),
+			Ok(handshake::ServerResponse::Redirect { .. }) => {
+				Err(SokettoError::Io(io::Error::new(io::ErrorKind::Other, "Redirection not supported in tests")))
+			}
+			Ok(handshake::ServerResponse::Rejected { .. }) => {
+				Err(SokettoError::Io(io::Error::new(io::ErrorKind::Other, "Rejected")))
+			}
+			Err(err) => Err(err),
 		}
 	}
 
