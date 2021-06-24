@@ -120,7 +120,7 @@ jobs:
         uses: actions-rs/cargo@v1.0.3
         with:
           command: check
-          args: --manifest-path utils/Cargo.toml
+          args: --manifest-path proc-macros/Cargo.toml
 
       - name: Cargo check test utils
         uses: actions-rs/cargo@v1.0.3
