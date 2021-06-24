@@ -3,14 +3,15 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
-use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, OwnedId, OwnedRpcParams, RpcParams, TwoPointZero};
-use jsonrpsee_types::v2::request::JsonRpcRequest;
-use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
+use jsonrpsee_types::v2::params::{
+	Id, JsonRpcSubscriptionParams, OwnedId, OwnedRpcParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId,
+	TwoPointZero,
+};
+use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use serde_json::value::{to_raw_value, RawValue};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -367,18 +368,20 @@ pub struct SubscriptionSink {
 impl SubscriptionSink {
 	/// Send message on this subscription.
 	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), Error> {
-		let result = to_raw_value(result)?;
-		self.send_raw_value(&result)
+		let msg = self.build_message(result)?;
+		self.inner_send(msg).map_err(Into::into)
 	}
 
-	fn send_raw_value(&mut self, result: &RawValue) -> Result<(), Error> {
-		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
+		serde_json::to_string(&JsonRpcNotification {
 			jsonrpc: TwoPointZero,
 			method: self.method,
-			params: JsonRpcNotificationParams { subscription: self.uniq_sub.sub_id, result: &*result },
-		})?;
-
-		self.inner_send(msg).map_err(Into::into)
+			params: JsonRpcSubscriptionParams {
+				subscription: JsonRpcSubscriptionId::Num(self.uniq_sub.sub_id),
+				result,
+			},
+		})
+		.map_err(Into::into)
 	}
 
 	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
@@ -404,14 +407,8 @@ impl SubscriptionSink {
 	pub fn close(&mut self, close_reason: String) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
-			let result =
-				to_raw_value(&SubscriptionClosedError::from(close_reason)).expect("valid json infallible; qed");
-			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
-				jsonrpc: TwoPointZero,
-				method: self.method,
-				params: JsonRpcNotificationParams { subscription: self.uniq_sub.sub_id, result: &*result },
-			})
-			.expect("valid json infallible; qed");
+			let msg =
+				self.build_message(&SubscriptionClosedError::from(close_reason)).expect("valid json infallible; qed");
 			let _ = sink.unbounded_send(msg);
 		}
 	}

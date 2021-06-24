@@ -1,9 +1,9 @@
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use futures::channel::mpsc;
-use jsonrpsee_types::v2::params::{Id, JsonRpcParams, SubscriptionId};
-use jsonrpsee_types::v2::request::JsonRpcCallSer;
-use jsonrpsee_types::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponseAlloc};
+use jsonrpsee_types::v2::params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId};
+use jsonrpsee_types::v2::request::{JsonRpcCallSer, JsonRpcNotification};
+use jsonrpsee_types::v2::response::JsonRpcResponse;
 use jsonrpsee_types::{v2::error::JsonRpcError, Error, RequestMessage};
 use serde_json::Value as JsonValue;
 
@@ -46,7 +46,7 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<JsonRpcResp
 /// Returns `Err(Some(msg))` if the subscription was full.
 pub fn process_subscription_response(
 	manager: &mut RequestManager,
-	notif: JsonRpcSubscriptionResponseAlloc<JsonValue>,
+	notif: JsonRpcNotification<JsonRpcSubscriptionParams<JsonValue>>,
 ) -> Result<(), Option<RequestMessage>> {
 	let sub_id = notif.params.subscription;
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -75,7 +75,7 @@ pub fn process_subscription_response(
 ///
 /// Returns Ok() if the response was successfully handled
 /// Returns Err() if there was no handler for the method
-pub fn process_notification(manager: &mut RequestManager, notif: JsonRpcNotifResponse<JsonValue>) -> Result<(), Error> {
+pub fn process_notification(manager: &mut RequestManager, notif: JsonRpcNotification<JsonValue>) -> Result<(), Error> {
 	match manager.as_notification_handler_mut(notif.method.to_owned()) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
