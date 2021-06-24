@@ -28,8 +28,8 @@ jobs:
           override: true
           components: clippy, rustfmt
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
       - name: Cargo fmt
         uses: actions-rs/cargo@v1.0.3
@@ -59,8 +59,8 @@ jobs:
           toolchain: stable
           override: true
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
       - name: Cargo check all targets (use Cargo.toml in workspace)
         uses: actions-rs/cargo@v1.0.3
@@ -148,8 +148,8 @@ jobs:
           toolchain: stable
           override: true
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
       - name: Cargo build
         uses: actions-rs/cargo@v1.0.3
@@ -176,8 +176,8 @@ jobs:
           toolchain: stable
           override: true
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
       - name: Cargo build
         uses: actions-rs/cargo@v1.0.3
@@ -204,8 +204,8 @@ jobs:
           toolchain: stable
           override: true
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
       - name: Cargo build
         uses: actions-rs/cargo@v1.0.3
