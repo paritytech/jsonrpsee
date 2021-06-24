@@ -110,9 +110,77 @@ jobs:
           command: check
           args: --manifest-path utils/Cargo.toml
 
+      - name: Cargo check test utils
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path test-utils/Cargo.toml
+
+      - name: Cargo check examples
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path examples/Cargo.toml
+
   tests:
-    name: Run tests
+    name: Run tests Ubuntu
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2.3.4
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name:                      Rust Cache
+        uses:                      Swatinem/rust-cache@v1.3.0
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: build
+          args: --workspace
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+
+  tests_macos:
+    name: Run tests macos
+    runs-on: macos-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2.3.4
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name:                      Rust Cache
+        uses:                      Swatinem/rust-cache@v1.3.0
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: build
+          args: --workspace
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+
+  tests_windows:
+    name: Run tests Windows
+    runs-on: windows-latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2.3.4
