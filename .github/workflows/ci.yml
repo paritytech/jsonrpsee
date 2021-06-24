@@ -62,7 +62,7 @@ jobs:
       - name:                      Rust Cache
         uses:                      Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo check all targets
+      - name: Cargo check all targets (use Cargo.toml in workspace)
         uses: actions-rs/cargo@v1.0.3
         with:
           command: check
@@ -73,6 +73,42 @@ jobs:
         with:
           command: check
           args: --manifest-path http-client/Cargo.toml --no-default-features --features tokio02
+
+      - name: Cargo check HTTP client
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path http-client/Cargo.toml
+
+      - name: Cargo check WS client
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path ws-client/Cargo.toml
+
+      - name: Cargo check WS client with tokio02
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path ws-client/Cargo.toml --no-default-features --features tokio02
+
+      - name: Cargo check types
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path types/Cargo.toml
+
+      - name: Cargo check utils
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path utils/Cargo.toml
+
+      - name: Cargo check proc macros
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path utils/Cargo.toml
 
   tests:
     name: Run tests
