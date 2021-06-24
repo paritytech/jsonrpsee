@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{RpcModule, WsServerBuilder};
+use crate::{server::StopHandle, RpcModule, WsServerBuilder};
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
@@ -12,6 +12,7 @@ use jsonrpsee_types::{
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
+use tokio::task::JoinHandle;
 
 /// Applications can/should provide their own error.
 #[derive(Debug)]
@@ -26,6 +27,13 @@ impl std::error::Error for MyAppError {}
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
 async fn server() -> SocketAddr {
+	server_with_handles().await.0
+}
+
+/// Spawns a dummy `JSONRPC v2 WebSocket`
+/// It has two hardcoded methods: "say_hello" and "add"
+/// Returns the address together with handles for server future and server stop.
+async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 	let mut server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
@@ -64,8 +72,10 @@ async fn server() -> SocketAddr {
 
 	let addr = server.local_addr().unwrap();
 	server.register_module(module).unwrap();
-	tokio::spawn(async { server.start().await });
-	addr
+
+	let stop_handle = server.stop_handle();
+	let join_handle = tokio::spawn(server.start());
+	(addr, join_handle, stop_handle)
 }
 
 /// Run server with user provided context.
@@ -114,7 +124,7 @@ async fn server_with_context() -> SocketAddr {
 	server.register_module(rpc_module).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(async { server.start().await });
+	tokio::spawn(server.start());
 	addr
 }
 
@@ -305,7 +315,7 @@ async fn async_method_call_that_fails() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"err_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, call_execution_failed("nah".into(), Id::Num(1)));
+	assert_eq!(response, call_execution_failed("nah", Id::Num(1)));
 }
 
 #[tokio::test]
@@ -441,4 +451,19 @@ async fn can_register_modules() {
 	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
 	assert!(matches!(err, _expected_err));
 	assert_eq!(server.method_names().len(), 2);
+}
+
+#[tokio::test]
+async fn stop_works() {
+	let _ = env_logger::try_init();
+	let (_addr, join_handle, mut stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	stop_handle.stop().with_default_timeout().await.unwrap().unwrap();
+	stop_handle.wait_for_stop().with_default_timeout().await.unwrap();
+
+	// After that we should be able to wait for task handle to finish.
+	// First `unwrap` is timeout, second is `JoinHandle`'s one.
+	join_handle.with_default_timeout().await.expect("Timeout").expect("Join error");
+
+	// After server was stopped, attempt to stop it again should result in an error.
+	assert!(matches!(stop_handle.stop().with_default_timeout().await.unwrap(), Err(Error::AlreadyStopped)));
 }

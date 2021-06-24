@@ -81,6 +81,9 @@ pub enum Error {
 	/// Configured max number of request slots exceeded.
 	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,
+	/// Attempted to stop server that is already stopped.
+	#[error("Attempted to stop server that is already stopped")]
+	AlreadyStopped,
 	/// List passed into `set_allowed_origins` was empty
 	#[error("Must set at least one allowed origin")]
 	EmptyAllowedOrigins,

@@ -25,12 +25,18 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::mpsc;
-use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
+use futures_util::{
+	io::{BufReader, BufWriter},
+	SinkExt,
+};
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
-use tokio::net::{TcpListener, ToSocketAddrs};
+use tokio::{
+	net::{TcpListener, ToSocketAddrs},
+	sync::Mutex,
+};
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
@@ -50,6 +56,10 @@ pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
 	cfg: Settings,
+	/// Pair of channels to stop the server.
+	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
+	/// Stop handle that indicates whether server has been stopped.
+	stop_handle: Arc<Mutex<()>>,
 }
 
 impl Server {
@@ -71,35 +81,57 @@ impl Server {
 		self.listener.local_addr().map_err(Into::into)
 	}
 
+	/// Returns the handle to stop the running server.
+	pub fn stop_handle(&self) -> StopHandle {
+		StopHandle { stop_sender: self.stop_pair.0.clone(), stop_handle: self.stop_handle.clone() }
+	}
+
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
-		let mut incoming = TcpListenerStream::new(self.listener);
+		// Lock the stop mutex so existing stop handles can wait for server to stop.
+		// It will be unlocked once this function returns.
+		let _stop_handle = self.stop_handle.lock().await;
+
+		let mut incoming = TcpListenerStream::new(self.listener).fuse();
 		let methods = self.methods;
 		let conn_counter = Arc::new(());
 		let mut id = 0;
+		let mut stop_receiver = self.stop_pair.1;
 
-		while let Some(socket) = incoming.next().await {
-			if let Ok(socket) = socket {
-				if let Err(e) = socket.set_nodelay(true) {
-					log::error!("Could not set NODELAY on socket: {:?}", e);
-					continue;
-				}
+		loop {
+			futures_util::select! {
+				socket = incoming.next() => {
+					if let Some(Ok(socket)) = socket {
+						if let Err(e) = socket.set_nodelay(true) {
+							log::error!("Could not set NODELAY on socket: {:?}", e);
+							continue;
+						}
 
-				if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
-					log::warn!("Too many connections. Try again in a while");
-					continue;
-				}
-				let methods = methods.clone();
-				let counter = conn_counter.clone();
-				let cfg = self.cfg.clone();
+						if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
+							log::warn!("Too many connections. Try again in a while");
+							continue;
+						}
+						let methods = methods.clone();
+						let counter = conn_counter.clone();
+						let cfg = self.cfg.clone();
 
-				tokio::spawn(async move {
-					let r = background_task(socket, id, methods, cfg).await;
-					drop(counter);
-					r
-				});
+						tokio::spawn(async move {
+							let r = background_task(socket, id, methods, cfg).await;
+							drop(counter);
+							r
+						});
 
-				id += 1;
+						id += 1;
+					} else {
+						break;
+					}
+				},
+				stop = stop_receiver.next() => {
+					if stop.is_some() {
+						break;
+					}
+				},
+				complete => break,
 			}
 		}
 	}
@@ -296,12 +328,41 @@ impl Builder {
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
-		Ok(Server { listener, methods: Methods::default(), cfg: self.settings })
+		let stop_pair = mpsc::channel(1);
+		Ok(Server {
+			listener,
+			methods: Methods::default(),
+			cfg: self.settings,
+			stop_pair,
+			stop_handle: Arc::new(Mutex::new(())),
+		})
 	}
 }
 
 impl Default for Builder {
 	fn default() -> Self {
 		Self { settings: Settings::default() }
+	}
+}
+
+/// Handle that is able to stop the running server.
+#[derive(Debug, Clone)]
+pub struct StopHandle {
+	stop_sender: mpsc::Sender<()>,
+	stop_handle: Arc<Mutex<()>>,
+}
+
+impl StopHandle {
+	/// Requests server to stop. Returns an error if server was already stopped.
+	///
+	/// Note: This method *does not* abort spawned futures, e.g. `tokio::spawn` handlers
+	/// for subscriptions. It only prevents server from accepting new connections.
+	pub async fn stop(&mut self) -> Result<(), Error> {
+		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
+	}
+
+	/// Blocks indefinitely until the server is stopped.
+	pub async fn wait_for_stop(&self) {
+		self.stop_handle.lock().await;
 	}
 }
