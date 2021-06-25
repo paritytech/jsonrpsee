@@ -25,6 +25,27 @@ impl<'a> fmt::Display for JsonRpcError<'a> {
 }
 
 /// JSON-RPC error object.
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct JsonRpcErrorObjectOwned {
+	/// Code
+	pub code: JsonRpcErrorCode,
+	/// Message
+	pub message: String,
+	/// Optional data
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub data: Option<serde_json::Value>,
+}
+
+impl fmt::Display for JsonRpcErrorObjectOwned {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		f.write_fmt(format_args!("code: {}: message: {}, data: {:?}", self.code, self.message, self.data))
+	}
+}
+
+impl std::error::Error for JsonRpcErrorObjectOwned {}
+
+/// JSON-RPC error object.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct JsonRpcErrorObject<'a> {
@@ -36,6 +57,17 @@ pub struct JsonRpcErrorObject<'a> {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[serde(borrow)]
 	pub data: Option<&'a RawValue>,
+}
+
+impl<'a> JsonRpcErrorObject<'a> {
+	/// Get owned version of the JsonRpcObject.
+	pub fn to_owned(&self) -> JsonRpcErrorObjectOwned {
+		JsonRpcErrorObjectOwned {
+			code: self.code,
+			message: self.message.to_owned(),
+			data: self.data.and_then(|data| Some(serde_json::Value::from(data.get()))),
+		}
+	}
 }
 
 impl<'a> From<JsonRpcErrorCode> for JsonRpcErrorObject<'a> {
@@ -134,7 +166,7 @@ impl JsonRpcErrorCode {
 
 impl fmt::Display for JsonRpcErrorCode {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}: {}", self.code(), self.message())
+		write!(f, "{}", self.code())
 	}
 }
 
@@ -174,7 +206,7 @@ impl serde::Serialize for JsonRpcErrorCode {
 
 #[cfg(test)]
 mod tests {
-	use super::{Id, JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject, TwoPointZero};
+	use super::{Id, JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject, JsonRpcErrorObjectOwned, TwoPointZero};
 
 	#[test]
 	fn deserialize_works() {
@@ -215,5 +247,18 @@ mod tests {
 		};
 		let ser = serde_json::to_string(&err).unwrap();
 		assert_eq!(exp, ser);
+	}
+
+	#[test]
+	fn deserialize_owned_with_optional_data() {
+		let ser = r#"{"code":-32700,"message":"Parse error", "data":"vegan"}"#;
+
+		let exp = JsonRpcErrorObjectOwned {
+			code: JsonRpcErrorCode::ParseError,
+			message: "Parse error".to_string(),
+			data: Some(serde_json::Value::from("vegan")),
+		};
+		let err: JsonRpcErrorObjectOwned = serde_json::from_str(ser).unwrap();
+		assert_eq!(exp, err);
 	}
 }

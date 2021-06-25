@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 
 use crate::{server::StopHandle, HttpServerBuilder, RpcModule};
 use futures_util::FutureExt;
+use jsonrpsee_http_client::v2::error::JsonRpcErrorObjectOwned;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -39,21 +40,31 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 	module.register_method("notif", |_, _| Ok("")).unwrap();
 	module
 		.register_method("should_err", |_, ctx| {
-			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.err().map_err(|e| {
+				CallError::Failed(JsonRpcErrorObjectOwned { code: (-32000).into(), message: e.to_string(), data: None })
+			})?;
 			Ok("err")
 		})
 		.unwrap();
 
 	module
 		.register_method("should_ok", |_, ctx| {
-			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(|e| {
+				CallError::Failed(JsonRpcErrorObjectOwned { code: (-32000).into(), message: e.to_string(), data: None })
+			})?;
 			Ok("ok")
 		})
 		.unwrap();
 	module
 		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(|e| {
+					CallError::Failed(JsonRpcErrorObjectOwned {
+						code: (-32000).into(),
+						message: e.to_string(),
+						data: None,
+					})
+				})?;
 				Ok("ok")
 			}
 			.boxed()

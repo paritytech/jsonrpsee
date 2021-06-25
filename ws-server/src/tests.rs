@@ -7,22 +7,14 @@ use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::{
 	error::{CallError, Error},
-	v2::params::RpcParams,
+	v2::{
+		error::{JsonRpcErrorCode, JsonRpcErrorObjectOwned},
+		params::RpcParams,
+	},
 };
 use serde_json::Value as JsonValue;
-use std::fmt;
 use std::net::SocketAddr;
 use tokio::task::JoinHandle;
-
-/// Applications can/should provide their own error.
-#[derive(Debug)]
-struct MyAppError;
-impl fmt::Display for MyAppError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "MyAppError")
-	}
-}
-impl std::error::Error for MyAppError {}
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
@@ -61,7 +53,15 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		})
 		.unwrap();
 	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	module
+		.register_method("call_fail", |_params, _| {
+			Err::<(), _>(CallError::Failed(JsonRpcErrorObjectOwned {
+				code: JsonRpcErrorCode::from(-1337),
+				message: "MyAppError".to_string(),
+				data: None,
+			}))
+		})
+		.unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
@@ -87,14 +87,18 @@ async fn server_with_context() -> SocketAddr {
 
 	rpc_module
 		.register_method("should_err", |_p, ctx| {
-			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.err().map_err(|e| {
+				CallError::Failed(JsonRpcErrorObjectOwned { code: (-32000).into(), message: e.to_string(), data: None })
+			})?;
 			Ok("err")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_method("should_ok", |_p, ctx| {
-			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(|e| {
+				CallError::Failed(JsonRpcErrorObjectOwned { code: (-32000).into(), message: e.to_string(), data: None })
+			})?;
 			Ok("ok")
 		})
 		.unwrap();
@@ -102,7 +106,13 @@ async fn server_with_context() -> SocketAddr {
 	rpc_module
 		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(|e| {
+					CallError::Failed(JsonRpcErrorObjectOwned {
+						code: (-32000).into(),
+						message: e.to_string(),
+						data: None,
+					})
+				})?;
 				// Call some async function inside.
 				Ok(futures_util::future::ready("ok!").await)
 			}
@@ -113,9 +123,20 @@ async fn server_with_context() -> SocketAddr {
 	rpc_module
 		.register_async_method("err_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(|e| {
+					CallError::Failed(JsonRpcErrorObjectOwned {
+						code: (-32000).into(),
+						message: e.to_string(),
+						data: None,
+					})
+				})?;
 				// Async work that returns an error
-				futures_util::future::err::<(), CallError>(CallError::Failed(String::from("nah").into())).await
+				futures_util::future::err::<(), CallError>(CallError::Failed(JsonRpcErrorObjectOwned {
+					code: (-32000).into(),
+					message: "nah".to_string(),
+					data: None,
+				}))
+				.await
 			}
 			.boxed()
 		})
@@ -253,7 +274,7 @@ async fn batch_method_call_where_some_calls_fail() {
 
 	assert_eq!(
 		response,
-		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
+		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-1337,"message":"MyAppError"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
 	);
 }
 
@@ -420,7 +441,7 @@ async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	// Good request, but causes error.
 	let req = r#"{"jsonrpc":"2.0","method":"call_fail","params":[],"id":123}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":123}"#);
+	assert_eq!(response, r#"{"jsonrpc":"2.0","error":{"code":-1337,"message":"MyAppError"},"id":123}"#);
 
 	// Connection is still good.
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;

@@ -12,6 +12,7 @@ use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
+use serde_json::value::to_raw_value;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -191,11 +192,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					Ok(res) => send_response(id, tx, res),
 					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
 					Err(CallError::Failed(err)) => {
-						let err = JsonRpcErrorObject {
-							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
-							message: &err.to_string(),
-							data: None,
-						};
+						let data = err.data.and_then(|v| to_raw_value(&v).ok());
+						let err = JsonRpcErrorObject { code: err.code, message: &err.message, data: data.as_deref() };
 						send_error(id, tx, err)
 					}
 				};
@@ -229,11 +227,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
 						Err(CallError::Failed(err)) => {
 							log::error!("Call failed with: {}", err);
-							let err = JsonRpcErrorObject {
-								code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
-								message: &err.to_string(),
-								data: None,
-							};
+							let data = err.data.and_then(|v| to_raw_value(&v).ok());
+							let err =
+								JsonRpcErrorObject { code: err.code, message: &err.message, data: data.as_deref() };
 							send_error(id, &tx, err)
 						}
 					};

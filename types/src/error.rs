@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::v2::error::JsonRpcErrorObjectOwned;
+
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
@@ -24,7 +26,7 @@ pub enum CallError {
 	InvalidParams,
 	#[error("RPC Call failed: {0}")]
 	/// The call failed.
-	Failed(#[source] Box<dyn std::error::Error + Send + Sync>),
+	Failed(JsonRpcErrorObjectOwned),
 }
 
 /// Error type.
