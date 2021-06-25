@@ -2,7 +2,7 @@ use crate::server::helpers::{send_error, send_response};
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
-use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject};
 use jsonrpsee_types::v2::params::{
 	Id, JsonRpcSubscriptionParams, OwnedId, OwnedRpcParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId,
 	TwoPointZero,
@@ -69,7 +69,7 @@ impl MethodCallback {
 
 		if let Err(err) = result {
 			log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, id);
-			send_error(id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+			send_error(id, tx, JsonRpcErrorCode::ServerError(-1).into());
 		}
 	}
 }
@@ -191,11 +191,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					Ok(res) => send_response(id, tx, res),
 					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
 					Err(CallError::Failed(err)) => {
-						let err = JsonRpcErrorObject {
-							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
-							message: &err.to_string(),
-							data: None,
-						};
+						let err =
+							JsonRpcErrorObject { code: err.code().into(), message: &err.message(), data: err.data() };
 						send_error(id, tx, err)
 					}
 				};
@@ -230,9 +227,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						Err(CallError::Failed(err)) => {
 							log::error!("Call failed with: {}", err);
 							let err = JsonRpcErrorObject {
-								code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
-								message: &err.to_string(),
-								data: None,
+								code: err.code().into(),
+								message: &err.message(),
+								data: err.data(),
 							};
 							send_error(id, &tx, err)
 						}
@@ -323,7 +320,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				MethodCallback::Sync(Arc::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					send_response(id, &tx, "Unsubscribed");
+					send_response(id, tx, "Unsubscribed");
 
 					Ok(())
 				})),

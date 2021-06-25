@@ -8,8 +8,35 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::traits::JsonRpcErrorT;
 use serde_json::Value as JsonValue;
 use tokio::task::JoinHandle;
+
+#[derive(Debug, thiserror::Error)]
+enum TestError {
+	#[error("One")]
+	One,
+	#[error("Two")]
+	Two,
+}
+
+impl JsonRpcErrorT for TestError {
+	fn code(&self) -> i32 {
+		match self {
+			Self::One => 1,
+			Self::Two => 2,
+		}
+	}
+	fn message(&self) -> String {
+		match self {
+			Self::One => "error one".to_string(),
+			Self::Two => "error two".to_string(),
+		}
+	}
+	fn data(&self) -> Option<&serde_json::value::RawValue> {
+		None
+	}
+}
 
 async fn server() -> SocketAddr {
 	server_with_handles().await.0
@@ -39,21 +66,21 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 	module.register_method("notif", |_, _| Ok("")).unwrap();
 	module
 		.register_method("should_err", |_, ctx| {
-			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.err().map_err(|_| CallError::Failed(Box::new(TestError::One)))?;
 			Ok("err")
 		})
 		.unwrap();
 
 	module
 		.register_method("should_ok", |_, ctx| {
-			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(|_| CallError::Failed(Box::new(TestError::One)))?;
 			Ok("ok")
 		})
 		.unwrap();
 	module
 		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(|_| CallError::Failed(Box::new(TestError::Two)))?;
 				Ok("ok")
 			}
 			.boxed()
@@ -147,7 +174,7 @@ async fn single_method_call_with_faulty_context() {
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, call_execution_failed("RPC context failed", Id::Num(1)));
+	assert_eq!(response.body, user_defined_error("error one", Id::Num(1), 1));
 }
 
 #[tokio::test]

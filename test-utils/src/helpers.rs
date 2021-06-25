@@ -83,6 +83,15 @@ pub fn server_error(id: Id) -> String {
 	)
 }
 
+pub fn user_defined_error(msg: &str, id: Id, error_code: i32) -> String {
+	format!(
+		r#"{{"jsonrpc":"2.0","error":{{"code":{},"message":"{}"}},"id":{}}}"#,
+		error_code,
+		msg,
+		serde_json::to_string(&id).unwrap()
+	)
+}
+
 /// Hardcoded server response when a client initiates a new subscription.
 ///
 /// NOTE: works only for one subscription because the subscription ID is hardcoded.

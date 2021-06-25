@@ -1,3 +1,4 @@
+use crate::traits::JsonRpcErrorMarker;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -17,14 +18,24 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 }
 
 /// Error that occurs when a call failed.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum CallError {
-	#[error("Invalid params in the RPC call")]
 	/// Invalid params in the call.
 	InvalidParams,
-	#[error("RPC Call failed: {0}")]
 	/// The call failed.
-	Failed(#[source] Box<dyn std::error::Error + Send + Sync>),
+	Failed(Box<dyn JsonRpcErrorMarker>),
+}
+
+impl std::error::Error for CallError {}
+
+impl fmt::Display for CallError {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		let s = match self {
+			Self::InvalidParams => "Invalid params in the call".to_string(),
+			Self::Failed(err) => format!("RPC Call failed: {}", err),
+		};
+		f.write_str(&s)
+	}
 }
 
 /// Error type.

@@ -5,6 +5,7 @@ use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_types::traits::JsonRpcErrorT;
 use jsonrpsee_types::{
 	error::{CallError, Error},
 	v2::params::RpcParams,
@@ -17,12 +18,28 @@ use tokio::task::JoinHandle;
 /// Applications can/should provide their own error.
 #[derive(Debug)]
 struct MyAppError;
+
 impl fmt::Display for MyAppError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "MyAppError")
+		write!(f, "this is needed for error impl")
 	}
 }
+
 impl std::error::Error for MyAppError {}
+
+impl JsonRpcErrorT for MyAppError {
+	fn code(&self) -> i32 {
+		-32000
+	}
+
+	fn message(&self) -> String {
+		"MyAppError".to_string()
+	}
+
+	fn data(&self) -> Option<&serde_json::value::RawValue> {
+		None
+	}
+}
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has two hardcoded methods: "say_hello" and "add"
@@ -87,14 +104,14 @@ async fn server_with_context() -> SocketAddr {
 
 	rpc_module
 		.register_method("should_err", |_p, ctx| {
-			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.err().map_err(|_e| CallError::Failed(Box::new(MyAppError)))?;
 			Ok("err")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_method("should_ok", |_p, ctx| {
-			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(|_e| CallError::Failed(Box::new(MyAppError)))?;
 			Ok("ok")
 		})
 		.unwrap();
@@ -102,7 +119,7 @@ async fn server_with_context() -> SocketAddr {
 	rpc_module
 		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(|_| CallError::Failed(Box::new(MyAppError)))?;
 				// Call some async function inside.
 				Ok(futures_util::future::ready("ok!").await)
 			}
@@ -113,9 +130,9 @@ async fn server_with_context() -> SocketAddr {
 	rpc_module
 		.register_async_method("err_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(|_| CallError::Failed(Box::new(MyAppError)))?;
 				// Async work that returns an error
-				futures_util::future::err::<(), CallError>(CallError::Failed(String::from("nah").into())).await
+				futures_util::future::err::<(), CallError>(CallError::Failed(Box::new(MyAppError))).await
 			}
 			.boxed()
 		})
@@ -285,7 +302,7 @@ async fn single_method_call_with_faulty_context() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, call_execution_failed("RPC context failed", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("MyAppError", Id::Num(1)));
 }
 
 #[tokio::test]
@@ -315,7 +332,7 @@ async fn async_method_call_that_fails() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"err_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, call_execution_failed("nah", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("MyAppError", Id::Num(1)));
 }
 
 #[tokio::test]
