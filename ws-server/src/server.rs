@@ -32,6 +32,7 @@ use futures_util::{
 };
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
+use std::collections::HashMap;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
 	net::{TcpListener, ToSocketAddrs},
@@ -94,7 +95,7 @@ impl Server {
 
 		let mut incoming = TcpListenerStream::new(self.listener).fuse();
 		let methods = self.methods;
-		let conn_counter = Arc::new(());
+		let mut connections = HashMap::new();
 		let mut id = 0;
 		let mut stop_receiver = self.stop_pair.1;
 
@@ -107,27 +108,28 @@ impl Server {
 							continue;
 						}
 
-						if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
+						if connections.len() > self.cfg.max_connections as usize {
 							log::warn!("Too many connections. Try again in a while");
 							continue;
 						}
+						id += 1;
+						let (tx, rx) = mpsc::channel::<()>(1);
+						connections.insert(id, rx);
 						let methods = methods.clone();
-						let counter = conn_counter.clone();
 						let cfg = self.cfg.clone();
 
 						tokio::spawn(async move {
-							let r = background_task(socket, id, methods, cfg).await;
-							drop(counter);
-							r
+							background_task(socket, id, methods, cfg, tx).await
+							// TODO: remove from connections.
 						});
 
-						id += 1;
 					} else {
 						break;
 					}
 				},
 				stop = stop_receiver.next() => {
 					if stop.is_some() {
+						log::debug!("server is terminated");
 						break;
 					}
 				},
@@ -142,13 +144,13 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	cfg: Settings,
+	is_conn: mpsc::Sender<()>,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
 	let key = {
 		let req = server.receive_request().await?;
-
 		cfg.allowed_origins.verify(req.headers().origin).map(|()| req.key())
 	};
 
@@ -169,19 +171,27 @@ async fn background_task(
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 
+	let conn = is_conn.clone();
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while let Some(response) = rx.next().await {
-			log::debug!("send: {}", response);
-			let _ = sender.send_text(response).await;
-			let _ = sender.flush().await;
+		while !conn.is_closed() {
+			match rx.next().await {
+				Some(response) => {
+					log::debug!("send: {}", response);
+					let _ = sender.send_text(response).await;
+					let _ = sender.flush().await;
+				}
+				None => break,
+			};
 		}
+		// terminate connection.
+		let _ = sender.close().await;
 	});
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 
-	loop {
+	while !is_conn.is_closed() {
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
@@ -198,7 +208,7 @@ async fn background_task(
 		// worst case – unparseable input – we make three calls to [`serde_json::from_slice`] which is pretty annoying.
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
-			log::debug!("recv: {:?}", req);
+			log::info!("recv: {:?}", req);
 			methods.execute(&tx, req, conn_id).await;
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
@@ -228,6 +238,7 @@ async fn background_task(
 			send_error(id, &tx, code.into());
 		}
 	}
+	Err(Error::Custom("Server is terminated".to_string()))
 }
 
 #[derive(Debug, Clone)]

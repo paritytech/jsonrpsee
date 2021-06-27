@@ -27,7 +27,7 @@
 use jsonrpsee::{
 	types::Error,
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
-	ws_server::{RpcModule, WsServerBuilder},
+	ws_server::{RpcModule, WsServerBuilder, WsStopHandle},
 };
 use std::net::SocketAddr;
 
@@ -36,24 +36,31 @@ const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	env_logger::init();
-	let addr = run_server().await?;
+	let (addr, mut handle) = run_server().await?;
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let mut subscribe_hello: Subscription<String> =
+	let mut sub: Subscription<String> =
 		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await?;
 
-	let mut i = 0;
-	while i <= NUM_SUBSCRIPTION_RESPONSES {
-		let r = subscribe_hello.next().await;
-		log::debug!("received {:?}", r);
-		i += 1;
+	let r = sub.next().await;
+	log::debug!("received {:?}", r);
+
+	handle.stop().await.unwrap();
+	handle.wait_for_stop().await;
+
+	loop {
+		match sub.next().await {
+			Ok(None) => break,
+			Ok(Some(r)) => log::debug!("recv {:?}", r),
+			Err(e) => log::debug!("recv err: {:?}", e),
+		}
 	}
 
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
+async fn run_server() -> anyhow::Result<(SocketAddr, WsStopHandle)> {
 	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
@@ -65,8 +72,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		});
 		Ok(())
 	})?;
+	let handle = server.stop_handle();
 	server.register_module(module).unwrap();
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start().await });
-	Ok(addr)
+	Ok((addr, handle))
 }
