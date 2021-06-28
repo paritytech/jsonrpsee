@@ -28,8 +28,8 @@ jobs:
           override: true
           components: clippy, rustfmt
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
       - name: Cargo fmt
         uses: actions-rs/cargo@v1.0.3
@@ -59,10 +59,10 @@ jobs:
           toolchain: stable
           override: true
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo check all targets
+      - name: Cargo check all targets (use Cargo.toml in workspace)
         uses: actions-rs/cargo@v1.0.3
         with:
           command: check
@@ -74,8 +74,68 @@ jobs:
           command: check
           args: --manifest-path http-client/Cargo.toml --no-default-features --features tokio02
 
+      - name: Cargo check HTTP client
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path http-client/Cargo.toml
+
+      - name: Cargo check HTTP server
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path http-server/Cargo.toml
+
+      - name: Cargo check WS client
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path ws-client/Cargo.toml
+
+      - name: Cargo check WS client with tokio02
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path ws-client/Cargo.toml --no-default-features --features tokio02
+
+      - name: Cargo check WS server
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path ws-server/Cargo.toml
+
+      - name: Cargo check types
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path types/Cargo.toml
+
+      - name: Cargo check utils
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path utils/Cargo.toml
+
+      - name: Cargo check proc macros
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path proc-macros/Cargo.toml
+
+      - name: Cargo check test utils
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path test-utils/Cargo.toml
+
+      - name: Cargo check examples
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: check
+          args: --manifest-path examples/Cargo.toml
+
   tests:
-    name: Run tests
+    name: Run tests Ubuntu
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -88,8 +148,64 @@ jobs:
           toolchain: stable
           override: true
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: build
+          args: --workspace
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+
+  tests_macos:
+    name: Run tests macos
+    runs-on: macos-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2.3.4
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: build
+          args: --workspace
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+
+  tests_windows:
+    name: Run tests Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2.3.4
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
       - name: Cargo build
         uses: actions-rs/cargo@v1.0.3
