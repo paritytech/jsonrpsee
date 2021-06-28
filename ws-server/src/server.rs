@@ -239,7 +239,7 @@ async fn background_task(
 			send_error(id, &tx, code.into());
 		}
 	}
-	Err(Error::Custom("Server is terminated".to_string()))
+	Ok(())
 }
 
 #[derive(Debug, Clone)]
