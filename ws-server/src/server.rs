@@ -112,7 +112,7 @@ impl Server {
 							log::warn!("Too many connections. Try again in a while");
 							continue;
 						}
-						id += 1;
+
 						let (tx, rx) = mpsc::channel::<()>(1);
 						connections.write().await.insert(id, rx);
 						let methods = methods.clone();
@@ -124,6 +124,7 @@ impl Server {
 							conns.write().await.remove(&id);
 						});
 
+						id = id.wrapping_add(1);
 					} else {
 						break;
 					}
