@@ -36,7 +36,7 @@ use std::collections::HashMap;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
 	net::{TcpListener, ToSocketAddrs},
-	sync::Mutex,
+	sync::{Mutex, RwLock},
 };
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -95,7 +95,7 @@ impl Server {
 
 		let mut incoming = TcpListenerStream::new(self.listener).fuse();
 		let methods = self.methods;
-		let mut connections = HashMap::new();
+		let connections = Arc::new(RwLock::new(HashMap::new()));
 		let mut id = 0;
 		let mut stop_receiver = self.stop_pair.1;
 
@@ -108,19 +108,20 @@ impl Server {
 							continue;
 						}
 
-						if connections.len() > self.cfg.max_connections as usize {
+						if connections.read().await.len() >= self.cfg.max_connections as usize {
 							log::warn!("Too many connections. Try again in a while");
 							continue;
 						}
 						id += 1;
 						let (tx, rx) = mpsc::channel::<()>(1);
-						connections.insert(id, rx);
+						connections.write().await.insert(id, rx);
 						let methods = methods.clone();
 						let cfg = self.cfg.clone();
 
+						let conns = connections.clone();
 						tokio::spawn(async move {
-							background_task(socket, id, methods, cfg, tx).await
-							// TODO: remove from connections.
+							let _ = background_task(socket, id, methods, cfg, tx).await;
+							conns.write().await.remove(&id);
 						});
 
 					} else {
@@ -129,7 +130,7 @@ impl Server {
 				},
 				stop = stop_receiver.next() => {
 					if stop.is_some() {
-						log::debug!("server is terminated");
+						*connections.write().await = HashMap::new();
 						break;
 					}
 				},
