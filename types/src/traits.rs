@@ -55,20 +55,3 @@ pub trait SubscriptionClient: Client {
 	where
 		Notif: DeserializeOwned;
 }
-
-/// Marker trait for an type that implements [`JsonRpcErrorT`] and [`std::error::Error`].
-pub trait JsonRpcErrorMarker: Send + Sync + std::error::Error + JsonRpcErrorT {}
-
-impl<T: Send + Sync + std::error::Error + JsonRpcErrorT> JsonRpcErrorMarker for T {}
-
-/// Trait for customizable [JSON-RPC error object](https://www.jsonrpc.org/specification#error-object)
-pub trait JsonRpcErrorT {
-	/// Error code (-32768 to -32000 are reserved and should not be used)
-	fn code(&self) -> i32;
-	/// Short description of the error.
-	// NOTE(niklasad1): this is a String because the underlying error may not be an constant
-	// and need to be included in the error.
-	fn message(&self) -> String;
-	/// A Primitive or Structured value that contains additional information about the error.
-	fn data(&self) -> Option<&serde_json::value::RawValue>;
-}
