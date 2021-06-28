@@ -366,9 +366,6 @@ pub struct StopHandle {
 
 impl StopHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
-	///
-	/// Note: This method *does not* abort spawned futures, e.g. `tokio::spawn` handlers
-	/// for subscriptions. It only prevents server from accepting new connections.
 	pub async fn stop(&mut self) -> Result<(), Error> {
 		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
 	}
