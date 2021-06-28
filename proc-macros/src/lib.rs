@@ -222,7 +222,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///
 /// **Trait requirements:**
 ///
-/// Trait wrapped with an `rfc` attribute **must not**:
+/// Trait wrapped with an `rpc` attribute **must not**:
 ///
 /// - have associated types or constants;
 /// - have Rust methods not marked with either `method` or `subscription` attribute;
