@@ -18,6 +18,9 @@ pub trait Rpc {
 
 	#[subscription(name = "sub", unsub = "unsub", item = String)]
 	fn sub(&self);
+
+	#[subscription(name = "echo", unsub = "no_more_echo", item = u32)]
+	fn sub_with_params(&self, val: u32);
 }
 
 pub struct RpcServerImpl;
@@ -35,6 +38,11 @@ impl RpcServer for RpcServerImpl {
 	fn sub(&self, mut sink: SubscriptionSink) {
 		sink.send(&"Response_A").unwrap();
 		sink.send(&"Response_B").unwrap();
+	}
+
+	fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) {
+		sink.send(&val).unwrap();
+		sink.send(&val).unwrap();
 	}
 }
 

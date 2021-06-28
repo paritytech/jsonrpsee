@@ -18,6 +18,9 @@ mod rpc_impl {
 
 		#[subscription(name = "sub", unsub = "unsub", item = String)]
 		fn sub(&self);
+
+		#[subscription(name = "echo", unsub = "no_more_echo", item = u32)]
+		fn sub_with_params(&self, val: u32);
 	}
 
 	pub struct RpcServerImpl;
@@ -35,6 +38,11 @@ mod rpc_impl {
 		fn sub(&self, mut sink: SubscriptionSink) {
 			sink.send(&"Response_A").unwrap();
 			sink.send(&"Response_B").unwrap();
+		}
+
+		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) {
+			sink.send(&val).unwrap();
+			sink.send(&val).unwrap();
 		}
 	}
 }
@@ -68,9 +76,18 @@ async fn proc_macros_generic_ws_client_api() {
 
 	assert_eq!(client.async_method(10, "a".into()).await.unwrap(), 42);
 	assert_eq!(client.sync_method().await.unwrap(), 10);
+
+	// Sub without params
 	let mut sub = client.sub().await.unwrap();
 	let first_recv = sub.next().await.unwrap();
 	assert_eq!(first_recv, Some("Response_A".to_string()));
 	let second_recv = sub.next().await.unwrap();
 	assert_eq!(second_recv, Some("Response_B".to_string()));
+
+	// Sub with params
+	let mut sub = client.sub_with_params(42).await.unwrap();
+	let first_recv = sub.next().await.unwrap();
+	assert_eq!(first_recv, Some(42));
+	let second_recv = sub.next().await.unwrap();
+	assert_eq!(second_recv, Some(42));
 }
