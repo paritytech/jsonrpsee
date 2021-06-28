@@ -209,7 +209,7 @@ async fn background_task(
 		// worst case – unparseable input – we make three calls to [`serde_json::from_slice`] which is pretty annoying.
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
-			log::info!("recv: {:?}", req);
+			log::debug!("recv: {:?}", req);
 			methods.execute(&tx, req, conn_id).await;
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
