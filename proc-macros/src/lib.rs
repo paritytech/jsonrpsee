@@ -198,7 +198,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     }
 ///     
 ///     // Subscription method returns `Subscription` object in case of success.
-///     async fn sub(&self, subscription_sink: SubscriptionSink) -> Result<Subscription<String>, Error> {
+///     async fn sub(&self) -> Result<Subscription<String>, Error> {
 ///         // ...
 ///     }
 /// }
@@ -296,6 +296,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     // In can have fields, if required, as long as it's still `Send + Sync + 'static`.
 ///     pub struct RpcServerImpl;
 ///
+///     // Note that the trait name we use is `RpcServer`, not `Rpc`!
 ///     #[async_trait]
 ///     impl RpcServer for RpcServerImpl {
 ///         async fn async_method(&self, _param_a: u8, _param_b: String) -> u16 {
