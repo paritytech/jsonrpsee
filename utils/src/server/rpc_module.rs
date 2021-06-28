@@ -12,7 +12,6 @@ use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use serde_json::value::to_raw_value;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -200,7 +199,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						send_error(id, tx, err)
 					}
 					Err(CallError::Custom { code, message, data }) => {
-						let data = data.and_then(|v| to_raw_value(&v).ok());
 						let err = JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 						send_error(id, tx, err)
 					}
@@ -242,7 +240,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							send_error(id, &tx, err)
 						}
 						Err(CallError::Custom { code, message, data }) => {
-							let data = data.and_then(|v| to_raw_value(&v).ok());
 							let err =
 								JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 							send_error(id, &tx, err)

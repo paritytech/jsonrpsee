@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use std::fmt;
 
 /// Convenience type for displaying errors.
@@ -26,8 +27,8 @@ pub enum CallError {
 	#[error("RPC Call failed: {0}")]
 	Failed(Box<dyn std::error::Error + Send + Sync>),
 	/// Custom error with specific JSON-RPC error code, message and data.
-	#[error("RPC Call failed")]
-	Custom { code: i32, message: String, data: Option<serde_json::Value> },
+	#[error("RPC Call failed: code: {code}, message: {message}, data: {data:?}")]
+	Custom { code: i32, message: String, data: Option<Box<RawValue>> },
 }
 
 /// Error type.
