@@ -28,7 +28,14 @@ pub enum CallError {
 	Failed(Box<dyn std::error::Error + Send + Sync>),
 	/// Custom error with specific JSON-RPC error code, message and data.
 	#[error("RPC Call failed: code: {code}, message: {message}, data: {data:?}")]
-	Custom { code: i32, message: String, data: Option<Box<RawValue>> },
+	Custom {
+		/// JSON-RPC error code
+		code: i32,
+		/// Short description of the error.
+		message: String,
+		/// A primitive or structured value that contains additional information about the error.
+		data: Option<Box<RawValue>>,
+	},
 }
 
 /// Error type.
