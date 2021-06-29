@@ -34,9 +34,10 @@ use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{net::SocketAddr, sync::Arc};
+use tokio::sync::RwLockReadGuard;
 use tokio::{
 	net::{TcpListener, ToSocketAddrs},
-	sync::Mutex,
+	sync::RwLock,
 };
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -60,7 +61,7 @@ pub struct Server {
 	/// Pair of channels to stop the server.
 	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
 	/// Stop handle that indicates whether server has been stopped.
-	stop_handle: Arc<Mutex<()>>,
+	stop_handle: Arc<RwLock<()>>,
 }
 
 impl Server {
@@ -89,9 +90,9 @@ impl Server {
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
-		// Lock the stop mutex so existing stop handles can wait for server to stop.
-		// It will be unlocked once this function returns.
-		let _stop_handle = self.stop_handle.lock().await;
+		// Acquire read access the lock such that additional reader(s) may share this lock.
+		// Write access to this lock will only occur until the server and all background tasks has been stopped.
+		let _stop_handle = self.stop_handle.read().await;
 
 		let mut incoming = TcpListenerStream::new(self.listener).fuse();
 		let methods = self.methods;
@@ -118,9 +119,10 @@ impl Server {
 						let shutdown2 = shutdown.clone();
 						let methods = methods.clone();
 						let cfg = self.cfg.clone();
+						let stop_handle2 = self.stop_handle.clone();
 
 						tokio::spawn(async move {
-							let _ = background_task(socket, id, methods, cfg, shutdown2).await;
+							let _ = background_task(socket, id, methods, cfg, shutdown2, stop_handle2).await;
 							drop(conn_counter2);
 						});
 
@@ -147,7 +149,9 @@ async fn background_task(
 	methods: Methods,
 	cfg: Settings,
 	shutdown: Arc<AtomicBool>,
+	stop_handle: Arc<RwLock<()>>,
 ) -> Result<(), Error> {
+	let _lock = stop_handle.read().await;
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
@@ -347,7 +351,7 @@ impl Builder {
 			methods: Methods::default(),
 			cfg: self.settings,
 			stop_pair,
-			stop_handle: Arc::new(Mutex::new(())),
+			stop_handle: Arc::new(RwLock::new(())),
 		})
 	}
 }
@@ -362,7 +366,7 @@ impl Default for Builder {
 #[derive(Debug, Clone)]
 pub struct StopHandle {
 	stop_sender: mpsc::Sender<()>,
-	stop_handle: Arc<Mutex<()>>,
+	stop_handle: Arc<RwLock<()>>,
 }
 
 impl StopHandle {
@@ -373,6 +377,7 @@ impl StopHandle {
 
 	/// Blocks indefinitely until the server is stopped.
 	pub async fn wait_for_stop(&self) {
-		self.stop_handle.lock().await;
+		// blocks until there are no readers left.
+		self.stop_handle.write().await;
 	}
 }
