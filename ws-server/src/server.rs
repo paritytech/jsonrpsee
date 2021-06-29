@@ -25,8 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::mpsc;
-use futures_util::pin_mut;
-use futures_util::stream::{FuturesUnordered, StreamExt};
+use futures_util::stream::StreamExt;
 use futures_util::{
 	io::{BufReader, BufWriter},
 	SinkExt,
