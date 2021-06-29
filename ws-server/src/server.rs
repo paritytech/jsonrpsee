@@ -89,7 +89,7 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
 		// Acquire read access to the lock such that additional reader(s) may share this lock.
-		// Write access to this lock will only occur until the server and all background tasks has been stopped.
+		// Write access to this lock will only be possible after the server and all background tasks have stopped.
 		let _stop_handle = self.stop_handle.read().await;
 
 		let mut incoming = TcpListenerStream::new(self.listener).fuse();
