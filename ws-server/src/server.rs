@@ -34,7 +34,6 @@ use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{net::SocketAddr, sync::Arc};
-use tokio::sync::RwLockReadGuard;
 use tokio::{
 	net::{TcpListener, ToSocketAddrs},
 	sync::RwLock,
