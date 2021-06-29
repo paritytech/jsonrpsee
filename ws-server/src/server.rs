@@ -25,18 +25,19 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::mpsc;
-use futures_util::stream::StreamExt;
+use futures_util::pin_mut;
+use futures_util::stream::{FuturesUnordered, StreamExt};
 use futures_util::{
 	io::{BufReader, BufWriter},
 	SinkExt,
 };
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
 	net::{TcpListener, ToSocketAddrs},
-	sync::{Mutex, RwLock},
+	sync::Mutex,
 };
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -95,7 +96,8 @@ impl Server {
 
 		let mut incoming = TcpListenerStream::new(self.listener).fuse();
 		let methods = self.methods;
-		let connections = Arc::new(RwLock::new(HashMap::new()));
+		let conn_counter = Arc::new(());
+		let is_conn = Arc::new(AtomicBool::new(true));
 		let mut id = 0;
 		let mut stop_receiver = self.stop_pair.1;
 
@@ -108,20 +110,19 @@ impl Server {
 							continue;
 						}
 
-						if connections.read().await.len() >= self.cfg.max_connections as usize {
+						if Arc::strong_count(&conn_counter) > self.cfg.max_connections as usize {
 							log::warn!("Too many connections. Try again in a while");
 							continue;
 						}
 
-						let (tx, rx) = mpsc::channel::<()>(1);
-						connections.write().await.insert(id, rx);
+						let counter = conn_counter.clone();
+						let conn = is_conn.clone();
 						let methods = methods.clone();
 						let cfg = self.cfg.clone();
 
-						let conns = connections.clone();
 						tokio::spawn(async move {
-							let _ = background_task(socket, id, methods, cfg, tx).await;
-							conns.write().await.remove(&id);
+							let _ = background_task(socket, id, methods, cfg, conn).await;
+							drop(counter);
 						});
 
 						id = id.wrapping_add(1);
@@ -131,7 +132,7 @@ impl Server {
 				},
 				stop = stop_receiver.next() => {
 					if stop.is_some() {
-						*connections.write().await = HashMap::new();
+						is_conn.store(false, Ordering::SeqCst);
 						break;
 					}
 				},
@@ -146,7 +147,7 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	cfg: Settings,
-	is_conn: mpsc::Sender<()>,
+	is_conn: Arc<AtomicBool>,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
@@ -176,7 +177,7 @@ async fn background_task(
 	let conn = is_conn.clone();
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while !conn.is_closed() {
+		while conn.load(std::sync::atomic::Ordering::SeqCst) {
 			match rx.next().await {
 				Some(response) => {
 					log::debug!("send: {}", response);
@@ -193,7 +194,7 @@ async fn background_task(
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 
-	while !is_conn.is_closed() {
+	while is_conn.load(std::sync::atomic::Ordering::SeqCst) {
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
