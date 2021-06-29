@@ -96,7 +96,7 @@ impl Server {
 		let mut incoming = TcpListenerStream::new(self.listener).fuse();
 		let methods = self.methods;
 		let conn_counter = Arc::new(());
-		let is_conn = Arc::new(AtomicBool::new(true));
+		let shutdown = Arc::new(AtomicBool::new(false));
 		let mut id = 0;
 		let mut stop_receiver = self.stop_pair.1;
 
@@ -114,14 +114,14 @@ impl Server {
 							continue;
 						}
 
-						let counter = conn_counter.clone();
-						let conn = is_conn.clone();
+						let conn_counter2 = conn_counter.clone();
+						let shutdown2 = shutdown.clone();
 						let methods = methods.clone();
 						let cfg = self.cfg.clone();
 
 						tokio::spawn(async move {
-							let _ = background_task(socket, id, methods, cfg, conn).await;
-							drop(counter);
+							let _ = background_task(socket, id, methods, cfg, shutdown2).await;
+							drop(conn_counter2);
 						});
 
 						id = id.wrapping_add(1);
@@ -131,7 +131,7 @@ impl Server {
 				},
 				stop = stop_receiver.next() => {
 					if stop.is_some() {
-						is_conn.store(false, Ordering::SeqCst);
+						shutdown.store(true, Ordering::SeqCst);
 						break;
 					}
 				},
@@ -146,7 +146,7 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	cfg: Settings,
-	is_conn: Arc<AtomicBool>,
+	shutdown: Arc<AtomicBool>,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
@@ -173,10 +173,10 @@ async fn background_task(
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 
-	let conn = is_conn.clone();
+	let shutdown2 = shutdown.clone();
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while conn.load(std::sync::atomic::Ordering::SeqCst) {
+		while !shutdown2.load(std::sync::atomic::Ordering::SeqCst) {
 			match rx.next().await {
 				Some(response) => {
 					log::debug!("send: {}", response);
@@ -193,7 +193,7 @@ async fn background_task(
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 
-	while is_conn.load(std::sync::atomic::Ordering::SeqCst) {
+	while !shutdown.load(std::sync::atomic::Ordering::SeqCst) {
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
