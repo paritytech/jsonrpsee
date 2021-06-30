@@ -120,7 +120,7 @@ impl Server {
 
 					driver.add(Box::pin(handshake(socket, id, methods, cfg, &shutdown, &self.stop_handle)));
 
-					id += 1;
+					id = id.wrapping_add(1);
 				}
 				Err(DriverError::Io(err)) => {
 					log::error!("Error while awaiting a new connection: {:?}", err);
