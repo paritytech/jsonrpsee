@@ -191,9 +191,7 @@ async fn background_task(
 		}
 	}
 
-	tokio::spawn(background_task_2(server, conn_id, methods.clone(), cfg.max_request_body_size));
-
-	Ok(())
+	tokio::spawn(background_task_2(server, conn_id, methods.clone(), cfg.max_request_body_size)).await.unwrap()
 }
 
 async fn background_task_2(
