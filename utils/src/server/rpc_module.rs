@@ -396,12 +396,12 @@ impl SubscriptionSink {
 		let res = if let Some(conn) = self.is_connected.as_ref() {
 			if !conn.is_canceled() {
 				// unbounded send only fails if the receiver has been dropped.
-				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_by_client())
+				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_err(self.uniq_sub.sub_id))
 			} else {
-				Err(subscription_closed_by_client())
+				Err(subscription_closed_err(self.uniq_sub.sub_id))
 			}
 		} else {
-			Err(subscription_closed_by_client())
+			Err(subscription_closed_err(self.uniq_sub.sub_id))
 		};
 
 		if let Err(e) = &res {
@@ -424,13 +424,12 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		self.close(format!("Subscription: {} closed by the server", self.uniq_sub.sub_id));
+		self.close(format!("Subscription: {} is closed and dropped", self.uniq_sub.sub_id));
 	}
 }
 
-fn subscription_closed_by_client() -> Error {
-	const CLOSE_REASON: &str = "Subscription closed by the client";
-	Error::SubscriptionClosed(CLOSE_REASON.to_owned().into())
+fn subscription_closed_err(sub_id: u64) -> Error {
+	Error::SubscriptionClosed(format!("Subscription {} is closed but not yet dropped", sub_id).into())
 }
 
 #[cfg(test)]

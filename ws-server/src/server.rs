@@ -35,7 +35,7 @@ use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
 	net::{TcpListener, ToSocketAddrs},
-	sync::Mutex,
+	sync::RwLock,
 };
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::compat::TokioAsyncReadCompatExt;
@@ -59,7 +59,7 @@ pub struct Server {
 	/// Pair of channels to stop the server.
 	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
 	/// Stop handle that indicates whether server has been stopped.
-	stop_handle: Arc<Mutex<()>>,
+	stop_handle: Arc<RwLock<()>>,
 }
 
 impl Server {
@@ -88,15 +88,16 @@ impl Server {
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
-		// Lock the stop mutex so existing stop handles can wait for server to stop.
-		// It will be unlocked once this function returns.
-		let _stop_handle = self.stop_handle.lock().await;
+		// Acquire read access to the lock such that additional reader(s) may share this lock.
+		// Write access to this lock will only be possible after the server and all background tasks have stopped.
+		let _stop_handle = self.stop_handle.read().await;
 
 		let mut incoming = TcpListenerStream::new(self.listener).fuse();
 		let methods = self.methods;
 		let conn_counter = Arc::new(());
 		let mut id = 0;
 		let mut stop_receiver = self.stop_pair.1;
+		let shutdown = self.stop_pair.0;
 
 		loop {
 			futures_util::select! {
@@ -111,17 +112,19 @@ impl Server {
 							log::warn!("Too many connections. Try again in a while");
 							continue;
 						}
+
+						let conn_counter2 = conn_counter.clone();
+						let shutdown2 = shutdown.clone();
 						let methods = methods.clone();
-						let counter = conn_counter.clone();
 						let cfg = self.cfg.clone();
+						let stop_handle2 = self.stop_handle.clone();
 
 						tokio::spawn(async move {
-							let r = background_task(socket, id, methods, cfg).await;
-							drop(counter);
-							r
+							let _ = background_task(socket, id, methods, cfg, shutdown2, stop_handle2).await;
+							drop(conn_counter2);
 						});
 
-						id += 1;
+						id = id.wrapping_add(1);
 					} else {
 						break;
 					}
@@ -142,13 +145,15 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	cfg: Settings,
+	shutdown: mpsc::Sender<()>,
+	stop_handle: Arc<RwLock<()>>,
 ) -> Result<(), Error> {
+	let _lock = stop_handle.read().await;
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
 	let key = {
 		let req = server.receive_request().await?;
-
 		cfg.allowed_origins.verify(req.headers().origin).map(|()| req.key())
 	};
 
@@ -169,19 +174,27 @@ async fn background_task(
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 
+	let shutdown2 = shutdown.clone();
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while let Some(response) = rx.next().await {
-			log::debug!("send: {}", response);
-			let _ = sender.send_text(response).await;
-			let _ = sender.flush().await;
+		while !shutdown2.is_closed() {
+			match rx.next().await {
+				Some(response) => {
+					log::debug!("send: {}", response);
+					let _ = sender.send_text(response).await;
+					let _ = sender.flush().await;
+				}
+				None => break,
+			};
 		}
+		// terminate connection.
+		let _ = sender.close().await;
 	});
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 
-	loop {
+	while !shutdown.is_closed() {
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
@@ -228,6 +241,7 @@ async fn background_task(
 			send_error(id, &tx, code.into());
 		}
 	}
+	Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -334,7 +348,7 @@ impl Builder {
 			methods: Methods::default(),
 			cfg: self.settings,
 			stop_pair,
-			stop_handle: Arc::new(Mutex::new(())),
+			stop_handle: Arc::new(RwLock::new(())),
 		})
 	}
 }
@@ -349,20 +363,18 @@ impl Default for Builder {
 #[derive(Debug, Clone)]
 pub struct StopHandle {
 	stop_sender: mpsc::Sender<()>,
-	stop_handle: Arc<Mutex<()>>,
+	stop_handle: Arc<RwLock<()>>,
 }
 
 impl StopHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
-	///
-	/// Note: This method *does not* abort spawned futures, e.g. `tokio::spawn` handlers
-	/// for subscriptions. It only prevents server from accepting new connections.
 	pub async fn stop(&mut self) -> Result<(), Error> {
 		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
 	}
 
 	/// Blocks indefinitely until the server is stopped.
 	pub async fn wait_for_stop(&self) {
-		self.stop_handle.lock().await;
+		// blocks until there are no readers left.
+		self.stop_handle.write().await;
 	}
 }
