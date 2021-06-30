@@ -196,13 +196,16 @@ impl<'a> WsTransportClientBuilder<'a> {
 		tls_connector: &Option<crate::tokio::TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut path = self.target.path.clone();
+		// Try establish the TCP connection.
+
+		let mut socket = {
+			let tcp_stream = connect(sockaddr, self.timeout, &self.target.host, tls_connector).await?;
+			Some(BufReader::new(BufWriter::new(tcp_stream)))
+		};
 
 		let client = loop {
-			// Try establish the TCP connection.
-			let tcp_stream = connect(sockaddr, self.timeout, &self.target.host, tls_connector).await?;
-
-			let mut client =
-				WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.target.host_header, &path);
+			let sock = socket.take();
+			let mut client = WsRawClient::new(sock.expect("is Some; qed"), &self.target.host_header, &path);
 			if let Some(origin) = self.origin_header.as_ref() {
 				client.set_origin(origin);
 			}
@@ -213,6 +216,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 					break Err(WsHandshakeError::Rejected { status_code });
 				}
 				ServerResponse::Redirect { status_code, location } => {
+					socket = Some(client.into_inner());
 					log::trace!("recv redirection: status_code: {}, location: {}", status_code, location);
 					log::debug!("trying to reconnect to redirection: {}", location);
 					path = location;
