@@ -32,7 +32,7 @@ use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio_util::compat::{TokioAsyncReadCompatExt, Compat};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_types::error::Error;
 use jsonrpsee_types::v2::error::JsonRpcErrorCode;
@@ -94,7 +94,7 @@ impl Server {
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					driver.add(Box::pin(background_task(socket, id, methods, cfg)));
+					driver.add(Box::pin(handshake(socket, id, methods, cfg)));
 
 					id += 1;
 				}
@@ -163,13 +163,12 @@ where
 
 impl<F: Unpin> Unpin for ConnDriver<F> {}
 
-async fn background_task(
+async fn handshake(
 	socket: tokio::net::TcpStream,
 	conn_id: ConnectionId,
 	methods: &Methods,
 	cfg: &Settings,
 ) -> Result<(), Error> {
-	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
 	let key = {
@@ -191,10 +190,10 @@ async fn background_task(
 		}
 	}
 
-	tokio::spawn(background_task_2(server, conn_id, methods.clone(), cfg.max_request_body_size)).await.unwrap()
+	tokio::spawn(background_task(server, conn_id, methods.clone(), cfg.max_request_body_size)).await.unwrap()
 }
 
-async fn background_task_2(
+async fn background_task(
 	server: SokettoServer<'_, BufReader<BufWriter<Compat<tokio::net::TcpStream>>>>,
 	conn_id: ConnectionId,
 	methods: Methods,
