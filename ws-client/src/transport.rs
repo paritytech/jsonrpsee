@@ -192,20 +192,17 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 	async fn try_connect(
 		&self,
-		sockaddr: SocketAddr,
+		mut sockaddr: SocketAddr,
 		tls_connector: &Option<crate::tokio::TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut path = self.target.path.clone();
-
-		// NOTE(niklasad1): this in an `Option` to be able to reuse to tcp_stream.
-		let mut socket = {
-			let tcp_stream = connect(sockaddr, self.timeout, &self.target.host, tls_connector).await?;
-			Some(BufReader::new(BufWriter::new(tcp_stream)))
-		};
+		let mut host = self.target.host.clone();
+		let mut host_header = self.target.host_header.clone();
+		let mut tls_connector = tls_connector.clone();
 
 		let client = loop {
-			let sock = socket.take();
-			let mut client = WsRawClient::new(sock.expect("is Some; qed"), &self.target.host_header, &path);
+			let tcp_stream = connect(sockaddr, self.timeout, &host, tls_connector).await?;
+			let mut client = WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &host_header, &path);
 			if let Some(origin) = self.origin_header.as_ref() {
 				client.set_origin(origin);
 			}
@@ -216,10 +213,38 @@ impl<'a> WsTransportClientBuilder<'a> {
 					break Err(WsHandshakeError::Rejected { status_code });
 				}
 				ServerResponse::Redirect { status_code, location } => {
-					socket = Some(client.into_inner());
 					log::trace!("recv redirection: status_code: {}, location: {}", status_code, location);
 					log::debug!("trying to reconnect to redirection: {}", location);
-					path = location;
+					match url::Url::parse(&location) {
+						// absolute URL => need to lookup sockaddr.
+						// TODO: this is hacky, we need to actually test all sockaddrs
+						Ok(url) => {
+							let target = Target::parse(url)?;
+							// TODO.
+							sockaddr = target.sockaddrs[0];
+							path = target.path;
+							host = target.host;
+							host_header = target.host_header;
+							tls_connector = match target.mode {
+								Mode::Tls => {
+									let mut client_config = rustls::ClientConfig::default();
+									if let CertificateStore::Native = self.certificate_store {
+										client_config.root_store = rustls_native_certs::load_native_certs()
+											.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
+									}
+									Some(Arc::new(client_config).into())
+								}
+								Mode::Plain => None,
+							};
+						}
+						// URL is relative, just set it as location.
+						Err(
+							url::ParseError::RelativeUrlWithCannotBeABaseBase | url::ParseError::RelativeUrlWithoutBase,
+						) => {
+							path = location;
+						}
+						Err(e) => return Err(WsHandshakeError::Url(format!("Invalid URL: {}", e).into())),
+					};
 				}
 			};
 		}?;
