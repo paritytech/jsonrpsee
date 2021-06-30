@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::stream::EitherStream;
 use crate::tokio::{TcpStream, TlsStream};
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
@@ -194,44 +195,30 @@ impl<'a> WsTransportClientBuilder<'a> {
 		sockaddr: SocketAddr,
 		tls_connector: &Option<crate::tokio::TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
-		// Try establish the TCP connection.
-		let tcp_stream = {
-			let socket = TcpStream::connect(sockaddr);
-			let timeout = crate::tokio::sleep(self.timeout);
-			futures::pin_mut!(socket, timeout);
-			match future::select(socket, timeout).await {
-				future::Either::Left((socket, _)) => {
-					let socket = socket?;
-					if let Err(err) = socket.set_nodelay(true) {
-						log::warn!("set nodelay failed: {:?}", err);
-					}
-					match tls_connector {
-						None => TlsOrPlain::Plain(socket),
-						Some(connector) => {
-							let dns_name = crate::tokio::DNSNameRef::try_from_ascii_str(&self.target.host)?;
-							let tls_stream = connector.connect(dns_name, socket).await?;
-							TlsOrPlain::Tls(tls_stream)
-						}
-					}
+		let mut path = self.target.path.clone();
+
+		let client = loop {
+			// Try establish the TCP connection.
+			let tcp_stream = connect(sockaddr, self.timeout, &self.target.host, tls_connector).await?;
+
+			let mut client =
+				WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.target.host_header, &path);
+			if let Some(origin) = self.origin_header.as_ref() {
+				client.set_origin(origin);
+			}
+			// Perform the initial handshake.
+			match client.handshake().await? {
+				ServerResponse::Accepted { .. } => break Ok(client),
+				ServerResponse::Rejected { status_code } => {
+					break Err(WsHandshakeError::Rejected { status_code });
 				}
-				future::Either::Right((_, _)) => return Err(WsHandshakeError::Timeout(self.timeout)),
-			}
-		};
-
-		let mut client =
-			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.target.host_header, &self.target.path);
-		if let Some(origin) = self.origin_header.as_ref() {
-			client.set_origin(origin);
-		}
-
-		// Perform the initial handshake.
-		match client.handshake().await? {
-			ServerResponse::Accepted { .. } => {}
-			ServerResponse::Rejected { status_code } | ServerResponse::Redirect { status_code, .. } => {
-				// TODO: HTTP redirects also lead here #339.
-				return Err(WsHandshakeError::Rejected { status_code });
-			}
-		}
+				ServerResponse::Redirect { status_code, location } => {
+					log::trace!("recv redirection: status_code: {}, location: {}", status_code, location);
+					log::debug!("trying to reconnect to redirection: {}", location);
+					path = location;
+				}
+			};
+		}?;
 
 		// If the handshake succeeded, return.
 		let mut builder = client.into_builder();
@@ -239,6 +226,34 @@ impl<'a> WsTransportClientBuilder<'a> {
 		let (sender, receiver) = builder.finish();
 		Ok((Sender { inner: sender }, Receiver { inner: receiver }))
 	}
+}
+
+async fn connect(
+	sockaddr: SocketAddr,
+	timeout_dur: Duration,
+	host: &str,
+	tls_connector: &Option<crate::tokio::TlsConnector>,
+) -> Result<EitherStream<TcpStream, TlsStream<TcpStream>>, WsHandshakeError> {
+	let socket = TcpStream::connect(sockaddr);
+	let timeout = crate::tokio::sleep(timeout_dur);
+	futures::pin_mut!(socket, timeout);
+	Ok(match future::select(socket, timeout).await {
+		future::Either::Left((socket, _)) => {
+			let socket = socket?;
+			if let Err(err) = socket.set_nodelay(true) {
+				log::warn!("set nodelay failed: {:?}", err);
+			}
+			match tls_connector {
+				None => TlsOrPlain::Plain(socket),
+				Some(connector) => {
+					let dns_name = crate::tokio::DNSNameRef::try_from_ascii_str(host)?;
+					let tls_stream = connector.connect(dns_name, socket).await?;
+					TlsOrPlain::Tls(tls_stream)
+				}
+			}
+		}
+		future::Either::Right((_, _)) => return Err(WsHandshakeError::Timeout(timeout_dur)),
+	})
 }
 
 impl From<io::Error> for WsHandshakeError {
