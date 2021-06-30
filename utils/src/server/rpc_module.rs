@@ -3,14 +3,15 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
-use jsonrpsee_types::v2::params::{Id, JsonRpcNotificationParams, OwnedId, OwnedRpcParams, RpcParams, TwoPointZero};
-use jsonrpsee_types::v2::request::JsonRpcRequest;
-use jsonrpsee_types::v2::response::JsonRpcSubscriptionResponse;
+use jsonrpsee_types::v2::params::{
+	Id, JsonRpcSubscriptionParams, OwnedId, OwnedRpcParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId,
+	TwoPointZero,
+};
+use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use serde_json::value::{to_raw_value, RawValue};
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -68,7 +69,7 @@ impl MethodCallback {
 
 		if let Err(err) = result {
 			log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, id);
-			send_error(id, &tx, JsonRpcErrorCode::ServerError(-1).into());
+			send_error(id, tx, JsonRpcErrorCode::ServerError(-1).into());
 		}
 	}
 }
@@ -189,12 +190,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
-					Err(CallError::Failed(err)) => {
+					Err(CallError::Failed(e)) => {
 						let err = JsonRpcErrorObject {
 							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
-							message: &err.to_string(),
+							message: &e.to_string(),
 							data: None,
 						};
+						send_error(id, tx, err)
+					}
+					Err(CallError::Custom { code, message, data }) => {
+						let err = JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 						send_error(id, tx, err)
 					}
 				};
@@ -226,13 +231,17 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
 						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
-						Err(CallError::Failed(err)) => {
-							log::error!("Call failed with: {}", err);
+						Err(CallError::Failed(e)) => {
 							let err = JsonRpcErrorObject {
 								code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
-								message: &err.to_string(),
+								message: &e.to_string(),
 								data: None,
 							};
+							send_error(id, &tx, err)
+						}
+						Err(CallError::Custom { code, message, data }) => {
+							let err =
+								JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 							send_error(id, &tx, err)
 						}
 					};
@@ -322,7 +331,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				MethodCallback::Sync(Arc::new(move |id, params, tx, conn_id| {
 					let sub_id = params.one()?;
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					send_response(id, &tx, "Unsubscribed");
+					send_response(id, tx, "Unsubscribed");
 
 					Ok(())
 				})),
@@ -367,30 +376,32 @@ pub struct SubscriptionSink {
 impl SubscriptionSink {
 	/// Send message on this subscription.
 	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), Error> {
-		let result = to_raw_value(result)?;
-		self.send_raw_value(&result)
+		let msg = self.build_message(result)?;
+		self.inner_send(msg).map_err(Into::into)
 	}
 
-	fn send_raw_value(&mut self, result: &RawValue) -> Result<(), Error> {
-		let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
+	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
+		serde_json::to_string(&JsonRpcNotification {
 			jsonrpc: TwoPointZero,
 			method: self.method,
-			params: JsonRpcNotificationParams { subscription: self.uniq_sub.sub_id, result: &*result },
-		})?;
-
-		self.inner_send(msg).map_err(Into::into)
+			params: JsonRpcSubscriptionParams {
+				subscription: JsonRpcSubscriptionId::Num(self.uniq_sub.sub_id),
+				result,
+			},
+		})
+		.map_err(Into::into)
 	}
 
 	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
 		let res = if let Some(conn) = self.is_connected.as_ref() {
 			if !conn.is_canceled() {
 				// unbounded send only fails if the receiver has been dropped.
-				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_by_client())
+				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_err(self.uniq_sub.sub_id))
 			} else {
-				Err(subscription_closed_by_client())
+				Err(subscription_closed_err(self.uniq_sub.sub_id))
 			}
 		} else {
-			Err(subscription_closed_by_client())
+			Err(subscription_closed_err(self.uniq_sub.sub_id))
 		};
 
 		if let Err(e) = &res {
@@ -404,14 +415,8 @@ impl SubscriptionSink {
 	pub fn close(&mut self, close_reason: String) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
-			let result =
-				to_raw_value(&SubscriptionClosedError::from(close_reason)).expect("valid json infallible; qed");
-			let msg = serde_json::to_string(&JsonRpcSubscriptionResponse {
-				jsonrpc: TwoPointZero,
-				method: self.method,
-				params: JsonRpcNotificationParams { subscription: self.uniq_sub.sub_id, result: &*result },
-			})
-			.expect("valid json infallible; qed");
+			let msg =
+				self.build_message(&SubscriptionClosedError::from(close_reason)).expect("valid json infallible; qed");
 			let _ = sink.unbounded_send(msg);
 		}
 	}
@@ -419,13 +424,12 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		self.close(format!("Subscription: {} closed by the server", self.uniq_sub.sub_id));
+		self.close(format!("Subscription: {} is closed and dropped", self.uniq_sub.sub_id));
 	}
 }
 
-fn subscription_closed_by_client() -> Error {
-	const CLOSE_REASON: &str = "Subscription closed by the client";
-	Error::SubscriptionClosed(CLOSE_REASON.to_owned().into())
+fn subscription_closed_err(sub_id: u64) -> Error {
+	Error::SubscriptionClosed(format!("Subscription {} is closed but not yet dropped", sub_id).into())
 }
 
 #[cfg(test)]

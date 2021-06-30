@@ -42,7 +42,7 @@ pub use access_control::{
 };
 pub use jsonrpsee_types::{Error, TEN_MB_SIZE_BYTES};
 pub use jsonrpsee_utils::server::rpc_module::RpcModule;
-pub use server::{Builder as HttpServerBuilder, Server as HttpServer};
+pub use server::{Builder as HttpServerBuilder, Server as HttpServer, StopHandle as HttpStopHandle};
 
 #[cfg(test)]
 mod tests;

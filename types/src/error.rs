@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use std::fmt;
 
 /// Convenience type for displaying errors.
@@ -19,12 +20,22 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 /// Error that occurs when a call failed.
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
-	#[error("Invalid params in the RPC call")]
 	/// Invalid params in the call.
+	#[error("Invalid params in the call")]
 	InvalidParams,
+	/// The call failed (let jsonrpsee assign default error code and error message).
 	#[error("RPC Call failed: {0}")]
-	/// The call failed.
-	Failed(#[source] Box<dyn std::error::Error + Send + Sync>),
+	Failed(Box<dyn std::error::Error + Send + Sync>),
+	/// Custom error with specific JSON-RPC error code, message and data.
+	#[error("RPC Call failed: code: {code}, message: {message}, data: {data:?}")]
+	Custom {
+		/// JSON-RPC error code
+		code: i32,
+		/// Short description of the error.
+		message: String,
+		/// A primitive or structured value that contains additional information about the error.
+		data: Option<Box<RawValue>>,
+	},
 }
 
 /// Error type.
@@ -81,6 +92,9 @@ pub enum Error {
 	/// Configured max number of request slots exceeded.
 	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,
+	/// Attempted to stop server that is already stopped.
+	#[error("Attempted to stop server that is already stopped")]
+	AlreadyStopped,
 	/// List passed into `set_allowed_origins` was empty
 	#[error("Must set at least one allowed origin")]
 	EmptyAllowedOrigins,

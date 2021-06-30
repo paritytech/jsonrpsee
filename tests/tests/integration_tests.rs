@@ -39,7 +39,7 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn ws_subscription_works() {
-	let server_addr = websocket_server_with_subscription().await;
+	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut hello_sub: Subscription<String> =
@@ -57,7 +57,7 @@ async fn ws_subscription_works() {
 
 #[tokio::test]
 async fn ws_subscription_with_input_works() {
-	let server_addr = websocket_server_with_subscription().await;
+	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut add_one: Subscription<u64> =
@@ -89,7 +89,7 @@ async fn http_method_call_works() {
 
 #[tokio::test]
 async fn ws_subscription_several_clients() {
-	let server_addr = websocket_server_with_subscription().await;
+	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut clients = Vec::with_capacity(10);
@@ -105,7 +105,7 @@ async fn ws_subscription_several_clients() {
 
 #[tokio::test]
 async fn ws_subscription_several_clients_with_drop() {
-	let server_addr = websocket_server_with_subscription().await;
+	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut clients = Vec::with_capacity(10);
@@ -153,7 +153,7 @@ async fn ws_subscription_several_clients_with_drop() {
 
 #[tokio::test]
 async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
-	let server_addr = websocket_server_with_subscription().await;
+	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
@@ -230,7 +230,7 @@ async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
 
 #[tokio::test]
 async fn ws_unsubscribe_releases_request_slots() {
-	let server_addr = websocket_server_with_subscription().await;
+	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
@@ -244,7 +244,7 @@ async fn ws_unsubscribe_releases_request_slots() {
 
 #[tokio::test]
 async fn server_should_be_able_to_close_subscriptions() {
-	let server_addr = websocket_server_with_subscription().await;
+	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -255,4 +255,28 @@ async fn server_should_be_able_to_close_subscriptions() {
 	let res = sub.next().await;
 
 	assert!(matches!(res, Err(Error::SubscriptionClosed(_))));
+}
+
+#[tokio::test]
+async fn ws_close_pending_subscription_when_server_terminated() {
+	let (server_addr, mut handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub: Subscription<String> =
+		c1.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await.unwrap();
+
+	assert!(matches!(sub.next().await, Ok(Some(_))));
+
+	handle.stop().await.unwrap();
+	handle.wait_for_stop().await;
+
+	let sub2: Result<Subscription<String>, _> =
+		c1.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await;
+
+	// no new request should be accepted.
+	assert!(matches!(sub2, Err(_)));
+	// the already established subscription should also be closed.
+	assert!(matches!(sub.next().await, Ok(None)));
 }

@@ -31,11 +31,17 @@ use std::{net::SocketAddr, sync::Arc};
 
 use futures_channel::mpsc;
 use futures_util::future::{join_all, FutureExt};
-use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
+use futures_util::{
+	io::{BufReader, BufWriter},
+	SinkExt,
+};
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::{
+	net::{TcpListener, TcpStream, ToSocketAddrs},
+	sync::RwLock,
+};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_types::error::Error;
@@ -54,6 +60,10 @@ pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
 	cfg: Settings,
+	/// Pair of channels to stop the server.
+	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
+	/// Stop handle that indicates whether server has been stopped.
+	stop_handle: Arc<RwLock<()>>,
 }
 
 impl Server {
@@ -75,12 +85,22 @@ impl Server {
 		self.listener.local_addr().map_err(Into::into)
 	}
 
+	/// Returns the handle to stop the running server.
+	pub fn stop_handle(&self) -> StopHandle {
+		StopHandle { stop_sender: self.stop_pair.0.clone(), stop_handle: self.stop_handle.clone() }
+	}
+
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self) {
+		// Acquire read access to the lock such that additional reader(s) may share this lock.
+		// Write access to this lock will only be possible after the server and all background tasks have stopped.
+		let _stop_handle = self.stop_handle.read().await;
+		let shutdown = self.stop_pair.0;
+
 		let methods = self.methods;
 		let mut id = 0;
 
-		let mut driver = ConnDriver::new(self.listener);
+		let mut driver = ConnDriver::new(self.listener, self.stop_pair.1);
 
 		loop {
 			match Pin::new(&mut driver).await {
@@ -98,13 +118,14 @@ impl Server {
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					driver.add(Box::pin(handshake(socket, id, methods, cfg)));
+					driver.add(Box::pin(handshake(socket, id, methods, cfg, &shutdown, &self.stop_handle)));
 
 					id += 1;
 				}
-				Err(err) => {
+				Err(DriverError::Io(err)) => {
 					log::error!("Error while awaiting a new connection: {:?}", err);
 				}
+				Err(DriverError::Shutdown) => break,
 			}
 		}
 	}
@@ -115,6 +136,7 @@ impl Server {
 /// handling incoming connections.
 struct ConnDriver<F> {
 	listener: TcpListener,
+	stop_receiver: mpsc::Receiver<()>,
 	connections: Vec<F>,
 }
 
@@ -122,8 +144,8 @@ impl<F> ConnDriver<F>
 where
 	F: Future + Unpin,
 {
-	fn new(listener: TcpListener) -> Self {
-		ConnDriver { listener, connections: Vec::new() }
+	fn new(listener: TcpListener, stop_receiver: mpsc::Receiver<()>) -> Self {
+		ConnDriver { listener, stop_receiver, connections: Vec::new() }
 	}
 
 	fn connection_count(&self) -> usize {
@@ -135,11 +157,16 @@ where
 	}
 }
 
+enum DriverError {
+	Shutdown,
+	Io(std::io::Error),
+}
+
 impl<F> Future for ConnDriver<F>
 where
 	F: Future + Unpin,
 {
-	type Output = std::io::Result<(TcpStream, SocketAddr)>;
+	type Output = Result<(TcpStream, SocketAddr), DriverError>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
@@ -160,7 +187,11 @@ where
 			}
 		}
 
-		this.listener.poll_accept(cx)
+		if let Poll::Ready(Some(())) = this.stop_receiver.next().poll_unpin(cx) {
+			return Poll::Ready(Err(DriverError::Shutdown));
+		}
+
+		this.listener.poll_accept(cx).map_err(DriverError::Io)
 	}
 }
 
@@ -169,12 +200,14 @@ async fn handshake(
 	conn_id: ConnectionId,
 	methods: &Methods,
 	cfg: &Settings,
+	shutdown: &mpsc::Sender<()>,
+	stop_handle: &Arc<RwLock<()>>,
 ) -> Result<(), Error> {
+	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
 	let key = {
 		let req = server.receive_request().await?;
-
 		cfg.allowed_origins.verify(req.headers().origin).map(|()| req.key())
 	};
 
@@ -191,7 +224,16 @@ async fn handshake(
 		}
 	}
 
-	tokio::spawn(background_task(server, conn_id, methods.clone(), cfg.max_request_body_size)).await.unwrap()
+	tokio::spawn(background_task(
+		server,
+		conn_id,
+		methods.clone(),
+		cfg.max_request_body_size,
+		shutdown.clone(),
+		stop_handle.clone(),
+	))
+	.await
+	.unwrap()
 }
 
 async fn background_task(
@@ -199,24 +241,35 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	max_request_body_size: u32,
+	shutdown: mpsc::Sender<()>,
+	stop_handle: Arc<RwLock<()>>,
 ) -> Result<(), Error> {
+	let _lock = stop_handle.read().await;
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 
+	let shutdown2 = shutdown.clone();
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while let Some(response) = rx.next().await {
-			log::debug!("send: {}", response);
-			let _ = sender.send_text(response).await;
-			let _ = sender.flush().await;
+		while !shutdown2.is_closed() {
+			match rx.next().await {
+				Some(response) => {
+					log::debug!("send: {}", response);
+					let _ = sender.send_text(response).await;
+					let _ = sender.flush().await;
+				}
+				None => break,
+			};
 		}
+		// terminate connection.
+		let _ = sender.close().await;
 	});
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 
-	loop {
+	while !shutdown.is_closed() {
 		data.clear();
 
 		receiver.receive_data(&mut data).await?;
@@ -263,6 +316,7 @@ async fn background_task(
 			send_error(id, &tx, code.into());
 		}
 	}
+	Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -363,12 +417,39 @@ impl Builder {
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
-		Ok(Server { listener, methods: Methods::default(), cfg: self.settings })
+		let stop_pair = mpsc::channel(1);
+		Ok(Server {
+			listener,
+			methods: Methods::default(),
+			cfg: self.settings,
+			stop_pair,
+			stop_handle: Arc::new(RwLock::new(())),
+		})
 	}
 }
 
 impl Default for Builder {
 	fn default() -> Self {
 		Self { settings: Settings::default() }
+	}
+}
+
+/// Handle that is able to stop the running server.
+#[derive(Debug, Clone)]
+pub struct StopHandle {
+	stop_sender: mpsc::Sender<()>,
+	stop_handle: Arc<RwLock<()>>,
+}
+
+impl StopHandle {
+	/// Requests server to stop. Returns an error if server was already stopped.
+	pub async fn stop(&mut self) -> Result<(), Error> {
+		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
+	}
+
+	/// Blocks indefinitely until the server is stopped.
+	pub async fn wait_for_stop(&self) {
+		// blocks until there are no readers left.
+		self.stop_handle.write().await;
 	}
 }

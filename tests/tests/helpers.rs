@@ -25,11 +25,15 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::oneshot;
-use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServerBuilder, RpcModule};
+use jsonrpsee::{
+	http_server::HttpServerBuilder,
+	ws_server::{WsServerBuilder, WsStopHandle},
+	RpcModule,
+};
 use std::net::SocketAddr;
 use std::time::Duration;
 
-pub async fn websocket_server_with_subscription() -> SocketAddr {
+pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) {
 	let (server_started_tx, server_started_rx) = oneshot::channel();
 
 	std::thread::spawn(move || {
@@ -84,8 +88,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 
 		server.register_module(module).unwrap();
 		rt.block_on(async move {
-			server_started_tx.send(server.local_addr().unwrap()).unwrap();
-
+			server_started_tx.send((server.local_addr().unwrap(), server.stop_handle())).unwrap();
 			server.start().await
 		});
 	});
