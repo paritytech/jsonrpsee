@@ -30,6 +30,7 @@ use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
+use std::path::{Path, PathBuf};
 use std::{borrow::Cow, io, net::SocketAddr, sync::Arc, time::Duration};
 use thiserror::Error;
 
@@ -108,7 +109,7 @@ pub enum WsHandshakeError {
 	#[error("Invalid DNS name: {}", 0)]
 	InvalidDnsName(#[source] crate::tokio::InvalidDNSNameError),
 
-	/// RawServer rejected our handshake.
+	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {}", status_code)]
 	Rejected {
 		/// HTTP status code that the server returned.
@@ -175,34 +176,32 @@ impl<'a> WsTransportClientBuilder<'a> {
 			Mode::Plain => None,
 		};
 
-		let mut err = None;
-		for sockaddr in &self.target.sockaddrs {
-			match self.try_connect(*sockaddr, &connector).await {
-				Ok(res) => return Ok(res),
-				Err(e) => {
-					log::debug!("Failed to connect to sockaddr: {:?} with err: {:?}", sockaddr, e);
-					err = Some(Err(e));
-				}
-			}
-		}
-		// NOTE(niklasad1): this is most likely unreachable because [`Url::socket_addrs`] doesn't
-		// return an empty `Vec` if no socket address was found for the host name.
-		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(self.target.host)))
+		self.try_connect(connector).await
 	}
 
 	async fn try_connect(
-		&self,
-		mut sockaddr: SocketAddr,
-		tls_connector: &Option<crate::tokio::TlsConnector>,
+		self,
+		mut tls_connector: Option<crate::tokio::TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let mut path = self.target.path.clone();
-		let mut host = self.target.host.clone();
-		let mut host_header = self.target.host_header.clone();
-		let mut tls_connector = tls_connector.clone();
+		let mut sockaddrs = self.target.sockaddrs;
+		let mut path = PathBuf::from(self.target.path);
+		let mut host = self.target.host;
+		let mut host_header = self.target.host_header;
+
+		let mut err = Err(None);
 
 		let client = loop {
+			let sockaddr = match sockaddrs.pop() {
+				Some(addr) => addr,
+				None => break err,
+			};
+
 			let tcp_stream = connect(sockaddr, self.timeout, &host, &tls_connector).await?;
-			let mut client = WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &host_header, &path);
+			let mut client = WsRawClient::new(
+				BufReader::new(BufWriter::new(tcp_stream)),
+				&host_header,
+				path.to_str().expect("valid UTF-8 checked by Url::parse; qed"),
+			);
 			if let Some(origin) = self.origin_header.as_ref() {
 				client.set_origin(origin);
 			}
@@ -210,19 +209,16 @@ impl<'a> WsTransportClientBuilder<'a> {
 			match client.handshake().await? {
 				ServerResponse::Accepted { .. } => break Ok(client),
 				ServerResponse::Rejected { status_code } => {
-					break Err(WsHandshakeError::Rejected { status_code });
+					err = Err(Some(WsHandshakeError::Rejected { status_code }));
 				}
 				ServerResponse::Redirect { status_code, location } => {
 					log::trace!("recv redirection: status_code: {}, location: {}", status_code, location);
-					log::debug!("trying to reconnect to redirection: {}", location);
 					match url::Url::parse(&location) {
-						// absolute URL => need to lookup sockaddr.
-						// TODO: this is hacky, we need to actually test all sockaddrs
+						// redirection with absolute path => need to lookup.
 						Ok(url) => {
 							let target = Target::parse(url)?;
-							// TODO.
-							sockaddr = target.sockaddrs[0];
-							path = target.path;
+							sockaddrs = target.sockaddrs;
+							path = PathBuf::from(target.path);
 							host = target.host;
 							host_header = target.host_header;
 							tls_connector = match target.mode {
@@ -237,17 +233,23 @@ impl<'a> WsTransportClientBuilder<'a> {
 								Mode::Plain => None,
 							};
 						}
-						// URL is relative, just set it as location.
-						Err(
-							url::ParseError::RelativeUrlWithCannotBeABaseBase | url::ParseError::RelativeUrlWithoutBase,
-						) => {
-							path = location;
+						// redirection is relative, either `/baz` or `bar`.
+						Err(_) => {
+							// replace the entire path if `location` is `/`.
+							if location.starts_with('/') {
+								path = location.into();
+							} else {
+								// join paths such that the leaf is replaced with `location`.
+								let strip_last_child =
+									Path::new(&path).ancestors().nth(1).unwrap_or_else(|| Path::new("/"));
+								path = strip_last_child.join(location);
+							}
 						}
-						Err(e) => return Err(WsHandshakeError::Url(format!("Invalid URL: {}", e).into())),
 					};
 				}
 			};
-		}?;
+		}
+		.map_err(|e| e.unwrap_or(WsHandshakeError::NoAddressFound(host)))?;
 
 		// If the handshake succeeded, return.
 		let mut builder = client.into_builder();
