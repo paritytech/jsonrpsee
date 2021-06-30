@@ -24,13 +24,17 @@
 // IN background_task WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::{net::SocketAddr, sync::Arc};
+
 use futures_channel::mpsc;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use std::{net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
@@ -86,8 +90,8 @@ impl Server {
 						continue;
 					}
 
-					if driver.count() >= self.cfg.max_connections as usize {
-						log::warn!("Too many connections. Try again in a while");
+					if driver.connection_count() >= self.cfg.max_connections as usize {
+						log::warn!("Too many connections. Try again in a while.");
 						continue;
 					}
 
@@ -106,10 +110,6 @@ impl Server {
 	}
 }
 
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
-
 /// This is a glorified select `Future` that will attempt to drive all
 /// connection futures `F` to completion on each `poll`, while also
 /// handling incoming connections.
@@ -126,7 +126,7 @@ where
 		ConnDriver { listener, connections: Vec::new() }
 	}
 
-	fn count(&self) -> usize {
+	fn connection_count(&self) -> usize {
 		self.connections.len()
 	}
 
@@ -160,8 +160,6 @@ where
 		this.listener.poll_accept(cx)
 	}
 }
-
-impl<F: Unpin> Unpin for ConnDriver<F> {}
 
 async fn handshake(
 	socket: tokio::net::TcpStream,
