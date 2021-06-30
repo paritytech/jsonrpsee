@@ -148,6 +148,9 @@ where
 
 		while i < this.connections.len() {
 			if this.connections[i].poll_unpin(cx).is_ready() {
+				// Using `swap_remove` since we don't care about ordering
+				// but we do care about removing being `O(1)`.
+				//
 				// We don't increment `i` in this branch, since we now
 				// have a shorter length, and potentially a new value at
 				// current index
