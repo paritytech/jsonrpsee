@@ -29,8 +29,8 @@ use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::v2::error::JsonRpcError;
 use crate::v2::params::{Id, JsonRpcParams};
-use crate::v2::request::{JsonRpcCallSer, JsonRpcNotificationSer};
-use crate::v2::response::{JsonRpcNotifResponse, JsonRpcResponse, JsonRpcSubscriptionResponseAlloc};
+use crate::v2::request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificationSer};
+use crate::v2::response::JsonRpcResponse;
 use crate::TEN_MB_SIZE_BYTES;
 use crate::{
 	helpers::{
@@ -51,6 +51,7 @@ use futures::{
 	sink::SinkExt,
 };
 
+use jsonrpsee_types::v2::params::JsonRpcSubscriptionParams;
 use jsonrpsee_types::SubscriptionKind;
 use serde::de::DeserializeOwned;
 use std::{
@@ -621,14 +622,16 @@ async fn background_task(
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) = serde_json::from_slice::<JsonRpcSubscriptionResponseAlloc<_>>(&raw) {
+				else if let Ok(notif) =
+					serde_json::from_slice::<JsonRpcNotification<JsonRpcSubscriptionParams<_>>>(&raw)
+				{
 					log::debug!("[backend]: recv subscription {:?}", notif);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
 				}
 				// Incoming Notification
-				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotifResponse<_>>(&raw) {
+				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotification<_>>(&raw) {
 					log::debug!("[backend]: recv notification {:?}", notif);
 					let _ = process_notification(&mut manager, notif);
 				}
