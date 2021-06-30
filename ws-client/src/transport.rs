@@ -196,8 +196,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 		tls_connector: &Option<crate::tokio::TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut path = self.target.path.clone();
-		// Try establish the TCP connection.
 
+		// NOTE(niklasad1): this in an `Option` to be able to reuse to tcp_stream.
 		let mut socket = {
 			let tcp_stream = connect(sockaddr, self.timeout, &self.target.host, tls_connector).await?;
 			Some(BufReader::new(BufWriter::new(tcp_stream)))
