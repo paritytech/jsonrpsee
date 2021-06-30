@@ -201,7 +201,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		let mut tls_connector = tls_connector.clone();
 
 		let client = loop {
-			let tcp_stream = connect(sockaddr, self.timeout, &host, tls_connector).await?;
+			let tcp_stream = connect(sockaddr, self.timeout, &host, &tls_connector).await?;
 			let mut client = WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &host_header, &path);
 			if let Some(origin) = self.origin_header.as_ref() {
 				client.set_origin(origin);
