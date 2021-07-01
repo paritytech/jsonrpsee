@@ -425,7 +425,7 @@ impl Builder {
 	}
 
 	/// Set a list of allowed hosts. During the handshake, the `Host` header will be
-	/// checked against the list, connections without a matching host will be denied.
+	/// checked against the list. Connections without a matching host will be denied.
 	/// Values should be hostnames without protocol.
 	///
 	/// ```rust
