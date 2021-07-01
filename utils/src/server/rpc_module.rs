@@ -267,8 +267,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "unsub", |params, mut sink, ctx| {
-	///     let x: usize = params.one()?;
+	/// ctx.register_subscription("sub", "unsub", |mut params, mut sink, ctx| {
+	///     let x: usize = params.next()?;
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
 	///         sink.send(&sum)
