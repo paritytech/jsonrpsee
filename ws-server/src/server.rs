@@ -391,7 +391,7 @@ impl Builder {
 
 	/// Set a list of allowed origins. During the handshake, the `Origin` header will be
 	/// checked against the list, connections without a matching origin will be denied.
-	/// Values should include protocol.
+	/// Values should be hostnames with protocol.
 	///
 	/// ```rust
 	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
@@ -409,7 +409,7 @@ impl Builder {
 		let list: Box<_> = list.into_iter().map(Into::into).collect();
 
 		if list.len() == 0 {
-			return Err(Error::EmptyAllowedOrigins);
+			return Err(Error::EmptyAllowList("Origin"));
 		}
 
 		self.settings.allowed_origins = AllowedValue::OneOf(list);
@@ -426,19 +426,30 @@ impl Builder {
 
 	/// Set a list of allowed hosts. During the handshake, the `Host` header will be
 	/// checked against the list, connections without a matching host will be denied.
-	/// Values should be just hostnames without protocol.
+	/// Values should be hostnames without protocol.
 	///
 	/// ```rust
 	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
 	/// builder.set_allowed_hosts(["example.com"]);
 	/// ```
-	pub fn set_allowed_hosts<Host, List>(mut self, list: List) -> Self
+	///
+	/// By default allows any `Host`.
+	///
+	/// Will return an error if `list` is empty. Use [`allow_all_hosts`](Builder::allow_all_hosts) to restore the default.
+	pub fn set_allowed_hosts<Host, List>(mut self, list: List) -> Result<Self, Error>
 	where
 		List: IntoIterator<Item = Host>,
 		Host: Into<String>,
 	{
-		self.settings.allowed_hosts = AllowedValue::OneOf(list.into_iter().map(Into::into).collect());
-		self
+		let list: Box<_> = list.into_iter().map(Into::into).collect();
+
+		if list.len() == 0 {
+			return Err(Error::EmptyAllowList("Host"));
+		}
+
+		self.settings.allowed_hosts = AllowedValue::OneOf(list);
+
+		Ok(self)
 	}
 
 	/// Restores the default behavior of allowing connections with `Host` header

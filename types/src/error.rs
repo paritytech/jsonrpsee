@@ -96,8 +96,8 @@ pub enum Error {
 	#[error("Attempted to stop server that is already stopped")]
 	AlreadyStopped,
 	/// List passed into `set_allowed_origins` was empty
-	#[error("Must set at least one allowed origin")]
-	EmptyAllowedOrigins,
+	#[error("Must set at least one allowed value for the {0} header")]
+	EmptyAllowList(&'static str),
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),
