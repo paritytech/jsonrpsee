@@ -167,6 +167,13 @@ impl<'a> RpcParams<'a> {
 	{
 		self.parse::<[T; 1]>().map(|[res]| res)
 	}
+
+	/// Creates an owned version of parameters.
+	/// Required to simplify proc-macro implementation.
+	#[doc(hidden)]
+	pub fn owned(self) -> OwnedRpcParams {
+		self.into()
+	}
 }
 
 /// Owned version of [`RpcParams`].
