@@ -211,8 +211,7 @@ async fn handshake(
 	}
 
 	let join_result =
-		tokio::spawn(background_task(server, conn_id, methods.clone(), cfg.max_request_body_size, shutdown.clone()))
-			.await;
+		tokio::spawn(background_task(server, conn_id, methods.clone(), cfg.max_request_body_size, shutdown)).await;
 
 	match join_result {
 		Err(_) => Err(Error::Custom("Background task was aborted".into())),
