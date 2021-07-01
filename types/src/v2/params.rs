@@ -133,10 +133,10 @@ impl<'a> RpcParams<'a> {
 	/// let mut params = RpcParams::new(Some(r#"[1, 2, null]"#));
 	///
 	/// let params: [Option<u32>; 4] = [
-	/// 	params.optional_next().unwrap(),
-	/// 	params.optional_next().unwrap(),
-	/// 	params.optional_next().unwrap(),
-	/// 	params.optional_next().unwrap(),
+	///     params.optional_next().unwrap(),
+	///     params.optional_next().unwrap(),
+	///     params.optional_next().unwrap(),
+	///     params.optional_next().unwrap(),
 	/// ];;
 	///
 	/// assert_eq!(params, [Some(1), Some(2), None, None]);
