@@ -165,8 +165,7 @@ impl<'a> RpcParams<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		let params = self.0.unwrap_or("null");
-		serde_json::from_str::<[T; 1]>(params).map(|[r]| r).map_err(|_| CallError::InvalidParams)
+		self.parse::<[T; 1]>().map(|[res]| res)
 	}
 }
 
