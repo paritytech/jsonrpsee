@@ -41,8 +41,6 @@ mod transport;
 
 #[cfg(all(feature = "tokio1", not(feature = "tokio02")))]
 mod tokio {
-	// Required for `tokio::test` to work correctly.
-	pub(crate) use tokioV1::time::error::Elapsed;
 	pub(crate) use tokioV1::time::timeout;
 	#[cfg(test)]
 	pub(crate) use tokioV1::{runtime, test};

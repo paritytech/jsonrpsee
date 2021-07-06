@@ -190,19 +190,15 @@ pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcError) -
 	}
 }
 
-/// Wait for a stream to complete with optional timeout.
-pub async fn call_with_maybe_timeout<T>(
+/// Wait for a stream to complete within the given timeout.
+pub async fn call_with_timeout<T>(
+	timeout: Duration,
 	rx: oneshot::Receiver<Result<T, Error>>,
-	timeout: Option<Duration>,
 ) -> Result<Result<T, Error>, oneshot::Canceled> {
-	if let Some(dur) = timeout {
-		let timeout = crate::tokio::sleep(dur);
-		futures::pin_mut!(rx, timeout);
-		match futures::future::select(rx, timeout).await {
-			futures::future::Either::Left((res, _)) => res,
-			futures::future::Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
-		}
-	} else {
-		rx.await
+	let timeout = crate::tokio::sleep(timeout);
+	futures::pin_mut!(rx, timeout);
+	match futures::future::select(rx, timeout).await {
+		futures::future::Either::Left((res, _)) => res,
+		futures::future::Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
 	}
 }

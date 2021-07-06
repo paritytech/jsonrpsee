@@ -41,7 +41,7 @@ use crate::{
 };
 use crate::{
 	manager::RequestManager, BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage,
-	Subscription, SubscriptionMessage,
+	Subscription, SubscriptionMessage, helpers::call_with_timeout,
 };
 use async_trait::async_trait;
 use futures::{
@@ -101,8 +101,8 @@ pub struct WsClient {
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Mutex<ErrorFromBack>,
-	/// Request timeout
-	request_timeout: Option<Duration>,
+	/// Request timeout. Defaults to 60sec.
+	request_timeout: Duration,
 	/// Request ID manager.
 	id_guard: RequestIdGuard,
 }
@@ -173,7 +173,7 @@ impl RequestIdGuard {
 pub struct WsClientBuilder<'a> {
 	certificate_store: CertificateStore,
 	max_request_body_size: u32,
-	request_timeout: Option<Duration>,
+	request_timeout: Duration,
 	connection_timeout: Duration,
 	origin_header: Option<Cow<'a, str>>,
 	max_concurrent_requests: usize,
@@ -185,7 +185,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 		Self {
 			certificate_store: CertificateStore::Native,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
-			request_timeout: Some(Duration::from_secs(60)),
+			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
 			origin_header: None,
 			max_concurrent_requests: 256,
@@ -210,7 +210,7 @@ impl<'a> WsClientBuilder<'a> {
 	/// Set request timeout (default is 60 seconds).
 	///
 	/// None - no timeout is used.
-	pub fn request_timeout(mut self, timeout: Option<Duration>) -> Self {
+	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
 		self
 	}
@@ -318,17 +318,13 @@ impl Client for WsClient {
 		let mut sender = self.to_back.clone();
 		let fut = sender.send(FrontToBack::Notification(raw));
 
-		let res = if let Some(dur) = self.request_timeout {
-			let timeout = crate::tokio::sleep(dur);
-			futures::pin_mut!(fut, timeout);
+		let timeout = crate::tokio::sleep(self.request_timeout);
+		futures::pin_mut!(fut, timeout);
+		let res =
 			match futures::future::select(fut, timeout).await {
 				futures::future::Either::Left((res, _)) => res,
 				futures::future::Either::Right((_, _)) => return Err(Error::RequestTimeout),
-			}
-		} else {
-			fut.await
-		};
-
+			};
 		self.id_guard.reclaim_request_id();
 		match res {
 			Ok(()) => Ok(()),
@@ -359,7 +355,7 @@ impl Client for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = crate::helpers::call_with_maybe_timeout(send_back_rx, self.request_timeout).await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
 		self.id_guard.reclaim_request_id();
 		let json_value = match res {
@@ -399,7 +395,7 @@ impl Client for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = crate::helpers::call_with_maybe_timeout(send_back_rx, self.request_timeout).await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
 		self.id_guard.reclaim_request_id();
 		let json_values = match res {
@@ -460,7 +456,7 @@ impl SubscriptionClient for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = crate::helpers::call_with_maybe_timeout(send_back_rx, self.request_timeout).await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
 		self.id_guard.reclaim_request_id();
 		let (notifs_rx, id) = match res {
@@ -492,7 +488,7 @@ impl SubscriptionClient for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = crate::helpers::call_with_maybe_timeout(send_back_rx, self.request_timeout).await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
 		let (notifs_rx, method) = match res {
 			Ok(Ok(val)) => val,

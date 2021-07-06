@@ -9,7 +9,6 @@ use crate::v2::{
 use crate::{Error, TEN_MB_SIZE_BYTES};
 use async_trait::async_trait;
 use fnv::FnvHashMap;
-use futures::Future;
 use serde::de::DeserializeOwned;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -18,7 +17,7 @@ use std::time::Duration;
 #[derive(Debug)]
 pub struct HttpClientBuilder {
 	max_request_body_size: u32,
-	request_timeout: Option<Duration>,
+	request_timeout: Duration,
 }
 
 impl HttpClientBuilder {
@@ -29,9 +28,7 @@ impl HttpClientBuilder {
 	}
 
 	/// Set request timeout (default is 60 seconds).
-	///
-	/// None - implies that no timeout is used.
-	pub fn request_timeout(mut self, timeout: Option<Duration>) -> Self {
+	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
 		self
 	}
@@ -46,7 +43,7 @@ impl HttpClientBuilder {
 
 impl Default for HttpClientBuilder {
 	fn default() -> Self {
-		Self { max_request_body_size: TEN_MB_SIZE_BYTES, request_timeout: Some(Duration::from_secs(60)) }
+		Self { max_request_body_size: TEN_MB_SIZE_BYTES, request_timeout: Duration::from_secs(60) }
 	}
 }
 
@@ -57,8 +54,8 @@ pub struct HttpClient {
 	transport: HttpTransportClient,
 	/// Request ID that wraps around when overflowing.
 	request_id: AtomicU64,
-	/// Request timeout
-	request_timeout: Option<Duration>,
+	/// Request timeout. Defaults to 60sec.
+	request_timeout: Duration,
 }
 
 #[async_trait]
@@ -66,7 +63,7 @@ impl Client for HttpClient {
 	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
 		let notif = JsonRpcNotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?);
-		match call_with_maybe_timeout(fut, self.request_timeout).await {
+		match crate::tokio::timeout(self.request_timeout, fut).await {
 			Ok(Ok(ok)) => Ok(ok),
 			Err(_) => Err(Error::RequestTimeout),
 			Ok(Err(e)) => Err(Error::Transport(Box::new(e))),
@@ -83,7 +80,7 @@ impl Client for HttpClient {
 		let request = JsonRpcCallSer::new(Id::Number(id), method, params);
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
-		let body = match call_with_maybe_timeout(fut, self.request_timeout).await {
+		let body = match crate::tokio::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => return Err(Error::RequestTimeout),
 			Ok(Err(e)) => return Err(Error::Transport(Box::new(e))),
@@ -124,7 +121,7 @@ impl Client for HttpClient {
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
 
-		let body = match call_with_maybe_timeout(fut, self.request_timeout).await {
+		let body = match crate::tokio::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => return Err(Error::RequestTimeout),
 			Ok(Err(e)) => return Err(Error::Transport(Box::new(e))),
@@ -149,16 +146,5 @@ impl Client for HttpClient {
 			responses[pos] = rp.result
 		}
 		Ok(responses)
-	}
-}
-
-async fn call_with_maybe_timeout<F>(fut: F, timeout: Option<Duration>) -> Result<F::Output, crate::tokio::Elapsed>
-where
-	F: Future,
-{
-	if let Some(dur) = timeout {
-		crate::tokio::timeout(dur, fut).await
-	} else {
-		Ok(fut.await)
 	}
 }
