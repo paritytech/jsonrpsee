@@ -33,15 +33,15 @@ use crate::v2::request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificatio
 use crate::v2::response::JsonRpcResponse;
 use crate::TEN_MB_SIZE_BYTES;
 use crate::{
+	helpers::call_with_timeout, manager::RequestManager, BatchMessage, Error, FrontToBack, RegisterNotificationMessage,
+	RequestMessage, Subscription, SubscriptionMessage,
+};
+use crate::{
 	helpers::{
 		build_unsubscribe_message, process_batch_response, process_error_response, process_notification,
 		process_single_response, process_subscription_response, stop_subscription,
 	},
 	transport::CertificateStore,
-};
-use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage,
-	Subscription, SubscriptionMessage, helpers::call_with_timeout,
 };
 use async_trait::async_trait;
 use futures::{
@@ -321,11 +321,10 @@ impl Client for WsClient {
 
 		let timeout = crate::tokio::sleep(self.request_timeout);
 		futures::pin_mut!(fut, timeout);
-		let res =
-			match futures::future::select(fut, timeout).await {
-				futures::future::Either::Left((res, _)) => res,
-				futures::future::Either::Right((_, _)) => return Err(Error::RequestTimeout),
-			};
+		let res = match futures::future::select(fut, timeout).await {
+			futures::future::Either::Left((res, _)) => res,
+			futures::future::Either::Right((_, _)) => return Err(Error::RequestTimeout),
+		};
 		self.id_guard.reclaim_request_id();
 		match res {
 			Ok(()) => Ok(()),
