@@ -25,11 +25,15 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::oneshot;
-use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServerBuilder, RpcModule};
+use jsonrpsee::{
+	http_server::HttpServerBuilder,
+	ws_server::{WsServerBuilder, WsStopHandle},
+	RpcModule,
+};
 use std::net::SocketAddr;
 use std::time::Duration;
 
-pub async fn websocket_server_with_subscription() -> SocketAddr {
+pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) {
 	let (server_started_tx, server_started_rx) = oneshot::channel();
 
 	std::thread::spawn(move || {
@@ -41,7 +45,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 		module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
 		module
-			.register_subscription("subscribe_hello", "unsubscribe_hello", |_, sink, _| {
+			.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
 				std::thread::spawn(move || loop {
 					let _ = sink.send(&"hello from subscription");
 					std::thread::sleep(Duration::from_millis(50));
@@ -51,7 +55,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			.unwrap();
 
 		module
-			.register_subscription("subscribe_foo", "unsubscribe_foo", |_, sink, _| {
+			.register_subscription("subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
 				std::thread::spawn(move || loop {
 					let _ = sink.send(&1337);
 					std::thread::sleep(Duration::from_millis(100));
@@ -61,7 +65,7 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			.unwrap();
 
 		module
-			.register_subscription("subscribe_add_one", "unsubscribe_add_one", |params, sink, _| {
+			.register_subscription("subscribe_add_one", "unsubscribe_add_one", |params, mut sink, _| {
 				let mut count: usize = params.one()?;
 				std::thread::spawn(move || loop {
 					count = count.wrapping_add(1);
@@ -72,10 +76,19 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			})
 			.unwrap();
 
+		module
+			.register_subscription("subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
+				std::thread::spawn(move || {
+					std::thread::sleep(Duration::from_secs(1));
+					sink.close("Server closed the stream because it was lazy".into())
+				});
+				Ok(())
+			})
+			.unwrap();
+
 		server.register_module(module).unwrap();
 		rt.block_on(async move {
-			server_started_tx.send(server.local_addr().unwrap()).unwrap();
-
+			server_started_tx.send((server.local_addr().unwrap(), server.stop_handle())).unwrap();
 			server.start().await
 		});
 	});

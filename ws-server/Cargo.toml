@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-ws-server"
-version = "0.2.0-alpha.7"
+version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket server for JSON-RPC"
 edition = "2018"
@@ -12,14 +12,14 @@ documentation = "https://docs.rs/jsonrpsee-ws-server"
 [dependencies]
 thiserror = "1"
 futures-channel = "0.3.14"
-futures-util = { version = "0.3.14", default-features = false, features = ["io"] }
-jsonrpsee-types = { path = "../types", version = "=0.2.0-alpha.7" }
-jsonrpsee-utils = { path = "../utils", version = "=0.2.0-alpha.7", features = ["server"] }
+futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
+jsonrpsee-types = { path = "../types", version = "0.2.0" }
+jsonrpsee-utils = { path = "../utils", version = "0.2.0", features = ["server"] }
 log = "0.4"
 rustc-hash = "1.1.0"
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-soketto = "0.5"
+soketto = "0.6"
 tokio = { version = "1", features = ["net", "rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.1", features = ["net"] }
 tokio-util = { version = "0.6", features = ["compat"] }

@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
+	types::Error,
 	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
 	ws_server::{RpcModule, WsServerBuilder},
 };
@@ -55,9 +56,11 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, sink, _| {
+	module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
 		std::thread::spawn(move || loop {
-			sink.send(&"hello my friend").unwrap();
+			if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello my friend") {
+				return;
+			}
 			std::thread::sleep(std::time::Duration::from_secs(1));
 		});
 		Ok(())

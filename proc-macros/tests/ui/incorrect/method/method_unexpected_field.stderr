@@ -1,0 +1,5 @@
+error: `#[method]` got unknown `magic` argument. Supported arguments are `name`
+ --> $DIR/method_unexpected_field.rs:6:2
+  |
+6 |     #[method(name = "foo", magic = false)]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

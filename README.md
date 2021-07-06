@@ -11,11 +11,11 @@ Support `WebSocket` and `HTTP` transports for both client and server.
 The library is still under development; do not use in production.
 
 ## Sub-projects
-- [jsonrpsee-http-client](./http-client) [![crates.io][ws-client-image]][ws-client-url]
+- [jsonrpsee-http-client](./http-client) [![crates.io][http-client-image]][http-client-url]
 - [jsonrpsee-http-server](./http-server) [![crates.io][http-server-image]][http-server-url]
 - [jsonrpsee-proc-macros](./proc-macros) [![crates.io][proc-macros-image]][proc-macros-url]
 - [jsonrpsee-ws-client](./ws-client) [![crates.io][ws-client-image]][ws-client-url]
-- [jsonrpsee-ws-server](./http-server) [![crates.io][http-server-image]][http-server-url]
+- [jsonrpsee-ws-server](./http-server) [![crates.io][ws-server-image]][ws-server-url]
 
 [http-client-image]: https://img.shields.io/crates/v/jsonrpsee-http-client.svg
 [http-client-url]: https://crates.io/crates/jsonrpsee-http-client
@@ -37,7 +37,7 @@ The library is still under development; do not use in production.
 
 ## Roadmap
 
-See [tracking issue for next stable release](https://github.com/paritytech/jsonrpsee/issues/251)
+See [tracking issue for next stable release (0.3)](https://github.com/paritytech/jsonrpsee/issues/376)
 
 ## Users
 
