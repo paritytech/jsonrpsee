@@ -1,5 +1,6 @@
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
+use futures::FutureExt;
 use futures::channel::{mpsc, oneshot};
 use jsonrpsee_types::v2::params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId};
 use jsonrpsee_types::v2::request::{JsonRpcCallSer, JsonRpcNotification};
@@ -195,10 +196,11 @@ pub async fn call_with_timeout<T>(
 	timeout: Duration,
 	rx: oneshot::Receiver<Result<T, Error>>,
 ) -> Result<Result<T, Error>, oneshot::Canceled> {
-	let timeout = crate::tokio::sleep(timeout);
+	let timeout = crate::tokio::sleep(timeout).fuse();
+	let rx = rx.fuse();
 	futures::pin_mut!(rx, timeout);
-	match futures::future::select(rx, timeout).await {
-		futures::future::Either::Left((res, _)) => res,
-		futures::future::Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
+	futures::select! {
+		res = rx => res,
+		_ = timeout => Ok(Err(Error::RequestTimeout))
 	}
 }

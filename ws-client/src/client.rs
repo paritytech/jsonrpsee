@@ -209,8 +209,6 @@ impl<'a> WsClientBuilder<'a> {
 	}
 
 	/// Set request timeout (default is 60 seconds).
-	///
-	/// None - no timeout is used.
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
 		self
@@ -317,14 +315,16 @@ impl Client for WsClient {
 		log::trace!("[frontend]: send notification: {:?}", raw);
 
 		let mut sender = self.to_back.clone();
-		let fut = sender.send(FrontToBack::Notification(raw));
+		let fut = sender.send(FrontToBack::Notification(raw)).fuse();
 
-		let timeout = crate::tokio::sleep(self.request_timeout);
+		let timeout = crate::tokio::sleep(self.request_timeout).fuse();
 		futures::pin_mut!(fut, timeout);
-		let res = match futures::future::select(fut, timeout).await {
-			futures::future::Either::Left((res, _)) => res,
-			futures::future::Either::Right((_, _)) => return Err(Error::RequestTimeout),
+
+		let res = futures::select! {
+			x = fut => x,
+			_ = timeout => return Err(Error::RequestTimeout)
 		};
+
 		self.id_guard.reclaim_request_id();
 		match res {
 			Ok(()) => Ok(()),
