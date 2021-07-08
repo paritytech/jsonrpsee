@@ -315,12 +315,11 @@ impl Client for WsClient {
 		log::trace!("[frontend]: send notification: {:?}", raw);
 
 		let mut sender = self.to_back.clone();
-		let fut = sender.send(FrontToBack::Notification(raw)).fuse();
+		let fut = sender.send(FrontToBack::Notification(raw));
 
-		let timeout = crate::tokio::sleep(self.request_timeout).fuse();
-		futures::pin_mut!(fut, timeout);
+		let timeout = crate::tokio::sleep(self.request_timeout);
 
-		let res = futures::select! {
+		let res = crate::tokio::select! {
 			x = fut => x,
 			_ = timeout => return Err(Error::RequestTimeout)
 		};

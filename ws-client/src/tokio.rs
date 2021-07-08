@@ -25,6 +25,8 @@ mod tokio_impl {
 	pub(crate) use tokioV1_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 	pub(crate) use tokioV1::time::sleep;
+
+	pub(crate) use tokioV1::select;
 }
 
 // Note that we check for `not(feature = "tokio1")` here, but not above.
@@ -50,4 +52,6 @@ mod tokio_impl {
 
 	// In 0.2 `tokio::time::sleep` had different name.
 	pub(crate) use tokioV02::time::delay_for as sleep;
+
+	pub(crate) use tokioV02::select;
 }

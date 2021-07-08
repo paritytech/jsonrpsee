@@ -11,18 +11,18 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 # Tokio v1 deps
-tokioV1 = { package="tokio", version = "1", features = ["net", "time", "rt-multi-thread"], optional = true }
+tokioV1 = { package="tokio", version = "1", features = ["net", "time", "rt-multi-thread", "macros"], optional = true }
 tokioV1-rustls = { package="tokio-rustls", version = "0.22", optional = true }
 tokioV1-util = { package="tokio-util", version = "0.6", features = ["compat"], optional = true }
 
 # Tokio v0.2 deps
-tokioV02 = { package="tokio", version = "0.2", features = ["net", "time", "rt-threaded", "sync"], optional = true }
+tokioV02 = { package="tokio", version = "0.2", features = ["net", "time", "rt-threaded", "sync", "macros"], optional = true }
 tokioV02-rustls = { package="tokio-rustls", version = "0.15", optional = true }
 tokioV02-util = { package="tokio-util", version = "0.3", features = ["compat"], optional = true }
 
 async-trait = "0.1"
 fnv = "1"
-futures = { version = "0.3.14", default-features = false, features = ["std", "async-await"] }
+futures = { version = "0.3.14", default-features = false, features = ["std"] }
 jsonrpsee-types = { path = "../types", version = "0.2.0" }
 log = "0.4"
 serde = "1"
