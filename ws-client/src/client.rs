@@ -33,15 +33,15 @@ use crate::v2::request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificatio
 use crate::v2::response::JsonRpcResponse;
 use crate::TEN_MB_SIZE_BYTES;
 use crate::{
+	helpers::call_with_timeout, manager::RequestManager, BatchMessage, Error, FrontToBack, RegisterNotificationMessage,
+	RequestMessage, Subscription, SubscriptionMessage,
+};
+use crate::{
 	helpers::{
 		build_unsubscribe_message, process_batch_response, process_error_response, process_notification,
 		process_single_response, process_subscription_response, stop_subscription,
 	},
 	transport::CertificateStore,
-};
-use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage,
-	Subscription, SubscriptionMessage,
 };
 use async_trait::async_trait;
 use futures::{
@@ -102,8 +102,8 @@ pub struct WsClient {
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Mutex<ErrorFromBack>,
-	/// Request timeout
-	request_timeout: Option<Duration>,
+	/// Request timeout. Defaults to 60sec.
+	request_timeout: Duration,
 	/// Request ID manager.
 	id_guard: RequestIdGuard,
 }
@@ -174,7 +174,7 @@ impl RequestIdGuard {
 pub struct WsClientBuilder<'a> {
 	certificate_store: CertificateStore,
 	max_request_body_size: u32,
-	request_timeout: Option<Duration>,
+	request_timeout: Duration,
 	connection_timeout: Duration,
 	origin_header: Option<Cow<'a, str>>,
 	max_concurrent_requests: usize,
@@ -186,7 +186,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 		Self {
 			certificate_store: CertificateStore::Native,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
-			request_timeout: None,
+			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
 			origin_header: None,
 			max_concurrent_requests: 256,
@@ -208,9 +208,9 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set request timeout.
+	/// Set request timeout (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
-		self.request_timeout = Some(timeout);
+		self.request_timeout = timeout;
 		self
 	}
 
@@ -313,7 +313,17 @@ impl Client for WsClient {
 			Error::ParseError(e)
 		})?;
 		log::trace!("[frontend]: send notification: {:?}", raw);
-		let res = self.to_back.clone().send(FrontToBack::Notification(raw)).await;
+
+		let mut sender = self.to_back.clone();
+		let fut = sender.send(FrontToBack::Notification(raw));
+
+		let timeout = crate::tokio::sleep(self.request_timeout);
+
+		let res = crate::tokio::select! {
+			x = fut => x,
+			_ = timeout => return Err(Error::RequestTimeout)
+		};
+
 		self.id_guard.reclaim_request_id();
 		match res {
 			Ok(()) => Ok(()),
@@ -344,19 +354,10 @@ impl Client for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let send_back_rx_out = if let Some(duration) = self.request_timeout {
-			let timeout = crate::tokio::sleep(duration);
-			futures::pin_mut!(send_back_rx, timeout);
-			match future::select(send_back_rx, timeout).await {
-				future::Either::Left((send_back_rx_out, _)) => send_back_rx_out,
-				future::Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
-			}
-		} else {
-			send_back_rx.await
-		};
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
 		self.id_guard.reclaim_request_id();
-		let json_value = match send_back_rx_out {
+		let json_value = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
@@ -393,7 +394,8 @@ impl Client for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = send_back_rx.await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+
 		self.id_guard.reclaim_request_id();
 		let json_values = match res {
 			Ok(Ok(v)) => v,
@@ -453,7 +455,8 @@ impl SubscriptionClient for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = send_back_rx.await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+
 		self.id_guard.reclaim_request_id();
 		let (notifs_rx, id) = match res {
 			Ok(Ok(val)) => val,
@@ -484,7 +487,8 @@ impl SubscriptionClient for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = send_back_rx.await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+
 		let (notifs_rx, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),

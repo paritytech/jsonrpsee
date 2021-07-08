@@ -39,6 +39,19 @@ extern crate hyper13_rustls as hyper_rustls;
 mod client;
 mod transport;
 
+#[cfg(all(feature = "tokio1", not(feature = "tokio02")))]
+mod tokio {
+	pub(crate) use tokioV1::time::timeout;
+	#[cfg(test)]
+	pub(crate) use tokioV1::{runtime, test};
+}
+
+#[cfg(all(feature = "tokio02", not(feature = "tokio1")))]
+mod tokio {
+	pub(crate) use tokioV02::time::timeout;
+	pub(crate) use tokioV02::time::Elapsed;
+}
+
 #[cfg(test)]
 mod tests;
 

@@ -115,6 +115,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Error, HttpTransportClient};
+	use crate::tokio;
 
 	#[test]
 	fn invalid_http_url_rejected() {
