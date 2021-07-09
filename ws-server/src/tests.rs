@@ -5,10 +5,7 @@ use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::{
-	error::{CallError, Error},
-	v2::params::RpcParams,
-};
+use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
@@ -25,13 +22,15 @@ impl fmt::Display for MyAppError {
 impl std::error::Error for MyAppError {}
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
-/// It has two hardcoded methods: "say_hello" and "add"
 async fn server() -> SocketAddr {
 	server_with_handles().await.0
 }
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
-/// It has two hardcoded methods: "say_hello" and "add"
+/// It has the following methods:
+/// 	sync methods: `say_hello` and `add`
+///		async: `say_hello_async` and `add_sync`
+/// 	other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns `CallError::Failed`), `sleep_for`
 /// Returns the address together with handles for server future and server stop.
 async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 	let mut server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
@@ -43,7 +42,14 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		})
 		.unwrap();
 	module
-		.register_async_method("say_hello_async", |_: RpcParams, _| {
+		.register_method("add", |params, _| {
+			let params: Vec<u64> = params.parse()?;
+			let sum: u64 = params.into_iter().sum();
+			Ok(sum)
+		})
+		.unwrap();
+	module
+		.register_async_method("say_hello_async", |_, _| {
 			async move {
 				log::debug!("server respond to hello");
 				// Call some async function inside.
@@ -53,13 +59,13 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 			.boxed()
 		})
 		.unwrap();
-	module
-		.register_method("add", |params, _| {
+	module.register_async_method("add_async", |params, _| {
+		async move {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
 			Ok(sum)
-		})
-		.unwrap();
+		}.boxed()
+	}).unwrap();
 	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
 	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
 	module
@@ -308,6 +314,16 @@ async fn async_method_call_with_ok_context() {
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, ok_response("ok!".into(), Id::Num(1)));
+}
+
+#[tokio::test]
+async fn async_method_call_with_params() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"add_async", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
 
 #[tokio::test]

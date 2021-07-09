@@ -1,7 +1,7 @@
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
 use beef::Cow;
-use serde::de::{self, Deserializer, Unexpected, Visitor};
+use serde::de::{self, DeserializeOwned, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -167,13 +167,6 @@ impl<'a> RpcParams<'a> {
 	{
 		self.parse::<[T; 1]>().map(|[res]| res)
 	}
-
-	/// Creates an owned version of parameters.
-	/// Required to simplify proc-macro implementation.
-	#[doc(hidden)]
-	pub fn owned(self) -> OwnedRpcParams {
-		self.into()
-	}
 }
 
 /// Owned version of [`RpcParams`].
@@ -181,9 +174,21 @@ impl<'a> RpcParams<'a> {
 pub struct OwnedRpcParams(Option<String>);
 
 impl OwnedRpcParams {
-	/// Converts `OwnedRpcParams` into borrowed [`RpcParams`].
-	pub fn borrowed(&self) -> RpcParams<'_> {
-		RpcParams(self.0.as_ref().map(|s| s.as_ref()))
+	/// Attempt to parse all parameters as array or map into type `T`
+	pub fn parse<T>(self) -> Result<T, CallError>
+	where
+		T: DeserializeOwned,
+	{
+		let params = self.0.unwrap_or("null".into());
+		serde_json::from_str(params.as_str()).map_err(|_| CallError::InvalidParams)
+	}
+
+	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
+	pub fn one<T>(self) -> Result<T, CallError>
+	where
+		T: DeserializeOwned,
+	{
+		self.parse::<[T; 1]>().map(|[res]| res)
 	}
 }
 
@@ -195,9 +200,9 @@ impl<'a> From<RpcParams<'a>> for OwnedRpcParams {
 
 /// [Serializable JSON-RPC parameters](https://www.jsonrpc.org/specification#parameter_structures)
 ///
-/// If your type implement `Into<JsonValue>` call that favor of `serde_json::to:value` to
-/// construct the parameters. Because `serde_json::to_value` serializes the type which
-/// allocates whereas `Into<JsonValue>` doesn't in most cases.
+/// If your type implement `Into<JsonValue>` call that in favor of `serde_json::to:value` to
+/// construct the parameters. Because `serde_json::to_value` serializes the type which allocates
+/// whereas `Into<JsonValue>` doesn't in most cases.
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum JsonRpcParams<'a> {

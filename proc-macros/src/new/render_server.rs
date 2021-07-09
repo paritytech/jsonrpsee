@@ -61,9 +61,7 @@ impl RpcDescription {
 			if method.signature.sig.asyncness.is_some() {
 				quote! {
 					rpc.register_async_method(#rpc_method_name, |params, context| {
-						let owned_params = params.owned();
 						let fut = async move {
-							let params = owned_params.borrowed();
 							#parsing
 							Ok(context.as_ref().#rust_method_name(#params_seq).await)
 						};

@@ -215,7 +215,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		F: Fn(RpcParams, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>> + Copy + Send + Sync + 'static,
+		F: Fn(OwnedRpcParams, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>> + Copy + Send + Sync + 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -226,7 +226,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
-					let params = params.borrowed();
 					let id = id.borrowed();
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
