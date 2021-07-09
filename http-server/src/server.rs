@@ -24,7 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{response, AccessControl, TEN_MB_SIZE_BYTES};
+use crate::{response, AccessControl};
+use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use futures_channel::mpsc;
 use futures_util::{lock::Mutex, stream::StreamExt, SinkExt};
 use hyper::{

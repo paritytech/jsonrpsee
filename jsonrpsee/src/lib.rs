@@ -25,7 +25,7 @@ pub use utils::server::rpc_module::{RpcModule, SubscriptionSink};
 pub use proc_macros;
 
 /// Common types used to implement JSON RPC server and client.
-#[cfg(feature = "macros")]
+#[cfg(any(feature = "types", feature = "macros"))]
 pub mod types {
 	pub use ::types::*;
 

@@ -19,7 +19,7 @@ utils = { path = "../utils", version = "0.2.0", package = "jsonrpsee-utils", opt
 types = { path = "../types", version = "0.2.0", package = "jsonrpsee-types", optional = true }
 
 [features]
-client = ["http-client", "ws-client"]
-server = ["http-server", "ws-server", "utils", "macros"]
+client = ["http-client", "ws-client", "types"]
+server = ["http-server", "ws-server", "utils", "types"]
 macros = ["proc-macros", "types"]
 full = ["client", "server", "macros", "utils"]
