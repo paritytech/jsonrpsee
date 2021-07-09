@@ -59,13 +59,16 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 			.boxed()
 		})
 		.unwrap();
-	module.register_async_method("add_async", |params, _| {
-		async move {
-			let params: Vec<u64> = params.parse()?;
-			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
-		}.boxed()
-	}).unwrap();
+	module
+		.register_async_method("add_async", |params, _| {
+			async move {
+				let params: Vec<u64> = params.parse()?;
+				let sum: u64 = params.into_iter().sum();
+				Ok(sum)
+			}
+			.boxed()
+		})
+		.unwrap();
 	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
 	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
 	module

@@ -68,10 +68,7 @@ pub struct RpcParams<'a> {
 impl<'a> RpcParams<'a> {
 	/// Create params
 	pub fn new(json: Option<&'a str>) -> Self {
-		Self {
-			json: json.map(Into::into),
-			offset: 0,
-		}
+		Self { json: json.map(Into::into), offset: 0 }
 	}
 
 	fn next_inner<'temp, T>(&'temp mut self) -> Option<Result<T, CallError>>
@@ -106,9 +103,7 @@ impl<'a> RpcParams<'a> {
 
 				Some(Ok(value))
 			}
-			Err(_) => {
-				Some(Err(CallError::InvalidParams))
-			}
+			Err(_) => Some(Err(CallError::InvalidParams)),
 		}
 	}
 
@@ -181,13 +176,10 @@ impl<'a> RpcParams<'a> {
 	}
 
 	/// Convert `RpcParams<'a>` to `RpcParams<'static>` so that it can be moved across threads.
-    ///
+	///
 	/// This will cause an allocation if the params internally are using a borrowed JSON slice.
 	pub fn into_owned(self) -> RpcParams<'static> {
-		RpcParams {
-			json: self.json.map(|s| Cow::owned(s.into_owned())),
-			offset: self.offset,
-		}
+		RpcParams { json: self.json.map(|s| Cow::owned(s.into_owned())), offset: self.offset }
 	}
 }
 
