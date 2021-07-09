@@ -20,6 +20,6 @@ types = { path = "../types", version = "0.2.0", package = "jsonrpsee-types", opt
 
 [features]
 client = ["http-client", "ws-client"]
-server = ["http-server", "ws-server", "utils"]
+server = ["http-server", "ws-server", "utils", "macros"]
 macros = ["proc-macros", "types"]
 full = ["client", "server", "macros", "utils"]
