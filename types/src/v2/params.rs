@@ -1,7 +1,7 @@
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
 use beef::Cow;
-use serde::de::{self, DeserializeOwned, Deserializer, Unexpected, Visitor};
+use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -59,42 +59,54 @@ impl Serialize for TwoPointZero {
 }
 
 /// Parameters sent with the RPC request
-#[derive(Clone, Copy, Debug)]
-pub struct RpcParams<'a>(Option<&'a str>);
+#[derive(Clone, Debug)]
+pub struct RpcParams<'a> {
+	json: Option<Cow<'a, str>>,
+	offset: usize,
+}
 
 impl<'a> RpcParams<'a> {
 	/// Create params
-	pub fn new(raw: Option<&'a str>) -> Self {
-		Self(raw)
+	pub fn new(json: Option<&'a str>) -> Self {
+		Self {
+			json: json.map(Into::into),
+			offset: 0,
+		}
 	}
 
-	fn next_inner<T>(&mut self) -> Option<Result<T, CallError>>
+	fn next_inner<'temp, T>(&'temp mut self) -> Option<Result<T, CallError>>
 	where
-		T: Deserialize<'a>,
+		T: Deserialize<'temp>,
 	{
-		let mut json = self.0?.trim_start();
+		let json = self.json.as_ref()?.as_ref();
 
-		match json.as_bytes().get(0)? {
-			b']' => {
-				self.0 = None;
-
-				return None;
+		loop {
+			match json.as_bytes().get(self.offset)? {
+				b']' => {
+					return None;
+				}
+				b'[' | b',' => {
+					self.offset += 1;
+					break;
+				}
+				b' ' | b'\n' | b'\r' | b'\t' | 0x0C => {
+					self.offset += 1;
+				}
+				_ => {
+					return Some(Err(CallError::InvalidParams));
+				}
 			}
-			b'[' | b',' => json = &json[1..],
-			_ => return Some(Err(CallError::InvalidParams)),
 		}
 
-		let mut iter = serde_json::Deserializer::from_str(json).into_iter::<T>();
+		let mut iter = serde_json::Deserializer::from_str(&json[self.offset..]).into_iter::<T>();
 
 		match iter.next()? {
 			Ok(value) => {
-				self.0 = Some(&json[iter.byte_offset()..]);
+				self.offset += iter.byte_offset();
 
 				Some(Ok(value))
 			}
 			Err(_) => {
-				self.0 = None;
-
 				Some(Err(CallError::InvalidParams))
 			}
 		}
@@ -114,9 +126,9 @@ impl<'a> RpcParams<'a> {
 	/// assert_eq!(b, 10);
 	/// assert_eq!(c, "foo");
 	/// ```
-	pub fn next<T>(&mut self) -> Result<T, CallError>
+	pub fn next<'temp, T>(&'temp mut self) -> Result<T, CallError>
 	where
-		T: Deserialize<'a>,
+		T: Deserialize<'temp>,
 	{
 		match self.next_inner() {
 			Some(result) => result,
@@ -141,9 +153,9 @@ impl<'a> RpcParams<'a> {
 	///
 	/// assert_eq!(params, [Some(1), Some(2), None, None]);
 	/// ```
-	pub fn optional_next<T>(&mut self) -> Result<Option<T>, CallError>
+	pub fn optional_next<'temp, T>(&'temp mut self) -> Result<Option<T>, CallError>
 	where
-		T: Deserialize<'a>,
+		T: Deserialize<'temp>,
 	{
 		match self.next_inner::<Option<T>>() {
 			Some(result) => result,
@@ -152,49 +164,30 @@ impl<'a> RpcParams<'a> {
 	}
 
 	/// Attempt to parse all parameters as array or map into type `T`
-	pub fn parse<T>(self) -> Result<T, CallError>
+	pub fn parse<T>(&'a self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
 	{
-		let params = self.0.unwrap_or("null");
+		let params = self.json.as_ref().map(AsRef::as_ref).unwrap_or("null");
 		serde_json::from_str(params).map_err(|_| CallError::InvalidParams)
 	}
 
 	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
-	pub fn one<T>(self) -> Result<T, CallError>
+	pub fn one<T>(&'a self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
 	{
 		self.parse::<[T; 1]>().map(|[res]| res)
 	}
-}
 
-/// Owned version of [`RpcParams`].
-#[derive(Clone, Debug)]
-pub struct OwnedRpcParams(Option<String>);
-
-impl OwnedRpcParams {
-	/// Attempt to parse all parameters as array or map into type `T`
-	pub fn parse<T>(self) -> Result<T, CallError>
-	where
-		T: DeserializeOwned,
-	{
-		let params = self.0.unwrap_or("null".into());
-		serde_json::from_str(params.as_str()).map_err(|_| CallError::InvalidParams)
-	}
-
-	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
-	pub fn one<T>(self) -> Result<T, CallError>
-	where
-		T: DeserializeOwned,
-	{
-		self.parse::<[T; 1]>().map(|[res]| res)
-	}
-}
-
-impl<'a> From<RpcParams<'a>> for OwnedRpcParams {
-	fn from(borrowed: RpcParams<'a>) -> Self {
-		Self(borrowed.0.map(Into::into))
+	/// Convert `RpcParams<'a>` to `RpcParams<'static>` so that it can be moved across threads.
+    ///
+	/// This will cause an allocation if the params internally are using a borrowed JSON slice.
+	pub fn into_owned(self) -> RpcParams<'static> {
+		RpcParams {
+			json: self.json.map(|s| Cow::owned(s.into_owned())),
+			offset: self.offset,
+		}
 	}
 }
 
