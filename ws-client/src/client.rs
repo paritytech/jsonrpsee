@@ -25,22 +25,24 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::tokio::Mutex;
-use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
-use crate::v2::error::JsonRpcError;
-use crate::v2::params::{Id, JsonRpcParams};
-use crate::v2::request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificationSer};
-use crate::v2::response::JsonRpcResponse;
-use crate::TEN_MB_SIZE_BYTES;
-use crate::{
-	helpers::call_with_timeout, manager::RequestManager, BatchMessage, Error, FrontToBack, RegisterNotificationMessage,
-	RequestMessage, Subscription, SubscriptionMessage,
+use crate::types::{
+	traits::{Client, SubscriptionClient},
+	v2::{
+		error::JsonRpcError,
+		params::{Id, JsonRpcParams},
+		request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificationSer},
+		response::JsonRpcResponse,
+	},
+	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionMessage,
+	TEN_MB_SIZE_BYTES,
 };
 use crate::{
 	helpers::{
-		build_unsubscribe_message, process_batch_response, process_error_response, process_notification,
-		process_single_response, process_subscription_response, stop_subscription,
+		build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response,
+		process_notification, process_single_response, process_subscription_response, stop_subscription,
 	},
+	manager::RequestManager,
 	transport::CertificateStore,
 };
 use async_trait::async_trait;
