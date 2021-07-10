@@ -307,7 +307,13 @@ mod test {
 	fn id_deserialization() {
 		let s = r#""2""#;
 		let deserialized: Id = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized, Id::Str("2".into()));
+		match deserialized {
+			Id::Str(ref cow) => {
+				assert!(cow.is_borrowed());
+				assert_eq!(cow, "2");
+			}
+			_ => panic!("Expected Id::Str"),
+		}
 
 		let s = r#"2"#;
 		let deserialized: Id = serde_json::from_str(s).unwrap();
