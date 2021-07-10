@@ -26,7 +26,7 @@
 
 use crate::{response, AccessControl, TEN_MB_SIZE_BYTES};
 use futures_channel::mpsc;
-use futures_util::{lock::Mutex, stream::StreamExt, SinkExt};
+use futures_util::{stream::StreamExt, SinkExt};
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
 	service::{make_service_fn, service_fn},
@@ -97,15 +97,12 @@ impl Builder {
 
 		let listener = hyper::Server::from_tcp(listener)?;
 
-		let stop_pair = mpsc::channel(1);
 		Ok(Server {
 			listener,
 			local_addr,
 			methods: Methods::default(),
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
-			stop_pair,
-			stop_handle: Arc::new(Mutex::new(())),
 		})
 	}
 }
@@ -117,21 +114,23 @@ impl Default for Builder {
 }
 
 /// Handle used to stop the running server.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StopHandle {
 	stop_sender: mpsc::Sender<()>,
-	stop_handle: Arc<Mutex<()>>,
+	stop_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl StopHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
 	pub async fn stop(&mut self) -> Result<(), Error> {
-		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
+		self.stop_sender.feed(()).await.map_err(|_| Error::AlreadyStopped)
 	}
 
 	/// Blocks indefinitely until the server is stopped.
-	pub async fn wait_for_stop(&self) {
-		self.stop_handle.lock().await;
+	pub async fn wait_for_stop(&mut self) {
+		if let Some(stop) = self.stop_handle.take() {
+			let _ = stop.await;
+		}
 	}
 }
 
@@ -148,10 +147,6 @@ pub struct Server {
 	max_request_body_size: u32,
 	/// Access control
 	access_control: AccessControl,
-	/// Pair of channels to stop the server.
-	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
-	/// Stop handle that indicates whether server has been stopped.
-	stop_handle: Arc<Mutex<()>>,
 }
 
 impl Server {
@@ -173,21 +168,13 @@ impl Server {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
 	}
 
-	/// Returns the handle to stop the running server.
-	pub fn stop_handle(&self) -> StopHandle {
-		StopHandle { stop_sender: self.stop_pair.0.clone(), stop_handle: self.stop_handle.clone() }
-	}
-
 	/// Start the server.
-	pub async fn start(self) -> Result<(), Error> {
-		// Lock the stop mutex so existing stop handles can wait for server to stop.
-		// It will be unlocked once this function returns.
-		let _stop_handle = self.stop_handle.lock().await;
-
+	pub async fn start(self) -> StopHandle {
 		let methods = Arc::new(self.methods);
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
-		let mut stop_receiver = self.stop_pair.1;
+		let (tx, mut rx) = mpsc::channel(1);
+		let listener = self.listener;
 
 		let make_service = make_service_fn(move |_| {
 			let methods = methods.clone();
@@ -276,13 +263,11 @@ impl Server {
 			}
 		});
 
-		let server = self.listener.serve(make_service);
-		server
-			.with_graceful_shutdown(async move {
-				stop_receiver.next().await;
-			})
-			.await
-			.map_err(Into::into)
+		let handle = tokio::spawn(async move {
+			let server = listener.serve(make_service);
+			let _ = server.with_graceful_shutdown(async move { rx.next().await.map_or((), |_| ()) }).await;
+		});
+		StopHandle { stop_handle: Some(handle), stop_sender: tx }
 	}
 }
 
