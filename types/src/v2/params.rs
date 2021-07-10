@@ -58,7 +58,10 @@ impl Serialize for TwoPointZero {
 	}
 }
 
-/// Parameters sent with the RPC request
+/// Parameters sent with the RPC request.
+///
+/// The data containing the params is a `Cow<&str>` and can either be a borrowed `&str` of JSON from an incoming [`JsonRpcRequest`] (which in
+/// turn borrows it from the input buffer that is shared between requests); or, it can be an owned `String`.
 #[derive(Clone, Debug)]
 pub struct RpcParams<'a>(Option<Cow<'a, str>>);
 
@@ -68,12 +71,15 @@ impl<'a> RpcParams<'a> {
 		Self(raw.map(Into::into))
 	}
 
-	/// Obtain a sequence parser
+	/// Obtain a sequence parser, [`RpcParamsSequence`].
+	///
+	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC
+	/// request has optional parameters at the tail that may or may not be present.
 	pub fn sequence(&self) -> RpcParamsSequence {
 		RpcParamsSequence(self.0.as_ref().map(AsRef::as_ref).unwrap_or(""))
 	}
 
-	/// Attempt to parse all parameters as array or map into type `T`
+	/// Attempt to parse all parameters as an array or map into type `T`.
 	pub fn parse<T>(&'a self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
@@ -98,8 +104,11 @@ impl<'a> RpcParams<'a> {
 	}
 }
 
-/// An `Iterator`-like parser for a sequence of `RpcParams`. This will parse the params one at
-/// a time, and allows for graceful handling of optional parameters at the tail.
+/// An `Iterator`-like parser for a sequence of `RpcParams`.
+///
+/// This will parse the params one at a time, and allows for graceful handling of optional parameters at the tail; other
+/// use cases are likely better served by [`RpcParams::parse`]. The reason this is not an actual [`Iterator`] is that
+/// params parsing (often) yields values of different types.
 #[derive(Debug)]
 pub struct RpcParamsSequence<'a>(&'a str);
 
@@ -192,7 +201,7 @@ impl<'a> RpcParamsSequence<'a> {
 
 /// [Serializable JSON-RPC parameters](https://www.jsonrpc.org/specification#parameter_structures)
 ///
-/// If your type implement `Into<JsonValue>` call that in favor of `serde_json::to:value` to
+/// If your type implements `Into<JsonValue>`, call that in favor of `serde_json::to:value` to
 /// construct the parameters. Because `serde_json::to_value` serializes the type which allocates
 /// whereas `Into<JsonValue>` doesn't in most cases.
 #[derive(Serialize, Debug, Clone)]
@@ -200,9 +209,9 @@ impl<'a> RpcParamsSequence<'a> {
 pub enum JsonRpcParams<'a> {
 	/// No params.
 	NoParams,
-	/// Positional params (heap allocated)
+	/// Positional params (heap allocated).
 	Array(Vec<JsonValue>),
-	/// Positional params (slice)
+	/// Positional params (slice).
 	ArrayRef(&'a [JsonValue]),
 	/// Params by name.
 	Map(BTreeMap<&'a str, JsonValue>),
@@ -389,6 +398,10 @@ mod test {
 		assert_eq!(seq.next::<&str>().unwrap(), "foo");
 		assert_eq!(seq.next::<&str>().unwrap(), "bar");
 		assert!(seq.next::<&str>().is_err());
+
+		// It's ok to parse the params again.
+		let params: (&str, &str) = params.parse().unwrap();
+		assert_eq!(params, ("foo", "bar"));
 	}
 
 	#[test]
