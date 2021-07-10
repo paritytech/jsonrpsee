@@ -60,8 +60,9 @@ impl Serialize for TwoPointZero {
 
 /// Parameters sent with the RPC request.
 ///
-/// The data containing the params is a `Cow<&str>` and can either be a borrowed `&str` of JSON from an incoming [`JsonRpcRequest`] (which in
-/// turn borrows it from the input buffer that is shared between requests); or, it can be an owned `String`.
+/// The data containing the params is a `Cow<&str>` and can either be a borrowed `&str` of JSON from an incoming
+/// [`super::request::JsonRpcRequest`] (which in turn borrows it from the input buffer that is shared between requests);
+/// or, it can be an owned `String`.
 #[derive(Clone, Debug)]
 pub struct RpcParams<'a>(Option<Cow<'a, str>>);
 
