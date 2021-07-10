@@ -284,38 +284,15 @@ impl<'a> Id<'a> {
 			_ => None,
 		}
 	}
-}
 
-/// Owned version of [`Id`] that allocates memory for the `Str` variant.
-#[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-#[serde(untagged)]
-pub enum OwnedId {
-	/// Null
-	Null,
-	/// Numeric id
-	Number(u64),
-	/// String id
-	Str(String),
-}
-
-impl OwnedId {
-	/// Converts `OwnedId` into borrowed `Id`.
-	pub fn borrowed(&self) -> Id<'_> {
+	/// Convert `Id<'a>` to `Id<'static>` so that it can be moved across threads.
+	///
+	/// This can cause an allocation if the id is a string.
+	pub fn into_owned(self) -> Id<'static> {
 		match self {
-			Self::Null => Id::Null,
-			Self::Number(num) => Id::Number(*num),
-			Self::Str(str) => Id::Str(Cow::borrowed(str)),
-		}
-	}
-}
-
-impl<'a> From<Id<'a>> for OwnedId {
-	fn from(borrowed: Id<'a>) -> Self {
-		match borrowed {
-			Id::Null => Self::Null,
-			Id::Number(num) => Self::Number(num),
-			Id::Str(num) => Self::Str(num.as_ref().to_owned()),
+			Id::Null => Id::Null,
+			Id::Number(num) => Id::Number(num),
+			Id::Str(s) => Id::Str(Cow::owned(s.into_owned())),
 		}
 	}
 }

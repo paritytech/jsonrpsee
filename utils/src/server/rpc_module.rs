@@ -4,7 +4,7 @@ use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{
-	Id, JsonRpcSubscriptionParams, OwnedId, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
+	Id, JsonRpcSubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
 };
 use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 
@@ -23,7 +23,7 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, Conne
 pub type AsyncMethod = Arc<
 	dyn Send
 		+ Sync
-		+ Fn(OwnedId, RpcParams<'static>, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
+		+ Fn(Id<'static>, RpcParams<'static>, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -62,7 +62,7 @@ impl MethodCallback {
 			MethodCallback::Async(callback) => {
 				let tx = tx.clone();
 				let params = params.into_owned();
-				let id = OwnedId::from(req.id);
+				let id = req.id.into_owned();
 
 				(callback)(id, params, tx, conn_id).await
 			}
@@ -231,7 +231,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
-					let id = id.borrowed();
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
 						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
