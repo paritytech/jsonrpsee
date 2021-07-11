@@ -327,12 +327,11 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///         let rt = tokio::runtime::Runtime::new().unwrap();
 ///         let server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
 ///         // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
-///         let module = RpcServerImpl.into_rpc().unwrap();
 ///
 ///         rt.block_on(async move {
 ///             server_started_tx.send(server.local_addr().unwrap()).unwrap();
 ///
-///             server.start(module).await
+///             server.start(RpcServerImpl.into_rpc()).await
 ///         });
 ///     });
 ///

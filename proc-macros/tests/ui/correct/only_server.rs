@@ -40,12 +40,12 @@ pub async fn websocket_server() -> SocketAddr {
 
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
-		let mut server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
+		let server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
 
 		rt.block_on(async move {
 			server_started_tx.send(server.local_addr().unwrap()).unwrap();
 
-			server.start(RpcServerImpl.into_rpc().unwrap()).await
+			server.start(RpcServerImpl.into_rpc()).await
 		});
 	});
 

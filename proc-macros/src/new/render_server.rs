@@ -106,13 +106,17 @@ impl RpcDescription {
 
 		Ok(quote! {
 			#[doc = #doc_comment]
-			fn into_rpc(self) -> Result<#rpc_module<Self>, #jrps_error> {
-				let mut rpc = #rpc_module::new(self);
+			fn into_rpc(self) -> #rpc_module<Self> {
+				let inner = move || -> Result<#rpc_module<Self>, #jrps_error> {
+					let mut rpc = #rpc_module::new(self);
 
-				#(#methods)*
-				#(#subscriptions)*
+					#(#methods)*
+					#(#subscriptions)*
 
-				Ok(rpc)
+					Ok(rpc)
+				};
+
+				inner().expect("Proc macro method names should never conflict")
 			}
 		})
 	}
