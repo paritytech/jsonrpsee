@@ -13,8 +13,8 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::fmt::Debug;
-use std::sync::Arc;
 use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
