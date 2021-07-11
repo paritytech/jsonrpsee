@@ -53,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "unsub_one_param", |params, mut sink, _| {
@@ -76,8 +76,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		})
 		.unwrap();
 
-	server.register_module(module).unwrap();
 	let addr = server.local_addr()?;
-	tokio::spawn(async move { server.start().await });
+	tokio::spawn(server.start(module));
 	Ok(addr)
 }

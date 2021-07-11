@@ -34,7 +34,7 @@ async fn server() -> SocketAddr {
 /// It has two hardcoded methods: "say_hello" and "add"
 /// Returns the address together with handles for server future and server stop.
 async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
-	let mut server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _| {
@@ -71,16 +71,15 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	server.register_module(module).unwrap();
 
 	let stop_handle = server.stop_handle();
-	let join_handle = tokio::spawn(server.start());
+	let join_handle = tokio::spawn(server.start(module));
 	(addr, join_handle, stop_handle)
 }
 
 /// Run server with user provided context.
 async fn server_with_context() -> SocketAddr {
-	let mut server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let ctx = TestContext;
 	let mut rpc_module = RpcModule::new(ctx);
@@ -121,10 +120,9 @@ async fn server_with_context() -> SocketAddr {
 		})
 		.unwrap();
 
-	server.register_module(rpc_module).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(server.start());
+	tokio::spawn(server.start(rpc_module));
 	addr
 }
 
@@ -132,12 +130,11 @@ async fn server_with_context() -> SocketAddr {
 async fn can_set_the_max_request_body_size() {
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 10 bytes
-	let mut server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
+	let server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
-	server.register_module(module).unwrap();
 	let addr = server.local_addr().unwrap();
-	tokio::spawn(async { server.start().await });
+	tokio::spawn(server.start(module));
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -156,13 +153,12 @@ async fn can_set_the_max_request_body_size() {
 async fn can_set_max_connections() {
 	let addr = "127.0.0.1:0";
 	// Server that accepts max 2 connections
-	let mut server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();
+	let server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
-	server.register_module(module).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(async { server.start().await });
+	tokio::spawn(server.start(module));
 
 	let conn1 = WebSocketTestClient::new(addr).await;
 	let conn2 = WebSocketTestClient::new(addr).await;
@@ -438,8 +434,8 @@ async fn can_register_modules() {
 	let cx2 = Vec::<u8>::new();
 	let mut mod2 = RpcModule::new(cx2);
 
-	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	assert_eq!(server.method_names().len(), 0);
+	assert_eq!(mod1.method_names().count(), 0);
+	assert_eq!(mod2.method_names().count(), 0);
 	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
@@ -447,12 +443,11 @@ async fn can_register_modules() {
 	// Won't register, name clashes
 	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
-	server.register_module(mod1).unwrap();
-	assert_eq!(server.method_names().len(), 2);
-	let err = server.register_module(mod2).unwrap_err();
+	assert_eq!(mod1.method_names().count(), 2);
+	let err = mod1.merge(mod2).unwrap_err();
 	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
 	assert!(matches!(err, _expected_err));
-	assert_eq!(server.method_names().len(), 2);
+	assert_eq!(mod1.method_names().count(), 2);
 }
 
 #[tokio::test]
