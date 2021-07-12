@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::Error,
-	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, Subscription, WsClientBuilder},
+	types::{traits::SubscriptionClient, v2::params::JsonRpcParams, Error, Subscription},
+	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;

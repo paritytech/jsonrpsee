@@ -9,7 +9,7 @@ impl RpcDescription {
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
 
-		let async_trait = self.jrps_server_item(quote! { __reexports::async_trait });
+		let async_trait = self.jrps_server_item(quote! { types::__reexports::async_trait });
 
 		// Doc-comment to be associated with the server.
 		let doc_comment = format!("Server trait implementation for the `{}` RPC API.", &self.trait_def.ident);
@@ -44,7 +44,7 @@ impl RpcDescription {
 	}
 
 	fn render_into_rpc(&self) -> Result<TokenStream2, syn::Error> {
-		let jrps_error = self.jrps_server_item(quote! { error::Error });
+		let jrps_error = self.jrps_server_item(quote! { types::Error });
 		let rpc_module = self.jrps_server_item(quote! { RpcModule });
 
 		let methods = self.methods.iter().map(|method| {
@@ -61,9 +61,7 @@ impl RpcDescription {
 			if method.signature.sig.asyncness.is_some() {
 				quote! {
 					rpc.register_async_method(#rpc_method_name, |params, context| {
-						let owned_params = params.owned();
 						let fut = async move {
-							let params = owned_params.borrowed();
 							#parsing
 							Ok(context.as_ref().#rust_method_name(#params_seq).await)
 						};
@@ -134,7 +132,7 @@ impl RpcDescription {
 		// error return type.
 		let (err, map_err_impl, ok_or_impl) = if is_method {
 			// For methods, we return `CallError`.
-			let jrps_call_error = self.jrps_server_item(quote! { error::CallError });
+			let jrps_call_error = self.jrps_server_item(quote! { types::CallError });
 			let err = quote! { #jrps_call_error::InvalidParams };
 			let map_err = quote! { .map_err(|_| #jrps_call_error::InvalidParams)? };
 			let ok_or = quote! { .ok_or(#jrps_call_error::InvalidParams)? };
@@ -142,16 +140,16 @@ impl RpcDescription {
 		} else {
 			// For subscriptions, we return `Error`.
 			// Note that while `Error` can be constructed from `CallError`, we should not do it,
-			// because it will be an obuse of the error type semantics.
+			// because it would be an abuse of the error type semantics.
 			// Instead, we use suitable top-level error variants.
-			let jrps_error = self.jrps_server_item(quote! { error::Error });
+			let jrps_error = self.jrps_server_item(quote! { types::Error });
 			let err = quote! { #jrps_error::Request("Required paramater missing".into()) };
 			let map_err = quote! { .map_err(|err| #jrps_error::ParseError(err))? };
 			let ok_or = quote! { .ok_or(#jrps_error::Request("Required paramater missing".into()))? };
 			(err, map_err, ok_or)
 		};
 
-		let serde_json = self.jrps_server_item(quote! { __reexports::serde_json });
+		let serde_json = self.jrps_server_item(quote! { types::__reexports::serde_json });
 
 		// Parameters encoded as a tuple (to be parsed from array).
 		let (params_fields_seq, params_types_seq): (Vec<_>, Vec<_>) = params.iter().cloned().unzip();

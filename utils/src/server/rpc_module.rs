@@ -4,8 +4,7 @@ use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{
-	Id, JsonRpcSubscriptionParams, OwnedId, OwnedRpcParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId,
-	TwoPointZero,
+	Id, JsonRpcSubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
 };
 use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 
@@ -23,7 +22,9 @@ use std::sync::Arc;
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod = Arc<
-	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
+	dyn Send
+		+ Sync
+		+ Fn(Id<'static>, RpcParams<'static>, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -61,8 +62,8 @@ impl MethodCallback {
 			MethodCallback::Sync(callback) => (callback)(req.id.clone(), params, tx, conn_id),
 			MethodCallback::Async(callback) => {
 				let tx = tx.clone();
-				let params = OwnedRpcParams::from(params);
-				let id = OwnedId::from(req.id);
+				let params = params.into_owned();
+				let id = req.id.into_owned();
 
 				(callback)(id, params, tx, conn_id).await
 			}
@@ -225,7 +226,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		F: Fn(RpcParams, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>> + Copy + Send + Sync + 'static,
+		F: Fn(RpcParams<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>>
+			+ Copy
+			+ Send
+			+ Sync
+			+ 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -236,8 +241,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
-					let params = params.borrowed();
-					let id = id.borrowed();
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
 						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
@@ -277,8 +280,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "unsub", |mut params, mut sink, ctx| {
-	///     let x: usize = params.next()?;
+	/// ctx.register_subscription("sub", "unsub", |params, mut sink, ctx| {
+	///     let x: usize = params.one()?;
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
 	///         sink.send(&sum)

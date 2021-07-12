@@ -1,10 +1,13 @@
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
+use crate::types::v2::{
+	error::JsonRpcError,
+	params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId},
+	request::{JsonRpcCallSer, JsonRpcNotification},
+	response::JsonRpcResponse,
+};
+use crate::types::{Error, RequestMessage};
 use futures::channel::{mpsc, oneshot};
-use jsonrpsee_types::v2::params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId};
-use jsonrpsee_types::v2::request::{JsonRpcCallSer, JsonRpcNotification};
-use jsonrpsee_types::v2::response::JsonRpcResponse;
-use jsonrpsee_types::{v2::error::JsonRpcError, Error, RequestMessage};
 use serde_json::Value as JsonValue;
 use std::time::Duration;
 

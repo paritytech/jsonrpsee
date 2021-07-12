@@ -28,7 +28,7 @@ pub fn build_client_api(api: crate::api_def::ApiDefinition) -> Result<proc_macro
 						"Having `self` is not allowed in RPC queries definitions",
 					));
 				}
-				syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => (ty, pat.span(), param_variant_name(&pat)?),
+				syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => (ty, pat.span(), param_variant_name(pat)?),
 			};
 			params_list.push(quote_spanned!(pat_span=> #param_variant_name: #ty));
 		}
@@ -69,7 +69,7 @@ fn build_client_impl(api: &crate::api_def::ApiDefinition) -> Result<proc_macro2:
 	let enum_name = &api.name;
 
 	let (impl_generics_org, type_generics, where_clause_org) = api.generics.split_for_impl();
-	let client_functions = build_client_functions(&api)?;
+	let client_functions = build_client_functions(api)?;
 
 	Ok(quote_spanned!(api.name.span() =>
 		impl #impl_generics_org #enum_name #type_generics #where_clause_org {
@@ -109,9 +109,7 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 						"Having `self` is not allowed in RPC queries definitions",
 					));
 				}
-				syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => {
-					(ty, pat.span(), rpc_param_name(&pat, &attrs)?)
-				}
+				syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => (ty, pat.span(), rpc_param_name(pat, attrs)?),
 			};
 
 			let generated_param_name =
@@ -122,16 +120,16 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name,
-					#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::Error::ParseError)?
+					#_crate::types::to_json_value(#generated_param_name.into()).map_err(#_crate::types::Error::ParseError)?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span=>
-				#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::Error::ParseError)?
+				#_crate::types::to_json_value(#generated_param_name.into()).map_err(#_crate::types::Error::ParseError)?
 			));
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote_spanned!(function.signature.span()=> #_crate::v2::params::JsonRpcParams::NoParams)
+			quote_spanned!(function.signature.span()=> #_crate::types::v2::params::JsonRpcParams::NoParams)
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=> vec![#(#params_to_array),*].into())
 		} else {
@@ -156,10 +154,10 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-			#visibility async fn #f_name (client: &impl #_crate::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::Error>
+			#visibility async fn #f_name (client: &impl #_crate::types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::types::Error>
 			where
-				#ret_ty: #_crate::DeserializeOwned
-				#(, #params_tys: #_crate::Serialize)*
+				#ret_ty: #_crate::types::DeserializeOwned
+				#(, #params_tys: #_crate::types::Serialize)*
 			{
 				#function_body
 			}
