@@ -51,7 +51,7 @@ use tokio::{
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
@@ -69,19 +69,6 @@ pub struct Server {
 }
 
 impl Server {
-	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
-	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
-	/// is returned. Note that the [`RpcModule`] is consumed after this call.
-	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
-		self.methods.merge(module.into_methods())?;
-		Ok(())
-	}
-
-	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<&'static str> {
-		self.methods.method_names()
-	}
-
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
@@ -93,15 +80,14 @@ impl Server {
 	}
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
-	pub async fn start(self) {
+	pub async fn start(self, methods: impl Into<Methods>) {
 		// Acquire read access to the lock such that additional reader(s) may share this lock.
 		// Write access to this lock will only be possible after the server and all background tasks have stopped.
 		let _stop_handle = self.stop_handle.read().await;
 		let shutdown = self.stop_pair.0;
+		let methods = methods.into();
 
-		let methods = self.methods;
 		let mut id = 0;
-
 		let mut driver = ConnDriver::new(self.listener, self.stop_pair.1);
 
 		loop {

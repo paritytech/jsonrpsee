@@ -1,6 +1,7 @@
 use super::RpcDescription;
-use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use proc_macro2::{Span, TokenStream as TokenStream2};
+use quote::{quote, quote_spanned};
+use std::collections::HashSet;
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -47,70 +48,99 @@ impl RpcDescription {
 		let jrps_error = self.jrps_server_item(quote! { types::Error });
 		let rpc_module = self.jrps_server_item(quote! { RpcModule });
 
-		let methods = self.methods.iter().map(|method| {
-			// Rust method to invoke (e.g. `self.<foo>(...)`).
-			let rust_method_name = &method.signature.sig.ident;
-			// Name of the RPC method (e.g. `foo_makeSpam`).
-			let rpc_method_name = self.rpc_identifier(&method.name);
-			// `parsing` is the code associated with parsing structure from the
-			// provided `RpcParams` object.
-			// `params_seq` is the comma-delimited sequence of parametsrs.
-			let is_method = true;
-			let (parsing, params_seq) = self.render_params_decoding(&method.params, is_method);
-
-			if method.signature.sig.asyncness.is_some() {
-				quote! {
-					rpc.register_async_method(#rpc_method_name, |params, context| {
-						let fut = async move {
-							#parsing
-							Ok(context.as_ref().#rust_method_name(#params_seq).await)
-						};
-						Box::pin(fut)
-					})?;
-				}
+		let mut registered = HashSet::new();
+		let mut errors = Vec::new();
+		let mut check_name = |name: String, span: Span| {
+			if registered.contains(&name) {
+				let message = format!("{:?} is already defined", name);
+				errors.push(quote_spanned!(span => compile_error!(#message);));
 			} else {
+				registered.insert(name);
+			}
+		};
+
+		let methods = self
+			.methods
+			.iter()
+			.map(|method| {
+				// Rust method to invoke (e.g. `self.<foo>(...)`).
+				let rust_method_name = &method.signature.sig.ident;
+				// Name of the RPC method (e.g. `foo_makeSpam`).
+				let rpc_method_name = self.rpc_identifier(&method.name);
+				// `parsing` is the code associated with parsing structure from the
+				// provided `RpcParams` object.
+				// `params_seq` is the comma-delimited sequence of parametsrs.
+				let is_method = true;
+				let (parsing, params_seq) = self.render_params_decoding(&method.params, is_method);
+
+				check_name(rpc_method_name.clone(), rust_method_name.span());
+
+				if method.signature.sig.asyncness.is_some() {
+					quote! {
+						rpc.register_async_method(#rpc_method_name, |params, context| {
+							let fut = async move {
+								#parsing
+								Ok(context.as_ref().#rust_method_name(#params_seq).await)
+							};
+							Box::pin(fut)
+						})?;
+					}
+				} else {
+					quote! {
+						rpc.register_method(#rpc_method_name, |params, context| {
+							#parsing
+							Ok(context.#rust_method_name(#params_seq))
+						})?;
+					}
+				}
+			})
+			.collect::<Vec<_>>();
+
+		let subscriptions = self
+			.subscriptions
+			.iter()
+			.map(|sub| {
+				// Rust method to invoke (e.g. `self.<foo>(...)`).
+				let rust_method_name = &sub.signature.sig.ident;
+				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
+				let rpc_sub_name = self.rpc_identifier(&sub.name);
+				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
+				let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
+				// `parsing` is the code associated with parsing structure from the
+				// provided `RpcParams` object.
+				// `params_seq` is the comma-delimited sequence of parametsrs.
+				let is_method = false;
+				let (parsing, params_seq) = self.render_params_decoding(&sub.params, is_method);
+
+				check_name(rpc_sub_name.clone(), rust_method_name.span());
+				check_name(rpc_unsub_name.clone(), rust_method_name.span());
+
 				quote! {
-					rpc.register_method(#rpc_method_name, |params, context| {
+					rpc.register_subscription(#rpc_sub_name, #rpc_unsub_name, |params, sink, context| {
 						#parsing
-						Ok(context.#rust_method_name(#params_seq))
+						Ok(context.as_ref().#rust_method_name(sink, #params_seq))
 					})?;
 				}
-			}
-		});
-
-		let subscriptions = self.subscriptions.iter().map(|sub| {
-			// Rust method to invoke (e.g. `self.<foo>(...)`).
-			let rust_method_name = &sub.signature.sig.ident;
-			// Name of the RPC method to subscribe (e.g. `foo_sub`).
-			let rpc_sub_name = self.rpc_identifier(&sub.name);
-			// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
-			let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
-			// `parsing` is the code associated with parsing structure from the
-			// provided `RpcParams` object.
-			// `params_seq` is the comma-delimited sequence of parametsrs.
-			let is_method = false;
-			let (parsing, params_seq) = self.render_params_decoding(&sub.params, is_method);
-
-			quote! {
-				rpc.register_subscription(#rpc_sub_name, #rpc_unsub_name, |params, sink, context| {
-					#parsing
-					Ok(context.as_ref().#rust_method_name(sink, #params_seq))
-				})?;
-			}
-		});
+			})
+			.collect::<Vec<_>>();
 
 		let doc_comment = "Collects all the methods and subscriptions defined in the trait \
 								and adds them into a single `RpcModule`.";
 
 		Ok(quote! {
 			#[doc = #doc_comment]
-			fn into_rpc(self) -> Result<#rpc_module<Self>, #jrps_error> {
-				let mut rpc = #rpc_module::new(self);
+			fn into_rpc(self) -> #rpc_module<Self> {
+				let inner = move || -> Result<#rpc_module<Self>, #jrps_error> {
+					let mut rpc = #rpc_module::new(self);
 
-				#(#methods)*
-				#(#subscriptions)*
+					#(#errors)*
+					#(#methods)*
+					#(#subscriptions)*
 
-				Ok(rpc)
+					Ok(rpc)
+				};
+
+				inner().expect("RPC macro method names should never conflict")
 			}
 		})
 	}
