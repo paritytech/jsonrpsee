@@ -102,7 +102,7 @@ impl RpcDescription {
 			.map(|sub| {
 				// Rust method to invoke (e.g. `self.<foo>(...)`).
 				let rust_method_name = &sub.signature.sig.ident;
-				// Name of the RPC method to subscribe (e.g. `foo_sub`).
+				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
 				let rpc_sub_name = self.rpc_identifier(&sub.name);
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
@@ -140,7 +140,7 @@ impl RpcDescription {
 					Ok(rpc)
 				};
 
-				inner().expect("Proc macro method names should never conflict")
+				inner().expect("RPC macro method names should never conflict")
 			}
 		})
 	}
