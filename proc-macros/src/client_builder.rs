@@ -122,11 +122,11 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name,
-					#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::types::Error::ParseError)?
+					#_crate::types::to_json_value(#generated_param_name.into()).map_err(#_crate::types::Error::ParseError)?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span=>
-				#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::types::Error::ParseError)?
+				#_crate::types::to_json_value(#generated_param_name.into()).map_err(#_crate::types::Error::ParseError)?
 			));
 		}
 
