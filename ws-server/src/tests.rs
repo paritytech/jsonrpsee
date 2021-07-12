@@ -26,16 +26,12 @@
 
 #![cfg(test)]
 
-use crate::types::{
-	error::{CallError, Error},
-	v2::params::RpcParams,
-};
+use crate::types::error::{CallError, Error};
 use crate::{server::StopHandle, RpcModule, WsServerBuilder};
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
