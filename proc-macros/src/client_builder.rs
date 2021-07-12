@@ -109,9 +109,7 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 						"Having `self` is not allowed in RPC queries definitions",
 					));
 				}
-				syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => {
-					(ty, pat.span(), rpc_param_name(pat, attrs)?)
-				}
+				syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => (ty, pat.span(), rpc_param_name(pat, attrs)?),
 			};
 
 			let generated_param_name =
