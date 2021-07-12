@@ -154,19 +154,6 @@ pub struct Server {
 }
 
 impl Server {
-	// /// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
-	// /// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
-	// /// is returned. Note that the [`RpcModule`] is consumed after this call.
-	// pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
-	// 	self.methods.merge(module.into_methods())?;
-	// 	Ok(())
-	// }
-
-	// /// Returns a `Vec` with all the method names registered on this server.
-	// pub fn method_names(&self) -> Vec<&'static str> {
-	// 	self.methods.method_names()
-	// }
-
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
