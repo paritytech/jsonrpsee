@@ -122,11 +122,11 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 			params_to_json.push(quote_spanned!(pat_span=>
 				map.insert(
 					#rpc_param_name,
-					#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::Error::ParseError)?
+					#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::types::Error::ParseError)?
 				);
 			));
 			params_to_array.push(quote_spanned!(pat_span=>
-				#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::Error::ParseError)?
+				#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::types::Error::ParseError)?
 			));
 		}
 
@@ -156,10 +156,10 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-			#visibility async fn #f_name (client: &impl #_crate::types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::Error>
+			#visibility async fn #f_name (client: &impl #_crate::types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::types::Error>
 			where
-				#ret_ty: #_crate::DeserializeOwned
-				#(, #params_tys: #_crate::Serialize)*
+				#ret_ty: #_crate::types::DeserializeOwned
+				#(, #params_tys: #_crate::types::Serialize)*
 			{
 				#function_body
 			}
