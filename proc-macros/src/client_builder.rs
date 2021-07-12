@@ -131,7 +131,7 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 		}
 
 		let params_building = if params_list.is_empty() {
-			quote_spanned!(function.signature.span()=> #_crate::v2::params::JsonRpcParams::NoParams)
+			quote_spanned!(function.signature.span()=> #_crate::types::v2::params::JsonRpcParams::NoParams)
 		} else if function.attributes.positional_params {
 			quote_spanned!(function.signature.span()=> vec![#(#params_to_array),*].into())
 		} else {
@@ -156,7 +156,7 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 		};
 
 		client_functions.push(quote_spanned!(function.signature.span()=>
-			#visibility async fn #f_name (client: &impl #_crate::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::Error>
+			#visibility async fn #f_name (client: &impl #_crate::types::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::Error>
 			where
 				#ret_ty: #_crate::DeserializeOwned
 				#(, #params_tys: #_crate::Serialize)*
