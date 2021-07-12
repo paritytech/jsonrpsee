@@ -28,7 +28,7 @@ pub fn build_client_api(api: crate::api_def::ApiDefinition) -> Result<proc_macro
 						"Having `self` is not allowed in RPC queries definitions",
 					));
 				}
-				syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => (ty, pat.span(), param_variant_name(&pat)?),
+				syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => (ty, pat.span(), param_variant_name(pat)?),
 			};
 			params_list.push(quote_spanned!(pat_span=> #param_variant_name: #ty));
 		}
@@ -69,7 +69,7 @@ fn build_client_impl(api: &crate::api_def::ApiDefinition) -> Result<proc_macro2:
 	let enum_name = &api.name;
 
 	let (impl_generics_org, type_generics, where_clause_org) = api.generics.split_for_impl();
-	let client_functions = build_client_functions(&api)?;
+	let client_functions = build_client_functions(api)?;
 
 	Ok(quote_spanned!(api.name.span() =>
 		impl #impl_generics_org #enum_name #type_generics #where_clause_org {
@@ -109,9 +109,7 @@ fn build_client_functions(api: &crate::api_def::ApiDefinition) -> Result<Vec<pro
 						"Having `self` is not allowed in RPC queries definitions",
 					));
 				}
-				syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => {
-					(ty, pat.span(), rpc_param_name(&pat, &attrs)?)
-				}
+				syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => (ty, pat.span(), rpc_param_name(pat, attrs)?),
 			};
 
 			let generated_param_name =
