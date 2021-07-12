@@ -2,13 +2,13 @@ use criterion::*;
 use futures_util::future::join_all;
 use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::{
-	http_client::{
+	http_client::HttpClientBuilder,
+	types::traits::SubscriptionClient,
+	types::{
 		traits::Client,
 		v2::params::{Id, JsonRpcParams},
 		v2::request::JsonRpcCallSer,
-		HttpClientBuilder,
 	},
-	types::traits::SubscriptionClient,
 	ws_client::WsClientBuilder,
 };
 use std::sync::Arc;

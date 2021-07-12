@@ -31,7 +31,8 @@
 //! mutation.
 
 use jsonrpsee::{
-	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, WsClientBuilder},
+	types::{traits::SubscriptionClient, v2::params::JsonRpcParams},
+	ws_client::WsClientBuilder,
 	ws_server::RpcModule,
 	ws_server::WsServerBuilder,
 };

@@ -18,14 +18,14 @@ pub use ws_server;
 
 /// Set of RPC methods that can be mounted to the server.
 #[cfg(feature = "server")]
-pub use utils::server::rpc_module::RpcModule;
+pub use utils::server::rpc_module::{RpcModule, SubscriptionSink};
 
 /// Procedural macros for JSON RPC implementations.
 #[cfg(feature = "macros")]
 pub use proc_macros;
 
 /// Common types used to implement JSON RPC server and client.
-#[cfg(feature = "macros")]
+#[cfg(any(feature = "types", feature = "macros"))]
 pub mod types {
 	pub use ::types::*;
 

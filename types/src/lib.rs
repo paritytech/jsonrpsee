@@ -23,7 +23,7 @@ pub mod traits;
 pub use async_trait::async_trait;
 pub use beef::Cow;
 pub use client::*;
-pub use error::Error;
+pub use error::{CallError, Error};
 pub use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json::{
 	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
