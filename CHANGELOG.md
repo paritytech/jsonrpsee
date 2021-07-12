@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog].
 
 ## [v0.3.0] – 2021-07-12
 
+[changed] Module API refactor [#412](https://github.com/paritytech/jsonrpsee/pull/412)
+
 [changed] Pass owned `RpcParams` to async methods [#410](https://github.com/paritytech/jsonrpsee/pull/410)
 
 [changed] Re-work re-exported types for clarity and consistency [#409](https://github.com/paritytech/jsonrpsee/pull/409)
