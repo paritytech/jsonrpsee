@@ -4,8 +4,7 @@ use futures_util::{future::BoxFuture, FutureExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{
-	Id, JsonRpcSubscriptionParams, OwnedId, OwnedRpcParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId,
-	TwoPointZero,
+	Id, JsonRpcSubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
 };
 use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 
@@ -22,7 +21,9 @@ use std::sync::Arc;
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod = Arc<
-	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
+	dyn Send
+		+ Sync
+		+ Fn(Id<'static>, RpcParams<'static>, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -60,8 +61,8 @@ impl MethodCallback {
 			MethodCallback::Sync(callback) => (callback)(req.id.clone(), params, tx, conn_id),
 			MethodCallback::Async(callback) => {
 				let tx = tx.clone();
-				let params = OwnedRpcParams::from(params);
-				let id = OwnedId::from(req.id);
+				let params = params.into_owned();
+				let id = req.id.into_owned();
 
 				(callback)(id, params, tx, conn_id).await
 			}
@@ -215,7 +216,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		F: Fn(RpcParams, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>> + Copy + Send + Sync + 'static,
+		F: Fn(RpcParams<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>>
+			+ Copy
+			+ Send
+			+ Sync
+			+ 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -226,8 +231,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
-					let params = params.borrowed();
-					let id = id.borrowed();
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
 						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
@@ -396,12 +399,12 @@ impl SubscriptionSink {
 		let res = if let Some(conn) = self.is_connected.as_ref() {
 			if !conn.is_canceled() {
 				// unbounded send only fails if the receiver has been dropped.
-				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_by_client())
+				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_err(self.uniq_sub.sub_id))
 			} else {
-				Err(subscription_closed_by_client())
+				Err(subscription_closed_err(self.uniq_sub.sub_id))
 			}
 		} else {
-			Err(subscription_closed_by_client())
+			Err(subscription_closed_err(self.uniq_sub.sub_id))
 		};
 
 		if let Err(e) = &res {
@@ -424,13 +427,12 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		self.close(format!("Subscription: {} closed by the server", self.uniq_sub.sub_id));
+		self.close(format!("Subscription: {} is closed and dropped", self.uniq_sub.sub_id));
 	}
 }
 
-fn subscription_closed_by_client() -> Error {
-	const CLOSE_REASON: &str = "Subscription closed by the client";
-	Error::SubscriptionClosed(CLOSE_REASON.to_owned().into())
+fn subscription_closed_err(sub_id: u64) -> Error {
+	Error::SubscriptionClosed(format!("Subscription {} is closed but not yet dropped", sub_id).into())
 }
 
 #[cfg(test)]

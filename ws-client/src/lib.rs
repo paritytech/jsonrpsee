@@ -27,4 +27,4 @@ mod tokio;
 mod tests;
 
 pub use client::{WsClient, WsClientBuilder};
-pub use jsonrpsee_types::*;
+pub use jsonrpsee_types as types;

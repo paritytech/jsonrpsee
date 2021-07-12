@@ -6,7 +6,7 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use crate::error::GenericTransportError;
+use crate::types::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
 use hyper_rustls::HttpsConnector;
 use jsonrpsee_utils::hyper_helpers;
@@ -115,6 +115,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Error, HttpTransportClient};
+	use crate::tokio;
 
 	#[test]
 	fn invalid_http_url_rejected() {

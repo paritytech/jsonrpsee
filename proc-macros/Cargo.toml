@@ -18,3 +18,10 @@ proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "1.0", default-features = false, features = ["extra-traits", "full"] }
 proc-macro-crate = "1"
+bae = "0.1.6"
+
+[dev-dependencies]
+jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
+trybuild = "1.0"
+tokio = { version = "1", features = ["rt", "macros"] }
+futures-channel = { version = "0.3.14", default-features = false }

@@ -1,3 +1,29 @@
+// Copyright 2019 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 //! Compatibility layer for supporting both tokio v0.2 and v1.
 
 // Check that either v1 or v0.2 feature is enabled.
@@ -25,6 +51,8 @@ mod tokio_impl {
 	pub(crate) use tokioV1_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 	pub(crate) use tokioV1::time::sleep;
+
+	pub(crate) use tokioV1::select;
 }
 
 // Note that we check for `not(feature = "tokio1")` here, but not above.
@@ -50,4 +78,6 @@ mod tokio_impl {
 
 	// In 0.2 `tokio::time::sleep` had different name.
 	pub(crate) use tokioV02::time::delay_for as sleep;
+
+	pub(crate) use tokioV02::select;
 }
