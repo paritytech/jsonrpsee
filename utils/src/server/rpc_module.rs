@@ -12,6 +12,7 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::fmt::Debug;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
@@ -111,7 +112,9 @@ impl Methods {
 
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
-	pub fn merge(&mut self, mut other: Methods) -> Result<(), Error> {
+	pub fn merge(&mut self, other: impl Into<Methods>) -> Result<(), Error> {
+		let mut other = other.into();
+
 		for name in other.callbacks.keys() {
 			self.verify_method_name(name)?;
 		}
@@ -138,9 +141,23 @@ impl Methods {
 		}
 	}
 
-	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<&'static str> {
-		self.callbacks.keys().copied().collect()
+	/// Returns an `Iterator` with all the method names registered on this server.
+	pub fn method_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+		self.callbacks.keys().copied()
+	}
+}
+
+impl<Context> Deref for RpcModule<Context> {
+	type Target = Methods;
+
+	fn deref(&self) -> &Methods {
+		&self.methods
+	}
+}
+
+impl<Context> DerefMut for RpcModule<Context> {
+	fn deref_mut(&mut self) -> &mut Methods {
+		&mut self.methods
 	}
 }
 
@@ -158,18 +175,11 @@ impl<Context> RpcModule<Context> {
 	pub fn new(ctx: Context) -> Self {
 		Self { ctx: Arc::new(ctx), methods: Default::default() }
 	}
+}
 
-	/// Convert a module into methods. Consumes self.
-	pub fn into_methods(self) -> Methods {
-		self.methods
-	}
-
-	/// Merge two [`RpcModule`]'s by adding all [`Methods`] `other` into `self`.
-	/// Fails if any of the methods in `other` is present already.
-	pub fn merge<Context2>(&mut self, other: RpcModule<Context2>) -> Result<(), Error> {
-		self.methods.merge(other.methods)?;
-
-		Ok(())
+impl<Context> From<RpcModule<Context>> for Methods {
+	fn from(module: RpcModule<Context>) -> Methods {
+		module.methods
 	}
 }
 
@@ -448,9 +458,8 @@ mod tests {
 
 		mod1.merge(mod2).unwrap();
 
-		let methods = mod1.into_methods();
-		assert!(methods.method("bla with Vec context").is_some());
-		assert!(methods.method("bla with String context").is_some());
+		assert!(mod1.method("bla with Vec context").is_some());
+		assert!(mod1.method("bla with String context").is_some());
 	}
 
 	#[test]
@@ -459,9 +468,8 @@ mod tests {
 		let mut cxmodule = RpcModule::new(cx);
 		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _, _| Ok(()));
 
-		let methods = cxmodule.into_methods();
-		assert!(methods.method("hi").is_some());
-		assert!(methods.method("goodbye").is_some());
+		assert!(cxmodule.method("hi").is_some());
+		assert!(cxmodule.method("goodbye").is_some());
 	}
 
 	#[test]
@@ -471,9 +479,7 @@ mod tests {
 		module.register_method("hello_world", |_: RpcParams, _| Ok(())).unwrap();
 		module.register_alias("hello_foobar", "hello_world").unwrap();
 
-		let methods = module.into_methods();
-
-		assert!(methods.method("hello_world").is_some());
-		assert!(methods.method("hello_foobar").is_some());
+		assert!(module.method("hello_world").is_some());
+		assert!(module.method("hello_foobar").is_some());
 	}
 }

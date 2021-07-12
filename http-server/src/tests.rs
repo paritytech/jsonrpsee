@@ -43,7 +43,7 @@ async fn server() -> SocketAddr {
 }
 
 async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, StopHandle) {
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
@@ -87,9 +87,8 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 		})
 		.unwrap();
 
-	server.register_module(module).unwrap();
 	let stop_handle = server.stop_handle();
-	let join_handle = tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
+	let join_handle = tokio::spawn(async move { server.start(module).with_default_timeout().await.unwrap() });
 	(addr, join_handle, stop_handle)
 }
 
@@ -323,8 +322,7 @@ async fn can_register_modules() {
 	let cx2 = Vec::<u8>::new();
 	let mut mod2 = RpcModule::new(cx2);
 
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
-	assert_eq!(server.method_names().len(), 0);
+	assert_eq!(mod1.method_names().count(), 0);
 	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
@@ -332,14 +330,13 @@ async fn can_register_modules() {
 	// Won't register, name clashes
 	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
-	server.register_module(mod1).unwrap();
-	assert_eq!(server.method_names().len(), 2);
+	assert_eq!(mod1.method_names().count(), 2);
 
-	let err = server.register_module(mod2).unwrap_err();
+	let err = mod1.merge(mod2).unwrap_err();
 
 	let expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
 	assert_eq!(err.to_string(), expected_err.to_string());
-	assert_eq!(server.method_names().len(), 2);
+	assert_eq!(mod1.method_names().count(), 2);
 }
 
 #[tokio::test]
