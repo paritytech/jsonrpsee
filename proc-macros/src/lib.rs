@@ -158,7 +158,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
 ///     #[method(name = "bar")]
 ///     fn sync_method(&self) -> String;
-///     
+///
 ///     #[subscription(name = "sub", unsub = "unsub", item = "String")]
 ///     fn sub(&self);
 /// }
@@ -176,7 +176,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     // Note that `subscription_sink` was added automatically.
 ///     fn sub(&self, subscription_sink: SubscriptionSink);
 ///
-///     fn into_rpc(self) -> Result<Self, jsonrpsee::types::error::Error> {
+///     fn into_rpc(self) -> Result<Self, jsonrpsee::types::Error> {
 ///         // Actual implementation stripped, but inside we will create
 ///         // a module with one method and one subscription
 ///     }
@@ -196,7 +196,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     async fn sync_method(&self) -> Result<String, Error> {
 ///         // ...
 ///     }
-///     
+///
 ///     // Subscription method returns `Subscription` object in case of success.
 ///     async fn sub(&self) -> Result<Subscription<String>, Error> {
 ///         // ...
