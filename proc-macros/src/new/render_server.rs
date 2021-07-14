@@ -181,7 +181,7 @@ impl RpcDescription {
 
 		// Parameters encoded as a tuple (to be parsed from array).
 		// let (params_fields_seq, params_types_seq): (Vec<_>, Vec<_>) = params.iter().cloned().unzip();
-		let params_fields_seq = params.iter().map(|(name, _)| name).collect::<Vec<_>>();
+		let params_fields_seq = params.iter().map(|(name, _)| name);
 		// let params_types = quote! { (#(#params_types_seq),*) };
 		let params_fields = quote! { #(#params_fields_seq),* };
 
@@ -208,16 +208,21 @@ impl RpcDescription {
 
 		// Code to decode sequence of parameters from a JSON object (aka map).
 		let decode_map = {
-			let serde_deserialize = self.jrps_server_item(quote! { types::__reexports::serde::Deserialize });
+			let serde = self.jrps_server_item(quote! { types::__reexports::serde });
+			let serde_crate = serde.to_string();
 			let fields = params.iter().map(|(name, ty)| quote! { #name: #ty, });
+			let destruct = params.iter().map(|(name, _)| quote! { parsed.#name });
 
 			quote! {
-				#[derive(#serde_deserialize)]
+				#[derive(#serde::Deserialize)]
+				#[serde(crate = #serde_crate)]
 				struct ParamsObject {
 					#(#fields)*
 				}
 
-				panic!("Not supported!");
+				let parsed: ParamsObject = params.parse()?;
+
+				(#(#destruct),*)
 			}
 		};
 
