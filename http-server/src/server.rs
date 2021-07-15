@@ -217,9 +217,9 @@ impl Server {
 						let mut single = true;
 						// TODO: Cut down on some noise. Is this a terrible idea?
 						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
-						match body[0] {
+						match body.get(0) {
 							// Single request or notification
-							b'{' => {
+							Some(b'{') => {
 								if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
 									// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 									methods.execute(&tx, req, 0).await;
@@ -231,7 +231,7 @@ impl Server {
 								}
 							}
 							// Bacth of requests or notifications
-							b'[' => {
+							Some(b'[') => {
 								if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 									if !batch.is_empty() {
 										single = false;
