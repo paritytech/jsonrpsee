@@ -4,6 +4,7 @@ use futures_util::stream::StreamExt;
 use jsonrpsee_types::v2::error::{JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject};
 use jsonrpsee_types::v2::params::{Id, TwoPointZero};
 use jsonrpsee_types::v2::response::JsonRpcResponse;
+use jsonrpsee_types::v2::request::JsonRpcInvalidRequest;
 use serde::Serialize;
 
 /// Helper for sending JSON-RPC responses to the client
@@ -35,6 +36,16 @@ pub fn send_error(id: Id, tx: &MethodSink, error: JsonRpcErrorObject) {
 
 	if let Err(err) = tx.unbounded_send(json) {
 		log::error!("Error sending response to the client: {:?}", err)
+	}
+}
+
+
+/// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
+/// unparseable garbage.
+pub fn prepare_error<'a>(data: &'a Vec<u8>) -> (Id<'a>, JsonRpcErrorCode) {
+	match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
+		Ok(JsonRpcInvalidRequest { id }) => (id, JsonRpcErrorCode::InvalidRequest),
+		Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
 	}
 }
 

@@ -37,13 +37,13 @@ use jsonrpsee_types::{
 	v2::{
 		error::JsonRpcErrorCode,
 		params::Id,
-		request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest},
+		request::{JsonRpcNotification, JsonRpcRequest},
 	},
 	TEN_MB_SIZE_BYTES,
 };
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
 use jsonrpsee_utils::server::{
-	helpers::{collect_batch_response, send_error},
+	helpers::{collect_batch_response, prepare_error, send_error},
 	rpc_module::Methods,
 };
 
@@ -215,43 +215,43 @@ impl Server {
 						let (tx, mut rx) = mpsc::unbounded::<String>();
 						// Is this a single request or a batch (or error)?
 						let mut single = true;
-
-						// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
-						// used with untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged
-						// enum here and have to try each case individually: first the single request case, then the
-						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
-						// to [`serde_json::from_slice`] which is pretty annoying.
-						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
-						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-							// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-							methods.execute(&tx, req, 0).await;
-						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification<Option<&RawValue>>>(&body)
-						{
-							return Ok::<_, HyperError>(response::ok_response("".into()));
-						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
-							if !batch.is_empty() {
-								single = false;
-								for req in batch {
+						// TODO: Cut down on some noise. Is this a terrible idea?
+						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
+						match body[0] {
+							// Single request or notification
+							b'{' => {
+								if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
+									// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 									methods.execute(&tx, req, 0).await;
+								} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
+									return Ok::<_, HyperError>(response::ok_response("".into()));
+								} else {
+									let (id, code) = prepare_error(&body);
+									send_error(id, &tx, code.into());
 								}
-							} else {
-								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
-						} else if let Ok(_batch) =
-							serde_json::from_slice::<Vec<JsonRpcNotification<Option<&RawValue>>>>(&body)
-						{
-							return Ok::<_, HyperError>(response::ok_response("".into()));
-						} else {
-							log::error!(
-								"[service_fn], Cannot parse request body={:?}",
-								String::from_utf8_lossy(&body[..cmp::min(body.len(), 1024)])
-							);
-							let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
-								Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-								Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
-							};
-							send_error(id, &tx, code.into());
+							// Bacth of requests or notifications
+							b'[' => {
+								if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
+									if !batch.is_empty() {
+										single = false;
+										for req in batch {
+											methods.execute(&tx, req, 0).await;
+										}
+									} else {
+										send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
+									}
+								} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
+									return Ok::<_, HyperError>(response::ok_response("".into()));
+								} else {
+									let (id, code) = prepare_error(&body);
+									send_error(id, &tx, code.into());
+								}
+							}
+							// Garbage request
+							_ => send_error(Id::Null, &tx, JsonRpcErrorCode::ParseError.into()),
 						}
+
 						// Closes the receiving half of a channel without dropping it. This prevents any further
 						// messages from being sent on the channel.
 						rx.close();
