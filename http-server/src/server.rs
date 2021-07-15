@@ -215,43 +215,42 @@ impl Server {
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
 						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
-						match single {
-							// Single request or notification
-							true => {
-								if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-									// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-									methods.execute(&tx, req, 0).await;
-								} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
-									return Ok::<_, HyperError>(response::ok_response("".into()));
-								} else {
-									let (id, code) = prepare_error(&body);
-									send_error(id, &tx, code.into());
-								}
+
+						// Single request or notification
+						if single {
+							if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
+								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
+								methods.execute(&tx, req, 0).await;
+							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
+								return Ok::<_, HyperError>(response::ok_response("".into()));
+							} else {
+								let (id, code) = prepare_error(&body);
+								send_error(id, &tx, code.into());
 							}
-							// Bacth of requests or notifications
-							false => {
-								if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
-									if !batch.is_empty() {
-										for req in batch {
-											methods.execute(&tx, req, 0).await;
-										}
-									} else {
-										// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
-										// Array with at least one value, the response from the Server MUST be a single
-										// Response object." – The Spec.
-										single = true;
-										send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
+
+						// Batch of requests or notifications
+						} else {
+							if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
+								if !batch.is_empty() {
+									for req in batch {
+										methods.execute(&tx, req, 0).await;
 									}
-								} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
-									return Ok::<_, HyperError>(response::ok_response("".into()));
 								} else {
 									// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
 									// Array with at least one value, the response from the Server MUST be a single
 									// Response object." – The Spec.
 									single = true;
-									let (id, code) = prepare_error(&body);
-									send_error(id, &tx, code.into());
+									send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 								}
+							} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
+								return Ok::<_, HyperError>(response::ok_response("".into()));
+							} else {
+								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+								// Array with at least one value, the response from the Server MUST be a single
+								// Response object." – The Spec.
+								single = true;
+								let (id, code) = prepare_error(&body);
+								send_error(id, &tx, code.into());
 							}
 						}
 
