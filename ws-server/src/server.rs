@@ -30,11 +30,7 @@ use std::task::{Context, Poll};
 use std::{net::SocketAddr, sync::Arc};
 
 use crate::types::{
-	error::Error,
-	v2::error::JsonRpcErrorCode,
-	v2::params::Id,
-	v2::request::JsonRpcRequest,
-	TEN_MB_SIZE_BYTES,
+	error::Error, v2::error::JsonRpcErrorCode, v2::params::Id, v2::request::JsonRpcRequest, TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
 use futures_util::future::{join_all, FutureExt};
