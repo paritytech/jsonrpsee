@@ -41,7 +41,7 @@ use jsonrpsee_types::{
 	},
 	TEN_MB_SIZE_BYTES,
 };
-use jsonrpsee_utils::hyper_helpers::read_response_to_body;
+use jsonrpsee_utils::hyper_helpers::read_body;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, prepare_error, send_error},
 	rpc_module::Methods,
@@ -201,25 +201,23 @@ impl Server {
 						}
 
 						let (parts, body) = request.into_parts();
-						let body = match read_response_to_body(&parts.headers, body, max_request_body_size).await {
-							Ok(body) => body,
-							Err(GenericTransportError::TooLarge) => {
-								return Ok::<_, HyperError>(response::too_large("The request was too large"))
-							}
+
+						let (body, mut single) = match read_body(&parts.headers, body, max_request_body_size).await {
+							Ok(r) => r,
+							Err(GenericTransportError::TooLarge) => return Ok::<_, HyperError>(response::too_large()),
+							Err(GenericTransportError::Malformed) => return Ok::<_, HyperError>(response::malformed()),
 							Err(GenericTransportError::Inner(e)) => {
-								return Ok::<_, HyperError>(response::internal_error(e.to_string()))
+								log::error!("Internal error reading request body: {}", e);
+								return Ok::<_, HyperError>(response::internal_error());
 							}
 						};
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
-						// Is this a single request or a batch (or error)?
-						let mut single = true;
-						// TODO: Cut down on some noise. Is this a terrible idea?
 						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
-						match body[0] {
+						match single {
 							// Single request or notification
-							b'{' => {
+							true => {
 								if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
 									// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 									methods.execute(&tx, req, 0).await;
@@ -231,25 +229,30 @@ impl Server {
 								}
 							}
 							// Bacth of requests or notifications
-							b'[' => {
+							false => {
 								if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 									if !batch.is_empty() {
-										single = false;
 										for req in batch {
 											methods.execute(&tx, req, 0).await;
 										}
 									} else {
+										// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+										// Array with at least one value, the response from the Server MUST be a single
+										// Response object." – The Spec.
+										single = true;
 										send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 									}
 								} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
 									return Ok::<_, HyperError>(response::ok_response("".into()));
 								} else {
+									// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+									// Array with at least one value, the response from the Server MUST be a single
+									// Response object." – The Spec.
+									single = true;
 									let (id, code) = prepare_error(&body);
 									send_error(id, &tx, code.into());
 								}
 							}
-							// Garbage request
-							_ => send_error(Id::Null, &tx, JsonRpcErrorCode::ParseError.into()),
 						}
 
 						// Closes the receiving half of a channel without dropping it. This prevents any further

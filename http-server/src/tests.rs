@@ -199,7 +199,7 @@ async fn async_method_call_with_ok_context() {
 }
 
 #[tokio::test]
-async fn valid_batched_method_calls() {
+async fn valid_batched_method_callsx() {
 	let _ = env_logger::try_init();
 
 	let addr = server().with_default_timeout().await.unwrap();
