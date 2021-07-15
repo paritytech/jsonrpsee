@@ -35,7 +35,7 @@ rustls = "0.19.1"
 rustls-native-certs = "0.5.0"
 
 [dev-dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
 jsonrpsee-test-utils = { path = "../test-utils" }
 
 [features]
