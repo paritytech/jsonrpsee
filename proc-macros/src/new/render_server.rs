@@ -1,4 +1,5 @@
 use super::RpcDescription;
+use super::lifetimes::replace_lifetimes;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
@@ -72,8 +73,7 @@ impl RpcDescription {
 				// `parsing` is the code associated with parsing structure from the
 				// provided `RpcParams` object.
 				// `params_seq` is the comma-delimited sequence of parametsrs.
-				let is_method = true;
-				let (parsing, params_seq) = self.render_params_decoding(&method.params, is_method);
+				let (parsing, params_seq) = self.render_params_decoding(&method.params);
 
 				check_name(rpc_method_name.clone(), rust_method_name.span());
 
@@ -111,8 +111,7 @@ impl RpcDescription {
 				// `parsing` is the code associated with parsing structure from the
 				// provided `RpcParams` object.
 				// `params_seq` is the comma-delimited sequence of parametsrs.
-				let is_method = false;
-				let (parsing, params_seq) = self.render_params_decoding(&sub.params, is_method);
+				let (parsing, params_seq) = self.render_params_decoding(&sub.params);
 
 				check_name(rpc_sub_name.clone(), rust_method_name.span());
 				check_name(rpc_unsub_name.clone(), rust_method_name.span());
@@ -147,42 +146,12 @@ impl RpcDescription {
 		})
 	}
 
-	fn render_params_decoding(
-		&self,
-		params: &[(syn::PatIdent, syn::Type)],
-		_is_method: bool,
-	) -> (TokenStream2, TokenStream2) {
+	fn render_params_decoding(&self, params: &[(syn::PatIdent, syn::Type)]) -> (TokenStream2, TokenStream2) {
 		if params.is_empty() {
 			return (TokenStream2::default(), TokenStream2::default());
 		}
 
-		// Implementations for `.map_err(...)?` and `.ok_or(...)?` with respect to the expected
-		// error return type.
-		// let (err, map_err_impl, ok_or_impl) = if is_method {
-		// 	// For methods, we return `CallError`.
-		// 	let jrps_call_error = self.jrps_server_item(quote! { types::CallError });
-		// 	let err = quote! { #jrps_call_error::InvalidParams };
-		// 	let map_err = quote! { .map_err(|_| #jrps_call_error::InvalidParams)? };
-		// 	let ok_or = quote! { .ok_or(#jrps_call_error::InvalidParams)? };
-		// 	(err, map_err, ok_or)
-		// } else {
-		// 	// For subscriptions, we return `Error`.
-		// 	// Note that while `Error` can be constructed from `CallError`, we should not do it,
-		// 	// because it would be an abuse of the error type semantics.
-		// 	// Instead, we use suitable top-level error variants.
-		// 	let jrps_error = self.jrps_server_item(quote! { types::Error });
-		// 	let err = quote! { #jrps_error::Request("Required paramater missing".into()) };
-		// 	let map_err = quote! { .map_err(|err| #jrps_error::ParseError(err))? };
-		// 	let ok_or = quote! { .ok_or(#jrps_error::Request("Required paramater missing".into()))? };
-		// 	(err, map_err, ok_or)
-		// };
-
-		// let serde_json = self.jrps_server_item(quote! { types::__reexports::serde_json });
-
-		// Parameters encoded as a tuple (to be parsed from array).
-		// let (params_fields_seq, params_types_seq): (Vec<_>, Vec<_>) = params.iter().cloned().unzip();
 		let params_fields_seq = params.iter().map(|(name, _)| name);
-		// let params_types = quote! { (#(#params_types_seq),*) };
 		let params_fields = quote! { #(#params_fields_seq),* };
 
 		// Code to decode sequence of parameters from a JSON array.
@@ -226,47 +195,6 @@ impl RpcDescription {
 			}
 		};
 
-		// // Code to decode sequence of parameters from a JSON object (aka map).
-		// let decode_map = {
-		// 	let decode_fields = params.iter().map(|(name, ty)| {
-		// 		let name_str = name.ident.to_string();
-		// 		if is_option(ty) {
-		// 			quote! {
-		// 				let #name = obj
-		// 					.get(#name_str)
-		// 					.cloned()
-		// 					.map(#serde_json::from_value)
-		// 					.transpose()
-		// 					#map_err_impl;
-		// 			}
-		// 		} else {
-		// 			quote! {
-		// 				let #name = obj
-		// 					.get(#name_str)
-		// 					.cloned()
-		// 					.map(#serde_json::from_value)
-		// 					#ok_or_impl
-		// 					#map_err_impl;
-		// 			}
-		// 		}
-		// 	});
-
-		// 	quote! {
-		// 		#(#decode_fields);*
-		// 		#params_fields
-		// 	}
-		// };
-
-		// // Code to decode single parameter from a JSON primitive.
-		// let decode_single = if params.len() == 1 {
-		// 	quote! {
-		// 		#serde_json::from_value(json)
-		// 		#map_err_impl
-		// 	}
-		// } else {
-		// 	quote! { return Err(#err);}
-		// };
-
 		// Parsing of `serde_json::Value`.
 		let parsing = quote! {
 			let (#params_fields) = if params.is_object() {
@@ -274,19 +202,6 @@ impl RpcDescription {
 			} else {
 				#decode_array
 			};
-			// let json: #serde_json::Value = params.parse()?;
-			// let #params_fields: #params_types = match json {
-			// 	#serde_json::Value::Null => return Err(#err),
-			// 	#serde_json::Value::Array(arr) => {
-			// 		#decode_array
-			// 	}
-			// 	#serde_json::Value::Object(obj) => {
-			// 		#decode_map
-			// 	}
-			// 	_ => {
-			// 		#decode_single
-			// 	}
-			// };
 		};
 
 		(parsing, params_fields)
