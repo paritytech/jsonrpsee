@@ -199,7 +199,7 @@ async fn async_method_call_with_ok_context() {
 }
 
 #[tokio::test]
-async fn valid_batched_method_calls() {
+async fn valid_batched_method_callsx() {
 	let _ = env_logger::try_init();
 
 	let addr = server().with_default_timeout().await.unwrap();
@@ -267,6 +267,52 @@ async fn invalid_batched_method_calls() {
 	  ]"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn garbage_request_fails() {
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"dsdfs fsdsfds"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{ "#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{sds}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"["#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"[dsds]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"[]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, invalid_request(Id::Null));
+
+	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
 }
 

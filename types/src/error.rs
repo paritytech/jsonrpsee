@@ -123,6 +123,9 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 	/// Request was too large.
 	#[error("The request was too big")]
 	TooLarge,
+	/// Malformed request
+	#[error("Malformed request")]
+	Malformed,
 	/// Concrete transport error.
 	#[error("Transport error: {0}")]
 	Inner(T),
