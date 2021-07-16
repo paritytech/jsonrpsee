@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::{Type, Path, Lifetime};
@@ -15,20 +13,34 @@ pub fn replace_lifetime(ty: &mut Type, replaced: &mut bool) {
 
     match ty {
         Type::Path(p) => {
-            p.path
-                .segments
-                .iter_mut()
-                .filter_map(|segment| match &mut segment.arguments {
-                    PathArguments::AngleBracketed(ab) => Some(ab),
-                    _ => None,
-                })
-                .flat_map(|ab| ab.args.iter_mut())
-                .for_each(|arg| {
-                    if let GenericArgument::Lifetime(lt) = arg {
-                        *lt = Lifetime::new("'a", lt.span());
+            for segment in p.path.segments.iter_mut() {
+                if let PathArguments::AngleBracketed(ref mut ab) = segment.arguments {
+                    let mut lifetimes = 0;
+
+                    for arg in ab.args.iter_mut() {
+                        match arg {
+                            GenericArgument::Lifetime(lt) => {
+                                *lt = Lifetime::new("'a", lt.span());
+                                *replaced = true;
+                                lifetimes += 1;
+                            }
+                            // Stop iterating on first non-lifetime generic argument
+                            // TODO: Replace by `.iter_mut().map_while(...).count()` when it's stabilized
+                            _ => break,
+                        }
+                    }
+
+                    // Check if the type is a `Cow<str>` or similar with lifetime elision,
+                    // if so insert the lifetime as first argument.
+                    if lifetimes == 0 && segment.ident == "Cow" {
+                        let span = Span::call_site();
+                        let lt = Lifetime::new("'a", span);
+                        ab.args.insert(0, GenericArgument::Lifetime(lt));
+
                         *replaced = true;
                     }
-                });
+                }
+            }
         }
         Type::Reference(r) => {
             let span = match r.lifetime.take() {
