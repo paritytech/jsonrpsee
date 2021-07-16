@@ -2,6 +2,8 @@ use proc_macro2::Span;
 use syn::spanned::Spanned;
 use syn::{Type, Path, Lifetime};
 
+static LIFETIME: &str = "'a";
+
 pub fn replace_lifetimes(ty: &mut Type) -> bool {
     let mut replaced = false;
     traverse_type(ty, &mut replaced, replace_lifetime);
@@ -20,7 +22,7 @@ pub fn replace_lifetime(ty: &mut Type, replaced: &mut bool) {
                     for arg in ab.args.iter_mut() {
                         match arg {
                             GenericArgument::Lifetime(lt) => {
-                                *lt = Lifetime::new("'a", lt.span());
+                                *lt = Lifetime::new(LIFETIME, lt.span());
                                 *replaced = true;
                                 lifetimes += 1;
                             }
@@ -34,7 +36,7 @@ pub fn replace_lifetime(ty: &mut Type, replaced: &mut bool) {
                     // if so insert the lifetime as first argument.
                     if lifetimes == 0 && segment.ident == "Cow" {
                         let span = Span::call_site();
-                        let lt = Lifetime::new("'a", span);
+                        let lt = Lifetime::new(LIFETIME, span);
                         ab.args.insert(0, GenericArgument::Lifetime(lt));
 
                         *replaced = true;
@@ -48,7 +50,7 @@ pub fn replace_lifetime(ty: &mut Type, replaced: &mut bool) {
                 None => Span::call_site(),
             };
 
-            r.lifetime = Some(Lifetime::new("'a", span));
+            r.lifetime = Some(Lifetime::new(LIFETIME, span));
             *replaced = true;
         }
         _ => (),
