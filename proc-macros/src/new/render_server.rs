@@ -1,5 +1,5 @@
-use super::RpcDescription;
 use super::lifetimes::replace_lifetimes;
+use super::RpcDescription;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
@@ -177,15 +177,33 @@ impl RpcDescription {
 
 		// Code to decode sequence of parameters from a JSON object (aka map).
 		let decode_map = {
+			let mut generics = None;
+
 			let serde = self.jrps_server_item(quote! { types::__reexports::serde });
 			let serde_crate = serde.to_string();
-			let fields = params.iter().map(|(name, ty)| quote! { #name: #ty, });
+			let fields = params
+				.iter()
+				.map(|(name, ty)| {
+					let mut ty = ty.clone();
+
+					if replace_lifetimes(&mut ty) {
+						generics = Some(());
+						quote! {
+							#[serde(borrow)]
+							#name: #ty,
+						}
+					} else {
+						quote! { #name: #ty, }
+					}
+				})
+				.collect::<Vec<_>>();
 			let destruct = params.iter().map(|(name, _)| quote! { parsed.#name });
+			let generics = generics.map(|()| quote! { <'a> });
 
 			quote! {
 				#[derive(#serde::Deserialize)]
 				#[serde(crate = #serde_crate)]
-				struct ParamsObject {
+				struct ParamsObject#generics {
 					#(#fields)*
 				}
 
