@@ -30,6 +30,7 @@ use std::net::SocketAddr;
 
 use futures_channel::oneshot;
 use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
+use serde_json::value::RawValue;
 
 mod rpc_impl {
 	use jsonrpsee::{proc_macros::rpc, types::async_trait, ws_server::SubscriptionSink};
@@ -47,6 +48,16 @@ mod rpc_impl {
 
 		#[subscription(name = "echo", unsub = "no_more_echo", item = u32)]
 		fn sub_with_params(&self, val: u32);
+
+		#[method(name = "params")]
+		fn params(&self, a: u8, b: &str) -> String {
+			format!("Called with: {}, {}", a, b)
+		}
+
+		#[method(name = "optional_params")]
+		fn optional_params(&self, a: u32, b: Option<u32>, c: Option<u32>) -> String {
+			format!("Called with: {}, {:?}, {:?}", a, b, c)
+		}
 	}
 
 	pub struct RpcServerImpl;
@@ -115,4 +126,37 @@ async fn proc_macros_generic_ws_client_api() {
 	assert_eq!(first_recv, Some(42));
 	let second_recv = sub.next().await.unwrap();
 	assert_eq!(second_recv, Some(42));
+}
+
+#[tokio::test]
+async fn macro_param_parsing() {
+	let module = RpcServerImpl.into_rpc();
+
+	let params = RawValue::from_string(r#"[42, "Hello"]"#.into()).ok();
+	let result = module.call("foo_params", params).await;
+
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, Hello","id":0}"#);
+}
+
+#[tokio::test]
+async fn macro_optional_param_parsing() {
+	let module = RpcServerImpl.into_rpc();
+
+	// Optional param omitted at tail
+	let params = RawValue::from_string(r#"[42, 70]"#.into()).ok();
+	let result = module.call("foo_optional_params", params).await;
+
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, Some(70), None","id":0}"#);
+
+	// Optional param using `null`
+	let params = RawValue::from_string(r#"[42, null, 70]"#.into()).ok();
+	let result = module.call("foo_optional_params", params).await;
+
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, None, Some(70)","id":0}"#);
+
+	// Named params using a map
+	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
+	let result = module.call("foo_optional_params", params).await;
+
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
 }
