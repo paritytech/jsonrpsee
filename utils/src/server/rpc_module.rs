@@ -145,7 +145,7 @@ impl Methods {
 
 	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
 	/// a server up.
-	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> String {
+	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
 		let req = JsonRpcRequest {
 			jsonrpc: TwoPointZero,
 			id: Id::Number(0),
@@ -157,12 +157,7 @@ impl Methods {
 
 		self.execute(&tx, req, 0).await;
 
-		loop {
-			match rx.next().await {
-				Some(res) => return res,
-				None => continue,
-			}
-		}
+		rx.next().await
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.

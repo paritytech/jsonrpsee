@@ -133,7 +133,7 @@ async fn macro_param_parsing() {
 	let module = RpcServerImpl.into_rpc();
 
 	let params = RawValue::from_string(r#"[42, "Hello"]"#.into()).ok();
-	let result = module.call("foo_params", params).await;
+	let result = module.call("foo_params", params).await.unwrap();
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, Hello","id":0}"#);
 }
@@ -144,19 +144,19 @@ async fn macro_optional_param_parsing() {
 
 	// Optional param omitted at tail
 	let params = RawValue::from_string(r#"[42, 70]"#.into()).ok();
-	let result = module.call("foo_optional_params", params).await;
+	let result = module.call("foo_optional_params", params).await.unwrap();
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, Some(70), None","id":0}"#);
 
 	// Optional param using `null`
 	let params = RawValue::from_string(r#"[42, null, 70]"#.into()).ok();
-	let result = module.call("foo_optional_params", params).await;
+	let result = module.call("foo_optional_params", params).await.unwrap();
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, None, Some(70)","id":0}"#);
 
 	// Named params using a map
 	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
-	let result = module.call("foo_optional_params", params).await;
+	let result = module.call("foo_optional_params", params).await.unwrap();
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
 }
