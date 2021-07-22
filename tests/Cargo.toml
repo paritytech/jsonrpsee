@@ -9,6 +9,7 @@ publish = false
 
 [dev-dependencies]
 env_logger = "0.8"
+beef = { version = "0.5.1", features = ["impl_serde"] }
 futures-channel = { version = "0.3.14", default-features = false }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 tokio = { version = "1", features = ["full"] }

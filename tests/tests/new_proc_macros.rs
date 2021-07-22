@@ -58,6 +58,22 @@ mod rpc_impl {
 		fn optional_params(&self, a: u32, b: Option<u32>, c: Option<u32>) -> String {
 			format!("Called with: {}, {:?}, {:?}", a, b, c)
 		}
+
+		#[method(name = "lifetimes")]
+		fn lifetimes(
+			&self,
+			a: &str,
+			b: &'_ str,
+			c: std::borrow::Cow<'_, str>,
+			d: Option<beef::Cow<'_, str>>,
+		) -> String {
+			format!("Called with: {}, {}, {}, {:?}", a, b, c, d)
+		}
+
+		#[method(name = "zero_copy_cow")]
+		fn zero_copy_cow(&self, a: std::borrow::Cow<'_, str>, b: beef::Cow<'_, str>) -> String {
+			format!("Zero copy params: {}, {}", matches!(a, std::borrow::Cow::Borrowed(_)), b.is_borrowed())
+		}
 	}
 
 	pub struct RpcServerImpl;
@@ -159,4 +175,31 @@ async fn macro_optional_param_parsing() {
 	let result = module.call("foo_optional_params", params).await.unwrap();
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
+}
+
+#[tokio::test]
+async fn macro_lifetimes_parsing() {
+	let module = RpcServerImpl.into_rpc();
+
+	let params = RawValue::from_string(r#"["foo", "bar", "baz", "qux"]"#.into()).ok();
+	let result = module.call("foo_lifetimes", params).await.unwrap();
+
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: foo, bar, baz, Some(\"qux\")","id":0}"#);
+}
+
+#[tokio::test]
+async fn macro_zero_copy_cow() {
+	let module = RpcServerImpl.into_rpc();
+
+	let params = RawValue::from_string(r#"["foo", "bar"]"#.into()).ok();
+	let result = module.call("foo_zero_copy_cow", params).await.unwrap();
+
+	// std::borrow::Cow<str> always deserialized to owned variant here
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, true","id":0}"#);
+
+	// serde_json will have to allocate a new string to replace `\t` with byte 0x09 (tab)
+	let params = RawValue::from_string(r#"["\tfoo", "\tbar"]"#.into()).ok();
+	let result = module.call("foo_zero_copy_cow", params).await.unwrap();
+
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
 }

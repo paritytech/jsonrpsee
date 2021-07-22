@@ -17,24 +17,23 @@ pub fn replace_lifetime(ty: &mut Type, replaced: &mut bool) {
 		Type::Path(p) => {
 			for segment in p.path.segments.iter_mut() {
 				if let PathArguments::AngleBracketed(ref mut ab) = segment.arguments {
-					let mut lifetimes = 0;
+					let mut owned = true;
 
 					for arg in ab.args.iter_mut() {
 						match arg {
 							GenericArgument::Lifetime(lt) => {
 								*lt = Lifetime::new(LIFETIME, lt.span());
 								*replaced = true;
-								lifetimes += 1;
+								owned = false;
 							}
 							// Stop iterating on first non-lifetime generic argument
-							// TODO: Replace by `.iter_mut().map_while(...).count()` when it's stabilized
 							_ => break,
 						}
 					}
 
-					// Check if the type is a `Cow<str>` or similar with lifetime elision,
-					// if so insert the lifetime as first argument.
-					if lifetimes == 0 && segment.ident == "Cow" {
+					// Check if the type is a `Cow<_>` with no lifetimes,
+					// if so transform it into `Cow<'a, _>`.
+					if owned && segment.ident == "Cow" {
 						let span = Span::call_site();
 						let lt = Lifetime::new(LIFETIME, span);
 						ab.args.insert(0, GenericArgument::Lifetime(lt));
