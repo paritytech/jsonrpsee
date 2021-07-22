@@ -261,11 +261,9 @@ async fn background_task(
 		let _ = sender.close().await;
 	});
 
-	// Buffer for incoming data.
-	let mut data = Vec::with_capacity(100);
-
 	while !shutdown.is_closed() {
-		data.clear();
+		// Buffer for incoming data.
+		let mut data = Vec::with_capacity(100);
 
 		receiver.receive_data(&mut data).await?;
 
@@ -275,42 +273,47 @@ async fn background_task(
 			continue;
 		}
 
-		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be used with
-		// untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged enum here and have to try
-		// each case individually: first the single request case, then the batch case and lastly the error. For the
-		// worst case – unparseable input – we make three calls to [`serde_json::from_slice`] which is pretty annoying.
-		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
-		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
-			log::debug!("recv: {:?}", req);
-			methods.execute(&tx, req, conn_id).await;
-		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
-			if !batch.is_empty() {
-				// Batch responses must be sent back as a single message so we read the results from each request in the
-				// batch and read the results off of a new channel, `rx_batch`, and then send the complete batch response
-				// back to the client over `tx`.
-				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
+		let tx = tx.clone();
+		let methods = methods.clone();
+		tokio::spawn(async move {
+			// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be used with
+			// untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged enum here and have to try
+			// each case individually: first the single request case, then the batch case and lastly the error. For the
+			// worst case – unparseable input – we make three calls to [`serde_json::from_slice`] which is pretty annoying.
+			// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
+			if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
+				log::debug!("recv: {:?}", req);
+				methods.execute(&tx, req, conn_id).await;
+			} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
+				if !batch.is_empty() {
+					// Batch responses must be sent back as a single message so we read the results from each request in the
+					// batch and read the results off of a new channel, `rx_batch`, and then send the complete batch response
+					// back to the client over `tx`.
+					let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 
-				join_all(batch.into_iter().map(|req| methods.execute(&tx_batch, req, conn_id))).await;
+					join_all(batch.into_iter().map(|req| methods.execute(&tx_batch, req, conn_id))).await;
 
-				// Closes the receiving half of a channel without dropping it. This prevents any further messages from
-				// being sent on the channel.
-				rx_batch.close();
-				let results = collect_batch_response(rx_batch).await;
-				if let Err(err) = tx.unbounded_send(results) {
-					log::error!("Error sending batch response to the client: {:?}", err)
+					// Closes the receiving half of a channel without dropping it. This prevents any further messages from
+					// being sent on the channel.
+					rx_batch.close();
+					let results = collect_batch_response(rx_batch).await;
+					if let Err(err) = tx.unbounded_send(results) {
+						log::error!("Error sending batch response to the client: {:?}", err)
+					}
+				} else {
+					send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 				}
 			} else {
-				send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
-			}
-		} else {
-			let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
-				Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-				Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
-			};
+				let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
+					Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
+					Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
+				};
 
-			send_error(id, &tx, code.into());
-		}
+				send_error(id, &tx, code.into());
+			}
+		});
 	}
+
 	Ok(())
 }
 
