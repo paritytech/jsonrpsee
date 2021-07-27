@@ -6,6 +6,7 @@ use quote::quote;
 use syn::Attribute;
 
 mod attributes;
+mod lifetimes;
 mod render_client;
 mod render_server;
 mod respan;
