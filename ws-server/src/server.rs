@@ -29,6 +29,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{net::SocketAddr, sync::Arc};
 
+use crate::future::FutureDriver;
 use crate::types::{
 	error::Error,
 	v2::error::JsonRpcErrorCode,
@@ -36,7 +37,6 @@ use crate::types::{
 	v2::request::{JsonRpcInvalidRequest, JsonRpcRequest},
 	TEN_MB_SIZE_BYTES,
 };
-use crate::future::FutureDriver;
 use futures_channel::mpsc;
 use futures_util::future::FutureExt;
 use futures_util::stream::StreamExt;

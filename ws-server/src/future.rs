@@ -26,10 +26,10 @@
 
 //! Utilities for handling async code.
 
+use futures_util::future::FutureExt;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use futures_util::future::FutureExt;
 
 /// This is a flexible collection of futures that need to be driven to completion
 /// alongside some other future, such as connection handlers that need to be
@@ -43,9 +43,7 @@ pub(crate) struct FutureDriver<F> {
 
 impl<F> Default for FutureDriver<F> {
 	fn default() -> Self {
-		FutureDriver {
-			futures: Vec::new()
-		}
+		FutureDriver { futures: Vec::new() }
 	}
 }
 
