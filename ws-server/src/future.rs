@@ -88,6 +88,25 @@ where
 	}
 }
 
+impl<F> Future for FutureDriver<F>
+where
+	F: Future + Unpin,
+{
+	type Output = ();
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		this.drive(cx);
+
+		if this.futures.len() == 0 {
+			Poll::Ready(())
+		} else {
+			Poll::Pending
+		}
+	}
+}
+
 /// This is a glorified select `Future` that will attempt to drive all
 /// connection futures `F` to completion on each `poll`, while also
 /// handling incoming connections.

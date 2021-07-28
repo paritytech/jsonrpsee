@@ -233,12 +233,12 @@ async fn background_task(
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
-	let mut driver = FutureDriver::default();
+	let mut method_executors = FutureDriver::default();
 
 	while !shutdown.is_closed() {
 		data.clear();
 
-		driver.select_with(receiver.receive_data(&mut data)).await?;
+		method_executors.select_with(receiver.receive_data(&mut data)).await?;
 
 		if data.len() > max_request_body_size as usize {
 			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
@@ -254,7 +254,7 @@ async fn background_task(
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			log::debug!("recv: {:?}", req);
 			if let Some(fut) = methods.execute(&tx, req, conn_id) {
-				driver.add(fut);
+				method_executors.add(fut);
 			}
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
@@ -263,13 +263,11 @@ async fn background_task(
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 
-				for req in batch {
-					if let Some(fut) = methods.execute(&tx_batch, req, conn_id) {
-						driver.add(fut);
-					}
+				for fut in batch.into_iter().filter_map(|req| methods.execute(&tx_batch, req, conn_id)) {
+					method_executors.add(fut);
 				}
 
-				driver.add(Box::pin(async {
+				method_executors.add(Box::pin(async {
 					// Closes the receiving half of a channel without dropping it. This prevents any further messages from
 					// being sent on the channel.
 					rx_batch.close();
@@ -290,6 +288,10 @@ async fn background_task(
 			send_error(id, &tx, code.into());
 		}
 	}
+
+	// Drive all running methods to completion
+	method_executors.await;
+
 	Ok(())
 }
 
