@@ -28,6 +28,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{net::SocketAddr, sync::Arc};
+use std::convert::Infallible;
 
 use crate::types::{
 	error::Error,
@@ -37,7 +38,7 @@ use crate::types::{
 	TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
-use futures_util::future::{join_all, FutureExt};
+use futures_util::future::FutureExt;
 use futures_util::stream::StreamExt;
 use futures_util::{
 	io::{BufReader, BufWriter},
@@ -98,7 +99,7 @@ impl Server {
 						continue;
 					}
 
-					if driver.connection_count() >= self.cfg.max_connections as usize {
+					if driver.connections.count() >= self.cfg.max_connections as usize {
 						log::warn!("Too many connections. Try again in a while.");
 						continue;
 					}
@@ -106,7 +107,7 @@ impl Server {
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					driver.add(Box::pin(handshake(socket, id, methods, cfg, &shutdown, &self.stop_handle)));
+					driver.connections.add(Box::pin(handshake(socket, id, methods, cfg, &shutdown, &self.stop_handle)));
 
 					id = id.wrapping_add(1);
 				}
@@ -122,10 +123,67 @@ impl Server {
 /// This is a glorified select `Future` that will attempt to drive all
 /// connection futures `F` to completion on each `poll`, while also
 /// handling incoming connections.
+struct FutureDriver<F> {
+	futures: Vec<F>,
+}
+
+impl<F> FutureDriver<F>
+where
+	F: Future + Unpin,
+{
+	fn new() -> Self {
+		FutureDriver {
+			futures: Vec::new(),
+		}
+	}
+
+	fn count(&self) -> usize {
+		self.futures.len()
+	}
+
+	fn add(&mut self, future: F) {
+		self.futures.push(future);
+	}
+}
+
+impl<F> Future for FutureDriver<F>
+where
+	F: Future + Unpin,
+{
+	// This future is never ready. Since `Infallible` is impossible to construct,
+	// the `Poll<Infallible>` return type is 0-sized.
+	type Output = Infallible;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Infallible> {
+		let this = Pin::into_inner(self);
+
+		let mut i = 0;
+
+		while i < this.futures.len() {
+			if this.futures[i].poll_unpin(cx).is_ready() {
+				// Using `swap_remove` since we don't care about ordering
+				// but we do care about removing being `O(1)`.
+				//
+				// We don't increment `i` in this branch, since we now
+				// have a shorter length, and potentially a new value at
+				// current index
+				this.futures.swap_remove(i);
+			} else {
+				i += 1;
+			}
+		}
+
+		Poll::Pending
+	}
+}
+
+/// This is a glorified select `Future` that will attempt to drive all
+/// connection futures `F` to completion on each `poll`, while also
+/// handling incoming connections.
 struct ConnDriver<F> {
 	listener: TcpListener,
 	stop_receiver: mpsc::Receiver<()>,
-	connections: Vec<F>,
+	connections: FutureDriver<F>,
 }
 
 impl<F> ConnDriver<F>
@@ -133,15 +191,7 @@ where
 	F: Future + Unpin,
 {
 	fn new(listener: TcpListener, stop_receiver: mpsc::Receiver<()>) -> Self {
-		ConnDriver { listener, stop_receiver, connections: Vec::new() }
-	}
-
-	fn connection_count(&self) -> usize {
-		self.connections.len()
-	}
-
-	fn add(&mut self, conn: F) {
-		self.connections.push(conn);
+		ConnDriver { listener, stop_receiver, connections: FutureDriver::new() }
 	}
 }
 
@@ -159,21 +209,7 @@ where
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		let mut i = 0;
-
-		while i < this.connections.len() {
-			if this.connections[i].poll_unpin(cx).is_ready() {
-				// Using `swap_remove` since we don't care about ordering
-				// but we do care about removing being `O(1)`.
-				//
-				// We don't increment `i` in this branch, since we now
-				// have a shorter length, and potentially a new value at
-				// current index
-				this.connections.swap_remove(i);
-			} else {
-				i += 1;
-			}
-		}
+		let _ = this.connections.poll_unpin(cx);
 
 		if let Poll::Ready(Some(())) = this.stop_receiver.next().poll_unpin(cx) {
 			return Poll::Ready(Err(DriverError::Shutdown));
@@ -263,11 +299,17 @@ async fn background_task(
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
+	let mut driver = FutureDriver::new();
 
 	while !shutdown.is_closed() {
 		data.clear();
 
-		receiver.receive_data(&mut data).await?;
+		{
+			let next_data = receiver.receive_data(&mut data);
+			tokio::pin!(next_data);
+
+			MethodDriver::new(next_data, &mut driver).await?;
+		}
 
 		if data.len() > max_request_body_size as usize {
 			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
@@ -282,7 +324,9 @@ async fn background_task(
 		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
 		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 			log::debug!("recv: {:?}", req);
-			methods.execute(&tx, req, conn_id).await;
+			if let Some(fut) = methods.execute(&tx, req, conn_id) {
+				driver.add(fut);
+			}
 		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 			if !batch.is_empty() {
 				// Batch responses must be sent back as a single message so we read the results from each request in the
@@ -290,15 +334,21 @@ async fn background_task(
 				// back to the client over `tx`.
 				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 
-				join_all(batch.into_iter().map(|req| methods.execute(&tx_batch, req, conn_id))).await;
-
-				// Closes the receiving half of a channel without dropping it. This prevents any further messages from
-				// being sent on the channel.
-				rx_batch.close();
-				let results = collect_batch_response(rx_batch).await;
-				if let Err(err) = tx.unbounded_send(results) {
-					log::error!("Error sending batch response to the client: {:?}", err)
+				for req in batch {
+					if let Some(fut) = methods.execute(&tx_batch, req, conn_id) {
+						driver.add(fut);
+					}
 				}
+
+				driver.add(Box::pin(async {
+					// Closes the receiving half of a channel without dropping it. This prevents any further messages from
+					// being sent on the channel.
+					rx_batch.close();
+					let results = collect_batch_response(rx_batch).await;
+					if let Err(err) = tx.unbounded_send(results) {
+						log::error!("Error sending batch response to the client: {:?}", err)
+					}
+				}));
 			} else {
 				send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 			}
@@ -312,6 +362,37 @@ async fn background_task(
 		}
 	}
 	Ok(())
+}
+
+
+/// This is a glorified select `Future` that will attempt to drive all
+/// connection futures `F` to completion on each `poll`, while also
+/// handling incoming connections.
+struct MethodDriver<'a, R, F> {
+	receiver: R,
+	methods: &'a mut FutureDriver<F>,
+}
+
+impl<'a, R, F> MethodDriver<'a, R, F> {
+	fn new(receiver: R, methods: &'a mut FutureDriver<F>) -> Self {
+		MethodDriver { receiver, methods }
+	}
+}
+
+impl<'a, R, F> Future for MethodDriver<'a, R, F>
+where
+	R: Future + Unpin,
+	F: Future + Unpin,
+{
+	type Output = R::Output;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		let _ = this.methods.poll_unpin(cx);
+
+		this.receiver.poll_unpin(cx)
+	}
 }
 
 #[derive(Debug, Clone)]

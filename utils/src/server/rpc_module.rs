@@ -26,7 +26,7 @@ pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, Conne
 pub type AsyncMethod = Arc<
 	dyn Send
 		+ Sync
-		+ Fn(Id<'static>, RpcParams<'static>, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
+		+ Fn(Id<'static>, RpcParams<'static>, MethodSink, ConnectionId) -> BoxFuture<'static, ()>
 >;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -56,24 +56,26 @@ pub enum MethodCallback {
 
 impl MethodCallback {
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
-	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
+	pub fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		let id = req.id.clone();
 		let params = RpcParams::new(req.params.map(|params| params.get()));
 
-		let result = match self {
-			MethodCallback::Sync(callback) => (callback)(req.id.clone(), params, tx, conn_id),
+		match self {
+			MethodCallback::Sync(callback) => {
+				if let Err(err) = (callback)(req.id.clone(), params, tx, conn_id) {
+					log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, id);
+					send_error(id, tx, JsonRpcErrorCode::ServerError(-1).into());
+				}
+
+				None
+			},
 			MethodCallback::Async(callback) => {
 				let tx = tx.clone();
 				let params = params.into_owned();
 				let id = req.id.into_owned();
 
-				(callback)(id, params, tx, conn_id).await
+				Some((callback)(id, params, tx, conn_id))
 			}
-		};
-
-		if let Err(err) = result {
-			log::error!("execution of method call '{}' failed: {:?}, request id={:?}", req.method, err, id);
-			send_error(id, tx, JsonRpcErrorCode::ServerError(-1).into());
 		}
 	}
 }
@@ -136,10 +138,13 @@ impl Methods {
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub async fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) {
+	pub fn execute(&self, tx: &MethodSink, req: JsonRpcRequest<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		match self.callbacks.get(&*req.method) {
-			Some(callback) => callback.execute(tx, req, conn_id).await,
-			None => send_error(req.id, tx, JsonRpcErrorCode::MethodNotFound.into()),
+			Some(callback) => callback.execute(tx, req, conn_id),
+			None => {
+				send_error(req.id, tx, JsonRpcErrorCode::MethodNotFound.into());
+				None
+			}
 		}
 	}
 
@@ -155,7 +160,9 @@ impl Methods {
 
 		let (tx, mut rx) = mpsc::unbounded();
 
-		self.execute(&tx, req, 0).await;
+		if let Some(fut) = self.execute(&tx, req, 0) {
+			fut.await;
+		}
 
 		rx.next().await
 	}
@@ -277,7 +284,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							send_error(id, &tx, err)
 						}
 					};
-					Ok(())
 				};
 				future.boxed()
 			})),
