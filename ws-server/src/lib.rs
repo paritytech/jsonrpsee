@@ -33,6 +33,7 @@
 extern crate alloc;
 
 mod server;
+mod future;
 
 #[cfg(test)]
 mod tests;
