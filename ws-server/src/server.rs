@@ -25,17 +25,11 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::future::Future;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::{
-	net::SocketAddr,
-	sync::{
-		atomic::{AtomicBool, Ordering},
-		Arc, Weak,
-	},
-};
 
-use crate::future::FutureDriver;
+use crate::future::{FutureDriver, StopHandle, StopMonitor};
 use crate::types::{
 	error::Error,
 	v2::error::JsonRpcErrorCode,
@@ -73,7 +67,7 @@ impl Server {
 
 	/// Returns the handle to stop the running server.
 	pub fn stop_handle(&self) -> StopHandle {
-		StopHandle(Arc::downgrade(&self.stop_monitor.0))
+		self.stop_monitor.handle()
 	}
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
@@ -427,7 +421,7 @@ impl Builder {
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
-		let stop_monitor = StopMonitor(Arc::new(AtomicBool::new(false)));
+		let stop_monitor = StopMonitor::new();
 		Ok(Server { listener, methods: Methods::default(), cfg: self.settings, stop_monitor })
 	}
 }
@@ -435,49 +429,5 @@ impl Builder {
 impl Default for Builder {
 	fn default() -> Self {
 		Self { settings: Settings::default() }
-	}
-}
-
-/// Monitor for checking whether the server has been flagged to shut down.
-#[derive(Debug, Clone)]
-struct StopMonitor(Arc<AtomicBool>);
-
-impl StopMonitor {
-	fn shutdown_requested(&self) -> bool {
-		self.0.load(Ordering::Relaxed)
-	}
-}
-
-/// Handle that is able to stop the running server.
-#[derive(Debug, Clone)]
-pub struct StopHandle(Weak<AtomicBool>);
-
-impl StopHandle {
-	/// Requests server to stop. Returns an error if server was already stopped.
-	///
-	/// Returns a future that can be awaited for when the server shuts down.
-	pub fn stop(self) -> Result<ShutdownWaiter, Error> {
-		if let Some(arc) = Weak::upgrade(&self.0) {
-			// We proceed only if the previous value of the flag was `false`
-			if arc.swap(true, Ordering::Relaxed) == false {
-				return Ok(ShutdownWaiter(self.0));
-			}
-		}
-		Err(Error::AlreadyStopped)
-	}
-}
-
-#[derive(Debug)]
-pub struct ShutdownWaiter(Weak<AtomicBool>);
-
-impl Future for ShutdownWaiter {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, _: &mut Context) -> Poll<Self::Output> {
-		if Weak::strong_count(&self.0) == 0 {
-			Poll::Ready(())
-		} else {
-			Poll::Pending
-		}
 	}
 }
