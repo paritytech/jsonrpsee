@@ -29,6 +29,13 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{net::SocketAddr, sync::Arc};
 
+use crate::types::{
+	error::Error,
+	v2::error::JsonRpcErrorCode,
+	v2::params::Id,
+	v2::request::{JsonRpcInvalidRequest, JsonRpcRequest},
+	TEN_MB_SIZE_BYTES,
+};
 use futures_channel::mpsc;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::StreamExt;
@@ -36,7 +43,6 @@ use futures_util::{
 	io::{BufReader, BufWriter},
 	SinkExt,
 };
-use jsonrpsee_types::TEN_MB_SIZE_BYTES;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use tokio::{
 	net::{TcpListener, TcpStream, ToSocketAddrs},
@@ -44,12 +50,8 @@ use tokio::{
 };
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-use jsonrpsee_types::error::Error;
-use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::Id;
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcRequest};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods, RpcModule};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
@@ -67,19 +69,6 @@ pub struct Server {
 }
 
 impl Server {
-	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
-	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
-	/// is returned. Note that the [`RpcModule`] is consumed after this call.
-	pub fn register_module<Context>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
-		self.methods.merge(module.into_methods())?;
-		Ok(())
-	}
-
-	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<&'static str> {
-		self.methods.method_names()
-	}
-
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
@@ -91,15 +80,14 @@ impl Server {
 	}
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
-	pub async fn start(self) {
+	pub async fn start(self, methods: impl Into<Methods>) {
 		// Acquire read access to the lock such that additional reader(s) may share this lock.
 		// Write access to this lock will only be possible after the server and all background tasks have stopped.
 		let _stop_handle = self.stop_handle.read().await;
 		let shutdown = self.stop_pair.0;
+		let methods = methods.into();
 
-		let methods = self.methods;
 		let mut id = 0;
-
 		let mut driver = ConnDriver::new(self.listener, self.stop_pair.1);
 
 		loop {
@@ -208,7 +196,10 @@ async fn handshake(
 
 	let key = {
 		let req = server.receive_request().await?;
-		cfg.allowed_origins.verify(req.headers().origin).map(|()| req.key())
+		let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
+		let origin_check = cfg.allowed_origins.verify("Origin", req.headers().origin);
+
+		host_check.and(origin_check).map(|()| req.key())
 	};
 
 	match key {
@@ -324,16 +315,16 @@ async fn background_task(
 }
 
 #[derive(Debug, Clone)]
-enum AllowedOrigins {
+enum AllowedValue {
 	Any,
-	OneOf(Arc<[String]>),
+	OneOf(Box<[String]>),
 }
 
-impl AllowedOrigins {
-	fn verify(&self, origin: Option<&[u8]>) -> Result<(), Error> {
-		if let (AllowedOrigins::OneOf(list), Some(origin)) = (self, origin) {
-			if !list.iter().any(|o| o.as_bytes() == origin) {
-				let error = format!("Origin denied: {}", String::from_utf8_lossy(origin));
+impl AllowedValue {
+	fn verify(&self, header: &str, value: Option<&[u8]>) -> Result<(), Error> {
+		if let (AllowedValue::OneOf(list), Some(value)) = (self, value) {
+			if !list.iter().any(|o| o.as_bytes() == value) {
+				let error = format!("{} denied: {}", header, String::from_utf8_lossy(value));
 				log::warn!("{}", error);
 				return Err(Error::Request(error));
 			}
@@ -350,8 +341,10 @@ struct Settings {
 	max_request_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
-	/// Cross-origin policy by which to accept or deny incoming requests.
-	allowed_origins: AllowedOrigins,
+	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
+	allowed_origins: AllowedValue,
+	/// Policy by which to accept or deny incoming requests based on the `Host` header.
+	allowed_hosts: AllowedValue,
 }
 
 impl Default for Settings {
@@ -359,7 +352,8 @@ impl Default for Settings {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_connections: MAX_CONNECTIONS,
-			allowed_origins: AllowedOrigins::Any,
+			allowed_origins: AllowedValue::Any,
+			allowed_hosts: AllowedValue::Any,
 		}
 	}
 }
@@ -385,11 +379,11 @@ impl Builder {
 
 	/// Set a list of allowed origins. During the handshake, the `Origin` header will be
 	/// checked against the list, connections without a matching origin will be denied.
-	/// Values should include protocol.
+	/// Values should be hostnames with protocol.
 	///
 	/// ```rust
 	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
-	/// builder.set_allowed_origins(vec!["https://example.com"]);
+	/// builder.set_allowed_origins(["https://example.com"]);
 	/// ```
 	///
 	/// By default allows any `Origin`.
@@ -400,13 +394,13 @@ impl Builder {
 		List: IntoIterator<Item = Origin>,
 		Origin: Into<String>,
 	{
-		let list: Arc<_> = list.into_iter().map(Into::into).collect();
+		let list: Box<_> = list.into_iter().map(Into::into).collect();
 
 		if list.len() == 0 {
-			return Err(Error::EmptyAllowedOrigins);
+			return Err(Error::EmptyAllowList("Origin"));
 		}
 
-		self.settings.allowed_origins = AllowedOrigins::OneOf(list);
+		self.settings.allowed_origins = AllowedValue::OneOf(list);
 
 		Ok(self)
 	}
@@ -414,7 +408,42 @@ impl Builder {
 	/// Restores the default behavior of allowing connections with `Origin` header
 	/// containing any value. This will undo any list set by [`set_allowed_origins`](Builder::set_allowed_origins).
 	pub fn allow_all_origins(mut self) -> Self {
-		self.settings.allowed_origins = AllowedOrigins::Any;
+		self.settings.allowed_origins = AllowedValue::Any;
+		self
+	}
+
+	/// Set a list of allowed hosts. During the handshake, the `Host` header will be
+	/// checked against the list. Connections without a matching host will be denied.
+	/// Values should be hostnames without protocol.
+	///
+	/// ```rust
+	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
+	/// builder.set_allowed_hosts(["example.com"]);
+	/// ```
+	///
+	/// By default allows any `Host`.
+	///
+	/// Will return an error if `list` is empty. Use [`allow_all_hosts`](Builder::allow_all_hosts) to restore the default.
+	pub fn set_allowed_hosts<Host, List>(mut self, list: List) -> Result<Self, Error>
+	where
+		List: IntoIterator<Item = Host>,
+		Host: Into<String>,
+	{
+		let list: Box<_> = list.into_iter().map(Into::into).collect();
+
+		if list.len() == 0 {
+			return Err(Error::EmptyAllowList("Host"));
+		}
+
+		self.settings.allowed_hosts = AllowedValue::OneOf(list);
+
+		Ok(self)
+	}
+
+	/// Restores the default behavior of allowing connections with `Host` header
+	/// containing any value. This will undo any list set by [`set_allowed_hosts`](Builder::set_allowed_hosts).
+	pub fn allow_all_hosts(mut self) -> Self {
+		self.settings.allowed_hosts = AllowedValue::Any;
 		self
 	}
 
