@@ -26,7 +26,7 @@
 
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, RpcModule, HttpStopHandle},
+	http_server::{HttpServerBuilder, HttpStopHandle, RpcModule},
 	types::{traits::Client, JsonValue},
 };
 use std::net::SocketAddr;
