@@ -1,11 +1,15 @@
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
-use futures::channel::mpsc;
-use jsonrpsee_types::v2::params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId};
-use jsonrpsee_types::v2::request::{JsonRpcCallSer, JsonRpcNotification};
-use jsonrpsee_types::v2::response::JsonRpcResponse;
-use jsonrpsee_types::{v2::error::JsonRpcError, Error, RequestMessage};
+use crate::types::v2::{
+	error::JsonRpcError,
+	params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId},
+	request::{JsonRpcCallSer, JsonRpcNotification},
+	response::JsonRpcResponse,
+};
+use crate::types::{Error, RequestMessage};
+use futures::channel::{mpsc, oneshot};
 use serde_json::Value as JsonValue;
+use std::time::Duration;
 
 /// Attempts to process a batch response.
 ///
@@ -186,5 +190,17 @@ pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcError) -
 			Ok(())
 		}
 		_ => Err(Error::InvalidRequestId),
+	}
+}
+
+/// Wait for a stream to complete within the given timeout.
+pub async fn call_with_timeout<T>(
+	timeout: Duration,
+	rx: oneshot::Receiver<Result<T, Error>>,
+) -> Result<Result<T, Error>, oneshot::Canceled> {
+	let timeout = crate::tokio::sleep(timeout);
+	crate::tokio::select! {
+		res = rx => res,
+		_ = timeout => Ok(Err(Error::RequestTimeout))
 	}
 }

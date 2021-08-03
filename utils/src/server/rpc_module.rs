@@ -1,18 +1,20 @@
 use crate::server::helpers::{send_error, send_response};
+use beef::Cow;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{future::BoxFuture, FutureExt};
+use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{
-	Id, JsonRpcSubscriptionParams, OwnedId, OwnedRpcParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId,
-	TwoPointZero,
+	Id, JsonRpcSubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
 };
 use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
+use serde_json::value::RawValue;
 use std::fmt::Debug;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
@@ -22,7 +24,9 @@ use std::sync::Arc;
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId) -> Result<(), Error>>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
 pub type AsyncMethod = Arc<
-	dyn Send + Sync + Fn(OwnedId, OwnedRpcParams, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
+	dyn Send
+		+ Sync
+		+ Fn(Id<'static>, RpcParams<'static>, MethodSink, ConnectionId) -> BoxFuture<'static, Result<(), Error>>,
 >;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -60,8 +64,8 @@ impl MethodCallback {
 			MethodCallback::Sync(callback) => (callback)(req.id.clone(), params, tx, conn_id),
 			MethodCallback::Async(callback) => {
 				let tx = tx.clone();
-				let params = OwnedRpcParams::from(params);
-				let id = OwnedId::from(req.id);
+				let params = params.into_owned();
+				let id = req.id.into_owned();
 
 				(callback)(id, params, tx, conn_id).await
 			}
@@ -110,7 +114,9 @@ impl Methods {
 
 	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
-	pub fn merge(&mut self, mut other: Methods) -> Result<(), Error> {
+	pub fn merge(&mut self, other: impl Into<Methods>) -> Result<(), Error> {
+		let mut other = other.into();
+
 		for name in other.callbacks.keys() {
 			self.verify_method_name(name)?;
 		}
@@ -137,9 +143,40 @@ impl Methods {
 		}
 	}
 
-	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<&'static str> {
-		self.callbacks.keys().copied().collect()
+	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
+	/// a server up.
+	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
+		let req = JsonRpcRequest {
+			jsonrpc: TwoPointZero,
+			id: Id::Number(0),
+			method: Cow::borrowed(method),
+			params: params.as_ref().map(|v| &**v),
+		};
+
+		let (tx, mut rx) = mpsc::unbounded();
+
+		self.execute(&tx, req, 0).await;
+
+		rx.next().await
+	}
+
+	/// Returns an `Iterator` with all the method names registered on this server.
+	pub fn method_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+		self.callbacks.keys().copied()
+	}
+}
+
+impl<Context> Deref for RpcModule<Context> {
+	type Target = Methods;
+
+	fn deref(&self) -> &Methods {
+		&self.methods
+	}
+}
+
+impl<Context> DerefMut for RpcModule<Context> {
+	fn deref_mut(&mut self) -> &mut Methods {
+		&mut self.methods
 	}
 }
 
@@ -157,18 +194,11 @@ impl<Context> RpcModule<Context> {
 	pub fn new(ctx: Context) -> Self {
 		Self { ctx: Arc::new(ctx), methods: Default::default() }
 	}
+}
 
-	/// Convert a module into methods. Consumes self.
-	pub fn into_methods(self) -> Methods {
-		self.methods
-	}
-
-	/// Merge two [`RpcModule`]'s by adding all [`Methods`] `other` into `self`.
-	/// Fails if any of the methods in `other` is present already.
-	pub fn merge<Context2>(&mut self, other: RpcModule<Context2>) -> Result<(), Error> {
-		self.methods.merge(other.methods)?;
-
-		Ok(())
+impl<Context> From<RpcModule<Context>> for Methods {
+	fn from(module: RpcModule<Context>) -> Methods {
+		module.methods
 	}
 }
 
@@ -215,7 +245,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		F: Fn(RpcParams, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>> + Copy + Send + Sync + 'static,
+		F: Fn(RpcParams<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>>
+			+ Copy
+			+ Send
+			+ Sync
+			+ 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -226,8 +260,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
-					let params = params.borrowed();
-					let id = id.borrowed();
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
 						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
@@ -445,9 +477,8 @@ mod tests {
 
 		mod1.merge(mod2).unwrap();
 
-		let methods = mod1.into_methods();
-		assert!(methods.method("bla with Vec context").is_some());
-		assert!(methods.method("bla with String context").is_some());
+		assert!(mod1.method("bla with Vec context").is_some());
+		assert!(mod1.method("bla with String context").is_some());
 	}
 
 	#[test]
@@ -456,9 +487,8 @@ mod tests {
 		let mut cxmodule = RpcModule::new(cx);
 		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _, _| Ok(()));
 
-		let methods = cxmodule.into_methods();
-		assert!(methods.method("hi").is_some());
-		assert!(methods.method("goodbye").is_some());
+		assert!(cxmodule.method("hi").is_some());
+		assert!(cxmodule.method("goodbye").is_some());
 	}
 
 	#[test]
@@ -468,9 +498,7 @@ mod tests {
 		module.register_method("hello_world", |_: RpcParams, _| Ok(())).unwrap();
 		module.register_alias("hello_foobar", "hello_world").unwrap();
 
-		let methods = module.into_methods();
-
-		assert!(methods.method("hello_world").is_some());
-		assert!(methods.method("hello_foobar").is_some());
+		assert!(module.method("hello_world").is_some());
+		assert!(module.method("hello_foobar").is_some());
 	}
 }

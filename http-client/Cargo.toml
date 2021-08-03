@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-http-client"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "HTTP client for JSON-RPC"
 edition = "2018"
@@ -11,24 +11,27 @@ documentation = "https://docs.rs/jsonrpsee-http-client"
 
 [dependencies]
 async-trait = "0.1"
+futures = { version = "0.3.14", default-features = false, features = ["std"] }
 hyper13-rustls = { package = "hyper-rustls", version = "0.21", optional = true }
 hyper14-rustls = { package = "hyper-rustls", version = "0.22", optional = true }
 hyper14 = { package = "hyper", version = "0.14", features = ["client", "http1", "http2", "tcp"], optional = true }
 hyper13 = { package = "hyper", version = "0.13", optional = true }
-jsonrpsee-types = { path = "../types", version = "0.2.0" }
-jsonrpsee-utils = { path = "../utils", version = "0.2.0", optional = true }
+jsonrpsee-types = { path = "../types", version = "0.3.0" }
+jsonrpsee-utils = { path = "../utils", version = "0.3.0", optional = true }
 log = "0.4"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
+tokioV1 = { package = "tokio", version = "1", features = ["time"], optional = true }
+tokioV02 = { package = "tokio", version = "0.2", features = ["time"], optional = true }
 thiserror = "1.0"
 url = "2.2"
 fnv = "1"
 
 [features]
 default = ["tokio1"]
-tokio1 = ["hyper14", "hyper14-rustls", "jsonrpsee-utils/hyper_14"]
-tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper_13"]
+tokio1 = ["hyper14", "hyper14-rustls", "jsonrpsee-utils/hyper_14", "tokioV1" ]
+tokio02 = ["hyper13", "hyper13-rustls", "jsonrpsee-utils/hyper_13", "tokioV02" ]
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
-tokio = { version = "1.0", features = ["net", "rt-multi-thread", "macros"] }
+tokioV1 = { package = "tokio", version = "1", features = ["net", "rt-multi-thread", "macros"] }

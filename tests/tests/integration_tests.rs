@@ -31,8 +31,13 @@ mod helpers;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::{
-	http_client::{traits::Client, Error, HttpClientBuilder},
-	ws_client::{traits::SubscriptionClient, v2::params::JsonRpcParams, JsonValue, Subscription, WsClientBuilder},
+	http_client::HttpClientBuilder,
+	types::{
+		traits::{Client, SubscriptionClient},
+		v2::params::JsonRpcParams,
+		Error, JsonValue, Subscription,
+	},
+	ws_client::WsClientBuilder,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -80,7 +85,7 @@ async fn ws_method_call_works() {
 
 #[tokio::test]
 async fn http_method_call_works() {
-	let server_addr = http_server().await;
+	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	let response: String = client.request("say_hello", JsonRpcParams::NoParams).await.unwrap();

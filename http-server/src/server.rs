@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{response, AccessControl, TEN_MB_SIZE_BYTES};
+use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{stream::StreamExt, SinkExt};
 use hyper::{
@@ -32,12 +32,16 @@ use hyper::{
 	service::{make_service_fn, service_fn},
 	Error as HyperError,
 };
-use jsonrpsee_types::error::{Error, GenericTransportError};
-use jsonrpsee_types::v2::error::JsonRpcErrorCode;
-use jsonrpsee_types::v2::params::Id;
-use jsonrpsee_types::v2::request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest};
+use jsonrpsee_types::{
+	error::{Error, GenericTransportError},
+	v2::{
+		error::JsonRpcErrorCode,
+		params::Id,
+		request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest},
+	},
+	TEN_MB_SIZE_BYTES,
+};
 use jsonrpsee_utils::hyper_helpers::read_response_to_body;
-use jsonrpsee_utils::server::rpc_module::RpcModule;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, send_error},
 	rpc_module::Methods,
@@ -48,7 +52,6 @@ use socket2::{Domain, Socket, Type};
 use std::{
 	cmp,
 	net::{SocketAddr, TcpListener},
-	sync::Arc,
 };
 
 /// Builder to create JSON-RPC HTTP server.
@@ -123,7 +126,7 @@ pub struct StopHandle {
 impl StopHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
 	pub async fn stop(&mut self) -> Result<(), Error> {
-		self.stop_sender.feed(()).await.map_err(|_| Error::AlreadyStopped)
+		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
 	}
 
 	/// Blocks indefinitely until the server is stopped.
@@ -150,30 +153,17 @@ pub struct Server {
 }
 
 impl Server {
-	/// Register all methods from a [`Methods`] of provided [`RpcModule`] on this server.
-	/// In case a method already is registered with the same name, no method is added and a [`Error::MethodAlreadyRegistered`]
-	/// is returned. Note that the [`RpcModule`] is consumed after this call.
-	pub fn register_module<Context: Send + Sync + 'static>(&mut self, module: RpcModule<Context>) -> Result<(), Error> {
-		self.methods.merge(module.into_methods())?;
-		Ok(())
-	}
-
-	/// Returns a `Vec` with all the method names registered on this server.
-	pub fn method_names(&self) -> Vec<&'static str> {
-		self.methods.method_names()
-	}
-
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
 	}
 
 	/// Start the server.
-	pub async fn start(self) -> StopHandle {
-		let methods = Arc::new(self.methods);
+	pub fn start(self, methods: impl Into<Methods>) -> StopHandle {
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
+		let methods = methods.into();
 		let listener = self.listener;
 
 		let make_service = make_service_fn(move |_| {

@@ -25,8 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	http_client::{traits::Client, HttpClientBuilder, JsonValue},
-	http_server::{HttpServerBuilder, RpcModule},
+	http_client::HttpClientBuilder,
+	http_server::{HttpServerBuilder, RpcModule, HttpStopHandle},
+	types::{traits::Client, JsonValue},
 };
 use std::net::SocketAddr;
 
@@ -34,7 +35,7 @@ use std::net::SocketAddr;
 async fn main() -> anyhow::Result<()> {
 	env_logger::init();
 
-	let server_addr = run_server().await?;
+	let (server_addr, _handle) = run_server().await?;
 	let url = format!("http://{}", server_addr);
 
 	let params: &[JsonValue] = &[1_u64.into(), 2.into(), 3.into()];
@@ -46,13 +47,12 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
+async fn run_server() -> anyhow::Result<(SocketAddr, HttpStopHandle)> {
+	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
-	server.register_module(module).unwrap();
 
 	let addr = server.local_addr()?;
-	tokio::spawn(async move { server.start().await });
-	Ok(addr)
+	let stop_handle = server.start(module);
+	Ok((addr, stop_handle))
 }

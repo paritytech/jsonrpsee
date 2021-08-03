@@ -1,7 +1,7 @@
 [package]
 name = "jsonrpsee"
 description = "JSON-RPC crate"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
 edition = "2018"
@@ -10,16 +10,16 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee"
 
 [dependencies]
-http-client = { path = "../http-client", version = "0.2.0", package = "jsonrpsee-http-client", optional = true }
-http-server = { path = "../http-server", version = "0.2.0", package = "jsonrpsee-http-server", optional = true }
-ws-client = { path = "../ws-client", version = "0.2.0", package = "jsonrpsee-ws-client", optional = true }
-ws-server = { path = "../ws-server", version = "0.2.0", package = "jsonrpsee-ws-server", optional = true }
-proc-macros = { path = "../proc-macros", version = "0.2.0", package = "jsonrpsee-proc-macros", optional = true }
-utils = { path = "../utils", version = "0.2.0", package = "jsonrpsee-utils", optional = true }
-types = { path = "../types", version = "0.2.0", package = "jsonrpsee-types", optional = true }
+http-client = { path = "../http-client", version = "0.3.0", package = "jsonrpsee-http-client", optional = true }
+http-server = { path = "../http-server", version = "0.3.0", package = "jsonrpsee-http-server", optional = true }
+ws-client = { path = "../ws-client", version = "0.3.0", package = "jsonrpsee-ws-client", optional = true }
+ws-server = { path = "../ws-server", version = "0.3.0", package = "jsonrpsee-ws-server", optional = true }
+proc-macros = { path = "../proc-macros", version = "0.3.0", package = "jsonrpsee-proc-macros", optional = true }
+utils = { path = "../utils", version = "0.3.0", package = "jsonrpsee-utils", optional = true }
+types = { path = "../types", version = "0.3.0", package = "jsonrpsee-types", optional = true }
 
 [features]
-client = ["http-client", "ws-client"]
-server = ["http-server", "ws-server", "utils"]
+client = ["http-client", "ws-client", "types"]
+server = ["http-server", "ws-server", "utils", "types"]
 macros = ["proc-macros", "types"]
 full = ["client", "server", "macros", "utils"]
