@@ -11,7 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-http-server"
 
 [dependencies]
 thiserror = "1"
-hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
+hyper = { version = "0.14.10", features = ["server", "http1", "http2", "tcp"] }
 futures-channel = "0.3.14"
 futures-util = { version = "0.3.14", default-features = false }
 jsonrpsee-types = { path = "../types", version = "0.2.0" }
