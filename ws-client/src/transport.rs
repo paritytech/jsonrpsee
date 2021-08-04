@@ -294,9 +294,14 @@ impl Target {
 			url.host_str().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
 		let port = url.port_or_known_default().ok_or_else(|| WsHandshakeError::Url("No port number in URL".into()))?;
 		let host_header = format!("{}:{}", host, port);
+		let mut path = url.path().to_owned();
+		if let Some(query) = url.query() {
+			path.push('?');
+			path.push_str(query);
+		}
 		// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
 		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self { sockaddrs, host, host_header, mode, path: url.path().to_owned() })
+		Ok(Self { sockaddrs, host, host_header, mode, path })
 	}
 }
 
@@ -347,5 +352,17 @@ mod tests {
 	fn url_with_path_works() {
 		let target = Target::parse("wss://127.0.0.1/my-special-path").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my-special-path");
+	}
+
+	#[test]
+	fn url_with_query_works() {
+		let target = Target::parse("wss://127.0.0.1/my?name1=value1&name2=value2").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my?name1=value1&name2=value2");
+	}
+
+	#[test]
+	fn url_with_fragment_is_ignored() {
+		let target = Target::parse("wss://127.0.0.1/my.htm#ignore").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my.htm");
 	}
 }
