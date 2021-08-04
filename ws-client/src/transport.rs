@@ -218,6 +218,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 			}
 		};
 
+		log::debug!("Connecting to target: {:?}", self.target);
 		let mut client =
 			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.target.host_header, &self.target.path);
 		if let Some(origin) = self.origin_header.as_ref() {
