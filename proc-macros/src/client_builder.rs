@@ -4,64 +4,6 @@ use syn::spanned::Spanned as _;
 
 use crate::helpers::*;
 
-/// Generates the macro output token stream corresponding to a single API.
-pub fn build_client_api(api: crate::api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
-	let enum_name = &api.name;
-	let visibility = &api.visibility;
-	let generics = api.generics.clone();
-	let mut non_used_type_params = HashSet::new();
-
-	let mut variants = Vec::new();
-	for function in &api.definitions {
-		let variant_name = snake_case_to_camel_case(&function.signature.ident);
-		if let syn::ReturnType::Type(_, ty) = &function.signature.output {
-			non_used_type_params.insert(ty);
-		};
-
-		let mut params_list = Vec::new();
-
-		for input in function.signature.inputs.iter() {
-			let (ty, pat_span, param_variant_name) = match input {
-				syn::FnArg::Receiver(_) => {
-					return Err(syn::Error::new(
-						input.span(),
-						"Having `self` is not allowed in RPC queries definitions",
-					));
-				}
-				syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => (ty, pat.span(), param_variant_name(pat)?),
-			};
-			params_list.push(quote_spanned!(pat_span=> #param_variant_name: #ty));
-		}
-
-		variants.push(quote_spanned!(function.signature.ident.span()=>
-			#variant_name {
-				#(#params_list,)*
-			}
-		));
-	}
-
-	let client_impl_block = build_client_impl(&api)?;
-
-	let mut ret_variants = Vec::new();
-	for (idx, ty) in non_used_type_params.into_iter().enumerate() {
-		// NOTE(niklasad1): variant names are converted from `snake_case` to `CamelCase`
-		// It's impossible to have collisions between `_0, _1, ... _N`
-		// Because variant name `_0`, `__0` becomes `0` in `CamelCase`
-		// then `0` is not a valid identifier in Rust syntax and the error message is hard to understand.
-		// Perhaps document this in macro when it's ready.
-		let varname = format_ident!("_{}", idx);
-		ret_variants.push(quote_spanned!(ty.span()=> #varname (#ty)));
-	}
-
-	Ok(quote_spanned!(api.name.span()=>
-		#visibility enum #enum_name #generics {
-			 #(#[allow(unused)] #variants,)* #(#[allow(unused)] #ret_variants,)*
-		}
-
-		#client_impl_block
-	))
-}
-
 /// Builds the impl block that allow performing outbound JSON-RPC queries.
 ///
 /// Generates the `impl <enum> { }` block containing functions that perform RPC client calls.
