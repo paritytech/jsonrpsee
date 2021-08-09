@@ -15,7 +15,7 @@ hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
 futures-channel = "0.3.14"
 futures-util = { version = "0.3.14", default-features = false }
 jsonrpsee-types = { path = "../types", version = "0.3.0" }
-jsonrpsee-utils = { path = "../utils", version = "0.3.0", features = ["server", "hyper_14"] }
+jsonrpsee-utils = { path = "../utils", version = "0.3.0", features = ["server", "http-helpers"] }
 globset = "0.4"
 lazy_static = "1.4"
 log = "0.4"

@@ -32,7 +32,7 @@ use crate::types::{
 	},
 	Error, JsonValue,
 };
-use crate::{tokio, HttpClientBuilder};
+use crate::HttpClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
