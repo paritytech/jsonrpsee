@@ -13,7 +13,7 @@ documentation = "https://docs.rs/jsonrpsee-http-client"
 async-trait = "0.1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 hyper-rustls = "0.22"
-hyper = { version = "0.14", features = ["client", "http1", "http2", "tcp"] }
+hyper = { version = "0.14.10", features = ["client", "http1", "http2", "tcp"] }
 jsonrpsee-types = { path = "../types", version = "0.3.0" }
 jsonrpsee-utils = { path = "../utils", version = "0.3.0", features = ["http-helpers"] }
 log = "0.4"
