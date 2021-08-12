@@ -215,7 +215,6 @@ impl Server {
 						let (tx, mut rx) = mpsc::unbounded::<String>();
 						// Is this a single request or a batch (or error)?
 						let mut single = true;
-						// TODO: Cut down on some noise. Is this a terrible idea?
 						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
 						match body.get(0) {
 							// Single request or notification
