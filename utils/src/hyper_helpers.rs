@@ -54,9 +54,9 @@ pub async fn read_body(
 		return Err(GenericTransportError::TooLarge);
 	}
 
-	let single = match first_chunk[0] {
-		b'{' => true,
-		b'[' => false,
+	let single = match first_chunk.get(0) {
+		Some(b'{') => true,
+		Some(b'[') => false,
 		_ => return Err(GenericTransportError::Malformed),
 	};
 
