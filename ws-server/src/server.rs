@@ -271,8 +271,8 @@ async fn background_task(
 			continue;
 		}
 
-		match data[0] {
-			b'{' => {
+		match data.get(0) {
+			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 					log::debug!("recv: {:?}", req);
 					methods.execute(&tx, req, conn_id).await;
@@ -281,7 +281,7 @@ async fn background_task(
 					send_error(id, &tx, code.into());
 				}
 			}
-			b'[' => {
+			Some(b'[') => {
 				if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 					if !batch.is_empty() {
 						// Batch responses must be sent back as a single message so we read the results from each request in the
