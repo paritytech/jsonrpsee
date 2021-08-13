@@ -9,7 +9,7 @@
 use crate::types::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
 use hyper_rustls::HttpsConnector;
-use jsonrpsee_utils::hyper_helpers;
+use jsonrpsee_utils::http_helpers;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
@@ -30,10 +30,7 @@ impl HttpTransportClient {
 	pub(crate) fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
-			#[cfg(feature = "tokio1")]
 			let connector = HttpsConnector::with_native_roots();
-			#[cfg(feature = "tokio02")]
-			let connector = HttpsConnector::new();
 			let client = Client::builder().build::<_, hyper::Body>(connector);
 			Ok(HttpTransportClient { target, client, max_request_body_size })
 		} else {
@@ -66,7 +63,7 @@ impl HttpTransportClient {
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
-		let (body, _) = hyper_helpers::read_body(&parts.headers, body, self.max_request_body_size).await?;
+		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_request_body_size).await?;
 		Ok(body)
 	}
 
@@ -120,7 +117,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::{Error, HttpTransportClient};
-	use crate::tokio;
 
 	#[test]
 	fn invalid_http_url_rejected() {
