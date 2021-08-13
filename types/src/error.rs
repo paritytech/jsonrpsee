@@ -38,6 +38,18 @@ pub enum CallError {
 	},
 }
 
+// TODO(niklasad1): doesn't work probably conflicting with `thiserror::Error`
+/*
+impl<E> From<E> for Error
+where
+	E: std::error::Error + Send + Sync + 'static,
+{
+	fn from(err: E) -> Self {
+		Error::Call(CallError::Failed(Box::new(err)))
+	}
+}
+*/
+
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
