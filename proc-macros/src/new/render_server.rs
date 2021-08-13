@@ -25,8 +25,6 @@ impl RpcDescription {
 			}
 		};
 
-		// panic!("{}", trait_impl);
-
 		Ok(trait_impl)
 	}
 
@@ -72,7 +70,7 @@ impl RpcDescription {
 				let rpc_method_name = self.rpc_identifier(&method.name);
 				// `parsing` is the code associated with parsing structure from the
 				// provided `RpcParams` object.
-				// `params_seq` is the comma-delimited sequence of parametsrs.
+				// `params_seq` is the comma-delimited sequence of parameters.
 				let (parsing, params_seq) = self.render_params_decoding(&method.params);
 
 				check_name(rpc_method_name.clone(), rust_method_name.span());
@@ -82,7 +80,7 @@ impl RpcDescription {
 						rpc.register_async_method(#rpc_method_name, |params, context| {
 							let fut = async move {
 								#parsing
-								Ok(context.as_ref().#rust_method_name(#params_seq).await)
+								context.as_ref().#rust_method_name(#params_seq).await
 							};
 							Box::pin(fut)
 						})?;
@@ -91,7 +89,7 @@ impl RpcDescription {
 					quote! {
 						rpc.register_method(#rpc_method_name, |params, context| {
 							#parsing
-							Ok(context.#rust_method_name(#params_seq))
+							context.#rust_method_name(#params_seq)
 						})?;
 					}
 				}
@@ -110,7 +108,7 @@ impl RpcDescription {
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
 				// `parsing` is the code associated with parsing structure from the
 				// provided `RpcParams` object.
-				// `params_seq` is the comma-delimited sequence of parametsrs.
+				// `params_seq` is the comma-delimited sequence of parameters.
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params);
 
 				check_name(rpc_sub_name.clone(), rust_method_name.span());
