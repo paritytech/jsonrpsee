@@ -38,3 +38,6 @@ pub mod __reexports {
 	pub use serde;
 	pub use serde_json;
 }
+
+/// JSON-RPC result.
+pub type JsonRpcResult<T> = Result<T, Error>;

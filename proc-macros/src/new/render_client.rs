@@ -52,7 +52,7 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
-			let returns = quote! { Result<#returns> };
+			let returns = quote! { #returns };
 
 			(called_method, returns)
 		} else {

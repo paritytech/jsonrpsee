@@ -95,8 +95,10 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 			.boxed()
 		})
 		.unwrap();
-	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams.into())).unwrap();
+	module
+		.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)).into()))
+		.unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
@@ -149,7 +151,7 @@ async fn server_with_context() -> SocketAddr {
 			async move {
 				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 				// Async work that returns an error
-				futures_util::future::err::<(), CallError>(CallError::Failed(String::from("nah").into())).await
+				futures_util::future::err::<(), Error>(CallError::Failed(String::from("nah").into()).into()).await
 			}
 			.boxed()
 		})

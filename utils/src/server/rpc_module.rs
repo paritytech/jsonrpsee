@@ -208,7 +208,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(RpcParams, &Context) -> Result<R, CallError> + Send + Sync + 'static,
+		F: Fn(RpcParams, &Context) -> Result<R, Error> + Send + Sync + 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -218,22 +218,24 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			method_name,
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
-					Ok(res) => send_response(id, tx, res),
-					Err(CallError::InvalidParams) => send_error(id, tx, JsonRpcErrorCode::InvalidParams.into()),
-					Err(CallError::Failed(e)) => {
+					Ok(res) => send_response(id, &tx, res),
+					Err(Error::Call(CallError::InvalidParams)) => {
+						send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into())
+					}
+					Err(Error::Call(CallError::Failed(e))) => {
 						let err = JsonRpcErrorObject {
 							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
 							message: &e.to_string(),
 							data: None,
 						};
-						send_error(id, tx, err)
+						send_error(id, &tx, err)
 					}
-					Err(CallError::Custom { code, message, data }) => {
+					Err(Error::Call(CallError::Custom { code, message, data })) => {
 						let err = JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
-						send_error(id, tx, err)
+						send_error(id, &tx, err)
 					}
+					_ => unreachable!(),
 				};
-
 				Ok(())
 			})),
 		);
@@ -245,11 +247,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		F: Fn(RpcParams<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, CallError>>
-			+ Copy
-			+ Send
-			+ Sync
-			+ 'static,
+		F: Fn(RpcParams<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, Error>> + Copy + Send + Sync + 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -262,8 +260,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let future = async move {
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
-						Err(CallError::InvalidParams) => send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into()),
-						Err(CallError::Failed(e)) => {
+						Err(Error::Call(CallError::InvalidParams)) => {
+							send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into())
+						}
+						Err(Error::Call(CallError::Failed(e))) => {
 							let err = JsonRpcErrorObject {
 								code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
 								message: &e.to_string(),
@@ -271,11 +271,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							};
 							send_error(id, &tx, err)
 						}
-						Err(CallError::Custom { code, message, data }) => {
+						Err(Error::Call(CallError::Custom { code, message, data })) => {
 							let err =
 								JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 							send_error(id, &tx, err)
 						}
+						_ => unreachable!(),
 					};
 					Ok(())
 				};

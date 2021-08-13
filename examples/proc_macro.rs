@@ -26,7 +26,7 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, error::CallError},
+	types::{async_trait, error::Error},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, SubscriptionSink, WsServerBuilder},
 };
@@ -36,7 +36,7 @@ use std::net::SocketAddr;
 pub trait Rpc {
 	/// Async method call example.
 	#[method(name = "getPairs")]
-	async fn storage_pairs(&self, prefix: usize, hash: Option<u128>) -> Result<Vec<usize>, CallError>;
+	async fn storage_pairs(&self, prefix: usize, hash: Option<u128>) -> Result<Vec<usize>, Error>;
 
 	/// Subscription that take `Option<Vec<u8>>` as input and produces output `Vec<usize>`.
 	#[subscription(name = "subscribeStorage", unsub = "unsubscribeStorage", item = Vec<usize>)]
@@ -47,7 +47,7 @@ pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn storage_pairs(&self, _prefix: usize, _hash: Option<u128>) -> Result<Vec<usize>, CallError> {
+	async fn storage_pairs(&self, _prefix: usize, _hash: Option<u128>) -> Result<Vec<usize>, Error> {
 		Ok(vec![1, 2, 3, 4])
 	}
 
@@ -61,13 +61,13 @@ async fn main() -> anyhow::Result<()> {
 	env_logger::init();
 
 	let server_addr = run_server().await?;
-	/*let url = format!("ws://{}", server_addr);
+	let url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	assert_eq!(client.storage_pairs(10, None).await.unwrap(), vec![1, 2, 3, 4]);
 
 	let mut sub = client.subscribe_storage(None).await.unwrap();
-	assert_eq!(Some(vec![]), sub.next().await.unwrap());*/
+	assert_eq!(Some(vec![]), sub.next().await.unwrap());
 
 	Ok(())
 }
