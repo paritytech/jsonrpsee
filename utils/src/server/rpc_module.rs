@@ -150,7 +150,7 @@ impl Methods {
 			jsonrpc: TwoPointZero,
 			id: Id::Number(0),
 			method: Cow::borrowed(method),
-			params: params.as_ref().map(|v| &**v),
+			params: params.as_deref(),
 		};
 
 		let (tx, mut rx) = mpsc::unbounded();

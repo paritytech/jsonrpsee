@@ -40,7 +40,7 @@ pub async fn read_response_to_body(
 ) -> Result<Vec<u8>, GenericTransportError<hyper::Error>> {
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in practice
 	// and for that case we fallback to allocating in the while-loop below instead of pre-allocating.
-	let body_size = read_header_content_length(&headers).unwrap_or(0);
+	let body_size = read_header_content_length(headers).unwrap_or(0);
 
 	if body_size > max_request_body_size {
 		return Err(GenericTransportError::TooLarge);
