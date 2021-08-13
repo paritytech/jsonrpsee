@@ -1,6 +1,7 @@
 use crate::server::helpers::{send_error, send_response};
+use beef::Cow;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{future::BoxFuture, FutureExt};
+use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
 use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::v2::params::{
@@ -11,6 +12,7 @@ use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
+use serde_json::value::RawValue;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -139,6 +141,23 @@ impl Methods {
 			Some(callback) => callback.execute(tx, req, conn_id).await,
 			None => send_error(req.id, tx, JsonRpcErrorCode::MethodNotFound.into()),
 		}
+	}
+
+	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
+	/// a server up.
+	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
+		let req = JsonRpcRequest {
+			jsonrpc: TwoPointZero,
+			id: Id::Number(0),
+			method: Cow::borrowed(method),
+			params: params.as_deref(),
+		};
+
+		let (tx, mut rx) = mpsc::unbounded();
+
+		self.execute(&tx, req, 0).await;
+
+		rx.next().await
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.

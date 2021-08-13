@@ -72,6 +72,16 @@ impl<'a> RpcParams<'a> {
 		Self(raw.map(Into::into))
 	}
 
+	/// Returns true if the contained JSON is an object
+	pub fn is_object(&self) -> bool {
+		let json: &str = match self.0 {
+			Some(ref cow) => cow,
+			None => return false,
+		};
+
+		json.trim_start().starts_with('{')
+	}
+
 	/// Obtain a sequence parser, [`RpcParamsSequence`].
 	///
 	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC

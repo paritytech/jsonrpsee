@@ -30,87 +30,8 @@ use new::RpcDescription;
 use proc_macro::TokenStream;
 use quote::quote;
 
-mod api_def;
-mod client_builder;
 mod helpers;
 mod new;
-
-/// Wraps around one or more API definitions and generates an enum.
-///
-/// The format within this macro must be:
-///
-/// ```ignore
-/// jsonrpsee_proc_macros::rpc_client_api! {
-///     Foo { ... }
-///     pub(crate) Bar { ... }
-/// }
-/// ```
-///
-/// The `Foo` and `Bar` are identifiers, optionally prefixed with a visibility modifier
-/// (e.g. `pub`).
-///
-/// The content of the blocks is the same as the content of a trait definition, except that
-/// default implementations for methods are forbidden.
-///
-/// For each identifier (such as `Foo` and `Bar` in the example above), this macro will generate
-/// an enum where each variant corresponds to a function of the definition. Function names are
-/// turned into PascalCase to conform to the Rust style guide.
-///
-/// Additionally, each generated enum has one method per function definition that lets you perform
-/// the method has a client.
-///
-// TODO(niklasad1): Generic type params for individual methods doesn't work
-// because how the enum is generated, so for now type params must be declared on the entire enum.
-// The reason is that all type params on the enum is bound as a separate variant but
-// not generic params i.e, either params or return type.
-// To handle that properly, all generic types has to be collected and applied to the enum, see example:
-//
-// ```rust
-// jsonrpsee_rpc_client_api! {
-//     Api {
-//       // Doesn't work.
-//       fn generic_notif<T>(t: T);
-// }
-// ```
-//
-// Expands to which doesn't compile:
-// ```rust
-// enum Api {
-//    GenericNotif {
-//        t: T,
-//    },
-// }
-// ```
-// The code should be expanded to (to compile):
-// ```rust
-// enum Api<T> {
-//    GenericNotif {
-//        t: T,
-//    },
-// }
-// ```
-#[proc_macro]
-pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
-	// Start by parsing the input into what we expect.
-	let defs: api_def::ApiDefinitions = match syn::parse(input_token_stream) {
-		Ok(d) => d,
-		Err(err) => return err.to_compile_error().into(),
-	};
-
-	let mut out = Vec::with_capacity(defs.apis.len());
-	for api in defs.apis {
-		match client_builder::build_client_api(api) {
-			Ok(a) => out.push(a),
-			Err(err) => return err.to_compile_error().into(),
-		};
-	}
-
-	TokenStream::from(quote! {
-		#(#out)*
-	})
-}
-
-// New implementation starts here.
 
 /// Main RPC macro.
 ///
