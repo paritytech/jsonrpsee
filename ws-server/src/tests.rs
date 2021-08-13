@@ -291,6 +291,52 @@ async fn batch_method_call_where_some_calls_fail() {
 }
 
 #[tokio::test]
+async fn garbage_request_fails() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"dsdfs fsdsfds"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{ "#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{sds}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"["#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"[dsds]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"[]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, invalid_request(Id::Null));
+
+	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+}
+
+#[tokio::test]
 async fn single_method_call_with_params_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
