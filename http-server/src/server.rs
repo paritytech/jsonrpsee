@@ -41,7 +41,7 @@ use jsonrpsee_types::{
 	},
 	TEN_MB_SIZE_BYTES,
 };
-use jsonrpsee_utils::hyper_helpers::read_response_to_body;
+use jsonrpsee_utils::http_helpers::read_response_to_body;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, prepare_error, send_error},
 	rpc_module::Methods,
