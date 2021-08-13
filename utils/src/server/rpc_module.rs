@@ -3,7 +3,9 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
-use jsonrpsee_types::v2::error::{JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee_types::v2::error::{
+	JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE,
+};
 use jsonrpsee_types::v2::params::{
 	Id, JsonRpcSubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
 };
@@ -234,7 +236,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						let err = JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 						send_error(id, &tx, err)
 					}
-					_ => unreachable!(),
+					// This should normally not happen.
+					Err(e) => {
+						let err = JsonRpcErrorObject {
+							code: JsonRpcErrorCode::ServerError(UNKNOWN_ERROR_CODE),
+							message: &e.to_string(),
+							data: None,
+						};
+						send_error(id, &tx, err)
+					}
 				};
 				Ok(())
 			})),
@@ -276,7 +286,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 							send_error(id, &tx, err)
 						}
-						_ => unreachable!(),
+						// This should normally not happen.
+						Err(e) => {
+							let err = JsonRpcErrorObject {
+								code: JsonRpcErrorCode::ServerError(UNKNOWN_ERROR_CODE),
+								message: &e.to_string(),
+								data: None,
+							};
+							send_error(id, &tx, err)
+						}
 					};
 					Ok(())
 				};
