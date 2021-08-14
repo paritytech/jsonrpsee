@@ -206,11 +206,12 @@ impl<Context> From<RpcModule<Context>> for Methods {
 
 impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// Register a new synchronous RPC method, which computes the response with the given callback.
-	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	pub fn register_method<R, F, E>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(RpcParams, &Context) -> Result<R, Error> + Send + Sync + 'static,
+		F: Fn(RpcParams, &Context) -> Result<R, E> + Send + Sync + 'static,
+		E: Into<Error>,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -219,7 +220,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods.mut_callbacks().insert(
 			method_name,
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
-				match callback(params, &*ctx) {
+				match callback(params, &*ctx).map_err(Into::into) {
 					Ok(res) => send_response(id, &tx, res),
 					Err(Error::Call(CallError::InvalidParams)) => {
 						send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into())
@@ -254,10 +255,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
-	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	pub fn register_async_method<R, F, E>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		F: Fn(RpcParams<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, Error>> + Copy + Send + Sync + 'static,
+		F: Fn(RpcParams<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, E>> + Copy + Send + Sync + 'static,
+		E: Into<Error>,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -268,7 +270,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
-					match callback(params, ctx).await {
+					match callback(params, ctx).await.map_err(Into::into) {
 						Ok(res) => send_response(id, &tx, res),
 						Err(Error::Call(CallError::InvalidParams)) => {
 							send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into())
@@ -490,9 +492,9 @@ mod tests {
 	fn rpc_modules_with_different_contexts_can_be_merged() {
 		let cx = Vec::<u8>::new();
 		let mut mod1 = RpcModule::new(cx);
-		mod1.register_method("bla with Vec context", |_: RpcParams, _| Ok(())).unwrap();
+		mod1.register_method::<_, _, Error>("bla with Vec context", |_: RpcParams, _| Ok(())).unwrap();
 		let mut mod2 = RpcModule::new(String::new());
-		mod2.register_method("bla with String context", |_: RpcParams, _| Ok(())).unwrap();
+		mod2.register_method::<_, _, Error>("bla with String context", |_: RpcParams, _| Ok(())).unwrap();
 
 		mod1.merge(mod2).unwrap();
 
@@ -514,7 +516,7 @@ mod tests {
 	fn rpc_register_alias() {
 		let mut module = RpcModule::new(());
 
-		module.register_method("hello_world", |_: RpcParams, _| Ok(())).unwrap();
+		module.register_method::<_, _, Error>("hello_world", |_: RpcParams, _| Ok(())).unwrap();
 		module.register_alias("hello_foobar", "hello_world").unwrap();
 
 		assert!(module.method("hello_world").is_some());
