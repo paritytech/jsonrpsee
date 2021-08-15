@@ -218,7 +218,6 @@ async fn can_set_max_connections() {
 
 #[tokio::test]
 async fn single_method_calls_works() {
-	println!("[test] START single");
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
@@ -256,7 +255,6 @@ async fn slow_method_calls_works() {
 
 #[tokio::test]
 async fn batch_method_call_works() {
-	println!("[test] START batch");
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
