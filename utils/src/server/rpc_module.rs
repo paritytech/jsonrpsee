@@ -221,9 +221,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			method_name,
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx).map_err(Into::into) {
-					Ok(res) => send_response(id, &tx, res),
+					Ok(res) => send_response(id, tx, res),
 					Err(Error::Call(CallError::InvalidParams)) => {
-						send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into())
+						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
 					}
 					Err(Error::Call(CallError::Failed(e))) => {
 						let err = JsonRpcErrorObject {
@@ -231,11 +231,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							message: &e.to_string(),
 							data: None,
 						};
-						send_error(id, &tx, err)
+						send_error(id, tx, err)
 					}
 					Err(Error::Call(CallError::Custom { code, message, data })) => {
 						let err = JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
-						send_error(id, &tx, err)
+						send_error(id, tx, err)
 					}
 					// This should normally not happen.
 					Err(e) => {
@@ -244,7 +244,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							message: &e.to_string(),
 							data: None,
 						};
-						send_error(id, &tx, err)
+						send_error(id, tx, err)
 					}
 				};
 				Ok(())
