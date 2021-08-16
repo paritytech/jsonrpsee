@@ -96,7 +96,7 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		})
 		.unwrap();
 	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), Error>(anyhow::Error::new(MyAppError).into())).unwrap();
+	module.register_method("call_fail", |_params, _| Err::<(), _>(anyhow::Error::new(MyAppError))).unwrap();
 	module
 		.register_method::<_, _, Error>("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
