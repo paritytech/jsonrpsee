@@ -64,7 +64,7 @@ impl HttpClientBuilder {
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
 		let transport =
-			HttpTransportClient::new(target, self.max_request_body_size).map_err(|e| Error::Transport(Box::new(e)))?;
+			HttpTransportClient::new(target, self.max_request_body_size).map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient { transport, request_id: AtomicU64::new(0), request_timeout: self.request_timeout })
 	}
 }
@@ -94,7 +94,7 @@ impl Client for HttpClient {
 		match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(ok)) => Ok(ok),
 			Err(_) => Err(Error::RequestTimeout),
-			Ok(Err(e)) => Err(Error::Transport(Box::new(e))),
+			Ok(Err(e)) => Err(Error::Transport(e.into())),
 		}
 	}
 
@@ -111,7 +111,7 @@ impl Client for HttpClient {
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => return Err(Error::RequestTimeout),
-			Ok(Err(e)) => return Err(Error::Transport(Box::new(e))),
+			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
 		let response: JsonRpcResponse<_> = match serde_json::from_slice(&body) {
@@ -152,7 +152,7 @@ impl Client for HttpClient {
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => return Err(Error::RequestTimeout),
-			Ok(Err(e)) => return Err(Error::Transport(Box::new(e))),
+			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
 		let rps: Vec<JsonRpcResponse<_>> = match serde_json::from_slice(&body) {

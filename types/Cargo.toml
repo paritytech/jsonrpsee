@@ -11,6 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-types"
 
 [dependencies]
 async-trait = "0.1"
+anyhow = "1"
 beef = { version = "0.5.1", features = ["impl_serde"] }
 futures-channel = { version = "0.3.14", features = ["sink"] }
 futures-util = { version = "0.3.14", default-features = false, features = ["std", "sink", "channel"] }

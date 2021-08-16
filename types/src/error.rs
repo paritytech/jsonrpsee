@@ -25,7 +25,7 @@ pub enum CallError {
 	InvalidParams,
 	/// The call failed (let jsonrpsee assign default error code and error message).
 	#[error("RPC Call failed: {0}")]
-	Failed(Box<dyn std::error::Error + Send + Sync>),
+	Failed(anyhow::Error),
 	/// Custom error with specific JSON-RPC error code, message and data.
 	#[error("RPC Call failed: code: {code}, message: {message}, data: {data:?}")]
 	Custom {
@@ -38,17 +38,13 @@ pub enum CallError {
 	},
 }
 
-// TODO(niklasad1): doesn't work probably conflicting with `thiserror::Error`
-/*
-impl<E> From<E> for Error
-where
-	E: std::error::Error + Send + Sync + 'static,
-{
-	fn from(err: E) -> Self {
-		Error::Call(CallError::Failed(Box::new(err)))
+// NOTE(niklasad1): this `From` impl is a bit opinionated to regard all generic errors as `CallError`.
+// The most common use case is when register method calls on the servers.
+impl From<anyhow::Error> for Error {
+	fn from(err: anyhow::Error) -> Self {
+		Error::Call(CallError::Failed(err.into()))
 	}
 }
-*/
 
 /// Error type.
 #[derive(Debug, thiserror::Error)]
@@ -58,7 +54,7 @@ pub enum Error {
 	Call(#[from] CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
-	Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
+	Transport(#[source] anyhow::Error),
 	/// JSON-RPC request error.
 	#[error("JSON-RPC request error: {0:?}")]
 	Request(String),
@@ -145,24 +141,24 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 
 impl From<std::io::Error> for Error {
 	fn from(io_err: std::io::Error) -> Error {
-		Error::Transport(Box::new(io_err))
+		Error::Transport(io_err.into())
 	}
 }
 
 impl From<soketto::handshake::Error> for Error {
 	fn from(handshake_err: soketto::handshake::Error) -> Error {
-		Error::Transport(Box::new(handshake_err))
+		Error::Transport(handshake_err.into())
 	}
 }
 
 impl From<soketto::connection::Error> for Error {
 	fn from(conn_err: soketto::connection::Error) -> Error {
-		Error::Transport(Box::new(conn_err))
+		Error::Transport(conn_err.into())
 	}
 }
 
 impl From<hyper::Error> for Error {
 	fn from(hyper_err: hyper::Error) -> Error {
-		Error::Transport(Box::new(hyper_err))
+		Error::Transport(hyper_err.into())
 	}
 }
