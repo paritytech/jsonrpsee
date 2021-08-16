@@ -41,7 +41,7 @@ use jsonrpsee_types::{
 	},
 	TEN_MB_SIZE_BYTES,
 };
-use jsonrpsee_utils::hyper_helpers::read_response_to_body;
+use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, prepare_error, send_error},
 	rpc_module::Methods,
@@ -201,60 +201,61 @@ impl Server {
 						}
 
 						let (parts, body) = request.into_parts();
-						let body = match read_response_to_body(&parts.headers, body, max_request_body_size).await {
-							Ok(body) => body,
-							Err(GenericTransportError::TooLarge) => {
-								return Ok::<_, HyperError>(response::too_large("The request was too large"))
-							}
+
+						let (body, mut is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
+							Ok(r) => r,
+							Err(GenericTransportError::TooLarge) => return Ok::<_, HyperError>(response::too_large()),
+							Err(GenericTransportError::Malformed) => return Ok::<_, HyperError>(response::malformed()),
 							Err(GenericTransportError::Inner(e)) => {
-								return Ok::<_, HyperError>(response::internal_error(e.to_string()))
+								log::error!("Internal error reading request body: {}", e);
+								return Ok::<_, HyperError>(response::internal_error());
 							}
 						};
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
-						// Is this a single request or a batch (or error)?
-						let mut single = true;
 						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
-						match body.get(0) {
-							// Single request or notification
-							Some(b'{') => {
-								if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-									// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
+
+						// Single request or notification
+						if is_single {
+							if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
+								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
+								methods.execute(&tx, req, 0).await;
+							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
+								return Ok::<_, HyperError>(response::ok_response("".into()));
+							} else {
+								let (id, code) = prepare_error(&body);
+								send_error(id, &tx, code.into());
+							}
+
+						// Batch of requests or notifications
+						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
+							if !batch.is_empty() {
+								for req in batch {
 									methods.execute(&tx, req, 0).await;
-								} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
-									return Ok::<_, HyperError>(response::ok_response("".into()));
-								} else {
-									let (id, code) = prepare_error(&body);
-									send_error(id, &tx, code.into());
 								}
+							} else {
+								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+								// Array with at least one value, the response from the Server MUST be a single
+								// Response object." – The Spec.
+								is_single = true;
+								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
-							// Bacth of requests or notifications
-							Some(b'[') => {
-								if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
-									if !batch.is_empty() {
-										single = false;
-										for req in batch {
-											methods.execute(&tx, req, 0).await;
-										}
-									} else {
-										send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
-									}
-								} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
-									return Ok::<_, HyperError>(response::ok_response("".into()));
-								} else {
-									let (id, code) = prepare_error(&body);
-									send_error(id, &tx, code.into());
-								}
-							}
-							// Garbage request
-							_ => send_error(Id::Null, &tx, JsonRpcErrorCode::ParseError.into()),
+						} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
+							return Ok::<_, HyperError>(response::ok_response("".into()));
+						} else {
+							// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+							// Array with at least one value, the response from the Server MUST be a single
+							// Response object." – The Spec.
+							is_single = true;
+							let (id, code) = prepare_error(&body);
+							send_error(id, &tx, code.into());
 						}
 
 						// Closes the receiving half of a channel without dropping it. This prevents any further
 						// messages from being sent on the channel.
 						rx.close();
-						let response = if single {
+						let response = if is_single {
 							rx.next().await.expect("Sender is still alive managed by us above; qed")
 						} else {
 							collect_batch_response(rx).await
