@@ -59,11 +59,11 @@ impl HttpTransportClient {
 		}
 	}
 
-	/// Send serialized message and wait until all bytes from the HTTP message body is read.
+	/// Send serialized message and wait until all bytes from the HTTP message body have been read.
 	pub(crate) async fn send_and_read_body(&self, body: String) -> Result<Vec<u8>, Error> {
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
-		let body = http_helpers::read_response_to_body(&parts.headers, body, self.max_request_body_size).await?;
+		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_request_body_size).await?;
 		Ok(body)
 	}
 
@@ -95,6 +95,10 @@ pub(crate) enum Error {
 	/// Request body too large.
 	#[error("The request body was too large")]
 	RequestTooLarge,
+
+	/// Malformed request.
+	#[error("Malformed request")]
+	Malformed,
 }
 
 impl<T> From<GenericTransportError<T>> for Error
@@ -104,6 +108,7 @@ where
 	fn from(err: GenericTransportError<T>) -> Self {
 		match err {
 			GenericTransportError::<T>::TooLarge => Self::RequestTooLarge,
+			GenericTransportError::<T>::Malformed => Self::Malformed,
 			GenericTransportError::<T>::Inner(e) => Self::Http(Box::new(e)),
 		}
 	}

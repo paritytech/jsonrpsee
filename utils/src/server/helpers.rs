@@ -42,7 +42,7 @@ pub fn send_error(id: Id, tx: &MethodSink, error: JsonRpcErrorObject) {
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
 /// unparseable garbage.
 pub fn prepare_error(data: &[u8]) -> (Id<'_>, JsonRpcErrorCode) {
-	match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
+	match serde_json::from_slice::<JsonRpcInvalidRequest>(data) {
 		Ok(JsonRpcInvalidRequest { id }) => (id, JsonRpcErrorCode::InvalidRequest),
 		Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
 	}
