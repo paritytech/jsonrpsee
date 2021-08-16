@@ -42,7 +42,7 @@ pub enum CallError {
 // The most common use case is when register method calls on the servers.
 impl From<anyhow::Error> for Error {
 	fn from(err: anyhow::Error) -> Self {
-		Error::Call(CallError::Failed(err.into()))
+		Error::Call(CallError::Failed(err))
 	}
 }
 
