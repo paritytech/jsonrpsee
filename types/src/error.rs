@@ -25,7 +25,7 @@ pub enum CallError {
 	InvalidParams,
 	/// The call failed (let jsonrpsee assign default error code and error message).
 	#[error("RPC Call failed: {0}")]
-	Failed(anyhow::Error),
+	Failed(#[from] anyhow::Error),
 	/// Custom error with specific JSON-RPC error code, message and data.
 	#[error("RPC Call failed: code: {code}, message: {message}, data: {data:?}")]
 	Custom {
