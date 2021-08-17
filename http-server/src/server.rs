@@ -26,6 +26,7 @@
 
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
+use futures_util::future::join_all;
 use futures_util::{lock::Mutex, stream::StreamExt, SinkExt};
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
@@ -214,13 +215,16 @@ impl Server {
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
+
 						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
 
 						// Single request or notification
 						if is_single {
 							if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								methods.execute(&tx, req, 0).await;
+								if let Some(fut) = methods.execute(&tx, req, 0) {
+									fut.await;
+								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
 								return Ok::<_, HyperError>(response::ok_response("".into()));
 							} else {
@@ -231,9 +235,7 @@ impl Server {
 						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
-								for req in batch {
-									methods.execute(&tx, req, 0).await;
-								}
+								join_all(batch.into_iter().filter_map(|req| methods.execute(&tx, req, 0))).await;
 							} else {
 								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
 								// Array with at least one value, the response from the Server MUST be a single

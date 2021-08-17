@@ -29,11 +29,12 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{net::SocketAddr, sync::Arc};
 
+use crate::future::FutureDriver;
 use crate::types::{
 	error::Error, v2::error::JsonRpcErrorCode, v2::params::Id, v2::request::JsonRpcRequest, TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
-use futures_util::future::{join_all, FutureExt};
+use futures_util::future::FutureExt;
 use futures_util::stream::StreamExt;
 use futures_util::{
 	io::{BufReader, BufWriter},
@@ -84,17 +85,18 @@ impl Server {
 		let methods = methods.into();
 
 		let mut id = 0;
-		let mut driver = ConnDriver::new(self.listener, self.stop_pair.1);
+		let mut connections = FutureDriver::default();
+		let mut incoming = Incoming::new(self.listener, self.stop_pair.1);
 
 		loop {
-			match Pin::new(&mut driver).await {
+			match connections.select_with(&mut incoming).await {
 				Ok((socket, _addr)) => {
 					if let Err(e) = socket.set_nodelay(true) {
 						log::error!("Could not set NODELAY on socket: {:?}", e);
 						continue;
 					}
 
-					if driver.connection_count() >= self.cfg.max_connections as usize {
+					if connections.count() >= self.cfg.max_connections as usize {
 						log::warn!("Too many connections. Try again in a while.");
 						continue;
 					}
@@ -102,80 +104,48 @@ impl Server {
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					driver.add(Box::pin(handshake(socket, id, methods, cfg, &shutdown, &self.stop_handle)));
+					connections.add(Box::pin(handshake(socket, id, methods, cfg, &shutdown, &self.stop_handle)));
 
 					id = id.wrapping_add(1);
 				}
-				Err(DriverError::Io(err)) => {
+				Err(IncomingError::Io(err)) => {
 					log::error!("Error while awaiting a new connection: {:?}", err);
 				}
-				Err(DriverError::Shutdown) => break,
+				Err(IncomingError::Shutdown) => break,
 			}
 		}
 	}
 }
 
-/// This is a glorified select `Future` that will attempt to drive all
-/// connection futures `F` to completion on each `poll`, while also
-/// handling incoming connections.
-struct ConnDriver<F> {
+/// This is a glorified select listening to new connections, while also checking
+/// for `stop_receiver` signal.
+struct Incoming {
 	listener: TcpListener,
 	stop_receiver: mpsc::Receiver<()>,
-	connections: Vec<F>,
 }
 
-impl<F> ConnDriver<F>
-where
-	F: Future + Unpin,
-{
+impl Incoming {
 	fn new(listener: TcpListener, stop_receiver: mpsc::Receiver<()>) -> Self {
-		ConnDriver { listener, stop_receiver, connections: Vec::new() }
-	}
-
-	fn connection_count(&self) -> usize {
-		self.connections.len()
-	}
-
-	fn add(&mut self, conn: F) {
-		self.connections.push(conn);
+		Incoming { listener, stop_receiver }
 	}
 }
 
-enum DriverError {
+enum IncomingError {
 	Shutdown,
 	Io(std::io::Error),
 }
 
-impl<F> Future for ConnDriver<F>
-where
-	F: Future + Unpin,
-{
-	type Output = Result<(TcpStream, SocketAddr), DriverError>;
+impl Future for Incoming {
+	type Output = Result<(TcpStream, SocketAddr), IncomingError>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		let mut i = 0;
-
-		while i < this.connections.len() {
-			if this.connections[i].poll_unpin(cx).is_ready() {
-				// Using `swap_remove` since we don't care about ordering
-				// but we do care about removing being `O(1)`.
-				//
-				// We don't increment `i` in this branch, since we now
-				// have a shorter length, and potentially a new value at
-				// current index
-				this.connections.swap_remove(i);
-			} else {
-				i += 1;
-			}
-		}
-
 		if let Poll::Ready(Some(())) = this.stop_receiver.next().poll_unpin(cx) {
-			return Poll::Ready(Err(DriverError::Shutdown));
+			return Poll::Ready(Err(IncomingError::Shutdown));
 		}
 
-		this.listener.poll_accept(cx).map_err(DriverError::Io)
+		this.listener.poll_accept(cx).map_err(IncomingError::Io)
 	}
 }
 
@@ -259,11 +229,12 @@ async fn background_task(
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
+	let mut method_executors = FutureDriver::default();
 
 	while !shutdown.is_closed() {
 		data.clear();
 
-		receiver.receive_data(&mut data).await?;
+		method_executors.select_with(receiver.receive_data(&mut data)).await?;
 
 		if data.len() > max_request_body_size as usize {
 			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
@@ -275,7 +246,9 @@ async fn background_task(
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
 					log::debug!("recv: {:?}", req);
-					methods.execute(&tx, req, conn_id).await;
+					if let Some(fut) = methods.execute(&tx, req, conn_id) {
+						method_executors.add(fut);
+					}
 				} else {
 					let (id, code) = prepare_error(&data);
 					send_error(id, &tx, code.into());
@@ -289,7 +262,9 @@ async fn background_task(
 						// back to the client over `tx`.
 						let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 
-						join_all(batch.into_iter().map(|req| methods.execute(&tx_batch, req, conn_id))).await;
+						for fut in batch.into_iter().filter_map(|req| methods.execute(&tx_batch, req, conn_id)) {
+							method_executors.add(fut);
+						}
 
 						// Closes the receiving half of a channel without dropping it. This prevents any further messages from
 						// being sent on the channel.
@@ -309,6 +284,10 @@ async fn background_task(
 			_ => send_error(Id::Null, &tx, JsonRpcErrorCode::ParseError.into()),
 		}
 	}
+
+	// Drive all running methods to completion
+	method_executors.await;
+
 	Ok(())
 }
 
