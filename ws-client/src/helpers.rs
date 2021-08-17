@@ -198,8 +198,8 @@ pub async fn call_with_timeout<T>(
 	timeout: Duration,
 	rx: oneshot::Receiver<Result<T, Error>>,
 ) -> Result<Result<T, Error>, oneshot::Canceled> {
-	let timeout = crate::tokio::sleep(timeout);
-	crate::tokio::select! {
+	let timeout = tokio::time::sleep(timeout);
+	tokio::select! {
 		res = rx => res,
 		_ = timeout => Ok(Err(Error::RequestTimeout))
 	}

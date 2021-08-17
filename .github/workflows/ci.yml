@@ -68,12 +68,6 @@ jobs:
           command: check
           args: --all-targets
 
-      - name: Cargo check HTTP client with tokio02
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path http-client/Cargo.toml --no-default-features --features tokio02
-
       - name: Cargo check HTTP client
         uses: actions-rs/cargo@v1.0.3
         with:
@@ -91,12 +85,6 @@ jobs:
         with:
           command: check
           args: --manifest-path ws-client/Cargo.toml
-
-      - name: Cargo check WS client with tokio02
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path ws-client/Cargo.toml --no-default-features --features tokio02
 
       - name: Cargo check WS server
         uses: actions-rs/cargo@v1.0.3

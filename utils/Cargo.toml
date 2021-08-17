@@ -12,8 +12,7 @@ thiserror = { version = "1", optional = true }
 tokio = { version = "1", features = ["macros"], optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
-hyper13 = { package = "hyper", version = "0.13", default-features = false, features = ["stream"], optional = true }
-hyper14 = { package = "hyper", version = "0.14", default-features = false, features = ["stream"], optional = true }
+hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
 jsonrpsee-types = { path = "../types", version = "0.3.0", optional = true }
 log = { version = "0.4", optional = true }
 rustc-hash = { version = "1", optional = true }
@@ -24,8 +23,7 @@ parking_lot = { version = "0.11", optional = true }
 
 [features]
 default = []
-hyper_13 = ["hyper13", "futures-util", "jsonrpsee-types"]
-hyper_14 = ["hyper14", "futures-util", "jsonrpsee-types"]
+http-helpers = ["hyper", "futures-util", "jsonrpsee-types"]
 server = [
 	"thiserror",
 	"futures-channel",

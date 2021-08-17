@@ -31,11 +31,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use crate::future::FutureDriver;
 use crate::types::{
-	error::Error,
-	v2::error::JsonRpcErrorCode,
-	v2::params::Id,
-	v2::request::{JsonRpcInvalidRequest, JsonRpcRequest},
-	TEN_MB_SIZE_BYTES,
+	error::Error, v2::error::JsonRpcErrorCode, v2::params::Id, v2::request::JsonRpcRequest, TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
 use futures_util::future::FutureExt;
@@ -51,7 +47,7 @@ use tokio::{
 };
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-use jsonrpsee_utils::server::helpers::{collect_batch_response, send_error};
+use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, send_error};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
 
 /// Default maximum connections allowed.
@@ -246,46 +242,46 @@ async fn background_task(
 			continue;
 		}
 
-		// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be used with
-		// untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged enum here and have to try
-		// each case individually: first the single request case, then the batch case and lastly the error. For the
-		// worst case – unparseable input – we make three calls to [`serde_json::from_slice`] which is pretty annoying.
-		// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
-		if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
-			log::debug!("recv: {:?}", req);
-			if let Some(fut) = methods.execute(&tx, req, conn_id) {
-				method_executors.add(fut);
-			}
-		} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
-			if !batch.is_empty() {
-				// Batch responses must be sent back as a single message so we read the results from each request in the
-				// batch and read the results off of a new channel, `rx_batch`, and then send the complete batch response
-				// back to the client over `tx`.
-				let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
-
-				for fut in batch.into_iter().filter_map(|req| methods.execute(&tx_batch, req, conn_id)) {
-					method_executors.add(fut);
-				}
-
-				method_executors.add(Box::pin(async {
-					// Closes the receiving half of a channel without dropping it. This prevents any further messages from
-					// being sent on the channel.
-					rx_batch.close();
-					let results = collect_batch_response(rx_batch).await;
-					if let Err(err) = tx.unbounded_send(results) {
-						log::error!("Error sending batch response to the client: {:?}", err)
+		match data.get(0) {
+			Some(b'{') => {
+				if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
+					log::debug!("recv: {:?}", req);
+					if let Some(fut) = methods.execute(&tx, req, conn_id) {
+						method_executors.add(fut);
 					}
-				}));
-			} else {
-				send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
+				} else {
+					let (id, code) = prepare_error(&data);
+					send_error(id, &tx, code.into());
+				}
 			}
-		} else {
-			let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&data) {
-				Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-				Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
-			};
+			Some(b'[') => {
+				if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
+					if !batch.is_empty() {
+						// Batch responses must be sent back as a single message so we read the results from each request in the
+						// batch and read the results off of a new channel, `rx_batch`, and then send the complete batch response
+						// back to the client over `tx`.
+						let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 
-			send_error(id, &tx, code.into());
+						for fut in batch.into_iter().filter_map(|req| methods.execute(&tx_batch, req, conn_id)) {
+							method_executors.add(fut);
+						}
+
+						// Closes the receiving half of a channel without dropping it. This prevents any further messages from
+						// being sent on the channel.
+						rx_batch.close();
+						let results = collect_batch_response(rx_batch).await;
+						if let Err(err) = tx.unbounded_send(results) {
+							log::error!("Error sending batch response to the client: {:?}", err)
+						}
+					} else {
+						send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
+					}
+				} else {
+					let (id, code) = prepare_error(&data);
+					send_error(id, &tx, code.into());
+				}
+			}
+			_ => send_error(Id::Null, &tx, JsonRpcErrorCode::ParseError.into()),
 		}
 	}
 

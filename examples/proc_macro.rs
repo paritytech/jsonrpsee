@@ -25,15 +25,34 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, RpcModule},
+	proc_macros::rpc,
+	types::async_trait,
+	ws_client::WsClientBuilder,
+	ws_server::{RpcModule, SubscriptionSink, WsServerBuilder},
 };
 use std::net::SocketAddr;
 
-jsonrpsee::proc_macros::rpc_client_api! {
-	RpcApi {
-		#[rpc(method = "state_getPairs", positional_params)]
-		fn storage_pairs(prefix: usize, hash: Option<String>) -> Vec<u8>;
+#[rpc(client, server, namespace = "state")]
+pub trait Rpc {
+	/// Async method call example.
+	#[method(name = "getPairs")]
+	async fn storage_pairs(&self, prefix: usize, hash: Option<u128>) -> Vec<usize>;
+
+	/// Subscription that take `Option<Vec<u8>>` as input and produces output `Vec<usize>`.
+	#[subscription(name = "subscribeStorage", unsub = "unsubscribeStorage", item = Vec<usize>)]
+	fn subscribe_storage(&self, keys: Option<Vec<u8>>);
+}
+
+pub struct RpcServerImpl;
+
+#[async_trait]
+impl RpcServer for RpcServerImpl {
+	async fn storage_pairs(&self, _prefix: usize, _hash: Option<u128>) -> Vec<usize> {
+		vec![1, 2, 3, 4]
+	}
+
+	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<u8>>) {
+		sink.send(&keys.unwrap_or_default()).unwrap();
 	}
 }
 
@@ -42,21 +61,23 @@ async fn main() -> anyhow::Result<()> {
 	env_logger::init();
 
 	let server_addr = run_server().await?;
-	let url = format!("http://{}", server_addr);
+	let url = format!("ws://{}", server_addr);
 
-	let client = HttpClientBuilder::default().build(url)?;
-	let response = RpcApi::storage_pairs(&client, 0_usize, Some("aaa".to_string())).await?;
-	println!("r: {:?}", response);
+	let client = WsClientBuilder::default().build(&url).await?;
+	assert_eq!(client.storage_pairs(10, None).await.unwrap(), vec![1, 2, 3, 4]);
+
+	let mut sub = client.subscribe_storage(None).await.unwrap();
+	assert_eq!(Some(vec![]), sub.next().await.unwrap());
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("state_getPairs", |_, _| Ok(vec![1, 2, 3]))?;
 
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module));
+	tokio::spawn(async move { server.start(RpcServerImpl.into_rpc()).await });
 	Ok(addr)
 }
