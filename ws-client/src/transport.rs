@@ -24,13 +24,18 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::tokio::{TcpStream, TlsStream};
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
 use std::{borrow::Cow, io, net::SocketAddr, sync::Arc, time::Duration};
 use thiserror::Error;
+use tokio::net::TcpStream;
+use tokio_rustls::{
+	client::TlsStream,
+	webpki::{DNSNameRef, InvalidDNSNameError},
+	TlsConnector,
+};
 
 type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
 
@@ -105,7 +110,7 @@ pub enum WsHandshakeError {
 
 	/// Invalid DNS name error for TLS
 	#[error("Invalid DNS name: {}", 0)]
-	InvalidDnsName(#[source] crate::tokio::InvalidDNSNameError),
+	InvalidDnsName(#[source] InvalidDNSNameError),
 
 	/// RawServer rejected our handshake.
 	#[error("Connection rejected with status code: {}", status_code)]
@@ -192,12 +197,12 @@ impl<'a> WsTransportClientBuilder<'a> {
 	async fn try_connect(
 		&self,
 		sockaddr: SocketAddr,
-		tls_connector: &Option<crate::tokio::TlsConnector>,
+		tls_connector: &Option<TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		// Try establish the TCP connection.
 		let tcp_stream = {
 			let socket = TcpStream::connect(sockaddr);
-			let timeout = crate::tokio::sleep(self.timeout);
+			let timeout = tokio::time::sleep(self.timeout);
 			futures::pin_mut!(socket, timeout);
 			match future::select(socket, timeout).await {
 				future::Either::Left((socket, _)) => {
@@ -208,7 +213,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 					match tls_connector {
 						None => TlsOrPlain::Plain(socket),
 						Some(connector) => {
-							let dns_name = crate::tokio::DNSNameRef::try_from_ascii_str(&self.target.host)?;
+							let dns_name = DNSNameRef::try_from_ascii_str(&self.target.host)?;
 							let tls_stream = connector.connect(dns_name, socket).await?;
 							TlsOrPlain::Tls(tls_stream)
 						}
@@ -218,8 +223,12 @@ impl<'a> WsTransportClientBuilder<'a> {
 			}
 		};
 
-		let mut client =
-			WsRawClient::new(BufReader::new(BufWriter::new(tcp_stream)), &self.target.host_header, &self.target.path);
+		log::debug!("Connecting to target: {:?}", self.target);
+		let mut client = WsRawClient::new(
+			BufReader::new(BufWriter::new(tcp_stream)),
+			&self.target.host_header,
+			&self.target.path_and_query,
+		);
 		if let Some(origin) = self.origin_header.as_ref() {
 			client.set_origin(origin);
 		}
@@ -247,8 +256,8 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-impl From<crate::tokio::InvalidDNSNameError> for WsHandshakeError {
-	fn from(err: crate::tokio::InvalidDNSNameError) -> WsHandshakeError {
+impl From<InvalidDNSNameError> for WsHandshakeError {
+	fn from(err: InvalidDNSNameError) -> WsHandshakeError {
 		WsHandshakeError::InvalidDnsName(err)
 	}
 }
@@ -276,8 +285,8 @@ pub struct Target {
 	host_header: String,
 	/// WebSocket stream mode, see [`Mode`] for further documentation.
 	mode: Mode,
-	/// The HTTP host resource path.
-	path: String,
+	/// The path and query parts from an URL.
+	path_and_query: String,
 }
 
 impl Target {
@@ -294,9 +303,14 @@ impl Target {
 			url.host_str().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
 		let port = url.port_or_known_default().ok_or_else(|| WsHandshakeError::Url("No port number in URL".into()))?;
 		let host_header = format!("{}:{}", host, port);
+		let mut path_and_query = url.path().to_owned();
+		if let Some(query) = url.query() {
+			path_and_query.push('?');
+			path_and_query.push_str(query);
+		}
 		// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
 		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self { sockaddrs, host, host_header, mode, path: url.path().to_owned() })
+		Ok(Self { sockaddrs, host, host_header, mode, path_and_query })
 	}
 }
 
@@ -304,11 +318,11 @@ impl Target {
 mod tests {
 	use super::{Mode, Target, WsHandshakeError};
 
-	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path: &str) {
+	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
 		assert_eq!(&target.host, host);
 		assert_eq!(&target.host_header, host_header);
 		assert_eq!(target.mode, mode);
-		assert_eq!(&target.path, path);
+		assert_eq!(&target.path_and_query, path_and_query);
 	}
 
 	#[test]
@@ -347,5 +361,17 @@ mod tests {
 	fn url_with_path_works() {
 		let target = Target::parse("wss://127.0.0.1/my-special-path").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my-special-path");
+	}
+
+	#[test]
+	fn url_with_query_works() {
+		let target = Target::parse("wss://127.0.0.1/my?name1=value1&name2=value2").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my?name1=value1&name2=value2");
+	}
+
+	#[test]
+	fn url_with_fragment_is_ignored() {
+		let target = Target::parse("wss://127.0.0.1/my.htm#ignore").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my.htm");
 	}
 }

@@ -7,7 +7,6 @@
 //! ## Runtime support
 //!
 //! This library uses `tokio` as the runtime and does not support other kinds of runtimes.
-//! Tokio versions v1 and v0.2 are supported behind `tokioV1` and `tokioV02` feature flags correspondingly.
 
 /// WebSocket Client.
 pub mod client;
@@ -19,9 +18,6 @@ pub mod manager;
 pub mod stream;
 /// WebSocket transport.
 pub mod transport;
-
-/// Compatibility layer to support both `tokio` 0.2 and 1.x versions.
-mod tokio;
 
 #[cfg(test)]
 mod tests;

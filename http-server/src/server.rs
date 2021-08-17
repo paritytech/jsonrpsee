@@ -26,6 +26,7 @@
 
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
+use futures_util::future::join_all;
 use futures_util::{lock::Mutex, stream::StreamExt, SinkExt};
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
@@ -37,13 +38,13 @@ use jsonrpsee_types::{
 	v2::{
 		error::JsonRpcErrorCode,
 		params::Id,
-		request::{JsonRpcInvalidRequest, JsonRpcNotification, JsonRpcRequest},
+		request::{JsonRpcNotification, JsonRpcRequest},
 	},
 	TEN_MB_SIZE_BYTES,
 };
-use jsonrpsee_utils::hyper_helpers::read_response_to_body;
+use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
-	helpers::{collect_batch_response, send_error},
+	helpers::{collect_batch_response, prepare_error, send_error},
 	rpc_module::Methods,
 };
 
@@ -201,61 +202,62 @@ impl Server {
 						}
 
 						let (parts, body) = request.into_parts();
-						let body = match read_response_to_body(&parts.headers, body, max_request_body_size).await {
-							Ok(body) => body,
-							Err(GenericTransportError::TooLarge) => {
-								return Ok::<_, HyperError>(response::too_large("The request was too large"))
-							}
+
+						let (body, mut is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
+							Ok(r) => r,
+							Err(GenericTransportError::TooLarge) => return Ok::<_, HyperError>(response::too_large()),
+							Err(GenericTransportError::Malformed) => return Ok::<_, HyperError>(response::malformed()),
 							Err(GenericTransportError::Inner(e)) => {
-								return Ok::<_, HyperError>(response::internal_error(e.to_string()))
+								log::error!("Internal error reading request body: {}", e);
+								return Ok::<_, HyperError>(response::internal_error());
 							}
 						};
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
-						// Is this a single request or a batch (or error)?
-						let mut single = true;
 
-						// For reasons outlined [here](https://github.com/serde-rs/json/issues/497), `RawValue` can't be
-						// used with untagged enums at the moment. This means we can't use an `SingleOrBatch` untagged
-						// enum here and have to try each case individually: first the single request case, then the
-						// batch case and lastly the error. For the worst case – unparseable input – we make three calls
-						// to [`serde_json::from_slice`] which is pretty annoying.
-						// Our [issue](https://github.com/paritytech/jsonrpsee/issues/296).
-						if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
-							// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-							methods.execute(&tx, req, 0).await;
-						} else if let Ok(_req) = serde_json::from_slice::<JsonRpcNotification<Option<&RawValue>>>(&body)
-						{
-							return Ok::<_, HyperError>(response::ok_response("".into()));
+						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
+
+						// Single request or notification
+						if is_single {
+							if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
+								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
+								if let Some(fut) = methods.execute(&tx, req, 0) {
+									fut.await;
+								}
+							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
+								return Ok::<_, HyperError>(response::ok_response("".into()));
+							} else {
+								let (id, code) = prepare_error(&body);
+								send_error(id, &tx, code.into());
+							}
+
+						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
 							if !batch.is_empty() {
-								single = false;
-								for req in batch {
-									methods.execute(&tx, req, 0).await;
-								}
+								join_all(batch.into_iter().filter_map(|req| methods.execute(&tx, req, 0))).await;
 							} else {
+								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+								// Array with at least one value, the response from the Server MUST be a single
+								// Response object." – The Spec.
+								is_single = true;
 								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
 							}
-						} else if let Ok(_batch) =
-							serde_json::from_slice::<Vec<JsonRpcNotification<Option<&RawValue>>>>(&body)
-						{
+						} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
 						} else {
-							log::error!(
-								"[service_fn], Cannot parse request body={:?}",
-								String::from_utf8_lossy(&body[..cmp::min(body.len(), 1024)])
-							);
-							let (id, code) = match serde_json::from_slice::<JsonRpcInvalidRequest>(&body) {
-								Ok(req) => (req.id, JsonRpcErrorCode::InvalidRequest),
-								Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
-							};
+							// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+							// Array with at least one value, the response from the Server MUST be a single
+							// Response object." – The Spec.
+							is_single = true;
+							let (id, code) = prepare_error(&body);
 							send_error(id, &tx, code.into());
 						}
+
 						// Closes the receiving half of a channel without dropping it. This prevents any further
 						// messages from being sent on the channel.
 						rx.close();
-						let response = if single {
+						let response = if is_single {
 							rx.next().await.expect("Sender is still alive managed by us above; qed")
 						} else {
 							collect_batch_response(rx).await
@@ -305,7 +307,7 @@ fn content_type_is_valid(request: &hyper::Request<hyper::Body>) -> Result<(), hy
 /// Returns true if the `content_type` header indicates a valid JSON message.
 fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 	match content_type.and_then(|val| val.to_str().ok()) {
-		Some(ref content)
+		Some(content)
 			if content.eq_ignore_ascii_case("application/json")
 				|| content.eq_ignore_ascii_case("application/json; charset=utf-8")
 				|| content.eq_ignore_ascii_case("application/json;charset=utf-8") =>

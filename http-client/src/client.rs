@@ -91,7 +91,7 @@ impl Client for HttpClient {
 	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
 		let notif = JsonRpcNotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?);
-		match crate::tokio::timeout(self.request_timeout, fut).await {
+		match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(ok)) => Ok(ok),
 			Err(_) => Err(Error::RequestTimeout),
 			Ok(Err(e)) => Err(Error::Transport(Box::new(e))),
@@ -108,7 +108,7 @@ impl Client for HttpClient {
 		let request = JsonRpcCallSer::new(Id::Number(id), method, params);
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
-		let body = match crate::tokio::timeout(self.request_timeout, fut).await {
+		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => return Err(Error::RequestTimeout),
 			Ok(Err(e)) => return Err(Error::Transport(Box::new(e))),
@@ -149,7 +149,7 @@ impl Client for HttpClient {
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
 
-		let body = match crate::tokio::timeout(self.request_timeout, fut).await {
+		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => return Err(Error::RequestTimeout),
 			Ok(Err(e)) => return Err(Error::Transport(Box::new(e))),

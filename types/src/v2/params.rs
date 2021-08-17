@@ -79,7 +79,7 @@ impl<'a> RpcParams<'a> {
 			None => return false,
 		};
 
-		json.trim_start().starts_with("{")
+		json.trim_start().starts_with('{')
 	}
 
 	/// Obtain a sequence parser, [`RpcParamsSequence`].
