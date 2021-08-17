@@ -41,12 +41,12 @@ pub enum CallError {
 impl CallError {
 	/// Create `CallError` from a generic error.
 	pub fn from_std_error<E>(err: E) -> Self
-	where E: std::error::Error + Send + Sync + 'static
+	where
+		E: std::error::Error + Send + Sync + 'static,
 	{
 		CallError::Failed(err.into())
 	}
 }
-
 
 // NOTE(niklasad1): this `From` impl is a bit opinionated to regard all generic errors as `CallError`.
 // In practice this should be the most common use case for users of this library.
@@ -126,12 +126,12 @@ impl Error {
 	/// Useful if you don't care about specific JSON-RPC error code and
 	/// just wants to return your custom error type.
 	pub fn to_call_error<E>(err: E) -> Self
-	where E: std::error::Error + Send + Sync + 'static
+	where
+		E: std::error::Error + Send + Sync + 'static,
 	{
 		Error::Call(CallError::from_std_error(err))
 	}
 }
-
 
 /// Error type with a special `subscription_closed` field to detect that
 /// a subscription has been closed to distinguish valid items produced
