@@ -28,6 +28,7 @@
 
 use crate::types::error::{CallError, Error};
 use crate::{server::StopHandle, RpcModule, WsServerBuilder};
+use anyhow::anyhow;
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
@@ -62,20 +63,20 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_method::<_, _, Error>("say_hello", |_, _| {
+		.register_method("say_hello", |_, _| {
 			log::debug!("server respond to hello");
 			Ok("hello")
 		})
 		.unwrap();
 	module
-		.register_method::<_, _, Error>("add", |params, _| {
+		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
 			Ok(sum)
 		})
 		.unwrap();
 	module
-		.register_async_method::<_, _, Error>("say_hello_async", |_, _| {
+		.register_async_method("say_hello_async", |_, _| {
 			async move {
 				log::debug!("server respond to hello");
 				// Call some async function inside.
@@ -86,7 +87,7 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		})
 		.unwrap();
 	module
-		.register_async_method::<_, _, Error>("add_async", |params, _| {
+		.register_async_method("add_async", |params, _| {
 			async move {
 				let params: Vec<u64> = params.parse()?;
 				let sum: u64 = params.into_iter().sum();
@@ -95,10 +96,10 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 			.boxed()
 		})
 		.unwrap();
-	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(anyhow::Error::new(MyAppError))).unwrap();
+	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams.into())).unwrap();
+	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
 	module
-		.register_method::<_, _, Error>("sleep_for", |params, _| {
+		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
 			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
 			Ok("Yawn!")
@@ -120,21 +121,21 @@ async fn server_with_context() -> SocketAddr {
 	let mut rpc_module = RpcModule::new(ctx);
 
 	rpc_module
-		.register_method::<_, _, Error>("should_err", |_p, ctx| {
+		.register_method("should_err", |_p, ctx| {
 			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("err")
 		})
 		.unwrap();
 
 	rpc_module
-		.register_method::<_, _, Error>("should_ok", |_p, ctx| {
+		.register_method("should_ok", |_p, ctx| {
 			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("ok")
 		})
 		.unwrap();
 
 	rpc_module
-		.register_async_method::<_, _, Error>("should_ok_async", |_p, ctx| {
+		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
 				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 				// Call some async function inside.
@@ -149,7 +150,7 @@ async fn server_with_context() -> SocketAddr {
 			async move {
 				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 				// Async work that returns an error
-				futures_util::future::err::<(), _>(CallError::Failed(anyhow::anyhow!("nah"))).await
+				futures_util::future::err::<(), _>(anyhow!("nah").into()).await
 			}
 			.boxed()
 		})
@@ -167,7 +168,7 @@ async fn can_set_the_max_request_body_size() {
 	// Rejects all requests larger than 10 bytes
 	let server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method::<_, _, Error>("anything", |_p, _cx| Ok(())).unwrap();
+	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
 	tokio::spawn(server.start(module));
 
@@ -190,7 +191,7 @@ async fn can_set_max_connections() {
 	// Server that accepts max 2 connections
 	let server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method::<_, _, Error>("anything", |_p, _cx| Ok(())).unwrap();
+	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
 
 	tokio::spawn(server.start(module));
@@ -451,12 +452,12 @@ async fn invalid_request_object() {
 #[tokio::test]
 async fn register_methods_works() {
 	let mut module = RpcModule::new(());
-	assert!(module.register_method::<_, _, Error>("say_hello", |_, _| Ok("lo")).is_ok());
-	assert!(module.register_method::<_, _, Error>("say_hello", |_, _| Ok("lo")).is_err());
+	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
+	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
 	assert!(module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, _, _| Ok(())).is_ok());
 	assert!(module.register_subscription("subscribe_hello_again", "unsubscribe_hello", |_, _, _| Ok(())).is_err());
 	assert!(
-		module.register_method::<_, _, Error>("subscribe_hello_again", |_, _| Ok("lo")).is_ok(),
+		module.register_method("subscribe_hello_again", |_, _| Ok("lo")).is_ok(),
 		"Failed register_subscription should not have side-effects"
 	);
 }
@@ -527,12 +528,12 @@ async fn can_register_modules() {
 
 	assert_eq!(mod1.method_names().count(), 0);
 	assert_eq!(mod2.method_names().count(), 0);
-	mod1.register_method::<_, _, Error>("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
-	mod1.register_method::<_, _, Error>("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
-	mod2.register_method::<_, _, Error>("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
 	// Won't register, name clashes
-	mod2.register_method::<_, _, Error>("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
 	assert_eq!(mod1.method_names().count(), 2);
 	let err = mod1.merge(mod2).unwrap_err();

@@ -47,38 +47,38 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
-	module.register_method::<_, _, Error>("say_hello", |_, _| Ok("lo")).unwrap();
-	module.register_async_method::<_, _, Error>("say_hello_async", |_, _| async move { Ok("lo") }.boxed()).unwrap();
+	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+	module.register_async_method("say_hello_async", |_, _| async move { Ok("lo") }.boxed()).unwrap();
 	module
-		.register_method::<_, _, Error>("add", |params, _| {
+		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
 			let sum: u64 = params.into_iter().sum();
 			Ok(sum)
 		})
 		.unwrap();
 	module
-		.register_method::<_, _, Error>("multiparam", |params, _| {
+		.register_method("multiparam", |params, _| {
 			let params: (String, String, Vec<u8>) = params.parse()?;
 			let r = format!("string1={}, string2={}, vec={}", params.0.len(), params.1.len(), params.2.len());
 			Ok(r)
 		})
 		.unwrap();
-	module.register_method::<_, _, Error>("notif", |_, _| Ok("")).unwrap();
+	module.register_method("notif", |_, _| Ok("")).unwrap();
 	module
-		.register_method::<_, _, Error>("should_err", |_, ctx| {
+		.register_method("should_err", |_, ctx| {
 			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("err")
 		})
 		.unwrap();
 
 	module
-		.register_method::<_, _, Error>("should_ok", |_, ctx| {
+		.register_method("should_ok", |_, ctx| {
 			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 			Ok("ok")
 		})
 		.unwrap();
 	module
-		.register_async_method::<_, _, Error>("should_ok_async", |_p, ctx| {
+		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
 				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 				Ok("ok")
@@ -369,12 +369,12 @@ async fn can_register_modules() {
 	let mut mod2 = RpcModule::new(cx2);
 
 	assert_eq!(mod1.method_names().count(), 0);
-	mod1.register_method::<_, _, Error>("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
-	mod1.register_method::<_, _, Error>("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
-	mod2.register_method::<_, _, Error>("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
+	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
 	// Won't register, name clashes
-	mod2.register_method::<_, _, Error>("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
+	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
 	assert_eq!(mod1.method_names().count(), 2);
 

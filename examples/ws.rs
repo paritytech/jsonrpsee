@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::{traits::Client, v2::params::JsonRpcParams, Error},
+	types::{traits::Client, v2::params::JsonRpcParams},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_method::<_, _, Error>("say_hello", |_, _| Ok("lo"))?;
+	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
 	tokio::spawn(server.start(module));
 	Ok(addr)

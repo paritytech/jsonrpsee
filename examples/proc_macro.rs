@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_method::<_, _, Error>("state_getPairs", |_, _| Ok(vec![1, 2, 3]))?;
+	module.register_method("state_getPairs", |_, _| Ok(vec![1, 2, 3]))?;
 
 	let addr = server.local_addr()?;
 	tokio::spawn(async move { server.start(RpcServerImpl.into_rpc()).await });
