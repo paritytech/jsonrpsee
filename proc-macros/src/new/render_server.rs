@@ -46,7 +46,6 @@ impl RpcDescription {
 	}
 
 	fn render_into_rpc(&self) -> Result<TokenStream2, syn::Error> {
-		let jrps_error = self.jrps_server_item(quote! { types::Error });
 		let rpc_module = self.jrps_server_item(quote! { RpcModule });
 
 		let mut registered = HashSet::new();
@@ -59,6 +58,18 @@ impl RpcDescription {
 				registered.insert(name);
 			}
 		};
+
+		/// Helper that will ignore results of `register_*` method calls, and panic
+		/// if there have been any errors in debug builds.
+		///
+		/// The debug assert is a safeguard should the contract that guarantees the method
+		/// names to never conflict in the macro be broken in the future.
+		fn handle_register_result(tokens: TokenStream2) -> TokenStream2 {
+			quote! {{
+				let res = #tokens;
+				debug_assert!(res.is_ok(), "RPC macro method names should never conflict, this is a bug, please report it.");
+			}}
+		}
 
 		let methods = self
 			.methods
@@ -76,22 +87,22 @@ impl RpcDescription {
 				check_name(rpc_method_name.clone(), rust_method_name.span());
 
 				if method.signature.sig.asyncness.is_some() {
-					quote! {
+					handle_register_result(quote! {
 						rpc.register_async_method(#rpc_method_name, |params, context| {
 							let fut = async move {
 								#parsing
 								context.as_ref().#rust_method_name(#params_seq).await
 							};
 							Box::pin(fut)
-						})?;
-					}
+						})
+					})
 				} else {
-					quote! {
+					handle_register_result(quote! {
 						rpc.register_method(#rpc_method_name, |params, context| {
 							#parsing
 							context.#rust_method_name(#params_seq)
-						})?;
-					}
+						})
+					})
 				}
 			})
 			.collect::<Vec<_>>();
@@ -114,12 +125,12 @@ impl RpcDescription {
 				check_name(rpc_sub_name.clone(), rust_method_name.span());
 				check_name(rpc_unsub_name.clone(), rust_method_name.span());
 
-				quote! {
+				handle_register_result(quote! {
 					rpc.register_subscription(#rpc_sub_name, #rpc_unsub_name, |params, sink, context| {
 						#parsing
 						Ok(context.as_ref().#rust_method_name(sink, #params_seq))
-					})?;
-				}
+					})
+				})
 			})
 			.collect::<Vec<_>>();
 
@@ -129,17 +140,13 @@ impl RpcDescription {
 		Ok(quote! {
 			#[doc = #doc_comment]
 			fn into_rpc(self) -> #rpc_module<Self> {
-				let inner = move || -> Result<#rpc_module<Self>, #jrps_error> {
-					let mut rpc = #rpc_module::new(self);
+				let mut rpc = #rpc_module::new(self);
 
-					#(#errors)*
-					#(#methods)*
-					#(#subscriptions)*
+				#(#errors)*
+				#(#methods)*
+				#(#subscriptions)*
 
-					Ok(rpc)
-				};
-
-				inner().expect("RPC macro method names should never conflict")
+				rpc
 			}
 		})
 	}
