@@ -231,7 +231,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			method_name,
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
-					Ok(res) => send_response(id, &tx, res),
+					Ok(res) => send_response(id, tx, res),
 					Err(Error::Call(CallError::InvalidParams)) => {
 						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
 					}
