@@ -26,17 +26,17 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::async_trait,
+	types::{async_trait, error::Error},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, SubscriptionSink, WsServerBuilder},
 };
 use std::net::SocketAddr;
 
-#[rpc(client, server, namespace = "state")]
+#[rpc(server, client, namespace = "state")]
 pub trait Rpc {
 	/// Async method call example.
 	#[method(name = "getPairs")]
-	async fn storage_pairs(&self, prefix: usize, hash: Option<u128>) -> Vec<usize>;
+	async fn storage_pairs(&self, prefix: usize, hash: Option<u128>) -> Result<Vec<usize>, Error>;
 
 	/// Subscription that take `Option<Vec<u8>>` as input and produces output `Vec<usize>`.
 	#[subscription(name = "subscribeStorage", unsub = "unsubscribeStorage", item = Vec<usize>)]
@@ -47,8 +47,8 @@ pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn storage_pairs(&self, _prefix: usize, _hash: Option<u128>) -> Vec<usize> {
-		vec![1, 2, 3, 4]
+	async fn storage_pairs(&self, _prefix: usize, _hash: Option<u128>) -> Result<Vec<usize>, Error> {
+		Ok(vec![1, 2, 3, 4])
 	}
 
 	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<u8>>) {
