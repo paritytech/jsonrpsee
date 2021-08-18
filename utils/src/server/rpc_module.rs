@@ -247,7 +247,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						let err = JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 						send_error(id, tx, err)
 					}
-					// This should normally not happen.
+					// This should normally not happen because the most common use case is to
+					// return `Error::Call` in `register_method`.
 					Err(e) => {
 						let err = JsonRpcErrorObject {
 							code: JsonRpcErrorCode::ServerError(UNKNOWN_ERROR_CODE),
@@ -296,7 +297,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 							send_error(id, &tx, err)
 						}
-						// This should normally not happen.
+						// This should normally not happen because the most common use case is to
+						// return `Error::Call` in `register_async_method`.
 						Err(e) => {
 							let err = JsonRpcErrorObject {
 								code: JsonRpcErrorCode::ServerError(UNKNOWN_ERROR_CODE),
