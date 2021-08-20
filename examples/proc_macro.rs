@@ -39,7 +39,7 @@ pub trait Rpc<Hash: std::fmt::Debug, Prefix> {
 	async fn storage_pairs(&self, prefix: Option<Prefix>, hash: Hash) -> Result<Vec<usize>, Error>;
 	/// Subscription that take `Option<Vec<u8>>` as input and produces output `Vec<usize>`.
 	#[subscription(name = "subscribeStorage", unsub = "unsubscribeStorage", item = Vec<usize>)]
-	fn subscribe_storage(&self, keys: Option<Vec<u8>>);
+	fn subscribe_storage(&self, keys: Option<Prefix>);
 }
 
 pub struct RpcServerImpl;
@@ -50,8 +50,8 @@ impl RpcServer<Vec<u8>, usize> for RpcServerImpl {
 		Ok(vec![1, 2, 3, 4])
 	}
 
-	fn subscribe_storage(&self, mut sink: SubscriptionSink, keys: Option<Vec<u8>>) {
-		sink.send(&keys.unwrap_or_default()).unwrap();
+	fn subscribe_storage(&self, mut sink: SubscriptionSink, _keys: Option<usize>) {
+		sink.send(&vec![1]).unwrap();
 	}
 }
 
@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
 	assert_eq!(client.storage_pairs(None::<usize>, vec![1, 2, 3, 4]).await.unwrap(), vec![1, 2, 3, 4]);
 
 	let mut sub = RpcClient::<(), ()>::subscribe_storage(&client, None).await.unwrap();
-	assert_eq!(Some(vec![]), sub.next().await.unwrap());
+	assert_eq!(Some(vec![1]), sub.next().await.unwrap());
 
 	Ok(())
 }

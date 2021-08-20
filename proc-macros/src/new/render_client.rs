@@ -1,7 +1,7 @@
 use super::{RpcDescription, RpcMethod, RpcSubscription};
+use crate::helpers::add_trait_bounds;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_quote, GenericParam, Generics};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -140,16 +140,4 @@ impl RpcDescription {
 		};
 		Ok(method)
 	}
-}
-
-fn add_trait_bounds(mut generics: Generics) -> Generics {
-	for param in &mut generics.params {
-		if let GenericParam::Type(type_param) = param {
-			type_param.bounds.push(parse_quote!(Send));
-			type_param.bounds.push(parse_quote!(Sync));
-			type_param.bounds.push(parse_quote!('static));
-			type_param.bounds.push(parse_quote!(jsonrpsee::types::Serialize));
-		}
-	}
-	generics
 }

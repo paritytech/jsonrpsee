@@ -1,9 +1,9 @@
 use super::lifetimes::replace_lifetimes;
 use super::RpcDescription;
+use crate::helpers::add_trait_bounds;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
-use syn::{parse_quote, GenericParam, Generics};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -244,15 +244,4 @@ fn is_option(ty: &syn::Type) -> bool {
 	}
 
 	false
-}
-
-fn add_trait_bounds(mut generics: Generics) -> Generics {
-	for param in &mut generics.params {
-		if let GenericParam::Type(type_param) = param {
-			type_param.bounds.push(parse_quote!(Send));
-			type_param.bounds.push(parse_quote!('static));
-			type_param.bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned));
-		}
-	}
-	generics
 }
