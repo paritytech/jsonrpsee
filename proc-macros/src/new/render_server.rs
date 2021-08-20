@@ -3,11 +3,12 @@ use super::RpcDescription;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
+use syn::{parse_quote, GenericParam, Generics};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
 		let trait_name = quote::format_ident!("{}Server", &self.trait_def.ident);
-		let generics = self.trait_def.generics.clone();
+		let generics = add_trait_bounds(self.trait_def.generics.clone());
 
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
@@ -181,7 +182,7 @@ impl RpcDescription {
 		};
 
 		// Code to decode sequence of parameters from a JSON object (aka map).
-		let decode_map = {
+		let _decode_map = {
 			let mut generics = None;
 
 			let serde = self.jrps_server_item(quote! { types::__reexports::serde });
@@ -220,6 +221,7 @@ impl RpcDescription {
 
 		// Parsing of `serde_json::Value`.
 		let parsing = quote! {
+			// TODO(niklasad1): add support for JSON object.
 			/*let (#params_fields) = if params.is_object() {
 				#decode_map
 			} else {
@@ -242,4 +244,15 @@ fn is_option(ty: &syn::Type) -> bool {
 	}
 
 	false
+}
+
+fn add_trait_bounds(mut generics: Generics) -> Generics {
+	for param in &mut generics.params {
+		if let GenericParam::Type(type_param) = param {
+			type_param.bounds.push(parse_quote!(Send));
+			type_param.bounds.push(parse_quote!('static));
+			type_param.bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned));
+		}
+	}
+	generics
 }

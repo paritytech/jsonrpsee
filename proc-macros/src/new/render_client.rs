@@ -1,20 +1,21 @@
 use super::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::{parse_quote, GenericParam, Generics};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
-		let generics = self.trait_def.generics.clone();
+		let generics = add_trait_bounds(self.trait_def.generics.clone());
 
 		let mut type_idents = Vec::new();
 		for param in generics.type_params() {
 			type_idents.push(param);
 		}
 
-		let (_, type_generics, where_clause) = generics.split_for_impl();
+		let (_, type_generics, _) = generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {
 			quote! { #jsonrpsee::types::traits::Client }
@@ -139,4 +140,16 @@ impl RpcDescription {
 		};
 		Ok(method)
 	}
+}
+
+fn add_trait_bounds(mut generics: Generics) -> Generics {
+	for param in &mut generics.params {
+		if let GenericParam::Type(type_param) = param {
+			type_param.bounds.push(parse_quote!(Send));
+			type_param.bounds.push(parse_quote!(Sync));
+			type_param.bounds.push(parse_quote!('static));
+			type_param.bounds.push(parse_quote!(jsonrpsee::types::Serialize));
+		}
+	}
+	generics
 }
