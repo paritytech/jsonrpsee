@@ -7,6 +7,14 @@ impl RpcDescription {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
+		let generics = self.trait_def.generics.clone();
+
+		let mut type_idents = Vec::new();
+		for param in generics.type_params() {
+			type_idents.push(param);
+		}
+
+		let (_, type_generics, where_clause) = generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {
 			quote! { #jsonrpsee::types::traits::Client }
@@ -26,12 +34,12 @@ impl RpcDescription {
 		let trait_impl = quote! {
 			#[#async_trait]
 			#[doc = #doc_comment]
-			pub trait #trait_name: #super_trait {
+			pub trait #trait_name #generics: #super_trait {
 				#(#method_impls)*
 				#(#sub_impls)*
 			}
 
-			impl<T> #trait_name for T where T: #super_trait {}
+			impl<T #(,#type_idents)*> #trait_name #type_generics for T where T: #super_trait {}
 		};
 
 		Ok(trait_impl)

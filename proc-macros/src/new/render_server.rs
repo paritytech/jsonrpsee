@@ -7,6 +7,7 @@ use std::collections::HashSet;
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
 		let trait_name = quote::format_ident!("{}Server", &self.trait_def.ident);
+		let generics = self.trait_def.generics.clone();
 
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
@@ -19,7 +20,7 @@ impl RpcDescription {
 		let trait_impl = quote! {
 			#[#async_trait]
 			#[doc = #doc_comment]
-			pub trait #trait_name: Sized + Send + Sync + 'static {
+			pub trait #trait_name #generics: Sized + Send + Sync + 'static {
 				#method_impls
 				#into_rpc_impl
 			}
@@ -176,7 +177,6 @@ impl RpcDescription {
 			quote! {
 				let mut seq = params.sequence();
 				#(#decode_fields);*
-				(#params_fields)
 			}
 		};
 
@@ -220,11 +220,12 @@ impl RpcDescription {
 
 		// Parsing of `serde_json::Value`.
 		let parsing = quote! {
-			let (#params_fields) = if params.is_object() {
+			/*let (#params_fields) = if params.is_object() {
 				#decode_map
 			} else {
 				#decode_array
-			};
+			};*/
+			#decode_array;
 		};
 
 		(parsing, params_fields)
