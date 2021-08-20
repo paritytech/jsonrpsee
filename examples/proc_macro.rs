@@ -35,16 +35,20 @@ use serde::ser::Serialize;
 use std::net::SocketAddr;
 
 #[rpc(server, client, namespace = "state")]
-pub trait Rpc<Hash: DeserializeOwned + Serialize + Send + Sync + 'static> {
+pub trait Rpc<
+	Hash: DeserializeOwned + Serialize + Send + Sync + 'static,
+	Prefix: DeserializeOwned + Serialize + Send + Sync + 'static,
+>
+{
 	/// Async method call example.
 	#[method(name = "getPairs")]
-	async fn storage_pairs(&self, prefix: usize, hash: Hash) -> Result<Vec<usize>, Error>;
+	async fn storage_pairs(&self, prefix: Prefix, hash: Hash) -> Result<Vec<usize>, Error>;
 }
 
 pub struct RpcServerImpl;
 
 #[async_trait]
-impl RpcServer<Vec<u8>> for RpcServerImpl {
+impl RpcServer<Vec<u8>, usize> for RpcServerImpl {
 	async fn storage_pairs(&self, _prefix: usize, _hash: Vec<u8>) -> Result<Vec<usize>, Error> {
 		Ok(vec![1, 2, 3, 4])
 	}
