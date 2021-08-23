@@ -1,5 +1,5 @@
 use super::{RpcDescription, RpcMethod, RpcSubscription};
-use crate::helpers::add_trait_bounds;
+use crate::helpers::client_add_trait_bounds;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
@@ -8,14 +8,14 @@ impl RpcDescription {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
-		let generics = add_trait_bounds(self.trait_def.generics.clone());
+		let tweaked_generics = client_add_trait_bounds(&self.trait_def);
 
 		let mut type_idents = Vec::new();
-		for param in generics.type_params() {
+		for param in tweaked_generics.type_params() {
 			type_idents.push(param);
 		}
 
-		let (_, type_generics, _) = generics.split_for_impl();
+		let (impl_generics, type_generics, where_clause) = tweaked_generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {
 			quote! { #jsonrpsee::types::traits::Client }
@@ -35,7 +35,7 @@ impl RpcDescription {
 		let trait_impl = quote! {
 			#[#async_trait]
 			#[doc = #doc_comment]
-			pub trait #trait_name #generics: #super_trait {
+			pub trait #trait_name #impl_generics: #super_trait where #where_clause {
 				#(#method_impls)*
 				#(#sub_impls)*
 			}
