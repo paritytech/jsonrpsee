@@ -113,6 +113,14 @@ struct FindTyParams {
 	visiting_fn_arg: bool,
 }
 impl<'ast> Visit<'ast> for FindTyParams {
+	fn visit_attribute(&mut self, attr: &'ast syn::Attribute) {
+		use syn::NestedMeta;
+
+		if attr.path.is_ident("subscription") {
+			if let Ok(args) = attr.parse_args_with(Punctuated::<NestedMeta, Token![,]>::parse_terminated) {}
+		}
+	}
+
 	fn visit_type_param(&mut self, ty_param: &'ast syn::TypeParam) {
 		self.trait_generics.insert(ty_param.ident.clone());
 	}

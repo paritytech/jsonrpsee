@@ -95,7 +95,7 @@ pub struct RpcDescription {
 	trait_def: syn::ItemTrait,
 	/// List of RPC methods defined in the trait.
 	methods: Vec<RpcMethod>,
-	/// List of RPC subscritpions defined in the trait.
+	/// List of RPC subscriptions defined in the trait.
 	subscriptions: Vec<RpcSubscription>,
 }
 

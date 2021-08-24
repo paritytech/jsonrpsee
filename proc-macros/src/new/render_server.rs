@@ -1,9 +1,10 @@
 use super::lifetimes::replace_lifetimes;
 use super::RpcDescription;
 use crate::helpers::server_generate_where_clause;
+use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, quote_spanned};
-use std::collections::HashSet;
+use quote::{quote, quote_spanned, ToTokens};
+use std::{collections::HashSet, convert::TryInto};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -138,6 +139,13 @@ impl RpcDescription {
 
 		let doc_comment = "Collects all the methods and subscriptions defined in the trait \
 								and adds them into a single `RpcModule`.";
+
+		let mut sub_items: Vec<_> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
+
+		for it in sub_items {
+			let tokens = it.to_token_stream();
+			//panic!("error {:?}", ty);
+		}
 
 		let where_clause = server_generate_where_clause(&self.trait_def);
 
