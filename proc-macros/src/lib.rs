@@ -258,13 +258,13 @@ mod new;
 ///     server_started_rx.await.unwrap()
 /// }
 ///
-/// // In the main function, we will spawn the server, create a client connected to this server,
-/// // and call all the available methods.
+/// // In the main function, we start the server, create a client connected to this server,
+/// // and call the available methods.
 /// #[tokio::main]
 /// async fn main() {
 ///     let server_addr = websocket_server().await;
 ///     let server_url = format!("ws://{}", server_addr);
-///     // Note that we create the client as usual, but thanks to the `use rpc_impl::RpcClient`,
+///     // Note that we create the client as usual, but thanks to the `use rpc_impl::MyRpcClient`,
 ///     // the client object will have all the methods to interact with the server.
 ///     let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 ///
