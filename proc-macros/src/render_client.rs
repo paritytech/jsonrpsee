@@ -1,5 +1,5 @@
-use crate::RpcDescription;
 use crate::rpc_macro::{RpcMethod, RpcSubscription};
+use crate::RpcDescription;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;

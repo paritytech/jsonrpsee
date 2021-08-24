@@ -26,17 +26,17 @@
 
 extern crate proc_macro;
 
-use rpc_macro::RpcDescription;
 use proc_macro::TokenStream;
 use quote::quote;
+use rpc_macro::RpcDescription;
 
-mod rpc_macro;
-mod helpers;
 mod attributes;
+mod helpers;
 mod lifetimes;
 mod render_client;
 mod render_server;
 mod respan;
+mod rpc_macro;
 
 /// Main RPC macro.
 ///
