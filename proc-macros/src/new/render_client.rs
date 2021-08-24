@@ -2,6 +2,7 @@ use super::{RpcDescription, RpcMethod, RpcSubscription};
 use crate::helpers::client_add_trait_bounds;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::TypeParam;
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -10,10 +11,7 @@ impl RpcDescription {
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
 		let tweaked_generics = client_add_trait_bounds(&self.trait_def);
 
-		let mut type_idents = Vec::new();
-		for param in tweaked_generics.type_params() {
-			type_idents.push(param);
-		}
+		let type_idents = tweaked_generics.type_params().collect::<Vec<&TypeParam>>();
 
 		let (impl_generics, type_generics, where_clause) = tweaked_generics.split_for_impl();
 
@@ -40,6 +38,7 @@ impl RpcDescription {
 				#(#sub_impls)*
 			}
 
+			// TODO(niklasad1): support for where clause on trait def.
 			impl<T #(,#type_idents)*> #trait_name #type_generics for T where T: #super_trait {}
 		};
 
