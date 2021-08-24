@@ -47,14 +47,14 @@ mod rpc_macro;
 /// will be generated.
 ///
 /// For clients, it will be an extension trait that adds all the required methods to a
-/// type that implements [`Client`] or [`SubscriptionClient`] (depending on whether trait has
-/// subscriptions methods or not), namely [`HttpClient`] and [`WsClient`].
+/// type that implements `Client` or `SubscriptionClient` (depending on whether trait has
+/// subscriptions methods or not), namely `HttpClient` and `WsClient`.
 ///
 /// For servers, it will generate a trait mostly equivalent to the input, with two main
 /// differences:
 ///
 /// - The trait will have one additional (already implemented) method, `into_rpc`, which
-///   turns any object that implements the server trait into an [`RpcModule`].
+///   turns any object that implements the server trait into an `RpcModule`.
 /// - For subscription methods, there will be one additional argument inserted right
 ///   after `&self`: `subscription_sink: SubscriptionSink`. It should be used to
 ///   actually maintain the subscription.
