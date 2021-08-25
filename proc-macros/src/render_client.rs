@@ -24,7 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use super::{RpcDescription, RpcMethod, RpcSubscription};
+use crate::rpc_macro::{RpcMethod, RpcSubscription};
+use crate::RpcDescription;
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 

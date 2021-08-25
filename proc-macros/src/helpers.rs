@@ -44,14 +44,14 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 			let ident = syn::Ident::new(&name, Span::call_site());
 			Ok(quote!(#ident))
 		}
-		Ok(FoundCrate::Itself) => panic!("Deriving RPC methods in any of the `jsonrpsee crates` is not supported"),
+		Ok(FoundCrate::Itself) => panic!("Deriving RPC methods in any of the `jsonrpsee` crates is not supported"),
 		Err(_) => match (crate_name(http_name), crate_name(ws_name)) {
 			(Ok(FoundCrate::Name(name)), _) | (_, Ok(FoundCrate::Name(name))) => {
 				let ident = syn::Ident::new(&name, Span::call_site());
 				Ok(quote!(#ident))
 			}
 			(Ok(FoundCrate::Itself), _) | (_, Ok(FoundCrate::Itself)) => {
-				panic!("Deriving RPC methods in any of the `jsonrpsee crates` is not supported")
+				panic!("Deriving RPC methods in any of the `jsonrpsee` crates is not supported")
 			}
 			(_, Err(e)) => Err(syn::Error::new(Span::call_site(), &e)),
 		},

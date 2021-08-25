@@ -26,16 +26,11 @@
 
 //! Declaration of the JSON RPC generator procedural macros.
 
-use self::respan::Respan;
+use crate::{attributes, respan::Respan};
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::Attribute;
-
-mod attributes;
-mod lifetimes;
-mod render_client;
-mod render_server;
-mod respan;
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
@@ -112,17 +107,17 @@ impl RpcSubscription {
 #[derive(Debug)]
 pub struct RpcDescription {
 	/// Path to the `jsonrpsee` client types part.
-	jsonrpsee_client_path: Option<TokenStream2>,
+	pub(crate) jsonrpsee_client_path: Option<TokenStream2>,
 	/// Path to the `jsonrpsee` server types part.
-	jsonrpsee_server_path: Option<TokenStream2>,
+	pub(crate) jsonrpsee_server_path: Option<TokenStream2>,
 	/// Data about RPC declaration
-	attrs: attributes::Rpc,
+	pub(crate) attrs: attributes::Rpc,
 	/// Trait definition in which all the attributes were stripped.
-	trait_def: syn::ItemTrait,
+	pub(crate) trait_def: syn::ItemTrait,
 	/// List of RPC methods defined in the trait.
-	methods: Vec<RpcMethod>,
+	pub(crate) methods: Vec<RpcMethod>,
 	/// List of RPC subscritpions defined in the trait.
-	subscriptions: Vec<RpcSubscription>,
+	pub(crate) subscriptions: Vec<RpcSubscription>,
 }
 
 impl RpcDescription {
@@ -212,14 +207,14 @@ impl RpcDescription {
 
 	/// Formats the identifier as a path relative to the resolved
 	/// `jsonrpsee` client path.
-	fn jrps_client_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
+	pub(crate) fn jrps_client_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 		quote! { #jsonrpsee::#item }
 	}
 
 	/// Formats the identifier as a path relative to the resolved
 	/// `jsonrpsee` server path.
-	fn jrps_server_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
+	pub(crate) fn jrps_server_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
 		let jsonrpsee = self.jsonrpsee_server_path.as_ref().unwrap();
 		quote! { #jsonrpsee::#item }
 	}
@@ -228,7 +223,7 @@ impl RpcDescription {
 	/// Examples:
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
 	/// For no namespace and method `makeSpam` it will be just `makeSpam.
-	fn rpc_identifier(&self, method: &syn::LitStr) -> String {
+	pub(crate) fn rpc_identifier(&self, method: &syn::LitStr) -> String {
 		if let Some(ns) = &self.attrs.namespace {
 			format!("{}_{}", ns.value(), method.value())
 		} else {
