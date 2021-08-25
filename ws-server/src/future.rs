@@ -204,6 +204,9 @@ impl Future for ShutdownWaiter {
 			}
 		}
 
+		// Re-check the count after dropping the `Arc` above in case another
+		// thread has dropped final `Arc` in the mean time, else the future
+		// might never resolve.
 		match Weak::strong_count(&self.0) {
 			0 => Poll::Ready(()),
 			_ => Poll::Pending,
