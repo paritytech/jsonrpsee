@@ -35,11 +35,11 @@ use std::net::SocketAddr;
 #[rpc(server, client, namespace = "state")]
 pub trait Rpc {
 	/// Async method call example.
-	#[method(name = "getPairs")]
+	#[method(name = "getPairs", alias = "getPairsAlias")]
 	async fn storage_pairs(&self, prefix: usize, hash: Option<u128>) -> Result<Vec<usize>, Error>;
 
 	/// Subscription that take `Option<Vec<u8>>` as input and produces output `Vec<usize>`.
-	#[subscription(name = "subscribeStorage", unsub = "unsubscribeStorage", item = Vec<usize>)]
+	#[subscription(name = "subscribeStorage", unsub = "unsubscribeStorage", item = Vec<usize>, sub_alias = "foo", unsub_alias = "bar")]
 	fn subscribe_storage(&self, keys: Option<Vec<u8>>);
 }
 

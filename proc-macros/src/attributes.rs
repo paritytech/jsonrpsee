@@ -63,6 +63,8 @@ impl Rpc {
 pub(crate) struct Method {
 	/// Method name
 	pub name: syn::LitStr,
+	/// Alias for the method.
+	pub alias: Option<syn::LitStr>,
 }
 
 /// Input for the `#[subscription(...)]` attribute.
@@ -74,4 +76,8 @@ pub(crate) struct Subscription {
 	pub unsub: syn::LitStr,
 	/// Type yielded by the subscription.
 	pub item: syn::Type,
+	/// Alias for the subscribe method.
+	pub sub_alias: Option<syn::LitStr>,
+	/// Alias for the unsubscribe method.
+	pub unsub_alias: Option<syn::LitStr>,
 }

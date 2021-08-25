@@ -160,6 +160,66 @@ impl RpcDescription {
 			})
 			.collect::<Vec<_>>();
 
+		let method_aliases = self
+			.methods
+			.iter()
+			.filter_map(|method| {
+				// Rust method to invoke (e.g. `self.<foo>(...)`).
+				let alias = match method.alias.as_ref().map(|m| self.rpc_identifier(m)) {
+					None => return None,
+					Some(alias) => alias,
+				};
+
+				let rust_method_name = &method.signature.sig.ident;
+				let rpc_method_name = self.rpc_identifier(&method.name);
+				check_name(alias.clone(), rust_method_name.span());
+
+				Some(handle_register_result(quote! {
+					rpc.register_alias(#alias, #rpc_method_name)
+				}))
+			})
+			.collect::<Vec<_>>();
+
+		let subscription_aliases = self
+			.subscriptions
+			.iter()
+			.filter_map(|method| {
+				let sub = method.sub_alias.as_ref().map(|m| self.rpc_identifier(m));
+				let unsub = method.unsub_alias.as_ref().map(|m| self.rpc_identifier(m));
+
+				let rust_method_name = &method.signature.sig.ident;
+				let sub_name = self.rpc_identifier(&method.name);
+				let unsub_name = self.rpc_identifier(&method.unsub_method);
+
+				match (sub, unsub) {
+					(Some(sub), Some(unsub)) => {
+						check_name(sub.clone(), rust_method_name.span());
+						check_name(unsub.clone(), rust_method_name.span());
+						let res1 = handle_register_result(quote!(rpc.register_alias(#sub, #sub_name)));
+						let res2 = handle_register_result(quote!(rpc.register_alias(#unsub, #unsub_name)));
+
+						Some(quote! {
+							#res1
+							#res2
+						})
+					}
+					(None, Some(unsub)) => {
+						check_name(unsub.clone(), rust_method_name.span());
+						Some(quote! {
+							rpc.register_alias(#unsub, #unsub_name)
+						})
+					}
+					(Some(sub), None) => {
+						check_name(sub.clone(), rust_method_name.span());
+						Some(quote! {
+							rpc.register_alias(#sub, #sub_name)
+						})
+					}
+					_ => None,
+				}
+			})
+			.collect::<Vec<_>>();
+
 		let doc_comment = "Collects all the methods and subscriptions defined in the trait \
 								and adds them into a single `RpcModule`.";
 
@@ -171,6 +231,8 @@ impl RpcDescription {
 				#(#errors)*
 				#(#methods)*
 				#(#subscriptions)*
+				#(#method_aliases)*
+				#(#subscription_aliases)*
 
 				rpc
 			}

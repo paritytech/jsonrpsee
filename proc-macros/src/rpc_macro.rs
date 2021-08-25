@@ -38,6 +38,7 @@ pub struct RpcMethod {
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
+	pub alias: Option<syn::LitStr>,
 }
 
 impl RpcMethod {
@@ -45,6 +46,7 @@ impl RpcMethod {
 		let attributes = attributes::Method::from_attributes(&method.attrs).respan(&method.attrs.first())?;
 		let sig = method.sig.clone();
 		let name = attributes.name;
+		let alias = attributes.alias;
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -65,7 +67,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { name, params, returns, signature: method })
+		Ok(Self { alias, name, params, returns, signature: method })
 	}
 }
 
@@ -76,6 +78,8 @@ pub struct RpcSubscription {
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemMethod,
+	pub sub_alias: Option<syn::LitStr>,
+	pub unsub_alias: Option<syn::LitStr>,
 }
 
 impl RpcSubscription {
@@ -85,6 +89,8 @@ impl RpcSubscription {
 		let name = attributes.name;
 		let unsub_method = attributes.unsub;
 		let item = attributes.item;
+		let sub_alias = attributes.sub_alias;
+		let unsub_alias = attributes.unsub_alias;
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -100,7 +106,7 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsub_method, params, item, signature: sub })
+		Ok(Self { name, unsub_method, params, item, signature: sub, sub_alias, unsub_alias })
 	}
 }
 
