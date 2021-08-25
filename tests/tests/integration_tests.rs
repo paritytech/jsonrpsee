@@ -281,6 +281,8 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	// no new request should be accepted.
 	assert!(matches!(sub2, Err(_)));
+	// consume final message
+	assert!(matches!(sub.next().await, Ok(Some(_))));
 	// the already established subscription should also be closed.
-	// assert!(matches!(sub.next().await, Ok(None)));
+	assert!(matches!(sub.next().await, Ok(None)));
 }
