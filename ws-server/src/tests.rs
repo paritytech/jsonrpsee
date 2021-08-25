@@ -28,6 +28,7 @@
 
 use crate::types::error::{CallError, Error};
 use crate::{future::StopHandle, RpcModule, WsServerBuilder};
+use anyhow::anyhow;
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
@@ -95,8 +96,8 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 			.boxed()
 		})
 		.unwrap();
-	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams.into())).unwrap();
+	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
@@ -149,7 +150,7 @@ async fn server_with_context() -> SocketAddr {
 			async move {
 				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 				// Async work that returns an error
-				futures_util::future::err::<(), CallError>(CallError::Failed(String::from("nah").into())).await
+				futures_util::future::err::<(), _>(anyhow!("nah").into()).await
 			}
 			.boxed()
 		})
@@ -288,6 +289,52 @@ async fn batch_method_call_where_some_calls_fail() {
 		response,
 		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
 	);
+}
+
+#[tokio::test]
+async fn garbage_request_fails() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"dsdfs fsdsfds"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{ "#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{sds}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"["#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"[dsds]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"[]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, invalid_request(Id::Null));
+
+	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
 }
 
 #[tokio::test]

@@ -136,7 +136,7 @@ where
 			Some(n) => match serde_json::from_value::<NotifResponse<Notif>>(n) {
 				Ok(NotifResponse::Ok(parsed)) => Ok(Some(parsed)),
 				Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(e)),
-				Err(e) => Err(e.into()),
+				Err(e) => Err(Error::ParseError(e)),
 			},
 			None => Ok(None),
 		}

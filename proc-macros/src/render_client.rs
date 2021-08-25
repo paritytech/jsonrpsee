@@ -1,4 +1,6 @@
-use super::{RpcDescription, RpcMethod, RpcSubscription};
+use crate::rpc_macro::{RpcMethod, RpcSubscription};
+use crate::RpcDescription;
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
@@ -52,7 +54,7 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
-			let returns = quote! { Result<#returns, #jrps_error> };
+			let returns = quote! { #returns };
 
 			(called_method, returns)
 		} else {

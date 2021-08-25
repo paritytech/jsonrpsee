@@ -26,91 +26,17 @@
 
 extern crate proc_macro;
 
-use new::RpcDescription;
 use proc_macro::TokenStream;
 use quote::quote;
+use rpc_macro::RpcDescription;
 
-mod api_def;
-mod client_builder;
+mod attributes;
 mod helpers;
-mod new;
-
-/// Wraps around one or more API definitions and generates an enum.
-///
-/// The format within this macro must be:
-///
-/// ```ignore
-/// jsonrpsee_proc_macros::rpc_client_api! {
-///     Foo { ... }
-///     pub(crate) Bar { ... }
-/// }
-/// ```
-///
-/// The `Foo` and `Bar` are identifiers, optionally prefixed with a visibility modifier
-/// (e.g. `pub`).
-///
-/// The content of the blocks is the same as the content of a trait definition, except that
-/// default implementations for methods are forbidden.
-///
-/// For each identifier (such as `Foo` and `Bar` in the example above), this macro will generate
-/// an enum where each variant corresponds to a function of the definition. Function names are
-/// turned into PascalCase to conform to the Rust style guide.
-///
-/// Additionally, each generated enum has one method per function definition that lets you perform
-/// the method has a client.
-///
-// TODO(niklasad1): Generic type params for individual methods doesn't work
-// because how the enum is generated, so for now type params must be declared on the entire enum.
-// The reason is that all type params on the enum is bound as a separate variant but
-// not generic params i.e, either params or return type.
-// To handle that properly, all generic types has to be collected and applied to the enum, see example:
-//
-// ```rust
-// jsonrpsee_rpc_client_api! {
-//     Api {
-//       // Doesn't work.
-//       fn generic_notif<T>(t: T);
-// }
-// ```
-//
-// Expands to which doesn't compile:
-// ```rust
-// enum Api {
-//    GenericNotif {
-//        t: T,
-//    },
-// }
-// ```
-// The code should be expanded to (to compile):
-// ```rust
-// enum Api<T> {
-//    GenericNotif {
-//        t: T,
-//    },
-// }
-// ```
-#[proc_macro]
-pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
-	// Start by parsing the input into what we expect.
-	let defs: api_def::ApiDefinitions = match syn::parse(input_token_stream) {
-		Ok(d) => d,
-		Err(err) => return err.to_compile_error().into(),
-	};
-
-	let mut out = Vec::with_capacity(defs.apis.len());
-	for api in defs.apis {
-		match client_builder::build_client_api(api) {
-			Ok(a) => out.push(a),
-			Err(err) => return err.to_compile_error().into(),
-		};
-	}
-
-	TokenStream::from(quote! {
-		#(#out)*
-	})
-}
-
-// New implementation starts here.
+mod lifetimes;
+mod render_client;
+mod render_server;
+mod respan;
+mod rpc_macro;
 
 /// Main RPC macro.
 ///
@@ -120,15 +46,15 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 /// Based on the attributes provided to the `rpc` macro, either one or both of implementations
 /// will be generated.
 ///
-/// For clients, it will be an extension trait that will add all the required methods to any
+/// For clients, it will be an extension trait that adds all the required methods to a
 /// type that implements `Client` or `SubscriptionClient` (depending on whether trait has
 /// subscriptions methods or not), namely `HttpClient` and `WsClient`.
 ///
-/// For servers, it will generate a trait mostly equivalent to the initial one, with two main
+/// For servers, it will generate a trait mostly equivalent to the input, with two main
 /// differences:
 ///
-/// - This trait will have one additional (already implemented) method `into_rpc`, which
-///   will turn any object that implements the server trait into an `RpcModule`.
+/// - The trait will have one additional (already implemented) method, `into_rpc`, which
+///   turns any object that implements the server trait into an `RpcModule`.
 /// - For subscription methods, there will be one additional argument inserted right
 ///   after `&self`: `subscription_sink: SubscriptionSink`. It should be used to
 ///   actually maintain the subscription.
@@ -137,19 +63,18 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
 /// correspondingly, `FooClient`.
 ///
-/// `FooClient` in that case will only have to be imported in the context and will be ready to
-/// use, while `FooServer` must be implemented for some type first.
+/// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait must be implemented on your type first.
 ///
 /// ## Prerequisites
 ///
 /// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`.
-///   If you want to implement this trait to some type that is not thread-safe, consider
+///   If you want to implement this trait on some type that is not thread-safe, consider
 ///   using `Arc<RwLock<..>>`.
 ///
 /// ## Examples
 ///
-/// Below you can find the example of the macro usage along with the code
-/// that will be generated for it.
+/// Below you can find examples of the macro usage along with the code
+/// that generated for it by the macro.
 ///
 /// ```ignore
 /// #[rpc(client, server, namespace = "foo")]
@@ -169,7 +94,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 /// ```ignore
 /// #[async_trait]
 /// pub trait RpcServer {
-///     // RPC methods are usual methods and can be either sync or async.
+///     // RPC methods are normal methods and can be either sync or async.
 ///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
 ///     fn sync_method(&self) -> String;
 ///
@@ -215,17 +140,17 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 /// **Arguments:**
 ///
 /// - `server`: generate `<Trait>Server` trait for the server implementation.
-/// - `client`: generate `<Trait>Client` extension trait that makes RPC clients to invoke a concrete RPC
-///   implementation methods conveniently.
+/// - `client`: generate `<Trait>Client` extension trait that builds RPC clients to invoke a concrete RPC
+///   implementation's methods conveniently.
 /// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace
 ///   `foo` and method `spam`, the resulting method name will be `foo_spam`.
 ///
 /// **Trait requirements:**
 ///
-/// Trait wrapped with an `rpc` attribute **must not**:
+/// A trait wrapped with the `rpc` attribute **must not**:
 ///
 /// - have associated types or constants;
-/// - have Rust methods not marked with either `method` or `subscription` attribute;
+/// - have Rust methods not marked with either the `method` or `subscription` attribute;
 /// - be empty.
 ///
 /// At least one of the `server` or `client` flags must be provided, otherwise the compilation will err.
@@ -240,11 +165,11 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///
 /// **Method requirements:**
 ///
-/// Rust method marked with `method` attribute, **may**:
+/// A Rust method marked with the `method` attribute, **may**:
 ///
 /// - be either `async` or not;
 /// - have input parameters or not;
-/// - have return value or not (in the latter case, it will be considered a notification method).
+/// - have a return value or not (in the latter case, it will be considered a notification method).
 ///
 /// ### `subscription` attribute
 ///
@@ -256,7 +181,7 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///
 /// **Method requirements:**
 ///
-/// Rust method marked with `subscription` attribute **must**:
+/// Rust method marked with the `subscription` attribute **must**:
 ///
 /// - be synchronous;
 /// - not have return value.
@@ -275,36 +200,36 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 /// use futures_channel::oneshot;
 /// use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
 ///
-/// // RPC is moved into a separate module to clearly show names of generated entities.
+/// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc, types::async_trait, ws_server::SubscriptionSink};
+///     use jsonrpsee::{proc_macros::rpc, types::{async_trait, JsonRpcResult}, ws_server::SubscriptionSink};
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
 ///     #[rpc(client, server, namespace = "foo")]
-///     pub trait Rpc {
+///     pub trait MyRpc {
 ///         #[method(name = "foo")]
-///         async fn async_method(&self, param_a: u8, param_b: String) -> u16;
+///         async fn async_method(&self, param_a: u8, param_b: String) -> JsonRpcResult<u16>;
 ///
 ///         #[method(name = "bar")]
-///         fn sync_method(&self) -> u16;
+///         fn sync_method(&self) -> JsonRpcResult<u16>;
 ///
 ///         #[subscription(name = "sub", unsub = "unsub", item = String)]
 ///         fn sub(&self);
 ///     }
 ///
-///     // Structure that will implement `RpcServer` trait.
-///     // In can have fields, if required, as long as it's still `Send + Sync + 'static`.
+///     // Structure that will implement the `MyRpcServer` trait.
+///     // It can have fields, if required, as long as it's still `Send + Sync + 'static`.
 ///     pub struct RpcServerImpl;
 ///
-///     // Note that the trait name we use is `RpcServer`, not `Rpc`!
+///     // Note that the trait name we use is `MyRpcServer`, not `MyRpc`!
 ///     #[async_trait]
-///     impl RpcServer for RpcServerImpl {
-///         async fn async_method(&self, _param_a: u8, _param_b: String) -> u16 {
-///             42u16
+///     impl MyRpcServer for RpcServerImpl {
+///         async fn async_method(&self, _param_a: u8, _param_b: String) -> JsonRpcResult<u16> {
+///             Ok(42u16)
 ///         }
 ///
-///         fn sync_method(&self) -> u16 {
-///             10u16
+///         fn sync_method(&self) -> JsonRpcResult<u16> {
+///             Ok(10u16)
 ///         }
 ///
 ///         // We could've spawned a `tokio` future that yields values while our program works,
@@ -317,8 +242,8 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     }
 /// }
 ///
-/// // Use generated implementations of server and client.
-/// use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
+/// // Use the generated implementations of server and client.
+/// use rpc_impl::{MyRpcClient, MyRpcServer, RpcServerImpl};
 ///
 /// pub async fn websocket_server() -> SocketAddr {
 ///     let (server_started_tx, server_started_rx) = oneshot::channel();
@@ -338,13 +263,13 @@ pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
 ///     server_started_rx.await.unwrap()
 /// }
 ///
-/// // In the main function, we will spawn the server, create a client connected to this server,
-/// // and call all the available methods.
+/// // In the main function, we start the server, create a client connected to this server,
+/// // and call the available methods.
 /// #[tokio::main]
 /// async fn main() {
 ///     let server_addr = websocket_server().await;
 ///     let server_url = format!("ws://{}", server_addr);
-///     // Note that we create the client as usual, but thanks to the `use rpc_impl::RpcClient`,
+///     // Note that we create the client as usual, but thanks to the `use rpc_impl::MyRpcClient`,
 ///     // the client object will have all the methods to interact with the server.
 ///     let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 ///

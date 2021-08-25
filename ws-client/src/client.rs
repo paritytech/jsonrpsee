@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::tokio::Mutex;
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::types::{
 	traits::{Client, SubscriptionClient},
@@ -52,6 +51,7 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+use tokio::sync::Mutex;
 
 use jsonrpsee_types::v2::params::JsonRpcSubscriptionParams;
 use jsonrpsee_types::SubscriptionKind;
@@ -268,15 +268,15 @@ impl<'a> WsClientBuilder<'a> {
 
 		let builder = WsTransportClientBuilder {
 			certificate_store,
-			target: Target::parse(url).map_err(|e| Error::Transport(Box::new(e)))?,
+			target: Target::parse(url).map_err(|e| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
 			origin_header: self.origin_header,
 			max_request_body_size: self.max_request_body_size,
 		};
 
-		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(Box::new(e)))?;
+		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(e.into()))?;
 
-		crate::tokio::spawn(async move {
+		tokio::spawn(async move {
 			background_task(sender, receiver, from_front, err_tx, max_capacity_per_subscription).await;
 		});
 		Ok(WsClient {
@@ -319,9 +319,9 @@ impl Client for WsClient {
 		let mut sender = self.to_back.clone();
 		let fut = sender.send(FrontToBack::Notification(raw));
 
-		let timeout = crate::tokio::sleep(self.request_timeout);
+		let timeout = tokio::time::sleep(self.request_timeout);
 
-		let res = crate::tokio::select! {
+		let res = tokio::select! {
 			x = fut => x,
 			_ = timeout => return Err(Error::RequestTimeout)
 		};
@@ -562,7 +562,7 @@ async fn background_task(
 						.expect("ID unused checked above; qed"),
 					Err(e) => {
 						log::warn!("[backend]: client request failed: {:?}", e);
-						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(Box::new(e)))));
+						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
 					}
 				}
 			}
@@ -579,7 +579,7 @@ async fn background_task(
 					.expect("Request ID unused checked above; qed"),
 				Err(e) => {
 					log::warn!("[backend]: client subscription failed: {:?}", e);
-					let _ = sub.send_back.send(Err(Error::Transport(Box::new(e))));
+					let _ = sub.send_back.send(Err(Error::Transport(e.into())));
 				}
 			},
 			// User dropped a subscription.
@@ -669,7 +669,7 @@ async fn background_task(
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
-				let _ = front_error.send(Error::Transport(Box::new(e)));
+				let _ = front_error.send(Error::Transport(e.into()));
 				return;
 			}
 			Either::Right((None, _)) => {

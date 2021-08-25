@@ -32,7 +32,7 @@ use crate::types::{
 	},
 	Error, JsonValue,
 };
-use crate::{tokio, HttpClientBuilder};
+use crate::HttpClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -157,7 +157,7 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 fn assert_jsonrpc_error_response(err: Error, exp: JsonRpcErrorObject) {
 	match &err {
 		Error::Request(e) => {
-			let this: JsonRpcError = serde_json::from_str(&e).unwrap();
+			let this: JsonRpcError = serde_json::from_str(e).unwrap();
 			assert_eq!(this.error, exp);
 		}
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
