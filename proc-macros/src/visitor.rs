@@ -91,7 +91,7 @@ impl<'ast> Visit<'ast> for FindTyParams {
 }
 
 impl FindSubTyParams {
-	/// Visit all types and returns all generic [`Ident`]'s that are subscriptions.
+	/// Visit all types and returns all generic [`syn::Ident`]'s that are subscriptions.
 	pub fn visit(mut self, tys: &[syn::Type]) -> HashSet<Ident> {
 		for ty in tys {
 			self.visit_type(ty);
