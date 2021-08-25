@@ -197,11 +197,16 @@ impl Future for ShutdownWaiter {
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		match Weak::upgrade(&self.0) {
-			None => Poll::Ready(()),
+			None => return Poll::Ready(()),
 			Some(arc) => {
 				arc.waker.register(cx.waker());
-				Poll::Pending
+				drop(arc)
 			}
+		}
+
+		match Weak::strong_count(&self.0) {
+			0 => Poll::Ready(()),
+			_ => Poll::Pending,
 		}
 	}
 }
