@@ -123,6 +123,7 @@ impl<'ast> Visit<'ast> for FindTyParams {
 		self.visiting_return_type = false
 	}
 
+    /// Walk the tree and find all `Ident`s; if it's a generic and if our current state is set to look for generics in the return type, collect the item in the `ret_params`; if we are looking for function args, add the `Ident` to the `input_params`.
 	fn visit_ident(&mut self, ident: &'ast syn::Ident) {
 		if self.trait_generics.contains(ident) {
 			if self.visiting_return_type {
