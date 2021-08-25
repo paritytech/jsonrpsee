@@ -37,9 +37,7 @@ impl RpcDescription {
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
 		let tweaked_generics = client_add_trait_bounds(&self.trait_def, &sub_tys);
-
 		let type_idents = tweaked_generics.type_params().collect::<Vec<&TypeParam>>();
-
 		let (impl_generics, type_generics, where_clause) = tweaked_generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {

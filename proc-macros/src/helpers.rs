@@ -90,7 +90,6 @@ pub(crate) fn server_generate_where_clause(
 	sub_tys: &[syn::Type],
 ) -> Vec<syn::WherePredicate> {
 	let visitor = visit_trait(item_trait, sub_tys);
-
 	let additional_where_clause = item_trait.generics.where_clause.clone();
 
 	item_trait
@@ -137,7 +136,7 @@ pub(crate) fn server_generate_where_clause(
 
 fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindTyParams {
 	let type_params: HashSet<_> = item_trait.generics.type_params().map(|t| t.ident.clone()).collect();
-	let sub_tys = FindSubTyParams::new(type_params).visit(&sub_tys);
+	let sub_tys = FindSubTyParams::new(type_params).visit(sub_tys);
 	let mut visitor = FindTyParams::new(sub_tys);
 	visitor.visit_item_trait(item_trait);
 	visitor
