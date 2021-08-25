@@ -10,6 +10,7 @@ mod lifetimes;
 mod render_client;
 mod render_server;
 mod respan;
+mod visitor;
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {

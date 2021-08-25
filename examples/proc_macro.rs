@@ -73,9 +73,9 @@ async fn main() -> anyhow::Result<()> {
 	let client = WsClientBuilder::default().build(&url).await?;
 	assert_eq!(client.storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>).await.unwrap(), vec![vec![1, 2, 3, 4]]);
 
-	/*let mut sub: Subscription<Vec<ExampleHash>> =
-		RpcClient::<ExampleStorageKey, _>::subscribe_storage(&client, None).await.unwrap();
-	assert_eq!(Some(vec![[0; 32]]), sub.next().await.unwrap());*/
+	let mut sub: Subscription<Vec<ExampleHash>> =
+		RpcClient::<ExampleHash, ExampleStorageKey>::subscribe_storage(&client, None).await.unwrap();
+	assert_eq!(Some(vec![[0; 32]]), sub.next().await.unwrap());
 
 	Ok(())
 }
