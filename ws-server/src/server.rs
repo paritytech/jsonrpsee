@@ -125,7 +125,6 @@ enum IncomingError {
 	Io(std::io::Error),
 }
 
-
 impl<'a> Future for Incoming<'a> {
 	type Output = Result<(TcpStream, SocketAddr), IncomingError>;
 

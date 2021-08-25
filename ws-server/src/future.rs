@@ -200,7 +200,7 @@ impl Future for ShutdownWaiter {
 			None => return Poll::Ready(()),
 			Some(arc) => {
 				arc.waker.register(cx.waker());
-				drop(arc)
+				drop(arc);
 			}
 		}
 
