@@ -41,7 +41,7 @@ pub trait Rpc<Hash: std::fmt::Debug, StorageKey> {
 	#[method(name = "getKeys")]
 	async fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>, Error>;
 
-	/// Subscription that take `StorageKey` as input and produces output `Vec<Hash>`.
+	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage", unsub = "unsubscribeStorage", item = Vec<Hash>)]
 	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
 }
