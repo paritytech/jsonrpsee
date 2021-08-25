@@ -10,7 +10,7 @@ mod lifetimes;
 mod render_client;
 mod render_server;
 mod respan;
-mod visitor;
+pub(crate) mod visitor;
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
@@ -65,6 +65,7 @@ impl RpcSubscription {
 		let name = attributes.name;
 		let unsub_method = attributes.unsub;
 		let item = attributes.item;
+
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()

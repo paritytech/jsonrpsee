@@ -1,4 +1,3 @@
-use super::visitor::FindSubTyParams;
 use super::{RpcDescription, RpcMethod, RpcSubscription};
 use crate::helpers::client_add_trait_bounds;
 use proc_macro2::TokenStream as TokenStream2;
@@ -8,15 +7,10 @@ use syn::TypeParam;
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
-
-		let sub_tys = {
-			let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
-			let all_type_params = self.trait_def.generics.type_params().map(|param| param.ident.clone()).collect();
-			FindSubTyParams::new(all_type_params).visit(&sub_tys)
-		};
+		let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
-		let tweaked_generics = client_add_trait_bounds(&self.trait_def, sub_tys);
+		let tweaked_generics = client_add_trait_bounds(&self.trait_def, &sub_tys);
 
 		let type_idents = tweaked_generics.type_params().collect::<Vec<&TypeParam>>();
 

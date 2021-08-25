@@ -1,13 +1,9 @@
+use crate::new::visitor::{FindSubTyParams, FindTyParams};
 use proc_macro2::Span;
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use std::collections::HashSet;
-use syn::{
-	parse_quote,
-	punctuated::Punctuated,
-	visit::{self, Visit},
-	GenericParam, Generics, Token,
-};
+use syn::{parse_quote, punctuated::Punctuated, visit::Visit, GenericParam, Generics, Token};
 
 /// Search for client-side `jsonrpsee` in `Cargo.toml`.
 pub(crate) fn find_jsonrpsee_client_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
@@ -39,9 +35,8 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 	}
 }
 
-pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: HashSet<syn::Ident>) -> Generics {
-	let mut visitor = FindTyParams::new(sub_tys);
-	visitor.visit_item_trait(item_trait);
+pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> Generics {
+	let visitor = visit_trait(item_trait, sub_tys);
 	let mut generics = item_trait.generics.clone();
 
 	for param in &mut generics.params {
@@ -56,7 +51,6 @@ pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: Hash
 			if visitor.ret_params.contains(&ty.ident) {
 				ty.bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
 			}
-
 			if visitor.sub_params.contains(&ty.ident) {
 				ty.bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
 			}
@@ -67,10 +61,9 @@ pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: Hash
 
 pub(crate) fn server_generate_where_clause(
 	item_trait: &syn::ItemTrait,
-	sub_tys: HashSet<syn::Ident>,
+	sub_tys: &[syn::Type],
 ) -> Vec<syn::WherePredicate> {
-	let mut visitor = FindTyParams::new(sub_tys);
-	visitor.visit_item_trait(item_trait);
+	let visitor = visit_trait(item_trait, sub_tys);
 
 	let additional_where_clause = item_trait.generics.where_clause.clone();
 
@@ -116,53 +109,10 @@ pub(crate) fn server_generate_where_clause(
 		.collect()
 }
 
-struct FindTyParams {
-	trait_generics: HashSet<syn::Ident>,
-	input_params: HashSet<syn::Ident>,
-	ret_params: HashSet<syn::Ident>,
-	sub_params: HashSet<syn::Ident>,
-	visiting_return_type: bool,
-	visiting_fn_arg: bool,
-}
-
-impl FindTyParams {
-	pub fn new(sub_params: HashSet<syn::Ident>) -> Self {
-		Self {
-			trait_generics: HashSet::new(),
-			input_params: HashSet::new(),
-			ret_params: HashSet::new(),
-			sub_params,
-			visiting_return_type: false,
-			visiting_fn_arg: false,
-		}
-	}
-}
-
-impl<'ast> Visit<'ast> for FindTyParams {
-	fn visit_type_param(&mut self, ty_param: &'ast syn::TypeParam) {
-		self.trait_generics.insert(ty_param.ident.clone());
-	}
-
-	fn visit_return_type(&mut self, return_type: &'ast syn::ReturnType) {
-		self.visiting_return_type = true;
-		visit::visit_return_type(self, return_type);
-		self.visiting_return_type = false
-	}
-
-	fn visit_ident(&mut self, ident: &'ast syn::Ident) {
-		if self.trait_generics.contains(ident) {
-			if self.visiting_return_type {
-				self.ret_params.insert(ident.clone());
-			}
-			if self.visiting_fn_arg {
-				self.input_params.insert(ident.clone());
-			}
-		}
-	}
-
-	fn visit_fn_arg(&mut self, arg: &'ast syn::FnArg) {
-		self.visiting_fn_arg = true;
-		visit::visit_fn_arg(self, arg);
-		self.visiting_fn_arg = false;
-	}
+fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindTyParams {
+	let type_params: HashSet<_> = item_trait.generics.type_params().map(|t| t.ident.clone()).collect();
+	let sub_tys = FindSubTyParams::new(type_params).visit(&sub_tys);
+	let mut visitor = FindTyParams::new(sub_tys);
+	visitor.visit_item_trait(item_trait);
+	visitor
 }

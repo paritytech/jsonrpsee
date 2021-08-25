@@ -1,5 +1,4 @@
 use super::lifetimes::replace_lifetimes;
-use super::visitor::FindSubTyParams;
 use super::RpcDescription;
 use crate::helpers::server_generate_where_clause;
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -140,13 +139,8 @@ impl RpcDescription {
 		let doc_comment = "Collects all the methods and subscriptions defined in the trait \
 								and adds them into a single `RpcModule`.";
 
-		let sub_tys = {
-			let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
-			let all_type_params = self.trait_def.generics.type_params().map(|param| param.ident.clone()).collect();
-			FindSubTyParams::new(all_type_params).visit(&sub_tys)
-		};
-
-		let where_clause = server_generate_where_clause(&self.trait_def, sub_tys);
+		let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
+		let where_clause = server_generate_where_clause(&self.trait_def, &sub_tys);
 
 		// NOTE(niklasad1): empty where clause is valid rust syntax.
 		Ok(quote! {
