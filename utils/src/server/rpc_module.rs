@@ -574,4 +574,12 @@ mod tests {
 		assert!(module.method("hello_world").is_some());
 		assert!(module.method("hello_foobar").is_some());
 	}
+
+	#[tokio::test]
+	async fn calling_method_without_server() {
+		let mut module = RpcModule::new(());
+		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
+		let result = &module.call("boo", None).await;
+		assert_eq!(result, &Some(String::from("{\"jsonrpc\":\"2.0\",\"result\":\"boo!\",\"id\":0}")));
+	}
 }
