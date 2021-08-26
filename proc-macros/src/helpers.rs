@@ -78,7 +78,7 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 /// Because `item` is not parsed as ordinary rust syntax, the actual `syn::Type` is traversed to find
 /// each generic parameter of it.
 /// This is used an additional input before traversing the entire trait.
-/// Otherwise, it's not possible to know whether a type parameter is used for subscription output.
+/// Otherwise, it's not possible to know whether a type parameter is used for subscription result.
 pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> Generics {
 	let visitor = visit_trait(item_trait, sub_tys);
 	let mut generics = item_trait.generics.clone();
