@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::visitor::{FindSubTyParams, FindTyParams};
+use crate::visitor::{FindAllParams, FindSubscriptionParams};
 use proc_macro2::Span;
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
@@ -74,10 +74,7 @@ pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[sy
 			if visitor.input_params.contains(&ty.ident) {
 				ty.bounds.push(parse_quote!(jsonrpsee::types::Serialize))
 			}
-			if visitor.ret_params.contains(&ty.ident) {
-				ty.bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
-			}
-			if visitor.sub_params.contains(&ty.ident) {
+			if visitor.ret_params.contains(&ty.ident) | visitor.sub_params.contains(&ty.ident) {
 				ty.bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
 			}
 		}
@@ -103,11 +100,7 @@ pub(crate) fn server_generate_where_clause(
 				bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
 			}
 
-			if visitor.ret_params.contains(&ty.ident) {
-				bounds.push(parse_quote!(jsonrpsee::types::Serialize))
-			}
-
-			if visitor.sub_params.contains(&ty.ident) {
+			if visitor.ret_params.contains(&ty.ident) | visitor.sub_params.contains(&ty.ident) {
 				bounds.push(parse_quote!(jsonrpsee::types::Serialize))
 			}
 
@@ -134,10 +127,10 @@ pub(crate) fn server_generate_where_clause(
 		.collect()
 }
 
-fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindTyParams {
+fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindAllParams {
 	let type_params: HashSet<_> = item_trait.generics.type_params().map(|t| t.ident.clone()).collect();
-	let sub_tys = FindSubTyParams::new(type_params).visit(sub_tys);
-	let mut visitor = FindTyParams::new(sub_tys);
+	let sub_tys = FindSubscriptionParams::new(type_params).visit(sub_tys);
+	let mut visitor = FindAllParams::new(sub_tys);
 	visitor.visit_item_trait(item_trait);
 	visitor
 }

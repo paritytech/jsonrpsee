@@ -33,13 +33,13 @@ use syn::{
 /// Visitor that parses generic type parameters from `syn::Type`.
 // Based on https://github.com/serde-rs/serde/blob/master/serde_derive/src/bound.rs.
 #[derive(Default, Debug)]
-pub(crate) struct FindSubTyParams {
+pub(crate) struct FindSubscriptionParams {
 	pub(crate) generic_sub_params: HashSet<Ident>,
 	pub(crate) all_type_params: HashSet<Ident>,
 }
 
 /// Visitor for the entire `RPC trait`.
-pub struct FindTyParams {
+pub struct FindAllParams {
 	pub(crate) trait_generics: HashSet<syn::Ident>,
 	pub(crate) input_params: HashSet<syn::Ident>,
 	pub(crate) ret_params: HashSet<syn::Ident>,
@@ -48,7 +48,7 @@ pub struct FindTyParams {
 	pub(crate) visiting_fn_arg: bool,
 }
 
-impl FindTyParams {
+impl FindAllParams {
 	pub fn new(sub_params: HashSet<syn::Ident>) -> Self {
 		Self {
 			trait_generics: HashSet::new(),
@@ -61,7 +61,7 @@ impl FindTyParams {
 	}
 }
 
-impl<'ast> Visit<'ast> for FindTyParams {
+impl<'ast> Visit<'ast> for FindAllParams {
 	fn visit_type_param(&mut self, ty_param: &'ast syn::TypeParam) {
 		self.trait_generics.insert(ty_param.ident.clone());
 	}
@@ -90,7 +90,7 @@ impl<'ast> Visit<'ast> for FindTyParams {
 	}
 }
 
-impl FindSubTyParams {
+impl FindSubscriptionParams {
 	/// Visit all types and returns all generic [`struct@syn::Ident`]'s that are subscriptions.
 	pub fn visit(mut self, tys: &[syn::Type]) -> HashSet<Ident> {
 		for ty in tys {
@@ -225,8 +225,9 @@ mod tests {
 
 		let mut exp = HashSet::new();
 		exp.insert(id);
+		let generics = exp.clone();
 
-		assert_eq!(exp, FindSubTyParams::new(exp.clone()).visit(&[t]));
+		assert_eq!(exp, FindSubscriptionParams::new(generics).visit(&[t]));
 	}
 
 	#[test]
@@ -245,11 +246,11 @@ mod tests {
 		exp.insert(parse_quote!(B));
 		exp.insert(parse_quote!(C));
 
-		assert_eq!(exp, FindSubTyParams::new(exp.clone()).visit(&[t]));
+		assert_eq!(exp, FindSubscriptionParams::new(generics).visit(&[t]));
 	}
 
 	#[test]
-	fn nested() {
+	fn nested_type() {
 		let t: Type = parse_quote!(Vec<Foo<A, B>>);
 
 		let mut generics: HashSet<syn::Ident> = HashSet::new();
@@ -263,6 +264,6 @@ mod tests {
 		exp.insert(parse_quote!(A));
 		exp.insert(parse_quote!(B));
 
-		assert_eq!(exp, FindSubTyParams::new(exp.clone()).visit(&[t]));
+		assert_eq!(exp, FindSubscriptionParams::new(generics).visit(&[t]));
 	}
 }
