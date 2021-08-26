@@ -61,6 +61,24 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 	}
 }
 
+/// Traversing the `trait RPC definition` applies the required bounds for the generic type parameters.
+/// This actually depends on whether the actual type parameter in used a parameter, return value or subscription result.
+///
+/// Example:
+///
+///  #[rpc(client)]
+///  pub trait RpcTrait<A, B, C> {
+///    #[method(name = "call")]
+///    fn call(&self, a: A) -> B;
+///
+///    #[subscription(name = "sub", item = Vec<S>)]
+///    fn sub(&self);
+///  }
+///
+/// Because `item` is not parsed as ordinary rust syntax, the actual `syn::Type` is traversed to find
+/// each generic parameter of it.
+/// This is used an additional input before traversing the entire trait.
+/// Otherwise, it's not possible to know whether a type parameter is used for subscription output.
 pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> Generics {
 	let visitor = visit_trait(item_trait, sub_tys);
 	let mut generics = item_trait.generics.clone();
@@ -82,6 +100,8 @@ pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[sy
 	generics
 }
 
+/// Similar to `client_add_trait_bounds` but the logic is reversed for trait bounds
+/// however in contrast it generates the where clause for the server trait instead generics.
 pub(crate) fn server_generate_where_clause(
 	item_trait: &syn::ItemTrait,
 	sub_tys: &[syn::Type],
@@ -127,6 +147,8 @@ pub(crate) fn server_generate_where_clause(
 		.collect()
 }
 
+/// Traversing the `RPC trait` by first find the subscription parameters and then all elements
+/// needed for generating the `client` and `server` traits/implementations.
 fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindAllParams {
 	let type_params: HashSet<_> = item_trait.generics.type_params().map(|t| t.ident.clone()).collect();
 	let sub_tys = FindSubscriptionParams::new(type_params).visit(sub_tys);
