@@ -34,19 +34,19 @@ use syn::Attribute;
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
-	pub name: syn::LitStr,
+	pub name: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
-	pub alias: Option<syn::LitStr>,
+	pub alias: Vec<String>,
 }
 
 impl RpcMethod {
 	pub fn from_item(mut method: syn::TraitItemMethod) -> Result<Self, syn::Error> {
 		let attributes = attributes::Method::from_attributes(&method.attrs).respan(&method.attrs.first())?;
 		let sig = method.sig.clone();
-		let name = attributes.name;
-		let alias = attributes.alias;
+		let name = attributes.name.value();
+		let alias = attributes.alias.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -73,24 +73,25 @@ impl RpcMethod {
 
 #[derive(Debug, Clone)]
 pub struct RpcSubscription {
-	pub name: syn::LitStr,
-	pub unsub_method: syn::LitStr,
+	pub name: String,
+	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemMethod,
-	pub sub_alias: Option<syn::LitStr>,
-	pub unsub_alias: Option<syn::LitStr>,
+	pub alias: Vec<String>,
+	pub unsubscribe_alias: Vec<String>,
 }
 
 impl RpcSubscription {
 	pub fn from_item(mut sub: syn::TraitItemMethod) -> Result<Self, syn::Error> {
 		let attributes = attributes::Subscription::from_attributes(&sub.attrs).respan(&sub.attrs.first())?;
 		let sig = sub.sig.clone();
-		let name = attributes.name;
-		let unsub_method = attributes.unsub;
+		let name = attributes.name.value();
+		let unsubscribe = build_unsubscribe_method(&name);
 		let item = attributes.item;
-		let sub_alias = attributes.sub_alias;
-		let unsub_alias = attributes.unsub_alias;
+		let alias = attributes.alias.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
+		let unsubscribe_alias =
+			attributes.unsubscribe_alias.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -106,7 +107,7 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsub_method, params, item, signature: sub, sub_alias, unsub_alias })
+		Ok(Self { name, unsubscribe, unsubscribe_alias, params, item, signature: sub, alias })
 	}
 }
 
@@ -229,11 +230,11 @@ impl RpcDescription {
 	/// Examples:
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
 	/// For no namespace and method `makeSpam` it will be just `makeSpam.
-	pub(crate) fn rpc_identifier(&self, method: &syn::LitStr) -> String {
+	pub(crate) fn rpc_identifier(&self, method: &str) -> String {
 		if let Some(ns) = &self.attrs.namespace {
-			format!("{}_{}", ns.value(), method.value())
+			format!("{}_{}", ns.value(), method.trim())
 		} else {
-			method.value()
+			method.to_string()
 		}
 	}
 }
@@ -245,4 +246,15 @@ fn has_attr(attrs: &[Attribute], ident: &str) -> bool {
 		}
 	}
 	false
+}
+
+fn build_unsubscribe_method(existing_method: &str) -> String {
+	let method = existing_method.trim();
+	let mut new_method = String::from("unsubscribe");
+	if method.starts_with("subscribe") {
+		new_method.extend(method.chars().skip(9));
+	} else {
+		new_method.push_str(method);
+	}
+	new_method
 }

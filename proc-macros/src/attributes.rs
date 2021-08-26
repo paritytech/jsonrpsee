@@ -72,12 +72,10 @@ pub(crate) struct Method {
 pub(crate) struct Subscription {
 	/// Subscription name
 	pub name: syn::LitStr,
-	/// Name of the method to unsubscribe.
-	pub unsub: syn::LitStr,
 	/// Type yielded by the subscription.
 	pub item: syn::Type,
 	/// Alias for the subscribe method.
-	pub sub_alias: Option<syn::LitStr>,
+	pub alias: Option<syn::LitStr>,
 	/// Alias for the unsubscribe method.
-	pub unsub_alias: Option<syn::LitStr>,
+	pub unsubscribe_alias: Option<syn::LitStr>,
 }

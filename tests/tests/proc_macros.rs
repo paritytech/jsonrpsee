@@ -47,10 +47,10 @@ mod rpc_impl {
 		#[method(name = "bar")]
 		fn sync_method(&self) -> JsonRpcResult<u16>;
 
-		#[subscription(name = "sub", unsub = "unsub", item = String)]
+		#[subscription(name = "sub", item = String)]
 		fn sub(&self);
 
-		#[subscription(name = "echo", unsub = "no_more_echo", item = u32)]
+		#[subscription(name = "echo", alias = "alias_echo", item = u32)]
 		fn sub_with_params(&self, val: u32);
 
 		#[method(name = "params")]

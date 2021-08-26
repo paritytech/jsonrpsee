@@ -1,5 +1,5 @@
 error: unexpected end of input, `#[subscription]` is missing `item` argument
  --> $DIR/sub_no_item.rs:6:2
   |
-6 |     #[subscription(name = "sub", unsub = "unsub")]
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+6 |     #[subscription(name = "sub")]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

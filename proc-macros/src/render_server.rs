@@ -142,7 +142,7 @@ impl RpcDescription {
 				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
 				let rpc_sub_name = self.rpc_identifier(&sub.name);
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
-				let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
+				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 				// `parsing` is the code associated with parsing structure from the
 				// provided `RpcParams` object.
 				// `params_seq` is the comma-delimited sequence of parameters.
@@ -163,60 +163,62 @@ impl RpcDescription {
 		let method_aliases = self
 			.methods
 			.iter()
-			.filter_map(|method| {
-				// Rust method to invoke (e.g. `self.<foo>(...)`).
-				let alias = match method.alias.as_ref().map(|m| self.rpc_identifier(m)) {
-					None => return None,
-					Some(alias) => alias,
-				};
-
+			.map(|method| {
+				let rpc_name = self.rpc_identifier(&method.name);
 				let rust_method_name = &method.signature.sig.ident;
-				let rpc_method_name = self.rpc_identifier(&method.name);
-				check_name(alias.clone(), rust_method_name.span());
 
-				Some(handle_register_result(quote! {
-					rpc.register_alias(#alias, #rpc_method_name)
-				}))
+				// Rust method to invoke (e.g. `self.<foo>(...)`).
+				let alias: Vec<TokenStream2> = method
+					.alias
+					.iter()
+					.map(|alias| {
+						let alias = self.rpc_identifier(alias);
+						check_name(alias.clone(), rust_method_name.span());
+						handle_register_result(quote! {
+							rpc.register_alias(#alias, #rpc_name)
+						})
+					})
+					.collect();
+
+				quote!( #(#alias)* )
 			})
 			.collect::<Vec<_>>();
 
 		let subscription_aliases = self
 			.subscriptions
 			.iter()
-			.filter_map(|method| {
-				let sub = method.sub_alias.as_ref().map(|m| self.rpc_identifier(m));
-				let unsub = method.unsub_alias.as_ref().map(|m| self.rpc_identifier(m));
-
-				let rust_method_name = &method.signature.sig.ident;
+			.map(|method| {
 				let sub_name = self.rpc_identifier(&method.name);
-				let unsub_name = self.rpc_identifier(&method.unsub_method);
+				let unsub_name = self.rpc_identifier(&method.unsubscribe);
+				let rust_method_name = &method.signature.sig.ident;
 
-				match (sub, unsub) {
-					(Some(sub), Some(unsub)) => {
-						check_name(sub.clone(), rust_method_name.span());
-						check_name(unsub.clone(), rust_method_name.span());
-						let res1 = handle_register_result(quote!(rpc.register_alias(#sub, #sub_name)));
-						let res2 = handle_register_result(quote!(rpc.register_alias(#unsub, #unsub_name)));
+				let sub: Vec<TokenStream2> = method
+					.alias
+					.iter()
+					.map(|alias| {
+						let alias = self.rpc_identifier(alias);
+						check_name(alias.clone(), rust_method_name.span());
+						handle_register_result(quote! {
+							rpc.register_alias(#alias, #sub_name)
+						})
+					})
+					.collect();
+				let unsub: Vec<TokenStream2> = method
+					.unsubscribe_alias
+					.iter()
+					.map(|alias| {
+						let alias = self.rpc_identifier(alias);
+						check_name(alias.clone(), rust_method_name.span());
+						handle_register_result(quote! {
+							rpc.register_alias(#alias, #unsub_name)
+						})
+					})
+					.collect();
 
-						Some(quote! {
-							#res1
-							#res2
-						})
-					}
-					(None, Some(unsub)) => {
-						check_name(unsub.clone(), rust_method_name.span());
-						Some(quote! {
-							rpc.register_alias(#unsub, #unsub_name)
-						})
-					}
-					(Some(sub), None) => {
-						check_name(sub.clone(), rust_method_name.span());
-						Some(quote! {
-							rpc.register_alias(#sub, #sub_name)
-						})
-					}
-					_ => None,
-				}
+				quote! (
+					#(#sub)*
+					#(#unsub)*
+				)
 			})
 			.collect::<Vec<_>>();
 
