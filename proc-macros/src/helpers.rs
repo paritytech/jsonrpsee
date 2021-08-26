@@ -61,7 +61,7 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 	}
 }
 
-/// Traversing the `trait RPC definition` applies the required bounds for the generic type parameters.
+/// Traversing the `trait RPC definition` and applies the required bounds for the generic type parameters.
 /// This actually depends on whether the actual type parameter in used a parameter, return value or subscription result.
 ///
 /// Example:
