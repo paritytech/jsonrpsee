@@ -32,7 +32,7 @@ use syn::{
 
 /// Visitor that parses generic type parameters from `syn::Type` by traversing the AST.
 /// A `syn::Type` can any type such as `Vec<T>, T, Foo<A<B<V>>>, usize or similar`.
-/// The implementation is based on https://github.com/serde-rs/serde/blob/master/serde_derive/src/bound.rs.
+/// The implementation is based on <https://github.com/serde-rs/serde/blob/master/serde_derive/src/bound.rs>.
 #[derive(Default, Debug)]
 pub(crate) struct FindSubscriptionParams {
 	pub(crate) generic_sub_params: HashSet<Ident>,
