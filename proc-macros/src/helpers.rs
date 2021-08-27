@@ -92,7 +92,7 @@ pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[sy
 			if visitor.input_params.contains(&ty.ident) {
 				ty.bounds.push(parse_quote!(jsonrpsee::types::Serialize))
 			}
-			if visitor.ret_params.contains(&ty.ident) | visitor.sub_params.contains(&ty.ident) {
+			if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
 				ty.bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
 			}
 		}
@@ -120,7 +120,7 @@ pub(crate) fn server_generate_where_clause(
 				bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
 			}
 
-			if visitor.ret_params.contains(&ty.ident) | visitor.sub_params.contains(&ty.ident) {
+			if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
 				bounds.push(parse_quote!(jsonrpsee::types::Serialize))
 			}
 
