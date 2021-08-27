@@ -85,6 +85,7 @@ impl RpcSubscription {
 		let name = attributes.name;
 		let unsub_method = attributes.unsub;
 		let item = attributes.item;
+
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -116,7 +117,7 @@ pub struct RpcDescription {
 	pub(crate) trait_def: syn::ItemTrait,
 	/// List of RPC methods defined in the trait.
 	pub(crate) methods: Vec<RpcMethod>,
-	/// List of RPC subscritpions defined in the trait.
+	/// List of RPC subscriptions defined in the trait.
 	pub(crate) subscriptions: Vec<RpcSubscription>,
 }
 

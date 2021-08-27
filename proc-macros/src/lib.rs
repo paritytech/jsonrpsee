@@ -37,6 +37,7 @@ mod render_client;
 mod render_server;
 mod respan;
 mod rpc_macro;
+pub(crate) mod visitor;
 
 /// Main RPC macro.
 ///

@@ -26,6 +26,7 @@
 
 use super::lifetimes::replace_lifetimes;
 use super::RpcDescription;
+use crate::helpers::generate_where_clause;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
@@ -33,6 +34,8 @@ use std::collections::HashSet;
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
 		let trait_name = quote::format_ident!("{}Server", &self.trait_def.ident);
+		let generics = self.trait_def.generics.clone();
+		let (impl_generics, _, where_clause) = generics.split_for_impl();
 
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
@@ -45,7 +48,7 @@ impl RpcDescription {
 		let trait_impl = quote! {
 			#[#async_trait]
 			#[doc = #doc_comment]
-			pub trait #trait_name: Sized + Send + Sync + 'static {
+			pub trait #trait_name #impl_generics: Sized + Send + Sync + 'static #where_clause {
 				#method_impls
 				#into_rpc_impl
 			}
@@ -163,9 +166,13 @@ impl RpcDescription {
 		let doc_comment = "Collects all the methods and subscriptions defined in the trait \
 								and adds them into a single `RpcModule`.";
 
+		let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
+		let where_clause = generate_where_clause(&self.trait_def, &sub_tys, false);
+
+		// NOTE(niklasad1): empty where clause is valid rust syntax.
 		Ok(quote! {
 			#[doc = #doc_comment]
-			fn into_rpc(self) -> #rpc_module<Self> {
+			fn into_rpc(self) -> #rpc_module<Self> where #(#where_clause,)* {
 				let mut rpc = #rpc_module::new(self);
 
 				#(#errors)*
@@ -202,12 +209,11 @@ impl RpcDescription {
 			quote! {
 				let mut seq = params.sequence();
 				#(#decode_fields);*
-				(#params_fields)
 			}
 		};
 
 		// Code to decode sequence of parameters from a JSON object (aka map).
-		let decode_map = {
+		let _decode_map = {
 			let mut generics = None;
 
 			let serde = self.jrps_server_item(quote! { types::__reexports::serde });
@@ -246,11 +252,13 @@ impl RpcDescription {
 
 		// Parsing of `serde_json::Value`.
 		let parsing = quote! {
-			let (#params_fields) = if params.is_object() {
+			// TODO: https://github.com/paritytech/jsonrpsee/issues/445
+			/*let (#params_fields) = if params.is_object() {
 				#decode_map
 			} else {
 				#decode_array
-			};
+			};*/
+			#decode_array;
 		};
 
 		(parsing, params_fields)

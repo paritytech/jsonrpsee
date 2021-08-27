@@ -24,17 +24,21 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::rpc_macro::{RpcMethod, RpcSubscription};
-use crate::RpcDescription;
-
+use crate::helpers::generate_where_clause;
+use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::TypeParam;
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
+		let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
+		let where_clause = generate_where_clause(&self.trait_def, &sub_tys, true);
+		let type_idents = self.trait_def.generics.type_params().collect::<Vec<&TypeParam>>();
+		let (impl_generics, type_generics, _) = self.trait_def.generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {
 			quote! { #jsonrpsee::types::traits::Client }
@@ -54,12 +58,12 @@ impl RpcDescription {
 		let trait_impl = quote! {
 			#[#async_trait]
 			#[doc = #doc_comment]
-			pub trait #trait_name: #super_trait {
+			pub trait #trait_name #impl_generics: #super_trait where #(#where_clause,)* {
 				#(#method_impls)*
 				#(#sub_impls)*
 			}
 
-			impl<T> #trait_name for T where T: #super_trait {}
+			impl<T #(,#type_idents)*> #trait_name #type_generics for T where T: #super_trait #(,#where_clause)* {}
 		};
 
 		Ok(trait_impl)
