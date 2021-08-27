@@ -67,16 +67,20 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 /// Type params get `Send + Sync + 'static` bounds and input/output parameters get `Serialize` and/or `DeserializeOwned` bounds.
 /// Inspired by <https://github.com/paritytech/jsonrpc/blob/master/derive/src/to_delegate.rs#L414>
 ///
-/// Example:
+/// ### Example
+///
+/// ```
+///  use jsonrpsee::{proc_macros::rpc, types::JsonRpcResult};
 ///
 ///  #[rpc(client, server)]
 ///  pub trait RpcTrait<A, B, C> {
 ///    #[method(name = "call")]
-///    fn call(&self, a: A) -> B;
+///    fn call(&self, a: A) -> JsonRpcResult<B>;
 ///
-///    #[subscription(name = "sub", item = Vec<S>)]
+///    #[subscription(name = "sub", unsub = "unsub", item = Vec<C>)]
 ///    fn sub(&self);
 ///  }
+/// ```
 ///
 /// Because the `item` attribute is not parsed as ordinary rust syntax, the `syn::Type` is traversed to find
 /// each generic parameter of it.
@@ -108,14 +112,13 @@ pub(crate) fn generate_where_clause(
 				if visitor.input_params.contains(&ty.ident) {
 					bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
 				}
-
 				if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
 					bounds.push(parse_quote!(jsonrpsee::types::Serialize))
 				}
 			}
 
 			// Add the trait bounds specified in the trait.
-			if let Some(ref where_clause) = additional_where_clause {
+			if let Some(where_clause) = &additional_where_clause {
 				for predicate in where_clause.predicates.iter() {
 					if let syn::WherePredicate::Type(where_ty) = predicate {
 						if let syn::Type::Path(ref predicate) = where_ty.bounded_ty {
