@@ -63,7 +63,7 @@ impl RpcDescription {
 				#(#sub_impls)*
 			}
 
-			// TODO(niklasad1): support for where clause on trait def.
+			// TODO: https://github.com/paritytech/jsonrpsee/issues/444
 			impl<T #(,#type_idents)*> #trait_name #type_generics for T where T: #super_trait {}
 		};
 

@@ -228,7 +228,7 @@ async fn macro_optional_param_parsing() {
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, None, Some(70)","id":0}"#);
 
-	// TODO(niklasad1): support for JSON map/object in proc macros, this will always fail now.
+	// TODO: https://github.com/paritytech/jsonrpsee/issues/445
 	// Named params using a map
 	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
 	let result = module.call("foo_optional_params", params).await.unwrap();

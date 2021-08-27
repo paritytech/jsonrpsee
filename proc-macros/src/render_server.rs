@@ -251,7 +251,7 @@ impl RpcDescription {
 
 		// Parsing of `serde_json::Value`.
 		let parsing = quote! {
-			// TODO(niklasad1): add support for JSON object.
+			// TODO: https://github.com/paritytech/jsonrpsee/issues/445
 			/*let (#params_fields) = if params.is_object() {
 				#decode_map
 			} else {
