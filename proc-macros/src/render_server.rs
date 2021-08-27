@@ -26,7 +26,7 @@
 
 use super::lifetimes::replace_lifetimes;
 use super::RpcDescription;
-use crate::helpers::server_generate_where_clause;
+use crate::helpers::generate_where_clause;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
@@ -35,6 +35,7 @@ impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
 		let trait_name = quote::format_ident!("{}Server", &self.trait_def.ident);
 		let generics = self.trait_def.generics.clone();
+		let (impl_generics, _, where_clause) = generics.split_for_impl();
 
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
@@ -47,7 +48,7 @@ impl RpcDescription {
 		let trait_impl = quote! {
 			#[#async_trait]
 			#[doc = #doc_comment]
-			pub trait #trait_name #generics: Sized + Send + Sync + 'static {
+			pub trait #trait_name #impl_generics: Sized + Send + Sync + 'static #where_clause {
 				#method_impls
 				#into_rpc_impl
 			}
@@ -166,7 +167,7 @@ impl RpcDescription {
 								and adds them into a single `RpcModule`.";
 
 		let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
-		let where_clause = server_generate_where_clause(&self.trait_def, &sub_tys);
+		let where_clause = generate_where_clause(&self.trait_def, &sub_tys, false);
 
 		// NOTE(niklasad1): empty where clause is valid rust syntax.
 		Ok(quote! {

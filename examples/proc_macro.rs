@@ -36,7 +36,10 @@ type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;
 
 #[rpc(server, client, namespace = "state")]
-pub trait Rpc<Hash: std::fmt::Debug, StorageKey> {
+pub trait Rpc<Hash: Clone, StorageKey>
+where
+	Hash: std::fmt::Debug,
+{
 	/// Async method call example.
 	#[method(name = "getKeys")]
 	async fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>, Error>;

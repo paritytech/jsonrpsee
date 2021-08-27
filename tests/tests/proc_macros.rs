@@ -120,6 +120,28 @@ mod rpc_impl {
 		fn sub(&self, hash: Input);
 	}
 
+	/// Trait to ensure that the trait bounds are correct.
+	#[rpc(client, server, namespace = "generic_with_where_clause")]
+	pub trait GenericWhereClause<I, R>
+	where
+		I: std::fmt::Debug,
+		R: Copy + Clone,
+	{
+		#[method(name = "getHeader")]
+		fn call(&self, input: I) -> JsonRpcResult<R>;
+	}
+
+	/// Trait to ensure that the trait bounds are correct.
+	#[rpc(client, server, namespace = "generic_with_where_clause")]
+	pub trait GenericWhereClauseWithTypeBoundsToo<I: Copy + Clone, R>
+	where
+		I: std::fmt::Debug,
+		R: Copy + Clone,
+	{
+		#[method(name = "getHeader")]
+		fn call(&self, input: I) -> JsonRpcResult<R>;
+	}
+
 	pub struct RpcServerImpl;
 
 	#[async_trait]

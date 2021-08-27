@@ -29,7 +29,7 @@ use proc_macro2::Span;
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use std::collections::HashSet;
-use syn::{parse_quote, punctuated::Punctuated, visit::Visit, GenericParam, Generics, Token};
+use syn::{parse_quote, punctuated::Punctuated, visit::Visit, Token};
 
 /// Search for client-side `jsonrpsee` in `Cargo.toml`.
 pub(crate) fn find_jsonrpsee_client_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
@@ -61,13 +61,15 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 	}
 }
 
-/// Traverses the RPC trait definition and applies the required bounds for the generic type parameters that are used in the client implementation.
-/// The bounds applies depends on whether the type parameter is used as a parameter, return value or subscription result.
-/// Type params get `Send + Sync + 'static` bounds. Input params also get `Serialize`, while return values and subscription stream items get `DeserializeOwned`.
+/// Traverses the RPC trait definition and applies the required bounds for the generic type parameters that are used.
+/// The bounds applies depends on whether the type parameter is used as a parameter, return value or subscription result
+/// and whether the it's used in client or server mode.
+/// Type params get `Send + Sync + 'static` bounds and input/output parameters get `Serialize` and/or `DeserializeOwned` bounds.
+/// Inspired by <https://github.com/paritytech/jsonrpc/blob/master/derive/src/to_delegate.rs#L414>
 ///
 /// Example:
 ///
-///  #[rpc(client)]
+///  #[rpc(client, server)]
 ///  pub trait RpcTrait<A, B, C> {
 ///    #[method(name = "call")]
 ///    fn call(&self, a: A) -> B;
@@ -80,32 +82,10 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 /// each generic parameter of it.
 /// This is used as an additional input before traversing the entire trait.
 /// Otherwise, it's not possible to know whether a type parameter is used for subscription result.
-pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> Generics {
-	let visitor = visit_trait(item_trait, sub_tys);
-	let mut generics = item_trait.generics.clone();
-
-	for param in &mut generics.params {
-		if let GenericParam::Type(ty) = param {
-			ty.bounds.push(parse_quote!(Send));
-			ty.bounds.push(parse_quote!(Sync));
-			ty.bounds.push(parse_quote!('static));
-
-			if visitor.input_params.contains(&ty.ident) {
-				ty.bounds.push(parse_quote!(jsonrpsee::types::Serialize))
-			}
-			if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
-				ty.bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
-			}
-		}
-	}
-	generics
-}
-
-/// Adds bounds needed for the server implementation. Similar to `client_add_trait_bounds` but the logic is reversed for the trait bounds.
-/// All type params get `Send + Sync + 'static`. Input params also get `DeserializedOwned`, while return values and subscription stream items get `Serialize`. 
-pub(crate) fn server_generate_where_clause(
+pub(crate) fn generate_where_clause(
 	item_trait: &syn::ItemTrait,
 	sub_tys: &[syn::Type],
+	is_client: bool,
 ) -> Vec<syn::WherePredicate> {
 	let visitor = visit_trait(item_trait, sub_tys);
 	let additional_where_clause = item_trait.generics.where_clause.clone();
@@ -117,12 +97,21 @@ pub(crate) fn server_generate_where_clause(
 			let ty_path = syn::TypePath { qself: None, path: ty.ident.clone().into() };
 			let mut bounds: Punctuated<syn::TypeParamBound, Token![+]> = parse_quote!(Send + Sync + 'static);
 
-			if visitor.input_params.contains(&ty.ident) {
-				bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
-			}
+			if is_client {
+				if visitor.input_params.contains(&ty.ident) {
+					bounds.push(parse_quote!(jsonrpsee::types::Serialize))
+				}
+				if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
+					bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
+				}
+			} else {
+				if visitor.input_params.contains(&ty.ident) {
+					bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
+				}
 
-			if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
-				bounds.push(parse_quote!(jsonrpsee::types::Serialize))
+				if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
+					bounds.push(parse_quote!(jsonrpsee::types::Serialize))
+				}
 			}
 
 			// Add the trait bounds specified in the trait.
