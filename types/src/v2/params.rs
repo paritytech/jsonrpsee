@@ -150,11 +150,16 @@ impl<'a> RpcParams<'a> {
 pub struct RpcParamsSequence<'a>(&'a str);
 
 impl<'a> RpcParamsSequence<'a> {
-	fn next_inner<T>(&mut self) -> Option<Result<T, CallError>>
+	fn next_inner<T>(&mut self, treat_empty_json_as_no_params: bool) -> Option<Result<T, CallError>>
 	where
 		T: Deserialize<'a>,
 	{
 		let mut json = self.0.trim_start();
+
+		if treat_empty_json_as_no_params && json == "[]" || json == "{}" {
+			self.0 = "";
+			return None;
+		}
 
 		match json.as_bytes().get(0)? {
 			b']' => {
@@ -201,7 +206,7 @@ impl<'a> RpcParamsSequence<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		match self.next_inner() {
+		match self.next_inner(false) {
 			Some(result) => result,
 			None => Err(CallError::InvalidParams),
 		}
@@ -221,7 +226,7 @@ impl<'a> RpcParamsSequence<'a> {
 	///     seq.optional_next().unwrap(),
 	///     seq.optional_next().unwrap(),
 	///     seq.optional_next().unwrap(),
-	/// ];;
+	/// ];
 	///
 	/// assert_eq!(params, [Some(1), Some(2), None, None]);
 	/// ```
@@ -229,7 +234,26 @@ impl<'a> RpcParamsSequence<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		match self.next_inner::<Option<T>>() {
+		match self.next_inner::<Option<T>>(false) {
+			Some(result) => result,
+			None => Ok(None),
+		}
+	}
+
+	/// Similar to `RpcParamsSequence::optional_next` but regards empty JSON Array and JSON Object
+	/// as no params supplied.
+	///
+	/// ```
+	/// # use jsonrpsee_types::v2::params::RpcParams;
+	/// let params = RpcParams::new(Some(r#"[]"#));
+	/// let mut seq = params.sequence();
+	/// assert_eq!(None::<u64>, seq.optional_next_ignore_empty_json().unwrap())
+	/// ```
+	pub fn optional_next_ignore_empty_json<T>(&mut self) -> Result<Option<T>, CallError>
+	where
+		T: Deserialize<'a>,
+	{
+		match self.next_inner::<Option<T>>(true) {
 			Some(result) => result,
 			None => Ok(None),
 		}
@@ -481,5 +505,22 @@ mod test {
 		let dsr: JsonRpcSubscriptionParams<JsonValue> = serde_json::from_str(ser).unwrap();
 		assert_eq!(dsr.subscription, SubscriptionId::Str("9".into()));
 		assert_eq!(dsr.result, serde_json::json!("offside"));
+	}
+
+	#[test]
+	fn params_sequence_optional_ignore_empty() {
+		let params = RpcParams::new(Some(r#"["foo", "bar"]"#));
+		let mut seq = params.sequence();
+
+		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), Some("foo"));
+		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), Some("bar"));
+
+		let params = RpcParams::new(Some(r#"[]"#));
+		let mut seq = params.sequence();
+		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), None);
+
+		let params = RpcParams::new(Some(r#"{}"#));
+		let mut seq = params.sequence();
+		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), None);
 	}
 }

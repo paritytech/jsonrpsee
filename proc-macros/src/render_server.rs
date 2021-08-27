@@ -197,7 +197,8 @@ impl RpcDescription {
 			let decode_fields = params.iter().map(|(name, ty)| {
 				if is_option(ty) {
 					quote! {
-						let #name: #ty = seq.optional_next()?;
+						// treat empty array or map as no params.
+						let #name: #ty = seq.optional_next_ignore_empty_json()?;
 					}
 				} else {
 					quote! {
