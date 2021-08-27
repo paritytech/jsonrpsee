@@ -100,7 +100,7 @@ pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[sy
 	generics
 }
 
-/// Similar to `client_add_trait_bounds` but the logic is reversed for trait bounds
+/// Similar to `client_add_trait_bounds` but the logic is reversed for the trait bounds
 /// however in contrast it generates the where clause for the server trait instead of generics.
 pub(crate) fn server_generate_where_clause(
 	item_trait: &syn::ItemTrait,
