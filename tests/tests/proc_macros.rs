@@ -101,7 +101,7 @@ mod rpc_impl {
 		fn finalized_head(&self) -> JsonRpcResult<Hash>;
 
 		/// All head subscription
-		#[subscription(name = "subscribeAllHeads", unsub = "unsubscribeAllHeads", item = Header)]
+		#[subscription(name = "subscribeAllHeads", item = Header)]
 		fn subscribe_all_heads(&self, hash: Hash);
 	}
 
@@ -116,7 +116,7 @@ mod rpc_impl {
 	#[rpc(client, server, namespace = "generic_sub")]
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
-		#[subscription(name = "sub", unsub = "unsub", item = Vec<R>)]
+		#[subscription(name = "sub", item = Vec<R>)]
 		fn sub(&self, hash: Input);
 	}
 
