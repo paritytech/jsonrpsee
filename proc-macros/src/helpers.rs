@@ -61,8 +61,9 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 	}
 }
 
-/// Traversing the `trait RPC definition` and applies the required bounds for the generic type parameters.
-/// This actually depends on whether the actual type parameter in used a parameter, return value or subscription result.
+/// Traverses the RPC trait definition and applies the required bounds for the generic type parameters that are used in the client implementation.
+/// The bounds applies depends on whether the type parameter is used as a parameter, return value or subscription result.
+/// Type params get `Send + Sync + 'static` bounds. Input params also get `Serialize`, while return values and subscription stream items get `DeserializeOwned`.
 ///
 /// Example:
 ///
@@ -75,9 +76,9 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 ///    fn sub(&self);
 ///  }
 ///
-/// Because `item` is not parsed as ordinary rust syntax, the actual `syn::Type` is traversed to find
+/// Because the `item` attribute is not parsed as ordinary rust syntax, the `syn::Type` is traversed to find
 /// each generic parameter of it.
-/// This is used an additional input before traversing the entire trait.
+/// This is used as an additional input before traversing the entire trait.
 /// Otherwise, it's not possible to know whether a type parameter is used for subscription result.
 pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> Generics {
 	let visitor = visit_trait(item_trait, sub_tys);
