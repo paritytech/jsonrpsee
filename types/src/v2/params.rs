@@ -519,6 +519,11 @@ mod test {
 		let mut seq = params.sequence();
 		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), None);
 
+		let params = RpcParams::new(Some(r#"[12, "[]"]"#));
+		let mut seq = params.sequence();
+		assert_eq!(seq.optional_next_ignore_empty_json::<u64>().unwrap(), Some(12));
+		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), Some("[]"));
+
 		let params = RpcParams::new(Some(r#"{}"#));
 		let mut seq = params.sequence();
 		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), None);
