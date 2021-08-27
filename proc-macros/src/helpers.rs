@@ -101,8 +101,8 @@ pub(crate) fn client_add_trait_bounds(item_trait: &syn::ItemTrait, sub_tys: &[sy
 	generics
 }
 
-/// Similar to `client_add_trait_bounds` but the logic is reversed for the trait bounds
-/// however in contrast it generates the where clause for the server trait instead of generics.
+/// Adds bounds needed for the server implementation. Similar to `client_add_trait_bounds` but the logic is reversed for the trait bounds.
+/// All type params get `Send + Sync + 'static`. Input params also get `DeserializedOwned`, while return values and subscription stream items get `Serialize`. 
 pub(crate) fn server_generate_where_clause(
 	item_trait: &syn::ItemTrait,
 	sub_tys: &[syn::Type],
