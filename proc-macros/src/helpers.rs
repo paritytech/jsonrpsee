@@ -148,7 +148,7 @@ pub(crate) fn server_generate_where_clause(
 		.collect()
 }
 
-/// Traversing the `RPC trait` by first find the subscription parameters and then all elements
+/// Traverse the RPC trait by first finding the subscription parameters and then all elements
 /// needed for generating the `client` and `server` traits/implementations.
 fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindAllParams {
 	let type_params: HashSet<_> = item_trait.generics.type_params().map(|t| t.ident.clone()).collect();
