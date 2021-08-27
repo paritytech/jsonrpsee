@@ -1,0 +1,5 @@
+error: expected identifier
+ --> $DIR/rpc_conflicting_alias.rs:5:2
+  |
+5 |     #[method(name = "foo", alias = "foo_dup", "foo_dup")]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
