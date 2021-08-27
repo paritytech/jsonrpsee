@@ -50,6 +50,8 @@ pub struct FindAllParams {
 }
 
 impl FindAllParams {
+	/// Create a visitor to traverse the entire RPC trait.
+	/// It takes the already visited subscription parameters as input.
 	pub fn new(sub_params: HashSet<syn::Ident>) -> Self {
 		Self {
 			trait_generics: HashSet::new(),
@@ -63,16 +65,20 @@ impl FindAllParams {
 }
 
 impl<'ast> Visit<'ast> for FindAllParams {
+	/// Visit generic type param.
 	fn visit_type_param(&mut self, ty_param: &'ast syn::TypeParam) {
 		self.trait_generics.insert(ty_param.ident.clone());
 	}
 
+	/// Visit return type and mark it as `visiting_return_type`.
+	/// To know whether a given Ident is a function argument or return type when traversing.
 	fn visit_return_type(&mut self, return_type: &'ast syn::ReturnType) {
 		self.visiting_return_type = true;
 		visit::visit_return_type(self, return_type);
 		self.visiting_return_type = false
 	}
 
+	/// Visit ident.
 	fn visit_ident(&mut self, ident: &'ast syn::Ident) {
 		if self.trait_generics.contains(ident) {
 			if self.visiting_return_type {
@@ -84,6 +90,8 @@ impl<'ast> Visit<'ast> for FindAllParams {
 		}
 	}
 
+	/// Visit function argument and mark it as `visiting_fn_arg`.
+	/// To know whether a given Ident is a function argument or return type when traversing.
 	fn visit_fn_arg(&mut self, arg: &'ast syn::FnArg) {
 		self.visiting_fn_arg = true;
 		visit::visit_fn_arg(self, arg);
@@ -100,10 +108,15 @@ impl FindSubscriptionParams {
 		self.generic_sub_params
 	}
 
+	/// Create a new subscription parameters visitor that takes all
+	/// generic parameters on the RPC trait as input in order to determine
+	/// whether a given ident is a generic type param or not when traversing
+	/// one or more types in `FindSubscriptionParams::visit`.
 	pub fn new(all_type_params: HashSet<Ident>) -> Self {
 		Self { generic_sub_params: HashSet::new(), all_type_params }
 	}
 
+	/// Visit path, if it's a leaf path and generic type param then add it as a subscription param.
 	fn visit_path(&mut self, path: &syn::Path) {
 		if path.leading_colon.is_none() && path.segments.len() == 1 {
 			let id = &path.segments[0].ident;
@@ -116,8 +129,7 @@ impl FindSubscriptionParams {
 		}
 	}
 
-	// Everything below is simply traversing the syntax tree.
-
+	/// Traverse syntax tree.
 	fn visit_type(&mut self, ty: &syn::Type) {
 		match ty {
 			syn::Type::Array(ty) => self.visit_type(&ty.elem),
@@ -164,10 +176,12 @@ impl FindSubscriptionParams {
 		}
 	}
 
+	/// Traverse syntax tree.
 	fn visit_path_segment(&mut self, segment: &syn::PathSegment) {
 		self.visit_path_arguments(&segment.arguments);
 	}
 
+	/// Traverse syntax tree.
 	fn visit_path_arguments(&mut self, arguments: &syn::PathArguments) {
 		match arguments {
 			syn::PathArguments::None => {}
@@ -191,6 +205,7 @@ impl FindSubscriptionParams {
 		}
 	}
 
+	/// Traverse syntax tree.
 	fn visit_return_type(&mut self, return_type: &syn::ReturnType) {
 		match return_type {
 			syn::ReturnType::Default => {}
@@ -198,6 +213,7 @@ impl FindSubscriptionParams {
 		}
 	}
 
+	/// Traverse syntax tree.
 	fn visit_type_param_bound(&mut self, bound: &syn::TypeParamBound) {
 		match bound {
 			syn::TypeParamBound::Trait(bound) => self.visit_path(&bound.path),
