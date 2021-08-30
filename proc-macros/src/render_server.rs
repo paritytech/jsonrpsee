@@ -171,8 +171,8 @@ impl RpcDescription {
 				let rust_method_name = &method.signature.sig.ident;
 
 				// Rust method to invoke (e.g. `self.<foo>(...)`).
-				let alias: Vec<TokenStream2> = method
-					.alias
+				let aliases: Vec<TokenStream2> = method
+					.aliases
 					.iter()
 					.map(|alias| {
 						let alias = alias.trim().to_string();
@@ -183,7 +183,7 @@ impl RpcDescription {
 					})
 					.collect();
 
-				quote!( #(#alias)* )
+				quote!( #(#aliases)* )
 			})
 			.collect::<Vec<_>>();
 
@@ -196,7 +196,7 @@ impl RpcDescription {
 				let rust_method_name = &method.signature.sig.ident;
 
 				let sub: Vec<TokenStream2> = method
-					.alias
+					.aliases
 					.iter()
 					.map(|alias| {
 						let alias = alias.trim().to_string();
@@ -207,7 +207,7 @@ impl RpcDescription {
 					})
 					.collect();
 				let unsub: Vec<TokenStream2> = method
-					.unsubscribe_alias
+					.unsubscribe_aliases
 					.iter()
 					.map(|alias| {
 						let alias = alias.trim().to_string();

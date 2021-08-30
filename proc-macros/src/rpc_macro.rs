@@ -38,7 +38,7 @@ pub struct RpcMethod {
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
-	pub alias: Vec<String>,
+	pub aliases: Vec<String>,
 }
 
 impl RpcMethod {
@@ -46,7 +46,7 @@ impl RpcMethod {
 		let attributes = attributes::Method::from_attributes(&method.attrs).respan(&method.attrs.first())?;
 		let sig = method.sig.clone();
 		let name = attributes.name.value();
-		let alias = attributes.alias.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
+		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -67,7 +67,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { alias, name, params, returns, signature: method })
+		Ok(Self { aliases, name, params, returns, signature: method })
 	}
 }
 
@@ -78,8 +78,8 @@ pub struct RpcSubscription {
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemMethod,
-	pub alias: Vec<String>,
-	pub unsubscribe_alias: Vec<String>,
+	pub aliases: Vec<String>,
+	pub unsubscribe_aliases: Vec<String>,
 }
 
 impl RpcSubscription {
@@ -89,9 +89,9 @@ impl RpcSubscription {
 		let name = attributes.name.value();
 		let unsubscribe = build_unsubscribe_method(&name);
 		let item = attributes.item;
-		let alias = attributes.alias.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
-		let unsubscribe_alias =
-			attributes.unsubscribe_alias.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
+		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
+		let unsubscribe_aliases =
+			attributes.unsubscribe_aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -107,7 +107,7 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsubscribe, unsubscribe_alias, params, item, signature: sub, alias })
+		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, item, signature: sub, aliases })
 	}
 }
 

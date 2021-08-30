@@ -1,4 +1,4 @@
-error: `#[method]` got unknown `magic` argument. Supported arguments are `alias`, `name`
+error: `#[method]` got unknown `magic` argument. Supported arguments are `aliases`, `name`
  --> $DIR/method_unexpected_field.rs:6:2
   |
 6 |     #[method(name = "foo", magic = false)]

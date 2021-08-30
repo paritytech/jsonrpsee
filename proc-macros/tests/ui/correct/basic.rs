@@ -10,7 +10,7 @@ use std::{net::SocketAddr, sync::mpsc::channel};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
-	#[method(name = "foo", alias = "fooAlias, Other")]
+	#[method(name = "foo", aliases = "fooAlias, Other")]
 	async fn async_method(&self, param_a: u8, param_b: String) -> JsonRpcResult<u16>;
 
 	#[method(name = "bar")]
@@ -19,7 +19,7 @@ pub trait Rpc {
 	#[subscription(name = "sub", item = String)]
 	fn sub(&self);
 
-	#[subscription(name = "echo", alias = "ECHO", item = u32, unsubscribe_alias = "NotInterested, listenNoMore")]
+	#[subscription(name = "echo", aliases = "ECHO", item = u32, unsubscribe_aliases = "NotInterested, listenNoMore")]
 	fn sub_with_params(&self, val: u32);
 }
 
