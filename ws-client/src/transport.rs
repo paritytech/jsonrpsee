@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::stream::EitherStream;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
 use soketto::connection;
@@ -38,7 +39,7 @@ use tokio_rustls::{
 	TlsConnector,
 };
 
-type TlsOrPlain = crate::stream::EitherStream<TcpStream, TlsStream<TcpStream>>;
+type TlsOrPlain = EitherStream<TcpStream, TlsStream<TcpStream>>;
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
@@ -185,10 +186,10 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 	async fn try_connect(
 		self,
-		mut tls_connector: Option<crate::tokio::TlsConnector>,
+		mut tls_connector: Option<TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut sockaddrs = self.target.sockaddrs;
-		let mut path = PathBuf::from(self.target.path);
+		let mut path_and_query = PathBuf::from(self.target.path_and_query);
 		let mut host = self.target.host;
 		let mut host_header = self.target.host_header;
 
@@ -204,7 +205,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 			let mut client = WsRawClient::new(
 				BufReader::new(BufWriter::new(tcp_stream)),
 				&host_header,
-				path.to_str().expect("valid UTF-8 checked by Url::parse; qed"),
+				path_and_query.to_str().expect("valid UTF-8 checked by Url::parse; qed"),
 			);
 			if let Some(origin) = self.origin_header.as_ref() {
 				client.set_origin(origin);
@@ -222,7 +223,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 						Ok(url) => {
 							let target = Target::parse(url)?;
 							sockaddrs = target.sockaddrs;
-							path = PathBuf::from(target.path);
+							path_and_query = PathBuf::from(target.path_and_query);
 							host = target.host;
 							host_header = target.host_header;
 							tls_connector = match target.mode {
@@ -241,12 +242,12 @@ impl<'a> WsTransportClientBuilder<'a> {
 						Err(_) => {
 							// replace the entire path if `location` is `/`.
 							if location.starts_with('/') {
-								path = location.into();
+								path_and_query = location.into();
 							} else {
 								// join paths such that the leaf is replaced with `location`.
 								let strip_last_child =
-									Path::new(&path).ancestors().nth(1).unwrap_or_else(|| Path::new("/"));
-								path = strip_last_child.join(location);
+									Path::new(&path_and_query).ancestors().nth(1).unwrap_or_else(|| Path::new("/"));
+								path_and_query = strip_last_child.join(location);
 							}
 						}
 					};
@@ -267,10 +268,10 @@ async fn connect(
 	sockaddr: SocketAddr,
 	timeout_dur: Duration,
 	host: &str,
-	tls_connector: &Option<crate::tokio::TlsConnector>,
+	tls_connector: &Option<TlsConnector>,
 ) -> Result<EitherStream<TcpStream, TlsStream<TcpStream>>, WsHandshakeError> {
 	let socket = TcpStream::connect(sockaddr);
-	let timeout = crate::tokio::sleep(timeout_dur);
+	let timeout = tokio::time::sleep(timeout_dur);
 	futures::pin_mut!(socket, timeout);
 	Ok(match future::select(socket, timeout).await {
 		future::Either::Left((socket, _)) => {
@@ -281,7 +282,7 @@ async fn connect(
 			match tls_connector {
 				None => TlsOrPlain::Plain(socket),
 				Some(connector) => {
-					let dns_name = crate::tokio::DNSNameRef::try_from_ascii_str(host)?;
+					let dns_name = DNSNameRef::try_from_ascii_str(host)?;
 					let tls_stream = connector.connect(dns_name, socket).await?;
 					TlsOrPlain::Tls(tls_stream)
 				}
