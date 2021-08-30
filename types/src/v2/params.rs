@@ -519,13 +519,32 @@ mod test {
 		let mut seq = params.sequence();
 		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), None);
 
-		let params = RpcParams::new(Some(r#"[12, "[]"]"#));
-		let mut seq = params.sequence();
-		assert_eq!(seq.optional_next_ignore_empty_json::<u64>().unwrap(), Some(12));
-		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), Some("[]"));
-
 		let params = RpcParams::new(Some(r#"{}"#));
 		let mut seq = params.sequence();
 		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), None);
+
+		let params = RpcParams::new(Some(r#"[12, "[]", [], {}]"#));
+		let mut seq = params.sequence();
+		assert_eq!(seq.optional_next_ignore_empty_json::<u64>().unwrap(), Some(12));
+		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), Some("[]"));
+		assert_eq!(seq.optional_next_ignore_empty_json::<Vec<u8>>().unwrap(), Some(vec![]));
+		assert_eq!(seq.optional_next_ignore_empty_json::<serde_json::Value>().unwrap(), Some(serde_json::json!({})));
+	}
+
+	#[test]
+	fn params_sequence_optional_nesting_works() {
+		let nested = RpcParams::new(Some(r#"[1, [2], [3, 4], [[5], [6,7], []], {"named":7}]"#));
+		let mut seq = nested.sequence();
+		assert_eq!(seq.optional_next_ignore_empty_json::<i8>().unwrap(), Some(1));
+		assert_eq!(seq.optional_next_ignore_empty_json::<[i8; 1]>().unwrap(), Some([2]));
+		assert_eq!(seq.optional_next_ignore_empty_json::<Vec<u16>>().unwrap(), Some(vec![3, 4]));
+		assert_eq!(
+			seq.optional_next_ignore_empty_json::<Vec<Vec<u32>>>().unwrap(),
+			Some(vec![vec![5], vec![6, 7], vec![]])
+		);
+		assert_eq!(
+			seq.optional_next_ignore_empty_json::<serde_json::Value>().unwrap(),
+			Some(serde_json::json!({"named":7}))
+		);
 	}
 }
