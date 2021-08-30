@@ -89,23 +89,23 @@ impl Serialize for TwoPointZero {
 /// The data containing the params is a `Cow<&str>` and can either be a borrowed `&str` of JSON from an incoming
 /// [`super::request::JsonRpcRequest`] (which in turn borrows it from the input buffer that is shared between requests);
 /// or, it can be an owned `String`.
+///
+/// Regards empty `JSON array` and `JSON object` as no parameters provided.
 #[derive(Clone, Debug)]
-pub struct RpcParams<'a>(Option<Cow<'a, str>>);
+pub struct RpcParams<'a>(Cow<'a, str>);
 
 impl<'a> RpcParams<'a> {
 	/// Create params
 	pub fn new(raw: Option<&'a str>) -> Self {
-		Self(raw.map(Into::into))
+		Self(match raw.unwrap_or("").trim() {
+			"{}" | "[]" => "".into(),
+			other => other.into(),
+		})
 	}
 
 	/// Returns true if the contained JSON is an object
 	pub fn is_object(&self) -> bool {
-		let json: &str = match self.0 {
-			Some(ref cow) => cow,
-			None => return false,
-		};
-
-		json.trim_start().starts_with('{')
+		self.0.starts_with('{')
 	}
 
 	/// Obtain a sequence parser, [`RpcParamsSequence`].
@@ -113,16 +113,7 @@ impl<'a> RpcParams<'a> {
 	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC
 	/// request has optional parameters at the tail that may or may not be present.
 	pub fn sequence(&self) -> RpcParamsSequence {
-		RpcParamsSequence(self.0.as_ref().map(AsRef::as_ref).unwrap_or(""))
-	}
-
-	/// Similar to [`RpcParams::sequence`] but treats empty `JSON array` and `JSON Map` as no parameters.
-	pub fn sequence_ignore_empty(&self) -> RpcParamsSequence {
-		RpcParamsSequence(match self.0.as_ref() {
-			Some(p) if p == "[]" || p == "{}" => "",
-			Some(p) => p.as_ref(),
-			None => "",
-		})
+		RpcParamsSequence(&self.0)
 	}
 
 	/// Attempt to parse all parameters as an array or map into type `T`.
@@ -130,8 +121,7 @@ impl<'a> RpcParams<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("null");
-		serde_json::from_str(params).map_err(|_| CallError::InvalidParams)
+		serde_json::from_str(&self.0).map_err(|_| CallError::InvalidParams)
 	}
 
 	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
@@ -146,7 +136,7 @@ impl<'a> RpcParams<'a> {
 	///
 	/// This will cause an allocation if the params internally are using a borrowed JSON slice.
 	pub fn into_owned(self) -> RpcParams<'static> {
-		RpcParams(self.0.map(|s| Cow::owned(s.into_owned())))
+		RpcParams(Cow::owned(self.0.into_owned()))
 	}
 }
 
@@ -495,21 +485,25 @@ mod test {
 	#[test]
 	fn params_sequence_optional_ignore_empty() {
 		let params = RpcParams::new(Some(r#"["foo", "bar"]"#));
-		let mut seq = params.sequence_ignore_empty();
+		let mut seq = params.sequence();
 
 		assert_eq!(seq.optional_next::<&str>().unwrap(), Some("foo"));
 		assert_eq!(seq.optional_next::<&str>().unwrap(), Some("bar"));
 
 		let params = RpcParams::new(Some(r#"[]"#));
-		let mut seq = params.sequence_ignore_empty();
+		let mut seq = params.sequence();
+		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
+
+		let params = RpcParams::new(Some(r#"   []		"#));
+		let mut seq = params.sequence();
 		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
 
 		let params = RpcParams::new(Some(r#"{}"#));
-		let mut seq = params.sequence_ignore_empty();
+		let mut seq = params.sequence();
 		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
 
 		let params = RpcParams::new(Some(r#"[12, "[]", [], {}]"#));
-		let mut seq = params.sequence_ignore_empty();
+		let mut seq = params.sequence();
 		assert_eq!(seq.optional_next::<u64>().unwrap(), Some(12));
 		assert_eq!(seq.optional_next::<&str>().unwrap(), Some("[]"));
 		assert_eq!(seq.optional_next::<Vec<u8>>().unwrap(), Some(vec![]));
@@ -519,7 +513,7 @@ mod test {
 	#[test]
 	fn params_sequence_optional_nesting_works() {
 		let nested = RpcParams::new(Some(r#"[1, [2], [3, 4], [[5], [6,7], []], {"named":7}]"#));
-		let mut seq = nested.sequence_ignore_empty();
+		let mut seq = nested.sequence();
 		assert_eq!(seq.optional_next::<i8>().unwrap(), Some(1));
 		assert_eq!(seq.optional_next::<[i8; 1]>().unwrap(), Some([2]));
 		assert_eq!(seq.optional_next::<Vec<u16>>().unwrap(), Some(vec![3, 4]));

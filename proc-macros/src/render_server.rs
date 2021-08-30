@@ -208,7 +208,7 @@ impl RpcDescription {
 			});
 
 			quote! {
-				let mut seq = params.sequence_ignore_empty();
+				let mut seq = params.sequence();
 				#(#decode_fields);*
 			}
 		};
