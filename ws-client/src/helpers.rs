@@ -1,11 +1,41 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
-use futures::channel::mpsc;
-use jsonrpsee_types::v2::params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId};
-use jsonrpsee_types::v2::request::{JsonRpcCallSer, JsonRpcNotification};
-use jsonrpsee_types::v2::response::JsonRpcResponse;
-use jsonrpsee_types::{v2::error::JsonRpcError, Error, RequestMessage};
+use crate::types::v2::{
+	error::JsonRpcError,
+	params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId},
+	request::{JsonRpcCallSer, JsonRpcNotification},
+	response::JsonRpcResponse,
+};
+use crate::types::{Error, RequestMessage};
+use futures::channel::{mpsc, oneshot};
 use serde_json::Value as JsonValue;
+use std::time::Duration;
 
 /// Attempts to process a batch response.
 ///
@@ -186,5 +216,17 @@ pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcError) -
 			Ok(())
 		}
 		_ => Err(Error::InvalidRequestId),
+	}
+}
+
+/// Wait for a stream to complete within the given timeout.
+pub async fn call_with_timeout<T>(
+	timeout: Duration,
+	rx: oneshot::Receiver<Result<T, Error>>,
+) -> Result<Result<T, Error>, oneshot::Canceled> {
+	let timeout = tokio::time::sleep(timeout);
+	tokio::select! {
+		res = rx => res,
+		_ = timeout => Ok(Err(Error::RequestTimeout))
 	}
 }

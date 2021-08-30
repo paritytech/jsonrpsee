@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -229,13 +229,13 @@ pub(crate) fn get_cors_allow_origin(
 			match allowed.as_ref() {
 				None if *origin == "null" => AllowCors::Ok(AccessControlAllowOrigin::Null),
 				None => AllowCors::Ok(AccessControlAllowOrigin::Value(Origin::parse(origin))),
-				Some(ref allowed) if *origin == "null" => allowed
+				Some(allowed) if *origin == "null" => allowed
 					.iter()
 					.find(|cors| **cors == AccessControlAllowOrigin::Null)
 					.cloned()
 					.map(AllowCors::Ok)
 					.unwrap_or(AllowCors::Invalid),
-				Some(ref allowed) => allowed
+				Some(allowed) => allowed
 					.iter()
 					.find(|cors| match **cors {
 						AccessControlAllowOrigin::Any => true,

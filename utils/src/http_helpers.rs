@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -29,24 +29,39 @@
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::error::GenericTransportError;
 
-/// Read a hyper response with configured `HTTP` settings.
+/// Read a data from a [`hyper::Body`] and return the data if it is valid and within the allowed size range.
 ///
-/// Returns `Ok(bytes)` if the body was in valid size range.
+/// Returns `Ok((bytes, single))` if the body was in valid size range; and a bool indicating whether the JSON-RPC
+/// request is a single or a batch.
 /// Returns `Err` if the body was too large or the body couldn't be read.
-pub async fn read_response_to_body(
+pub async fn read_body(
 	headers: &hyper::HeaderMap,
 	mut body: hyper::Body,
 	max_request_body_size: u32,
-) -> Result<Vec<u8>, GenericTransportError<hyper::Error>> {
+) -> Result<(Vec<u8>, bool), GenericTransportError<hyper::Error>> {
 	// NOTE(niklasad1): Values bigger than `u32::MAX` will be turned into zero here. This is unlikely to occur in practice
 	// and for that case we fallback to allocating in the while-loop below instead of pre-allocating.
-	let body_size = read_header_content_length(&headers).unwrap_or(0);
+	let body_size = read_header_content_length(headers).unwrap_or(0);
 
 	if body_size > max_request_body_size {
 		return Err(GenericTransportError::TooLarge);
 	}
 
+	let first_chunk =
+		body.next().await.ok_or(GenericTransportError::Malformed)?.map_err(GenericTransportError::Inner)?;
+
+	if first_chunk.len() > max_request_body_size as usize {
+		return Err(GenericTransportError::TooLarge);
+	}
+
+	let single = match first_chunk.get(0) {
+		Some(b'{') => true,
+		Some(b'[') => false,
+		_ => return Err(GenericTransportError::Malformed),
+	};
+
 	let mut received_data = Vec::with_capacity(body_size as usize);
+	received_data.extend_from_slice(&first_chunk);
 
 	while let Some(chunk) = body.next().await {
 		let chunk = chunk.map_err(GenericTransportError::Inner)?;
@@ -56,7 +71,7 @@ pub async fn read_response_to_body(
 		}
 		received_data.extend_from_slice(&chunk);
 	}
-	Ok(received_data)
+	Ok((received_data, single))
 }
 
 /// Read the `Content-Length` HTTP Header. Must fit into a `u32`; returns `None` otherwise.
@@ -90,13 +105,13 @@ pub fn read_header_values<'a>(
 
 #[cfg(test)]
 mod tests {
-	use super::{read_header_content_length, read_response_to_body};
+	use super::{read_body, read_header_content_length};
 
 	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {
 		let headers = hyper::header::HeaderMap::new();
 		let body = hyper::Body::from(vec![0; 128]);
-		assert!(read_response_to_body(&headers, body, 127).await.is_err());
+		assert!(read_body(&headers, body, 127).await.is_err());
 	}
 
 	#[test]

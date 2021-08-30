@@ -1,14 +1,38 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN background_task WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 #![cfg(test)]
 
+use crate::types::error::{CallError, Error};
 use crate::{server::StopHandle, RpcModule, WsServerBuilder};
+use anyhow::anyhow;
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::{
-	error::{CallError, Error},
-	v2::params::RpcParams,
-};
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
@@ -25,16 +49,18 @@ impl fmt::Display for MyAppError {
 impl std::error::Error for MyAppError {}
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
-/// It has two hardcoded methods: "say_hello" and "add"
 async fn server() -> SocketAddr {
 	server_with_handles().await.0
 }
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
-/// It has two hardcoded methods: "say_hello" and "add"
+/// It has the following methods:
+/// 	sync methods: `say_hello` and `add`
+///		async: `say_hello_async` and `add_sync`
+/// 	other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns `CallError::Failed`), `sleep_for`
 /// Returns the address together with handles for server future and server stop.
 async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
-	let mut server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _| {
@@ -43,7 +69,14 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		})
 		.unwrap();
 	module
-		.register_async_method("say_hello_async", |_: RpcParams, _| {
+		.register_method("add", |params, _| {
+			let params: Vec<u64> = params.parse()?;
+			let sum: u64 = params.into_iter().sum();
+			Ok(sum)
+		})
+		.unwrap();
+	module
+		.register_async_method("say_hello_async", |_, _| {
 			async move {
 				log::debug!("server respond to hello");
 				// Call some async function inside.
@@ -54,14 +87,17 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		})
 		.unwrap();
 	module
-		.register_method("add", |params, _| {
-			let params: Vec<u64> = params.parse()?;
-			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
+		.register_async_method("add_async", |params, _| {
+			async move {
+				let params: Vec<u64> = params.parse()?;
+				let sum: u64 = params.into_iter().sum();
+				Ok(sum)
+			}
+			.boxed()
 		})
 		.unwrap();
-	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams.into())).unwrap();
+	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
@@ -71,16 +107,15 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	server.register_module(module).unwrap();
 
 	let stop_handle = server.stop_handle();
-	let join_handle = tokio::spawn(server.start());
+	let join_handle = tokio::spawn(server.start(module));
 	(addr, join_handle, stop_handle)
 }
 
 /// Run server with user provided context.
 async fn server_with_context() -> SocketAddr {
-	let mut server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
+	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 
 	let ctx = TestContext;
 	let mut rpc_module = RpcModule::new(ctx);
@@ -115,16 +150,15 @@ async fn server_with_context() -> SocketAddr {
 			async move {
 				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
 				// Async work that returns an error
-				futures_util::future::err::<(), CallError>(CallError::Failed(String::from("nah").into())).await
+				futures_util::future::err::<(), _>(anyhow!("nah").into()).await
 			}
 			.boxed()
 		})
 		.unwrap();
 
-	server.register_module(rpc_module).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(server.start());
+	tokio::spawn(server.start(rpc_module));
 	addr
 }
 
@@ -132,12 +166,11 @@ async fn server_with_context() -> SocketAddr {
 async fn can_set_the_max_request_body_size() {
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 10 bytes
-	let mut server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
+	let server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
-	server.register_module(module).unwrap();
 	let addr = server.local_addr().unwrap();
-	tokio::spawn(async { server.start().await });
+	tokio::spawn(server.start(module));
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -156,13 +189,12 @@ async fn can_set_the_max_request_body_size() {
 async fn can_set_max_connections() {
 	let addr = "127.0.0.1:0";
 	// Server that accepts max 2 connections
-	let mut server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();
+	let server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
-	server.register_module(module).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(async { server.start().await });
+	tokio::spawn(server.start(module));
 
 	let conn1 = WebSocketTestClient::new(addr).await;
 	let conn2 = WebSocketTestClient::new(addr).await;
@@ -260,6 +292,52 @@ async fn batch_method_call_where_some_calls_fail() {
 }
 
 #[tokio::test]
+async fn garbage_request_fails() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"dsdfs fsdsfds"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{ "#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{sds}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"["#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"[dsds]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"[]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, invalid_request(Id::Null));
+
+	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+}
+
+#[tokio::test]
 async fn single_method_call_with_params_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -308,6 +386,16 @@ async fn async_method_call_with_ok_context() {
 	let req = r#"{"jsonrpc":"2.0","method":"should_ok_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, ok_response("ok!".into(), Id::Num(1)));
+}
+
+#[tokio::test]
+async fn async_method_call_with_params() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"add_async", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
 
 #[tokio::test]
@@ -438,8 +526,8 @@ async fn can_register_modules() {
 	let cx2 = Vec::<u8>::new();
 	let mut mod2 = RpcModule::new(cx2);
 
-	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	assert_eq!(server.method_names().len(), 0);
+	assert_eq!(mod1.method_names().count(), 0);
+	assert_eq!(mod2.method_names().count(), 0);
 	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
@@ -447,12 +535,11 @@ async fn can_register_modules() {
 	// Won't register, name clashes
 	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
-	server.register_module(mod1).unwrap();
-	assert_eq!(server.method_names().len(), 2);
-	let err = server.register_module(mod2).unwrap_err();
+	assert_eq!(mod1.method_names().count(), 2);
+	let err = mod1.merge(mod2).unwrap_err();
 	let _expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
 	assert!(matches!(err, _expected_err));
-	assert_eq!(server.method_names().len(), 2);
+	assert_eq!(mod1.method_names().count(), 2);
 }
 
 #[tokio::test]

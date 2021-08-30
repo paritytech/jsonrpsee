@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -26,51 +26,92 @@
 
 //! Contains common builders for hyper responses.
 
-/// Create a response for plaintext internal error.
-pub fn internal_error<T: Into<String>>(msg: T) -> hyper::Response<hyper::Body> {
-	from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, format!("Internal Server Error: {}", msg.into()))
+use crate::types::v2::{
+	error::{JsonRpcError, JsonRpcErrorCode},
+	params::{Id, TwoPointZero},
+};
+
+const JSON: &str = "application/json; charset=utf-8";
+const TEXT: &str = "text/plain";
+
+/// Create a response for json internal error.
+pub fn internal_error() -> hyper::Response<hyper::Body> {
+	let error = serde_json::to_string(&JsonRpcError {
+		jsonrpc: TwoPointZero,
+		error: JsonRpcErrorCode::InternalError.into(),
+		id: Id::Null,
+	})
+	.expect("built from known-good data; qed");
+
+	from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
 }
 
-/// Create a response for not allowed hosts.
+/// Create a text/plain response for not allowed hosts.
 pub fn host_not_allowed() -> hyper::Response<hyper::Body> {
-	from_template(hyper::StatusCode::FORBIDDEN, "Provided Host header is not whitelisted.\n".to_owned())
+	from_template(hyper::StatusCode::FORBIDDEN, "Provided Host header is not whitelisted.\n".to_owned(), TEXT)
 }
 
-/// Create a response for disallowed method used.
+/// Create a text/plain response for disallowed method used.
 pub fn method_not_allowed() -> hyper::Response<hyper::Body> {
 	from_template(
 		hyper::StatusCode::METHOD_NOT_ALLOWED,
 		"Used HTTP Method is not allowed. POST or OPTIONS is required\n".to_owned(),
+		TEXT,
 	)
 }
 
-/// CORS invalid
+/// Create a text/plain response for invalid CORS "Origin" headers.
 pub fn invalid_allow_origin() -> hyper::Response<hyper::Body> {
 	from_template(
         hyper::StatusCode::FORBIDDEN,
         "Origin of the request is not whitelisted. CORS headers would not be sent and any side-effects were cancelled as well.\n".to_owned(),
+		TEXT,
     )
 }
 
-/// CORS header invalid
+/// Create a text/plain response for invalid CORS "Allow-*" headers.
 pub fn invalid_allow_headers() -> hyper::Response<hyper::Body> {
 	from_template(
         hyper::StatusCode::FORBIDDEN,
         "Requested headers are not allowed for CORS. CORS headers would not be sent and any side-effects were cancelled as well.\n".to_owned(),
+		TEXT,
     )
 }
 
-/// Create a response for too large (413)
-pub fn too_large<S: Into<String>>(msg: S) -> hyper::Response<hyper::Body> {
-	from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, msg.into())
+/// Create a json response for oversized requests (413)
+pub fn too_large() -> hyper::Response<hyper::Body> {
+	let error = serde_json::to_string(&JsonRpcError {
+		jsonrpc: TwoPointZero,
+		error: JsonRpcErrorCode::OversizedRequest.into(),
+		id: Id::Null,
+	})
+	.expect("built from known-good data; qed");
+
+	from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, error, JSON)
 }
 
-/// Create a text response for a template.
-fn from_template(status: hyper::StatusCode, body: String) -> hyper::Response<hyper::Body> {
+/// Create a json response for empty or malformed requests (400)
+pub fn malformed() -> hyper::Response<hyper::Body> {
+	let error = serde_json::to_string(&JsonRpcError {
+		jsonrpc: TwoPointZero,
+		error: JsonRpcErrorCode::ParseError.into(),
+		id: Id::Null,
+	})
+	.expect("built from known-good data; qed");
+
+	from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
+}
+
+/// Create a response body.
+fn from_template<S: Into<hyper::Body>>(
+	status: hyper::StatusCode,
+	body: S,
+	content_type: &'static str,
+) -> hyper::Response<hyper::Body> {
 	hyper::Response::builder()
 		.status(status)
-		.header("content-type", hyper::header::HeaderValue::from_static("text/plain; charset=utf-8"))
-		.body(hyper::Body::from(body))
+		.header("content-type", hyper::header::HeaderValue::from_static(content_type))
+		.body(body.into())
 		// Parsing `StatusCode` and `HeaderValue` is infalliable but
 		// parsing body content is not.
 		.expect("Unable to parse response body for type conversion")
@@ -78,11 +119,5 @@ fn from_template(status: hyper::StatusCode, body: String) -> hyper::Response<hyp
 
 /// Create a valid JSON response.
 pub fn ok_response(body: String) -> hyper::Response<hyper::Body> {
-	hyper::Response::builder()
-		.status(hyper::StatusCode::OK)
-		.header("content-type", hyper::header::HeaderValue::from_static("application/json; charset=utf-8"))
-		.body(hyper::Body::from(body))
-		// Parsing `StatusCode` and `HeaderValue` is infalliable but
-		// parsing body content is not.
-		.expect("Unable to parse response body for type conversion")
+	from_template(hyper::StatusCode::OK, body, JSON)
 }

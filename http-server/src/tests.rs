@@ -1,13 +1,40 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 #![cfg(test)]
 
 use std::net::SocketAddr;
 
+use crate::types::error::{CallError, Error};
 use crate::{server::StopHandle, HttpServerBuilder, RpcModule};
+
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::error::{CallError, Error};
 use serde_json::Value as JsonValue;
 use tokio::task::JoinHandle;
 
@@ -16,7 +43,7 @@ async fn server() -> SocketAddr {
 }
 
 async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, StopHandle) {
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
@@ -60,9 +87,8 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 		})
 		.unwrap();
 
-	server.register_module(module).unwrap();
 	let stop_handle = server.stop_handle();
-	let join_handle = tokio::spawn(async move { server.start().with_default_timeout().await.unwrap() });
+	let join_handle = tokio::spawn(async move { server.start(module).with_default_timeout().await.unwrap() });
 	(addr, join_handle, stop_handle)
 }
 
@@ -245,6 +271,52 @@ async fn invalid_batched_method_calls() {
 }
 
 #[tokio::test]
+async fn garbage_request_fails() {
+	let addr = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"dsdfs fsdsfds"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{ "#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{sds}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"["#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"[dsds]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"[]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, invalid_request(Id::Null));
+
+	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+}
+
+#[tokio::test]
 async fn should_return_method_not_found() {
 	let addr = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
@@ -296,8 +368,7 @@ async fn can_register_modules() {
 	let cx2 = Vec::<u8>::new();
 	let mut mod2 = RpcModule::new(cx2);
 
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
-	assert_eq!(server.method_names().len(), 0);
+	assert_eq!(mod1.method_names().count(), 0);
 	mod1.register_method("bla", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod1.register_method("bla2", |_, cx| Ok(format!("Gave me {}", cx))).unwrap();
 	mod2.register_method("yada", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
@@ -305,14 +376,13 @@ async fn can_register_modules() {
 	// Won't register, name clashes
 	mod2.register_method("bla", |_, cx| Ok(format!("Gave me {:?}", cx))).unwrap();
 
-	server.register_module(mod1).unwrap();
-	assert_eq!(server.method_names().len(), 2);
+	assert_eq!(mod1.method_names().count(), 2);
 
-	let err = server.register_module(mod2).unwrap_err();
+	let err = mod1.merge(mod2).unwrap_err();
 
 	let expected_err = Error::MethodAlreadyRegistered(String::from("bla"));
 	assert_eq!(err.to_string(), expected_err.to_string());
-	assert_eq!(server.method_names().len(), 2);
+	assert_eq!(mod1.method_names().count(), 2);
 }
 
 #[tokio::test]

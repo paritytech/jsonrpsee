@@ -14,14 +14,13 @@ pub(crate) const UNSUB_METHOD_NAME: &str = "unsub";
 pub async fn http_server() -> String {
 	let (server_started_tx, server_started_rx) = oneshot::channel();
 	tokio::spawn(async move {
-		let mut server =
+		let server =
 			HttpServerBuilder::default().max_request_body_size(u32::MAX).build("127.0.0.1:0".parse().unwrap()).unwrap();
 		let mut module = RpcModule::new(());
 		module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
 		module.register_async_method(ASYNC_METHOD_NAME, |_, _| (async { Ok("lo") }).boxed()).unwrap();
-		server.register_module(module).unwrap();
 		server_started_tx.send(server.local_addr().unwrap()).unwrap();
-		server.start().await
+		server.start(module).await
 	});
 	format!("http://{}", server_started_rx.await.unwrap())
 }
@@ -30,7 +29,7 @@ pub async fn http_server() -> String {
 pub async fn ws_server() -> String {
 	let (server_started_tx, server_started_rx) = oneshot::channel();
 	tokio::spawn(async move {
-		let mut server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+		let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 		let mut module = RpcModule::new(());
 		module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
 		module.register_async_method(ASYNC_METHOD_NAME, |_, _| (async { Ok("lo") }).boxed()).unwrap();
@@ -42,9 +41,8 @@ pub async fn ws_server() -> String {
 			})
 			.unwrap();
 
-		server.register_module(module).unwrap();
 		server_started_tx.send(server.local_addr().unwrap()).unwrap();
-		server.start().await
+		server.start(module).await
 	});
 	format!("ws://{}", server_started_rx.await.unwrap())
 }

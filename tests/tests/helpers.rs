@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -25,17 +25,21 @@
 // DEALINGS IN THE SOFTWARE.
 
 use futures_channel::oneshot;
-use jsonrpsee::{http_server::HttpServerBuilder, ws_server::WsServerBuilder, RpcModule};
+use jsonrpsee::{
+	http_server::HttpServerBuilder,
+	ws_server::{WsServerBuilder, WsStopHandle},
+	RpcModule,
+};
 use std::net::SocketAddr;
 use std::time::Duration;
 
-pub async fn websocket_server_with_subscription() -> SocketAddr {
+pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) {
 	let (server_started_tx, server_started_rx) = oneshot::channel();
 
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
 
-		let mut server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
+		let server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
 
 		let mut module = RpcModule::new(());
 		module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -82,11 +86,9 @@ pub async fn websocket_server_with_subscription() -> SocketAddr {
 			})
 			.unwrap();
 
-		server.register_module(module).unwrap();
 		rt.block_on(async move {
-			server_started_tx.send(server.local_addr().unwrap()).unwrap();
-
-			server.start().await
+			server_started_tx.send((server.local_addr().unwrap(), server.stop_handle())).unwrap();
+			server.start(module).await
 		});
 	});
 
@@ -98,15 +100,14 @@ pub async fn websocket_server() -> SocketAddr {
 
 	std::thread::spawn(move || {
 		let rt = tokio::runtime::Runtime::new().unwrap();
-		let mut server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
+		let server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
 		let mut module = RpcModule::new(());
 		module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
-		server.register_module(module).unwrap();
 
 		rt.block_on(async move {
 			server_started_tx.send(server.local_addr().unwrap()).unwrap();
 
-			server.start().await
+			server.start(module).await
 		});
 	});
 
@@ -114,13 +115,12 @@ pub async fn websocket_server() -> SocketAddr {
 }
 
 pub async fn http_server() -> SocketAddr {
-	let mut server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 	module.register_method("notif", |_, _| Ok("")).unwrap();
-	server.register_module(module).unwrap();
 
-	tokio::spawn(async move { server.start().await.unwrap() });
+	tokio::spawn(server.start(module));
 	addr
 }

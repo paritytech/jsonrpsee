@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -40,7 +40,7 @@ pub use access_control::{
 	hosts::{AllowHosts, Host},
 	AccessControl, AccessControlBuilder,
 };
-pub use jsonrpsee_types::{Error, TEN_MB_SIZE_BYTES};
+pub use jsonrpsee_types as types;
 pub use jsonrpsee_utils::server::rpc_module::RpcModule;
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer, StopHandle as HttpStopHandle};
 

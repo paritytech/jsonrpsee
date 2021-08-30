@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -24,24 +24,25 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::tokio::Mutex;
-use crate::traits::{Client, SubscriptionClient};
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
-use crate::v2::error::JsonRpcError;
-use crate::v2::params::{Id, JsonRpcParams};
-use crate::v2::request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificationSer};
-use crate::v2::response::JsonRpcResponse;
-use crate::TEN_MB_SIZE_BYTES;
-use crate::{
-	helpers::{
-		build_unsubscribe_message, process_batch_response, process_error_response, process_notification,
-		process_single_response, process_subscription_response, stop_subscription,
+use crate::types::{
+	traits::{Client, SubscriptionClient},
+	v2::{
+		error::JsonRpcError,
+		params::{Id, JsonRpcParams},
+		request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificationSer},
+		response::JsonRpcResponse,
 	},
-	transport::CertificateStore,
+	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionMessage,
+	TEN_MB_SIZE_BYTES,
 };
 use crate::{
-	manager::RequestManager, BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage,
-	Subscription, SubscriptionMessage,
+	helpers::{
+		build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response,
+		process_notification, process_single_response, process_subscription_response, stop_subscription,
+	},
+	manager::RequestManager,
+	transport::CertificateStore,
 };
 use async_trait::async_trait;
 use futures::{
@@ -50,6 +51,7 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+use tokio::sync::Mutex;
 
 use jsonrpsee_types::v2::params::JsonRpcSubscriptionParams;
 use jsonrpsee_types::SubscriptionKind;
@@ -102,8 +104,8 @@ pub struct WsClient {
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Mutex<ErrorFromBack>,
-	/// Request timeout
-	request_timeout: Option<Duration>,
+	/// Request timeout. Defaults to 60sec.
+	request_timeout: Duration,
 	/// Request ID manager.
 	id_guard: RequestIdGuard,
 }
@@ -174,7 +176,7 @@ impl RequestIdGuard {
 pub struct WsClientBuilder<'a> {
 	certificate_store: CertificateStore,
 	max_request_body_size: u32,
-	request_timeout: Option<Duration>,
+	request_timeout: Duration,
 	connection_timeout: Duration,
 	origin_header: Option<Cow<'a, str>>,
 	max_concurrent_requests: usize,
@@ -186,7 +188,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 		Self {
 			certificate_store: CertificateStore::Native,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
-			request_timeout: None,
+			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
 			origin_header: None,
 			max_concurrent_requests: 256,
@@ -208,9 +210,9 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set request timeout.
+	/// Set request timeout (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
-		self.request_timeout = Some(timeout);
+		self.request_timeout = timeout;
 		self
 	}
 
@@ -234,7 +236,7 @@ impl<'a> WsClientBuilder<'a> {
 
 	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
 	///
-	/// You can also prevent the subscription being dropped by calling [`Subscription::next()`](crate::Subscription) frequently enough
+	/// You can also prevent the subscription being dropped by calling [`Subscription::next()`](crate::types::Subscription) frequently enough
 	/// such that the buffer capacity doesn't exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
@@ -266,15 +268,15 @@ impl<'a> WsClientBuilder<'a> {
 
 		let builder = WsTransportClientBuilder {
 			certificate_store,
-			target: Target::parse(url).map_err(|e| Error::Transport(Box::new(e)))?,
+			target: Target::parse(url).map_err(|e| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
 			origin_header: self.origin_header,
 			max_request_body_size: self.max_request_body_size,
 		};
 
-		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(Box::new(e)))?;
+		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(e.into()))?;
 
-		crate::tokio::spawn(async move {
+		tokio::spawn(async move {
 			background_task(sender, receiver, from_front, err_tx, max_capacity_per_subscription).await;
 		});
 		Ok(WsClient {
@@ -313,7 +315,17 @@ impl Client for WsClient {
 			Error::ParseError(e)
 		})?;
 		log::trace!("[frontend]: send notification: {:?}", raw);
-		let res = self.to_back.clone().send(FrontToBack::Notification(raw)).await;
+
+		let mut sender = self.to_back.clone();
+		let fut = sender.send(FrontToBack::Notification(raw));
+
+		let timeout = tokio::time::sleep(self.request_timeout);
+
+		let res = tokio::select! {
+			x = fut => x,
+			_ = timeout => return Err(Error::RequestTimeout)
+		};
+
 		self.id_guard.reclaim_request_id();
 		match res {
 			Ok(()) => Ok(()),
@@ -344,19 +356,10 @@ impl Client for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let send_back_rx_out = if let Some(duration) = self.request_timeout {
-			let timeout = crate::tokio::sleep(duration);
-			futures::pin_mut!(send_back_rx, timeout);
-			match future::select(send_back_rx, timeout).await {
-				future::Either::Left((send_back_rx_out, _)) => send_back_rx_out,
-				future::Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
-			}
-		} else {
-			send_back_rx.await
-		};
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
 		self.id_guard.reclaim_request_id();
-		let json_value = match send_back_rx_out {
+		let json_value = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
@@ -393,7 +396,8 @@ impl Client for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = send_back_rx.await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+
 		self.id_guard.reclaim_request_id();
 		let json_values = match res {
 			Ok(Ok(v)) => v,
@@ -453,7 +457,8 @@ impl SubscriptionClient for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = send_back_rx.await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+
 		self.id_guard.reclaim_request_id();
 		let (notifs_rx, id) = match res {
 			Ok(Ok(val)) => val,
@@ -484,7 +489,8 @@ impl SubscriptionClient for WsClient {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = send_back_rx.await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+
 		let (notifs_rx, method) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
@@ -556,7 +562,7 @@ async fn background_task(
 						.expect("ID unused checked above; qed"),
 					Err(e) => {
 						log::warn!("[backend]: client request failed: {:?}", e);
-						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(Box::new(e)))));
+						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
 					}
 				}
 			}
@@ -573,7 +579,7 @@ async fn background_task(
 					.expect("Request ID unused checked above; qed"),
 				Err(e) => {
 					log::warn!("[backend]: client subscription failed: {:?}", e);
-					let _ = sub.send_back.send(Err(Error::Transport(Box::new(e))));
+					let _ = sub.send_back.send(Err(Error::Transport(e.into())));
 				}
 			},
 			// User dropped a subscription.
@@ -663,7 +669,7 @@ async fn background_task(
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
-				let _ = front_error.send(Error::Transport(Box::new(e)));
+				let _ = front_error.send(Error::Transport(e.into()));
 				return;
 			}
 			Either::Right((None, _)) => {

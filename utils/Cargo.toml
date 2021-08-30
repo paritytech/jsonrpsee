@@ -1,18 +1,19 @@
 [package]
 name = "jsonrpsee-utils"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for jsonrpsee"
 edition = "2018"
 license = "MIT"
 
 [dependencies]
+beef = { version = "0.5.1", features = ["impl_serde"] }
 thiserror = { version = "1", optional = true }
+tokio = { version = "1", features = ["macros"], optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
-hyper13 = { package = "hyper", version = "0.13", default-features = false, features = ["stream"], optional = true }
-hyper14 = { package = "hyper", version = "0.14", default-features = false, features = ["stream"], optional = true }
-jsonrpsee-types = { path = "../types", version = "0.2.0", optional = true }
+hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
+jsonrpsee-types = { path = "../types", version = "0.3.0", optional = true }
 log = { version = "0.4", optional = true }
 rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
@@ -22,8 +23,7 @@ parking_lot = { version = "0.11", optional = true }
 
 [features]
 default = []
-hyper_13 = ["hyper13", "futures-util", "jsonrpsee-types"]
-hyper_14 = ["hyper14", "futures-util", "jsonrpsee-types"]
+http-helpers = ["hyper", "futures-util", "jsonrpsee-types"]
 server = [
 	"thiserror",
 	"futures-channel",
@@ -34,9 +34,9 @@ server = [
 	"serde_json",
 	"log",
 	"parking_lot",
-	"rand"
+	"rand",
+	"tokio"
 ]
 
 [dev-dependencies]
 serde_json = "1.0"
-tokio = { version = "1", features = ["macros"] }

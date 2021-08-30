@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 # This script is copied from `https://github.com/paritytech/jsonrpc` with some minor tweaks.
+# Add `--dry-run` and/or `--allow-dirty` to your command line to test things before publication.
 
 set -eu
 

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -26,297 +26,288 @@
 
 extern crate proc_macro;
 
-use inflector::Inflector as _;
 use proc_macro::TokenStream;
-use proc_macro2::Span;
-use proc_macro_crate::{crate_name, FoundCrate};
-use quote::{format_ident, quote, quote_spanned};
-use std::collections::HashSet;
-use syn::spanned::Spanned as _;
+use quote::quote;
+use rpc_macro::RpcDescription;
 
-mod api_def;
+mod attributes;
+mod helpers;
+mod lifetimes;
+mod render_client;
+mod render_server;
+mod respan;
+mod rpc_macro;
+pub(crate) mod visitor;
 
-/// Wraps around one or more API definitions and generates an enum.
+/// Main RPC macro.
 ///
-/// The format within this macro must be:
+/// ## Description
+///
+/// This macro is capable of generating both server and client implementations on demand.
+/// Based on the attributes provided to the `rpc` macro, either one or both of implementations
+/// will be generated.
+///
+/// For clients, it will be an extension trait that adds all the required methods to a
+/// type that implements `Client` or `SubscriptionClient` (depending on whether trait has
+/// subscriptions methods or not), namely `HttpClient` and `WsClient`.
+///
+/// For servers, it will generate a trait mostly equivalent to the input, with two main
+/// differences:
+///
+/// - The trait will have one additional (already implemented) method, `into_rpc`, which
+///   turns any object that implements the server trait into an `RpcModule`.
+/// - For subscription methods, there will be one additional argument inserted right
+///   after `&self`: `subscription_sink: SubscriptionSink`. It should be used to
+///   actually maintain the subscription.
+///
+/// Since this macro can generate up to two traits, both server and client traits will have
+/// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
+/// correspondingly, `FooClient`.
+///
+/// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait must be implemented on your type first.
+///
+/// ## Prerequisites
+///
+/// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`.
+///   If you want to implement this trait on some type that is not thread-safe, consider
+///   using `Arc<RwLock<..>>`.
+///
+/// ## Examples
+///
+/// Below you can find examples of the macro usage along with the code
+/// that generated for it by the macro.
 ///
 /// ```ignore
-/// jsonrpsee_proc_macros::rpc_client_api! {
-///     Foo { ... }
-///     pub(crate) Bar { ... }
+/// #[rpc(client, server, namespace = "foo")]
+/// pub trait Rpc {
+///     #[method(name = "foo")]
+///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
+///     #[method(name = "bar")]
+///     fn sync_method(&self) -> String;
+///
+///     #[subscription(name = "sub", unsub = "unsub", item = "String")]
+///     fn sub(&self);
 /// }
 /// ```
 ///
-/// The `Foo` and `Bar` are identifiers, optionally prefixed with a visibility modifier
-/// (e.g. `pub`).
+/// Server code that will be generated:
 ///
-/// The content of the blocks is the same as the content of a trait definition, except that
-/// default implementations for methods are forbidden.
+/// ```ignore
+/// #[async_trait]
+/// pub trait RpcServer {
+///     // RPC methods are normal methods and can be either sync or async.
+///     async fn async_method(&self, param_a: u8, param_b: String) -> u16;
+///     fn sync_method(&self) -> String;
 ///
-/// For each identifier (such as `Foo` and `Bar` in the example above), this macro will generate
-/// an enum where each variant corresponds to a function of the definition. Function names are
-/// turned into PascalCase to conform to the Rust style guide.
+///     // Note that `subscription_sink` was added automatically.
+///     fn sub(&self, subscription_sink: SubscriptionSink);
 ///
-/// Additionally, each generated enum has one method per function definition that lets you perform
-/// the method has a client.
+///     fn into_rpc(self) -> Result<Self, jsonrpsee::types::Error> {
+///         // Actual implementation stripped, but inside we will create
+///         // a module with one method and one subscription
+///     }
+/// }
+/// ```
 ///
-// TODO(niklasad1): Generic type params for individual methods doesn't work
-// because how the enum is generated, so for now type params must be declared on the entire enum.
-// The reason is that all type params on the enum is bound as a separate variant but
-// not generic params i.e, either params or return type.
-// To handle that properly, all generic types has to be collected and applied to the enum, see example:
-//
-// ```rust
-// jsonrpsee_rpc_client_api! {
-//     Api {
-//       // Doesn't work.
-//       fn generic_notif<T>(t: T);
-// }
-// ```
-//
-// Expands to which doesn't compile:
-// ```rust
-// enum Api {
-//    GenericNotif {
-//        t: T,
-//    },
-// }
-// ```
-// The code should be expanded to (to compile):
-// ```rust
-// enum Api<T> {
-//    GenericNotif {
-//        t: T,
-//    },
-// }
-// ```
-#[proc_macro]
-pub fn rpc_client_api(input_token_stream: TokenStream) -> TokenStream {
-	// Start by parsing the input into what we expect.
-	let defs: api_def::ApiDefinitions = match syn::parse(input_token_stream) {
-		Ok(d) => d,
-		Err(err) => return err.to_compile_error().into(),
+/// Client code that will be generated:
+///
+/// ```ignore
+/// #[async_trait]
+/// pub trait RpcClient: SubscriptionClient {
+///     // In client implementation all the methods are (obviously) async.
+///     async fn async_method(&self, param_a: u8, param_b: String) -> Result<u16, Error> {
+///         // Actual implementations are stripped, but inside a corresponding `Client` or
+///         // `SubscriptionClient` method is called.
+///     }
+///     async fn sync_method(&self) -> Result<String, Error> {
+///         // ...
+///     }
+///
+///     // Subscription method returns `Subscription` object in case of success.
+///     async fn sub(&self) -> Result<Subscription<String>, Error> {
+///         // ...
+///     }
+/// }
+///
+/// impl<T> RpcClient for T where T: SubscriptionClient {}
+/// ```
+///
+/// ## Attributes
+///
+/// ### `rpc` attribute
+///
+/// `rpc` attribute is applied to a trait in order to turn it into an RPC implementation.
+///
+/// **Arguments:**
+///
+/// - `server`: generate `<Trait>Server` trait for the server implementation.
+/// - `client`: generate `<Trait>Client` extension trait that builds RPC clients to invoke a concrete RPC
+///   implementation's methods conveniently.
+/// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace
+///   `foo` and method `spam`, the resulting method name will be `foo_spam`.
+///
+/// **Trait requirements:**
+///
+/// A trait wrapped with the `rpc` attribute **must not**:
+///
+/// - have associated types or constants;
+/// - have Rust methods not marked with either the `method` or `subscription` attribute;
+/// - be empty.
+///
+/// At least one of the `server` or `client` flags must be provided, otherwise the compilation will err.
+///
+/// ### `method` attribute
+///
+/// `method` attribute is used to define an RPC method.
+///
+/// **Arguments:**
+///
+/// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
+///
+/// **Method requirements:**
+///
+/// A Rust method marked with the `method` attribute, **may**:
+///
+/// - be either `async` or not;
+/// - have input parameters or not;
+/// - have a return value or not (in the latter case, it will be considered a notification method).
+///
+/// ### `subscription` attribute
+///
+/// **Arguments:**
+///
+/// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
+/// - `unsub` (mandatory): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
+/// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
+///
+/// **Method requirements:**
+///
+/// Rust method marked with the `subscription` attribute **must**:
+///
+/// - be synchronous;
+/// - not have return value.
+///
+/// Rust method marked with `subscription` attribute **may**:
+///
+/// - have input parameters or not.
+///
+/// ## Full workflow example
+///
+/// ```rust
+/// //! Example of using proc macro to generate working client and server.
+///
+/// use std::net::SocketAddr;
+///
+/// use futures_channel::oneshot;
+/// use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
+///
+/// // RPC is put into a separate module to clearly show names of generated entities.
+/// mod rpc_impl {
+///     use jsonrpsee::{proc_macros::rpc, types::{async_trait, JsonRpcResult}, ws_server::SubscriptionSink};
+///
+///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
+///     #[rpc(client, server, namespace = "foo")]
+///     pub trait MyRpc {
+///         #[method(name = "foo")]
+///         async fn async_method(&self, param_a: u8, param_b: String) -> JsonRpcResult<u16>;
+///
+///         #[method(name = "bar")]
+///         fn sync_method(&self) -> JsonRpcResult<u16>;
+///
+///         #[subscription(name = "sub", unsub = "unsub", item = String)]
+///         fn sub(&self);
+///     }
+///
+///     // Structure that will implement the `MyRpcServer` trait.
+///     // It can have fields, if required, as long as it's still `Send + Sync + 'static`.
+///     pub struct RpcServerImpl;
+///
+///     // Note that the trait name we use is `MyRpcServer`, not `MyRpc`!
+///     #[async_trait]
+///     impl MyRpcServer for RpcServerImpl {
+///         async fn async_method(&self, _param_a: u8, _param_b: String) -> JsonRpcResult<u16> {
+///             Ok(42u16)
+///         }
+///
+///         fn sync_method(&self) -> JsonRpcResult<u16> {
+///             Ok(10u16)
+///         }
+///
+///         // We could've spawned a `tokio` future that yields values while our program works,
+///         // but for simplicity of the example we will only send two values and then close
+///         // the subscription.
+///         fn sub(&self, mut sink: SubscriptionSink) {
+///             sink.send(&"Response_A").unwrap();
+///             sink.send(&"Response_B").unwrap();
+///         }
+///     }
+/// }
+///
+/// // Use the generated implementations of server and client.
+/// use rpc_impl::{MyRpcClient, MyRpcServer, RpcServerImpl};
+///
+/// pub async fn websocket_server() -> SocketAddr {
+///     let (server_started_tx, server_started_rx) = oneshot::channel();
+///
+///     std::thread::spawn(move || {
+///         let rt = tokio::runtime::Runtime::new().unwrap();
+///         let server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
+///         // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
+///
+///         rt.block_on(async move {
+///             server_started_tx.send(server.local_addr().unwrap()).unwrap();
+///
+///             server.start(RpcServerImpl.into_rpc()).await
+///         });
+///     });
+///
+///     server_started_rx.await.unwrap()
+/// }
+///
+/// // In the main function, we start the server, create a client connected to this server,
+/// // and call the available methods.
+/// #[tokio::main]
+/// async fn main() {
+///     let server_addr = websocket_server().await;
+///     let server_url = format!("ws://{}", server_addr);
+///     // Note that we create the client as usual, but thanks to the `use rpc_impl::MyRpcClient`,
+///     // the client object will have all the methods to interact with the server.
+///     let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+///
+///     // Invoke RPC methods.
+///     assert_eq!(client.async_method(10, "a".into()).await.unwrap(), 42);
+///     assert_eq!(client.sync_method().await.unwrap(), 10);
+///
+///     // Subscribe and receive messages from the subscription.
+///     let mut sub = client.sub().await.unwrap();
+///     let first_recv = sub.next().await.unwrap();
+///     assert_eq!(first_recv, Some("Response_A".to_string()));
+///     let second_recv = sub.next().await.unwrap();
+///     assert_eq!(second_recv, Some("Response_B".to_string()));
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
+	let attr = proc_macro2::TokenStream::from(attr);
+
+	let rebuilt_rpc_attribute = syn::Attribute {
+		pound_token: syn::token::Pound::default(),
+		style: syn::AttrStyle::Outer,
+		bracket_token: syn::token::Bracket::default(),
+		path: syn::Ident::new("rpc", proc_macro2::Span::call_site()).into(),
+		tokens: quote! { (#attr) },
 	};
 
-	let mut out = Vec::with_capacity(defs.apis.len());
-	for api in defs.apis {
-		match build_client_api(api) {
-			Ok(a) => out.push(a),
-			Err(err) => return err.to_compile_error().into(),
-		};
+	match rpc_impl(rebuilt_rpc_attribute, item) {
+		Ok(tokens) => tokens,
+		Err(err) => err.to_compile_error(),
 	}
-
-	TokenStream::from(quote! {
-		#(#out)*
-	})
+	.into()
 }
 
-/// Generates the macro output token stream corresponding to a single API.
-fn build_client_api(api: api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
-	let enum_name = &api.name;
-	let visibility = &api.visibility;
-	let generics = api.generics.clone();
-	let mut non_used_type_params = HashSet::new();
-
-	let mut variants = Vec::new();
-	for function in &api.definitions {
-		let variant_name = snake_case_to_camel_case(&function.signature.ident);
-		if let syn::ReturnType::Type(_, ty) = &function.signature.output {
-			non_used_type_params.insert(ty);
-		};
-
-		let mut params_list = Vec::new();
-
-		for input in function.signature.inputs.iter() {
-			let (ty, pat_span, param_variant_name) = match input {
-				syn::FnArg::Receiver(_) => {
-					return Err(syn::Error::new(
-						input.span(),
-						"Having `self` is not allowed in RPC queries definitions",
-					));
-				}
-				syn::FnArg::Typed(syn::PatType { ty, pat, .. }) => (ty, pat.span(), param_variant_name(&pat)?),
-			};
-			params_list.push(quote_spanned!(pat_span=> #param_variant_name: #ty));
-		}
-
-		variants.push(quote_spanned!(function.signature.ident.span()=>
-			#variant_name {
-				#(#params_list,)*
-			}
-		));
-	}
-
-	let client_impl_block = build_client_impl(&api)?;
-
-	let mut ret_variants = Vec::new();
-	for (idx, ty) in non_used_type_params.into_iter().enumerate() {
-		// NOTE(niklasad1): variant names are converted from `snake_case` to `CamelCase`
-		// It's impossible to have collisions between `_0, _1, ... _N`
-		// Because variant name `_0`, `__0` becomes `0` in `CamelCase`
-		// then `0` is not a valid identifier in Rust syntax and the error message is hard to understand.
-		// Perhaps document this in macro when it's ready.
-		let varname = format_ident!("_{}", idx);
-		ret_variants.push(quote_spanned!(ty.span()=> #varname (#ty)));
-	}
-
-	Ok(quote_spanned!(api.name.span()=>
-		#visibility enum #enum_name #generics {
-			 #(#[allow(unused)] #variants,)* #(#[allow(unused)] #ret_variants,)*
-		}
-
-		#client_impl_block
-	))
-}
-
-/// Builds the impl block that allow performing outbound JSON-RPC queries.
-///
-/// Generates the `impl <enum> { }` block containing functions that perform RPC client calls.
-fn build_client_impl(api: &api_def::ApiDefinition) -> Result<proc_macro2::TokenStream, syn::Error> {
-	let enum_name = &api.name;
-
-	let (impl_generics_org, type_generics, where_clause_org) = api.generics.split_for_impl();
-	let client_functions = build_client_functions(&api)?;
-
-	Ok(quote_spanned!(api.name.span() =>
-		impl #impl_generics_org #enum_name #type_generics #where_clause_org {
-			#(#client_functions)*
-		}
-	))
-}
-
-/// Builds the functions that allow performing outbound JSON-RPC queries.
-///
-/// Generates a list of functions that perform RPC client calls.
-fn build_client_functions(api: &api_def::ApiDefinition) -> Result<Vec<proc_macro2::TokenStream>, syn::Error> {
-	let visibility = &api.visibility;
-
-	let _crate = find_jsonrpsee_crate()?;
-
-	let mut client_functions = Vec::new();
-	for function in &api.definitions {
-		let f_name = &function.signature.ident;
-		let ret_ty = match function.signature.output {
-			syn::ReturnType::Default => quote!(()),
-			syn::ReturnType::Type(_, ref ty) => quote_spanned!(ty.span()=> #ty),
-		};
-		let rpc_method_name =
-			function.attributes.method.clone().unwrap_or_else(|| function.signature.ident.to_string());
-
-		let mut params_list = Vec::new();
-		let mut params_to_json = Vec::new();
-		let mut params_to_array = Vec::new();
-		let mut params_tys = Vec::new();
-
-		for (param_index, input) in function.signature.inputs.iter().enumerate() {
-			let (ty, pat_span, rpc_param_name) = match input {
-				syn::FnArg::Receiver(_) => {
-					return Err(syn::Error::new(
-						input.span(),
-						"Having `self` is not allowed in RPC queries definitions",
-					));
-				}
-				syn::FnArg::Typed(syn::PatType { ty, pat, attrs, .. }) => {
-					(ty, pat.span(), rpc_param_name(&pat, &attrs)?)
-				}
-			};
-
-			let generated_param_name =
-				syn::Ident::new(&format!("param{}", param_index), proc_macro2::Span::call_site());
-
-			params_tys.push(ty);
-			params_list.push(quote_spanned!(pat_span=> #generated_param_name: impl Into<#ty>));
-			params_to_json.push(quote_spanned!(pat_span=>
-				map.insert(
-					#rpc_param_name,
-					#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::Error::ParseError)?
-				);
-			));
-			params_to_array.push(quote_spanned!(pat_span=>
-				#_crate::to_json_value(#generated_param_name.into()).map_err(#_crate::Error::ParseError)?
-			));
-		}
-
-		let params_building = if params_list.is_empty() {
-			quote_spanned!(function.signature.span()=> #_crate::v2::params::JsonRpcParams::NoParams)
-		} else if function.attributes.positional_params {
-			quote_spanned!(function.signature.span()=> vec![#(#params_to_array),*].into())
-		} else {
-			quote_spanned!(function.signature.span()=>
-				{
-					let mut map = std::collections::BTreeMap::new();
-					#(#params_to_json)*
-					map.into()
-				}
-			)
-		};
-
-		let is_notification = function.is_void_ret_type();
-		let function_body = if is_notification {
-			quote_spanned!(function.signature.span()=>
-				client.notification(#rpc_method_name, #params_building).await
-			)
-		} else {
-			quote_spanned!(function.signature.span()=>
-				client.request(#rpc_method_name, #params_building).await
-			)
-		};
-
-		client_functions.push(quote_spanned!(function.signature.span()=>
-			#visibility async fn #f_name (client: &impl #_crate::traits::Client #(, #params_list)*) -> core::result::Result<#ret_ty, #_crate::Error>
-			where
-				#ret_ty: #_crate::DeserializeOwned
-				#(, #params_tys: #_crate::Serialize)*
-			{
-				#function_body
-			}
-		));
-	}
-
-	Ok(client_functions)
-}
-
-/// Turns a snake case function name into an UpperCamelCase name suitable to be an enum variant.
-fn snake_case_to_camel_case(snake_case: &syn::Ident) -> syn::Ident {
-	syn::Ident::new(&snake_case.to_string().to_pascal_case(), snake_case.span())
-}
-
-/// Determine the name of the variant in the enum based on the pattern of the function parameter.
-fn param_variant_name(pat: &syn::Pat) -> syn::parse::Result<&syn::Ident> {
-	match pat {
-		// TODO: check other fields of the `PatIdent`
-		syn::Pat::Ident(ident) => Ok(&ident.ident),
-		_ => unimplemented!(),
-	}
-}
-
-/// Determine the name of the parameter based on the pattern.
-fn rpc_param_name(pat: &syn::Pat, _attrs: &[syn::Attribute]) -> syn::parse::Result<String> {
-	// TODO: look in attributes if the user specified a param name
-	match pat {
-		// TODO: check other fields of the `PatIdent`
-		syn::Pat::Ident(ident) => Ok(ident.ident.to_string()),
-		_ => unimplemented!(),
-	}
-}
-
-/// Search for `jsonrpsee` in `Cargo.toml`.
-fn find_jsonrpsee_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
-	match crate_name("jsonrpsee") {
-		Ok(FoundCrate::Name(name)) => {
-			let ident = syn::Ident::new(&name, Span::call_site());
-			Ok(quote!(#ident::types))
-		}
-		Ok(FoundCrate::Itself) => panic!("Deriving RPC methods in any of the `jsonrpsee crates` is not supported"),
-		Err(_) => match (crate_name("jsonrpsee-http-client"), crate_name("jsonrpsee-ws-client")) {
-			(Ok(FoundCrate::Name(name)), _) | (_, Ok(FoundCrate::Name(name))) => {
-				let ident = syn::Ident::new(&name, Span::call_site());
-				Ok(quote!(#ident))
-			}
-			(Ok(FoundCrate::Itself), _) | (_, Ok(FoundCrate::Itself)) => {
-				panic!("Deriving RPC methods in any of the `jsonrpsee crates` is not supported")
-			}
-			(_, Err(e)) => Err(syn::Error::new(Span::call_site(), &e)),
-		},
-	}
+/// Convenience form of `rpc` that may use `?` for error handling to avoid boilerplate.
+fn rpc_impl(attr: syn::Attribute, item: TokenStream) -> Result<proc_macro2::TokenStream, syn::Error> {
+	let trait_data: syn::ItemTrait = syn::parse(item)?;
+	let rpc = RpcDescription::from_item(attr, trait_data)?;
+	rpc.render()
 }

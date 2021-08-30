@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -25,7 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	ws_client::{traits::Client, v2::params::JsonRpcParams, WsClientBuilder},
+	types::{traits::Client, v2::params::JsonRpcParams},
+	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
@@ -44,11 +45,10 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let mut server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
-	server.register_module(module).unwrap();
 	let addr = server.local_addr()?;
-	tokio::spawn(async move { server.start().await });
+	tokio::spawn(server.start(module));
 	Ok(addr)
 }

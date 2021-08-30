@@ -1,8 +1,35 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::v2::error::{JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject};
 use jsonrpsee_types::v2::params::{Id, TwoPointZero};
+use jsonrpsee_types::v2::request::JsonRpcInvalidRequest;
 use jsonrpsee_types::v2::response::JsonRpcResponse;
 use serde::Serialize;
 
@@ -35,6 +62,15 @@ pub fn send_error(id: Id, tx: &MethodSink, error: JsonRpcErrorObject) {
 
 	if let Err(err) = tx.unbounded_send(json) {
 		log::error!("Error sending response to the client: {:?}", err)
+	}
+}
+
+/// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
+/// unparseable garbage.
+pub fn prepare_error(data: &[u8]) -> (Id<'_>, JsonRpcErrorCode) {
+	match serde_json::from_slice::<JsonRpcInvalidRequest>(data) {
+		Ok(JsonRpcInvalidRequest { id }) => (id, JsonRpcErrorCode::InvalidRequest),
+		Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
 	}
 }
 
