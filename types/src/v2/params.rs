@@ -153,7 +153,7 @@ impl<'a> RpcParamsSequence<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		let mut json = self.0.trim_start();
+		let mut json = self.0;
 
 		match json.as_bytes().get(0)? {
 			b']' => {
