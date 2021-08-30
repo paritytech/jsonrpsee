@@ -116,6 +116,15 @@ impl<'a> RpcParams<'a> {
 		RpcParamsSequence(self.0.as_ref().map(AsRef::as_ref).unwrap_or(""))
 	}
 
+	/// Similar to [`RpcParams::sequence`] but treats empty `JSON array` and `JSON Map` as no parameters.
+	pub fn sequence_ignore_empty(&self) -> RpcParamsSequence {
+		RpcParamsSequence(match self.0.as_ref() {
+			Some(p) if p == "[]" || p == "{}" => "",
+			Some(p) => p.as_ref(),
+			None => "",
+		})
+	}
+
 	/// Attempt to parse all parameters as an array or map into type `T`.
 	pub fn parse<T>(&'a self) -> Result<T, CallError>
 	where
@@ -150,16 +159,11 @@ impl<'a> RpcParams<'a> {
 pub struct RpcParamsSequence<'a>(&'a str);
 
 impl<'a> RpcParamsSequence<'a> {
-	fn next_inner<T>(&mut self, empty_means_none: bool) -> Option<Result<T, CallError>>
+	fn next_inner<T>(&mut self) -> Option<Result<T, CallError>>
 	where
 		T: Deserialize<'a>,
 	{
 		let mut json = self.0.trim_start();
-
-		if treat_empty_json_as_no_params && json == "[]" || json == "{}" {
-			self.0 = "";
-			return None;
-		}
 
 		match json.as_bytes().get(0)? {
 			b']' => {
@@ -206,7 +210,7 @@ impl<'a> RpcParamsSequence<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		match self.next_inner(false) {
+		match self.next_inner() {
 			Some(result) => result,
 			None => Err(CallError::InvalidParams),
 		}
@@ -234,26 +238,7 @@ impl<'a> RpcParamsSequence<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		match self.next_inner::<Option<T>>(false) {
-			Some(result) => result,
-			None => Ok(None),
-		}
-	}
-
-	/// Similar to `RpcParamsSequence::optional_next` but regards empty JSON Array and JSON Object
-	/// as no params supplied.
-	///
-	/// ```
-	/// # use jsonrpsee_types::v2::params::RpcParams;
-	/// let params = RpcParams::new(Some(r#"[]"#));
-	/// let mut seq = params.sequence();
-	/// assert_eq!(None::<u64>, seq.optional_next_ignore_empty_json().unwrap())
-	/// ```
-	pub fn optional_next_ignore_empty_json<T>(&mut self) -> Result<Option<T>, CallError>
-	where
-		T: Deserialize<'a>,
-	{
-		match self.next_inner::<Option<T>>(true) {
+		match self.next_inner::<Option<T>>() {
 			Some(result) => result,
 			None => Ok(None),
 		}
@@ -510,41 +495,35 @@ mod test {
 	#[test]
 	fn params_sequence_optional_ignore_empty() {
 		let params = RpcParams::new(Some(r#"["foo", "bar"]"#));
-		let mut seq = params.sequence();
+		let mut seq = params.sequence_ignore_empty();
 
-		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), Some("foo"));
-		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), Some("bar"));
+		assert_eq!(seq.optional_next::<&str>().unwrap(), Some("foo"));
+		assert_eq!(seq.optional_next::<&str>().unwrap(), Some("bar"));
 
 		let params = RpcParams::new(Some(r#"[]"#));
-		let mut seq = params.sequence();
-		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), None);
+		let mut seq = params.sequence_ignore_empty();
+		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
 
 		let params = RpcParams::new(Some(r#"{}"#));
-		let mut seq = params.sequence();
-		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), None);
+		let mut seq = params.sequence_ignore_empty();
+		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
 
 		let params = RpcParams::new(Some(r#"[12, "[]", [], {}]"#));
-		let mut seq = params.sequence();
-		assert_eq!(seq.optional_next_ignore_empty_json::<u64>().unwrap(), Some(12));
-		assert_eq!(seq.optional_next_ignore_empty_json::<&str>().unwrap(), Some("[]"));
-		assert_eq!(seq.optional_next_ignore_empty_json::<Vec<u8>>().unwrap(), Some(vec![]));
-		assert_eq!(seq.optional_next_ignore_empty_json::<serde_json::Value>().unwrap(), Some(serde_json::json!({})));
+		let mut seq = params.sequence_ignore_empty();
+		assert_eq!(seq.optional_next::<u64>().unwrap(), Some(12));
+		assert_eq!(seq.optional_next::<&str>().unwrap(), Some("[]"));
+		assert_eq!(seq.optional_next::<Vec<u8>>().unwrap(), Some(vec![]));
+		assert_eq!(seq.optional_next::<serde_json::Value>().unwrap(), Some(serde_json::json!({})));
 	}
 
 	#[test]
 	fn params_sequence_optional_nesting_works() {
 		let nested = RpcParams::new(Some(r#"[1, [2], [3, 4], [[5], [6,7], []], {"named":7}]"#));
-		let mut seq = nested.sequence();
-		assert_eq!(seq.optional_next_ignore_empty_json::<i8>().unwrap(), Some(1));
-		assert_eq!(seq.optional_next_ignore_empty_json::<[i8; 1]>().unwrap(), Some([2]));
-		assert_eq!(seq.optional_next_ignore_empty_json::<Vec<u16>>().unwrap(), Some(vec![3, 4]));
-		assert_eq!(
-			seq.optional_next_ignore_empty_json::<Vec<Vec<u32>>>().unwrap(),
-			Some(vec![vec![5], vec![6, 7], vec![]])
-		);
-		assert_eq!(
-			seq.optional_next_ignore_empty_json::<serde_json::Value>().unwrap(),
-			Some(serde_json::json!({"named":7}))
-		);
+		let mut seq = nested.sequence_ignore_empty();
+		assert_eq!(seq.optional_next::<i8>().unwrap(), Some(1));
+		assert_eq!(seq.optional_next::<[i8; 1]>().unwrap(), Some([2]));
+		assert_eq!(seq.optional_next::<Vec<u16>>().unwrap(), Some(vec![3, 4]));
+		assert_eq!(seq.optional_next::<Vec<Vec<u32>>>().unwrap(), Some(vec![vec![5], vec![6, 7], vec![]]));
+		assert_eq!(seq.optional_next::<serde_json::Value>().unwrap(), Some(serde_json::json!({"named":7})));
 	}
 }

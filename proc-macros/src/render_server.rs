@@ -198,7 +198,7 @@ impl RpcDescription {
 				if is_option(ty) {
 					quote! {
 						// treat empty array or map as no params.
-						let #name: #ty = seq.optional_next_ignore_empty_json()?;
+						let #name: #ty = seq.optional_next()?;
 					}
 				} else {
 					quote! {
@@ -208,7 +208,7 @@ impl RpcDescription {
 			});
 
 			quote! {
-				let mut seq = params.sequence();
+				let mut seq = params.sequence_ignore_empty();
 				#(#decode_fields);*
 			}
 		};
