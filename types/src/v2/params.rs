@@ -150,7 +150,7 @@ impl<'a> RpcParams<'a> {
 pub struct RpcParamsSequence<'a>(&'a str);
 
 impl<'a> RpcParamsSequence<'a> {
-	fn next_inner<T>(&mut self, treat_empty_json_as_no_params: bool) -> Option<Result<T, CallError>>
+	fn next_inner<T>(&mut self, empty_means_none: bool) -> Option<Result<T, CallError>>
 	where
 		T: Deserialize<'a>,
 	{
