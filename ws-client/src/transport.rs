@@ -26,9 +26,8 @@
 
 use crate::stream::EitherStream;
 use futures::io::{BufReader, BufWriter};
-use futures::prelude::*;
 use soketto::connection;
-use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
+use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use std::path::{Path, PathBuf};
 use std::{borrow::Cow, io, net::SocketAddr, sync::Arc, time::Duration};
 use thiserror::Error;
@@ -40,6 +39,9 @@ use tokio_rustls::{
 };
 
 type TlsOrPlain = EitherStream<TcpStream, TlsStream<TcpStream>>;
+
+// TODO(niklasad1): make this configurable.
+const MAX_REDIRECTIONS_ALLOWED: usize = 5;
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
@@ -193,16 +195,16 @@ impl<'a> WsTransportClientBuilder<'a> {
 		let mut host = self.target.host;
 		let mut host_header = self.target.host_header;
 
-		let mut err = Err(None);
+		let mut err = None;
 
-		let client = loop {
+		for _ in 0..MAX_REDIRECTIONS_ALLOWED {
 			let sockaddr = match sockaddrs.pop() {
 				Some(addr) => addr,
-				None => break err,
+				None => return err.unwrap_or(Err(WsHandshakeError::NoAddressFound(host))),
 			};
 
 			let tcp_stream = connect(sockaddr, self.timeout, &host, &tls_connector).await?;
-			let mut client = WsRawClient::new(
+			let mut client = WsHandshakeClient::new(
 				BufReader::new(BufWriter::new(tcp_stream)),
 				&host_header,
 				path_and_query.to_str().expect("valid UTF-8 checked by Url::parse; qed"),
@@ -212,9 +214,15 @@ impl<'a> WsTransportClientBuilder<'a> {
 			}
 			// Perform the initial handshake.
 			match client.handshake().await? {
-				ServerResponse::Accepted { .. } => break Ok(client),
+				ServerResponse::Accepted { .. } => {
+					let mut builder = client.into_builder();
+					builder.set_max_message_size(self.max_request_body_size as usize);
+					let (sender, receiver) = builder.finish();
+					return Ok((Sender { inner: sender }, Receiver { inner: receiver }));
+				}
+
 				ServerResponse::Rejected { status_code } => {
-					err = Err(Some(WsHandshakeError::Rejected { status_code }));
+					err = Some(Err(WsHandshakeError::Rejected { status_code }));
 				}
 				ServerResponse::Redirect { status_code, location } => {
 					log::trace!("recv redirection: status_code: {}, location: {}", status_code, location);
@@ -239,7 +247,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 							};
 						}
 						// redirection is relative, either `/baz` or `bar`.
-						Err(_) => {
+						Err(
+							url::ParseError::RelativeUrlWithoutBase | url::ParseError::RelativeUrlWithCannotBeABaseBase,
+						) => {
 							// replace the entire path if `location` is `/`.
 							if location.starts_with('/') {
 								path_and_query = location.into();
@@ -250,17 +260,14 @@ impl<'a> WsTransportClientBuilder<'a> {
 								path_and_query = strip_last_child.join(location);
 							}
 						}
+						Err(e) => {
+							err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
+						}
 					};
 				}
 			};
 		}
-		.map_err(|e| e.unwrap_or(WsHandshakeError::NoAddressFound(host)))?;
-
-		// If the handshake succeeded, return.
-		let mut builder = client.into_builder();
-		builder.set_max_message_size(self.max_request_body_size as usize);
-		let (sender, receiver) = builder.finish();
-		Ok((Sender { inner: sender }, Receiver { inner: receiver }))
+		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(host)))
 	}
 }
 
@@ -272,24 +279,23 @@ async fn connect(
 ) -> Result<EitherStream<TcpStream, TlsStream<TcpStream>>, WsHandshakeError> {
 	let socket = TcpStream::connect(sockaddr);
 	let timeout = tokio::time::sleep(timeout_dur);
-	futures::pin_mut!(socket, timeout);
-	Ok(match future::select(socket, timeout).await {
-		future::Either::Left((socket, _)) => {
+	tokio::select! {
+		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
 				log::warn!("set nodelay failed: {:?}", err);
 			}
 			match tls_connector {
-				None => TlsOrPlain::Plain(socket),
+				None => Ok(TlsOrPlain::Plain(socket)),
 				Some(connector) => {
 					let dns_name = DNSNameRef::try_from_ascii_str(host)?;
 					let tls_stream = connector.connect(dns_name, socket).await?;
-					TlsOrPlain::Tls(tls_stream)
+					Ok(TlsOrPlain::Tls(tls_stream))
 				}
 			}
 		}
-		future::Either::Right((_, _)) => return Err(WsHandshakeError::Timeout(timeout_dur)),
-	})
+		_ = timeout => Err(WsHandshakeError::Timeout(timeout_dur))
+	}
 }
 
 impl From<io::Error> for WsHandshakeError {
