@@ -63,7 +63,7 @@ impl Rpc {
 pub(crate) struct Method {
 	/// Method name
 	pub name: syn::LitStr,
-	/// Alias for the method.
+	/// Aliases for the method.
 	pub alias: Option<syn::LitStr>,
 }
 
