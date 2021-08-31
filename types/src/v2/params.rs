@@ -90,17 +90,21 @@ impl Serialize for TwoPointZero {
 /// [`super::request::JsonRpcRequest`] (which in turn borrows it from the input buffer that is shared between requests);
 /// or, it can be an owned `String`.
 #[derive(Clone, Debug)]
-pub struct RpcParams<'a>(Cow<'a, str>);
+pub struct RpcParams<'a>(Option<Cow<'a, str>>);
 
 impl<'a> RpcParams<'a> {
 	/// Create params
 	pub fn new(raw: Option<&'a str>) -> Self {
-		Self(raw.map_or("", |r| r.trim()).into())
+		Self(raw.map(|r| r.trim().into()))
 	}
 
 	/// Returns true if the contained JSON is an object
 	pub fn is_object(&self) -> bool {
-		self.0.starts_with('{')
+		let json: &str = match self.0 {
+			Some(ref cow) => cow,
+			None => return false,
+		};
+		json.starts_with('{')
 	}
 
 	/// Obtain a sequence parser, [`RpcParamsSequence`].
@@ -109,8 +113,9 @@ impl<'a> RpcParams<'a> {
 	/// request has optional parameters at the tail that may or may not be present.
 	pub fn sequence(&self) -> RpcParamsSequence {
 		let json = match self.0.as_ref() {
-			"[]" | "{}" => "",
-			other => other,
+			Some(json) if json == "[]" || json == "{}" => "",
+			Some(json) => json,
+			None => "",
 		};
 		RpcParamsSequence(json)
 	}
@@ -120,7 +125,9 @@ impl<'a> RpcParams<'a> {
 	where
 		T: Deserialize<'a>,
 	{
-		serde_json::from_str(&self.0).map_err(|_| CallError::InvalidParams)
+		// NOTE(niklasad1): Option::None is serialized as `null` so we provide that here.
+		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("none");
+		serde_json::from_str(params).map_err(|_| CallError::InvalidParams)
 	}
 
 	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
@@ -135,7 +142,7 @@ impl<'a> RpcParams<'a> {
 	///
 	/// This will cause an allocation if the params internally are using a borrowed JSON slice.
 	pub fn into_owned(self) -> RpcParams<'static> {
-		RpcParams(Cow::owned(self.0.into_owned()))
+		RpcParams(self.0.map(|s| Cow::owned(s.into_owned())))
 	}
 }
 
