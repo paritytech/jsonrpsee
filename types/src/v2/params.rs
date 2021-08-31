@@ -169,7 +169,7 @@ impl<'a> RpcParamsSequence<'a> {
 
 		match iter.next()? {
 			Ok(value) => {
-				self.0 = &json[iter.byte_offset()..];
+				self.0 = json[iter.byte_offset()..].trim_start();
 
 				Some(Ok(value))
 			}
