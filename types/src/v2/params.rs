@@ -111,9 +111,17 @@ impl<'a> RpcParams<'a> {
 	///
 	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC
 	/// request has optional parameters at the tail that may or may not be present.
+	///
+	/// NOTE: there is an edge-case in JSON-RPC context where you would want to
+	/// decode `[1]` as either `Vec<u64>` or `u64` depending on specific method.
+	/// Thus, we decode `[1]` as `Vec<u64>` and not as `u64`.
+	///
+	/// If you need specific behaviour use `RpcParams::parse` or `RpcParams::one`.
 	pub fn sequence(&self) -> RpcParamsSequence {
 		let json = match self.0.as_ref() {
-			Some(json) if json == "[]" || json == "{}" => "",
+			// NOTE(niklasad1): hack to make parsing an empty array work but it won't work
+			// with passing in an empty array to as `no params` anymore.
+			Some(json) if json == "[]" => "[[]",
 			Some(json) => json,
 			None => "",
 		};
@@ -126,7 +134,7 @@ impl<'a> RpcParams<'a> {
 		T: Deserialize<'a>,
 	{
 		// NOTE(niklasad1): Option::None is serialized as `null` so we provide that here.
-		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("none");
+		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("null");
 		serde_json::from_str(params).map_err(|_| CallError::InvalidParams)
 	}
 
@@ -411,6 +419,7 @@ mod test {
 	fn params_parse() {
 		let none = RpcParams::new(None);
 		assert!(none.sequence().next::<u64>().is_err());
+		assert!(none.parse::<Option<u64>>().is_ok());
 
 		let array_params = RpcParams::new(Some("[1, 2, 3]"));
 		let arr: Result<[u64; 3], _> = array_params.parse();
@@ -509,16 +518,15 @@ mod test {
 
 		let params = RpcParams::new(Some(r#"[]"#));
 		let mut seq = params.sequence();
-		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
+		assert!(seq.optional_next::<&str>().is_err());
 
 		let params = RpcParams::new(Some(r#"   []		"#));
 		let mut seq = params.sequence();
-		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
-		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
+		assert!(seq.optional_next::<&str>().is_err());
 
 		let params = RpcParams::new(Some(r#"{}"#));
 		let mut seq = params.sequence();
-		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
+		assert!(seq.optional_next::<&str>().is_err(), "JSON object not supported by RpcSequence");
 
 		let params = RpcParams::new(Some(r#"[12, "[]", [], {}]"#));
 		let mut seq = params.sequence();
@@ -537,5 +545,12 @@ mod test {
 		assert_eq!(seq.optional_next::<Vec<u16>>().unwrap(), Some(vec![3, 4]));
 		assert_eq!(seq.optional_next::<Vec<Vec<u32>>>().unwrap(), Some(vec![vec![5], vec![6, 7], vec![]]));
 		assert_eq!(seq.optional_next::<serde_json::Value>().unwrap(), Some(serde_json::json!({"named":7})));
+	}
+
+	#[test]
+	fn sequence_empty_array_works() {
+		let params = RpcParams::new(Some(r#"[]"#));
+		let mut seq = params.sequence();
+		assert_eq!(seq.next::<Vec<u64>>().unwrap(), Vec::<u64>::new());
 	}
 }

@@ -2,7 +2,7 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, traits::Client, v2::params::JsonRpcParams, JsonRpcResult},
+	types::{async_trait, to_json_value, traits::Client, v2::params::JsonRpcParams, JsonRpcResult},
 	ws_client::*,
 	ws_server::{SubscriptionSink, WsServerBuilder},
 };
@@ -16,8 +16,11 @@ pub trait Rpc {
 	#[method(name = "optional_params")]
 	async fn optional_params(&self, a: Option<u8>, b: String) -> JsonRpcResult<bool>;
 
+	#[method(name = "optional_param")]
+	async fn optional_param(&self, a: Option<u8>) -> JsonRpcResult<bool>;
+
 	#[method(name = "array_params")]
-	async fn array_params_can_be_empty(&self, items: Vec<u64>) -> JsonRpcResult<u64>;
+	async fn array_params(&self, items: Vec<u64>) -> JsonRpcResult<u64>;
 
 	#[method(name = "bar")]
 	fn sync_method(&self) -> JsonRpcResult<u16>;
@@ -42,7 +45,12 @@ impl RpcServer for RpcServerImpl {
 		Ok(res)
 	}
 
-	async fn array_params_can_be_empty(&self, items: Vec<u64>) -> JsonRpcResult<u64> {
+	async fn optional_param(&self, a: Option<u8>) -> JsonRpcResult<bool> {
+		let res = if a.is_some() { true } else { false };
+		Ok(res)
+	}
+
+	async fn array_params(&self, items: Vec<u64>) -> JsonRpcResult<u64> {
 		Ok(items.len() as u64)
 	}
 
@@ -88,9 +96,21 @@ async fn main() {
 	assert_eq!(client.sync_method().await.unwrap(), 10);
 	assert_eq!(client.optional_params(None, "a".into()).await.unwrap(), false);
 	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
+
+	assert_eq!(client.array_params(vec![1]).await.unwrap(), 1);
 	assert_eq!(client.request::<u64>("foo_array_params", vec![].into()).await.unwrap(), 0);
-	assert_eq!(client.request::<u64>("foo_array_params", JsonRpcParams::NoParams).await.unwrap(), 0);
+	// TODO(niklasad1): do we want this to accepted as empty array?! doesn't makes sense to me
+	assert!(client.request::<u64>("foo_array_params", JsonRpcParams::NoParams).await.is_err());
 	assert_eq!(client.request::<u64>("foo_array_params", vec![1.into(), 2.into(), 3.into()].into()).await.unwrap(), 3);
+
+	// TODO(niklasad1): do we want empty array accepted as `no params`?.
+	assert!(client.request::<bool>("foo_optional_param", vec![].into()).await.is_err());
+	assert_eq!(client.request::<bool>("foo_optional_param", JsonRpcParams::NoParams).await.unwrap(), false);
+	assert_eq!(
+		client.request::<bool>("foo_optional_param", vec![to_json_value(Some(1)).unwrap()].into()).await.unwrap(),
+		true
+	);
+
 	let mut sub = client.sub().await.unwrap();
 	let first_recv = sub.next().await.unwrap();
 	assert_eq!(first_recv, Some("Response_A".to_string()));
