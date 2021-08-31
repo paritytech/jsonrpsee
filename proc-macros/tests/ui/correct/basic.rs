@@ -2,7 +2,7 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, JsonRpcResult},
+	types::{async_trait, traits::Client, v2::params::JsonRpcParams, JsonRpcResult},
 	ws_client::*,
 	ws_server::{SubscriptionSink, WsServerBuilder},
 };
@@ -12,6 +12,12 @@ use std::{net::SocketAddr, sync::mpsc::channel};
 pub trait Rpc {
 	#[method(name = "foo")]
 	async fn async_method(&self, param_a: u8, param_b: String) -> JsonRpcResult<u16>;
+
+	#[method(name = "optional_params")]
+	async fn optional_params(&self, a: Option<u8>, b: String) -> JsonRpcResult<bool>;
+
+	#[method(name = "array_params")]
+	async fn array_params_can_be_empty(&self, items: Vec<u64>) -> JsonRpcResult<u64>;
 
 	#[method(name = "bar")]
 	fn sync_method(&self) -> JsonRpcResult<u16>;
@@ -29,6 +35,15 @@ pub struct RpcServerImpl;
 impl RpcServer for RpcServerImpl {
 	async fn async_method(&self, _param_a: u8, _param_b: String) -> JsonRpcResult<u16> {
 		Ok(42u16)
+	}
+
+	async fn optional_params(&self, a: Option<u8>, _b: String) -> JsonRpcResult<bool> {
+		let res = if a.is_some() { true } else { false };
+		Ok(res)
+	}
+
+	async fn array_params_can_be_empty(&self, items: Vec<u64>) -> JsonRpcResult<u64> {
+		Ok(items.len() as u64)
 	}
 
 	fn sync_method(&self) -> JsonRpcResult<u16> {
@@ -71,6 +86,11 @@ async fn main() {
 
 	assert_eq!(client.async_method(10, "a".into()).await.unwrap(), 42);
 	assert_eq!(client.sync_method().await.unwrap(), 10);
+	assert_eq!(client.optional_params(None, "a".into()).await.unwrap(), false);
+	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
+	assert_eq!(client.request::<u64>("foo_array_params", vec![].into()).await.unwrap(), 0);
+	assert_eq!(client.request::<u64>("foo_array_params", JsonRpcParams::NoParams).await.unwrap(), 0);
+	assert_eq!(client.request::<u64>("foo_array_params", vec![1.into(), 2.into(), 3.into()].into()).await.unwrap(), 3);
 	let mut sub = client.sub().await.unwrap();
 	let first_recv = sub.next().await.unwrap();
 	assert_eq!(first_recv, Some("Response_A".to_string()));
