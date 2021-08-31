@@ -24,46 +24,19 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Shared types in `jsonrpsee` for clients, servers and utilities.
+//! Module with a trait extension capable of re-spanning `syn` errors.
 
-#![deny(unsafe_code)]
-#![warn(missing_docs, missing_debug_implementations)]
+use quote::ToTokens;
 
-extern crate alloc;
-
-/// Ten megabytes.
-pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
-
-/// JSON-RPC 2.0 specification related types v2.
-pub mod v2;
-
-/// Shared error type.
-pub mod error;
-
-/// Shared client types.
-mod client;
-
-/// Traits
-pub mod traits;
-
-pub use async_trait::async_trait;
-pub use beef::Cow;
-pub use client::*;
-pub use error::{CallError, Error};
-pub use serde::{de::DeserializeOwned, Serialize};
-pub use serde_json::{
-	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
-	Value as JsonValue,
-};
-
-/// Re-exports for proc-macro library to not require any additional
-/// dependencies to be explicitly added on the client side.
-#[doc(hidden)]
-pub mod __reexports {
-	pub use async_trait::async_trait;
-	pub use serde;
-	pub use serde_json;
+/// Trait capable of changing `Span` set in the `syn::Error` so in case
+/// of dependency setting it incorrectly, it is possible to easily create
+/// a new error with the correct span.
+pub trait Respan<T> {
+	fn respan<S: ToTokens>(self, spanned: S) -> Result<T, syn::Error>;
 }
 
-/// JSON-RPC result.
-pub type JsonRpcResult<T> = Result<T, Error>;
+impl<T> Respan<T> for Result<T, syn::Error> {
+	fn respan<S: ToTokens>(self, spanned: S) -> Result<T, syn::Error> {
+		self.map_err(|e| syn::Error::new_spanned(spanned, e))
+	}
+}

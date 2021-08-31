@@ -1,12 +1,44 @@
-use super::{RpcDescription, RpcMethod, RpcSubscription};
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+use crate::helpers::generate_where_clause;
+use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::TypeParam;
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
+		let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
+		let where_clause = generate_where_clause(&self.trait_def, &sub_tys, true);
+		let type_idents = self.trait_def.generics.type_params().collect::<Vec<&TypeParam>>();
+		let (impl_generics, type_generics, _) = self.trait_def.generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {
 			quote! { #jsonrpsee::types::traits::Client }
@@ -26,12 +58,12 @@ impl RpcDescription {
 		let trait_impl = quote! {
 			#[#async_trait]
 			#[doc = #doc_comment]
-			pub trait #trait_name: #super_trait {
+			pub trait #trait_name #impl_generics: #super_trait where #(#where_clause,)* {
 				#(#method_impls)*
 				#(#sub_impls)*
 			}
 
-			impl<T> #trait_name for T where T: #super_trait {}
+			impl<T #(,#type_idents)*> #trait_name #type_generics for T where T: #super_trait #(,#where_clause)* {}
 		};
 
 		Ok(trait_impl)
@@ -52,7 +84,7 @@ impl RpcDescription {
 		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
-			let returns = quote! { Result<#returns, #jrps_error> };
+			let returns = quote! { #returns };
 
 			(called_method, returns)
 		} else {
