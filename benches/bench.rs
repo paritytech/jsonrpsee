@@ -244,7 +244,7 @@ fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
 
 fn run_ws_concurrent_connections(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for conns in [2, 4, 8, 16, 32, 64].iter() {
+	for conns in [2, 4, 8, 16, 32, 64] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
 				|| {
@@ -253,7 +253,7 @@ fn run_ws_concurrent_connections(rt: &TokioRuntime, crit: &mut Criterion, url: &
 					// runtime context and simply calling `block_on` here will cause the code to panic.
 					tokio::task::block_in_place(|| {
 						tokio::runtime::Handle::current().block_on(async {
-							for _ in 0..*conns {
+							for _ in 0..conns {
 								clients.push(WsClientBuilder::default().build(url).await.unwrap());
 							}
 						})
@@ -285,10 +285,10 @@ fn run_http_concurrent_connections(
 	request: RequestType,
 ) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for conns in [2, 4, 8, 16, 32, 64].iter() {
+	for conns in [2, 4, 8, 16, 32, 64] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
-				|| (0..*conns).map(|_| HttpClientBuilder::default().build(url).unwrap()),
+				|| (0..conns).map(|_| HttpClientBuilder::default().build(url).unwrap()),
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
