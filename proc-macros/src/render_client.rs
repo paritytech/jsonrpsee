@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::helpers::{generate_where_clause, is_option};
+use crate::helpers::generate_where_clause;
 use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -97,17 +97,11 @@ impl RpcDescription {
 		// Encoded parameters for the request.
 		let parameters = if !method.params.is_empty() {
 			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
-			let (_, ty) = method.params[0].clone();
-
-			if method.params.len() == 1 && is_option(&ty) {
-				self.jrps_client_item(quote! { types::v2::params::JsonRpcParams::NoParams })
-			} else {
-				let params = method.params.iter().map(|(param, _param_type)| {
-					quote! { #serde_json::to_value(&#param)? }
-				});
-				quote! {
-					vec![ #(#params),* ].into()
-				}
+			let params = method.params.iter().map(|(param, _param_type)| {
+				quote! { #serde_json::to_value(&#param)? }
+			});
+			quote! {
+				vec![ #(#params),* ].into()
 			}
 		} else {
 			self.jrps_client_item(quote! { types::v2::params::JsonRpcParams::NoParams })
@@ -146,17 +140,11 @@ impl RpcDescription {
 		// Encoded parameters for the request.
 		let parameters = if !sub.params.is_empty() {
 			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
-			let (_, ty) = sub.params[0].clone();
-
-			if sub.params.len() == 1 && is_option(&ty) {
-				self.jrps_client_item(quote! { types::v2::params::JsonRpcParams::NoParams })
-			} else {
-				let params = sub.params.iter().map(|(param, _param_type)| {
-					quote! { #serde_json::to_value(&#param)? }
-				});
-				quote! {
-					vec![ #(#params),* ].into()
-				}
+			let params = sub.params.iter().map(|(param, _param_type)| {
+				quote! { #serde_json::to_value(&#param)? }
+			});
+			quote! {
+				vec![ #(#params),* ].into()
 			}
 		} else {
 			self.jrps_client_item(quote! { types::v2::params::JsonRpcParams::NoParams })

@@ -189,9 +189,18 @@ impl RpcDescription {
 			return (TokenStream2::default(), TokenStream2::default());
 		}
 
+		// NOTE(niklasad1): because `RpcParams::sequence` doesn't decode empty array as valid input
+		// We do this check instead for input of arity one:
+		// 	i) could be an single type passed in array that should be decoded as `T`
+		//  ii) could be an entire array that should be decoded as `Vec<T>` or something similar.
 		if params.len() == 1 {
-			let (name, ty) = params[0].clone();
-			let parse = quote! { let #name: #ty = params.parse()?; };
+			let (name, _) = params[0].clone();
+			let parse = quote! {
+				let #name = match params.one() {
+					Ok(one) => one,
+					Err(_) => params.parse()?,
+				};
+			};
 			let field = quote!(#name);
 			return (parse, field);
 		}

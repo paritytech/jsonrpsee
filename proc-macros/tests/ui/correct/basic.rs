@@ -2,7 +2,7 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, traits::Client, v2::params::JsonRpcParams, JsonRpcResult},
+	types::{async_trait, traits::Client, JsonRpcResult},
 	ws_client::*,
 	ws_server::{SubscriptionSink, WsServerBuilder},
 };
@@ -89,7 +89,6 @@ async fn main() {
 	assert_eq!(client.optional_params(None, "a".into()).await.unwrap(), false);
 	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
 	assert_eq!(client.request::<u64>("foo_array_params", vec![].into()).await.unwrap(), 0);
-	assert_eq!(client.request::<u64>("foo_array_params", JsonRpcParams::NoParams).await.unwrap(), 0);
 	assert_eq!(client.request::<u64>("foo_array_params", vec![1.into(), 2.into(), 3.into()].into()).await.unwrap(), 3);
 	let mut sub = client.sub().await.unwrap();
 	let first_recv = sub.next().await.unwrap();
