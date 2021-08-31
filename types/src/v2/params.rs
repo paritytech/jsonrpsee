@@ -89,18 +89,13 @@ impl Serialize for TwoPointZero {
 /// The data containing the params is a `Cow<&str>` and can either be a borrowed `&str` of JSON from an incoming
 /// [`super::request::JsonRpcRequest`] (which in turn borrows it from the input buffer that is shared between requests);
 /// or, it can be an owned `String`.
-///
-/// Regards empty `JSON array` and `JSON object` as no parameters provided.
 #[derive(Clone, Debug)]
 pub struct RpcParams<'a>(Cow<'a, str>);
 
 impl<'a> RpcParams<'a> {
 	/// Create params
 	pub fn new(raw: Option<&'a str>) -> Self {
-		Self(match raw.unwrap_or("").trim() {
-			"{}" | "[]" => "".into(),
-			other => other.into(),
-		})
+		Self(raw.map_or("", |r| r.trim()).into())
 	}
 
 	/// Returns true if the contained JSON is an object
@@ -113,7 +108,11 @@ impl<'a> RpcParams<'a> {
 	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC
 	/// request has optional parameters at the tail that may or may not be present.
 	pub fn sequence(&self) -> RpcParamsSequence {
-		RpcParamsSequence(&self.0)
+		let json = match self.0.as_ref() {
+			"[]" | "{}" => "",
+			other => other,
+		};
+		RpcParamsSequence(json)
 	}
 
 	/// Attempt to parse all parameters as an array or map into type `T`.
@@ -427,6 +426,17 @@ mod test {
 	}
 
 	#[test]
+	fn params_parse_empty_json() {
+		let array_params = RpcParams::new(Some("[]"));
+		let arr: Result<Vec<u64>, _> = array_params.parse();
+		assert!(arr.is_ok());
+
+		let obj_params = RpcParams::new(Some("{}"));
+		let obj: Result<JsonValue, _> = obj_params.parse();
+		assert!(obj.is_ok());
+	}
+
+	#[test]
 	fn params_sequence_borrows() {
 		let params = RpcParams::new(Some(r#"["foo", "bar"]"#));
 		let mut seq = params.sequence();
@@ -496,6 +506,7 @@ mod test {
 
 		let params = RpcParams::new(Some(r#"   []		"#));
 		let mut seq = params.sequence();
+		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
 		assert_eq!(seq.optional_next::<&str>().unwrap(), None);
 
 		let params = RpcParams::new(Some(r#"{}"#));
