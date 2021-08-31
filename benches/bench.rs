@@ -87,6 +87,7 @@ trait RequestBencher {
 		let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
 		run_round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		run_concurrent_round_trip(&rt, crit, client, "http_concurrent_round_trip", Self::REQUEST_TYPE);
+		run_http_concurrent_connections(&rt, crit, &url, "http_concurrent_connections", Self::REQUEST_TYPE);
 	}
 
 	fn batched_http_requests(crit: &mut Criterion) {
@@ -103,6 +104,7 @@ trait RequestBencher {
 			Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 		run_round_trip(&rt, crit, client.clone(), "ws_round_trip", Self::REQUEST_TYPE);
 		run_concurrent_round_trip(&rt, crit, client, "ws_concurrent_round_trip", Self::REQUEST_TYPE);
+		run_ws_concurrent_connections(&rt, crit, &url, "ws_concurrent_connections", Self::REQUEST_TYPE);
 	}
 
 	fn batched_ws_requests(crit: &mut Criterion) {
@@ -224,6 +226,69 @@ fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
 		group.bench_function(format!("{}", num_concurrent_tasks), |b| {
 			b.to_async(rt).iter_with_setup(
 				|| (0..num_concurrent_tasks).map(|_| client.clone()),
+				|clients| async {
+					let tasks = clients.map(|client| {
+						rt.spawn(async move {
+							let _ = black_box(
+								client.request::<String>(request.method_name(), JsonRpcParams::NoParams).await.unwrap(),
+							);
+						})
+					});
+					join_all(tasks).await;
+				},
+			)
+		});
+	}
+	group.finish();
+}
+
+fn run_ws_concurrent_connections(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
+	let mut group = crit.benchmark_group(request.group_name(name));
+	for conns in [2, 4, 8, 16, 32, 64] {
+		group.bench_function(format!("{}", conns), |b| {
+			b.to_async(rt).iter_with_setup(
+				|| {
+					let mut clients = Vec::new();
+					// We have to use `block_in_place` here since `b.to_async(rt)` automatically enters the
+					// runtime context and simply calling `block_on` here will cause the code to panic.
+					tokio::task::block_in_place(|| {
+						tokio::runtime::Handle::current().block_on(async {
+							for _ in 0..conns {
+								clients.push(WsClientBuilder::default().build(url).await.unwrap());
+							}
+						})
+					});
+
+					clients
+				},
+				|clients| async {
+					let tasks = clients.into_iter().map(|client| {
+						rt.spawn(async move {
+							let _ = black_box(
+								client.request::<String>(request.method_name(), JsonRpcParams::NoParams).await.unwrap(),
+							);
+						})
+					});
+					join_all(tasks).await;
+				},
+			)
+		});
+	}
+	group.finish();
+}
+
+fn run_http_concurrent_connections(
+	rt: &TokioRuntime,
+	crit: &mut Criterion,
+	url: &str,
+	name: &str,
+	request: RequestType,
+) {
+	let mut group = crit.benchmark_group(request.group_name(name));
+	for conns in [2, 4, 8, 16, 32, 64] {
+		group.bench_function(format!("{}", conns), |b| {
+			b.to_async(rt).iter_with_setup(
+				|| (0..conns).map(|_| HttpClientBuilder::default().build(url).unwrap()),
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
