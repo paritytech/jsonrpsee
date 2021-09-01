@@ -100,7 +100,6 @@ impl RpcDescription {
 			let params = method.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-
 			quote! {
 				vec![ #(#params),* ].into()
 			}
@@ -144,7 +143,6 @@ impl RpcDescription {
 			let params = sub.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-
 			quote! {
 				vec![ #(#params),* ].into()
 			}

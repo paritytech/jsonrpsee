@@ -26,7 +26,7 @@
 
 use super::lifetimes::replace_lifetimes;
 use super::RpcDescription;
-use crate::helpers::generate_where_clause;
+use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
@@ -263,16 +263,4 @@ impl RpcDescription {
 
 		(parsing, params_fields)
 	}
-}
-
-/// Checks whether provided type is an `Option<...>`.
-fn is_option(ty: &syn::Type) -> bool {
-	if let syn::Type::Path(path) = ty {
-		// TODO: Probably not the best way to check whether type is an `Option`.
-		if path.path.segments.iter().any(|seg| seg.ident == "Option") {
-			return true;
-		}
-	}
-
-	false
 }

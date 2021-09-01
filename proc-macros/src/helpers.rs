@@ -149,3 +149,33 @@ fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindAllPar
 	visitor.visit_item_trait(item_trait);
 	visitor
 }
+
+/// Checks whether provided type is an `Option<...>`.
+pub(crate) fn is_option(ty: &syn::Type) -> bool {
+	if let syn::Type::Path(path) = ty {
+		let mut it = path.path.segments.iter().peekable();
+		while let Some(seg) = it.next() {
+			// The leaf segment should be `Option` with or without angled brackets.
+			if seg.ident == "Option" && it.peek().is_none() {
+				return true;
+			}
+		}
+	}
+
+	false
+}
+
+#[cfg(test)]
+mod tests {
+	use super::is_option;
+	use syn::parse_quote;
+
+	#[test]
+	fn is_option_works() {
+		assert!(is_option(&parse_quote!(Option<T>)));
+		// could be a type alias.
+		assert!(is_option(&parse_quote!(Option)));
+		assert!(is_option(&parse_quote!(std::option::Option<R>)));
+		assert!(!is_option(&parse_quote!(foo::bar::Option::Booyah)));
+	}
+}
