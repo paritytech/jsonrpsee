@@ -27,7 +27,7 @@
 #![cfg(test)]
 
 use crate::types::error::{CallError, Error};
-use crate::{server::StopHandle, RpcModule, WsServerBuilder};
+use crate::{future::StopHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
@@ -545,14 +545,13 @@ async fn can_register_modules() {
 #[tokio::test]
 async fn stop_works() {
 	let _ = env_logger::try_init();
-	let (_addr, join_handle, mut stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
-	stop_handle.stop().with_default_timeout().await.unwrap().unwrap();
-	stop_handle.wait_for_stop().with_default_timeout().await.unwrap();
+	let (_addr, join_handle, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	stop_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
 	join_handle.with_default_timeout().await.expect("Timeout").expect("Join error");
 
 	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(stop_handle.stop().with_default_timeout().await.unwrap(), Err(Error::AlreadyStopped)));
+	assert!(matches!(stop_handle.stop(), Err(Error::AlreadyStopped)));
 }

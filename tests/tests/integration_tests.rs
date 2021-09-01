@@ -264,7 +264,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 #[tokio::test]
 async fn ws_close_pending_subscription_when_server_terminated() {
-	let (server_addr, mut handle) = websocket_server_with_subscription().await;
+	let (server_addr, handle) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -274,14 +274,15 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	assert!(matches!(sub.next().await, Ok(Some(_))));
 
-	handle.stop().await.unwrap();
-	handle.wait_for_stop().await;
+	handle.stop().unwrap().await;
 
 	let sub2: Result<Subscription<String>, _> =
 		c1.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await;
 
 	// no new request should be accepted.
 	assert!(matches!(sub2, Err(_)));
+	// consume final message
+	assert!(matches!(sub.next().await, Ok(Some(_))));
 	// the already established subscription should also be closed.
 	assert!(matches!(sub.next().await, Ok(None)));
 }
