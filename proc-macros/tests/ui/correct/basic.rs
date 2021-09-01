@@ -98,12 +98,17 @@ async fn main() {
 	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
 
 	assert_eq!(client.array_params(vec![1]).await.unwrap(), 1);
-	assert_eq!(client.request::<u64>("foo_array_params", vec![].into()).await.unwrap(), 0);
+	assert_eq!(
+		client
+			.request::<u64>("foo_array_params", vec![to_json_value(Vec::<u64>::new()).unwrap()].into())
+			.await
+			.unwrap(),
+		0
+	);
 	// TODO(niklasad1): do we want this to accepted as empty array?! doesn't makes sense to me
 	assert!(client.request::<u64>("foo_array_params", JsonRpcParams::NoParams).await.is_err());
 
-	// TODO(niklasad1): do we want empty array accepted as `no params`?.
-	assert!(client.request::<bool>("foo_optional_param", vec![].into()).await.is_err());
+	assert_eq!(client.request::<bool>("foo_optional_param", vec![].into()).await.unwrap(), false);
 	assert_eq!(client.request::<bool>("foo_optional_param", JsonRpcParams::NoParams).await.unwrap(), false);
 	assert_eq!(
 		client.request::<bool>("foo_optional_param", vec![to_json_value(Some(1)).unwrap()].into()).await.unwrap(),

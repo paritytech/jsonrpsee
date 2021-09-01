@@ -189,22 +189,6 @@ impl RpcDescription {
 			return (TokenStream2::default(), TokenStream2::default());
 		}
 
-		// We do this check instead for input of arity one:
-		// 	i) could be an single type passed in array that should be decoded as `T`
-		//  ii) could be an entire array that should be decoded as `Vec<T>` or something similar.
-		// TODO(niklasad1): or should we require array parameters to be passed as `[[12, 12, 00]]` instead?.
-		if params.len() == 1 {
-			let (name, ty) = params[0].clone();
-			let parse = quote! {
-				let #name: #ty = match params.one() {
-					Ok(one) => one,
-					Err(_) => params.parse()?,
-				};
-			};
-			let field = quote!(#name);
-			return (parse, field);
-		}
-
 		let params_fields_seq = params.iter().map(|(name, _)| name);
 		let params_fields = quote! { #(#params_fields_seq),* };
 
