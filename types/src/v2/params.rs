@@ -119,9 +119,8 @@ impl<'a> RpcParams<'a> {
 	/// If you need specific behaviour use `RpcParams::parse` or `RpcParams::one`.
 	pub fn sequence(&self) -> RpcParamsSequence {
 		let json = match self.0.as_ref() {
-			// NOTE(niklasad1): hack to make parsing an empty array work but it won't work
-			// with passing in an empty array to as `no params` anymore.
-			Some(json) if json == "[]" => "[[]",
+			// It's assumed that params is `[a,b,c]`, if empty regard as no params.
+			Some(json) if json == "[]" => "",
 			Some(json) => json,
 			None => "",
 		};
@@ -518,11 +517,11 @@ mod test {
 
 		let params = RpcParams::new(Some(r#"[]"#));
 		let mut seq = params.sequence();
-		assert!(seq.optional_next::<&str>().is_err());
+		assert!(seq.optional_next::<&str>().unwrap().is_none());
 
 		let params = RpcParams::new(Some(r#"   []		"#));
 		let mut seq = params.sequence();
-		assert!(seq.optional_next::<&str>().is_err());
+		assert!(seq.optional_next::<&str>().unwrap().is_none());
 
 		let params = RpcParams::new(Some(r#"{}"#));
 		let mut seq = params.sequence();
@@ -545,12 +544,5 @@ mod test {
 		assert_eq!(seq.optional_next::<Vec<u16>>().unwrap(), Some(vec![3, 4]));
 		assert_eq!(seq.optional_next::<Vec<Vec<u32>>>().unwrap(), Some(vec![vec![5], vec![6, 7], vec![]]));
 		assert_eq!(seq.optional_next::<serde_json::Value>().unwrap(), Some(serde_json::json!({"named":7})));
-	}
-
-	#[test]
-	fn sequence_empty_array_works() {
-		let params = RpcParams::new(Some(r#"[]"#));
-		let mut seq = params.sequence();
-		assert_eq!(seq.next::<Vec<u64>>().unwrap(), Vec::<u64>::new());
 	}
 }
