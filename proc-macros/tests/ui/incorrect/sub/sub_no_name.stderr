@@ -1,6 +1,5 @@
-error: Subscription methods must not be `async`
+error: unexpected end of input, `#[subscription]` is missing `name` argument
  --> $DIR/sub_no_name.rs:6:2
   |
-6 | /     #[subscription(unsub = "unsub", item = String)]
-7 | |     async fn async_method(&self) -> u8;
-  | |_______________________________________^
+6 |     #[subscription(item = String)]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -129,7 +129,7 @@ impl RpcDescription {
 		// Name of the RPC subscription (e.g. `foo_sub`).
 		let rpc_sub_name = self.rpc_identifier(&sub.name);
 		// Name of the RPC method to unsubscribe (e.g. `foo_unsub`).
-		let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
+		let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 
 		// `returns` represent the return type of the *rust method*, which is wrapped
 		// into the `Subscription` object.
