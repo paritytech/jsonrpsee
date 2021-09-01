@@ -180,7 +180,7 @@ impl StopHandle {
 	pub fn stop(self) -> Result<ShutdownWaiter, Error> {
 		if let Some(arc) = Weak::upgrade(&self.0) {
 			// We proceed only if the previous value of the flag was `false`
-			if arc.shutdown_requested.swap(true, Ordering::Relaxed) == false {
+			if !arc.shutdown_requested.swap(true, Ordering::Relaxed) {
 				return Ok(ShutdownWaiter(self.0));
 			}
 		}
