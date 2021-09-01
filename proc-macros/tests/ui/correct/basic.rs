@@ -101,7 +101,6 @@ async fn main() {
 	assert_eq!(client.request::<u64>("foo_array_params", vec![].into()).await.unwrap(), 0);
 	// TODO(niklasad1): do we want this to accepted as empty array?! doesn't makes sense to me
 	assert!(client.request::<u64>("foo_array_params", JsonRpcParams::NoParams).await.is_err());
-	assert_eq!(client.request::<u64>("foo_array_params", vec![1.into(), 2.into(), 3.into()].into()).await.unwrap(), 3);
 
 	// TODO(niklasad1): do we want empty array accepted as `no params`?.
 	assert!(client.request::<bool>("foo_optional_param", vec![].into()).await.is_err());
