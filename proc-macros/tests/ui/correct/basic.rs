@@ -14,7 +14,7 @@ pub trait Rpc {
 	async fn async_method(&self, param_a: u8, param_b: String) -> JsonRpcResult<u16>;
 
 	#[method(name = "optional_params")]
-	async fn optional_params(&self, a: Option<u8>, b: String) -> JsonRpcResult<bool>;
+	async fn optional_params(&self, a: std::option::Option<u8>, b: String) -> JsonRpcResult<bool>;
 
 	#[method(name = "optional_param")]
 	async fn optional_param(&self, a: Option<u8>) -> JsonRpcResult<bool>;

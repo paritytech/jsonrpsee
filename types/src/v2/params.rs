@@ -111,12 +111,6 @@ impl<'a> RpcParams<'a> {
 	///
 	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC
 	/// request has optional parameters at the tail that may or may not be present.
-	///
-	/// NOTE: there is an edge-case in JSON-RPC context where you would want to
-	/// decode `[1]` as either `Vec<u64>` or `u64` depending on specific method.
-	/// Thus, we decode `[1]` as `Vec<u64>` and not as `u64`.
-	///
-	/// If you need specific behaviour use `RpcParams::parse` or `RpcParams::one`.
 	pub fn sequence(&self) -> RpcParamsSequence {
 		let json = match self.0.as_ref() {
 			// It's assumed that params is `[a,b,c]`, if empty regard as no params.
@@ -158,6 +152,8 @@ impl<'a> RpcParams<'a> {
 /// This will parse the params one at a time, and allows for graceful handling of optional parameters at the tail; other
 /// use cases are likely better served by [`RpcParams::parse`]. The reason this is not an actual [`Iterator`] is that
 /// params parsing (often) yields values of different types.
+///
+/// Regards empty array `[]` as no parameters provided.
 #[derive(Debug)]
 pub struct RpcParamsSequence<'a>(&'a str);
 
