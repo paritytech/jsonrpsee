@@ -154,8 +154,8 @@ fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindAllPar
 pub(crate) fn is_option(ty: &syn::Type) -> bool {
 	if let syn::Type::Path(path) = ty {
 		let mut it = path.path.segments.iter().peekable();
-
 		while let Some(seg) = it.next() {
+			// The leaf segment should be `Option` with or without angled brackets.
 			if seg.ident == "Option" && it.peek().is_none() {
 				return true;
 			}

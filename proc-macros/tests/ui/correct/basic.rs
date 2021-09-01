@@ -40,7 +40,7 @@ impl RpcServer for RpcServerImpl {
 		Ok(42u16)
 	}
 
-	async fn optional_params(&self, a: Option<u8>, _b: String) -> JsonRpcResult<bool> {
+	async fn optional_params(&self, a: core::option::Option<u8>, _b: String) -> JsonRpcResult<bool> {
 		let res = if a.is_some() { true } else { false };
 		Ok(res)
 	}
