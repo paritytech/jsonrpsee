@@ -105,7 +105,6 @@ async fn main() {
 			.unwrap(),
 		0
 	);
-	// TODO(niklasad1): do we want this to accepted as empty array?! doesn't makes sense to me
 
 	assert_eq!(client.request::<bool>("foo_optional_param", vec![].into()).await.unwrap(), false);
 	assert_eq!(client.request::<bool>("foo_optional_param", JsonRpcParams::NoParams).await.unwrap(), false);
