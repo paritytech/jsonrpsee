@@ -161,6 +161,8 @@ impl StopMonitor {
 	}
 
 	pub(crate) fn shutdown_requested(&self) -> bool {
+		// We expect this method to be polled frequently, skipping an iteration isn't problematic, so relaxed
+		// ordering is optimal.
 		self.0.shutdown_requested.load(Ordering::Relaxed)
 	}
 
