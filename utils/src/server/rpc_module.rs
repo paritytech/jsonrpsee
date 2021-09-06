@@ -577,9 +577,32 @@ mod tests {
 
 	#[tokio::test]
 	async fn calling_method_without_server() {
+		use serde_json::value::to_raw_value;
+		// Call sync method with no params
 		let mut module = RpcModule::new(());
 		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
-		let result = &module.call("boo", None).await;
-		assert_eq!(result, &Some(String::from("{\"jsonrpc\":\"2.0\",\"result\":\"boo!\",\"id\":0}")));
+		let result = &module.call("boo", None).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#));
+
+		// Call sync method with params
+		module.register_method("foo", |params, _| {
+			let n: u16 = params.parse().expect("valid params please");
+			Ok(n * 2)
+		}).unwrap();
+		let result = &module.call("foo", Some(to_raw_value(&3).unwrap())).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
+
+		// Call async method with params and context
+		struct MyContext;
+		impl MyContext {
+			pub fn roo(&self, things: Vec<u8>) -> u16 { things.iter().sum::<u8>().into() }
+		}
+		let mut module = RpcModule::new(MyContext);
+		module.register_async_method("roo", |params, ctx| {
+			let ns: Vec<u8> = params.parse().expect("valid params please");
+			async move { Ok(ctx.roo(ns)) }.boxed()
+		}).unwrap();
+		let result = &module.call("roo", Some(to_raw_value(&vec![12, 13]).unwrap())).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":25,"id":0}"#));
 	}
 }
