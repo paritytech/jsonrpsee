@@ -265,7 +265,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!("Error parsing optional #name (#ty): {:?}", e);
+								log::error!("Error parsing optional: {:?}, (:?)({:?})", e, stringify!(#name), stringify!(#ty));
 								panic!("NO NO");
 							}
 						};
@@ -275,7 +275,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!("Error parsing {:?} (#ty): {:?}", e, stringify!(#name));
+								log::error!("Error parsing: {:?}, (:?)({:?})", e, stringify!(#name), stringify!(#ty));
 								panic!("NO NO");
 							}
 						};
@@ -284,7 +284,7 @@ impl RpcDescription {
 			});
 
 			quote! {
-				log::debug!("HERE? params_fields=#params_fields, decode_fields=#decode_fields");
+				log::debug!("params_fields={:?}, decode_fields={:?}", stringify!(#params_fields), "stringify!(#decode_fields)");
 				let mut seq = params.sequence();
 				#(#decode_fields);*
 			}
