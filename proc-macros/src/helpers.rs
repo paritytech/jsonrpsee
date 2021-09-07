@@ -172,15 +172,12 @@ pub(crate) fn is_option(ty: &syn::Type) -> bool {
 pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
 	let docs = attrs.iter().filter_map(|attr| {
 		if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
-			if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
-				if let syn::Lit::Str(_lit) = &meta.lit {
-					Some(attr)
-				} else {
-					None
-				}
-			} else {
-				None
-			}
+			match &meta.lit {
+				syn::Lit::Str(_) => (),
+				_ => return None,
+			};
+
+			meta.path.get_ident().and_then(|ident| if ident == "doc" { Some(attr) } else { None })
 		} else {
 			None
 		}
