@@ -10,7 +10,7 @@ pub trait Rpc {
 	#[method(name = "bar")]
 	fn sync_method(&self) -> JsonRpcResult<u16>;
 
-	#[subscription(name = "sub", unsub = "unsub", item = String)]
+	#[subscription(name = "sub", item = String)]
 	fn sub(&self);
 }
 

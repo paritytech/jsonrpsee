@@ -25,26 +25,20 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::future::Future;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::{net::SocketAddr, sync::Arc};
 
-use crate::future::FutureDriver;
+use crate::future::{FutureDriver, StopHandle, StopMonitor};
 use crate::types::{
 	error::Error, v2::error::JsonRpcErrorCode, v2::params::Id, v2::request::JsonRpcRequest, TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
-use futures_util::future::FutureExt;
+use futures_util::io::{BufReader, BufWriter};
+// use futures_util::future::FutureExt;
 use futures_util::stream::StreamExt;
-use futures_util::{
-	io::{BufReader, BufWriter},
-	SinkExt,
-};
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use tokio::{
-	net::{TcpListener, TcpStream, ToSocketAddrs},
-	sync::RwLock,
-};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, send_error};
@@ -59,10 +53,7 @@ pub struct Server {
 	methods: Methods,
 	listener: TcpListener,
 	cfg: Settings,
-	/// Pair of channels to stop the server.
-	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
-	/// Stop handle that indicates whether server has been stopped.
-	stop_handle: Arc<RwLock<()>>,
+	stop_monitor: StopMonitor,
 }
 
 impl Server {
@@ -73,20 +64,17 @@ impl Server {
 
 	/// Returns the handle to stop the running server.
 	pub fn stop_handle(&self) -> StopHandle {
-		StopHandle { stop_sender: self.stop_pair.0.clone(), stop_handle: self.stop_handle.clone() }
+		self.stop_monitor.handle()
 	}
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self, methods: impl Into<Methods>) {
-		// Acquire read access to the lock such that additional reader(s) may share this lock.
-		// Write access to this lock will only be possible after the server and all background tasks have stopped.
-		let _stop_handle = self.stop_handle.read().await;
-		let shutdown = self.stop_pair.0;
+		let stop_monitor = self.stop_monitor;
 		let methods = methods.into();
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
-		let mut incoming = Incoming::new(self.listener, self.stop_pair.1);
+		let mut incoming = Incoming::new(self.listener, &stop_monitor);
 
 		loop {
 			match connections.select_with(&mut incoming).await {
@@ -104,7 +92,7 @@ impl Server {
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					connections.add(Box::pin(handshake(socket, id, methods, cfg, &shutdown, &self.stop_handle)));
+					connections.add(Box::pin(handshake(socket, id, methods, cfg, &stop_monitor)));
 
 					id = id.wrapping_add(1);
 				}
@@ -114,19 +102,21 @@ impl Server {
 				Err(IncomingError::Shutdown) => break,
 			}
 		}
+
+		connections.await
 	}
 }
 
 /// This is a glorified select listening to new connections, while also checking
 /// for `stop_receiver` signal.
-struct Incoming {
+struct Incoming<'a> {
 	listener: TcpListener,
-	stop_receiver: mpsc::Receiver<()>,
+	stop_monitor: &'a StopMonitor,
 }
 
-impl Incoming {
-	fn new(listener: TcpListener, stop_receiver: mpsc::Receiver<()>) -> Self {
-		Incoming { listener, stop_receiver }
+impl<'a> Incoming<'a> {
+	fn new(listener: TcpListener, stop_monitor: &'a StopMonitor) -> Self {
+		Incoming { listener, stop_monitor }
 	}
 }
 
@@ -135,13 +125,13 @@ enum IncomingError {
 	Io(std::io::Error),
 }
 
-impl Future for Incoming {
+impl<'a> Future for Incoming<'a> {
 	type Output = Result<(TcpStream, SocketAddr), IncomingError>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		if let Poll::Ready(Some(())) = this.stop_receiver.next().poll_unpin(cx) {
+		if this.stop_monitor.shutdown_requested() {
 			return Poll::Ready(Err(IncomingError::Shutdown));
 		}
 
@@ -154,8 +144,7 @@ async fn handshake(
 	conn_id: ConnectionId,
 	methods: &Methods,
 	cfg: &Settings,
-	shutdown: &mpsc::Sender<()>,
-	stop_handle: &Arc<RwLock<()>>,
+	stop_monitor: &StopMonitor,
 ) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
@@ -186,8 +175,7 @@ async fn handshake(
 		conn_id,
 		methods.clone(),
 		cfg.max_request_body_size,
-		shutdown.clone(),
-		stop_handle.clone(),
+		stop_monitor.clone(),
 	))
 	.await;
 
@@ -202,18 +190,16 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	max_request_body_size: u32,
-	shutdown: mpsc::Sender<()>,
-	stop_handle: Arc<RwLock<()>>,
+	stop_monitor: StopMonitor,
 ) -> Result<(), Error> {
-	let _lock = stop_handle.read().await;
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 
-	let shutdown2 = shutdown.clone();
+	let stop_monitor2 = stop_monitor.clone();
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while !shutdown2.is_closed() {
+		while !stop_monitor2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
 					log::debug!("send: {}", response);
@@ -223,6 +209,8 @@ async fn background_task(
 				None => break,
 			};
 		}
+
+		drop(stop_monitor2);
 		// terminate connection.
 		let _ = sender.close().await;
 	});
@@ -231,7 +219,7 @@ async fn background_task(
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
 
-	while !shutdown.is_closed() {
+	while !stop_monitor.shutdown_requested() {
 		data.clear();
 
 		method_executors.select_with(receiver.receive_data(&mut data)).await?;
@@ -287,6 +275,9 @@ async fn background_task(
 
 	// Drive all running methods to completion
 	method_executors.await;
+
+	// Drop the monitor for this task since we are shutting down
+	drop(stop_monitor);
 
 	Ok(())
 }
@@ -427,39 +418,13 @@ impl Builder {
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
-		let stop_pair = mpsc::channel(1);
-		Ok(Server {
-			listener,
-			methods: Methods::default(),
-			cfg: self.settings,
-			stop_pair,
-			stop_handle: Arc::new(RwLock::new(())),
-		})
+		let stop_monitor = StopMonitor::new();
+		Ok(Server { listener, methods: Methods::default(), cfg: self.settings, stop_monitor })
 	}
 }
 
 impl Default for Builder {
 	fn default() -> Self {
 		Self { settings: Settings::default() }
-	}
-}
-
-/// Handle that is able to stop the running server.
-#[derive(Debug, Clone)]
-pub struct StopHandle {
-	stop_sender: mpsc::Sender<()>,
-	stop_handle: Arc<RwLock<()>>,
-}
-
-impl StopHandle {
-	/// Requests server to stop. Returns an error if server was already stopped.
-	pub async fn stop(&mut self) -> Result<(), Error> {
-		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
-	}
-
-	/// Blocks indefinitely until the server is stopped.
-	pub async fn wait_for_stop(&self) {
-		// blocks until there are no readers left.
-		self.stop_handle.write().await;
 	}
 }

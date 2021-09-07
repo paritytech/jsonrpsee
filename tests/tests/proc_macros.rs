@@ -47,10 +47,10 @@ mod rpc_impl {
 		#[method(name = "bar")]
 		fn sync_method(&self) -> JsonRpcResult<u16>;
 
-		#[subscription(name = "sub", unsub = "unsub", item = String)]
+		#[subscription(name = "sub", item = String)]
 		fn sub(&self);
 
-		#[subscription(name = "echo", unsub = "no_more_echo", item = u32)]
+		#[subscription(name = "echo", aliases = "alias_echo", item = u32)]
 		fn sub_with_params(&self, val: u32);
 
 		#[method(name = "params")]
@@ -80,6 +80,68 @@ mod rpc_impl {
 		}
 	}
 
+	#[rpc(client, server, namespace = "chain")]
+	pub trait ChainApi<Number, Hash, Header, SignedBlock> {
+		/// Get header of a relay chain block.
+		#[method(name = "getHeader")]
+		fn header(&self, hash: Option<Hash>) -> JsonRpcResult<Option<Header>>;
+
+		/// Get header and body of a relay chain block.
+		#[method(name = "getBlock")]
+		async fn block(&self, hash: Option<Hash>) -> JsonRpcResult<Option<SignedBlock>>;
+
+		/// Get hash of the n-th block in the canon chain.
+		///
+		/// By default returns latest block hash.
+		#[method(name = "getBlockHash")]
+		fn block_hash(&self, hash: Hash) -> JsonRpcResult<Option<Hash>>;
+
+		/// Get hash of the last finalized block in the canon chain.
+		#[method(name = "getFinalizedHead")]
+		fn finalized_head(&self) -> JsonRpcResult<Hash>;
+
+		/// All head subscription
+		#[subscription(name = "subscribeAllHeads", item = Header)]
+		fn subscribe_all_heads(&self, hash: Hash);
+	}
+
+	/// Trait to ensure that the trait bounds are correct.
+	#[rpc(client, server, namespace = "generic_call")]
+	pub trait OnlyGenericCall<I, R> {
+		#[method(name = "getHeader")]
+		fn call(&self, input: I) -> JsonRpcResult<R>;
+	}
+
+	/// Trait to ensure that the trait bounds are correct.
+	#[rpc(client, server, namespace = "generic_sub")]
+	pub trait OnlyGenericSubscription<Input, R> {
+		/// Get header of a relay chain block.
+		#[subscription(name = "sub", item = Vec<R>)]
+		fn sub(&self, hash: Input);
+	}
+
+	/// Trait to ensure that the trait bounds are correct.
+	#[rpc(client, server, namespace = "generic_with_where_clause")]
+	pub trait GenericWhereClause<I, R>
+	where
+		I: std::fmt::Debug,
+		R: Copy + Clone,
+	{
+		#[method(name = "getHeader")]
+		fn call(&self, input: I) -> JsonRpcResult<R>;
+	}
+
+	/// Trait to ensure that the trait bounds are correct.
+	#[rpc(client, server, namespace = "generic_with_where_clause")]
+	pub trait GenericWhereClauseWithTypeBoundsToo<I: Copy + Clone, R>
+	where
+		I: std::fmt::Debug,
+		R: Copy + Clone,
+	{
+		#[method(name = "getHeader")]
+		fn call(&self, input: I) -> JsonRpcResult<R>;
+	}
+
 	pub struct RpcServerImpl;
 
 	#[async_trait]
@@ -100,6 +162,20 @@ mod rpc_impl {
 		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) {
 			sink.send(&val).unwrap();
 			sink.send(&val).unwrap();
+		}
+	}
+
+	#[async_trait]
+	impl OnlyGenericCallServer<String, String> for RpcServerImpl {
+		fn call(&self, _: String) -> JsonRpcResult<String> {
+			Ok("hello".to_string())
+		}
+	}
+
+	#[async_trait]
+	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
+		fn sub(&self, mut sink: SubscriptionSink, _: String) {
+			sink.send(&"hello").unwrap();
 		}
 	}
 }
@@ -174,11 +250,11 @@ async fn macro_optional_param_parsing() {
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, None, Some(70)","id":0}"#);
 
+	// TODO: https://github.com/paritytech/jsonrpsee/issues/445
 	// Named params using a map
 	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
 	let result = module.call("foo_optional_params", params).await.unwrap();
-
-	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
+	assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
 }
 
 #[tokio::test]
