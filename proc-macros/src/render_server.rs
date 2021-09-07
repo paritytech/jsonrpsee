@@ -275,7 +275,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!("Error parsing {:?} (#ty): {:?}", e, #name);
+								log::error!("Error parsing {:?} (#ty): {:?}", e, "#name");
 								panic!("NO NO");
 							}
 						};
