@@ -35,7 +35,7 @@ use syn::Attribute;
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
 	pub name: String,
-	pub doc: Vec<syn::Attribute>,
+	pub docs: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
@@ -47,7 +47,7 @@ impl RpcMethod {
 		let attributes = attributes::Method::from_attributes(&method.attrs).respan(&method.attrs.first())?;
 		let sig = method.sig.clone();
 		let name = attributes.name.value();
-		let doc = extract_doc_comments(&method.attrs);
+		let docs = extract_doc_comments(&method.attrs);
 		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
 		let params: Vec<_> = sig
 			.inputs
@@ -69,14 +69,14 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, name, params, returns, signature: method, doc })
+		Ok(Self { aliases, name, params, returns, signature: method, docs })
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct RpcSubscription {
 	pub name: String,
-	pub doc: Vec<syn::Attribute>,
+	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub item: syn::Type,
@@ -90,7 +90,7 @@ impl RpcSubscription {
 		let attributes = attributes::Subscription::from_attributes(&sub.attrs).respan(&sub.attrs.first())?;
 		let sig = sub.sig.clone();
 		let name = attributes.name.value();
-		let doc = extract_doc_comments(&sub.attrs);
+		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = build_unsubscribe_method(&name);
 		let item = attributes.item;
 		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
@@ -111,7 +111,7 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, item, signature: sub, aliases, doc })
+		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, item, signature: sub, aliases, docs })
 	}
 }
 

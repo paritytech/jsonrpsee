@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::visitor::{FindAllParams, FindSubscriptionParams};
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use std::collections::HashSet;
@@ -169,14 +169,23 @@ pub(crate) fn is_option(ty: &syn::Type) -> bool {
 ///
 /// Note that `doc comments` are expanded into `#[doc = "some comment"]`
 /// Thus, if the attribute starts with `doc` => it's regarded as a doc comment.
-pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
-	attrs
-		.iter()
-		.filter_map(|attr| match attr.path.segments.first() {
-			Some(syn::PathSegment { ident, .. }) if ident == "doc" => Some(attr.to_owned()),
-			_ => None,
-		})
-		.collect()
+pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
+	let docs = attrs.iter().filter_map(|attr| {
+		if let Ok(syn::Meta::NameValue(meta)) = attr.parse_meta() {
+			if meta.path.get_ident().map_or(false, |ident| ident == "doc") {
+				if let syn::Lit::Str(_lit) = &meta.lit {
+					Some(attr)
+				} else {
+					None
+				}
+			} else {
+				None
+			}
+		} else {
+			None
+		}
+	});
+	quote! ( #(#docs)* )
 }
 
 #[cfg(test)]

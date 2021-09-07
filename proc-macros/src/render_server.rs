@@ -58,23 +58,23 @@ impl RpcDescription {
 
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
 		let methods = self.methods.iter().map(|method| {
-			let doc = &method.doc;
+			let docs = &method.docs;
 			let method_sig = &method.signature;
 			quote! {
-				#(#doc)*
+				#docs
 				#method_sig
 			}
 		});
 
 		let subscriptions = self.subscriptions.iter().map(|sub| {
-			let doc = &sub.doc;
+			let docs = &sub.docs;
 			let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
 			sub_sig.sig.inputs.insert(1, subscription_sink);
 			quote! {
-				#(#doc)*
+				#docs
 				#sub_sig
 			}
 		});
