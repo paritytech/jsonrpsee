@@ -89,9 +89,9 @@ impl MethodCallback {
 	) -> Option<BoxFuture<'static, ()>> {
 		let id = req.id.clone();
 		let params = RpcParams::new(req.params.map(|params| params.get()));
-
 		match self {
 			MethodCallback::Sync(callback) => {
+				log::trace!("Executing sync callback id={:?}, params={:?}", id, params);
 				(callback)(id, params, tx, conn_id);
 
 				None
@@ -100,6 +100,7 @@ impl MethodCallback {
 				let tx = tx.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
+				log::trace!("Executing async callback id={:?}, params={:?}", id, params);
 
 				Some((callback)(id, params, tx, conn_id))
 			}
@@ -171,6 +172,7 @@ impl Methods {
 		req: JsonRpcRequest<'_>,
 		conn_id: ConnectionId,
 	) -> Option<BoxFuture<'static, ()>> {
+		log::trace!("executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id),
 			None => {
