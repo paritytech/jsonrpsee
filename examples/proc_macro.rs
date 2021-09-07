@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#![warn(missing_docs)]
 use jsonrpsee::{
 	proc_macros::rpc,
 	types::{async_trait, error::Error, Subscription},
@@ -40,11 +41,9 @@ pub trait Rpc<Hash: Clone, StorageKey>
 where
 	Hash: std::fmt::Debug,
 {
-	/// Async method call example.
 	#[method(name = "getKeys")]
 	async fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>, Error>;
 
-	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage", item = Vec<Hash>)]
 	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
 }

@@ -165,6 +165,20 @@ pub(crate) fn is_option(ty: &syn::Type) -> bool {
 	false
 }
 
+/// Iterates over all Attribute's and parses only the attributes that are doc comments.
+///
+/// Note that `doc comments` are expanded into `#[doc = "some comment"]`
+/// Thus, if the attribute starts with `doc` => it's regarded as a doc comment.
+pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> Vec<syn::Attribute> {
+	attrs
+		.iter()
+		.filter_map(|attr| match attr.path.segments.first() {
+			Some(syn::PathSegment { ident, .. }) if ident == "doc" => Some(attr.to_owned()),
+			_ => None,
+		})
+		.collect()
+}
+
 #[cfg(test)]
 mod tests {
 	use super::is_option;

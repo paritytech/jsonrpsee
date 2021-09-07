@@ -39,7 +39,6 @@ impl RpcDescription {
 
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
-
 		let async_trait = self.jrps_server_item(quote! { types::__reexports::async_trait });
 
 		// Doc-comment to be associated with the server.
@@ -58,14 +57,26 @@ impl RpcDescription {
 	}
 
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
-		let methods = self.methods.iter().map(|method| &method.signature);
+		let methods = self.methods.iter().map(|method| {
+			let doc = &method.doc;
+			let method_sig = &method.signature;
+			quote! {
+				#(#doc)*
+				#method_sig
+			}
+		});
 
-		let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
-		let subscriptions = self.subscriptions.iter().cloned().map(|mut sub| {
+		let subscriptions = self.subscriptions.iter().map(|sub| {
+			let doc = &sub.doc;
+			let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
-			sub.signature.sig.inputs.insert(1, subscription_sink);
-			sub.signature
+			let mut sub_sig = sub.signature.clone();
+			sub_sig.sig.inputs.insert(1, subscription_sink);
+			quote! {
+				#(#doc)*
+				#sub_sig
+			}
 		});
 
 		Ok(quote! {
