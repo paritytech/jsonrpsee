@@ -183,7 +183,7 @@ impl Methods {
 	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
 	/// a server up.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
-		log::trace!("[call] method: '{:?}', params: {:?}", method, params);
+		log::debug!("[call] method: '{:?}', params: {:?}", method, params);
 		let req = JsonRpcRequest {
 			jsonrpc: TwoPointZero,
 			id: Id::Number(0),
