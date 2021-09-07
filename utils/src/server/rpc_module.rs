@@ -182,8 +182,8 @@ impl Methods {
 		}
 	}
 
-	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
-	/// a server up.
+	/// Helper alternative to `execute`, useful for writing unit tests without having to up spin
+	/// a server.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
 		log::debug!("[call] method: '{:?}', params: {:?}", method, params);
 		let req = JsonRpcRequest {
@@ -262,6 +262,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(Error::Call(CallError::InvalidParams)) => {
+						log::error!("Invalid params. id={:?}", id);
 						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
 					}
 					Err(Error::Call(CallError::Failed(e))) => {
