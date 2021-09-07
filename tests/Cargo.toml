@@ -14,3 +14,4 @@ futures-channel = { version = "0.3.14", default-features = false }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
+log = "0.4"

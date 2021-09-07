@@ -31,6 +31,7 @@ use jsonrpsee::{
 	ws_server::{SubscriptionSink, WsServerBuilder},
 };
 use std::net::SocketAddr;
+use log;
 
 type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;

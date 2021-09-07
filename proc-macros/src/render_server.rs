@@ -261,7 +261,14 @@ impl RpcDescription {
 			let decode_fields = params.iter().map(|(name, ty)| {
 				if is_option(ty) {
 					quote! {
-						let #name: #ty = seq.optional_next()?;
+						// let #name: #ty = seq.optional_next()?;
+						let #name: #ty = match seq.optional_next() {
+							Ok(v) => v,
+							Err(e) => {
+								log::error!("Error parsing #name (#ty): {:?}", e);
+								panic!("NO NO");
+							}
+						};
 					}
 				} else {
 					quote! {
@@ -271,6 +278,7 @@ impl RpcDescription {
 			});
 
 			quote! {
+				log::debug!("HERE? params_fields=#params_fields, decode_fields=#decode_fields");
 				let mut seq = params.sequence();
 				#(#decode_fields);*
 			}

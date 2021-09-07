@@ -31,6 +31,7 @@ use std::net::SocketAddr;
 use futures_channel::oneshot;
 use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
 use serde_json::value::RawValue;
+use log;
 
 mod rpc_impl {
 	use jsonrpsee::{
