@@ -265,14 +265,20 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!("Error parsing #name (#ty): {:?}", e);
+								log::error!("Error parsing optional #name (#ty): {:?}", e);
 								panic!("NO NO");
 							}
 						};
 					}
 				} else {
 					quote! {
-						let #name: #ty = seq.next()?;
+						let #name: #ty = match seq.next() {
+							Ok(v) => v,
+							Err(e) => {
+								log::error!("Error parsing #name (#ty): {:?}", e);
+								panic!("NO NO");
+							}
+						};
 					}
 				}
 			});
