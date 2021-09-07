@@ -163,15 +163,19 @@ impl<'a> RpcParamsSequence<'a> {
 		T: Deserialize<'a>,
 	{
 		let mut json = self.0;
-
+		log::trace!("[next_inner] Params JSON: {:?}", json);
 		match json.as_bytes().get(0)? {
 			b']' => {
 				self.0 = "";
 
+				log::trace!("[next_inner] Reached end sequence.");
 				return None;
 			}
 			b'[' | b',' => json = &json[1..],
-			_ => return Some(Err(CallError::InvalidParams)),
+			_ => {
+				log::error!("[next_inner] Expected one of '[', ']' or ',' but found {:?}", json);
+				return Some(Err(CallError::InvalidParams))
+			},
 		}
 
 		let mut iter = serde_json::Deserializer::from_str(json).into_iter::<T>();
@@ -182,7 +186,8 @@ impl<'a> RpcParamsSequence<'a> {
 
 				Some(Ok(value))
 			}
-			Err(_) => {
+			Err(e) => {
+				log::error!("[next_inner] Deserialization error: {:?}", e);
 				self.0 = "";
 
 				Some(Err(CallError::InvalidParams))

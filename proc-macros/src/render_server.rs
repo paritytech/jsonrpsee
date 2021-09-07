@@ -265,7 +265,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!("Error parsing optional: {:?}, {:?} ({:?})", e, stringify!(#name), stringify!(#ty));
+								log::error!("Error parsing optional {:?} as {:?}: {:?}", stringify!(#name), stringify!(#ty), e);
 								panic!("NO NO");
 							}
 						};
@@ -275,7 +275,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!("Error parsing: {:?}, {:?} ({:?})", e, stringify!(#name), stringify!(#ty));
+								log::error!("Error parsing {:?} as {:?}: {:?}", stringify!(#name), stringify!(#ty), e);
 								panic!("NO NO");
 							}
 						};
