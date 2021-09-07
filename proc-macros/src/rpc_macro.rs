@@ -26,7 +26,7 @@
 
 //! Declaration of the JSON RPC generator procedural macros.
 
-use crate::{attributes, respan::Respan};
+use crate::{attributes, helpers::extract_doc_comments, respan::Respan};
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -47,7 +47,7 @@ impl RpcMethod {
 		let attributes = attributes::Method::from_attributes(&method.attrs).respan(&method.attrs.first())?;
 		let sig = method.sig.clone();
 		let name = attributes.name.value();
-		let doc = crate::helpers::extract_doc_comments(&method.attrs);
+		let doc = extract_doc_comments(&method.attrs);
 		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
 		let params: Vec<_> = sig
 			.inputs
@@ -90,7 +90,7 @@ impl RpcSubscription {
 		let attributes = attributes::Subscription::from_attributes(&sub.attrs).respan(&sub.attrs.first())?;
 		let sig = sub.sig.clone();
 		let name = attributes.name.value();
-		let doc = crate::helpers::extract_doc_comments(&sub.attrs);
+		let doc = extract_doc_comments(&sub.attrs);
 		let unsubscribe = build_unsubscribe_method(&name);
 		let item = attributes.item;
 		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
