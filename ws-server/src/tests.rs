@@ -55,9 +55,9 @@ async fn server() -> SocketAddr {
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has the following methods:
-/// 	sync methods: `say_hello` and `add`
-///		async: `say_hello_async` and `add_sync`
-/// 	other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns `CallError::Failed`), `sleep_for`
+///     sync methods: `say_hello` and `add`
+///     async: `say_hello_async` and `add_sync`
+///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns `CallError::Failed`), `sleep_for`
 /// Returns the address together with handles for server future and server stop.
 async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
@@ -122,14 +122,14 @@ async fn server_with_context() -> SocketAddr {
 
 	rpc_module
 		.register_method("should_err", |_p, ctx| {
-			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(CallError::Failed)?;
 			Ok("err")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_method("should_ok", |_p, ctx| {
-			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(CallError::Failed)?;
 			Ok("ok")
 		})
 		.unwrap();
@@ -137,7 +137,7 @@ async fn server_with_context() -> SocketAddr {
 	rpc_module
 		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(CallError::Failed)?;
 				// Call some async function inside.
 				Ok(futures_util::future::ready("ok!").await)
 			}
@@ -148,7 +148,7 @@ async fn server_with_context() -> SocketAddr {
 	rpc_module
 		.register_async_method("err_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(CallError::Failed)?;
 				// Async work that returns an error
 				futures_util::future::err::<(), _>(anyhow!("nah").into()).await
 			}
