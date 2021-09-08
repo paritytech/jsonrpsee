@@ -108,10 +108,10 @@ impl RpcDescription {
 		};
 
 		// Doc-comment to be associated with the method.
-		let doc_comment = format!("Invokes the RPC method `{}`.", rpc_method_name);
+		let docs = &method.docs;
 
 		let method = quote! {
-			#[doc = #doc_comment]
+			#docs
 			async fn #rust_method_name(#rust_method_params) -> #returns {
 				self.#called_method(#rpc_method_name, #parameters).await
 			}
@@ -151,10 +151,10 @@ impl RpcDescription {
 		};
 
 		// Doc-comment to be associated with the method.
-		let doc_comment = format!("Subscribes to the RPC method `{}`.", rpc_sub_name);
+		let docs = &sub.docs;
 
 		let method = quote! {
-			#[doc = #doc_comment]
+			#docs
 			async fn #rust_method_name(#rust_method_params) -> #returns {
 				self.subscribe(#rpc_sub_name, #parameters, #rpc_unsub_name).await
 			}

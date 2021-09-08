@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::visitor::{FindAllParams, FindSubscriptionParams};
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use std::collections::HashSet;
@@ -163,6 +163,18 @@ pub(crate) fn is_option(ty: &syn::Type) -> bool {
 	}
 
 	false
+}
+
+/// Iterates over all Attribute's and parses only the attributes that are doc comments.
+///
+/// Note that `doc comments` are expanded into `#[doc = "some comment"]`
+/// Thus, if the attribute starts with `doc` => it's regarded as a doc comment.
+pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
+	let docs = attrs.iter().filter(|attr| attr.path.is_ident("doc")).filter(|attr| match attr.parse_meta() {
+		Ok(syn::Meta::NameValue(meta)) if matches!(&meta.lit, syn::Lit::Str(_)) => true,
+		_ => false,
+	});
+	quote! ( #(#docs)* )
 }
 
 #[cfg(test)]
