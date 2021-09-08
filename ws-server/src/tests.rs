@@ -122,7 +122,7 @@ async fn server_with_context() -> SocketAddr {
 
 	rpc_module
 		.register_method("should_err", |_p, ctx| {
-			let _ = ctx.ok().map_err(CallError::Failed)?;
+			let _ = ctx.err().map_err(CallError::Failed)?;
 			Ok("err")
 		})
 		.unwrap();
