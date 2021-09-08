@@ -187,7 +187,7 @@ impl<'a> RpcParamsSequence<'a> {
 				Some(Ok(value))
 			}
 			Err(e) => {
-				log::error!("[next_inner] Deserialization error: {:?}", e);
+				log::error!("[next_inner] Deserialization error: {:?}; input JSON: {:?}", e, json);
 				self.0 = "";
 
 				Some(Err(CallError::InvalidParams))
