@@ -48,10 +48,10 @@ mod rpc_impl {
 		fn sync_method(&self) -> JsonRpcResult<u16>;
 
 		#[subscription(name = "sub", item = String)]
-		fn sub(&self);
+		fn sub(&self) -> JsonRpcResult<()>;
 
 		#[subscription(name = "echo", aliases = "alias_echo", item = u32)]
-		fn sub_with_params(&self, val: u32);
+		fn sub_with_params(&self, val: u32) -> JsonRpcResult<()>;
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> JsonRpcResult<String> {
@@ -102,7 +102,7 @@ mod rpc_impl {
 
 		/// All head subscription
 		#[subscription(name = "subscribeAllHeads", item = Header)]
-		fn subscribe_all_heads(&self, hash: Hash);
+		fn subscribe_all_heads(&self, hash: Hash) -> JsonRpcResult<()>;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -117,7 +117,7 @@ mod rpc_impl {
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
 		#[subscription(name = "sub", item = Vec<R>)]
-		fn sub(&self, hash: Input);
+		fn sub(&self, hash: Input) -> JsonRpcResult<()>;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -154,14 +154,16 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		fn sub(&self, mut sink: SubscriptionSink) {
-			sink.send(&"Response_A").unwrap();
-			sink.send(&"Response_B").unwrap();
+		fn sub(&self, mut sink: SubscriptionSink) -> JsonRpcResult<()> {
+			sink.send(&"Response_A")?;
+			sink.send(&"Response_B")?;
+			Ok(())
 		}
 
-		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) {
-			sink.send(&val).unwrap();
-			sink.send(&val).unwrap();
+		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> JsonRpcResult<()> {
+			sink.send(&val)?;
+			sink.send(&val)?;
+			Ok(())
 		}
 	}
 
@@ -174,8 +176,8 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		fn sub(&self, mut sink: SubscriptionSink, _: String) {
-			sink.send(&"hello").unwrap();
+		fn sub(&self, mut sink: SubscriptionSink, _: String) -> JsonRpcResult<()> {
+			sink.send(&"hello")
 		}
 	}
 }

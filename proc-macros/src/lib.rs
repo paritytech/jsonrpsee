@@ -215,7 +215,7 @@ pub(crate) mod visitor;
 ///         fn sync_method(&self) -> JsonRpcResult<u16>;
 ///
 ///         #[subscription(name = "sub", item = String)]
-///         fn sub(&self);
+///         fn sub(&self) -> JsonRpcResult<()>;
 ///     }
 ///
 ///     // Structure that will implement the `MyRpcServer` trait.
@@ -236,9 +236,9 @@ pub(crate) mod visitor;
 ///         // We could've spawned a `tokio` future that yields values while our program works,
 ///         // but for simplicity of the example we will only send two values and then close
 ///         // the subscription.
-///         fn sub(&self, mut sink: SubscriptionSink) {
-///             sink.send(&"Response_A").unwrap();
-///             sink.send(&"Response_B").unwrap();
+///         fn sub(&self, mut sink: SubscriptionSink) -> JsonRpcResult<()> {
+///             sink.send(&"Response_A")?;
+///             sink.send(&"Response_B")
 ///         }
 ///     }
 /// }
