@@ -170,9 +170,12 @@ pub(crate) fn is_option(ty: &syn::Type) -> bool {
 /// Note that `doc comments` are expanded into `#[doc = "some comment"]`
 /// Thus, if the attribute starts with `doc` => it's regarded as a doc comment.
 pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
-	let docs = attrs.iter().filter(|attr| attr.path.is_ident("doc")).filter(|attr| match attr.parse_meta() {
-		Ok(syn::Meta::NameValue(meta)) if matches!(&meta.lit, syn::Lit::Str(_)) => true,
-		_ => false,
+	let docs = attrs.iter().filter(|attr| {
+		attr.path.is_ident("doc")
+			&& match attr.parse_meta() {
+				Ok(syn::Meta::NameValue(meta)) => matches!(&meta.lit, syn::Lit::Str(_)),
+				_ => false,
+			}
 	});
 	quote! ( #(#docs)* )
 }

@@ -105,7 +105,7 @@ where
 
 		this.drive(cx);
 
-		if this.futures.len() == 0 {
+		if this.futures.is_empty() {
 			Poll::Ready(())
 		} else {
 			Poll::Pending
