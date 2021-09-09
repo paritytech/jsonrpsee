@@ -29,7 +29,6 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
-use jsonrpsee_types::to_json_raw_value;
 use jsonrpsee_types::v2::error::{
 	JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE,
 };
@@ -41,7 +40,7 @@ use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use serde_json::value::{to_raw_value, RawValue};
+use serde_json::value::RawValue;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -185,7 +184,7 @@ impl Methods {
 	/// a server up.
 	///
 	/// Converts the params to an array for you if it's not already serialized to a sequence.
-	pub async fn call_with_params_as_array<T: Serialize>(&self, method: &str, params: &T) -> Option<String> {
+	pub async fn call_with<T: Serialize>(&self, method: &str, params: &T) -> Option<String> {
 		let params = serde_json::to_string(params).ok().map(|json| {
 			let json = if json.starts_with("[") && json.ends_with("]") { json } else { format!("[{}]", json) };
 			RawValue::from_string(json).expect("valid JSON string above; qed")
