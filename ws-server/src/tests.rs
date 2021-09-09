@@ -31,7 +31,7 @@ use crate::{future::StopHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
+use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 use std::fmt;
@@ -203,12 +203,7 @@ async fn can_set_max_connections() {
 	assert!(conn2.is_ok());
 	// Third connection is rejected
 	assert!(conn3.is_err());
-
-	let err = match conn3 {
-		Err(soketto::handshake::Error::Io(err)) => err,
-		_ => panic!("Invalid error kind; expected std::io::Error"),
-	};
-	assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset);
+	assert!(matches!(conn3, Err(WebSocketTestError::RejectedWithStatusCode(429))));
 
 	// Decrement connection count
 	drop(conn2);

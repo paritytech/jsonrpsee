@@ -88,8 +88,21 @@ impl std::fmt::Debug for WebSocketTestClient {
 	}
 }
 
+#[derive(Debug)]
+pub enum WebSocketTestError {
+	Redirect,
+	RejectedWithStatusCode(u16),
+	Soketto(SokettoError)
+}
+
+impl From<io::Error> for WebSocketTestError {
+	fn from(err: io::Error) -> Self {
+		WebSocketTestError::Soketto(SokettoError::Io(err))
+	}
+}
+
 impl WebSocketTestClient {
-	pub async fn new(url: SocketAddr) -> Result<Self, SokettoError> {
+	pub async fn new(url: SocketAddr) -> Result<Self, WebSocketTestError> {
 		let socket = TcpStream::connect(url).await?;
 		let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), "test-client", "/");
 		match client.handshake().await {
@@ -98,12 +111,12 @@ impl WebSocketTestClient {
 				Ok(Self { tx, rx })
 			}
 			Ok(handshake::ServerResponse::Redirect { .. }) => {
-				Err(SokettoError::Io(io::Error::new(io::ErrorKind::Other, "Redirection not supported in tests")))
+				Err(WebSocketTestError::Redirect)
 			}
-			Ok(handshake::ServerResponse::Rejected { .. }) => {
-				Err(SokettoError::Io(io::Error::new(io::ErrorKind::Other, "Rejected")))
+			Ok(handshake::ServerResponse::Rejected { status_code }) => {
+				Err(WebSocketTestError::RejectedWithStatusCode(status_code))
 			}
-			Err(err) => Err(err),
+			Err(err) => Err(WebSocketTestError::Soketto(err)),
 		}
 	}
 
