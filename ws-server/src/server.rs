@@ -35,7 +35,6 @@ use crate::types::{
 };
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
-// use futures_util::future::FutureExt;
 use futures_util::stream::StreamExt;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -157,6 +156,11 @@ async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeMode<'_>) -> Re
 			// Forced rejection, don't need to read anything from the socket
 			let reject = Response::Reject { status_code };
 			server.send_response(&reject).await?;
+
+			let (mut sender, _) = server.into_builder().finish();
+
+			// Gracefully shut down the connection
+			sender.close().await?;
 
 			Ok(())
 		}
