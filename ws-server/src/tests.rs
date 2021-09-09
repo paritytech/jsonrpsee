@@ -203,7 +203,9 @@ async fn can_set_max_connections() {
 	assert!(conn2.is_ok());
 	// Third connection is rejected
 	assert!(conn3.is_err());
-	assert!(matches!(conn3, Err(WebSocketTestError::RejectedWithStatusCode(429))));
+	if !matches!(conn3, Err(WebSocketTestError::RejectedWithStatusCode(429))) {
+		panic!("Expected RejectedWithStatusCode(429), got: {:#?}", conn3);
+	}
 
 	// Decrement connection count
 	drop(conn2);
