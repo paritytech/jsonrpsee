@@ -29,6 +29,7 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
+use jsonrpsee_types::to_json_raw_value;
 use jsonrpsee_types::v2::error::{
 	JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE,
 };
@@ -40,7 +41,7 @@ use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
-use serde_json::value::RawValue;
+use serde_json::value::{to_raw_value, RawValue};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -178,6 +179,18 @@ impl Methods {
 				None
 			}
 		}
+	}
+
+	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
+	/// a server up.
+	///
+	/// Converts the params to an array for you if it's not already serialized to a sequence.
+	pub async fn call_with_params_as_array<T: Serialize>(&self, method: &str, params: &T) -> Option<String> {
+		let params = serde_json::to_string(params).ok().map(|json| {
+			let json = if json.starts_with("[") && json.ends_with("]") { json } else { format!("[{}]", json) };
+			RawValue::from_string(json).expect("valid JSON string above; qed")
+		});
+		self.call(method, params).await
 	}
 
 	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
@@ -540,6 +553,8 @@ fn subscription_closed_err(sub_id: u64) -> Error {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use serde_json::json;
+
 	#[test]
 	fn rpc_modules_with_different_contexts_can_be_merged() {
 		let cx = Vec::<u8>::new();
@@ -573,5 +588,62 @@ mod tests {
 
 		assert!(module.method("hello_world").is_some());
 		assert!(module.method("hello_foobar").is_some());
+	}
+
+	#[tokio::test]
+	async fn calling_method_without_server() {
+		// Call sync method with no params
+		let mut module = RpcModule::new(());
+		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
+		let result = &module.call_with_params_as_array("boo", &None::<()>).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#));
+
+		// Call sync method with params
+		module
+			.register_method("foo", |params, _| {
+				let n: u16 = params.one().expect("valid params please");
+				Ok(n * 2)
+			})
+			.unwrap();
+		let result = &module.call_with_params_as_array("foo", &3).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
+		let result = &module.call_with_params_as_array("foo", &[3]).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
+
+		// Call async method with params and context
+		struct MyContext;
+		impl MyContext {
+			fn roo(&self, things: Vec<u8>) -> u16 {
+				things.iter().sum::<u8>().into()
+			}
+		}
+		let mut module = RpcModule::new(MyContext);
+		module
+			.register_async_method("roo", |params, ctx| {
+				let ns: Vec<u8> = params.parse().expect("valid params please");
+				async move { Ok(ctx.roo(ns)) }.boxed()
+			})
+			.unwrap();
+
+		module
+			.register_async_method("many_args", |params, _ctx| {
+				let mut seq = params.sequence();
+
+				let one: Vec<usize> = seq.next().unwrap();
+				let two: String = seq.next().unwrap();
+				let three: usize = seq.optional_next().unwrap().unwrap_or(0);
+
+				let res = one.iter().sum::<usize>() + two.as_bytes().len() + three;
+
+				async move { Ok(res) }.boxed()
+			})
+			.unwrap();
+
+		let result = &module.call_with_params_as_array("roo", &[12, 13]).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":25,"id":0}"#));
+
+		let json = vec![json!([1, 3, 7]), json!("oooh")];
+		let result = &module.call_with_params_as_array("many_args", &json).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":15,"id":0}"#));
 	}
 }
