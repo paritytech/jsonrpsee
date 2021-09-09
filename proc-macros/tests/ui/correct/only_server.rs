@@ -14,7 +14,7 @@ pub trait Rpc {
 	fn sync_method(&self) -> JsonRpcResult<u16>;
 
 	#[subscription(name = "sub", item = String)]
-	fn sub(&self);
+	fn sub(&self) -> JsonRpcResult<()>;
 }
 
 pub struct RpcServerImpl;
@@ -29,9 +29,9 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	fn sub(&self, mut sink: SubscriptionSink) {
-		sink.send(&"Response_A").unwrap();
-		sink.send(&"Response_B").unwrap();
+	fn sub(&self, mut sink: SubscriptionSink) -> JsonRpcResult<()> {
+		sink.send(&"Response_A")?;
+		sink.send(&"Response_B")
 	}
 }
 

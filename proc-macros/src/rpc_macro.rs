@@ -180,9 +180,6 @@ impl RpcDescription {
 					if method.sig.asyncness.is_some() {
 						return Err(syn::Error::new_spanned(&method, "Subscription methods must not be `async`"));
 					}
-					if !matches!(method.sig.output, syn::ReturnType::Default) {
-						return Err(syn::Error::new_spanned(&method, "Subscription methods must not return anything"));
-					}
 
 					let sub_data = RpcSubscription::from_item(method.clone())?;
 					subscriptions.push(sub_data);

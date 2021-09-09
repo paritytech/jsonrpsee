@@ -168,7 +168,7 @@ impl RpcDescription {
 				handle_register_result(quote! {
 					rpc.register_subscription(#rpc_sub_name, #rpc_unsub_name, |params, sink, context| {
 						#parsing
-						Ok(context.as_ref().#rust_method_name(sink, #params_seq))
+						context.as_ref().#rust_method_name(sink, #params_seq)
 					})
 				})
 			})
