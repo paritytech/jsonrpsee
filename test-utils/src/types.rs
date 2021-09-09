@@ -92,7 +92,7 @@ impl std::fmt::Debug for WebSocketTestClient {
 pub enum WebSocketTestError {
 	Redirect,
 	RejectedWithStatusCode(u16),
-	Soketto(SokettoError)
+	Soketto(SokettoError),
 }
 
 impl From<io::Error> for WebSocketTestError {
@@ -110,9 +110,7 @@ impl WebSocketTestClient {
 				let (tx, rx) = client.into_builder().finish();
 				Ok(Self { tx, rx })
 			}
-			Ok(handshake::ServerResponse::Redirect { .. }) => {
-				Err(WebSocketTestError::Redirect)
-			}
+			Ok(handshake::ServerResponse::Redirect { .. }) => Err(WebSocketTestError::Redirect),
 			Ok(handshake::ServerResponse::Rejected { status_code }) => {
 				Err(WebSocketTestError::RejectedWithStatusCode(status_code))
 			}
