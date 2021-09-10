@@ -91,7 +91,12 @@ impl MethodCallback {
 		let params = RpcParams::new(req.params.map(|params| params.get()));
 		match self {
 			MethodCallback::Sync(callback) => {
-				log::trace!("Executing sync callback id={:?}, params={:?}", id, params);
+				log::trace!(
+					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
+					id,
+					params,
+					conn_id
+				);
 				(callback)(id, params, tx, conn_id);
 
 				None
@@ -100,7 +105,12 @@ impl MethodCallback {
 				let tx = tx.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
-				log::trace!("Executing async callback id={:?}, params={:?}", id, params);
+				log::trace!(
+					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_id={:?}",
+					id,
+					params,
+					conn_id
+				);
 
 				Some((callback)(id, params, tx, conn_id))
 			}
@@ -172,7 +182,7 @@ impl Methods {
 		req: JsonRpcRequest<'_>,
 		conn_id: ConnectionId,
 	) -> Option<BoxFuture<'static, ()>> {
-		log::trace!("executing request: {:?}", req);
+		log::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id),
 			None => {
@@ -185,7 +195,7 @@ impl Methods {
 	/// Helper alternative to `execute`, useful for writing unit tests without having to up spin
 	/// a server.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
-		log::debug!("[call] method: '{:?}', params: {:?}", method, params);
+		log::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let req = JsonRpcRequest {
 			jsonrpc: TwoPointZero,
 			id: Id::Number(0),
@@ -200,6 +210,36 @@ impl Methods {
 		}
 
 		rx.next().await
+	}
+
+	/// Test helper that sets up a subscription using the given `method`. Returns a tuple of the
+	/// [`SubscriptionId`] and a channel on which subscription JSON payloads can be received.
+	#[cfg(test)]
+	pub async fn test_subscription(
+		&self,
+		method: &str,
+		params: Option<Box<RawValue>>,
+	) -> (SubscriptionId, mpsc::UnboundedReceiver<String>) {
+		use jsonrpsee_types::v2::response::JsonRpcResponse;
+
+		log::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
+		let req = JsonRpcRequest {
+			jsonrpc: TwoPointZero,
+			id: Id::Number(0),
+			method: Cow::borrowed(method),
+			params: params.as_deref(),
+		};
+
+		let (tx, mut rx) = mpsc::unbounded();
+
+		if let Some(fut) = self.execute(&tx, req, 0) {
+			fut.await;
+		}
+		let response = rx.next().await.expect("Could not establish subscription.");
+		let subscription_response = serde_json::from_str::<JsonRpcResponse<SubscriptionId>>(&response)
+			.expect(&format!("Could not deserialize subscription response {:?}", response));
+		let sub_id = subscription_response.result;
+		(sub_id, rx)
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.
@@ -493,6 +533,7 @@ impl SubscriptionSink {
 		serde_json::to_string(&JsonRpcNotification {
 			jsonrpc: TwoPointZero,
 			method: self.method,
+			// TODO: `params` is a bit weird here. It's a result payload not really a set of params?
 			params: JsonRpcSubscriptionParams {
 				subscription: JsonRpcSubscriptionId::Num(self.uniq_sub.sub_id),
 				result,
@@ -505,6 +546,7 @@ impl SubscriptionSink {
 		let res = if let Some(conn) = self.is_connected.as_ref() {
 			if !conn.is_canceled() {
 				// unbounded send only fails if the receiver has been dropped.
+				log::trace!("sending {:?}", msg);
 				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_err(self.uniq_sub.sub_id))
 			} else {
 				Err(subscription_closed_err(self.uniq_sub.sub_id))
@@ -543,6 +585,8 @@ fn subscription_closed_err(sub_id: u64) -> Error {
 
 #[cfg(test)]
 mod tests {
+	use jsonrpsee_types::v2::{self, response::JsonRpcResponse};
+
 	use super::*;
 	#[test]
 	fn rpc_modules_with_different_contexts_can_be_merged() {
@@ -589,24 +633,71 @@ mod tests {
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#));
 
 		// Call sync method with params
-		module.register_method("foo", |params, _| {
-			let n: u16 = params.parse().expect("valid params please");
-			Ok(n * 2)
-		}).unwrap();
+		module
+			.register_method("foo", |params, _| {
+				let n: u16 = params.parse().expect("valid params please");
+				Ok(n * 2)
+			})
+			.unwrap();
 		let result = &module.call("foo", Some(to_raw_value(&3).unwrap())).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
 
 		// Call async method with params and context
 		struct MyContext;
 		impl MyContext {
-			pub fn roo(&self, things: Vec<u8>) -> u16 { things.iter().sum::<u8>().into() }
+			fn roo(&self, things: Vec<u8>) -> u16 {
+				things.iter().sum::<u8>().into()
+			}
 		}
 		let mut module = RpcModule::new(MyContext);
-		module.register_async_method("roo", |params, ctx| {
-			let ns: Vec<u8> = params.parse().expect("valid params please");
-			async move { Ok(ctx.roo(ns)) }.boxed()
-		}).unwrap();
+		module
+			.register_async_method("roo", |params, ctx| {
+				let ns: Vec<u8> = params.parse().expect("valid params please");
+				async move { Ok(ctx.roo(ns)) }.boxed()
+			})
+			.unwrap();
 		let result = &module.call("roo", Some(to_raw_value(&vec![12, 13]).unwrap())).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":25,"id":0}"#));
+	}
+
+	// TODO: expand with test using the proc macros
+	// TODO: expand with test provoking Invalid Params (e.g. requiring `Bytes`)
+
+	#[tokio::test]
+	async fn subscribing_without_server() {
+		env_logger::init();
+		let mut module = RpcModule::new(());
+		module
+			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
+				let mut stream_data = vec!['0', '1', '2'];
+				std::thread::spawn(move || loop {
+					log::debug!("This is your friendly subscription sending data.");
+					if let Some(letter) = stream_data.pop() {
+						if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
+							return;
+						}
+					} else {
+						return;
+					}
+					std::thread::sleep(std::time::Duration::from_millis(500));
+				});
+				Ok(())
+			})
+			.unwrap();
+
+		let (sub_id, mut my_sub_stream) = module.test_subscription("my_sub", None).await;
+		for i in (0..=2).rev() {
+			let my_sub = my_sub_stream.next().await.unwrap();
+			let my_sub = serde_json::from_str::<JsonRpcNotification<JsonRpcSubscriptionParams<char>>>(&my_sub).unwrap();
+			assert_eq!(my_sub.params.result, std::char::from_digit(i, 10).unwrap());
+			assert_eq!(my_sub.params.subscription, v2::params::SubscriptionId::Num(sub_id));
+		}
+
+		// The subscription is now closed
+		let my_sub = my_sub_stream.next().await.unwrap();
+		let my_sub =
+			serde_json::from_str::<JsonRpcNotification<JsonRpcSubscriptionParams<SubscriptionClosedError>>>(&my_sub)
+				.unwrap();
+		assert_eq!(my_sub.params.result, format!("Subscription: {} is closed and dropped", sub_id).to_string().into());
 	}
 }

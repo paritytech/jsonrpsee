@@ -174,8 +174,8 @@ impl<'a> RpcParamsSequence<'a> {
 			b'[' | b',' => json = &json[1..],
 			_ => {
 				log::error!("[next_inner] Expected one of '[', ']' or ',' but found {:?}", json);
-				return Some(Err(CallError::InvalidParams))
-			},
+				return Some(Err(CallError::InvalidParams));
+			}
 		}
 
 		let mut iter = serde_json::Deserializer::from_str(json).into_iter::<T>();
@@ -187,7 +187,12 @@ impl<'a> RpcParamsSequence<'a> {
 				Some(Ok(value))
 			}
 			Err(e) => {
-				log::error!("[next_inner] Deserialization to {:?} failed. Error: {:?}, input JSON: {:?}", std::any::type_name::<T>(), e, json);
+				log::error!(
+					"[next_inner] Deserialization to {:?} failed. Error: {:?}, input JSON: {:?}",
+					std::any::type_name::<T>(),
+					e,
+					json
+				);
 				self.0 = "";
 
 				Some(Err(CallError::InvalidParams))

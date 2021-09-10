@@ -28,7 +28,7 @@ use crate::v2::params::{Id, TwoPointZero};
 use serde::{Deserialize, Serialize};
 
 /// JSON-RPC successful response object.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct JsonRpcResponse<'a, T> {
 	/// JSON-RPC version.

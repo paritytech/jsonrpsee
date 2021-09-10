@@ -162,7 +162,7 @@ impl Error {
 /// Error type with a special `subscription_closed` field to detect that
 /// a subscription has been closed to distinguish valid items produced
 /// by the server on the subscription stream from an error.
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct SubscriptionClosedError {
 	subscription_closed: String,
 }
