@@ -93,8 +93,8 @@ impl MethodCallback {
 			MethodCallback::Sync(callback) => {
 				log::trace!(
 					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
-					id,
 					params,
+					id,
 					conn_id
 				);
 				(callback)(id, params, tx, conn_id);
@@ -107,8 +107,8 @@ impl MethodCallback {
 				let id = id.into_owned();
 				log::trace!(
 					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_id={:?}",
-					id,
 					params,
+					id,
 					conn_id
 				);
 
@@ -192,8 +192,24 @@ impl Methods {
 		}
 	}
 
-	/// Helper alternative to `execute`, useful for writing unit tests without having to up spin
+
+	/// Helper alternative to `execute`, useful for writing unit tests without having to spin up
 	/// a server.
+	///
+	/// Converts the params to a stringified array for you if it's not already serialized to a sequence.
+	pub async fn call_with<T: Serialize>(&self, method: &str, params: T) -> Option<String> {
+		let params = serde_json::to_string(&params).ok().map(|json| {
+			let json = if json.starts_with('[') && json.ends_with(']') { json } else { format!("[{}]", json) };
+			RawValue::from_string(json).expect("valid JSON string above; qed")
+		});
+		self.call(method, params).await
+	}
+
+	/// Helper alternative to `execute`, useful for writing unit tests without having to spin up a server.
+	///
+	/// The params argument, `Option<Box<RawValue>>` is expected to be something serde can deserialize into a sequence
+	/// of the actual method argument, so in JSON syntax, for example: `[123, "0xDEADBEEF", [255, 0, 0, 0]]` to match
+	/// the arguments of a Rust function taking arguments of types, in order, `usize`, `Bytes`, `[u8; 4]`.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
 		log::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let req = JsonRpcRequest {
@@ -546,7 +562,6 @@ impl SubscriptionSink {
 		let res = if let Some(conn) = self.is_connected.as_ref() {
 			if !conn.is_canceled() {
 				// unbounded send only fails if the receiver has been dropped.
-				log::trace!("sending {:?}", msg);
 				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_err(self.uniq_sub.sub_id))
 			} else {
 				Err(subscription_closed_err(self.uniq_sub.sub_id))
@@ -625,22 +640,22 @@ mod tests {
 
 	#[tokio::test]
 	async fn calling_method_without_server() {
-		use serde_json::value::to_raw_value;
 		// Call sync method with no params
 		let mut module = RpcModule::new(());
 		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
-		let result = &module.call("boo", None).await.unwrap();
-		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#));
+
+		let result = module.call("boo", None).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#);
 
 		// Call sync method with params
 		module
 			.register_method("foo", |params, _| {
-				let n: u16 = params.parse().expect("valid params please");
+				let n: u16 = params.one()?;
 				Ok(n * 2)
 			})
 			.unwrap();
-		let result = &module.call("foo", Some(to_raw_value(&3).unwrap())).await.unwrap();
-		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
+		let result = module.call_with("foo", 3).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":6,"id":0}"#);
 
 		// Call async method with params and context
 		struct MyContext;
@@ -656,8 +671,8 @@ mod tests {
 				async move { Ok(ctx.roo(ns)) }.boxed()
 			})
 			.unwrap();
-		let result = &module.call("roo", Some(to_raw_value(&vec![12, 13]).unwrap())).await.unwrap();
-		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":25,"id":0}"#));
+		let result = module.call_with("roo", vec![12, 13]).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":25,"id":0}"#);
 	}
 
 	// TODO: expand with test using the proc macros
