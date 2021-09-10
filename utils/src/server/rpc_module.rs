@@ -192,7 +192,6 @@ impl Methods {
 		}
 	}
 
-
 	/// Helper alternative to `execute`, useful for writing unit tests without having to spin up
 	/// a server.
 	///
