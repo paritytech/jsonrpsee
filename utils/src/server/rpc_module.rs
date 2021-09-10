@@ -184,8 +184,8 @@ impl Methods {
 	/// a server up.
 	///
 	/// Converts the params to an array for you if it's not already serialized to a sequence.
-	pub async fn call_with<T: Serialize>(&self, method: &str, params: &T) -> Option<String> {
-		let params = serde_json::to_string(params).ok().map(|json| {
+	pub async fn call_with<T: Serialize>(&self, method: &str, params: T) -> Option<String> {
+		let params = serde_json::to_string(&params).ok().map(|json| {
 			let json = if json.starts_with("[") && json.ends_with("]") { json } else { format!("[{}]", json) };
 			RawValue::from_string(json).expect("valid JSON string above; qed")
 		});
@@ -594,7 +594,7 @@ mod tests {
 		// Call sync method with no params
 		let mut module = RpcModule::new(());
 		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
-		let result = &module.call_with("boo", &None::<()>).await.unwrap();
+		let result = &module.call_with("boo", None::<()>).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#));
 
 		// Call sync method with params
