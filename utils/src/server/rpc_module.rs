@@ -594,7 +594,7 @@ mod tests {
 		// Call sync method with no params
 		let mut module = RpcModule::new(());
 		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
-		let result = &module.call_with("boo", None::<()>).await.unwrap();
+		let result = module.call_with("boo", None).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#));
 
 		// Call sync method with params
