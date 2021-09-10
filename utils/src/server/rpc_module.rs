@@ -180,11 +180,10 @@ impl Methods {
 		}
 	}
 
-	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
-	/// a server up.
+	/// Test helper to call a method on the `RPC module` without having to spin a server up.
 	///
-	/// Converts the params to an array for you if it's not already serialized to a sequence.
-	pub async fn call_with<T: Serialize>(&self, method: &str, params: T) -> Option<String> {
+	/// Converts the params to a stringified array for you if it's not already serialized to a sequence.
+	pub async fn test_call<T: Serialize>(&self, method: &str, params: T) -> Option<String> {
 		let params = serde_json::to_string(&params).ok().map(|json| {
 			let json = if json.starts_with('[') && json.ends_with(']') { json } else { format!("[{}]", json) };
 			RawValue::from_string(json).expect("valid JSON string above; qed")
@@ -594,7 +593,7 @@ mod tests {
 		// Call sync method with no params
 		let mut module = RpcModule::new(());
 		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
-		let result = module.call_with("boo", None).await.unwrap();
+		let result = module.test_call("boo", None::<()>).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#));
 
 		// Call sync method with params
@@ -604,9 +603,9 @@ mod tests {
 				Ok(n * 2)
 			})
 			.unwrap();
-		let result = &module.call_with("foo", &3).await.unwrap();
+		let result = &module.test_call("foo", &3).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
-		let result = &module.call_with("foo", &[3]).await.unwrap();
+		let result = &module.test_call("foo", &[3]).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
 
 		// Call async method with params and context
@@ -638,11 +637,11 @@ mod tests {
 			})
 			.unwrap();
 
-		let result = &module.call_with("roo", &[12, 13]).await.unwrap();
+		let result = &module.test_call("roo", &[12, 13]).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":25,"id":0}"#));
 
 		let json = vec![json!([1, 3, 7]), json!("oooh")];
-		let result = &module.call_with("many_args", &json).await.unwrap();
+		let result = &module.test_call("many_args", &json).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":15,"id":0}"#));
 	}
 }
