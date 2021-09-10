@@ -36,6 +36,7 @@ use jsonrpsee_types::v2::params::{
 	Id, JsonRpcSubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
 };
 use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
+use jsonrpsee_types::v2::response::JsonRpcResponse;
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -229,14 +230,11 @@ impl Methods {
 
 	/// Test helper that sets up a subscription using the given `method`. Returns a tuple of the
 	/// [`SubscriptionId`] and a channel on which subscription JSON payloads can be received.
-	#[cfg(test)]
 	pub async fn test_subscription(
 		&self,
 		method: &str,
 		params: Option<Box<RawValue>>,
 	) -> (SubscriptionId, mpsc::UnboundedReceiver<String>) {
-		use jsonrpsee_types::v2::response::JsonRpcResponse;
-
 		log::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
 		let req = JsonRpcRequest {
 			jsonrpc: TwoPointZero,
