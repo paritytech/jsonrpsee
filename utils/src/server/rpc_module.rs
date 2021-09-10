@@ -549,7 +549,6 @@ impl SubscriptionSink {
 		serde_json::to_string(&JsonRpcNotification {
 			jsonrpc: TwoPointZero,
 			method: self.method,
-			// TODO: `params` is a bit weird here. It's a result payload not really a set of params?
 			params: JsonRpcSubscriptionParams {
 				subscription: JsonRpcSubscriptionId::Num(self.uniq_sub.sub_id),
 				result,
