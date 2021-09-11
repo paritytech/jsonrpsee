@@ -27,7 +27,7 @@
 //! Contains common builders for hyper responses.
 
 use crate::types::v2::{
-	error::{RpcError, ErrorCode},
+	error::{ErrorCode, RpcError},
 	params::{Id, TwoPointZero},
 };
 
@@ -92,12 +92,9 @@ pub fn too_large() -> hyper::Response<hyper::Body> {
 
 /// Create a json response for empty or malformed requests (400)
 pub fn malformed() -> hyper::Response<hyper::Body> {
-	let error = serde_json::to_string(&RpcError {
-		jsonrpc: TwoPointZero,
-		error: ErrorCode::ParseError.into(),
-		id: Id::Null,
-	})
-	.expect("built from known-good data; qed");
+	let error =
+		serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error: ErrorCode::ParseError.into(), id: Id::Null })
+			.expect("built from known-good data; qed");
 
 	from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
 }

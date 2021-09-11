@@ -356,9 +356,7 @@ impl<'a> Id<'a> {
 
 #[cfg(test)]
 mod test {
-	use super::{
-		Cow, Id, RpcParamsSer, SubscriptionParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero,
-	};
+	use super::{Cow, Id, JsonValue, RpcParams, RpcParamsSer, SubscriptionId, SubscriptionParams, TwoPointZero};
 
 	#[test]
 	fn id_deserialization() {
@@ -487,9 +485,8 @@ mod test {
 
 	#[test]
 	fn subscription_params_serialize_work() {
-		let ser =
-			serde_json::to_string(&SubscriptionParams { subscription: SubscriptionId::Num(12), result: "goal" })
-				.unwrap();
+		let ser = serde_json::to_string(&SubscriptionParams { subscription: SubscriptionId::Num(12), result: "goal" })
+			.unwrap();
 		let exp = r#"{"subscription":12,"result":"goal"}"#;
 		assert_eq!(ser, exp);
 	}

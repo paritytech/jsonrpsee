@@ -28,7 +28,7 @@
 use crate::types::{
 	traits::{Client, SubscriptionClient},
 	v2::{
-		error::{RpcError, ErrorCode, ErrorObject},
+		error::{ErrorCode, ErrorObject, RpcError},
 		params::RpcParamsSer,
 	},
 	Error, Subscription,

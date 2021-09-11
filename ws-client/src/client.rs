@@ -30,7 +30,7 @@ use crate::types::{
 	v2::{
 		error::RpcError,
 		params::{Id, RpcParamsSer},
-		request::{RequestSer, Notification, NotificationSer},
+		request::{Notification, NotificationSer, RequestSer},
 		response::Response,
 	},
 	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionMessage,
@@ -628,9 +628,7 @@ async fn background_task(
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) =
-					serde_json::from_slice::<Notification<SubscriptionParams<_>>>(&raw)
-				{
+				else if let Ok(notif) = serde_json::from_slice::<Notification<SubscriptionParams<_>>>(&raw) {
 					log::debug!("[backend]: recv subscription {:?}", notif);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;

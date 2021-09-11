@@ -27,7 +27,7 @@
 use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::v2::error::{RpcError, ErrorCode, ErrorObject};
+use jsonrpsee_types::v2::error::{ErrorCode, ErrorObject, RpcError};
 use jsonrpsee_types::v2::params::{Id, TwoPointZero};
 use jsonrpsee_types::v2::request::InvalidRequest;
 use jsonrpsee_types::v2::response::Response;

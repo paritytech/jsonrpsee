@@ -29,11 +29,9 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
-use jsonrpsee_types::v2::error::{
-	ErrorCode, ErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE,
-};
+use jsonrpsee_types::v2::error::{ErrorCode, ErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE};
 use jsonrpsee_types::v2::params::{
-	Id, SubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
+	Id, RpcParams, SubscriptionId as JsonRpcSubscriptionId, SubscriptionParams, TwoPointZero,
 };
 use jsonrpsee_types::v2::request::{Notification, Request};
 
@@ -81,12 +79,7 @@ pub enum MethodCallback {
 
 impl MethodCallback {
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(
-		&self,
-		tx: &MethodSink,
-		req: Request<'_>,
-		conn_id: ConnectionId,
-	) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		let id = req.id.clone();
 		let params = RpcParams::new(req.params.map(|params| params.get()));
 
@@ -165,12 +158,7 @@ impl Methods {
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(
-		&self,
-		tx: &MethodSink,
-		req: Request<'_>,
-		conn_id: ConnectionId,
-	) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id),
 			None => {
@@ -258,9 +246,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
-					Err(Error::Call(CallError::InvalidParams)) => {
-						send_error(id, tx, ErrorCode::InvalidParams.into())
-					}
+					Err(Error::Call(CallError::InvalidParams)) => send_error(id, tx, ErrorCode::InvalidParams.into()),
 					Err(Error::Call(CallError::Failed(e))) => {
 						let err = ErrorObject {
 							code: ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
@@ -319,8 +305,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							send_error(id, &tx, err)
 						}
 						Err(Error::Call(CallError::Custom { code, message, data })) => {
-							let err =
-								ErrorObject { code: code.into(), message: &message, data: data.as_deref() };
+							let err = ErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 							send_error(id, &tx, err)
 						}
 						// This should normally not happen because the most common use case is to
@@ -489,10 +474,7 @@ impl SubscriptionSink {
 		serde_json::to_string(&Notification {
 			jsonrpc: TwoPointZero,
 			method: self.method,
-			params: SubscriptionParams {
-				subscription: JsonRpcSubscriptionId::Num(self.uniq_sub.sub_id),
-				result,
-			},
+			params: SubscriptionParams { subscription: JsonRpcSubscriptionId::Num(self.uniq_sub.sub_id), result },
 		})
 		.map_err(Into::into)
 	}

@@ -110,10 +110,7 @@ impl<'a> NotificationSer<'a> {
 
 #[cfg(test)]
 mod test {
-	use super::{
-		Id, RequestSer, InvalidRequest, Notification, NotificationSer, RpcParamsSer,
-		Request, TwoPointZero,
-	};
+	use super::{Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, RpcParamsSer, TwoPointZero};
 	use serde_json::{value::RawValue, Value};
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {

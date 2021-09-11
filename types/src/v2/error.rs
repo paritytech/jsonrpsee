@@ -202,7 +202,7 @@ impl serde::Serialize for ErrorCode {
 
 #[cfg(test)]
 mod tests {
-	use super::{Id, RpcError, ErrorCode, ErrorObject, TwoPointZero};
+	use super::{ErrorCode, ErrorObject, Id, RpcError, TwoPointZero};
 
 	#[test]
 	fn deserialize_works() {
@@ -222,11 +222,7 @@ mod tests {
 		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
 		let exp = RpcError {
 			jsonrpc: TwoPointZero,
-			error: ErrorObject {
-				code: ErrorCode::ParseError,
-				message: "Parse error",
-				data: Some(&*data),
-			},
+			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error", data: Some(&*data) },
 			id: Id::Null,
 		};
 		let err: RpcError = serde_json::from_str(ser).unwrap();

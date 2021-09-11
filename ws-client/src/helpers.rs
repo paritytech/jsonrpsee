@@ -28,8 +28,8 @@ use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::v2::{
 	error::RpcError,
-	params::{Id, RpcParamsSer, SubscriptionParams, SubscriptionId},
-	request::{RequestSer, Notification},
+	params::{Id, RpcParamsSer, SubscriptionId, SubscriptionParams},
+	request::{Notification, RequestSer},
 	response::Response,
 };
 use crate::types::{Error, RequestMessage};

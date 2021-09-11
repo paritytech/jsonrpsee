@@ -30,7 +30,7 @@ use crate::types::{
 	v2::{
 		error::RpcError,
 		params::{Id, RpcParamsSer},
-		request::{RequestSer, NotificationSer},
+		request::{NotificationSer, RequestSer},
 		response::Response,
 	},
 	Error, TEN_MB_SIZE_BYTES,

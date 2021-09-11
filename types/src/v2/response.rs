@@ -29,7 +29,6 @@
 use crate::v2::params::{Id, TwoPointZero};
 use serde::{Deserialize, Serialize};
 
-
 /// JSON-RPC successful response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -49,8 +48,7 @@ mod tests {
 
 	#[test]
 	fn serialize_call_response() {
-		let ser =
-			serde_json::to_string(&Response { jsonrpc: TwoPointZero, result: "ok", id: Id::Number(1) }).unwrap();
+		let ser = serde_json::to_string(&Response { jsonrpc: TwoPointZero, result: "ok", id: Id::Number(1) }).unwrap();
 		let exp = r#"{"jsonrpc":"2.0","result":"ok","id":1}"#;
 		assert_eq!(ser, exp);
 	}
