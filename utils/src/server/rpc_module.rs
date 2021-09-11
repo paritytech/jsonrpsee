@@ -351,7 +351,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// # Examples
 	///
 	/// ```no_run
-	///
+	/// 
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
