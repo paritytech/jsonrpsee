@@ -315,7 +315,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(Error::Call(CallError::InvalidParams)) => {
-						log::error!("Invalid params. id={:?}", id);
 						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
 					}
 					Err(Error::Call(CallError::Failed(e))) => {
@@ -408,7 +407,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// # Examples
 	///
 	/// ```no_run
-	/// 
+	///
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
@@ -596,7 +595,7 @@ fn subscription_closed_err(sub_id: u64) -> Error {
 
 #[cfg(test)]
 mod tests {
-	use jsonrpsee_types::v2::{self, response::JsonRpcResponse};
+	use jsonrpsee_types::v2;
 
 	use super::*;
 	#[test]

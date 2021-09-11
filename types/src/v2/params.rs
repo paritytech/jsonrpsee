@@ -168,7 +168,7 @@ impl<'a> RpcParamsSequence<'a> {
 			b']' => {
 				self.0 = "";
 
-				log::trace!("[next_inner] Reached end sequence.");
+				log::trace!("[next_inner] Reached end of sequence.");
 				return None;
 			}
 			b'[' | b',' => json = &json[1..],
