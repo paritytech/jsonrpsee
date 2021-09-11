@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::v2::params::RpcParamsSer;
+use crate::v2::params::ParamsSer;
 use crate::{Error, Subscription};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -33,10 +33,10 @@ use serde::de::DeserializeOwned;
 #[async_trait]
 pub trait Client {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
-	async fn notification<'a>(&self, method: &'a str, params: RpcParamsSer<'a>) -> Result<(), Error>;
+	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error>;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<'a, R>(&self, method: &'a str, params: RpcParamsSer<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
 	where
 		R: DeserializeOwned;
 
@@ -46,7 +46,7 @@ pub trait Client {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, RpcParamsSer<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone;
 }
@@ -68,7 +68,7 @@ pub trait SubscriptionClient: Client {
 	async fn subscribe<'a, Notif>(
 		&self,
 		subscribe_method: &'a str,
-		params: RpcParamsSer<'a>,
+		params: ParamsSer<'a>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<Notif>, Error>
 	where

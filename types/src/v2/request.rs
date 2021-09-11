@@ -27,7 +27,7 @@
 //! Types to handle JSON-RPC requests according to the [spec](https://www.jsonrpc.org/specification#request-object).
 //! Some types come with a "*Ser" variant that implements [`Serialize`]; these are used in the client.
 
-use crate::v2::params::{Id, RpcParamsSer, TwoPointZero};
+use crate::v2::params::{Id, ParamsSer, TwoPointZero};
 use beef::Cow;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -80,12 +80,12 @@ pub struct RequestSer<'a> {
 	/// Name of the method to be invoked.
 	pub method: &'a str,
 	/// Parameter values of the request.
-	pub params: RpcParamsSer<'a>,
+	pub params: ParamsSer<'a>,
 }
 
 impl<'a> RequestSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(id: Id<'a>, method: &'a str, params: RpcParamsSer<'a>) -> Self {
+	pub fn new(id: Id<'a>, method: &'a str, params: ParamsSer<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
 	}
 }
@@ -98,19 +98,19 @@ pub struct NotificationSer<'a> {
 	/// Name of the method to be invoked.
 	pub method: &'a str,
 	/// Parameter values of the request.
-	pub params: RpcParamsSer<'a>,
+	pub params: ParamsSer<'a>,
 }
 
 impl<'a> NotificationSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(method: &'a str, params: RpcParamsSer<'a>) -> Self {
+	pub fn new(method: &'a str, params: ParamsSer<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, method, params }
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use super::{Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, RpcParamsSer, TwoPointZero};
+	use super::{Id, InvalidRequest, Notification, NotificationSer, ParamsSer, Request, RequestSer, TwoPointZero};
 	use serde_json::{value::RawValue, Value};
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
@@ -173,7 +173,7 @@ mod test {
 	fn serialize_call() {
 		let method = "subtract";
 		let id = Id::Number(1); // It's enough to check one variant, since the type itself also has tests.
-		let params: RpcParamsSer = vec![Value::Number(42.into()), Value::Number(23.into())].into(); // Same as above.
+		let params: ParamsSer = vec![Value::Number(42.into()), Value::Number(23.into())].into(); // Same as above.
 		let test_vector = &[
 			// With all fields set.
 			(
@@ -194,7 +194,7 @@ mod test {
 				jsonrpc: TwoPointZero,
 				method,
 				id: id.unwrap_or(Id::Null),
-				params: params.unwrap_or(RpcParamsSer::NoParams),
+				params: params.unwrap_or(ParamsSer::NoParams),
 			})
 			.unwrap();
 

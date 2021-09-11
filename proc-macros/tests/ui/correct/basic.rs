@@ -2,7 +2,7 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, to_json_value, traits::Client, v2::params::RpcParamsSer, RpcResult},
+	types::{async_trait, to_json_value, traits::Client, v2::params::ParamsSer, RpcResult},
 	ws_client::*,
 	ws_server::{SubscriptionSink, WsServerBuilder},
 };
@@ -107,7 +107,7 @@ async fn main() {
 	);
 
 	assert_eq!(client.request::<bool>("foo_optional_param", vec![].into()).await.unwrap(), false);
-	assert_eq!(client.request::<bool>("foo_optional_param", RpcParamsSer::NoParams).await.unwrap(), false);
+	assert_eq!(client.request::<bool>("foo_optional_param", ParamsSer::NoParams).await.unwrap(), false);
 	assert_eq!(
 		client.request::<bool>("foo_optional_param", vec![to_json_value(Some(1)).unwrap()].into()).await.unwrap(),
 		true

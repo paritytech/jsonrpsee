@@ -28,7 +28,7 @@ use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::v2::{
 	error::RpcError,
-	params::{Id, RpcParamsSer, SubscriptionId, SubscriptionParams},
+	params::{Id, ParamsSer, SubscriptionId, SubscriptionParams},
 	request::{Notification, RequestSer},
 	response::Response,
 };
@@ -193,7 +193,7 @@ pub fn build_unsubscribe_message(
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
 	// TODO: https://github.com/paritytech/jsonrpsee/issues/275
-	let params = RpcParamsSer::ArrayRef(sub_id_slice);
+	let params = ParamsSer::ArrayRef(sub_id_slice);
 	let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
