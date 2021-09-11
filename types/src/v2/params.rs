@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Types to handle JSON-RPC request parameters according to the [spec](https://www.jsonrpc.org/specification#parameter_structures).
-//! Some types come with a "*Ser" variant that implements [`Serialize`]; these are used in the client.
+//! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
 
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
@@ -101,7 +101,7 @@ impl<'a> Params<'a> {
 		json.starts_with('{')
 	}
 
-	/// Obtain a sequence parser, [`RpcParamsSequence`].
+	/// Obtain a sequence parser, [`ParamsSequence`].
 	///
 	/// This allows sequential parsing of the incoming params, using an `Iterator`-style API and is useful when the RPC
 	/// request has optional parameters at the tail that may or may not be present.
@@ -144,7 +144,7 @@ impl<'a> Params<'a> {
 /// An `Iterator`-like parser for a sequence of `RpcParams`.
 ///
 /// This will parse the params one at a time, and allows for graceful handling of optional parameters at the tail; other
-/// use cases are likely better served by [`RpcParams::parse`]. The reason this is not an actual [`Iterator`] is that
+/// use cases are likely better served by [`Params::parse`]. The reason this is not an actual [`Iterator`] is that
 /// params parsing (often) yields values of different types.
 ///
 /// Regards empty array `[]` as no parameters provided.
