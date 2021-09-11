@@ -48,7 +48,7 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 pub enum CallError {
 	/// Invalid params in the call.
 	#[error("Invalid params in the call")]
-	InvalidParams,
+	InvalidParams(#[source] anyhow::Error),
 	/// The call failed (let jsonrpsee assign default error code and error message).
 	#[error("RPC Call failed: {0}")]
 	Failed(#[from] anyhow::Error),

@@ -314,8 +314,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
-					Err(Error::Call(CallError::InvalidParams)) => {
-						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
+					Err(Error::Call(CallError::InvalidParams(e))) => {
+						let error = JsonRpcErrorObject {
+							code: JsonRpcErrorCode::InvalidParams,
+							message: &e.to_string(),
+							data: None,
+						};
+						send_error(id, tx, error)
 					}
 					Err(Error::Call(CallError::Failed(e))) => {
 						let err = JsonRpcErrorObject {
@@ -363,8 +368,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let future = async move {
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
-						Err(Error::Call(CallError::InvalidParams)) => {
-							send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into())
+						Err(Error::Call(CallError::InvalidParams(e))) => {
+							let error = JsonRpcErrorObject {
+								code: JsonRpcErrorCode::InvalidParams,
+								message: &e.to_string(),
+								data: None,
+							};
+							send_error(id, &tx, error)
 						}
 						Err(Error::Call(CallError::Failed(e))) => {
 							let err = JsonRpcErrorObject {
@@ -407,7 +417,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// # Examples
 	///
 	/// ```no_run
-	/// 
+	///
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);

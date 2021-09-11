@@ -97,7 +97,7 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 			.boxed()
 		})
 		.unwrap();
-	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams.into())).unwrap();
+	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams(anyhow!("buh!")).into())).unwrap();
 	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
@@ -353,10 +353,11 @@ async fn single_method_call_with_faulty_params_returns_err() {
 	let _ = env_logger::try_init();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
 
-	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["should be a number"],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, invalid_params(Id::Num(1)));
+	assert_eq!(response, expected);
 }
 
 #[tokio::test]
