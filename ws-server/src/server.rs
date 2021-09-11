@@ -245,17 +245,17 @@ async fn background_task(
 			Some(b'[') => {
 				if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
 					if !batch.is_empty() {
-						// Batch responses must be sent back as a single message so we read the results from each request in the
-						// batch and read the results off of a new channel, `rx_batch`, and then send the complete batch response
-						// back to the client over `tx`.
+						// Batch responses must be sent back as a single message so we read the results from each
+						// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
+						// complete batch response back to the client over `tx`.
 						let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 
 						for fut in batch.into_iter().filter_map(|req| methods.execute(&tx_batch, req, conn_id)) {
 							method_executors.add(fut);
 						}
 
-						// Closes the receiving half of a channel without dropping it. This prevents any further messages from
-						// being sent on the channel.
+						// Closes the receiving half of a channel without dropping it. This prevents any further
+						// messages from being sent on the channel.
 						rx_batch.close();
 						let results = collect_batch_response(rx_batch).await;
 						if let Err(err) = tx.unbounded_send(results) {
@@ -356,7 +356,8 @@ impl Builder {
 	///
 	/// By default allows any `Origin`.
 	///
-	/// Will return an error if `list` is empty. Use [`allow_all_origins`](Builder::allow_all_origins) to restore the default.
+	/// Will return an error if `list` is empty. Use [`allow_all_origins`](Builder::allow_all_origins) to restore the
+	/// default.
 	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
 	where
 		List: IntoIterator<Item = Origin>,
@@ -391,7 +392,8 @@ impl Builder {
 	///
 	/// By default allows any `Host`.
 	///
-	/// Will return an error if `list` is empty. Use [`allow_all_hosts`](Builder::allow_all_hosts) to restore the default.
+	/// Will return an error if `list` is empty. Use [`allow_all_hosts`](Builder::allow_all_hosts) to restore the
+	/// default.
 	pub fn set_allowed_hosts<Host, List>(mut self, list: List) -> Result<Self, Error>
 	where
 		List: IntoIterator<Item = Host>,

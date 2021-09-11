@@ -57,8 +57,8 @@ async fn server() -> SocketAddr {
 /// It has the following methods:
 ///     sync methods: `say_hello` and `add`
 ///     async: `say_hello_async` and `add_sync`
-///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns `CallError::Failed`), `sleep_for`
-/// Returns the address together with handles for server future and server stop.
+///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns
+/// `CallError::Failed`), `sleep_for` Returns the address together with handles for server future and server stop.
 async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
@@ -435,7 +435,8 @@ async fn invalid_json_id_missing_value() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
+	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
+	// Null.
 	assert_eq!(response, parse_error(Id::Null));
 }
 
