@@ -77,9 +77,11 @@ pub struct BatchState {
 /// Manages and monitors JSONRPC v2 method calls and subscriptions.
 pub struct RequestManager {
 	/// List of requests that are waiting for a response from the server.
-	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short key.
+	// NOTE: FnvHashMap is used here because RequestId is not under the caller's control and is known to be a short
+	// key.
 	requests: FnvHashMap<RequestId, Kind>,
-	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all requests.
+	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all
+	/// requests.
 	subscriptions: HashMap<SubscriptionId, RequestId>,
 	/// Pending batch requests
 	batches: FnvHashMap<Vec<RequestId>, BatchState>,
