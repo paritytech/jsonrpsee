@@ -28,8 +28,8 @@
 use crate::types::{
 	traits::{Client, SubscriptionClient},
 	v2::{
-		error::{JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject},
-		params::JsonRpcParams,
+		error::{RpcError, JsonRpcErrorCode, JsonRpcErrorObject},
+		params::Params,
 	},
 	Error, Subscription,
 };
@@ -58,7 +58,7 @@ async fn notif_works() {
 		.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
-	assert!(client.notification("notif", JsonRpcParams::NoParams).with_default_timeout().await.unwrap().is_ok());
+	assert!(client.notification("notif", Params::NoParams).with_default_timeout().await.unwrap().is_ok());
 }
 
 #[tokio::test]
@@ -119,7 +119,7 @@ async fn subscription_works() {
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
 		let mut sub: Subscription<String> = client
-			.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello")
+			.subscribe("subscribe_hello", Params::NoParams, "unsubscribe_hello")
 			.with_default_timeout()
 			.await
 			.unwrap()
@@ -193,9 +193,9 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 #[tokio::test]
 async fn batch_request_works() {
 	let batch_request = vec![
-		("say_hello", JsonRpcParams::NoParams),
-		("say_goodbye", JsonRpcParams::Array(vec![0_u64.into(), 1.into(), 2.into()])),
-		("get_swag", JsonRpcParams::NoParams),
+		("say_hello", Params::NoParams),
+		("say_goodbye", Params::Array(vec![0_u64.into(), 1.into(), 2.into()])),
+		("get_swag", Params::NoParams),
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
 	let response =
@@ -206,9 +206,9 @@ async fn batch_request_works() {
 #[tokio::test]
 async fn batch_request_out_of_order_response() {
 	let batch_request = vec![
-		("say_hello", JsonRpcParams::NoParams),
-		("say_goodbye", JsonRpcParams::Array(vec![0_u64.into(), 1.into(), 2.into()])),
-		("get_swag", JsonRpcParams::NoParams),
+		("say_hello", Params::NoParams),
+		("say_goodbye", Params::Array(vec![0_u64.into(), 1.into(), 2.into()])),
+		("get_swag", Params::NoParams),
 	];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
 	let response =
@@ -228,14 +228,14 @@ async fn is_connected_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	assert!(client.is_connected());
-	client.request::<String>("say_hello", JsonRpcParams::NoParams).with_default_timeout().await.unwrap().unwrap_err();
+	client.request::<String>("say_hello", Params::NoParams).with_default_timeout().await.unwrap().unwrap_err();
 	// give the background thread some time to terminate.
 	std::thread::sleep(std::time::Duration::from_millis(100));
 	assert!(!client.is_connected())
 }
 
 async fn run_batch_request_with_response<'a>(
-	batch: Vec<(&'a str, JsonRpcParams<'a>)>,
+	batch: Vec<(&'a str, Params<'a>)>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
@@ -254,13 +254,13 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 		.unwrap();
 	let uri = format!("ws://{}", server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
-	client.request("say_hello", JsonRpcParams::NoParams).with_default_timeout().await.unwrap()
+	client.request("say_hello", Params::NoParams).with_default_timeout().await.unwrap()
 }
 
 fn assert_error_response(err: Error, exp: JsonRpcErrorObject) {
 	match &err {
 		Error::Request(e) => {
-			let this: JsonRpcError = serde_json::from_str(e).unwrap();
+			let this: RpcError = serde_json::from_str(e).unwrap();
 			assert_eq!(this.error, exp);
 		}
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),

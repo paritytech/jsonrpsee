@@ -38,7 +38,7 @@ use jsonrpsee_types::{
 	v2::{
 		error::JsonRpcErrorCode,
 		params::Id,
-		request::{JsonRpcNotification, JsonRpcRequest},
+		request::{Notification, Request},
 	},
 	TEN_MB_SIZE_BYTES,
 };
@@ -216,11 +216,11 @@ impl Server {
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
 
-						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
+						type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
 						// Single request or notification
 						if is_single {
-							if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
+							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 								if let Some(fut) = methods.execute(&tx, req, 0) {
 									fut.await;
@@ -233,7 +233,7 @@ impl Server {
 							}
 
 						// Batch of requests or notifications
-						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
+						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							if !batch.is_empty() {
 								join_all(batch.into_iter().filter_map(|req| methods.execute(&tx, req, 0))).await;
 							} else {

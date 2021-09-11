@@ -35,7 +35,7 @@ use jsonrpsee_types::v2::error::{
 use jsonrpsee_types::v2::params::{
 	Id, JsonRpcSubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
 };
-use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
+use jsonrpsee_types::v2::request::{Notification, Request};
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -84,7 +84,7 @@ impl MethodCallback {
 	pub fn execute(
 		&self,
 		tx: &MethodSink,
-		req: JsonRpcRequest<'_>,
+		req: Request<'_>,
 		conn_id: ConnectionId,
 	) -> Option<BoxFuture<'static, ()>> {
 		let id = req.id.clone();
@@ -168,7 +168,7 @@ impl Methods {
 	pub fn execute(
 		&self,
 		tx: &MethodSink,
-		req: JsonRpcRequest<'_>,
+		req: Request<'_>,
 		conn_id: ConnectionId,
 	) -> Option<BoxFuture<'static, ()>> {
 		match self.callbacks.get(&*req.method) {
@@ -183,7 +183,7 @@ impl Methods {
 	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
 	/// a server up.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
-		let req = JsonRpcRequest {
+		let req = Request {
 			jsonrpc: TwoPointZero,
 			id: Id::Number(0),
 			method: Cow::borrowed(method),
@@ -486,7 +486,7 @@ impl SubscriptionSink {
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
-		serde_json::to_string(&JsonRpcNotification {
+		serde_json::to_string(&Notification {
 			jsonrpc: TwoPointZero,
 			method: self.method,
 			params: JsonRpcSubscriptionParams {

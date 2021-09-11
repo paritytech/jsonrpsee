@@ -27,7 +27,7 @@
 //! Contains common builders for hyper responses.
 
 use crate::types::v2::{
-	error::{JsonRpcError, JsonRpcErrorCode},
+	error::{RpcError, JsonRpcErrorCode},
 	params::{Id, TwoPointZero},
 };
 
@@ -36,7 +36,7 @@ const TEXT: &str = "text/plain";
 
 /// Create a response for json internal error.
 pub fn internal_error() -> hyper::Response<hyper::Body> {
-	let error = serde_json::to_string(&JsonRpcError {
+	let error = serde_json::to_string(&RpcError {
 		jsonrpc: TwoPointZero,
 		error: JsonRpcErrorCode::InternalError.into(),
 		id: Id::Null,
@@ -80,7 +80,7 @@ pub fn invalid_allow_headers() -> hyper::Response<hyper::Body> {
 
 /// Create a json response for oversized requests (413)
 pub fn too_large() -> hyper::Response<hyper::Body> {
-	let error = serde_json::to_string(&JsonRpcError {
+	let error = serde_json::to_string(&RpcError {
 		jsonrpc: TwoPointZero,
 		error: JsonRpcErrorCode::OversizedRequest.into(),
 		id: Id::Null,
@@ -92,7 +92,7 @@ pub fn too_large() -> hyper::Response<hyper::Body> {
 
 /// Create a json response for empty or malformed requests (400)
 pub fn malformed() -> hyper::Response<hyper::Body> {
-	let error = serde_json::to_string(&JsonRpcError {
+	let error = serde_json::to_string(&RpcError {
 		jsonrpc: TwoPointZero,
 		error: JsonRpcErrorCode::ParseError.into(),
 		id: Id::Null,

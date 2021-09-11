@@ -74,7 +74,7 @@ impl RpcDescription {
 		let jrps_error = self.jrps_client_item(quote! { types::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &method.signature.sig.ident;
-		// List of inputs to put into `JsonRpcParams` (e.g. `self.foo(<12, "baz">)`).
+		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).
 		// Includes `&self` receiver.
 		let rust_method_params = &method.signature.sig.inputs;
 		// Name of the RPC method (e.g. `foo_makeSpam`).
@@ -104,7 +104,7 @@ impl RpcDescription {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_client_item(quote! { types::v2::params::JsonRpcParams::NoParams })
+			self.jrps_client_item(quote! { types::v2::params::Params::NoParams })
 		};
 
 		// Doc-comment to be associated with the method.
@@ -124,7 +124,7 @@ impl RpcDescription {
 		let jrps_error = self.jrps_client_item(quote! { types::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &sub.signature.sig.ident;
-		// List of inputs to put into `JsonRpcParams` (e.g. `self.foo(<12, "baz">)`).
+		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).
 		let rust_method_params = &sub.signature.sig.inputs;
 		// Name of the RPC subscription (e.g. `foo_sub`).
 		let rpc_sub_name = self.rpc_identifier(&sub.name);
@@ -147,7 +147,7 @@ impl RpcDescription {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_client_item(quote! { types::v2::params::JsonRpcParams::NoParams })
+			self.jrps_client_item(quote! { types::v2::params::Params::NoParams })
 		};
 
 		// Doc-comment to be associated with the method.

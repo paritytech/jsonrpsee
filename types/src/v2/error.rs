@@ -34,7 +34,7 @@ use thiserror::Error;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
-pub struct JsonRpcError<'a> {
+pub struct RpcError<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Error.
@@ -44,7 +44,7 @@ pub struct JsonRpcError<'a> {
 	pub id: Id<'a>,
 }
 
-impl<'a> fmt::Display for JsonRpcError<'a> {
+impl<'a> fmt::Display for RpcError<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
 	}
@@ -202,17 +202,17 @@ impl serde::Serialize for JsonRpcErrorCode {
 
 #[cfg(test)]
 mod tests {
-	use super::{Id, JsonRpcError, JsonRpcErrorCode, JsonRpcErrorObject, TwoPointZero};
+	use super::{Id, RpcError, JsonRpcErrorCode, JsonRpcErrorObject, TwoPointZero};
 
 	#[test]
 	fn deserialize_works() {
 		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
-		let exp = JsonRpcError {
+		let exp = RpcError {
 			jsonrpc: TwoPointZero,
 			error: JsonRpcErrorObject { code: JsonRpcErrorCode::ParseError, message: "Parse error", data: None },
 			id: Id::Null,
 		};
-		let err: JsonRpcError = serde_json::from_str(ser).unwrap();
+		let err: RpcError = serde_json::from_str(ser).unwrap();
 		assert_eq!(exp, err);
 	}
 
@@ -220,7 +220,7 @@ mod tests {
 	fn deserialize_with_optional_data() {
 		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
 		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
-		let exp = JsonRpcError {
+		let exp = RpcError {
 			jsonrpc: TwoPointZero,
 			error: JsonRpcErrorObject {
 				code: JsonRpcErrorCode::ParseError,
@@ -229,14 +229,14 @@ mod tests {
 			},
 			id: Id::Null,
 		};
-		let err: JsonRpcError = serde_json::from_str(ser).unwrap();
+		let err: RpcError = serde_json::from_str(ser).unwrap();
 		assert_eq!(exp, err);
 	}
 
 	#[test]
 	fn serialize_works() {
 		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
-		let err = JsonRpcError {
+		let err = RpcError {
 			jsonrpc: TwoPointZero,
 			error: JsonRpcErrorObject { code: JsonRpcErrorCode::InternalError, message: "Internal error", data: None },
 			id: Id::Number(1337),

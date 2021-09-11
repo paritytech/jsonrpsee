@@ -31,7 +31,7 @@ use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, StopHandle, StopMonitor};
 use crate::types::{
-	error::Error, v2::error::JsonRpcErrorCode, v2::params::Id, v2::request::JsonRpcRequest, TEN_MB_SIZE_BYTES,
+	error::Error, v2::error::JsonRpcErrorCode, v2::params::Id, v2::request::Request, TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
@@ -232,7 +232,7 @@ async fn background_task(
 
 		match data.get(0) {
 			Some(b'{') => {
-				if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
+				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 					log::debug!("recv: {:?}", req);
 					if let Some(fut) = methods.execute(&tx, req, conn_id) {
 						method_executors.add(fut);
@@ -243,7 +243,7 @@ async fn background_task(
 				}
 			}
 			Some(b'[') => {
-				if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
+				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
 					if !batch.is_empty() {
 						// Batch responses must be sent back as a single message so we read the results from each request in the
 						// batch and read the results off of a new channel, `rx_batch`, and then send the complete batch response

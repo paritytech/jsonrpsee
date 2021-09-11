@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::{traits::Client, v2::params::JsonRpcParams},
+	types::{traits::Client, v2::params::Params},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", JsonRpcParams::NoParams).await?;
+	let response: String = client.request("say_hello", Params::NoParams).await?;
 	println!("r: {:?}", response);
 
 	Ok(())

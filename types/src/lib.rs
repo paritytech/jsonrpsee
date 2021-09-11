@@ -66,4 +66,4 @@ pub mod __reexports {
 }
 
 /// JSON-RPC result.
-pub type JsonRpcResult<T> = Result<T, Error>;
+pub type RpcResult<T> = std::result::Result<T, Error>;

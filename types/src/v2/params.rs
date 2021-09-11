@@ -251,7 +251,7 @@ impl<'a> RpcParamsSequence<'a> {
 /// whereas `Into<JsonValue>` doesn't in most cases.
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
-pub enum JsonRpcParams<'a> {
+pub enum Params<'a> {
 	/// No params.
 	NoParams,
 	/// Positional params (heap allocated).
@@ -262,19 +262,19 @@ pub enum JsonRpcParams<'a> {
 	Map(BTreeMap<&'a str, JsonValue>),
 }
 
-impl<'a> From<BTreeMap<&'a str, JsonValue>> for JsonRpcParams<'a> {
+impl<'a> From<BTreeMap<&'a str, JsonValue>> for Params<'a> {
 	fn from(map: BTreeMap<&'a str, JsonValue>) -> Self {
 		Self::Map(map)
 	}
 }
 
-impl<'a> From<Vec<JsonValue>> for JsonRpcParams<'a> {
+impl<'a> From<Vec<JsonValue>> for Params<'a> {
 	fn from(arr: Vec<JsonValue>) -> Self {
 		Self::Array(arr)
 	}
 }
 
-impl<'a> From<&'a [JsonValue]> for JsonRpcParams<'a> {
+impl<'a> From<&'a [JsonValue]> for Params<'a> {
 	fn from(slice: &'a [JsonValue]) -> Self {
 		Self::ArrayRef(slice)
 	}
@@ -354,7 +354,7 @@ impl<'a> Id<'a> {
 #[cfg(test)]
 mod test {
 	use super::{
-		Cow, Id, JsonRpcParams, JsonRpcSubscriptionParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero,
+		Cow, Id, Params, JsonRpcSubscriptionParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero,
 	};
 
 	#[test]
@@ -396,11 +396,11 @@ mod test {
 	#[test]
 	fn params_serialize() {
 		let test_vector = &[
-			("null", JsonRpcParams::NoParams),
-			("[42,23]", JsonRpcParams::Array(serde_json::from_str("[42,23]").unwrap())),
+			("null", Params::NoParams),
+			("[42,23]", Params::Array(serde_json::from_str("[42,23]").unwrap())),
 			(
 				r#"{"a":42,"b":null,"c":"aa"}"#,
-				JsonRpcParams::Map(serde_json::from_str(r#"{"a":42,"b":null,"c":"aa"}"#).unwrap()),
+				Params::Map(serde_json::from_str(r#"{"a":42,"b":null,"c":"aa"}"#).unwrap()),
 			),
 		];
 
