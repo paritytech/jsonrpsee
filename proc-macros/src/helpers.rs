@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::visitor::{FindAllParams, FindSubscriptionParams};
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use std::collections::HashSet;
@@ -64,8 +64,8 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 /// Traverses the RPC trait definition and applies the required bounds for the generic type parameters that are used.
 /// The bounds applied depend on whether the type parameter is used as a parameter, return value or subscription result
 /// and whether it's used in client or server mode.
-/// Type params get `Send + Sync + 'static` bounds and input/output parameters get `Serialize` and/or `DeserializeOwned` bounds.
-/// Inspired by <https://github.com/paritytech/jsonrpc/blob/master/derive/src/to_delegate.rs#L414>
+/// Type params get `Send + Sync + 'static` bounds and input/output parameters get `Serialize` and/or `DeserializeOwned`
+/// bounds. Inspired by <https://github.com/paritytech/jsonrpc/blob/master/derive/src/to_delegate.rs#L414>
 ///
 /// ### Example
 ///
@@ -78,7 +78,7 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 ///    fn call(&self, a: A) -> JsonRpcResult<B>;
 ///
 ///    #[subscription(name = "sub", item = Vec<C>)]
-///    fn sub(&self);
+///    fn sub(&self) -> JsonRpcResult<()>;
 ///  }
 /// ```
 ///
@@ -163,6 +163,21 @@ pub(crate) fn is_option(ty: &syn::Type) -> bool {
 	}
 
 	false
+}
+
+/// Iterates over all Attribute's and parses only the attributes that are doc comments.
+///
+/// Note that `doc comments` are expanded into `#[doc = "some comment"]`
+/// Thus, if the attribute starts with `doc` => it's regarded as a doc comment.
+pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
+	let docs = attrs.iter().filter(|attr| {
+		attr.path.is_ident("doc")
+			&& match attr.parse_meta() {
+				Ok(syn::Meta::NameValue(meta)) => matches!(&meta.lit, syn::Lit::Str(_)),
+				_ => false,
+			}
+	});
+	quote! ( #(#docs)* )
 }
 
 #[cfg(test)]

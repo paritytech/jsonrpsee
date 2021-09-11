@@ -234,14 +234,15 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
+	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription
+	/// will be dropped.
 	///
-	/// You can also prevent the subscription being dropped by calling [`Subscription::next()`](crate::types::Subscription) frequently enough
-	/// such that the buffer capacity doesn't exceeds.
+	/// You can also prevent the subscription being dropped by calling
+	/// [`Subscription::next()`](crate::types::Subscription) frequently enough such that the buffer capacity doesn't
+	/// exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
 	/// because it is passed to [`futures::channel::mpsc::channel`].
-	///
 	pub fn max_notifs_per_subscription(mut self, max: usize) -> Self {
 		self.max_notifs_per_subscription = max;
 		self

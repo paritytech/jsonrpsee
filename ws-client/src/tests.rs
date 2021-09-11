@@ -260,7 +260,7 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 fn assert_error_response(err: Error, exp: JsonRpcErrorObject) {
 	match &err {
 		Error::Request(e) => {
-			let this: JsonRpcError = serde_json::from_str(&e).unwrap();
+			let this: JsonRpcError = serde_json::from_str(e).unwrap();
 			assert_eq!(this.error, exp);
 		}
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),

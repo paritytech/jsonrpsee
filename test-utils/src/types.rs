@@ -145,7 +145,8 @@ pub struct WebSocketTestServer {
 }
 
 impl WebSocketTestServer {
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every connection.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every
+	// connection.
 	pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
 		let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
@@ -155,7 +156,8 @@ impl WebSocketTestServer {
 		Self { local_addr, exit: tx }
 	}
 
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every connection.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every
+	// connection.
 	pub async fn with_hardcoded_notification(sockaddr: SocketAddr, notification: String) -> Self {
 		let (tx, rx) = mpsc::channel::<()>(1);
 		let (addr_tx, addr_rx) = oneshot::channel();
@@ -174,7 +176,8 @@ impl WebSocketTestServer {
 		Self { local_addr, exit: tx }
 	}
 
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription response.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription
+	// response.
 	//
 	// NOTE: ignores the actual subscription and unsubscription method.
 	pub async fn with_hardcoded_subscription(
