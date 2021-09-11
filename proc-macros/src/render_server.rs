@@ -121,7 +121,8 @@ impl RpcDescription {
 				let rpc_method_name = self.rpc_identifier(&method.name);
 				// `parsing` is the code associated with parsing structure from the
 				// provided `RpcParams` object.
-				// `params_seq` is the comma-delimited sequence of parameters we're passing to the rust function called..
+				// `params_seq` is the comma-delimited sequence of parameters we're passing to the rust function
+				// called..
 				let (parsing, params_seq) = self.render_params_decoding(&method.params);
 
 				check_name(&rpc_method_name, rust_method_name.span());
