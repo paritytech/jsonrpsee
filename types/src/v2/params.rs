@@ -36,15 +36,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::fmt;
 
-/// JSON-RPC parameter values for subscriptions.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SubscriptionParams<T> {
-	/// Subscription ID
-	pub subscription: SubscriptionId,
-	/// Result.
-	pub result: T,
-}
-
 /// JSON-RPC v2 marker type.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TwoPointZero;
@@ -356,7 +347,8 @@ impl<'a> Id<'a> {
 
 #[cfg(test)]
 mod test {
-	use super::{Cow, Id, JsonValue, Params, ParamsSer, SubscriptionId, SubscriptionParams, TwoPointZero};
+	use super::{Cow, Id, JsonValue, Params, ParamsSer, SubscriptionId, TwoPointZero};
+	use crate::v2::response::SubscriptionPayload;
 
 	#[test]
 	fn id_deserialization() {
@@ -485,7 +477,7 @@ mod test {
 
 	#[test]
 	fn subscription_params_serialize_work() {
-		let ser = serde_json::to_string(&SubscriptionParams { subscription: SubscriptionId::Num(12), result: "goal" })
+		let ser = serde_json::to_string(&SubscriptionPayload { subscription: SubscriptionId::Num(12), result: "goal" })
 			.unwrap();
 		let exp = r#"{"subscription":12,"result":"goal"}"#;
 		assert_eq!(ser, exp);
@@ -495,10 +487,10 @@ mod test {
 	fn subscription_params_deserialize_work() {
 		let ser = r#"{"subscription":"9","result":"offside"}"#;
 		assert!(
-			serde_json::from_str::<SubscriptionParams<()>>(ser).is_err(),
+			serde_json::from_str::<SubscriptionPayload<()>>(ser).is_err(),
 			"invalid type should not be deserializable"
 		);
-		let dsr: SubscriptionParams<JsonValue> = serde_json::from_str(ser).unwrap();
+		let dsr: SubscriptionPayload<JsonValue> = serde_json::from_str(ser).unwrap();
 		assert_eq!(dsr.subscription, SubscriptionId::Str("9".into()));
 		assert_eq!(dsr.result, serde_json::json!("offside"));
 	}

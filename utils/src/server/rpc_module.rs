@@ -29,11 +29,12 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
-use jsonrpsee_types::v2::error::{ErrorCode, ErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE};
-use jsonrpsee_types::v2::params::{
-	Id, Params, SubscriptionId as JsonRpcSubscriptionId, SubscriptionParams, TwoPointZero,
+use jsonrpsee_types::v2::{
+	error::{ErrorCode, ErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
+	params::{Id, Params, SubscriptionId as RpcSubscriptionId, TwoPointZero},
+	request::Request,
+	response::{SubscriptionPayload, SubscriptionResponse},
 };
-use jsonrpsee_types::v2::request::{Notification, Request};
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -463,17 +464,17 @@ pub struct SubscriptionSink {
 }
 
 impl SubscriptionSink {
-	/// Send message on this subscription.
+	/// Send a message back to subscribers.
 	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), Error> {
 		let msg = self.build_message(result)?;
 		self.inner_send(msg).map_err(Into::into)
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
-		serde_json::to_string(&Notification {
+		serde_json::to_string(&SubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,
-			params: SubscriptionParams { subscription: JsonRpcSubscriptionId::Num(self.uniq_sub.sub_id), result },
+			params: SubscriptionPayload { subscription: RpcSubscriptionId::Num(self.uniq_sub.sub_id), result },
 		})
 		.map_err(Into::into)
 	}

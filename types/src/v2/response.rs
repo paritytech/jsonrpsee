@@ -26,7 +26,10 @@
 
 //! Types pertaining to JSON-RPC responses.
 
-use crate::v2::params::{Id, TwoPointZero};
+use crate::v2::{
+	params::{Id, SubscriptionId, TwoPointZero},
+	request::Notification,
+};
 use serde::{Deserialize, Serialize};
 
 /// JSON-RPC successful response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
@@ -41,6 +44,18 @@ pub struct Response<'a, T> {
 	#[serde(borrow)]
 	pub id: Id<'a>,
 }
+
+/// Return value for subscriptions.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SubscriptionPayload<T> {
+	/// Subscription ID
+	pub subscription: SubscriptionId,
+	/// Result.
+	pub result: T,
+}
+
+/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member.
+pub type SubscriptionResponse<'a, T> = Notification<'a, SubscriptionPayload<T>>;
 
 #[cfg(test)]
 mod tests {

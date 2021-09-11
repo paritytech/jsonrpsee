@@ -28,9 +28,9 @@ use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::v2::{
 	error::RpcError,
-	params::{Id, ParamsSer, SubscriptionId, SubscriptionParams},
+	params::{Id, ParamsSer, SubscriptionId},
 	request::{Notification, RequestSer},
-	response::Response,
+	response::{Response, SubscriptionResponse},
 };
 use crate::types::{Error, RequestMessage};
 use futures::channel::{mpsc, oneshot};
@@ -73,19 +73,19 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<Js
 ///
 /// Returns `Ok()` if the response was successfully sent to the frontend.
 /// Return `Err(None)` if the subscription was not found.
-/// Returns `Err(Some(msg))` if the subscription was full.
+/// Returns `Err(Some(msg))` if the channel to the frontend was full.
 pub fn process_subscription_response(
 	manager: &mut RequestManager,
-	notif: Notification<SubscriptionParams<JsonValue>>,
+	response: SubscriptionResponse<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
-	let sub_id = notif.params.subscription;
+	let sub_id = response.params.subscription;
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => return Err(None),
 	};
 
 	match manager.as_subscription_mut(&request_id) {
-		Some(send_back_sink) => match send_back_sink.try_send(notif.params.result) {
+		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
 			Err(err) => {
 				log::error!("Dropping subscription {:?} error: {:?}", sub_id, err);

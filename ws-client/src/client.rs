@@ -51,9 +51,9 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+use jsonrpsee_types::v2::response::SubscriptionResponse;
 use tokio::sync::Mutex;
 
-use jsonrpsee_types::v2::params::SubscriptionParams;
 use jsonrpsee_types::SubscriptionKind;
 use serde::de::DeserializeOwned;
 use std::{
@@ -628,9 +628,9 @@ async fn background_task(
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) = serde_json::from_slice::<Notification<SubscriptionParams<_>>>(&raw) {
-					log::debug!("[backend]: recv subscription {:?}", notif);
-					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
+				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(&raw) {
+					log::debug!("[backend]: recv subscription {:?}", response);
+					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
 				}
