@@ -36,7 +36,7 @@ use hyper::{
 use jsonrpsee_types::{
 	error::{Error, GenericTransportError},
 	v2::{
-		error::JsonRpcErrorCode,
+		error::ErrorCode,
 		params::Id,
 		request::{Notification, Request},
 	},
@@ -241,7 +241,7 @@ impl Server {
 								// Array with at least one value, the response from the Server MUST be a single
 								// Response object." – The Spec.
 								is_single = true;
-								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
+								send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
 							}
 						} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));

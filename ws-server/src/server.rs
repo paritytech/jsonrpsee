@@ -31,7 +31,7 @@ use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, StopHandle, StopMonitor};
 use crate::types::{
-	error::Error, v2::error::JsonRpcErrorCode, v2::params::Id, v2::request::Request, TEN_MB_SIZE_BYTES,
+	error::Error, v2::error::ErrorCode, v2::params::Id, v2::request::Request, TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
@@ -226,7 +226,7 @@ async fn background_task(
 
 		if data.len() > max_request_body_size as usize {
 			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
-			send_error(Id::Null, &tx, JsonRpcErrorCode::OversizedRequest.into());
+			send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
 			continue;
 		}
 
@@ -262,14 +262,14 @@ async fn background_task(
 							log::error!("Error sending batch response to the client: {:?}", err)
 						}
 					} else {
-						send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
+						send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
 					send_error(id, &tx, code.into());
 				}
 			}
-			_ => send_error(Id::Null, &tx, JsonRpcErrorCode::ParseError.into()),
+			_ => send_error(Id::Null, &tx, ErrorCode::ParseError.into()),
 		}
 	}
 

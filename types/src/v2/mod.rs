@@ -24,6 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! Types to handle in- and outgoing JSON-RPC requests and subscriptions according to the [spec](https://www.jsonrpc.org/specification).
+
 /// JSON-RPC error related types.
 pub mod error;
 /// JSON_RPC params related types.

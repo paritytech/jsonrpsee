@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::{traits::SubscriptionClient, v2::params::Params},
+	types::{traits::SubscriptionClient, v2::params::RpcParamsSer},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
@@ -40,12 +40,12 @@ async fn main() -> anyhow::Result<()> {
 	let client = WsClientBuilder::default().build(&url).await?;
 
 	// Subscription with a single parameter
-	let params = Params::Array(vec![3.into()]);
+	let params = RpcParamsSer::Array(vec![3.into()]);
 	let mut sub_params_one = client.subscribe::<Option<char>>("sub_one_param", params, "unsub_one_param").await?;
 	println!("subscription with one param: {:?}", sub_params_one.next().await);
 
 	// Subscription with multiple parameters
-	let params = Params::Array(vec![2.into(), 5.into()]);
+	let params = RpcParamsSer::Array(vec![2.into(), 5.into()]);
 	let mut sub_params_two = client.subscribe::<String>("sub_params_two", params, "unsub_params_two").await?;
 	println!("subscription with two params: {:?}", sub_params_two.next().await);
 

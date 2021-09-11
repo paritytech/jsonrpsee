@@ -104,7 +104,7 @@ impl RpcDescription {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_client_item(quote! { types::v2::params::Params::NoParams })
+			self.jrps_client_item(quote! { types::v2::params::RpcParamsSer::NoParams })
 		};
 
 		// Doc-comment to be associated with the method.
@@ -147,7 +147,7 @@ impl RpcDescription {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_client_item(quote! { types::v2::params::Params::NoParams })
+			self.jrps_client_item(quote! { types::v2::params::RpcParamsSer::NoParams })
 		};
 
 		// Doc-comment to be associated with the method.

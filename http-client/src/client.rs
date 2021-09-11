@@ -29,8 +29,8 @@ use crate::types::{
 	traits::Client,
 	v2::{
 		error::RpcError,
-		params::{Id, Params},
-		request::{CallSer, NotificationSer},
+		params::{Id, RpcParamsSer},
+		request::{RequestSer, NotificationSer},
 		response::Response,
 	},
 	Error, TEN_MB_SIZE_BYTES,
@@ -88,7 +88,7 @@ pub struct HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<'a>(&self, method: &'a str, params: Params<'a>) -> Result<(), Error> {
+	async fn notification<'a>(&self, method: &'a str, params: RpcParamsSer<'a>) -> Result<(), Error> {
 		let notif = NotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?);
 		match tokio::time::timeout(self.request_timeout, fut).await {
@@ -99,13 +99,13 @@ impl Client for HttpClient {
 	}
 
 	/// Perform a request towards the server.
-	async fn request<'a, R>(&self, method: &'a str, params: Params<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: RpcParamsSer<'a>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-		let request = CallSer::new(Id::Number(id), method, params);
+		let request = RequestSer::new(Id::Number(id), method, params);
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
@@ -131,7 +131,7 @@ impl Client for HttpClient {
 		}
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Params<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, RpcParamsSer<'a>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -142,7 +142,7 @@ impl Client for HttpClient {
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-			batch_request.push(CallSer::new(Id::Number(id), method, params));
+			batch_request.push(RequestSer::new(Id::Number(id), method, params));
 			ordered_requests.push(id);
 			request_set.insert(id, pos);
 		}

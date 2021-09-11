@@ -28,8 +28,8 @@ use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::v2::{
 	error::RpcError,
-	params::{Id, Params, JsonRpcSubscriptionParams, SubscriptionId},
-	request::{CallSer, Notification},
+	params::{Id, RpcParamsSer, SubscriptionParams, SubscriptionId},
+	request::{RequestSer, Notification},
 	response::Response,
 };
 use crate::types::{Error, RequestMessage};
@@ -76,7 +76,7 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<Js
 /// Returns `Err(Some(msg))` if the subscription was full.
 pub fn process_subscription_response(
 	manager: &mut RequestManager,
-	notif: Notification<JsonRpcSubscriptionParams<JsonValue>>,
+	notif: Notification<SubscriptionParams<JsonValue>>,
 ) -> Result<(), Option<RequestMessage>> {
 	let sub_id = notif.params.subscription;
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
@@ -193,8 +193,8 @@ pub fn build_unsubscribe_message(
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
 	// TODO: https://github.com/paritytech/jsonrpsee/issues/275
-	let params = Params::ArrayRef(sub_id_slice);
-	let raw = serde_json::to_string(&CallSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
+	let params = RpcParamsSer::ArrayRef(sub_id_slice);
+	let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 

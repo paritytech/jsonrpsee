@@ -34,13 +34,13 @@ extern crate alloc;
 /// Ten megabytes.
 pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 
-/// JSON-RPC 2.0 specification related types v2.
+/// JSON-RPC v2.0 specification related types.
 pub mod v2;
 
-/// Shared error type.
+/// Error type.
 pub mod error;
 
-/// Shared client types.
+/// Client types.
 mod client;
 
 /// Traits

@@ -27,7 +27,7 @@
 //! Contains common builders for hyper responses.
 
 use crate::types::v2::{
-	error::{RpcError, JsonRpcErrorCode},
+	error::{RpcError, ErrorCode},
 	params::{Id, TwoPointZero},
 };
 
@@ -38,7 +38,7 @@ const TEXT: &str = "text/plain";
 pub fn internal_error() -> hyper::Response<hyper::Body> {
 	let error = serde_json::to_string(&RpcError {
 		jsonrpc: TwoPointZero,
-		error: JsonRpcErrorCode::InternalError.into(),
+		error: ErrorCode::InternalError.into(),
 		id: Id::Null,
 	})
 	.expect("built from known-good data; qed");
@@ -82,7 +82,7 @@ pub fn invalid_allow_headers() -> hyper::Response<hyper::Body> {
 pub fn too_large() -> hyper::Response<hyper::Body> {
 	let error = serde_json::to_string(&RpcError {
 		jsonrpc: TwoPointZero,
-		error: JsonRpcErrorCode::OversizedRequest.into(),
+		error: ErrorCode::OversizedRequest.into(),
 		id: Id::Null,
 	})
 	.expect("built from known-good data; qed");
@@ -94,7 +94,7 @@ pub fn too_large() -> hyper::Response<hyper::Body> {
 pub fn malformed() -> hyper::Response<hyper::Body> {
 	let error = serde_json::to_string(&RpcError {
 		jsonrpc: TwoPointZero,
-		error: JsonRpcErrorCode::ParseError.into(),
+		error: ErrorCode::ParseError.into(),
 		id: Id::Null,
 	})
 	.expect("built from known-good data; qed");

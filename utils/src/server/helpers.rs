@@ -27,7 +27,7 @@
 use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::v2::error::{RpcError, JsonRpcErrorCode, JsonRpcErrorObject};
+use jsonrpsee_types::v2::error::{RpcError, ErrorCode, ErrorObject};
 use jsonrpsee_types::v2::params::{Id, TwoPointZero};
 use jsonrpsee_types::v2::request::InvalidRequest;
 use jsonrpsee_types::v2::response::Response;
@@ -40,7 +40,7 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize) {
 		Err(err) => {
 			log::error!("Error serializing response: {:?}", err);
 
-			return send_error(id, tx, JsonRpcErrorCode::InternalError.into());
+			return send_error(id, tx, ErrorCode::InternalError.into());
 		}
 	};
 
@@ -50,7 +50,7 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize) {
 }
 
 /// Helper for sending JSON-RPC errors to the client
-pub fn send_error(id: Id, tx: &MethodSink, error: JsonRpcErrorObject) {
+pub fn send_error(id: Id, tx: &MethodSink, error: ErrorObject) {
 	let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
 		Ok(json) => json,
 		Err(err) => {
@@ -67,10 +67,10 @@ pub fn send_error(id: Id, tx: &MethodSink, error: JsonRpcErrorObject) {
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
 /// unparseable garbage.
-pub fn prepare_error(data: &[u8]) -> (Id<'_>, JsonRpcErrorCode) {
+pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	match serde_json::from_slice::<InvalidRequest>(data) {
-		Ok(InvalidRequest { id }) => (id, JsonRpcErrorCode::InvalidRequest),
-		Err(_) => (Id::Null, JsonRpcErrorCode::ParseError),
+		Ok(InvalidRequest { id }) => (id, ErrorCode::InvalidRequest),
+		Err(_) => (Id::Null, ErrorCode::ParseError),
 	}
 }
 

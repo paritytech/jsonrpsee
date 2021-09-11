@@ -24,12 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::v2::params::{Id, Params, TwoPointZero};
+//! Types to handle JSON-RPC requests according to the [spec](https://www.jsonrpc.org/specification#request-object).
+//! Some types come with a "*Ser" variant that implements [`Serialize`]; these are used in the client.
+
+use crate::v2::params::{Id, RpcParamsSer, TwoPointZero};
 use beef::Cow;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
-/// [JSON-RPC request object](https://www.jsonrpc.org/specification#request-object)
+/// JSON-RPC request object as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Request<'a> {
@@ -46,7 +49,7 @@ pub struct Request<'a> {
 	pub params: Option<&'a RawValue>,
 }
 
-/// Invalid request with known request ID.
+/// JSON-RPC Invalid request as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct InvalidRequest<'a> {
 	/// Request ID
@@ -54,7 +57,8 @@ pub struct InvalidRequest<'a> {
 	pub id: Id<'a>,
 }
 
-/// JSON-RPC notification (a request object without a request ID).
+/// JSON-RPC notification (a request object without a request ID) as defined in the
+/// [spec](https://www.jsonrpc.org/specification#request-object).
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Notification<'a, T> {
@@ -66,27 +70,27 @@ pub struct Notification<'a, T> {
 	pub params: T,
 }
 
-/// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object)
+/// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object).
 #[derive(Serialize, Debug)]
-pub struct CallSer<'a> {
+pub struct RequestSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
-	/// Name of the method to be invoked.
-	pub method: &'a str,
 	/// Request ID
 	pub id: Id<'a>,
+	/// Name of the method to be invoked.
+	pub method: &'a str,
 	/// Parameter values of the request.
-	pub params: Params<'a>,
+	pub params: RpcParamsSer<'a>,
 }
 
-impl<'a> CallSer<'a> {
+impl<'a> RequestSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(id: Id<'a>, method: &'a str, params: Params<'a>) -> Self {
+	pub fn new(id: Id<'a>, method: &'a str, params: RpcParamsSer<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
 	}
 }
 
-/// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object)
+/// Serializable [JSON-RPC notification object](https://www.jsonrpc.org/specification#request-object).
 #[derive(Serialize, Debug)]
 pub struct NotificationSer<'a> {
 	/// JSON-RPC version.
@@ -94,12 +98,12 @@ pub struct NotificationSer<'a> {
 	/// Name of the method to be invoked.
 	pub method: &'a str,
 	/// Parameter values of the request.
-	pub params: Params<'a>,
+	pub params: RpcParamsSer<'a>,
 }
 
 impl<'a> NotificationSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(method: &'a str, params: Params<'a>) -> Self {
+	pub fn new(method: &'a str, params: RpcParamsSer<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, method, params }
 	}
 }
@@ -107,7 +111,7 @@ impl<'a> NotificationSer<'a> {
 #[cfg(test)]
 mod test {
 	use super::{
-		Id, CallSer, InvalidRequest, Notification, NotificationSer, Params,
+		Id, RequestSer, InvalidRequest, Notification, NotificationSer, RpcParamsSer,
 		Request, TwoPointZero,
 	};
 	use serde_json::{value::RawValue, Value};
@@ -172,28 +176,28 @@ mod test {
 	fn serialize_call() {
 		let method = "subtract";
 		let id = Id::Number(1); // It's enough to check one variant, since the type itself also has tests.
-		let params: Params = vec![Value::Number(42.into()), Value::Number(23.into())].into(); // Same as above.
+		let params: RpcParamsSer = vec![Value::Number(42.into()), Value::Number(23.into())].into(); // Same as above.
 		let test_vector = &[
 			// With all fields set.
 			(
-				r#"{"jsonrpc":"2.0","method":"subtract","id":1,"params":[42,23]}"#,
+				r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#,
 				Some(id.clone()),
 				Some(params.clone()),
 			),
 			// Without ID field.
-			(r#"{"jsonrpc":"2.0","method":"subtract","id":null,"params":[42,23]}"#, None, Some(params)),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, Some(params)),
 			// Without params field
-			(r#"{"jsonrpc":"2.0","method":"subtract","id":1,"params":null}"#, Some(id), None),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":null}"#, Some(id), None),
 			// Without params and ID.
-			(r#"{"jsonrpc":"2.0","method":"subtract","id":null,"params":null}"#, None, None),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":null}"#, None, None),
 		];
 
 		for (ser, id, params) in test_vector.iter().cloned() {
-			let request = serde_json::to_string(&CallSer {
+			let request = serde_json::to_string(&RequestSer {
 				jsonrpc: TwoPointZero,
 				method,
 				id: id.unwrap_or(Id::Null),
-				params: params.unwrap_or(Params::NoParams),
+				params: params.unwrap_or(RpcParamsSer::NoParams),
 			})
 			.unwrap();
 

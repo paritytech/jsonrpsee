@@ -29,8 +29,8 @@ use crate::types::{
 	traits::{Client, SubscriptionClient},
 	v2::{
 		error::RpcError,
-		params::{Id, Params},
-		request::{CallSer, Notification, NotificationSer},
+		params::{Id, RpcParamsSer},
+		request::{RequestSer, Notification, NotificationSer},
 		response::Response,
 	},
 	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionMessage,
@@ -53,7 +53,7 @@ use futures::{
 };
 use tokio::sync::Mutex;
 
-use jsonrpsee_types::v2::params::JsonRpcSubscriptionParams;
+use jsonrpsee_types::v2::params::SubscriptionParams;
 use jsonrpsee_types::SubscriptionKind;
 use serde::de::DeserializeOwned;
 use std::{
@@ -306,7 +306,7 @@ impl WsClient {
 
 #[async_trait]
 impl Client for WsClient {
-	async fn notification<'a>(&self, method: &'a str, params: Params<'a>) -> Result<(), Error> {
+	async fn notification<'a>(&self, method: &'a str, params: RpcParamsSer<'a>) -> Result<(), Error> {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
 		let notif = NotificationSer::new(method, params);
@@ -333,13 +333,13 @@ impl Client for WsClient {
 		}
 	}
 
-	async fn request<'a, R>(&self, method: &'a str, params: Params<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: RpcParamsSer<'a>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
-		let raw = serde_json::to_string(&CallSer::new(Id::Number(req_id), method, params)).map_err(|e| {
+		let raw = serde_json::to_string(&RequestSer::new(Id::Number(req_id), method, params)).map_err(|e| {
 			self.id_guard.reclaim_request_id();
 			Error::ParseError(e)
 		})?;
@@ -367,7 +367,7 @@ impl Client for WsClient {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Params<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, RpcParamsSer<'a>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -375,7 +375,7 @@ impl Client for WsClient {
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(CallSer::new(Id::Number(batch_ids[idx]), method, params));
+			batches.push(RequestSer::new(Id::Number(batch_ids[idx]), method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -420,7 +420,7 @@ impl SubscriptionClient for WsClient {
 	async fn subscribe<'a, N>(
 		&self,
 		subscribe_method: &'a str,
-		params: Params<'a>,
+		params: RpcParamsSer<'a>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<N>, Error>
 	where
@@ -434,7 +434,7 @@ impl SubscriptionClient for WsClient {
 
 		let ids = self.id_guard.next_request_ids(2)?;
 		let raw =
-			serde_json::to_string(&CallSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
+			serde_json::to_string(&RequestSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
 				self.id_guard.reclaim_request_id();
 				Error::ParseError(e)
 			})?;
@@ -629,7 +629,7 @@ async fn background_task(
 				}
 				// Subscription response.
 				else if let Ok(notif) =
-					serde_json::from_slice::<Notification<JsonRpcSubscriptionParams<_>>>(&raw)
+					serde_json::from_slice::<Notification<SubscriptionParams<_>>>(&raw)
 				{
 					log::debug!("[backend]: recv subscription {:?}", notif);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {

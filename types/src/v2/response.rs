@@ -24,10 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! Types pertaining to JSON-RPC responses.
+
 use crate::v2::params::{Id, TwoPointZero};
 use serde::{Deserialize, Serialize};
 
-/// JSON-RPC successful response object.
+
+/// JSON-RPC successful response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Response<'a, T> {

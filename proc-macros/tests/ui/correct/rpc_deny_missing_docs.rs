@@ -3,16 +3,17 @@
 #![deny(missing_docs)]
 
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::types::RpcResult;
 
 #[rpc(client, server)]
-pub trait ApiWithoutDocumentation {
+pub trait ApiWithDocumentation {
 	/// Async method.
 	#[method(name = "foo")]
-	async fn async_method(&self) -> jsonrpsee::types::JsonRpcResult<u8>;
+	async fn async_method(&self) -> RpcResult<u8>;
 
 	/// Subscription docs.
 	#[subscription(name = "sub", item = String)]
-	fn sub(&self) -> jsonrpsee::types::JsonRpcResult<()>;
+	fn sub(&self) -> RpcResult<()>;
 }
 
 fn main() {}

@@ -24,6 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! Types to handle JSON-RPC request parameters according to the [spec](https://www.jsonrpc.org/specification#parameter_structures).
+//! Some types come with a "*Ser" variant that implements [`Serialize`]; these are used in the client.
+
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
 use beef::Cow;
@@ -35,7 +38,7 @@ use std::fmt;
 
 /// JSON-RPC parameter values for subscriptions.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct JsonRpcSubscriptionParams<T> {
+pub struct SubscriptionParams<T> {
 	/// Subscription ID
 	pub subscription: SubscriptionId,
 	/// Result.
@@ -84,11 +87,11 @@ impl Serialize for TwoPointZero {
 	}
 }
 
-/// Parameters sent with the RPC request.
+/// Parameters sent with an incoming JSON-RPC request.
 ///
 /// The data containing the params is a `Cow<&str>` and can either be a borrowed `&str` of JSON from an incoming
-/// [`super::request::JsonRpcRequest`] (which in turn borrows it from the input buffer that is shared between requests);
-/// or, it can be an owned `String`.
+/// [`super::request::Request`] (which in turn borrows it from the input buffer that is shared between requests);
+/// or, it can be an owned [`String`].
 #[derive(Clone, Debug)]
 pub struct RpcParams<'a>(Option<Cow<'a, str>>);
 
@@ -251,7 +254,7 @@ impl<'a> RpcParamsSequence<'a> {
 /// whereas `Into<JsonValue>` doesn't in most cases.
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
-pub enum Params<'a> {
+pub enum RpcParamsSer<'a> {
 	/// No params.
 	NoParams,
 	/// Positional params (heap allocated).
@@ -262,19 +265,19 @@ pub enum Params<'a> {
 	Map(BTreeMap<&'a str, JsonValue>),
 }
 
-impl<'a> From<BTreeMap<&'a str, JsonValue>> for Params<'a> {
+impl<'a> From<BTreeMap<&'a str, JsonValue>> for RpcParamsSer<'a> {
 	fn from(map: BTreeMap<&'a str, JsonValue>) -> Self {
 		Self::Map(map)
 	}
 }
 
-impl<'a> From<Vec<JsonValue>> for Params<'a> {
+impl<'a> From<Vec<JsonValue>> for RpcParamsSer<'a> {
 	fn from(arr: Vec<JsonValue>) -> Self {
 		Self::Array(arr)
 	}
 }
 
-impl<'a> From<&'a [JsonValue]> for Params<'a> {
+impl<'a> From<&'a [JsonValue]> for RpcParamsSer<'a> {
 	fn from(slice: &'a [JsonValue]) -> Self {
 		Self::ArrayRef(slice)
 	}
@@ -354,7 +357,7 @@ impl<'a> Id<'a> {
 #[cfg(test)]
 mod test {
 	use super::{
-		Cow, Id, Params, JsonRpcSubscriptionParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero,
+		Cow, Id, RpcParamsSer, SubscriptionParams, JsonValue, RpcParams, SubscriptionId, TwoPointZero,
 	};
 
 	#[test]
@@ -396,11 +399,11 @@ mod test {
 	#[test]
 	fn params_serialize() {
 		let test_vector = &[
-			("null", Params::NoParams),
-			("[42,23]", Params::Array(serde_json::from_str("[42,23]").unwrap())),
+			("null", RpcParamsSer::NoParams),
+			("[42,23]", RpcParamsSer::Array(serde_json::from_str("[42,23]").unwrap())),
 			(
 				r#"{"a":42,"b":null,"c":"aa"}"#,
-				Params::Map(serde_json::from_str(r#"{"a":42,"b":null,"c":"aa"}"#).unwrap()),
+				RpcParamsSer::Map(serde_json::from_str(r#"{"a":42,"b":null,"c":"aa"}"#).unwrap()),
 			),
 		];
 
@@ -485,7 +488,7 @@ mod test {
 	#[test]
 	fn subscription_params_serialize_work() {
 		let ser =
-			serde_json::to_string(&JsonRpcSubscriptionParams { subscription: SubscriptionId::Num(12), result: "goal" })
+			serde_json::to_string(&SubscriptionParams { subscription: SubscriptionId::Num(12), result: "goal" })
 				.unwrap();
 		let exp = r#"{"subscription":12,"result":"goal"}"#;
 		assert_eq!(ser, exp);
@@ -495,10 +498,10 @@ mod test {
 	fn subscription_params_deserialize_work() {
 		let ser = r#"{"subscription":"9","result":"offside"}"#;
 		assert!(
-			serde_json::from_str::<JsonRpcSubscriptionParams<()>>(ser).is_err(),
+			serde_json::from_str::<SubscriptionParams<()>>(ser).is_err(),
 			"invalid type should not be deserializable"
 		);
-		let dsr: JsonRpcSubscriptionParams<JsonValue> = serde_json::from_str(ser).unwrap();
+		let dsr: SubscriptionParams<JsonValue> = serde_json::from_str(ser).unwrap();
 		assert_eq!(dsr.subscription, SubscriptionId::Str("9".into()));
 		assert_eq!(dsr.result, serde_json::json!("offside"));
 	}

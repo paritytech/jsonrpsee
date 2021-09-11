@@ -39,7 +39,7 @@ pub struct RpcError<'a> {
 	pub jsonrpc: TwoPointZero,
 	/// Error.
 	#[serde(borrow)]
-	pub error: JsonRpcErrorObject<'a>,
+	pub error: ErrorObject<'a>,
 	/// Request ID
 	pub id: Id<'a>,
 }
@@ -53,9 +53,9 @@ impl<'a> fmt::Display for RpcError<'a> {
 /// JSON-RPC error object.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct JsonRpcErrorObject<'a> {
+pub struct ErrorObject<'a> {
 	/// Code
-	pub code: JsonRpcErrorCode,
+	pub code: ErrorCode,
 	/// Message
 	pub message: &'a str,
 	/// Optional data
@@ -64,13 +64,13 @@ pub struct JsonRpcErrorObject<'a> {
 	pub data: Option<&'a RawValue>,
 }
 
-impl<'a> From<JsonRpcErrorCode> for JsonRpcErrorObject<'a> {
-	fn from(code: JsonRpcErrorCode) -> Self {
+impl<'a> From<ErrorCode> for ErrorObject<'a> {
+	fn from(code: ErrorCode) -> Self {
 		Self { code, message: code.message(), data: None }
 	}
 }
 
-impl<'a> PartialEq for JsonRpcErrorObject<'a> {
+impl<'a> PartialEq for ErrorObject<'a> {
 	fn eq(&self, other: &Self) -> bool {
 		let this_raw = self.data.map(|r| r.get());
 		let other_raw = self.data.map(|r| r.get());
@@ -112,7 +112,7 @@ pub const SERVER_ERROR_MSG: &str = "Server error";
 
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Copy, Clone)]
-pub enum JsonRpcErrorCode {
+pub enum ErrorCode {
 	/// Invalid JSON was received by the server.
 	/// An error occurred on the server while parsing the JSON text.
 	ParseError,
@@ -130,10 +130,10 @@ pub enum JsonRpcErrorCode {
 	ServerError(i32),
 }
 
-impl JsonRpcErrorCode {
+impl ErrorCode {
 	/// Returns integer code value
 	pub const fn code(&self) -> i32 {
-		use JsonRpcErrorCode::*;
+		use ErrorCode::*;
 		match *self {
 			ParseError => PARSE_ERROR_CODE,
 			OversizedRequest => OVERSIZED_REQUEST_CODE,
@@ -147,7 +147,7 @@ impl JsonRpcErrorCode {
 
 	/// Returns the message for the given error code.
 	pub const fn message(&self) -> &'static str {
-		use JsonRpcErrorCode::*;
+		use ErrorCode::*;
 		match self {
 			ParseError => PARSE_ERROR_MSG,
 			OversizedRequest => OVERSIZED_REQUEST_MSG,
@@ -160,15 +160,15 @@ impl JsonRpcErrorCode {
 	}
 }
 
-impl fmt::Display for JsonRpcErrorCode {
+impl fmt::Display for ErrorCode {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}: {}", self.code(), self.message())
 	}
 }
 
-impl From<i32> for JsonRpcErrorCode {
+impl From<i32> for ErrorCode {
 	fn from(code: i32) -> Self {
-		use JsonRpcErrorCode::*;
+		use ErrorCode::*;
 		match code {
 			PARSE_ERROR_CODE => ParseError,
 			OVERSIZED_REQUEST_CODE => OversizedRequest,
@@ -181,17 +181,17 @@ impl From<i32> for JsonRpcErrorCode {
 	}
 }
 
-impl<'a> serde::Deserialize<'a> for JsonRpcErrorCode {
-	fn deserialize<D>(deserializer: D) -> Result<JsonRpcErrorCode, D::Error>
+impl<'a> serde::Deserialize<'a> for ErrorCode {
+	fn deserialize<D>(deserializer: D) -> Result<ErrorCode, D::Error>
 	where
 		D: Deserializer<'a>,
 	{
 		let code: i32 = Deserialize::deserialize(deserializer)?;
-		Ok(JsonRpcErrorCode::from(code))
+		Ok(ErrorCode::from(code))
 	}
 }
 
-impl serde::Serialize for JsonRpcErrorCode {
+impl serde::Serialize for ErrorCode {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: Serializer,
@@ -202,14 +202,14 @@ impl serde::Serialize for JsonRpcErrorCode {
 
 #[cfg(test)]
 mod tests {
-	use super::{Id, RpcError, JsonRpcErrorCode, JsonRpcErrorObject, TwoPointZero};
+	use super::{Id, RpcError, ErrorCode, ErrorObject, TwoPointZero};
 
 	#[test]
 	fn deserialize_works() {
 		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
 		let exp = RpcError {
 			jsonrpc: TwoPointZero,
-			error: JsonRpcErrorObject { code: JsonRpcErrorCode::ParseError, message: "Parse error", data: None },
+			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error", data: None },
 			id: Id::Null,
 		};
 		let err: RpcError = serde_json::from_str(ser).unwrap();
@@ -222,8 +222,8 @@ mod tests {
 		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
 		let exp = RpcError {
 			jsonrpc: TwoPointZero,
-			error: JsonRpcErrorObject {
-				code: JsonRpcErrorCode::ParseError,
+			error: ErrorObject {
+				code: ErrorCode::ParseError,
 				message: "Parse error",
 				data: Some(&*data),
 			},
@@ -238,7 +238,7 @@ mod tests {
 		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
 		let err = RpcError {
 			jsonrpc: TwoPointZero,
-			error: JsonRpcErrorObject { code: JsonRpcErrorCode::InternalError, message: "Internal error", data: None },
+			error: ErrorObject { code: ErrorCode::InternalError, message: "Internal error", data: None },
 			id: Id::Number(1337),
 		};
 		let ser = serde_json::to_string(&err).unwrap();
