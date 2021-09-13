@@ -28,6 +28,8 @@ use crate::v2::params::JsonRpcParams;
 use crate::{Error, Subscription};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
+use serde_json::value::RawValue;
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
 #[async_trait]
@@ -82,4 +84,58 @@ pub trait SubscriptionClient: Client {
 	async fn subscribe_to_method<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
 	where
 		Notif: DeserializeOwned;
+}
+
+/// Marker trait for types that can be serialized as JSON array/sequence.
+///
+/// If your type isn't a sequence, for example `String`, `usize` or similar
+/// you must insert it in a tuple, slice, array or Vec for it to work.
+pub trait ToRpcParams: Serialize {
+	/// Serialize the type as a JSON array.
+	fn to_rpc_params(&self) -> Result<Box<RawValue>, serde_json::Error> {
+		serde_json::to_string(&self).map(|json| RawValue::from_string(json).expect("JSON String; qed"))
+	}
+}
+
+impl<P: Serialize> ToRpcParams for &[P] {}
+
+impl<P: Serialize> ToRpcParams for Vec<P> {}
+
+macro_rules! array_impls {
+    ($($len:tt)+) => {
+        $(
+            impl<P: Serialize> ToRpcParams for [P; $len] {}
+        )+
+    }
+}
+
+array_impls! {
+	1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+}
+
+macro_rules! tuple_impls {
+    ($($len:expr => ($($n:tt $name:ident)+))+) => {
+        $(
+            impl<$($name: Serialize),+> ToRpcParams for ($($name,)+) {}
+        )+
+    }
+}
+
+tuple_impls! {
+	1 => (0 T0)
+	2 => (0 T0 1 T1)
+	3 => (0 T0 1 T1 2 T2)
+	4 => (0 T0 1 T1 2 T2 3 T3)
+	5 => (0 T0 1 T1 2 T2 3 T3 4 T4)
+	6 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5)
+	7 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6)
+	8 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7)
+	9 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8)
+	10 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9)
+	11 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10)
+	12 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11)
+	13 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12)
+	14 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13)
+	15 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14)
+	16 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14 15 T15)
 }

@@ -29,6 +29,7 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
+use jsonrpsee_types::traits::ToRpcParams;
 use jsonrpsee_types::v2::error::{
 	JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE,
 };
@@ -193,23 +194,16 @@ impl Methods {
 		}
 	}
 
-	/// Helper alternative to `execute`, useful for writing unit tests without having to spin up
-	/// a server.
+	/// Helper to call a method on the `RPC module` without having to spin up a server.
 	///
-	/// Converts the params to a stringified array for you if it's not already serialized to a sequence.
-	pub async fn call_with<T: Serialize>(&self, method: &str, params: T) -> Option<String> {
-		let params = serde_json::to_string(&params).ok().map(|json| {
-			let json = if json.starts_with('[') && json.ends_with(']') { json } else { format!("[{}]", json) };
-			RawValue::from_string(json).expect("valid JSON string above; qed")
-		});
+	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
+	pub async fn call_with<Params: ToRpcParams>(&self, method: &str, params: Params) -> Option<String> {
+		let params = params.to_rpc_params().ok();
 		self.call(method, params).await
 	}
 
-	/// Helper alternative to `execute`, useful for writing unit tests without having to spin up a server.
-	///
-	/// The params argument, `Option<Box<RawValue>>` is expected to be something serde can deserialize into a sequence
-	/// of the actual method argument, so in JSON syntax, for example: `[123, "0xDEADBEEF", [255, 0, 0, 0]]` to match
-	/// the arguments of a Rust function taking arguments of types, in order, `usize`, `Bytes`, `[u8; 4]`.
+	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
+	/// a server up.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
 		log::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let req = JsonRpcRequest {
@@ -250,7 +244,7 @@ impl Methods {
 		}
 		let response = rx.next().await.expect("Could not establish subscription.");
 		let subscription_response = serde_json::from_str::<JsonRpcResponse<SubscriptionId>>(&response)
-			.expect(&format!("Could not deserialize subscription response {:?}", response));
+			.unwrap_or_else(|_| panic!("Could not deserialize subscription response {:?}", response));
 		let sub_id = subscription_response.result;
 		(sub_id, rx)
 	}
@@ -605,9 +599,11 @@ fn subscription_closed_err(sub_id: u64) -> Error {
 
 #[cfg(test)]
 mod tests {
-	use jsonrpsee_types::v2;
-
 	use super::*;
+	use jsonrpsee_types::v2;
+	use serde::Deserialize;
+	use std::collections::HashMap;
+
 	#[test]
 	fn rpc_modules_with_different_contexts_can_be_merged() {
 		let cx = Vec::<u8>::new();
@@ -659,8 +655,12 @@ mod tests {
 				Ok(n * 2)
 			})
 			.unwrap();
-		let result = module.call_with("foo", 3).await.unwrap();
+		let result = module.call_with("foo", [3]).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":6,"id":0}"#);
+
+		// Call sync method with bad param
+		let result = module.call_with("foo", (false,)).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
 
 		// Call async method with params and context
 		struct MyContext;
@@ -680,8 +680,71 @@ mod tests {
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":25,"id":0}"#);
 	}
 
-	// TODO: expand with test using the proc macros
-	// TODO: expand with test provoking Invalid Params (e.g. requiring `Bytes`)
+	#[tokio::test]
+	async fn calling_method_without_server_using_proc_macro() {
+		use jsonrpsee::{proc_macros::rpc, types::async_trait};
+		// Setup
+		#[derive(Debug, Deserialize, Serialize)]
+		#[allow(unreachable_pub)]
+		pub struct Gun {
+			shoots: bool,
+		}
+
+		#[derive(Debug, Deserialize, Serialize)]
+		#[allow(unreachable_pub)]
+		pub struct Beverage {
+			ice: bool,
+		}
+
+		#[rpc(server)]
+		pub trait Cool {
+			/// Sync method, no params.
+			#[method(name = "rebel_without_cause")]
+			fn rebel_without_cause(&self) -> Result<bool, Error>;
+
+			/// Sync method.
+			#[method(name = "rebel")]
+			fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> Result<String, Error>;
+
+			/// Async method.
+			#[method(name = "revolution")]
+			async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> Result<String, Error>;
+		}
+
+		struct CoolServerImpl;
+
+		#[async_trait]
+		impl CoolServer for CoolServerImpl {
+			fn rebel_without_cause(&self) -> Result<bool, Error> {
+				Ok(false)
+			}
+
+			fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> Result<String, Error> {
+				Ok(format!("{} {:?}", map.values().len(), gun))
+			}
+
+			async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> Result<String, Error> {
+				Ok(format!("drink: {:?}, phases: {:?}", beverage, some_bytes))
+			}
+		}
+		let module = CoolServerImpl.into_rpc();
+
+		// Call sync method with no params
+		let result = module.call("rebel_without_cause", None).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":false,"id":0}"#);
+
+		// Call sync method with params
+		let result = module.call_with("rebel", (Gun { shoots: true }, HashMap::<u8, u8>::default())).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"0 Gun { shoots: true }","id":0}"#);
+
+		// Call sync method with bad params
+		let result = module.call_with("rebel", (Gun { shoots: true }, false)).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
+
+		// Call async method with params and context
+		let result = module.call_with("revolution", (Beverage { ice: true }, vec![1, 2, 3])).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"drink: Beverage { ice: true }, phases: [1, 2, 3]","id":0}"#);
+	}
 
 	#[tokio::test]
 	async fn subscribing_without_server() {
