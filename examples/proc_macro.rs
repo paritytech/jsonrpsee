@@ -30,7 +30,6 @@ use jsonrpsee::{
 	ws_client::WsClientBuilder,
 	ws_server::{SubscriptionSink, WsServerBuilder},
 };
-use log;
 use std::net::SocketAddr;
 
 type ExampleHash = [u8; 32];
