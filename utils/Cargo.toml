@@ -40,3 +40,8 @@ server = [
 serde_json = "1.0"
 env_logger = "0.9"
 tokio = { version = "1", features = ["macros", "rt"] }
+# TODO: (dp) seems like the macro doesn't work with the component crates, but users must import `jsonrpsee`?
+# jsonrpsee-proc-macros = { path = "../proc-macros" }
+# jsonrpsee-types = { path = "../types" }
+# jsonrpsee-ws-server = { path = "../ws-server" }
+jsonrpsee = { path = "../jsonrpsee" }
