@@ -29,6 +29,7 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
+use jsonrpsee_types::traits::ToRpcParams;
 use jsonrpsee_types::v2::error::{
 	JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE,
 };
@@ -193,23 +194,16 @@ impl Methods {
 		}
 	}
 
-	/// Helper alternative to `execute`, useful for writing unit tests without having to spin up
-	/// a server.
+	/// Helper to call a method on the `RPC module` without having to spin up a server.
 	///
-	/// Converts the params to a stringified array for you if it's not already serialized to a sequence.
-	pub async fn call_with<T: Serialize>(&self, method: &str, params: T) -> Option<String> {
-		let params = serde_json::to_string(&params).ok().map(|json| {
-			let json = if json.starts_with('[') && json.ends_with(']') { json } else { format!("[{}]", json) };
-			RawValue::from_string(json).expect("valid JSON string above; qed")
-		});
+	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
+	pub async fn call_with<Params: ToRpcParams>(&self, method: &str, params: Params) -> Option<String> {
+		let params = params.to_rpc_params().ok();
 		self.call(method, params).await
 	}
 
-	/// Helper alternative to `execute`, useful for writing unit tests without having to spin up a server.
-	///
-	/// The params argument, `Option<Box<RawValue>>` is expected to be something serde can deserialize into a sequence
-	/// of the actual method argument, so in JSON syntax, for example: `[123, "0xDEADBEEF", [255, 0, 0, 0]]` to match
-	/// the arguments of a Rust function taking arguments of types, in order, `usize`, `Bytes`, `[u8; 4]`.
+	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
+	/// a server up.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
 		log::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let req = JsonRpcRequest {
@@ -598,6 +592,8 @@ mod tests {
 	use jsonrpsee_types::v2;
 
 	use super::*;
+	use serde_json::json;
+
 	#[test]
 	fn rpc_modules_with_different_contexts_can_be_merged() {
 		let cx = Vec::<u8>::new();
@@ -649,7 +645,7 @@ mod tests {
 				Ok(n * 2)
 			})
 			.unwrap();
-		let result = module.call_with("foo", 3).await.unwrap();
+		let result = module.call_with("foo", [3]).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":6,"id":0}"#);
 
 		// Call async method with params and context
