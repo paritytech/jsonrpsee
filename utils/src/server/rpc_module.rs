@@ -244,7 +244,7 @@ impl Methods {
 		}
 		let response = rx.next().await.expect("Could not establish subscription.");
 		let subscription_response = serde_json::from_str::<JsonRpcResponse<SubscriptionId>>(&response)
-			.expect(&format!("Could not deserialize subscription response {:?}", response));
+			unwrap_or_else(|| panic!("Could not deserialize subscription response {:?}", response));
 		let sub_id = subscription_response.result;
 		(sub_id, rx)
 	}
