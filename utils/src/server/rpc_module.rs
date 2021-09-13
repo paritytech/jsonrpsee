@@ -244,7 +244,7 @@ impl Methods {
 		}
 		let response = rx.next().await.expect("Could not establish subscription.");
 		let subscription_response = serde_json::from_str::<JsonRpcResponse<SubscriptionId>>(&response)
-    		.unwrap_or_else(|_| panic!("Could not deserialize subscription response {:?}", response));
+			.unwrap_or_else(|_| panic!("Could not deserialize subscription response {:?}", response));
 		let sub_id = subscription_response.result;
 		(sub_id, rx)
 	}
@@ -401,7 +401,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// # Examples
 	///
 	/// ```no_run
-	///
+	/// 
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
@@ -589,10 +589,10 @@ fn subscription_closed_err(sub_id: u64) -> Error {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
+	use super::*;
 	use jsonrpsee_types::v2;
 	use serde::Deserialize;
-	use super::*;
+	use std::collections::HashMap;
 
 	#[test]
 	fn rpc_modules_with_different_contexts_can_be_merged() {
@@ -672,15 +672,19 @@ mod tests {
 
 	#[tokio::test]
 	async fn calling_method_without_server_using_proc_macro() {
-		use jsonrpsee::{types::async_trait, proc_macros::rpc};
+		use jsonrpsee::{proc_macros::rpc, types::async_trait};
 		// Setup
 		#[derive(Debug, Deserialize, Serialize)]
 		#[allow(unreachable_pub)]
-		pub struct Gun {shoots: bool}
+		pub struct Gun {
+			shoots: bool,
+		}
 
 		#[derive(Debug, Deserialize, Serialize)]
 		#[allow(unreachable_pub)]
-		pub struct Beverage {ice: bool}
+		pub struct Beverage {
+			ice: bool,
+		}
 
 		#[rpc(server)]
 		pub trait Cool {
@@ -720,15 +724,15 @@ mod tests {
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":false,"id":0}"#);
 
 		// Call sync method with params
-		let result = module.call_with("rebel", (Gun {shoots: true}, HashMap::<u8, u8>::default())).await.unwrap();
+		let result = module.call_with("rebel", (Gun { shoots: true }, HashMap::<u8, u8>::default())).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"0 Gun { shoots: true }","id":0}"#);
 
 		// Call sync method with bad params
-		let result = module.call_with("rebel", (Gun {shoots: true}, false)).await.unwrap();
+		let result = module.call_with("rebel", (Gun { shoots: true }, false)).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
 
 		// Call async method with params and context
-		let result = module.call_with("revolution", (Beverage {ice: true}, vec!(1, 2, 3))).await.unwrap();
+		let result = module.call_with("revolution", (Beverage { ice: true }, vec![1, 2, 3])).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"drink: Beverage { ice: true }, phases: [1, 2, 3]","id":0}"#);
 	}
 
