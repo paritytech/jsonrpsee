@@ -29,6 +29,7 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
+use jsonrpsee_types::traits::ToRpcParams;
 use jsonrpsee_types::v2::error::{
 	JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE,
 };
@@ -180,14 +181,11 @@ impl Methods {
 		}
 	}
 
-	/// Test helper to call a method on the `RPC module` without having to spin a server up.
+	/// Helper to call a method on the `RPC module` without having to spin a server up.
 	///
-	/// Converts the params to a stringified array for you if it's not already serialized to a sequence.
-	pub async fn test_call<T: Serialize>(&self, method: &str, params: T) -> Option<String> {
-		let params = serde_json::to_string(&params).ok().map(|json| {
-			let json = if json.starts_with('[') && json.ends_with(']') { json } else { format!("[{}]", json) };
-			RawValue::from_string(json).expect("valid JSON string above; qed")
-		});
+	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
+	pub async fn call_with<Params: ToRpcParams>(&self, method: &str, params: Params) -> Option<String> {
+		let params = params.to_rpc_params().ok();
 		self.call(method, params).await
 	}
 
@@ -593,7 +591,7 @@ mod tests {
 		// Call sync method with no params
 		let mut module = RpcModule::new(());
 		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
-		let result = module.test_call("boo", None::<()>).await.unwrap();
+		let result = module.call_with("boo", (None::<()>,)).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#));
 
 		// Call sync method with params
@@ -603,9 +601,7 @@ mod tests {
 				Ok(n * 2)
 			})
 			.unwrap();
-		let result = &module.test_call("foo", &3).await.unwrap();
-		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
-		let result = &module.test_call("foo", &[3]).await.unwrap();
+		let result = module.call_with("foo", [3]).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
 
 		// Call async method with params and context
@@ -627,21 +623,26 @@ mod tests {
 			.register_async_method("many_args", |params, _ctx| {
 				let mut seq = params.sequence();
 
-				let one: Vec<usize> = seq.next().unwrap();
-				let two: String = seq.next().unwrap();
-				let three: usize = seq.optional_next().unwrap().unwrap_or(0);
+				let one = seq.next::<Vec<usize>>().unwrap().iter().sum::<usize>();
+				let two = seq.optional_next::<Vec<usize>>().unwrap().unwrap_or_default().iter().sum::<usize>();
+				let three: usize = seq.optional_next::<Vec<usize>>().unwrap().unwrap_or_default().iter().sum::<usize>();
 
-				let res = one.iter().sum::<usize>() + two.as_bytes().len() + three;
+				let res = one + two + three;
 
 				async move { Ok(res) }.boxed()
 			})
 			.unwrap();
 
-		let result = &module.test_call("roo", &[12, 13]).await.unwrap();
+		let result = &module.call_with("roo", [12, 13]).await.unwrap();
 		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":25,"id":0}"#));
 
-		let json = vec![json!([1, 3, 7]), json!("oooh")];
-		let result = &module.test_call("many_args", &json).await.unwrap();
-		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":15,"id":0}"#));
+		let result = module.call_with("many_args", vec![vec![1, 3, 7]]).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":11,"id":0}"#));
+
+		let result = module.call_with("many_args", vec![json!([1]), json!([2]), json!([3])]).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":6,"id":0}"#));
+
+		let result = module.call_with("many_args", vec![&[1], &[2]]).await.unwrap();
+		assert_eq!(result.as_ref(), String::from(r#"{"jsonrpc":"2.0","result":3,"id":0}"#));
 	}
 }
