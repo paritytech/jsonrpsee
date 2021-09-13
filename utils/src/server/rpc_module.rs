@@ -411,7 +411,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// # Examples
 	///
 	/// ```no_run
-	/// 
+	///
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
@@ -660,7 +660,7 @@ mod tests {
 
 		// Call sync method with bad param
 		let result = module.call_with("foo", (false,)).await.unwrap();
-		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
+		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected u16 at line 1 column 6"},"id":0}"#);
 
 		// Call async method with params and context
 		struct MyContext;
@@ -739,7 +739,7 @@ mod tests {
 
 		// Call sync method with bad params
 		let result = module.call_with("rebel", (Gun { shoots: true }, false)).await.unwrap();
-		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
+		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected a map at line 1 column 5"},"id":0}"#);
 
 		// Call async method with params and context
 		let result = module.call_with("revolution", (Beverage { ice: true }, vec![1, 2, 3])).await.unwrap();
@@ -748,7 +748,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn subscribing_without_server() {
-		env_logger::init();
 		let mut module = RpcModule::new(());
 		module
 			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
