@@ -88,7 +88,7 @@ pub trait SubscriptionClient: Client {
 
 /// Marker trait for types that can be serialized as JSON array/sequence.
 ///
-/// If your type isn't a sequence such as `String`, `usize` or similar
+/// If your type isn't a sequence, for example `String`, `usize` or similar
 /// you must insert it in a tuple, slice, array or Vec for it to work.
 pub trait ToRpcParams: Serialize {
 	/// Serialize the type as a JSON array.
