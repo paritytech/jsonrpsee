@@ -736,6 +736,10 @@ mod tests {
 		let result = module.call("rebel_without_cause", None).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":false,"id":0}"#);
 
+		// Call sync method with no params, alternative way.
+		let result = module.call_with::<[u8; 0]>("rebel_without_cause", []).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":false,"id":0}"#);
+
 		// Call sync method with params
 		let result = module.call_with("rebel", (Gun { shoots: true }, HashMap::<u8, u8>::default())).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"0 Gun { shoots: true }","id":0}"#);
