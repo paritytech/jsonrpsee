@@ -41,6 +41,8 @@ use jsonrpsee_utils::http_helpers;
 pub struct AccessControl {
 	allow_hosts: AllowHosts,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,
+	// TODO: (dp) We never set this header in the response headers.
+	#[allow(dead_code)]
 	cors_max_age: Option<u32>,
 	cors_allow_headers: AccessControlAllowHeaders,
 	continue_on_invalid_cors: bool,
