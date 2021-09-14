@@ -286,7 +286,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!("Error parsing {:?} as {:?}: {:?}", stringify!(#name), stringify!(#ty), e);
+								log::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return Err(e.into())
 							}
 						};
