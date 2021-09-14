@@ -35,7 +35,6 @@ use crate::types::{
 };
 use futures_channel::mpsc;
 use futures_util::io::{BufReader, BufWriter};
-// use futures_util::future::FutureExt;
 use futures_util::stream::StreamExt;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -50,7 +49,6 @@ const MAX_CONNECTIONS: u64 = 100;
 /// A WebSocket JSON RPC server.
 #[derive(Debug)]
 pub struct Server {
-	methods: Methods,
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
@@ -86,13 +84,17 @@ impl Server {
 
 					if connections.count() >= self.cfg.max_connections as usize {
 						log::warn!("Too many connections. Try again in a while.");
+						connections.add(Box::pin(handshake(socket, HandshakeResponse::Reject { status_code: 429 })));
 						continue;
 					}
 
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					connections.add(Box::pin(handshake(socket, id, methods, cfg, &stop_monitor)));
+					connections.add(Box::pin(handshake(
+						socket,
+						HandshakeResponse::Accept { conn_id: id, methods, cfg, stop_monitor: &stop_monitor },
+					)));
 
 					id = id.wrapping_add(1);
 				}
@@ -139,49 +141,64 @@ impl<'a> Future for Incoming<'a> {
 	}
 }
 
-async fn handshake(
-	socket: tokio::net::TcpStream,
-	conn_id: ConnectionId,
-	methods: &Methods,
-	cfg: &Settings,
-	stop_monitor: &StopMonitor,
-) -> Result<(), Error> {
+enum HandshakeResponse<'a> {
+	Reject { status_code: u16 },
+	Accept { conn_id: ConnectionId, methods: &'a Methods, cfg: &'a Settings, stop_monitor: &'a StopMonitor },
+}
+
+async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
-	let key = {
-		let req = server.receive_request().await?;
-		let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
-		let origin_check = cfg.allowed_origins.verify("Origin", req.headers().origin);
-
-		host_check.and(origin_check).map(|()| req.key())
-	};
-
-	match key {
-		Ok(key) => {
-			let accept = Response::Accept { key, protocol: None };
-			server.send_response(&accept).await?;
-		}
-		Err(error) => {
-			let reject = Response::Reject { status_code: 403 };
+	match mode {
+		HandshakeResponse::Reject { status_code } => {
+			// Forced rejection, don't need to read anything from the socket
+			let reject = Response::Reject { status_code };
 			server.send_response(&reject).await?;
 
-			return Err(error);
+			let (mut sender, _) = server.into_builder().finish();
+
+			// Gracefully shut down the connection
+			sender.close().await?;
+
+			Ok(())
 		}
-	}
+		HandshakeResponse::Accept { conn_id, methods, cfg, stop_monitor } => {
+			let key = {
+				let req = server.receive_request().await?;
+				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
+				let origin_check = cfg.allowed_origins.verify("Origin", req.headers().origin);
 
-	let join_result = tokio::spawn(background_task(
-		server,
-		conn_id,
-		methods.clone(),
-		cfg.max_request_body_size,
-		stop_monitor.clone(),
-	))
-	.await;
+				host_check.and(origin_check).map(|()| req.key())
+			};
 
-	match join_result {
-		Err(_) => Err(Error::Custom("Background task was aborted".into())),
-		Ok(result) => result,
+			match key {
+				Ok(key) => {
+					let accept = Response::Accept { key, protocol: None };
+					server.send_response(&accept).await?;
+				}
+				Err(error) => {
+					let reject = Response::Reject { status_code: 403 };
+					server.send_response(&reject).await?;
+
+					return Err(error);
+				}
+			}
+
+			let join_result = tokio::spawn(background_task(
+				server,
+				conn_id,
+				methods.clone(),
+				cfg.max_request_body_size,
+				stop_monitor.clone(),
+			))
+			.await;
+
+			match join_result {
+				Err(_) => Err(Error::Custom("Background task was aborted".into())),
+				Ok(result) => result,
+			}
+		}
 	}
 }
 
@@ -421,7 +438,7 @@ impl Builder {
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
 		let stop_monitor = StopMonitor::new();
-		Ok(Server { listener, methods: Methods::default(), cfg: self.settings, stop_monitor })
+		Ok(Server { listener, cfg: self.settings, stop_monitor })
 	}
 }
 

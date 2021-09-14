@@ -26,6 +26,7 @@
 
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
+use anyhow::anyhow;
 use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
@@ -128,7 +129,7 @@ impl<'a> RpcParams<'a> {
 	{
 		// NOTE(niklasad1): Option::None is serialized as `null` so we provide that here.
 		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("null");
-		serde_json::from_str(params).map_err(|_| CallError::InvalidParams)
+		serde_json::from_str(params).map_err(|e| CallError::InvalidParams(e.into()))
 	}
 
 	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
@@ -173,8 +174,9 @@ impl<'a> RpcParamsSequence<'a> {
 			}
 			b'[' | b',' => json = &json[1..],
 			_ => {
-				log::error!("[next_inner] Expected one of '[', ']' or ',' but found {:?}", json);
-				return Some(Err(CallError::InvalidParams));
+				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {:?}", json);
+				log::error!("[next_inner] {}", errmsg);
+				return Some(Err(CallError::InvalidParams(anyhow!(errmsg))));
 			}
 		}
 
@@ -195,7 +197,7 @@ impl<'a> RpcParamsSequence<'a> {
 				);
 				self.0 = "";
 
-				Some(Err(CallError::InvalidParams))
+				Some(Err(CallError::InvalidParams(e.into())))
 			}
 		}
 	}
@@ -221,7 +223,7 @@ impl<'a> RpcParamsSequence<'a> {
 	{
 		match self.next_inner() {
 			Some(result) => result,
-			None => Err(CallError::InvalidParams),
+			None => Err(CallError::InvalidParams(anyhow!("No more params"))),
 		}
 	}
 

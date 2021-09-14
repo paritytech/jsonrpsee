@@ -308,8 +308,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
-					Err(Error::Call(CallError::InvalidParams)) => {
-						send_error(id, tx, JsonRpcErrorCode::InvalidParams.into())
+					Err(Error::Call(CallError::InvalidParams(e))) => {
+						let error = JsonRpcErrorObject {
+							code: JsonRpcErrorCode::InvalidParams,
+							message: &e.to_string(),
+							data: None,
+						};
+						send_error(id, tx, error)
 					}
 					Err(Error::Call(CallError::Failed(e))) => {
 						let err = JsonRpcErrorObject {
@@ -357,8 +362,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let future = async move {
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
-						Err(Error::Call(CallError::InvalidParams)) => {
-							send_error(id, &tx, JsonRpcErrorCode::InvalidParams.into())
+						Err(Error::Call(CallError::InvalidParams(e))) => {
+							let error = JsonRpcErrorObject {
+								code: JsonRpcErrorCode::InvalidParams,
+								message: &e.to_string(),
+								data: None,
+							};
+							send_error(id, &tx, error)
 						}
 						Err(Error::Call(CallError::Failed(e))) => {
 							let err = JsonRpcErrorObject {
@@ -650,7 +660,10 @@ mod tests {
 
 		// Call sync method with bad param
 		let result = module.call_with("foo", (false,)).await.unwrap();
-		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
+		assert_eq!(
+			result,
+			r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected u16 at line 1 column 6"},"id":0}"#
+		);
 
 		// Call async method with params and context
 		struct MyContext;
@@ -723,13 +736,20 @@ mod tests {
 		let result = module.call("rebel_without_cause", None).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":false,"id":0}"#);
 
+		// Call sync method with no params, alternative way.
+		let result = module.call_with::<[u8; 0]>("rebel_without_cause", []).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":false,"id":0}"#);
+
 		// Call sync method with params
 		let result = module.call_with("rebel", (Gun { shoots: true }, HashMap::<u8, u8>::default())).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"0 Gun { shoots: true }","id":0}"#);
 
 		// Call sync method with bad params
 		let result = module.call_with("rebel", (Gun { shoots: true }, false)).await.unwrap();
-		assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
+		assert_eq!(
+			result,
+			r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected a map at line 1 column 5"},"id":0}"#
+		);
 
 		// Call async method with params and context
 		let result = module.call_with("revolution", (Beverage { ice: true }, vec![1, 2, 3])).await.unwrap();
@@ -738,7 +758,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn subscribing_without_server() {
-		env_logger::init();
 		let mut module = RpcModule::new(());
 		module
 			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
