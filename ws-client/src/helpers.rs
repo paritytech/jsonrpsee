@@ -95,7 +95,7 @@ pub fn process_subscription_response(
 			}
 		},
 		None => {
-			log::error!("Subscription ID: {:?} not an active subscription", sub_id);
+			log::error!("Subscription ID: {:?} is not an active subscription", sub_id);
 			Err(None)
 		}
 	}

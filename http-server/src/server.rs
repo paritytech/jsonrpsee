@@ -106,7 +106,6 @@ impl Builder {
 		Ok(Server {
 			listener,
 			local_addr,
-			methods: Methods::default(),
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			stop_pair,
@@ -147,8 +146,6 @@ pub struct Server {
 	listener: HyperBuilder<AddrIncoming>,
 	/// Local address
 	local_addr: Option<SocketAddr>,
-	/// Registered methods.
-	methods: Methods,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Access control

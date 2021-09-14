@@ -256,7 +256,8 @@ async fn macro_optional_param_parsing() {
 	// Named params using a map
 	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
 	let result = module.call("foo_optional_params", params).await.unwrap();
-	assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params. Expected one of '[', ']' or ',' but found \"{\\\"a\\\": 22, \\\"c\\\": 50}\""},"id":0}"#;
+	assert_eq!(result, expected);
 }
 
 #[tokio::test]

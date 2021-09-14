@@ -29,6 +29,7 @@
 
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
+use anyhow::anyhow;
 use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
@@ -122,7 +123,7 @@ impl<'a> Params<'a> {
 	{
 		// NOTE(niklasad1): Option::None is serialized as `null` so we provide that here.
 		let params = self.0.as_ref().map(AsRef::as_ref).unwrap_or("null");
-		serde_json::from_str(params).map_err(|_| CallError::InvalidParams)
+		serde_json::from_str(params).map_err(|e| CallError::InvalidParams(e.into()))
 	}
 
 	/// Attempt to parse parameters as an array of a single value of type `T`, and returns that value.
@@ -157,15 +158,20 @@ impl<'a> ParamsSequence<'a> {
 		T: Deserialize<'a>,
 	{
 		let mut json = self.0;
-
+		log::trace!("[next_inner] Params JSON: {:?}", json);
 		match json.as_bytes().get(0)? {
 			b']' => {
 				self.0 = "";
 
+				log::trace!("[next_inner] Reached end of sequence.");
 				return None;
 			}
 			b'[' | b',' => json = &json[1..],
-			_ => return Some(Err(CallError::InvalidParams)),
+			_ => {
+				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {:?}", json);
+				log::error!("[next_inner] {}", errmsg);
+				return Some(Err(CallError::InvalidParams(anyhow!(errmsg))));
+			}
 		}
 
 		let mut iter = serde_json::Deserializer::from_str(json).into_iter::<T>();
@@ -176,10 +182,16 @@ impl<'a> ParamsSequence<'a> {
 
 				Some(Ok(value))
 			}
-			Err(_) => {
+			Err(e) => {
+				log::error!(
+					"[next_inner] Deserialization to {:?} failed. Error: {:?}, input JSON: {:?}",
+					std::any::type_name::<T>(),
+					e,
+					json
+				);
 				self.0 = "";
 
-				Some(Err(CallError::InvalidParams))
+				Some(Err(CallError::InvalidParams(e.into())))
 			}
 		}
 	}
@@ -205,7 +217,7 @@ impl<'a> ParamsSequence<'a> {
 	{
 		match self.next_inner() {
 			Some(result) => result,
-			None => Err(CallError::InvalidParams),
+			None => Err(CallError::InvalidParams(anyhow!("No more params"))),
 		}
 	}
 

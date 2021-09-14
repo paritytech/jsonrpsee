@@ -28,12 +28,15 @@ use crate::server::helpers::{send_error, send_response};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
-use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
-use jsonrpsee_types::v2::{
-	error::{ErrorCode, ErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
-	params::{Id, Params, SubscriptionId as RpcSubscriptionId, TwoPointZero},
-	request::Request,
-	response::{SubscriptionPayload, SubscriptionResponse},
+use jsonrpsee_types::{
+	error::{CallError, Error, SubscriptionClosedError},
+	traits::ToRpcParams,
+	v2::{
+		error::{ErrorCode, ErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
+		params::{Id, Params, SubscriptionId as RpcSubscriptionId, TwoPointZero},
+		request::Request,
+		response::{Response, SubscriptionPayload, SubscriptionResponse},
+	},
 };
 
 use parking_lot::Mutex;
@@ -85,6 +88,12 @@ impl MethodCallback {
 
 		match self {
 			MethodCallback::Sync(callback) => {
+				log::trace!(
+					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
+					params,
+					id,
+					conn_id
+				);
 				(callback)(id, params, tx, conn_id);
 
 				None
@@ -93,6 +102,12 @@ impl MethodCallback {
 				let tx = tx.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
+				log::trace!(
+					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_id={:?}",
+					params,
+					id,
+					conn_id
+				);
 
 				Some((callback)(id, params, tx, conn_id))
 			}
@@ -159,6 +174,7 @@ impl Methods {
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
+		log::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id),
 			None => {
@@ -166,6 +182,14 @@ impl Methods {
 				None
 			}
 		}
+	}
+
+	/// Helper to call a method on the `RPC module` without having to spin up a server.
+	///
+	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
+	pub async fn call_with<Params: ToRpcParams>(&self, method: &str, params: Params) -> Option<String> {
+		let params = params.to_rpc_params().ok();
+		self.call(method, params).await
 	}
 
 	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
@@ -185,6 +209,33 @@ impl Methods {
 		}
 
 		rx.next().await
+	}
+
+	/// Test helper that sets up a subscription using the given `method`. Returns a tuple of the
+	/// [`SubscriptionId`] and a channel on which subscription JSON payloads can be received.
+	pub async fn test_subscription(
+		&self,
+		method: &str,
+		params: Option<Box<RawValue>>,
+	) -> (SubscriptionId, mpsc::UnboundedReceiver<String>) {
+		log::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
+		let req = Request {
+			jsonrpc: TwoPointZero,
+			id: Id::Number(0),
+			method: Cow::borrowed(method),
+			params: params.as_deref(),
+		};
+
+		let (tx, mut rx) = mpsc::unbounded();
+
+		if let Some(fut) = self.execute(&tx, req, 0) {
+			fut.await;
+		}
+		let response = rx.next().await.expect("Could not establish subscription.");
+		let subscription_response = serde_json::from_str::<Response<SubscriptionId>>(&response)
+			.unwrap_or_else(|_| panic!("Could not deserialize subscription response {:?}", response));
+		let sub_id = subscription_response.result;
+		(sub_id, rx)
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.
@@ -246,7 +297,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
-					Err(Error::Call(CallError::InvalidParams)) => send_error(id, tx, ErrorCode::InvalidParams.into()),
+					Err(Error::Call(CallError::InvalidParams(e))) => {
+						let error = ErrorObject { code: ErrorCode::InvalidParams, message: &e.to_string(), data: None };
+						send_error(id, tx, error)
+					}
 					Err(Error::Call(CallError::Failed(e))) => {
 						let err = ErrorObject {
 							code: ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
@@ -293,8 +347,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let future = async move {
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
-						Err(Error::Call(CallError::InvalidParams)) => {
-							send_error(id, &tx, ErrorCode::InvalidParams.into())
+						Err(Error::Call(CallError::InvalidParams(e))) => {
+							let error =
+								ErrorObject { code: ErrorCode::InvalidParams, message: &e.to_string(), data: None };
+							send_error(id, &tx, error)
 						}
 						Err(Error::Call(CallError::Failed(e))) => {
 							let err = ErrorObject {
@@ -522,6 +578,11 @@ fn subscription_closed_err(sub_id: u64) -> Error {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use jsonrpsee_types::v2;
+	use jsonrpsee_types::v2::request::Notification;
+	use serde::Deserialize;
+	use std::collections::HashMap;
+
 	#[test]
 	fn rpc_modules_with_different_contexts_can_be_merged() {
 		let cx = Vec::<u8>::new();
@@ -555,5 +616,158 @@ mod tests {
 
 		assert!(module.method("hello_world").is_some());
 		assert!(module.method("hello_foobar").is_some());
+	}
+
+	#[tokio::test]
+	async fn calling_method_without_server() {
+		// Call sync method with no params
+		let mut module = RpcModule::new(());
+		module.register_method("boo", |_: Params, _| Ok(String::from("boo!"))).unwrap();
+
+		let result = module.call("boo", None).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#);
+
+		// Call sync method with params
+		module
+			.register_method("foo", |params, _| {
+				let n: u16 = params.one()?;
+				Ok(n * 2)
+			})
+			.unwrap();
+		let result = module.call_with("foo", [3]).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":6,"id":0}"#);
+
+		// Call sync method with bad param
+		let result = module.call_with("foo", (false,)).await.unwrap();
+		assert_eq!(
+			result,
+			r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected u16 at line 1 column 6"},"id":0}"#
+		);
+
+		// Call async method with params and context
+		struct MyContext;
+		impl MyContext {
+			fn roo(&self, things: Vec<u8>) -> u16 {
+				things.iter().sum::<u8>().into()
+			}
+		}
+		let mut module = RpcModule::new(MyContext);
+		module
+			.register_async_method("roo", |params, ctx| {
+				let ns: Vec<u8> = params.parse().expect("valid params please");
+				async move { Ok(ctx.roo(ns)) }.boxed()
+			})
+			.unwrap();
+		let result = module.call_with("roo", vec![12, 13]).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":25,"id":0}"#);
+	}
+
+	#[tokio::test]
+	async fn calling_method_without_server_using_proc_macro() {
+		use jsonrpsee::{proc_macros::rpc, types::async_trait};
+		// Setup
+		#[derive(Debug, Deserialize, Serialize)]
+		#[allow(unreachable_pub)]
+		pub struct Gun {
+			shoots: bool,
+		}
+
+		#[derive(Debug, Deserialize, Serialize)]
+		#[allow(unreachable_pub)]
+		pub struct Beverage {
+			ice: bool,
+		}
+
+		#[rpc(server)]
+		pub trait Cool {
+			/// Sync method, no params.
+			#[method(name = "rebel_without_cause")]
+			fn rebel_without_cause(&self) -> Result<bool, Error>;
+
+			/// Sync method.
+			#[method(name = "rebel")]
+			fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> Result<String, Error>;
+
+			/// Async method.
+			#[method(name = "revolution")]
+			async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> Result<String, Error>;
+		}
+
+		struct CoolServerImpl;
+
+		#[async_trait]
+		impl CoolServer for CoolServerImpl {
+			fn rebel_without_cause(&self) -> Result<bool, Error> {
+				Ok(false)
+			}
+
+			fn rebel(&self, gun: Gun, map: HashMap<u8, u8>) -> Result<String, Error> {
+				Ok(format!("{} {:?}", map.values().len(), gun))
+			}
+
+			async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> Result<String, Error> {
+				Ok(format!("drink: {:?}, phases: {:?}", beverage, some_bytes))
+			}
+		}
+		let module = CoolServerImpl.into_rpc();
+
+		// Call sync method with no params
+		let result = module.call("rebel_without_cause", None).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":false,"id":0}"#);
+
+		// Call sync method with no params, alternative way.
+		let result = module.call_with::<[u8; 0]>("rebel_without_cause", []).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":false,"id":0}"#);
+
+		// Call sync method with params
+		let result = module.call_with("rebel", (Gun { shoots: true }, HashMap::<u8, u8>::default())).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"0 Gun { shoots: true }","id":0}"#);
+
+		// Call sync method with bad params
+		let result = module.call_with("rebel", (Gun { shoots: true }, false)).await.unwrap();
+		assert_eq!(
+			result,
+			r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected a map at line 1 column 5"},"id":0}"#
+		);
+
+		// Call async method with params and context
+		let result = module.call_with("revolution", (Beverage { ice: true }, vec![1, 2, 3])).await.unwrap();
+		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"drink: Beverage { ice: true }, phases: [1, 2, 3]","id":0}"#);
+	}
+
+	#[tokio::test]
+	async fn subscribing_without_server() {
+		let mut module = RpcModule::new(());
+		module
+			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
+				let mut stream_data = vec!['0', '1', '2'];
+				std::thread::spawn(move || loop {
+					log::debug!("This is your friendly subscription sending data.");
+					if let Some(letter) = stream_data.pop() {
+						if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
+							return;
+						}
+					} else {
+						return;
+					}
+					std::thread::sleep(std::time::Duration::from_millis(500));
+				});
+				Ok(())
+			})
+			.unwrap();
+
+		let (sub_id, mut my_sub_stream) = module.test_subscription("my_sub", None).await;
+		for i in (0..=2).rev() {
+			let my_sub = my_sub_stream.next().await.unwrap();
+			let my_sub = serde_json::from_str::<Notification<SubscriptionPayload<char>>>(&my_sub).unwrap();
+			assert_eq!(my_sub.params.result, std::char::from_digit(i, 10).unwrap());
+			assert_eq!(my_sub.params.subscription, v2::params::SubscriptionId::Num(sub_id));
+		}
+
+		// The subscription is now closed
+		let my_sub = my_sub_stream.next().await.unwrap();
+		let my_sub =
+			serde_json::from_str::<Notification<SubscriptionPayload<SubscriptionClosedError>>>(&my_sub).unwrap();
+		assert_eq!(my_sub.params.result, format!("Subscription: {} is closed and dropped", sub_id).to_string().into());
 	}
 }

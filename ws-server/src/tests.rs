@@ -31,7 +31,7 @@ use crate::{future::StopHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
+use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 use std::fmt;
@@ -57,8 +57,9 @@ async fn server() -> SocketAddr {
 /// It has the following methods:
 ///     sync methods: `say_hello` and `add`
 ///     async: `say_hello_async` and `add_sync`
-///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns `CallError::Failed`), `sleep_for`
-/// Returns the address together with handles for server future and server stop.
+///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns
+/// 			`CallError::Failed`), `sleep_for` Returns the address together with handles for server future
+///				and server stop.
 async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
@@ -96,7 +97,9 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 			.boxed()
 		})
 		.unwrap();
-	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams.into())).unwrap();
+	module
+		.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams(anyhow!("buh!")).into()))
+		.unwrap();
 	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
@@ -203,12 +206,9 @@ async fn can_set_max_connections() {
 	assert!(conn2.is_ok());
 	// Third connection is rejected
 	assert!(conn3.is_err());
-
-	let err = match conn3 {
-		Err(soketto::handshake::Error::Io(err)) => err,
-		_ => panic!("Invalid error kind; expected std::io::Error"),
-	};
-	assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset);
+	if !matches!(conn3, Err(WebSocketTestError::RejectedWithStatusCode(429))) {
+		panic!("Expected RejectedWithStatusCode(429), got: {:#?}", conn3);
+	}
 
 	// Decrement connection count
 	drop(conn2);
@@ -352,10 +352,11 @@ async fn single_method_call_with_faulty_params_returns_err() {
 	let _ = env_logger::try_init();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
 
-	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["should be a number"],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, invalid_params(Id::Num(1)));
+	assert_eq!(response, expected);
 }
 
 #[tokio::test]
@@ -435,7 +436,8 @@ async fn invalid_json_id_missing_value() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
+	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
+	// Null.
 	assert_eq!(response, parse_error(Id::Null));
 }
 

@@ -54,23 +54,24 @@ pub(crate) mod visitor;
 /// For servers, it will generate a trait mostly equivalent to the input, with two main
 /// differences:
 ///
-/// - The trait will have one additional (already implemented) method, `into_rpc`, which
-///   turns any object that implements the server trait into an `RpcModule`.
-/// - For subscription methods, there will be one additional argument inserted right
-///   after `&self`: `subscription_sink: SubscriptionSink`. It should be used to
-///   actually maintain the subscription.
+/// - The trait will have one additional (already implemented) method, `into_rpc`, which turns any object that
+///   implements the server trait into an `RpcModule`.
+/// - For subscription methods, there will be one additional argument inserted right after `&self`: `subscription_sink:
+///   SubscriptionSink`. It should be used to actually maintain the subscription.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
 /// correspondingly, `FooClient`.
 ///
-/// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait must be implemented on your type first.
+/// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait must be implemented
+/// on your type first.
+///
+/// Note: you need to import the `jsonrpsee` façade crate in your code for the macro to work properly.
 ///
 /// ## Prerequisites
 ///
-/// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`.
-///   If you want to implement this trait on some type that is not thread-safe, consider
-///   using `Arc<RwLock<..>>`.
+/// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`. If you want to implement this
+///   trait on some type that is not thread-safe, consider using `Arc<RwLock<..>>`.
 ///
 /// ## Examples
 ///
@@ -143,8 +144,8 @@ pub(crate) mod visitor;
 /// - `server`: generate `<Trait>Server` trait for the server implementation.
 /// - `client`: generate `<Trait>Client` extension trait that builds RPC clients to invoke a concrete RPC
 ///   implementation's methods conveniently.
-/// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace
-///   `foo` and method `spam`, the resulting method name will be `foo_spam`.
+/// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
+///   method `spam`, the resulting method name will be `foo_spam`.
 ///
 /// **Trait requirements:**
 ///

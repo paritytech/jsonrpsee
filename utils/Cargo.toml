@@ -9,7 +9,6 @@ license = "MIT"
 [dependencies]
 beef = { version = "0.5.1", features = ["impl_serde"] }
 thiserror = { version = "1", optional = true }
-tokio = { version = "1", features = ["macros"], optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
@@ -35,8 +34,10 @@ server = [
 	"log",
 	"parking_lot",
 	"rand",
-	"tokio"
 ]
 
 [dev-dependencies]
 serde_json = "1.0"
+env_logger = "0.9"
+tokio = { version = "1", features = ["macros", "rt"] }
+jsonrpsee = { path = "../jsonrpsee" }

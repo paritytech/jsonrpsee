@@ -88,8 +88,21 @@ impl std::fmt::Debug for WebSocketTestClient {
 	}
 }
 
+#[derive(Debug)]
+pub enum WebSocketTestError {
+	Redirect,
+	RejectedWithStatusCode(u16),
+	Soketto(SokettoError),
+}
+
+impl From<io::Error> for WebSocketTestError {
+	fn from(err: io::Error) -> Self {
+		WebSocketTestError::Soketto(SokettoError::Io(err))
+	}
+}
+
 impl WebSocketTestClient {
-	pub async fn new(url: SocketAddr) -> Result<Self, SokettoError> {
+	pub async fn new(url: SocketAddr) -> Result<Self, WebSocketTestError> {
 		let socket = TcpStream::connect(url).await?;
 		let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), "test-client", "/");
 		match client.handshake().await {
@@ -97,13 +110,11 @@ impl WebSocketTestClient {
 				let (tx, rx) = client.into_builder().finish();
 				Ok(Self { tx, rx })
 			}
-			Ok(handshake::ServerResponse::Redirect { .. }) => {
-				Err(SokettoError::Io(io::Error::new(io::ErrorKind::Other, "Redirection not supported in tests")))
+			Ok(handshake::ServerResponse::Redirect { .. }) => Err(WebSocketTestError::Redirect),
+			Ok(handshake::ServerResponse::Rejected { status_code }) => {
+				Err(WebSocketTestError::RejectedWithStatusCode(status_code))
 			}
-			Ok(handshake::ServerResponse::Rejected { .. }) => {
-				Err(SokettoError::Io(io::Error::new(io::ErrorKind::Other, "Rejected")))
-			}
-			Err(err) => Err(err),
+			Err(err) => Err(WebSocketTestError::Soketto(err)),
 		}
 	}
 
@@ -145,7 +156,8 @@ pub struct WebSocketTestServer {
 }
 
 impl WebSocketTestServer {
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every connection.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every
+	// connection.
 	pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
 		let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
@@ -155,7 +167,8 @@ impl WebSocketTestServer {
 		Self { local_addr, exit: tx }
 	}
 
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every connection.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every
+	// connection.
 	pub async fn with_hardcoded_notification(sockaddr: SocketAddr, notification: String) -> Self {
 		let (tx, rx) = mpsc::channel::<()>(1);
 		let (addr_tx, addr_rx) = oneshot::channel();
@@ -174,7 +187,8 @@ impl WebSocketTestServer {
 		Self { local_addr, exit: tx }
 	}
 
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription response.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription
+	// response.
 	//
 	// NOTE: ignores the actual subscription and unsubscription method.
 	pub async fn with_hardcoded_subscription(
