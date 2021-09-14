@@ -66,6 +66,8 @@ pub(crate) mod visitor;
 /// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait must be implemented
 /// on your type first.
 ///
+/// Note: you need to import the `jsonrpsee` façade crate in your code for the macro to work properly.
+///
 /// ## Prerequisites
 ///
 /// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`. If you want to implement this
