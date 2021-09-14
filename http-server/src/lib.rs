@@ -37,7 +37,7 @@ mod server;
 pub mod response;
 
 pub use access_control::{
-	cors::{AccessControlAllowOrigin, AccessControlAllowHeaders},
+	cors::{AccessControlAllowHeaders, AccessControlAllowOrigin},
 	hosts::{AllowHosts, DomainsValidation, Host},
 	AccessControl, AccessControlBuilder,
 };
