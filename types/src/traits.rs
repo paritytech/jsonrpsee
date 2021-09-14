@@ -88,10 +88,10 @@ pub trait SubscriptionClient: Client {
 
 /// Marker trait for types that can be serialized as JSON array/sequence.
 ///
-/// If your type isn't a sequence such as `String`, `usize` or similar.
-/// You could insert it in a tuple, slice, array or Vec for it to work.
+/// If your type isn't a sequence, for example `String`, `usize` or similar
+/// you must insert it in a tuple, slice, array or Vec for it to work.
 pub trait ToRpcParams: Serialize {
-	/// Serialized the type as a JSON array.
+	/// Serialize the type as a JSON array.
 	fn to_rpc_params(&self) -> Result<Box<RawValue>, serde_json::Error> {
 		serde_json::to_string(&self).map(|json| RawValue::from_string(json).expect("JSON String; qed"))
 	}
@@ -110,7 +110,7 @@ macro_rules! array_impls {
 }
 
 array_impls! {
-	1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
 }
 
 macro_rules! tuple_impls {

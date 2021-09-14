@@ -61,7 +61,7 @@ pub fn send_error(id: Id, tx: &MethodSink, error: JsonRpcErrorObject) {
 	};
 
 	if let Err(err) = tx.unbounded_send(json) {
-		log::error!("Error sending response to the client: {:?}", err)
+		log::error!("Could not send error response to the client: {:?}", err)
 	}
 }
 
