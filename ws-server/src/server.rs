@@ -85,7 +85,7 @@ impl Server {
 
 					if connections.count() >= self.cfg.max_connections as usize {
 						log::warn!("Too many connections. Try again in a while.");
-						connections.add(Box::pin(handshake(socket, HandshakeMode::Reject { status_code: 429 })));
+						connections.add(Box::pin(handshake(socket, HandshakeResponse::Reject { status_code: 429 })));
 						continue;
 					}
 
@@ -94,7 +94,7 @@ impl Server {
 
 					connections.add(Box::pin(handshake(
 						socket,
-						HandshakeMode::Accept { conn_id: id, methods, cfg, stop_monitor: &stop_monitor },
+						HandshakeResponse::Accept { conn_id: id, methods, cfg, stop_monitor: &stop_monitor },
 					)));
 
 					id = id.wrapping_add(1);
@@ -142,17 +142,17 @@ impl<'a> Future for Incoming<'a> {
 	}
 }
 
-enum HandshakeMode<'a> {
+enum HandshakeResponse<'a> {
 	Reject { status_code: u16 },
 	Accept { conn_id: ConnectionId, methods: &'a Methods, cfg: &'a Settings, stop_monitor: &'a StopMonitor },
 }
 
-async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeMode<'_>) -> Result<(), Error> {
+async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
 	match mode {
-		HandshakeMode::Reject { status_code } => {
+		HandshakeResponse::Reject { status_code } => {
 			// Forced rejection, don't need to read anything from the socket
 			let reject = Response::Reject { status_code };
 			server.send_response(&reject).await?;
@@ -164,7 +164,7 @@ async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeMode<'_>) -> Re
 
 			Ok(())
 		}
-		HandshakeMode::Accept { conn_id, methods, cfg, stop_monitor } => {
+		HandshakeResponse::Accept { conn_id, methods, cfg, stop_monitor } => {
 			let key = {
 				let req = server.receive_request().await?;
 				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
