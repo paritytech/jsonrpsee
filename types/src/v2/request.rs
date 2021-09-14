@@ -147,14 +147,6 @@ mod test {
 		assert_eq!(dsr.jsonrpc, TwoPointZero);
 	}
 
-	// TODO(niklasad1): merge the types `JsonRpcParams` and `RpcParams` and remove `RawValue`.
-	#[test]
-	#[ignore]
-	fn deserialize_call_bad_params_should_fail() {
-		let ser = r#"{"jsonrpc":"2.0","method":"say_hello","params":"lol","id":1}"#;
-		assert!(serde_json::from_str::<Request>(ser).is_err());
-	}
-
 	#[test]
 	fn deserialize_call_bad_id_should_fail() {
 		let ser = r#"{"jsonrpc":"2.0","method":"say_hello","params":[],"id":{}}"#;

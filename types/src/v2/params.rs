@@ -133,7 +133,7 @@ impl<'a> Params<'a> {
 		self.parse::<[T; 1]>().map(|[res]| res)
 	}
 
-	/// Convert `RpcParams<'a>` to `RpcParams<'static>` so that it can be moved across threads.
+	/// Convert `Params<'a>` to `Params<'static>` so that it can be moved across threads.
 	///
 	/// This will cause an allocation if the params internally are using a borrowed JSON slice.
 	pub fn into_owned(self) -> Params<'static> {
@@ -141,7 +141,7 @@ impl<'a> Params<'a> {
 	}
 }
 
-/// An `Iterator`-like parser for a sequence of `RpcParams`.
+/// An `Iterator`-like parser for a sequence of [`Params`].
 ///
 /// This will parse the params one at a time, and allows for graceful handling of optional parameters at the tail; other
 /// use cases are likely better served by [`Params::parse`]. The reason this is not an actual [`Iterator`] is that

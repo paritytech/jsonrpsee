@@ -120,7 +120,7 @@ impl RpcDescription {
 				// Name of the RPC method (e.g. `foo_makeSpam`).
 				let rpc_method_name = self.rpc_identifier(&method.name);
 				// `parsing` is the code associated with parsing structure from the
-				// provided `RpcParams` object.
+				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let (parsing, params_seq) = self.render_params_decoding(&method.params);
 
@@ -158,7 +158,7 @@ impl RpcDescription {
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 				// `parsing` is the code associated with parsing structure from the
-				// provided `RpcParams` object.
+				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params);
 

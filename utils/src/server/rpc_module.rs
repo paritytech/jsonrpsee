@@ -329,9 +329,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 	/// Register a new RPC subscription that invokes callback on every subscription request.
 	/// The callback itself takes three parameters:
-	///     - RpcParams: JSONRPC parameters in the subscription request.
-	///     - SubscriptionSink: A sink to send messages to the subscriber.
-	///     - Context: Any type that can be embedded into the RpcContextModule.
+	///     - [`Params`]: JSONRPC parameters in the subscription request.
+	///     - [`SubscriptionSink`]: A sink to send messages to the subscriber.
+	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
 	/// # Examples
 	///
@@ -431,7 +431,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(())
 	}
 
-	/// Register an `alias` name for an `existing_method`.
+	/// Register an alias for an existing_method. Alias uniqueness is enforced at compile time.
 	pub fn register_alias(&mut self, alias: &'static str, existing_method: &'static str) -> Result<(), Error> {
 		self.methods.verify_method_name(alias)?;
 
