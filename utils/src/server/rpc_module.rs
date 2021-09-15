@@ -759,15 +759,14 @@ mod tests {
 		let (sub_id, mut my_sub_stream) = module.test_subscription("my_sub", None).await;
 		for i in (0..=2).rev() {
 			let my_sub = my_sub_stream.next().await.unwrap();
-			let my_sub = serde_json::from_str::<Notification<SubscriptionPayload<char>>>(&my_sub).unwrap();
+			let my_sub = serde_json::from_str::<SubscriptionResponse<char>>(&my_sub).unwrap();
 			assert_eq!(my_sub.params.result, std::char::from_digit(i, 10).unwrap());
 			assert_eq!(my_sub.params.subscription, v2::params::SubscriptionId::Num(sub_id));
 		}
 
 		// The subscription is now closed
 		let my_sub = my_sub_stream.next().await.unwrap();
-		let my_sub =
-			serde_json::from_str::<Notification<SubscriptionPayload<SubscriptionClosedError>>>(&my_sub).unwrap();
+		let my_sub = serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&my_sub).unwrap();
 		assert_eq!(my_sub.params.result, format!("Subscription: {} is closed and dropped", sub_id).to_string().into());
 	}
 }

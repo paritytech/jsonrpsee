@@ -73,7 +73,7 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<Js
 ///
 /// Returns `Ok()` if the response was successfully sent to the frontend.
 /// Return `Err(None)` if the subscription was not found.
-/// Returns `Err(Some(msg))` if the channel to the frontend was full.
+/// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
 pub fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
