@@ -49,7 +49,6 @@ const MAX_CONNECTIONS: u64 = 100;
 /// A WebSocket JSON RPC server.
 #[derive(Debug)]
 pub struct Server {
-	methods: Methods,
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
@@ -439,7 +438,7 @@ impl Builder {
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
 		let stop_monitor = StopMonitor::new();
-		Ok(Server { listener, methods: Methods::default(), cfg: self.settings, stop_monitor })
+		Ok(Server { listener, cfg: self.settings, stop_monitor })
 	}
 }
 

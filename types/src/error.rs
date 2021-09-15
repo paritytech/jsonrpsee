@@ -47,8 +47,8 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
 	/// Invalid params in the call.
-	#[error("Invalid params in the call")]
-	InvalidParams,
+	#[error("Invalid params in the call: {0}")]
+	InvalidParams(#[source] anyhow::Error),
 	/// The call failed (let jsonrpsee assign default error code and error message).
 	#[error("RPC Call failed: {0}")]
 	Failed(#[from] anyhow::Error),
@@ -162,7 +162,7 @@ impl Error {
 /// Error type with a special `subscription_closed` field to detect that
 /// a subscription has been closed to distinguish valid items produced
 /// by the server on the subscription stream from an error.
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct SubscriptionClosedError {
 	subscription_closed: String,
 }
