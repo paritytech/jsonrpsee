@@ -98,20 +98,8 @@ pub trait ToRpcParams: Serialize {
 }
 
 impl<P: Serialize> ToRpcParams for &[P] {}
-
 impl<P: Serialize> ToRpcParams for Vec<P> {}
-
-macro_rules! array_impls {
-    ($($len:tt)+) => {
-        $(
-            impl<P: Serialize> ToRpcParams for [P; $len] {}
-        )+
-    }
-}
-
-array_impls! {
-	0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
-}
+impl<P, const N: usize> ToRpcParams for [P; N] where [P; N]: Serialize {}
 
 macro_rules! tuple_impls {
     ($($len:expr => ($($n:tt $name:ident)+))+) => {
