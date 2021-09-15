@@ -141,7 +141,7 @@ impl std::ops::Deref for Host {
 
 /// Specifies if domains should be validated.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum DomainsValidation<T> {
+pub enum DomainsValidation<T> {
 	/// Allow only domains on the list.
 	AllowOnly(Vec<T>),
 	/// Disable domains validation completely.

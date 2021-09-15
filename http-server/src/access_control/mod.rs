@@ -26,13 +26,13 @@
 
 //! Access control based on HTTP headers
 
-mod cors;
+pub(crate) mod cors;
 pub(crate) mod hosts;
 mod matcher;
 
-pub(crate) use cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
 use hosts::{AllowHosts, Host};
 
+use cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
 use hyper::header;
 use jsonrpsee_utils::http_helpers;
 
@@ -41,7 +41,6 @@ use jsonrpsee_utils::http_helpers;
 pub struct AccessControl {
 	allow_hosts: AllowHosts,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,
-	cors_max_age: Option<u32>,
 	cors_allow_headers: AccessControlAllowHeaders,
 	continue_on_invalid_cors: bool,
 }
@@ -92,7 +91,6 @@ impl Default for AccessControl {
 		Self {
 			allow_hosts: AllowHosts::Any,
 			cors_allow_origin: None,
-			cors_max_age: None,
 			cors_allow_headers: AccessControlAllowHeaders::Any,
 			continue_on_invalid_cors: false,
 		}
@@ -104,7 +102,6 @@ impl Default for AccessControl {
 pub struct AccessControlBuilder {
 	allow_hosts: AllowHosts,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,
-	cors_max_age: Option<u32>,
 	cors_allow_headers: AccessControlAllowHeaders,
 	continue_on_invalid_cors: bool,
 }
@@ -114,7 +111,6 @@ impl Default for AccessControlBuilder {
 		Self {
 			allow_hosts: AllowHosts::Any,
 			cors_allow_origin: None,
-			cors_max_age: None,
 			cors_allow_headers: AccessControlAllowHeaders::Any,
 			continue_on_invalid_cors: false,
 		}
@@ -153,12 +149,6 @@ impl AccessControlBuilder {
 		self
 	}
 
-	/// Configure CORS max age.
-	pub fn cors_max_age(mut self, max_age: u32) -> Self {
-		self.cors_max_age = Some(max_age);
-		self
-	}
-
 	/// Configure which CORS header that is allowed.
 	pub fn cors_allow_header(mut self, header: String) -> Self {
 		let allow_headers = match self.cors_allow_headers {
@@ -183,7 +173,6 @@ impl AccessControlBuilder {
 		AccessControl {
 			allow_hosts: self.allow_hosts,
 			cors_allow_origin: self.cors_allow_origin,
-			cors_max_age: self.cors_max_age,
 			cors_allow_headers: self.cors_allow_headers,
 			continue_on_invalid_cors: self.continue_on_invalid_cors,
 		}
