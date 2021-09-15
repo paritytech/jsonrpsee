@@ -40,10 +40,6 @@ use jsonrpsee_utils::http_helpers;
 #[derive(Clone, Debug)]
 pub struct AccessControl {
 	allow_hosts: AllowHosts,
-	/// The value of `Access-Control-Max-Age` in response header to use.
-	///
-	/// A value of -1 will disable caching, requiring a preflight OPTIONS check for all calls.
-	pub cors_max_age: i32,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,
 	cors_allow_headers: AccessControlAllowHeaders,
 	continue_on_invalid_cors: bool,
@@ -96,7 +92,6 @@ impl Default for AccessControl {
 			allow_hosts: AllowHosts::Any,
 			cors_allow_origin: None,
 			cors_allow_headers: AccessControlAllowHeaders::Any,
-			cors_max_age: -1,
 			continue_on_invalid_cors: false,
 		}
 	}
@@ -108,7 +103,6 @@ pub struct AccessControlBuilder {
 	allow_hosts: AllowHosts,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,
 	cors_allow_headers: AccessControlAllowHeaders,
-	cors_max_age: i32,
 	continue_on_invalid_cors: bool,
 }
 
@@ -118,7 +112,6 @@ impl Default for AccessControlBuilder {
 			allow_hosts: AllowHosts::Any,
 			cors_allow_origin: None,
 			cors_allow_headers: AccessControlAllowHeaders::Any,
-			cors_max_age: -1,
 			continue_on_invalid_cors: false,
 		}
 	}
@@ -181,7 +174,6 @@ impl AccessControlBuilder {
 			allow_hosts: self.allow_hosts,
 			cors_allow_origin: self.cors_allow_origin,
 			cors_allow_headers: self.cors_allow_headers,
-			cors_max_age: self.cors_max_age,
 			continue_on_invalid_cors: self.continue_on_invalid_cors,
 		}
 	}
