@@ -28,16 +28,16 @@ use crate::server::helpers::{send_error, send_response};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
-use jsonrpsee_types::error::{CallError, Error, SubscriptionClosedError};
-use jsonrpsee_types::traits::ToRpcParams;
-use jsonrpsee_types::v2::error::{
-	JsonRpcErrorCode, JsonRpcErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE,
+use jsonrpsee_types::{
+	error::{CallError, Error, SubscriptionClosedError},
+	traits::ToRpcParams,
+	v2::{
+		error::{ErrorCode, ErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
+		params::{Id, Params, SubscriptionId as RpcSubscriptionId, TwoPointZero},
+		request::Request,
+		response::{Response, SubscriptionPayload, SubscriptionResponse},
+	},
 };
-use jsonrpsee_types::v2::params::{
-	Id, JsonRpcSubscriptionParams, RpcParams, SubscriptionId as JsonRpcSubscriptionId, TwoPointZero,
-};
-use jsonrpsee_types::v2::request::{JsonRpcNotification, JsonRpcRequest};
-use jsonrpsee_types::v2::response::JsonRpcResponse;
 
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -51,10 +51,9 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, RpcParams, &MethodSink, ConnectionId)>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
-pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, RpcParams<'a>, MethodSink, ConnectionId) -> BoxFuture<'a, ()>>;
+pub type AsyncMethod<'a> = Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId) -> BoxFuture<'a, ()>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -83,14 +82,10 @@ pub enum MethodCallback {
 
 impl MethodCallback {
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(
-		&self,
-		tx: &MethodSink,
-		req: JsonRpcRequest<'_>,
-		conn_id: ConnectionId,
-	) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		let id = req.id.clone();
-		let params = RpcParams::new(req.params.map(|params| params.get()));
+		let params = Params::new(req.params.map(|params| params.get()));
+
 		match self {
 			MethodCallback::Sync(callback) => {
 				log::trace!(
@@ -178,17 +173,12 @@ impl Methods {
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(
-		&self,
-		tx: &MethodSink,
-		req: JsonRpcRequest<'_>,
-		conn_id: ConnectionId,
-	) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		log::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id),
 			None => {
-				send_error(req.id, tx, JsonRpcErrorCode::MethodNotFound.into());
+				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
 				None
 			}
 		}
@@ -205,8 +195,7 @@ impl Methods {
 	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
 	/// a server up.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
-		log::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
-		let req = JsonRpcRequest {
+		let req = Request {
 			jsonrpc: TwoPointZero,
 			id: Id::Number(0),
 			method: Cow::borrowed(method),
@@ -230,7 +219,7 @@ impl Methods {
 		params: Option<Box<RawValue>>,
 	) -> (SubscriptionId, mpsc::UnboundedReceiver<String>) {
 		log::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
-		let req = JsonRpcRequest {
+		let req = Request {
 			jsonrpc: TwoPointZero,
 			id: Id::Number(0),
 			method: Cow::borrowed(method),
@@ -243,7 +232,7 @@ impl Methods {
 			fut.await;
 		}
 		let response = rx.next().await.expect("Could not establish subscription.");
-		let subscription_response = serde_json::from_str::<JsonRpcResponse<SubscriptionId>>(&response)
+		let subscription_response = serde_json::from_str::<Response<SubscriptionId>>(&response)
 			.unwrap_or_else(|_| panic!("Could not deserialize subscription response {:?}", response));
 		let sub_id = subscription_response.result;
 		(sub_id, rx)
@@ -297,7 +286,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
-		F: Fn(RpcParams, &Context) -> Result<R, Error> + Send + Sync + 'static,
+		F: Fn(Params, &Context) -> Result<R, Error> + Send + Sync + 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -309,30 +298,26 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(Error::Call(CallError::InvalidParams(e))) => {
-						let error = JsonRpcErrorObject {
-							code: JsonRpcErrorCode::InvalidParams,
-							message: &e.to_string(),
-							data: None,
-						};
+						let error = ErrorObject { code: ErrorCode::InvalidParams, message: &e.to_string(), data: None };
 						send_error(id, tx, error)
 					}
 					Err(Error::Call(CallError::Failed(e))) => {
-						let err = JsonRpcErrorObject {
-							code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
+						let err = ErrorObject {
+							code: ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
 							message: &e.to_string(),
 							data: None,
 						};
 						send_error(id, tx, err)
 					}
 					Err(Error::Call(CallError::Custom { code, message, data })) => {
-						let err = JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
+						let err = ErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 						send_error(id, tx, err)
 					}
 					// This should normally not happen because the most common use case is to
 					// return `Error::Call` in `register_method`.
 					Err(e) => {
-						let err = JsonRpcErrorObject {
-							code: JsonRpcErrorCode::ServerError(UNKNOWN_ERROR_CODE),
+						let err = ErrorObject {
+							code: ErrorCode::ServerError(UNKNOWN_ERROR_CODE),
 							message: &e.to_string(),
 							data: None,
 						};
@@ -349,7 +334,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		F: Fn(RpcParams<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, Error>> + Copy + Send + Sync + 'static,
+		F: Fn(Params<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, Error>> + Copy + Send + Sync + 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -363,31 +348,27 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
 						Err(Error::Call(CallError::InvalidParams(e))) => {
-							let error = JsonRpcErrorObject {
-								code: JsonRpcErrorCode::InvalidParams,
-								message: &e.to_string(),
-								data: None,
-							};
+							let error =
+								ErrorObject { code: ErrorCode::InvalidParams, message: &e.to_string(), data: None };
 							send_error(id, &tx, error)
 						}
 						Err(Error::Call(CallError::Failed(e))) => {
-							let err = JsonRpcErrorObject {
-								code: JsonRpcErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
+							let err = ErrorObject {
+								code: ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
 								message: &e.to_string(),
 								data: None,
 							};
 							send_error(id, &tx, err)
 						}
 						Err(Error::Call(CallError::Custom { code, message, data })) => {
-							let err =
-								JsonRpcErrorObject { code: code.into(), message: &message, data: data.as_deref() };
+							let err = ErrorObject { code: code.into(), message: &message, data: data.as_deref() };
 							send_error(id, &tx, err)
 						}
 						// This should normally not happen because the most common use case is to
 						// return `Error::Call` in `register_async_method`.
 						Err(e) => {
-							let err = JsonRpcErrorObject {
-								code: JsonRpcErrorCode::ServerError(UNKNOWN_ERROR_CODE),
+							let err = ErrorObject {
+								code: ErrorCode::ServerError(UNKNOWN_ERROR_CODE),
 								message: &e.to_string(),
 								data: None,
 							};
@@ -404,9 +385,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 	/// Register a new RPC subscription that invokes callback on every subscription request.
 	/// The callback itself takes three parameters:
-	///     - RpcParams: JSONRPC parameters in the subscription request.
-	///     - SubscriptionSink: A sink to send messages to the subscriber.
-	///     - Context: Any type that can be embedded into the RpcContextModule.
+	///     - [`Params`]: JSONRPC parameters in the subscription request.
+	///     - [`SubscriptionSink`]: A sink to send messages to the subscriber.
+	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
 	/// # Examples
 	///
@@ -432,7 +413,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<(), Error>
 	where
 		Context: Send + Sync + 'static,
-		F: Fn(RpcParams, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
+		F: Fn(Params, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
 	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
@@ -475,7 +456,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							err,
 							id
 						);
-						send_error(id, method_sink, JsonRpcErrorCode::ServerError(-1).into());
+						send_error(id, method_sink, ErrorCode::ServerError(-1).into());
 					}
 				})),
 			);
@@ -493,7 +474,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								unsubscribe_method_name,
 								id
 							);
-							send_error(id, tx, JsonRpcErrorCode::ServerError(-1).into());
+							send_error(id, tx, ErrorCode::ServerError(-1).into());
 							return;
 						}
 					};
@@ -506,7 +487,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(())
 	}
 
-	/// Register an `alias` name for an `existing_method`.
+	/// Register an alias for an existing_method. Alias uniqueness is enforced.
 	pub fn register_alias(&mut self, alias: &'static str, existing_method: &'static str) -> Result<(), Error> {
 		self.methods.verify_method_name(alias)?;
 
@@ -539,20 +520,17 @@ pub struct SubscriptionSink {
 }
 
 impl SubscriptionSink {
-	/// Send message on this subscription.
+	/// Send a message back to subscribers.
 	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), Error> {
 		let msg = self.build_message(result)?;
 		self.inner_send(msg).map_err(Into::into)
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
-		serde_json::to_string(&JsonRpcNotification {
+		serde_json::to_string(&SubscriptionResponse {
 			jsonrpc: TwoPointZero,
 			method: self.method,
-			params: JsonRpcSubscriptionParams {
-				subscription: JsonRpcSubscriptionId::Num(self.uniq_sub.sub_id),
-				result,
-			},
+			params: SubscriptionPayload { subscription: RpcSubscriptionId::Num(self.uniq_sub.sub_id), result },
 		})
 		.map_err(Into::into)
 	}
@@ -608,9 +586,9 @@ mod tests {
 	fn rpc_modules_with_different_contexts_can_be_merged() {
 		let cx = Vec::<u8>::new();
 		let mut mod1 = RpcModule::new(cx);
-		mod1.register_method("bla with Vec context", |_: RpcParams, _| Ok(())).unwrap();
+		mod1.register_method("bla with Vec context", |_: Params, _| Ok(())).unwrap();
 		let mut mod2 = RpcModule::new(String::new());
-		mod2.register_method("bla with String context", |_: RpcParams, _| Ok(())).unwrap();
+		mod2.register_method("bla with String context", |_: Params, _| Ok(())).unwrap();
 
 		mod1.merge(mod2).unwrap();
 
@@ -632,7 +610,7 @@ mod tests {
 	fn rpc_register_alias() {
 		let mut module = RpcModule::new(());
 
-		module.register_method("hello_world", |_: RpcParams, _| Ok(())).unwrap();
+		module.register_method("hello_world", |_: Params, _| Ok(())).unwrap();
 		module.register_alias("hello_foobar", "hello_world").unwrap();
 
 		assert!(module.method("hello_world").is_some());
@@ -643,7 +621,7 @@ mod tests {
 	async fn calling_method_without_server() {
 		// Call sync method with no params
 		let mut module = RpcModule::new(());
-		module.register_method("boo", |_: RpcParams, _| Ok(String::from("boo!"))).unwrap();
+		module.register_method("boo", |_: Params, _| Ok(String::from("boo!"))).unwrap();
 
 		let result = module.call("boo", None).await.unwrap();
 		assert_eq!(result, r#"{"jsonrpc":"2.0","result":"boo!","id":0}"#);
@@ -780,16 +758,14 @@ mod tests {
 		let (sub_id, mut my_sub_stream) = module.test_subscription("my_sub", None).await;
 		for i in (0..=2).rev() {
 			let my_sub = my_sub_stream.next().await.unwrap();
-			let my_sub = serde_json::from_str::<JsonRpcNotification<JsonRpcSubscriptionParams<char>>>(&my_sub).unwrap();
+			let my_sub = serde_json::from_str::<SubscriptionResponse<char>>(&my_sub).unwrap();
 			assert_eq!(my_sub.params.result, std::char::from_digit(i, 10).unwrap());
 			assert_eq!(my_sub.params.subscription, v2::params::SubscriptionId::Num(sub_id));
 		}
 
 		// The subscription is now closed
 		let my_sub = my_sub_stream.next().await.unwrap();
-		let my_sub =
-			serde_json::from_str::<JsonRpcNotification<JsonRpcSubscriptionParams<SubscriptionClosedError>>>(&my_sub)
-				.unwrap();
+		let my_sub = serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&my_sub).unwrap();
 		assert_eq!(my_sub.params.result, format!("Subscription: {} is closed and dropped", sub_id).to_string().into());
 	}
 }

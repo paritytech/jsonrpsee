@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::{traits::SubscriptionClient, v2::params::JsonRpcParams, Error, Subscription},
+	types::{traits::SubscriptionClient, v2::params::ParamsSer, Error, Subscription},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", JsonRpcParams::NoParams, "unsubscribe_hello").await?;
+		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await?;
 
 	let mut i = 0;
 	while i <= NUM_SUBSCRIPTION_RESPONSES {

@@ -31,7 +31,7 @@
 //! mutation.
 
 use jsonrpsee::{
-	types::{traits::SubscriptionClient, v2::params::JsonRpcParams},
+	types::{traits::SubscriptionClient, v2::params::ParamsSer},
 	ws_client::WsClientBuilder,
 	ws_server::RpcModule,
 	ws_server::WsServerBuilder,
@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
 	let client = WsClientBuilder::default().build(&url).await?;
 
 	// Subscription to the London weather
-	let params = JsonRpcParams::Array(vec!["London,uk".into(), "metric".into()]);
+	let params = ParamsSer::Array(vec!["London,uk".into(), "metric".into()]);
 	let mut weather_sub = client.subscribe::<Weather>("weather_sub", params, "weather_unsub").await?;
 	while let Ok(Some(w)) = weather_sub.next().await {
 		println!("[client] London weather: {:?}", w);

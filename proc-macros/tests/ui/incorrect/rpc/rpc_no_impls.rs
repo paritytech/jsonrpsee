@@ -4,7 +4,7 @@ use jsonrpsee::proc_macros::rpc;
 #[rpc()]
 pub trait NoImpls {
 	#[method(name = "foo")]
-	async fn async_method(&self) -> jsonrpsee::types::JsonRpcResult<u8>;
+	async fn async_method(&self) -> jsonrpsee::types::RpcResult<u8>;
 }
 
 fn main() {}
