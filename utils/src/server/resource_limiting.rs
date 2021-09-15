@@ -4,6 +4,8 @@ use std::sync::{
 	Arc,
 };
 
+pub type ResourceMap<T> = [T; 8];
+
 /// Resource definition
 pub struct Resource {
 	/// Human readable label for a resource, e.g.: "CPU", "Memory"...

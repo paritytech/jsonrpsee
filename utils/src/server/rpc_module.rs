@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::helpers::{send_error, send_response};
+use crate::server::resource_limiting::ResourceMap;
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -46,7 +47,7 @@ use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-/// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
+/// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
@@ -73,14 +74,45 @@ struct SubscriptionKey {
 
 /// Callback wrapper that can be either sync or async.
 #[derive(Clone)]
-pub enum MethodCallback {
+enum MethodKind {
 	/// Synchronous method handler.
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
 }
 
+/// Method resources table
+#[derive(Clone, Debug)]
+enum MethodResources {
+	/// Unintialized resource table, mapping string label to units.
+	Uninitialized(&'static [(&'static str, u32)]),
+	/// Intialized resource table containing units for each `ResourceId`.
+	Initialized(ResourceMap<u32>),
+}
+
+/// Method callback wrapper that contains a sync or async closure,
+/// plus a table with resources it needs to claim to run
+#[derive(Clone, Debug)]
+pub struct MethodCallback {
+	callback: MethodKind,
+	resources: MethodResources,
+}
+
 impl MethodCallback {
+	fn new_sync(callback: SyncMethod) -> Self {
+		MethodCallback {
+			callback: MethodKind::Sync(callback),
+			resources: MethodResources::Initialized(ResourceMap::default()),
+		}
+	}
+
+	fn new_async(callback: AsyncMethod<'static>) -> Self {
+		MethodCallback {
+			callback: MethodKind::Async(callback),
+			resources: MethodResources::Initialized(ResourceMap::default()),
+		}
+	}
+
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(
 		&self,
@@ -91,13 +123,13 @@ impl MethodCallback {
 		let id = req.id.clone();
 		let params = RpcParams::new(req.params.map(|params| params.get()));
 
-		match self {
-			MethodCallback::Sync(callback) => {
+		match &self.callback {
+			MethodKind::Sync(callback) => {
 				(callback)(id, params, tx, conn_id);
 
 				None
 			}
-			MethodCallback::Async(callback) => {
+			MethodKind::Async(callback) => {
 				let tx = tx.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
@@ -108,7 +140,7 @@ impl MethodCallback {
 	}
 }
 
-impl Debug for MethodCallback {
+impl Debug for MethodKind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Async(_) => write!(f, "Async"),
@@ -142,7 +174,7 @@ impl Methods {
 		Arc::make_mut(&mut self.callbacks)
 	}
 
-	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
+	/// Merge two [`Methods`]'s by adding all [`MethodKind`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
 	pub fn merge(&mut self, other: impl Into<Methods>) -> Result<(), Error> {
 		let mut other = other.into();
@@ -264,7 +296,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.mut_callbacks().insert(
 			method_name,
-			MethodCallback::Sync(Arc::new(move |id, params, tx, _| {
+			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(Error::Call(CallError::InvalidParams)) => {
@@ -311,7 +343,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.mut_callbacks().insert(
 			method_name,
-			MethodCallback::Async(Arc::new(move |id, params, tx, _| {
+			MethodCallback::new_async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
@@ -397,7 +429,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
-				MethodCallback::Sync(Arc::new(move |id, params, method_sink, conn_id| {
+				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn_id| {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
@@ -433,7 +465,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::Sync(Arc::new(move |id, params, tx, conn_id| {
+				MethodCallback::new_sync(Arc::new(move |id, params, tx, conn_id| {
 					let sub_id = match params.one() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -475,7 +507,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 pub struct SubscriptionSink {
 	/// Sink.
 	inner: mpsc::UnboundedSender<String>,
-	/// Method.
+	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
 	uniq_sub: SubscriptionKey,
