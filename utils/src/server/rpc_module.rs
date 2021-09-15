@@ -487,7 +487,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(())
 	}
 
-	/// Register an alias for an existing_method. Alias uniqueness is enforced at compile time.
+	/// Register an alias for an existing_method. Alias uniqueness is enforced.
 	pub fn register_alias(&mut self, alias: &'static str, existing_method: &'static str) -> Result<(), Error> {
 		self.methods.verify_method_name(alias)?;
 
@@ -579,7 +579,6 @@ fn subscription_closed_err(sub_id: u64) -> Error {
 mod tests {
 	use super::*;
 	use jsonrpsee_types::v2;
-	use jsonrpsee_types::v2::request::Notification;
 	use serde::Deserialize;
 	use std::collections::HashMap;
 
