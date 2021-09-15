@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::{traits::SubscriptionClient, v2::params::ParamsSer, Error, Subscription},
+	types::{traits::SubscriptionClient, v2::ParamsSer, Error, Subscription},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };

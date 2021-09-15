@@ -26,10 +26,7 @@
 
 use crate::types::{
 	traits::Client,
-	v2::{
-		error::{ErrorCode, ErrorObject, RpcError},
-		params::ParamsSer,
-	},
+	v2::{ErrorCode, ErrorObject, ParamsSer, RpcError},
 	Error, JsonValue,
 };
 use crate::HttpClientBuilder;

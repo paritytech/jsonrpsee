@@ -32,10 +32,9 @@ use jsonrpsee_types::{
 	error::{CallError, Error, SubscriptionClosedError},
 	traits::ToRpcParams,
 	v2::{
-		error::{ErrorCode, ErrorObject, CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
-		params::{Id, Params, SubscriptionId as RpcSubscriptionId, TwoPointZero},
-		request::Request,
-		response::{Response, SubscriptionPayload, SubscriptionResponse},
+		error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
+		ErrorCode, ErrorObject, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId,
+		SubscriptionPayload, SubscriptionResponse, TwoPointZero,
 	},
 };
 

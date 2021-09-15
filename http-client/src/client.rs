@@ -27,12 +27,7 @@
 use crate::transport::HttpTransportClient;
 use crate::types::{
 	traits::Client,
-	v2::{
-		error::RpcError,
-		params::{Id, ParamsSer},
-		request::{NotificationSer, RequestSer},
-		response::Response,
-	},
+	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
 	Error, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;

@@ -27,10 +27,7 @@
 #![cfg(test)]
 use crate::types::{
 	traits::{Client, SubscriptionClient},
-	v2::{
-		error::{ErrorCode, ErrorObject, RpcError},
-		params::ParamsSer,
-	},
+	v2::{ErrorCode, ErrorObject, ParamsSer, RpcError},
 	Error, Subscription,
 };
 use crate::WsClientBuilder;
