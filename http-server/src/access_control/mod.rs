@@ -145,11 +145,12 @@ impl AccessControlBuilder {
 	/// Configure allowed hosts.
 	///
 	/// Default - allow all.
-	pub fn set_allowed_hosts<List>(mut self, list: List) -> Result<Self, Error>
+	pub fn set_allowed_hosts<List, H>(mut self, list: List) -> Result<Self, Error>
 	where
-		List: IntoIterator<Item = Host>,
+		List: IntoIterator<Item = H>,
+		H: Into<Host>,
 	{
-		let allowed_hosts: Vec<Host> = list.into_iter().collect();
+		let allowed_hosts: Vec<Host> = list.into_iter().map(Into::into).collect();
 		if allowed_hosts.is_empty() {
 			return Err(Error::EmptyAllowList("Host"));
 		}
@@ -162,7 +163,7 @@ impl AccessControlBuilder {
 	/// Default - allow all.
 	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
 	where
-		List: IntoIterator<Item = AccessControlAllowOrigin>,
+		List: IntoIterator<Item = Origin>,
 		Origin: Into<AccessControlAllowOrigin>,
 	{
 		let allowed_origins: Vec<AccessControlAllowOrigin> = list.into_iter().map(Into::into).collect();
