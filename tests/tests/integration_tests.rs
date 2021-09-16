@@ -263,6 +263,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 }
 
 #[tokio::test]
+#[cfg_attr(target_os = "windows", ignore)]
 async fn ws_close_pending_subscription_when_server_terminated() {
 	let (server_addr, handle) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
