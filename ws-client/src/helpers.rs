@@ -27,10 +27,7 @@
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::v2::{
-	error::RpcError,
-	params::{Id, ParamsSer, SubscriptionId},
-	request::{Notification, RequestSer},
-	response::{Response, SubscriptionResponse},
+	Id, Notification, ParamsSer, RequestSer, Response, RpcError, SubscriptionId, SubscriptionResponse,
 };
 use crate::types::{Error, RequestMessage};
 use futures::channel::{mpsc, oneshot};

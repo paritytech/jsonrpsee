@@ -27,14 +27,9 @@
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::types::{
 	traits::{Client, SubscriptionClient},
-	v2::{
-		error::RpcError,
-		params::{Id, ParamsSer},
-		request::{Notification, NotificationSer, RequestSer},
-		response::Response,
-	},
-	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionMessage,
-	TEN_MB_SIZE_BYTES,
+	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
+	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionKind,
+	SubscriptionMessage, TEN_MB_SIZE_BYTES,
 };
 use crate::{
 	helpers::{
@@ -51,10 +46,8 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
-use jsonrpsee_types::v2::response::SubscriptionResponse;
 use tokio::sync::Mutex;
 
-use jsonrpsee_types::SubscriptionKind;
 use serde::de::DeserializeOwned;
 use std::{
 	borrow::Cow,

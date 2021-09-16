@@ -26,10 +26,7 @@
 
 //! Contains common builders for hyper responses.
 
-use crate::types::v2::{
-	error::{ErrorCode, RpcError},
-	params::{Id, TwoPointZero},
-};
+use crate::types::v2::{ErrorCode, Id, RpcError, TwoPointZero};
 
 const JSON: &str = "application/json; charset=utf-8";
 const TEXT: &str = "text/plain";

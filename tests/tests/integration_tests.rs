@@ -34,7 +34,7 @@ use jsonrpsee::{
 	http_client::HttpClientBuilder,
 	types::{
 		traits::{Client, SubscriptionClient},
-		v2::params::ParamsSer,
+		v2::ParamsSer,
 		Error, JsonValue, Subscription,
 	},
 	ws_client::WsClientBuilder,

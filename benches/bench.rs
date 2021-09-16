@@ -6,8 +6,7 @@ use jsonrpsee::{
 	types::traits::SubscriptionClient,
 	types::{
 		traits::Client,
-		v2::params::{Id, ParamsSer},
-		v2::request::RequestSer,
+		v2::{Id, ParamsSer, RequestSer},
 	},
 	ws_client::WsClientBuilder,
 };

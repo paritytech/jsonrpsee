@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{error::SubscriptionClosedError, v2::params::SubscriptionId, Error};
+use crate::{error::SubscriptionClosedError, v2::SubscriptionId, Error};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
