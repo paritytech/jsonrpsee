@@ -71,6 +71,12 @@ impl Builder {
 		self
 	}
 
+	/// Sets access control settings.
+	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
+		self.access_control = acl;
+		self
+	}
+
 	/// Enables or disables HTTP keep-alive.
 	///
 	/// Default is true.
