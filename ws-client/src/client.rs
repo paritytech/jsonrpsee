@@ -185,7 +185,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			connection_timeout: Duration::from_secs(10),
 			origin_header: None,
 			max_concurrent_requests: 256,
-			max_notifs_per_subscription: 4,
+			max_notifs_per_subscription: 1024,
 		}
 	}
 }
