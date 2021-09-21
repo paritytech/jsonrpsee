@@ -50,6 +50,12 @@ async fn main() -> anyhow::Result<()> {
 		i += 1;
 	}
 
+	drop(client);
+	println!("dropped client");
+
+	loop {}
+
+
 	Ok(())
 }
 
