@@ -241,7 +241,13 @@ async fn background_task(
 	while !stop_monitor.shutdown_requested() {
 		data.clear();
 
-		method_executors.select_with(receiver.receive_data(&mut data)).await?;
+		if let Err(e) = method_executors.select_with(receiver.receive_data(&mut data)).await {
+			log::error!("rx websocket data failed: {:?}; closing connection", e);
+			if let Ok(stop_fut) = stop_monitor.handle().stop() {
+				stop_fut.await;
+			}
+			return Err(e.into());
+		}
 
 		if data.len() > max_request_body_size as usize {
 			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);

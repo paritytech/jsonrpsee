@@ -298,6 +298,12 @@ impl WsClient {
 	}
 }
 
+impl Drop for WsClient {
+	fn drop(&mut self) {
+		self.to_back.send(FrontToBack::Terminate).now_or_never();
+	}
+}
+
 #[async_trait]
 impl Client for WsClient {
 	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
@@ -522,7 +528,7 @@ async fn background_task(
 			// There is nothing to do just terminate.
 			Either::Left((None, _)) => {
 				log::trace!("[backend]: frontend dropped; terminate client");
-				return;
+				break;
 			}
 
 			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
@@ -606,6 +612,10 @@ async fn background_task(
 				log::trace!("[backend] unregistering notification handler: {:?}", method);
 				let _ = manager.remove_notification_handler(method);
 			}
+			// User dropped the client.
+			Either::Left((Some(FrontToBack::Terminate), _)) => {
+				break;
+			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
@@ -617,7 +627,7 @@ async fn background_task(
 						Ok(None) => (),
 						Err(err) => {
 							let _ = front_error.send(err);
-							return;
+							break;
 						}
 					}
 				}
@@ -656,19 +666,22 @@ async fn background_task(
 						serde_json::from_slice::<serde_json::Value>(&raw)
 					);
 					let _ = front_error.send(Error::Custom("Unparsable response".into()));
-					return;
+					break;
 				}
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
 				let _ = front_error.send(Error::Transport(e.into()));
-				return;
+				break;
 			}
 			Either::Right((None, _)) => {
 				log::error!("[backend]: WebSocket receiver dropped; terminate client");
 				let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
-				return;
+				break;
 			}
 		}
 	}
+
+	// Send WebSocket close reason to the server.
+	let _ = sender.close().await;
 }

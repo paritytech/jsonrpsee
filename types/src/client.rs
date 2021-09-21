@@ -148,6 +148,10 @@ pub enum FrontToBack {
 	// Such operations will be blocked until a response is received or the background
 	// thread has been terminated.
 	SubscriptionClosed(SubscriptionId),
+	/// Terminate background thread.
+	///
+	/// This implies that all pending operations are ignored and the connection is terminated.
+	Terminate,
 }
 
 impl<Notif> Subscription<Notif>
