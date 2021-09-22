@@ -31,7 +31,7 @@ use jsonrpsee::{
 };
 use std::net::SocketAddr;
 
-const NUM_SUBSCRIPTION_RESPONSES: usize = 1;
+const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -50,10 +50,6 @@ async fn main() -> anyhow::Result<()> {
 		i += 1;
 	}
 
-	drop(client);
-
-	tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-
 	Ok(())
 }
 
@@ -63,7 +59,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
 		std::thread::spawn(move || loop {
 			if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello my friend") {
-				log::debug!("The client closed the subscription");
 				return;
 			}
 			std::thread::sleep(std::time::Duration::from_secs(1));

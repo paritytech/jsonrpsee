@@ -110,6 +110,7 @@ async fn ws_subscription_several_clients() {
 
 #[tokio::test]
 async fn ws_subscription_several_clients_with_drop() {
+	env_logger::try_init();
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -137,17 +138,16 @@ async fn ws_subscription_several_clients_with_drop() {
 		let (client, hello_sub, foo_sub) = clients.remove(i);
 		drop(hello_sub);
 		drop(foo_sub);
-		// Send this request to make sure that the client's background thread hasn't
-		// been canceled.
 		assert!(client.is_connected());
 		drop(client);
 	}
 
-	// make sure nothing weird happened after dropping half the clients (should be `unsubscribed` in the server)
+	// make sure nothing weird happened after dropping half of the clients (should be `unsubscribed` in the server)
 	// would be good to know that subscriptions actually were removed but not possible to verify at
 	// this layer.
-	for _ in 0..10 {
-		for (_client, hello_sub, foo_sub) in &mut clients {
+	for _ in 0..1 {
+		for (client, hello_sub, foo_sub) in &mut clients {
+			assert!(client.is_connected());
 			let hello = hello_sub.next().await.unwrap().unwrap();
 			let foo = foo_sub.next().await.unwrap().unwrap();
 			assert_eq!(&hello, "hello from subscription");
@@ -294,4 +294,47 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 	}
 
 	panic!("subscription keeps sending messages after server shutdown");
+}
+
+#[tokio::test]
+async fn ws_server_should_stop_subscription_after_client_drop() {
+	let _ = env_logger::try_init();
+	use futures::{channel::mpsc, SinkExt, StreamExt};
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let (tx, mut rx) = mpsc::channel(1);
+	let mut module = RpcModule::new(tx);
+
+	module
+		.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
+			tokio::spawn(async move {
+				let close_err = loop {
+					if let Err(Error::SubscriptionClosed(err)) = sink.send(&1) {
+						break err;
+					}
+					tokio::time::sleep(Duration::from_millis(100)).await;
+				};
+				let send_back = Arc::make_mut(&mut tx);
+				send_back.feed(close_err).await.unwrap();
+			});
+			Ok(())
+		})
+		.unwrap();
+
+	tokio::spawn(async move { server.start(module).await });
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut sub: Subscription<usize> =
+		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_noop").await.unwrap();
+
+	let res = sub.next().await.unwrap();
+
+	assert_eq!(res.as_ref(), Some(&1));
+	drop(client);
+	// assert that the server received `SubscriptionClosed` after the client was dropped.
+	assert!(rx.next().await.is_some());
 }
