@@ -2,7 +2,7 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, to_json_value, traits::Client, v2::params::JsonRpcParams, JsonRpcResult},
+	types::{async_trait, to_json_value, traits::Client, v2::params::ParamsSer, RpcResult},
 	ws_client::*,
 	ws_server::{SubscriptionSink, WsServerBuilder},
 };
@@ -11,59 +11,59 @@ use std::{net::SocketAddr, sync::mpsc::channel};
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
 	#[method(name = "foo", aliases = "fooAlias, Other")]
-	async fn async_method(&self, param_a: u8, param_b: String) -> JsonRpcResult<u16>;
+	async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
 	#[method(name = "optional_params")]
-	async fn optional_params(&self, a: std::option::Option<u8>, b: String) -> JsonRpcResult<bool>;
+	async fn optional_params(&self, a: std::option::Option<u8>, b: String) -> RpcResult<bool>;
 
 	#[method(name = "optional_param")]
-	async fn optional_param(&self, a: Option<u8>) -> JsonRpcResult<bool>;
+	async fn optional_param(&self, a: Option<u8>) -> RpcResult<bool>;
 
 	#[method(name = "array_params")]
-	async fn array_params(&self, items: Vec<u64>) -> JsonRpcResult<u64>;
+	async fn array_params(&self, items: Vec<u64>) -> RpcResult<u64>;
 
 	#[method(name = "bar")]
-	fn sync_method(&self) -> JsonRpcResult<u16>;
+	fn sync_method(&self) -> RpcResult<u16>;
 
 	#[subscription(name = "sub", item = String)]
-	fn sub(&self) -> JsonRpcResult<()>;
+	fn sub(&self) -> RpcResult<()>;
 
 	#[subscription(name = "echo", aliases = "ECHO", item = u32, unsubscribe_aliases = "NotInterested, listenNoMore")]
-	fn sub_with_params(&self, val: u32) -> JsonRpcResult<()>;
+	fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 }
 
 pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn async_method(&self, _param_a: u8, _param_b: String) -> JsonRpcResult<u16> {
+	async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
 		Ok(42u16)
 	}
 
-	async fn optional_params(&self, a: core::option::Option<u8>, _b: String) -> JsonRpcResult<bool> {
+	async fn optional_params(&self, a: core::option::Option<u8>, _b: String) -> RpcResult<bool> {
 		let res = if a.is_some() { true } else { false };
 		Ok(res)
 	}
 
-	async fn optional_param(&self, a: Option<u8>) -> JsonRpcResult<bool> {
+	async fn optional_param(&self, a: Option<u8>) -> RpcResult<bool> {
 		let res = if a.is_some() { true } else { false };
 		Ok(res)
 	}
 
-	async fn array_params(&self, items: Vec<u64>) -> JsonRpcResult<u64> {
+	async fn array_params(&self, items: Vec<u64>) -> RpcResult<u64> {
 		Ok(items.len() as u64)
 	}
 
-	fn sync_method(&self) -> JsonRpcResult<u16> {
+	fn sync_method(&self) -> RpcResult<u16> {
 		Ok(10u16)
 	}
 
-	fn sub(&self, mut sink: SubscriptionSink) -> JsonRpcResult<()> {
+	fn sub(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
 		sink.send(&"Response_A")?;
 		sink.send(&"Response_B")
 	}
 
-	fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> JsonRpcResult<()> {
+	fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> RpcResult<()> {
 		sink.send(&val)?;
 		sink.send(&val)
 	}
@@ -107,7 +107,7 @@ async fn main() {
 	);
 
 	assert_eq!(client.request::<bool>("foo_optional_param", vec![].into()).await.unwrap(), false);
-	assert_eq!(client.request::<bool>("foo_optional_param", JsonRpcParams::NoParams).await.unwrap(), false);
+	assert_eq!(client.request::<bool>("foo_optional_param", ParamsSer::NoParams).await.unwrap(), false);
 	assert_eq!(
 		client.request::<bool>("foo_optional_param", vec![to_json_value(Some(1)).unwrap()].into()).await.unwrap(),
 		true

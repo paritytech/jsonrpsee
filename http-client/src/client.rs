@@ -27,12 +27,7 @@
 use crate::transport::HttpTransportClient;
 use crate::types::{
 	traits::Client,
-	v2::{
-		error::JsonRpcError,
-		params::{Id, JsonRpcParams},
-		request::{JsonRpcCallSer, JsonRpcNotificationSer},
-		response::JsonRpcResponse,
-	},
+	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
 	Error, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
@@ -88,8 +83,8 @@ pub struct HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
-		let notif = JsonRpcNotificationSer::new(method, params);
+	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
+		let notif = NotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?);
 		match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(ok)) => Ok(ok),
@@ -99,13 +94,13 @@ impl Client for HttpClient {
 	}
 
 	/// Perform a request towards the server.
-	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
 		// NOTE: `fetch_add` wraps on overflow which is intended.
 		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-		let request = JsonRpcCallSer::new(Id::Number(id), method, params);
+		let request = RequestSer::new(Id::Number(id), method, params);
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
@@ -114,10 +109,10 @@ impl Client for HttpClient {
 			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
-		let response: JsonRpcResponse<_> = match serde_json::from_slice(&body) {
+		let response: Response<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				let err: RpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 				return Err(Error::Request(err.to_string()));
 			}
 		};
@@ -131,7 +126,7 @@ impl Client for HttpClient {
 		}
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -142,7 +137,7 @@ impl Client for HttpClient {
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-			batch_request.push(JsonRpcCallSer::new(Id::Number(id), method, params));
+			batch_request.push(RequestSer::new(Id::Number(id), method, params));
 			ordered_requests.push(id);
 			request_set.insert(id, pos);
 		}
@@ -155,10 +150,10 @@ impl Client for HttpClient {
 			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
-		let rps: Vec<JsonRpcResponse<_>> = match serde_json::from_slice(&body) {
+		let rps: Vec<Response<_>> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				let err: RpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 				return Err(Error::Request(err.to_string()));
 			}
 		};

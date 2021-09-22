@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::v2::params::JsonRpcParams;
+use crate::v2::ParamsSer;
 use crate::{Error, Subscription};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -35,10 +35,10 @@ use serde_json::value::RawValue;
 #[async_trait]
 pub trait Client {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
-	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error>;
+	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error>;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
 	where
 		R: DeserializeOwned;
 
@@ -48,7 +48,7 @@ pub trait Client {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone;
 }
@@ -71,7 +71,7 @@ pub trait SubscriptionClient: Client {
 	async fn subscribe<'a, Notif>(
 		&self,
 		subscribe_method: &'a str,
-		params: JsonRpcParams<'a>,
+		params: ParamsSer<'a>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<Notif>, Error>
 	where
@@ -88,30 +88,18 @@ pub trait SubscriptionClient: Client {
 
 /// Marker trait for types that can be serialized as JSON array/sequence.
 ///
-/// If your type isn't a sequence such as `String`, `usize` or similar.
-/// You could insert it in a tuple, slice, array or Vec for it to work.
+/// If your type isn't a sequence, for example `String`, `usize` or similar
+/// you must insert it in a tuple, slice, array or Vec for it to work.
 pub trait ToRpcParams: Serialize {
-	/// Serialized the type as a JSON array.
+	/// Serialize the type as a JSON array.
 	fn to_rpc_params(&self) -> Result<Box<RawValue>, serde_json::Error> {
 		serde_json::to_string(&self).map(|json| RawValue::from_string(json).expect("JSON String; qed"))
 	}
 }
 
 impl<P: Serialize> ToRpcParams for &[P] {}
-
 impl<P: Serialize> ToRpcParams for Vec<P> {}
-
-macro_rules! array_impls {
-    ($($len:tt)+) => {
-        $(
-            impl<P: Serialize> ToRpcParams for [P; $len] {}
-        )+
-    }
-}
-
-array_impls! {
-	1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
-}
+impl<P, const N: usize> ToRpcParams for [P; N] where [P; N]: Serialize {}
 
 macro_rules! tuple_impls {
     ($($len:expr => ($($n:tt $name:ident)+))+) => {

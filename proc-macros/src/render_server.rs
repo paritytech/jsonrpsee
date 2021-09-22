@@ -120,8 +120,9 @@ impl RpcDescription {
 				// Name of the RPC method (e.g. `foo_makeSpam`).
 				let rpc_method_name = self.rpc_identifier(&method.name);
 				// `parsing` is the code associated with parsing structure from the
-				// provided `RpcParams` object.
-				// `params_seq` is the comma-delimited sequence of parameters.
+				// provided `Params` object.
+				// `params_seq` is the comma-delimited sequence of parameters we're passing to the rust function
+				// called..
 				let (parsing, params_seq) = self.render_params_decoding(&method.params);
 
 				check_name(&rpc_method_name, rust_method_name.span());
@@ -158,7 +159,7 @@ impl RpcDescription {
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 				// `parsing` is the code associated with parsing structure from the
-				// provided `RpcParams` object.
+				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params);
 
@@ -272,11 +273,23 @@ impl RpcDescription {
 			let decode_fields = params.iter().map(|(name, ty)| {
 				if is_option(ty) {
 					quote! {
-						let #name: #ty = seq.optional_next()?;
+						let #name: #ty = match seq.optional_next() {
+							Ok(v) => v,
+							Err(e) => {
+								log::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								return Err(e.into())
+							}
+						};
 					}
 				} else {
 					quote! {
-						let #name: #ty = seq.next()?;
+						let #name: #ty = match seq.next() {
+							Ok(v) => v,
+							Err(e) => {
+								log::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								return Err(e.into())
+							}
+						};
 					}
 				}
 			});

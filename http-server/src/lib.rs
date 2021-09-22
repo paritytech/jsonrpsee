@@ -37,7 +37,8 @@ mod server;
 pub mod response;
 
 pub use access_control::{
-	hosts::{AllowHosts, Host},
+	cors::{AccessControlAllowHeaders, AccessControlAllowOrigin},
+	hosts::{AllowHosts, DomainsValidation, Host},
 	AccessControl, AccessControlBuilder,
 };
 pub use jsonrpsee_types as types;
