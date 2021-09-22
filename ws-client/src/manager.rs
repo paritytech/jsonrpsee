@@ -289,7 +289,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Get a mutable reference to underlying `Sink` in order to send incmoing notifications to the subscription.
+	/// Get a mutable reference to underlying `Sink` in order to send incoming notifications to the subscription.
 	///
 	/// Returns `Some` if the `method` was registered as a NotificationHandler otherwise `None`.
 	pub fn as_notification_handler_mut(&mut self, method: String) -> Option<&mut SubscriptionSink> {
@@ -301,6 +301,11 @@ impl RequestManager {
 	/// Returns `Some` if the subscription ID was registered as a subscription otherwise `None`.
 	pub fn get_request_id_by_subscription_id(&self, sub_id: &SubscriptionId) -> Option<RequestId> {
 		self.subscriptions.get(sub_id).copied()
+	}
+
+	/// Get all active subscriptions.
+	pub fn subscriptions(&self) -> Vec<(SubscriptionId, RequestId)> {
+		self.subscriptions.iter().map(|(s, r)| (s.clone(), *r)).collect()
 	}
 }
 

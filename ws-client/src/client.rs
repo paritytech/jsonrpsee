@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::helpers::close_all_subscriptions;
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::types::{
 	traits::{Client, SubscriptionClient},
@@ -681,6 +682,8 @@ async fn background_task(
 			}
 		}
 	}
+
+	close_all_subscriptions(&mut sender, manager).await;
 
 	// Send WebSocket close reason to the server.
 	let _ = sender.close().await;

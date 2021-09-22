@@ -297,7 +297,6 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 #[tokio::test]
 async fn ws_server_should_stop_subscription_after_client_drop() {
-	let _ = env_logger::try_init();
 	use futures::{channel::mpsc, SinkExt, StreamExt};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
@@ -328,7 +327,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	let mut sub: Subscription<usize> =
-		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_noop").await.unwrap();
+		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
 
 	let res = sub.next().await.unwrap();
 
