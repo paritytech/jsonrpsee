@@ -181,20 +181,6 @@ pub async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManag
 	}
 }
 
-/// Garbage collect all active subscriptions.
-pub async fn close_all_subscriptions(sender: &mut WsSender, mut manager: RequestManager) {
-	let subs = manager.subscriptions();
-	for (sub_id, req_id) in subs {
-		let (unsub_req_id, _, unsub_method, sub_id) =
-			manager.remove_subscription(req_id, sub_id).expect("valid ID; qed");
-		let sub_id_slice: &[JsonValue] = &[sub_id.into()];
-		let params = ParamsSer::ArrayRef(sub_id_slice);
-		let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), unsub_method.as_str(), params))
-			.expect("RequestSer serialize works; qed");
-		let _ = sender.send(raw).await;
-	}
-}
-
 /// Builds an unsubscription message.
 pub fn build_unsubscribe_message(
 	manager: &mut RequestManager,
