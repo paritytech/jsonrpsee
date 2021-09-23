@@ -3,8 +3,11 @@ use std::sync::{
 	atomic::{AtomicU32, Ordering},
 	Arc,
 };
+use parking_lot::Mutex;
 
-pub type ResourceMap<T> = [T; 8];
+const RESOURCE_COUNT: usize = 8;
+
+pub type ResourceMap<T> = [T; RESOURCE_COUNT];
 
 /// Resource definition
 pub struct Resource {
@@ -18,7 +21,7 @@ pub struct Resource {
 
 /// Id referencing a resource for `O(1)` lookups
 #[derive(Debug, Clone, Copy)]
-pub struct ResourceId(u8);
+pub struct ResourceId(usize);
 
 pub struct ResourceBuilder {
 	table: Vec<Resource>,
@@ -46,7 +49,7 @@ impl ResourceBuilder {
 			.iter()
 			.enumerate()
 			.find(|(_, resource)| resource.label == label)
-			.map(|(id, resource)| (ResourceId(id as u8), resource))
+			.map(|(id, resource)| (ResourceId(id), resource))
 	}
 
 	pub fn register_resource(&mut self, label: &'static str, capacity: u32, default: u32) -> Result<ResourceId, Error> {
@@ -54,7 +57,11 @@ impl ResourceBuilder {
 			return Err(Error::ResourceNameAlreadyTaken(label));
 		}
 
-		let id = ResourceId(u8::try_from(self.table.len()).map_err(|_| Error::MaxResourcesReached)?);
+		if self.table.len() >= RESOURCE_COUNT {
+			return Err(Error::MaxResourcesReached);
+		}
+
+		let id = ResourceId(self.table.len());
 
 		self.table.push(Resource { label, capacity, default });
 
@@ -62,72 +69,58 @@ impl ResourceBuilder {
 	}
 
 	pub fn build(self) -> ResourcesInternal {
+		let mut caps = [0; RESOURCE_COUNT];
+		let mut labels = [""; RESOURCE_COUNT];
+
+		for (idx, Resource { label, capacity, .. }) in self.table.into_iter().enumerate() {
+			caps[idx] = capacity;
+			labels[idx] = label;
+		}
+
 		ResourcesInternal {
-			table: self
-				.table
-				.into_iter()
-				.map(|Resource { label, capacity, .. }| ResourceInternal { label, capacity, used: AtomicU32::new(0) })
-				.collect(),
+			totals: Mutex::new([0; RESOURCE_COUNT]),
+			caps,
+			labels,
 		}
 	}
 }
 
 #[derive(Debug)]
-struct ResourceInternal {
-	/// We store the label, although we only use it for verbose errors
-	label: &'static str,
-	/// Max capacity of arbitrary units of the resource
-	capacity: u32,
-	/// Currently used units
-	used: AtomicU32,
-}
-
-#[derive(Clone, Debug)]
 pub struct ResourcesInternal {
-	table: Arc<[ResourceInternal]>,
+	totals: Mutex<ResourceMap<u32>>,
+	caps: ResourceMap<u32>,
+	labels: ResourceMap<&'static str>,
 }
 
 impl ResourcesInternal {
-	/// Attempt to claim a given amount of units of a resource using the `id`.
-	pub fn claim(&self, id: ResourceId, units: u32) -> Result<ClaimedResource, Error> {
-		let resource = self.table.get(id.0 as usize).ok_or_else(|| Error::InvalidResourceId(id))?;
+	pub fn claim(&self, units: ResourceMap<u32>) -> Result<ClaimedResource, Error> {
+		let mut totals = self.totals.lock();
+		let mut sum = *totals;
 
-		resource.claim(units)?;
+		for idx in 0..RESOURCE_COUNT {
+			sum[idx] += units[idx];
 
-		Ok(ClaimedResource { resource, units })
-	}
-}
-
-impl ResourceInternal {
-	fn claim(&self, units: u32) -> Result<(), Error> {
-		let previous = self.used.fetch_add(units, Ordering::SeqCst);
-
-		if previous + units > self.capacity {
-			self.used.fetch_sub(units, Ordering::SeqCst);
-			Err(Error::ResourceAtCapacity(self.label))
-		} else {
-			Ok(())
+			if sum[idx] > self.caps[idx] {
+				return Err(Error::ResourceAtCapacity(self.labels[idx]));
+			}
 		}
-	}
 
-	fn free(&self, units: u32) {
-		let previous = self.used.fetch_sub(units, Ordering::SeqCst);
+		*totals = sum;
 
-		// Overflow below 0 should never happen!
-		if previous < units {
-			panic!("Trying to free more units than where used for resource: {}", self.label);
-		}
+		Ok(ClaimedResource { totals: &self.totals, units })
 	}
 }
 
 /// RAII style "lock" for claimed resources, will automatically release them once dropped.
 pub struct ClaimedResource<'a> {
-	resource: &'a ResourceInternal,
-	units: u32,
+	totals: &'a Mutex<ResourceMap<u32>>,
+	units: ResourceMap<u32>,
 }
 
 impl Drop for ClaimedResource<'_> {
 	fn drop(&mut self) {
-		self.resource.free(self.units)
+		for (sum, claimed) in self.totals.lock().iter_mut().zip(self.units) {
+			*sum -= claimed;
+		}
 	}
 }
