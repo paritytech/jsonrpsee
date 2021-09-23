@@ -302,11 +302,6 @@ impl RequestManager {
 	pub fn get_request_id_by_subscription_id(&self, sub_id: &SubscriptionId) -> Option<RequestId> {
 		self.subscriptions.get(sub_id).copied()
 	}
-
-	/// Get all active subscriptions.
-	pub fn subscriptions(&self) -> Vec<(SubscriptionId, RequestId)> {
-		self.subscriptions.iter().map(|(s, r)| (s.clone(), *r)).collect()
-	}
 }
 
 #[cfg(test)]
