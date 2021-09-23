@@ -682,6 +682,6 @@ async fn background_task(
 		}
 	}
 
-	// Send WebSocket close reason to the server (this might fail if the server terminated the connection).
+	// Send WebSocket close reason to the server (this might fail if the server already terminated the connection).
 	let _ = sender.close().await;
 }
