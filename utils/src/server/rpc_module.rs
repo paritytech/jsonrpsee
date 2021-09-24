@@ -765,6 +765,6 @@ mod tests {
 		// The subscription is now closed
 		let my_sub = my_sub_stream.next().await.unwrap();
 		let my_sub = serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&my_sub).unwrap();
-		assert_eq!(my_sub.params.result, format!("Subscription: {} is closed and dropped", sub_id).to_string().into());
+		assert_eq!(my_sub.params.result, format!("Subscription: {} closed", sub_id).into());
 	}
 }
