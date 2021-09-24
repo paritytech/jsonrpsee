@@ -334,5 +334,5 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	assert_eq!(res.as_ref(), Some(&1));
 	drop(client);
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert!(rx.next().await.is_some());
+	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError(_)));
 }
