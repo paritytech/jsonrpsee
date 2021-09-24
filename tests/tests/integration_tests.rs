@@ -33,6 +33,7 @@ use helpers::{http_server, websocket_server, websocket_server_with_subscription}
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
 	types::{
+		error::SubscriptionClosedError,
 		traits::{Client, SubscriptionClient},
 		v2::ParamsSer,
 		Error, JsonValue, Subscription,
@@ -334,5 +335,5 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	assert_eq!(res.as_ref(), Some(&1));
 	drop(client);
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError(_)));
+	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError { .. }));
 }
