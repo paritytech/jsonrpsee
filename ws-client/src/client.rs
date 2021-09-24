@@ -300,7 +300,7 @@ impl WsClient {
 
 impl Drop for WsClient {
 	fn drop(&mut self) {
-		self.to_back.send(FrontToBack::Terminate).now_or_never();
+		self.to_back.close_channel();
 	}
 }
 
@@ -611,10 +611,6 @@ async fn background_task(
 			Either::Left((Some(FrontToBack::UnregisterNotification(method)), _)) => {
 				log::trace!("[backend] unregistering notification handler: {:?}", method);
 				let _ = manager.remove_notification_handler(method);
-			}
-			// User dropped the client.
-			Either::Left((Some(FrontToBack::Terminate), _)) => {
-				break;
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
