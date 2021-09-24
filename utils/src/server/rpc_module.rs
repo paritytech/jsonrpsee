@@ -566,12 +566,12 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		self.close(format!("Subscription: {} is closed and dropped", self.uniq_sub.sub_id));
+		self.close(format!("Subscription: {} closed", self.uniq_sub.sub_id));
 	}
 }
 
 fn subscription_closed_err(sub_id: u64) -> Error {
-	Error::SubscriptionClosed(format!("Subscription {} is closed but not yet dropped", sub_id).into())
+	Error::SubscriptionClosed(format!("Subscription {} closed", sub_id).into())
 }
 
 #[cfg(test)]
