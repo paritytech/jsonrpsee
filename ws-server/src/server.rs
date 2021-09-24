@@ -27,8 +27,6 @@
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, StopHandle, StopMonitor};
@@ -216,14 +214,11 @@ async fn background_task(
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let stop_conn = Arc::new(AtomicBool::new(false));
-
 	let stop_server2 = stop_server.clone();
-	let stop_conn2 = stop_conn.clone();
 
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while !stop_server2.shutdown_requested() && !stop_conn2.load(Ordering::SeqCst) {
+		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
 					log::debug!("send: {}", response);
@@ -248,7 +243,7 @@ async fn background_task(
 
 		if let Err(e) = method_executors.select_with(receiver.receive_data(&mut data)).await {
 			log::error!("Could not receive WS data: {:?}; closing connection", e);
-			stop_conn.store(true, Ordering::SeqCst);
+			tx.close_channel();
 			return Err(e.into());
 		}
 
