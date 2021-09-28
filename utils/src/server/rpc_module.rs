@@ -36,6 +36,7 @@ use jsonrpsee_types::{
 		ErrorCode, ErrorObject, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId,
 		SubscriptionPayload, SubscriptionResponse, TwoPointZero,
 	},
+	DeserializeOwned,
 };
 
 use parking_lot::Mutex;
@@ -212,18 +213,11 @@ impl Methods {
 
 	/// Test helper that sets up a subscription using the given `method`. Returns a tuple of the
 	/// [`SubscriptionId`] and a channel on which subscription JSON payloads can be received.
-	pub async fn test_subscription(
-		&self,
-		method: &str,
-		params: Option<Box<RawValue>>,
-	) -> (SubscriptionId, mpsc::UnboundedReceiver<String>) {
+	pub async fn test_subscription(&self, method: &str, params: impl ToRpcParams) -> TestSubscription {
+		let params = params.to_rpc_params().expect("valid JSON-RPC params");
 		log::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
-		let req = Request {
-			jsonrpc: TwoPointZero,
-			id: Id::Number(0),
-			method: Cow::borrowed(method),
-			params: params.as_deref(),
-		};
+		let req =
+			Request { jsonrpc: TwoPointZero, id: Id::Number(0), method: Cow::borrowed(method), params: Some(&params) };
 
 		let (tx, mut rx) = mpsc::unbounded();
 
@@ -234,7 +228,7 @@ impl Methods {
 		let subscription_response = serde_json::from_str::<Response<SubscriptionId>>(&response)
 			.unwrap_or_else(|_| panic!("Could not deserialize subscription response {:?}", response));
 		let sub_id = subscription_response.result;
-		(sub_id, rx)
+		TestSubscription { tx, rx, sub_id }
 	}
 
 	/// Returns an `Iterator` with all the method names registered on this server.
@@ -574,6 +568,41 @@ fn subscription_closed_err(sub_id: u64) -> Error {
 	Error::SubscriptionClosed(format!("Subscription {} closed", sub_id).into())
 }
 
+/// Wrapper struct that maintains a subscription for testing.
+#[derive(Debug)]
+pub struct TestSubscription {
+	tx: mpsc::UnboundedSender<String>,
+	rx: mpsc::UnboundedReceiver<String>,
+	sub_id: u64,
+}
+
+impl TestSubscription {
+	/// Close the subscription channel.
+	pub fn close(&mut self) {
+		self.tx.close_channel();
+	}
+
+	/// Get the subscription ID
+	pub fn subscription_id(&self) -> u64 {
+		self.sub_id
+	}
+
+	/// Get the next element of type T from the underlying stream.
+	///
+	/// Panics if the stream was closed or if the decoding the value as `T`.
+	pub async fn next<T: DeserializeOwned>(&mut self) -> (T, jsonrpsee_types::v2::SubscriptionId) {
+		let raw = self.rx.next().await.expect("subscription not closed");
+		let val: SubscriptionResponse<T> = serde_json::from_str(&raw).expect("valid response");
+		(val.params.result, val.params.subscription)
+	}
+}
+
+impl Drop for TestSubscription {
+	fn drop(&mut self) {
+		self.close();
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -754,17 +783,15 @@ mod tests {
 			})
 			.unwrap();
 
-		let (sub_id, mut my_sub_stream) = module.test_subscription("my_sub", None).await;
+		let mut my_sub: TestSubscription = module.test_subscription("my_sub", Vec::<()>::new()).await;
 		for i in (0..=2).rev() {
-			let my_sub = my_sub_stream.next().await.unwrap();
-			let my_sub = serde_json::from_str::<SubscriptionResponse<char>>(&my_sub).unwrap();
-			assert_eq!(my_sub.params.result, std::char::from_digit(i, 10).unwrap());
-			assert_eq!(my_sub.params.subscription, v2::params::SubscriptionId::Num(sub_id));
+			let (val, id) = my_sub.next::<char>().await;
+			assert_eq!(val, std::char::from_digit(i, 10).unwrap());
+			assert_eq!(id, v2::params::SubscriptionId::Num(my_sub.subscription_id()));
 		}
 
 		// The subscription is now closed
-		let my_sub = my_sub_stream.next().await.unwrap();
-		let my_sub = serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&my_sub).unwrap();
-		assert_eq!(my_sub.params.result, format!("Subscription: {} closed", sub_id).into());
+		let (val, _) = my_sub.next::<SubscriptionClosedError>().await;
+		assert_eq!(val, format!("Subscription: {} closed", my_sub.subscription_id()).into());
 	}
 }
