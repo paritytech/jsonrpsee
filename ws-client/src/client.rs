@@ -298,6 +298,12 @@ impl WsClient {
 	}
 }
 
+impl Drop for WsClient {
+	fn drop(&mut self) {
+		self.to_back.close_channel();
+	}
+}
+
 #[async_trait]
 impl Client for WsClient {
 	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
@@ -522,7 +528,7 @@ async fn background_task(
 			// There is nothing to do just terminate.
 			Either::Left((None, _)) => {
 				log::trace!("[backend]: frontend dropped; terminate client");
-				return;
+				break;
 			}
 
 			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
@@ -617,7 +623,7 @@ async fn background_task(
 						Ok(None) => (),
 						Err(err) => {
 							let _ = front_error.send(err);
-							return;
+							break;
 						}
 					}
 				}
@@ -656,19 +662,22 @@ async fn background_task(
 						serde_json::from_slice::<serde_json::Value>(&raw)
 					);
 					let _ = front_error.send(Error::Custom("Unparsable response".into()));
-					return;
+					break;
 				}
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
 				let _ = front_error.send(Error::Transport(e.into()));
-				return;
+				break;
 			}
 			Either::Right((None, _)) => {
 				log::error!("[backend]: WebSocket receiver dropped; terminate client");
 				let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
-				return;
+				break;
 			}
 		}
 	}
+
+	// Send close message to the server.
+	let _ = sender.close().await;
 }

@@ -9,8 +9,7 @@ publish = false
 
 [dev-dependencies]
 beef = { version = "0.5.1", features = ["impl_serde"] }
-env_logger = "0.9"
-futures-channel = { version = "0.3.14", default-features = false }
+futures = { version = "0.3.14", default-features = false, features = ["std"] }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"

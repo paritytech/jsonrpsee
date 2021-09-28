@@ -289,7 +289,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Get a mutable reference to underlying `Sink` in order to send incmoing notifications to the subscription.
+	/// Get a mutable reference to underlying `Sink` in order to send incoming notifications to the subscription.
 	///
 	/// Returns `Some` if the `method` was registered as a NotificationHandler otherwise `None`.
 	pub fn as_notification_handler_mut(&mut self, method: String) -> Option<&mut SubscriptionSink> {

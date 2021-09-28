@@ -209,16 +209,16 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	max_request_body_size: u32,
-	stop_monitor: StopMonitor,
+	stop_server: StopMonitor,
 ) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let stop_server2 = stop_server.clone();
 
-	let stop_monitor2 = stop_monitor.clone();
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while !stop_monitor2.shutdown_requested() {
+		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
 					log::debug!("send: {}", response);
@@ -228,20 +228,24 @@ async fn background_task(
 				None => break,
 			};
 		}
-
-		drop(stop_monitor2);
 		// terminate connection.
 		let _ = sender.close().await;
+		// NOTE(niklasad1): when the receiver is dropped no further requests or subscriptions
+		// will be possible.
 	});
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
 
-	while !stop_monitor.shutdown_requested() {
+	while !stop_server.shutdown_requested() {
 		data.clear();
 
-		method_executors.select_with(receiver.receive_data(&mut data)).await?;
+		if let Err(e) = method_executors.select_with(receiver.receive_data(&mut data)).await {
+			log::error!("Could not receive WS data: {:?}; closing connection", e);
+			tx.close_channel();
+			return Err(e.into());
+		}
 
 		if data.len() > max_request_body_size as usize {
 			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
@@ -294,9 +298,6 @@ async fn background_task(
 
 	// Drive all running methods to completion
 	method_executors.await;
-
-	// Drop the monitor for this task since we are shutting down
-	drop(stop_monitor);
 
 	Ok(())
 }

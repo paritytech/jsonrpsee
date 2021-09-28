@@ -598,12 +598,12 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		self.close(format!("Subscription: {} is closed and dropped", self.uniq_sub.sub_id));
+		self.close(format!("Subscription: {} closed", self.uniq_sub.sub_id));
 	}
 }
 
 fn subscription_closed_err(sub_id: u64) -> Error {
-	Error::SubscriptionClosed(format!("Subscription {} is closed but not yet dropped", sub_id).into())
+	Error::SubscriptionClosed(format!("Subscription {} closed", sub_id).into())
 }
 
 #[cfg(test)]
@@ -797,6 +797,6 @@ mod tests {
 		// The subscription is now closed
 		let my_sub = my_sub_stream.next().await.unwrap();
 		let my_sub = serde_json::from_str::<SubscriptionResponse<SubscriptionClosedError>>(&my_sub).unwrap();
-		assert_eq!(my_sub.params.result, format!("Subscription: {} is closed and dropped", sub_id).to_string().into());
+		assert_eq!(my_sub.params.result, format!("Subscription: {} closed", sub_id).into());
 	}
 }
