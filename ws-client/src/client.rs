@@ -26,11 +26,10 @@
 
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::types::{
-	RequestIdGuard,
 	traits::{Client, SubscriptionClient},
 	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
-	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionKind,
-	SubscriptionMessage, TEN_MB_SIZE_BYTES,
+	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestIdGuard, RequestMessage, Subscription,
+	SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
 };
 use crate::{
 	helpers::{
@@ -50,10 +49,7 @@ use futures::{
 use tokio::sync::Mutex;
 
 use serde::de::DeserializeOwned;
-use std::{
-	borrow::Cow,
-	time::Duration,
-};
+use std::{borrow::Cow, time::Duration};
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.

@@ -203,8 +203,7 @@ impl RequestIdGuard {
 		Self { current_pending: AtomicUsize::new(0), max_concurrent_requests: limit, current_id: AtomicU64::new(0) }
 	}
 
-	/// TODO docs
-	pub fn get_slot(&self) -> Result<(), Error> {
+	fn get_slot(&self) -> Result<(), Error> {
 		self.current_pending
 			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
 				if val >= self.max_concurrent_requests {
@@ -238,7 +237,7 @@ impl RequestIdGuard {
 		Ok(batch)
 	}
 
-	/// TODO docs
+	/// Decrease the currently pending counter by one (saturated at 0).
 	pub fn reclaim_request_id(&self) {
 		// NOTE we ignore the error here, since we are simply saturating at 0
 		let _ = self.current_pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
