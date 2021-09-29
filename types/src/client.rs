@@ -187,7 +187,7 @@ impl<Notif> Drop for Subscription<Notif> {
 }
 
 #[derive(Debug)]
-/// TODO docs
+/// Keep track of request IDs.
 pub struct RequestIdGuard {
 	// Current pending requests.
 	current_pending: AtomicUsize,
@@ -198,7 +198,7 @@ pub struct RequestIdGuard {
 }
 
 impl RequestIdGuard {
-	/// TODO docs
+	/// Create a new `RequestIdGuard` with the provided concurrency limit.
 	pub fn new(limit: usize) -> Self {
 		Self { current_pending: AtomicUsize::new(0), max_concurrent_requests: limit, current_id: AtomicU64::new(0) }
 	}
