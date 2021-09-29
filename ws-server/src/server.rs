@@ -55,6 +55,7 @@ pub struct Server {
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
+	resources: Resources,
 }
 
 impl Server {
@@ -71,7 +72,8 @@ impl Server {
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self, methods: impl Into<Methods>) {
 		let stop_monitor = self.stop_monitor;
-		let methods = methods.into();
+		let resources = self.resources;
+		let methods = methods.into().initialize_resources(&resources).unwrap(); // TODO: fix
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
@@ -367,6 +369,8 @@ impl Builder {
 		self
 	}
 
+	/// Register a new resource type. Errors if `label` was already registered, or if number of
+	/// registered resources would exceed 8.
 	pub fn register_resource(&mut self, label: &'static str, capacity: u16, default: u16) -> Result<(), Error> {
 		self.resources.register(label, capacity, default)?;
 
@@ -449,12 +453,13 @@ impl Builder {
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
 		let stop_monitor = StopMonitor::new();
-		Ok(Server { listener, cfg: self.settings, stop_monitor })
+		let resources = self.resources;
+		Ok(Server { listener, cfg: self.settings, stop_monitor, resources })
 	}
 }
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { settings: Settings::default(), resources: Resources::new() }
+		Self { settings: Settings::default(), resources: Resources::default() }
 	}
 }

@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::helpers::{send_error, send_response};
-use crate::server::resource_limiting::{ResourceMap, ResourceVec, Resources};
+use crate::server::resource_limiting::{ResourceTable, ResourceVec, Resources};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -81,13 +81,13 @@ enum MethodKind {
 	Async(AsyncMethod<'static>),
 }
 
-/// Method resources table
+/// Information about resources the method uses during its execution.
 #[derive(Clone, Debug)]
 enum MethodResources {
 	/// Unintialized resource table, mapping string label to units.
 	Uninitialized(Box<[(&'static str, u16)]>),
 	/// Intialized resource table containing units for each `ResourceId`.
-	Initialized(ResourceMap<u16>),
+	Initialized(ResourceTable<u16>),
 }
 
 /// Method callback wrapper that contains a sync or async closure,
@@ -99,14 +99,15 @@ pub struct MethodCallback {
 }
 
 /// Builder for configuring resources used by a method.
+#[derive(Debug)]
 pub struct MethodResourcesBuilder<'a> {
 	build: ResourceVec<(&'static str, u16)>,
 	callback: &'a mut MethodCallback,
 }
 
 impl<'a> MethodResourcesBuilder<'a> {
-	///
-	fn resource(mut self, label: &'static str, units: u16) -> Result<Self, Error> {
+	/// Define how many units of a given named resource the method uses during its execution.
+	pub fn resource(mut self, label: &'static str, units: u16) -> Result<Self, Error> {
 		self.build.try_push((label, units)).map_err(|_| Error::MaxResourcesReached)?;
 		Ok(self)
 	}
@@ -203,7 +204,8 @@ impl Methods {
 		}
 	}
 
-	fn initialize(&mut self, resources: &Resources) -> Result<(), Error> {
+	/// Initialize resources for all methods in this collection. This method has no effect if called more than once.
+	pub fn initialize_resources(mut self, resources: &Resources) -> Result<Self, Error> {
 		let callbacks = self.mut_callbacks();
 
 		for (&method_name, callback) in callbacks.iter_mut() {
@@ -223,7 +225,7 @@ impl Methods {
 			}
 		}
 
-		Ok(())
+		Ok(self)
 	}
 
 	/// Helper for obtaining a mut ref to the callbacks HashMap.
