@@ -205,7 +205,13 @@ impl<'a> WsTransportClientBuilder<'a> {
 				None => return err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host))),
 			};
 
-			let tcp_stream = connect(sockaddr, self.timeout, &target.host, &tls_connector).await?;
+			let tcp_stream = match connect(sockaddr, self.timeout, &target.host, &tls_connector).await {
+				Ok(stream) => stream,
+				Err(e) => {
+					err = Some(Err(e));
+					continue;
+				}
+			};
 			let mut client = WsHandshakeClient::new(
 				BufReader::new(BufWriter::new(tcp_stream)),
 				&target.host_header,
@@ -215,18 +221,18 @@ impl<'a> WsTransportClientBuilder<'a> {
 				client.set_origin(origin);
 			}
 			// Perform the initial handshake.
-			match client.handshake().await? {
-				ServerResponse::Accepted { .. } => {
+			match client.handshake().await {
+				Ok(ServerResponse::Accepted { .. }) => {
 					let mut builder = client.into_builder();
 					builder.set_max_message_size(self.max_request_body_size as usize);
 					let (sender, receiver) = builder.finish();
 					return Ok((Sender { inner: sender }, Receiver { inner: receiver }));
 				}
 
-				ServerResponse::Rejected { status_code } => {
+				Ok(ServerResponse::Rejected { status_code }) => {
 					err = Some(Err(WsHandshakeError::Rejected { status_code }));
 				}
-				ServerResponse::Redirect { status_code, location } => {
+				Ok(ServerResponse::Redirect { status_code, location }) => {
 					log::trace!("recv redirection: status_code: {}, location: {}", status_code, location);
 					match url::Url::parse(&location) {
 						// redirection with absolute path => need to lookup.
@@ -268,6 +274,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 							err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
 						}
 					};
+				}
+				Err(e) => {
+					err = Some(Err(e.into()));
 				}
 			};
 		}
