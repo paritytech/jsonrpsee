@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::helpers::{send_error, send_response};
-use crate::server::resource_limiting::{ResourceMap, ResourceVec, ResourcesInternal};
+use crate::server::resource_limiting::{ResourceMap, ResourceVec, Resources};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -203,7 +203,7 @@ impl Methods {
 		}
 	}
 
-	fn initialize(&mut self, resources: &ResourcesInternal) -> Result<(), Error> {
+	fn initialize(&mut self, resources: &Resources) -> Result<(), Error> {
 		let callbacks = self.mut_callbacks();
 
 		for (&method_name, callback) in callbacks.iter_mut() {

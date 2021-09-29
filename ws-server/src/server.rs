@@ -43,7 +43,7 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, send_error};
-use jsonrpsee_utils::server::resource_limiting::ResourceBuilder;
+use jsonrpsee_utils::server::resource_limiting::Resources;
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
 
 /// Default maximum connections allowed.
@@ -351,7 +351,7 @@ impl Default for Settings {
 #[derive(Debug)]
 pub struct Builder {
 	settings: Settings,
-	resources: ResourceBuilder,
+	resources: Resources,
 }
 
 impl Builder {
@@ -455,6 +455,6 @@ impl Builder {
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { settings: Settings::default(), resources: ResourceBuilder::new() }
+		Self { settings: Settings::default(), resources: Resources::new() }
 	}
 }

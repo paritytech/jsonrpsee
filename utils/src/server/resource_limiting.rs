@@ -7,63 +7,40 @@ const RESOURCE_COUNT: usize = 8;
 pub type ResourceVec<T> = ArrayVec<T, RESOURCE_COUNT>;
 pub type ResourceMap<T> = [T; RESOURCE_COUNT];
 
-/// Resource definition
 #[derive(Debug)]
-pub struct Resource {
-	/// Human readable label for a resource, e.g.: "CPU", "Memory"...
-	label: &'static str,
-	/// Max capacity of arbitrary units of the resource
-	capacity: u16,
-	/// Default amount of units running a method costs
-	default: u16,
+pub struct Resources {
+	totals: Mutex<ResourceMap<u16>>,
+	pub caps: ResourceMap<u16>,
+	pub defaults: ResourceMap<u16>,
+	pub labels: ResourceVec<&'static str>,
 }
 
-#[derive(Debug)]
-pub struct ResourceBuilder {
-	table: ResourceVec<Resource>,
-}
-
-impl ResourceBuilder {
+impl Resources {
 	pub fn new() -> Self {
-		ResourceBuilder { table: ResourceVec::new() }
-	}
-
-	pub fn get(&self, label: &str) -> Option<(usize, &Resource)> {
-		self.table.iter().enumerate().find(|(_, resource)| resource.label == label).map(|(id, resource)| (id, resource))
+		Resources {
+			totals: Mutex::new([0; RESOURCE_COUNT]),
+			caps: [0; RESOURCE_COUNT],
+			defaults: [0; RESOURCE_COUNT],
+			labels: ResourceVec::new(),
+		}
 	}
 
 	pub fn register(&mut self, label: &'static str, capacity: u16, default: u16) -> Result<(), Error> {
-		if self.get(label).is_some() {
+		if self.labels.iter().any(|&l| l == label) {
 			return Err(Error::ResourceNameAlreadyTaken(label));
 		}
 
-		self.table.try_push(Resource { label, capacity, default }).map_err(|_| Error::MaxResourcesReached)
+		let idx = self.labels.len();
+
+		self.labels.try_push(label).map_err(|_| Error::MaxResourcesReached)?;
+
+
+		self.caps[idx] = capacity;
+		self.defaults[idx] = default;
+
+		Ok(())
 	}
 
-	pub fn build(self) -> ResourcesInternal {
-		let mut caps = [0; RESOURCE_COUNT];
-		let mut labels = [""; RESOURCE_COUNT];
-		let mut defaults = [0; RESOURCE_COUNT];
-
-		for (idx, Resource { label, capacity, default }) in self.table.into_iter().enumerate() {
-			caps[idx] = capacity;
-			labels[idx] = label;
-			defaults[idx] = default;
-		}
-
-		ResourcesInternal { totals: Mutex::new([0; RESOURCE_COUNT]), caps, labels, defaults }
-	}
-}
-
-#[derive(Debug)]
-pub struct ResourcesInternal {
-	totals: Mutex<ResourceMap<u16>>,
-	caps: ResourceMap<u16>,
-	pub labels: ResourceMap<&'static str>,
-	pub defaults: ResourceMap<u16>,
-}
-
-impl ResourcesInternal {
 	pub fn claim(&self, units: ResourceMap<u16>) -> Result<ClaimedResource, Error> {
 		let mut totals = self.totals.lock();
 		let mut sum = *totals;
