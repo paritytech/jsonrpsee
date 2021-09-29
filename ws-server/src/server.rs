@@ -25,26 +25,21 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::future::Future;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::{net::SocketAddr, sync::Arc};
 
-use crate::future::FutureDriver;
+use crate::future::{FutureDriver, StopHandle, StopMonitor};
 use crate::types::{
-	error::Error, v2::error::JsonRpcErrorCode, v2::params::Id, v2::request::JsonRpcRequest, TEN_MB_SIZE_BYTES,
+	error::Error,
+	v2::{ErrorCode, Id, Request},
+	TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
-use futures_util::future::FutureExt;
+use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use futures_util::{
-	io::{BufReader, BufWriter},
-	SinkExt,
-};
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use tokio::{
-	net::{TcpListener, TcpStream, ToSocketAddrs},
-	sync::RwLock,
-};
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, send_error};
@@ -56,13 +51,9 @@ const MAX_CONNECTIONS: u64 = 100;
 /// A WebSocket JSON RPC server.
 #[derive(Debug)]
 pub struct Server {
-	methods: Methods,
 	listener: TcpListener,
 	cfg: Settings,
-	/// Pair of channels to stop the server.
-	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
-	/// Stop handle that indicates whether server has been stopped.
-	stop_handle: Arc<RwLock<()>>,
+	stop_monitor: StopMonitor,
 }
 
 impl Server {
@@ -73,20 +64,17 @@ impl Server {
 
 	/// Returns the handle to stop the running server.
 	pub fn stop_handle(&self) -> StopHandle {
-		StopHandle { stop_sender: self.stop_pair.0.clone(), stop_handle: self.stop_handle.clone() }
+		self.stop_monitor.handle()
 	}
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
 	pub async fn start(self, methods: impl Into<Methods>) {
-		// Acquire read access to the lock such that additional reader(s) may share this lock.
-		// Write access to this lock will only be possible after the server and all background tasks have stopped.
-		let _stop_handle = self.stop_handle.read().await;
-		let shutdown = self.stop_pair.0;
+		let stop_monitor = self.stop_monitor;
 		let methods = methods.into();
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
-		let mut incoming = Incoming::new(self.listener, self.stop_pair.1);
+		let mut incoming = Incoming::new(self.listener, &stop_monitor);
 
 		loop {
 			match connections.select_with(&mut incoming).await {
@@ -98,13 +86,17 @@ impl Server {
 
 					if connections.count() >= self.cfg.max_connections as usize {
 						log::warn!("Too many connections. Try again in a while.");
+						connections.add(Box::pin(handshake(socket, HandshakeResponse::Reject { status_code: 429 })));
 						continue;
 					}
 
 					let methods = &methods;
 					let cfg = &self.cfg;
 
-					connections.add(Box::pin(handshake(socket, id, methods, cfg, &shutdown, &self.stop_handle)));
+					connections.add(Box::pin(handshake(
+						socket,
+						HandshakeResponse::Accept { conn_id: id, methods, cfg, stop_monitor: &stop_monitor },
+					)));
 
 					id = id.wrapping_add(1);
 				}
@@ -114,19 +106,21 @@ impl Server {
 				Err(IncomingError::Shutdown) => break,
 			}
 		}
+
+		connections.await
 	}
 }
 
 /// This is a glorified select listening to new connections, while also checking
 /// for `stop_receiver` signal.
-struct Incoming {
+struct Incoming<'a> {
 	listener: TcpListener,
-	stop_receiver: mpsc::Receiver<()>,
+	stop_monitor: &'a StopMonitor,
 }
 
-impl Incoming {
-	fn new(listener: TcpListener, stop_receiver: mpsc::Receiver<()>) -> Self {
-		Incoming { listener, stop_receiver }
+impl<'a> Incoming<'a> {
+	fn new(listener: TcpListener, stop_monitor: &'a StopMonitor) -> Self {
+		Incoming { listener, stop_monitor }
 	}
 }
 
@@ -135,13 +129,13 @@ enum IncomingError {
 	Io(std::io::Error),
 }
 
-impl Future for Incoming {
+impl<'a> Future for Incoming<'a> {
 	type Output = Result<(TcpStream, SocketAddr), IncomingError>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		if let Poll::Ready(Some(())) = this.stop_receiver.next().poll_unpin(cx) {
+		if this.stop_monitor.shutdown_requested() {
 			return Poll::Ready(Err(IncomingError::Shutdown));
 		}
 
@@ -149,51 +143,64 @@ impl Future for Incoming {
 	}
 }
 
-async fn handshake(
-	socket: tokio::net::TcpStream,
-	conn_id: ConnectionId,
-	methods: &Methods,
-	cfg: &Settings,
-	shutdown: &mpsc::Sender<()>,
-	stop_handle: &Arc<RwLock<()>>,
-) -> Result<(), Error> {
+enum HandshakeResponse<'a> {
+	Reject { status_code: u16 },
+	Accept { conn_id: ConnectionId, methods: &'a Methods, cfg: &'a Settings, stop_monitor: &'a StopMonitor },
+}
+
+async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -> Result<(), Error> {
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
-	let key = {
-		let req = server.receive_request().await?;
-		let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
-		let origin_check = cfg.allowed_origins.verify("Origin", req.headers().origin);
-
-		host_check.and(origin_check).map(|()| req.key())
-	};
-
-	match key {
-		Ok(key) => {
-			let accept = Response::Accept { key, protocol: None };
-			server.send_response(&accept).await?;
-		}
-		Err(error) => {
-			let reject = Response::Reject { status_code: 403 };
+	match mode {
+		HandshakeResponse::Reject { status_code } => {
+			// Forced rejection, don't need to read anything from the socket
+			let reject = Response::Reject { status_code };
 			server.send_response(&reject).await?;
 
-			return Err(error);
+			let (mut sender, _) = server.into_builder().finish();
+
+			// Gracefully shut down the connection
+			sender.close().await?;
+
+			Ok(())
 		}
-	}
+		HandshakeResponse::Accept { conn_id, methods, cfg, stop_monitor } => {
+			let key = {
+				let req = server.receive_request().await?;
+				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
+				let origin_check = cfg.allowed_origins.verify("Origin", req.headers().origin);
 
-	let join_result = tokio::spawn(background_task(
-		server,
-		conn_id,
-		methods.clone(),
-		cfg.max_request_body_size,
-		shutdown.clone(),
-		stop_handle.clone(),
-	))
-	.await;
+				host_check.and(origin_check).map(|()| req.key())
+			};
 
-	match join_result {
-		Err(_) => Err(Error::Custom("Background task was aborted".into())),
-		Ok(result) => result,
+			match key {
+				Ok(key) => {
+					let accept = Response::Accept { key, protocol: None };
+					server.send_response(&accept).await?;
+				}
+				Err(error) => {
+					let reject = Response::Reject { status_code: 403 };
+					server.send_response(&reject).await?;
+
+					return Err(error);
+				}
+			}
+
+			let join_result = tokio::spawn(background_task(
+				server,
+				conn_id,
+				methods.clone(),
+				cfg.max_request_body_size,
+				stop_monitor.clone(),
+			))
+			.await;
+
+			match join_result {
+				Err(_) => Err(Error::Custom("Background task was aborted".into())),
+				Ok(result) => result,
+			}
+		}
 	}
 }
 
@@ -202,18 +209,16 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	max_request_body_size: u32,
-	shutdown: mpsc::Sender<()>,
-	stop_handle: Arc<RwLock<()>>,
+	stop_server: StopMonitor,
 ) -> Result<(), Error> {
-	let _lock = stop_handle.read().await;
 	// And we can finally transition to a websocket background_task.
 	let (mut sender, mut receiver) = server.into_builder().finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let stop_server2 = stop_server.clone();
 
-	let shutdown2 = shutdown.clone();
 	// Send results back to the client.
 	tokio::spawn(async move {
-		while !shutdown2.is_closed() {
+		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
 					log::debug!("send: {}", response);
@@ -225,26 +230,32 @@ async fn background_task(
 		}
 		// terminate connection.
 		let _ = sender.close().await;
+		// NOTE(niklasad1): when the receiver is dropped no further requests or subscriptions
+		// will be possible.
 	});
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
 
-	while !shutdown.is_closed() {
+	while !stop_server.shutdown_requested() {
 		data.clear();
 
-		method_executors.select_with(receiver.receive_data(&mut data)).await?;
+		if let Err(e) = method_executors.select_with(receiver.receive_data(&mut data)).await {
+			log::error!("Could not receive WS data: {:?}; closing connection", e);
+			tx.close_channel();
+			return Err(e.into());
+		}
 
 		if data.len() > max_request_body_size as usize {
 			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
-			send_error(Id::Null, &tx, JsonRpcErrorCode::OversizedRequest.into());
+			send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
 			continue;
 		}
 
 		match data.get(0) {
 			Some(b'{') => {
-				if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&data) {
+				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 					log::debug!("recv: {:?}", req);
 					if let Some(fut) = methods.execute(&tx, req, conn_id) {
 						method_executors.add(fut);
@@ -255,33 +266,33 @@ async fn background_task(
 				}
 			}
 			Some(b'[') => {
-				if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&data) {
+				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
 					if !batch.is_empty() {
-						// Batch responses must be sent back as a single message so we read the results from each request in the
-						// batch and read the results off of a new channel, `rx_batch`, and then send the complete batch response
-						// back to the client over `tx`.
+						// Batch responses must be sent back as a single message so we read the results from each
+						// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
+						// complete batch response back to the client over `tx`.
 						let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 
 						for fut in batch.into_iter().filter_map(|req| methods.execute(&tx_batch, req, conn_id)) {
 							method_executors.add(fut);
 						}
 
-						// Closes the receiving half of a channel without dropping it. This prevents any further messages from
-						// being sent on the channel.
+						// Closes the receiving half of a channel without dropping it. This prevents any further
+						// messages from being sent on the channel.
 						rx_batch.close();
 						let results = collect_batch_response(rx_batch).await;
 						if let Err(err) = tx.unbounded_send(results) {
 							log::error!("Error sending batch response to the client: {:?}", err)
 						}
 					} else {
-						send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
+						send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
 					send_error(id, &tx, code.into());
 				}
 			}
-			_ => send_error(Id::Null, &tx, JsonRpcErrorCode::ParseError.into()),
+			_ => send_error(Id::Null, &tx, ErrorCode::ParseError.into()),
 		}
 	}
 
@@ -365,7 +376,8 @@ impl Builder {
 	///
 	/// By default allows any `Origin`.
 	///
-	/// Will return an error if `list` is empty. Use [`allow_all_origins`](Builder::allow_all_origins) to restore the default.
+	/// Will return an error if `list` is empty. Use [`allow_all_origins`](Builder::allow_all_origins) to restore the
+	/// default.
 	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
 	where
 		List: IntoIterator<Item = Origin>,
@@ -400,7 +412,8 @@ impl Builder {
 	///
 	/// By default allows any `Host`.
 	///
-	/// Will return an error if `list` is empty. Use [`allow_all_hosts`](Builder::allow_all_hosts) to restore the default.
+	/// Will return an error if `list` is empty. Use [`allow_all_hosts`](Builder::allow_all_hosts) to restore the
+	/// default.
 	pub fn set_allowed_hosts<Host, List>(mut self, list: List) -> Result<Self, Error>
 	where
 		List: IntoIterator<Item = Host>,
@@ -427,39 +440,13 @@ impl Builder {
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
 		let listener = TcpListener::bind(addr).await?;
-		let stop_pair = mpsc::channel(1);
-		Ok(Server {
-			listener,
-			methods: Methods::default(),
-			cfg: self.settings,
-			stop_pair,
-			stop_handle: Arc::new(RwLock::new(())),
-		})
+		let stop_monitor = StopMonitor::new();
+		Ok(Server { listener, cfg: self.settings, stop_monitor })
 	}
 }
 
 impl Default for Builder {
 	fn default() -> Self {
 		Self { settings: Settings::default() }
-	}
-}
-
-/// Handle that is able to stop the running server.
-#[derive(Debug, Clone)]
-pub struct StopHandle {
-	stop_sender: mpsc::Sender<()>,
-	stop_handle: Arc<RwLock<()>>,
-}
-
-impl StopHandle {
-	/// Requests server to stop. Returns an error if server was already stopped.
-	pub async fn stop(&mut self) -> Result<(), Error> {
-		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
-	}
-
-	/// Blocks indefinitely until the server is stopped.
-	pub async fn wait_for_stop(&self) {
-		// blocks until there are no readers left.
-		self.stop_handle.write().await;
 	}
 }

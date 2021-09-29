@@ -161,7 +161,7 @@ impl<T: Into<String>> From<T> for AccessControlAllowOrigin {
 
 /// Headers allowed to access
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum AccessControlAllowHeaders {
+pub enum AccessControlAllowHeaders {
 	/// Specific headers
 	Only(Vec<String>),
 	/// Any header

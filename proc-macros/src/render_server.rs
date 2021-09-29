@@ -26,7 +26,7 @@
 
 use super::lifetimes::replace_lifetimes;
 use super::RpcDescription;
-use crate::helpers::generate_where_clause;
+use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use std::collections::HashSet;
@@ -39,7 +39,6 @@ impl RpcDescription {
 
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
-
 		let async_trait = self.jrps_server_item(quote! { types::__reexports::async_trait });
 
 		// Doc-comment to be associated with the server.
@@ -58,14 +57,26 @@ impl RpcDescription {
 	}
 
 	fn render_methods(&self) -> Result<TokenStream2, syn::Error> {
-		let methods = self.methods.iter().map(|method| &method.signature);
+		let methods = self.methods.iter().map(|method| {
+			let docs = &method.docs;
+			let method_sig = &method.signature;
+			quote! {
+				#docs
+				#method_sig
+			}
+		});
 
-		let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
-		let subscriptions = self.subscriptions.iter().cloned().map(|mut sub| {
+		let subscriptions = self.subscriptions.iter().map(|sub| {
+			let docs = &sub.docs;
+			let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
-			sub.signature.sig.inputs.insert(1, subscription_sink);
-			sub.signature
+			let mut sub_sig = sub.signature.clone();
+			sub_sig.sig.inputs.insert(1, subscription_sink);
+			quote! {
+				#docs
+				#sub_sig
+			}
 		});
 
 		Ok(quote! {
@@ -79,12 +90,12 @@ impl RpcDescription {
 
 		let mut registered = HashSet::new();
 		let mut errors = Vec::new();
-		let mut check_name = |name: String, span: Span| {
-			if registered.contains(&name) {
+		let mut check_name = |name: &str, span: Span| {
+			if registered.contains(name) {
 				let message = format!("{:?} is already defined", name);
 				errors.push(quote_spanned!(span => compile_error!(#message);));
 			} else {
-				registered.insert(name);
+				registered.insert(name.to_string());
 			}
 		};
 
@@ -109,11 +120,12 @@ impl RpcDescription {
 				// Name of the RPC method (e.g. `foo_makeSpam`).
 				let rpc_method_name = self.rpc_identifier(&method.name);
 				// `parsing` is the code associated with parsing structure from the
-				// provided `RpcParams` object.
-				// `params_seq` is the comma-delimited sequence of parameters.
+				// provided `Params` object.
+				// `params_seq` is the comma-delimited sequence of parameters we're passing to the rust function
+				// called..
 				let (parsing, params_seq) = self.render_params_decoding(&method.params);
 
-				check_name(rpc_method_name.clone(), rust_method_name.span());
+				check_name(&rpc_method_name, rust_method_name.span());
 
 				if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
@@ -145,21 +157,83 @@ impl RpcDescription {
 				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
 				let rpc_sub_name = self.rpc_identifier(&sub.name);
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
-				let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
+				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 				// `parsing` is the code associated with parsing structure from the
-				// provided `RpcParams` object.
+				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters.
 				let (parsing, params_seq) = self.render_params_decoding(&sub.params);
 
-				check_name(rpc_sub_name.clone(), rust_method_name.span());
-				check_name(rpc_unsub_name.clone(), rust_method_name.span());
+				check_name(&rpc_sub_name, rust_method_name.span());
+				check_name(&rpc_unsub_name, rust_method_name.span());
 
 				handle_register_result(quote! {
 					rpc.register_subscription(#rpc_sub_name, #rpc_unsub_name, |params, sink, context| {
 						#parsing
-						Ok(context.as_ref().#rust_method_name(sink, #params_seq))
+						context.as_ref().#rust_method_name(sink, #params_seq)
 					})
 				})
+			})
+			.collect::<Vec<_>>();
+
+		let method_aliases = self
+			.methods
+			.iter()
+			.map(|method| {
+				let rpc_name = self.rpc_identifier(&method.name);
+				let rust_method_name = &method.signature.sig.ident;
+
+				// Rust method to invoke (e.g. `self.<foo>(...)`).
+				let aliases: Vec<TokenStream2> = method
+					.aliases
+					.iter()
+					.map(|alias| {
+						let alias = alias.trim().to_string();
+						check_name(&alias, rust_method_name.span());
+						handle_register_result(quote! {
+							rpc.register_alias(#alias, #rpc_name)
+						})
+					})
+					.collect();
+
+				quote!( #(#aliases)* )
+			})
+			.collect::<Vec<_>>();
+
+		let subscription_aliases = self
+			.subscriptions
+			.iter()
+			.map(|method| {
+				let sub_name = self.rpc_identifier(&method.name);
+				let unsub_name = self.rpc_identifier(&method.unsubscribe);
+				let rust_method_name = &method.signature.sig.ident;
+
+				let sub: Vec<TokenStream2> = method
+					.aliases
+					.iter()
+					.map(|alias| {
+						let alias = alias.trim().to_string();
+						check_name(&alias, rust_method_name.span());
+						handle_register_result(quote! {
+							rpc.register_alias(#alias, #sub_name)
+						})
+					})
+					.collect();
+				let unsub: Vec<TokenStream2> = method
+					.unsubscribe_aliases
+					.iter()
+					.map(|alias| {
+						let alias = alias.trim().to_string();
+						check_name(&alias, rust_method_name.span());
+						handle_register_result(quote! {
+							rpc.register_alias(#alias, #unsub_name)
+						})
+					})
+					.collect();
+
+				quote! (
+					#(#sub)*
+					#(#unsub)*
+				)
 			})
 			.collect::<Vec<_>>();
 
@@ -178,6 +252,8 @@ impl RpcDescription {
 				#(#errors)*
 				#(#methods)*
 				#(#subscriptions)*
+				#(#method_aliases)*
+				#(#subscription_aliases)*
 
 				rpc
 			}
@@ -197,11 +273,23 @@ impl RpcDescription {
 			let decode_fields = params.iter().map(|(name, ty)| {
 				if is_option(ty) {
 					quote! {
-						let #name: #ty = seq.optional_next()?;
+						let #name: #ty = match seq.optional_next() {
+							Ok(v) => v,
+							Err(e) => {
+								log::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								return Err(e.into())
+							}
+						};
 					}
 				} else {
 					quote! {
-						let #name: #ty = seq.next()?;
+						let #name: #ty = match seq.next() {
+							Ok(v) => v,
+							Err(e) => {
+								log::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								return Err(e.into())
+							}
+						};
 					}
 				}
 			});
@@ -263,16 +351,4 @@ impl RpcDescription {
 
 		(parsing, params_fields)
 	}
-}
-
-/// Checks whether provided type is an `Option<...>`.
-fn is_option(ty: &syn::Type) -> bool {
-	if let syn::Type::Path(path) = ty {
-		// TODO: Probably not the best way to check whether type is an `Option`.
-		if path.path.segments.iter().any(|seg| seg.ident == "Option") {
-			return true;
-		}
-	}
-
-	false
 }

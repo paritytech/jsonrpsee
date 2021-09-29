@@ -35,11 +35,7 @@ use hyper::{
 };
 use jsonrpsee_types::{
 	error::{Error, GenericTransportError},
-	v2::{
-		error::JsonRpcErrorCode,
-		params::Id,
-		request::{JsonRpcNotification, JsonRpcRequest},
-	},
+	v2::{ErrorCode, Id, Notification, Request},
 	TEN_MB_SIZE_BYTES,
 };
 use jsonrpsee_utils::http_helpers::read_body;
@@ -106,7 +102,6 @@ impl Builder {
 		Ok(Server {
 			listener,
 			local_addr,
-			methods: Methods::default(),
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			stop_pair,
@@ -147,8 +142,6 @@ pub struct Server {
 	listener: HyperBuilder<AddrIncoming>,
 	/// Local address
 	local_addr: Option<SocketAddr>,
-	/// Registered methods.
-	methods: Methods,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Access control
@@ -216,11 +209,11 @@ impl Server {
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
 
-						type Notif<'a> = JsonRpcNotification<'a, Option<&'a RawValue>>;
+						type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
 						// Single request or notification
 						if is_single {
-							if let Ok(req) = serde_json::from_slice::<JsonRpcRequest>(&body) {
+							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 								if let Some(fut) = methods.execute(&tx, req, 0) {
 									fut.await;
@@ -233,7 +226,7 @@ impl Server {
 							}
 
 						// Batch of requests or notifications
-						} else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcRequest>>(&body) {
+						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							if !batch.is_empty() {
 								join_all(batch.into_iter().filter_map(|req| methods.execute(&tx, req, 0))).await;
 							} else {
@@ -241,7 +234,7 @@ impl Server {
 								// Array with at least one value, the response from the Server MUST be a single
 								// Response object." – The Spec.
 								is_single = true;
-								send_error(Id::Null, &tx, JsonRpcErrorCode::InvalidRequest.into());
+								send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
 							}
 						} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));

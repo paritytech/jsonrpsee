@@ -74,7 +74,7 @@ impl RpcDescription {
 		let jrps_error = self.jrps_client_item(quote! { types::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &method.signature.sig.ident;
-		// List of inputs to put into `JsonRpcParams` (e.g. `self.foo(<12, "baz">)`).
+		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).
 		// Includes `&self` receiver.
 		let rust_method_params = &method.signature.sig.inputs;
 		// Name of the RPC method (e.g. `foo_makeSpam`).
@@ -100,19 +100,18 @@ impl RpcDescription {
 			let params = method.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-
 			quote! {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_client_item(quote! { types::v2::params::JsonRpcParams::NoParams })
+			self.jrps_client_item(quote! { types::v2::params::ParamsSer::NoParams })
 		};
 
 		// Doc-comment to be associated with the method.
-		let doc_comment = format!("Invokes the RPC method `{}`.", rpc_method_name);
+		let docs = &method.docs;
 
 		let method = quote! {
-			#[doc = #doc_comment]
+			#docs
 			async fn #rust_method_name(#rust_method_params) -> #returns {
 				self.#called_method(#rpc_method_name, #parameters).await
 			}
@@ -125,12 +124,12 @@ impl RpcDescription {
 		let jrps_error = self.jrps_client_item(quote! { types::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &sub.signature.sig.ident;
-		// List of inputs to put into `JsonRpcParams` (e.g. `self.foo(<12, "baz">)`).
+		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).
 		let rust_method_params = &sub.signature.sig.inputs;
 		// Name of the RPC subscription (e.g. `foo_sub`).
 		let rpc_sub_name = self.rpc_identifier(&sub.name);
 		// Name of the RPC method to unsubscribe (e.g. `foo_unsub`).
-		let rpc_unsub_name = self.rpc_identifier(&sub.unsub_method);
+		let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 
 		// `returns` represent the return type of the *rust method*, which is wrapped
 		// into the `Subscription` object.
@@ -144,19 +143,18 @@ impl RpcDescription {
 			let params = sub.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-
 			quote! {
 				vec![ #(#params),* ].into()
 			}
 		} else {
-			self.jrps_client_item(quote! { types::v2::params::JsonRpcParams::NoParams })
+			self.jrps_client_item(quote! { types::v2::params::ParamsSer::NoParams })
 		};
 
 		// Doc-comment to be associated with the method.
-		let doc_comment = format!("Subscribes to the RPC method `{}`.", rpc_sub_name);
+		let docs = &sub.docs;
 
 		let method = quote! {
-			#[doc = #doc_comment]
+			#docs
 			async fn #rust_method_name(#rust_method_params) -> #returns {
 				self.subscribe(#rpc_sub_name, #parameters, #rpc_unsub_name).await
 			}

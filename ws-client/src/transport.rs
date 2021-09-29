@@ -157,6 +157,11 @@ impl Sender {
 		self.inner.flush().await?;
 		Ok(())
 	}
+
+	/// Send a close message and close the connection.
+	pub async fn close(&mut self) -> Result<(), WsError> {
+		self.inner.close().await.map_err(Into::into)
+	}
 }
 
 impl Receiver {

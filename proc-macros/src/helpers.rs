@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::visitor::{FindAllParams, FindSubscriptionParams};
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use std::collections::HashSet;
@@ -64,21 +64,21 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 /// Traverses the RPC trait definition and applies the required bounds for the generic type parameters that are used.
 /// The bounds applied depend on whether the type parameter is used as a parameter, return value or subscription result
 /// and whether it's used in client or server mode.
-/// Type params get `Send + Sync + 'static` bounds and input/output parameters get `Serialize` and/or `DeserializeOwned` bounds.
-/// Inspired by <https://github.com/paritytech/jsonrpc/blob/master/derive/src/to_delegate.rs#L414>
+/// Type params get `Send + Sync + 'static` bounds and input/output parameters get `Serialize` and/or `DeserializeOwned`
+/// bounds. Inspired by <https://github.com/paritytech/jsonrpc/blob/master/derive/src/to_delegate.rs#L414>
 ///
 /// ### Example
 ///
 /// ```
-///  use jsonrpsee::{proc_macros::rpc, types::JsonRpcResult};
+///  use jsonrpsee::{proc_macros::rpc, types::RpcResult};
 ///
 ///  #[rpc(client, server)]
 ///  pub trait RpcTrait<A, B, C> {
 ///    #[method(name = "call")]
-///    fn call(&self, a: A) -> JsonRpcResult<B>;
+///    fn call(&self, a: A) -> RpcResult<B>;
 ///
-///    #[subscription(name = "sub", unsub = "unsub", item = Vec<C>)]
-///    fn sub(&self);
+///    #[subscription(name = "sub", item = Vec<C>)]
+///    fn sub(&self) -> RpcResult<()>;
 ///  }
 /// ```
 ///
@@ -148,4 +148,49 @@ fn visit_trait(item_trait: &syn::ItemTrait, sub_tys: &[syn::Type]) -> FindAllPar
 	let mut visitor = FindAllParams::new(sub_tys);
 	visitor.visit_item_trait(item_trait);
 	visitor
+}
+
+/// Checks whether provided type is an `Option<...>`.
+pub(crate) fn is_option(ty: &syn::Type) -> bool {
+	if let syn::Type::Path(path) = ty {
+		let mut it = path.path.segments.iter().peekable();
+		while let Some(seg) = it.next() {
+			// The leaf segment should be `Option` with or without angled brackets.
+			if seg.ident == "Option" && it.peek().is_none() {
+				return true;
+			}
+		}
+	}
+
+	false
+}
+
+/// Iterates over all Attribute's and parses only the attributes that are doc comments.
+///
+/// Note that `doc comments` are expanded into `#[doc = "some comment"]`
+/// Thus, if the attribute starts with `doc` => it's regarded as a doc comment.
+pub(crate) fn extract_doc_comments(attrs: &[syn::Attribute]) -> TokenStream2 {
+	let docs = attrs.iter().filter(|attr| {
+		attr.path.is_ident("doc")
+			&& match attr.parse_meta() {
+				Ok(syn::Meta::NameValue(meta)) => matches!(&meta.lit, syn::Lit::Str(_)),
+				_ => false,
+			}
+	});
+	quote! ( #(#docs)* )
+}
+
+#[cfg(test)]
+mod tests {
+	use super::is_option;
+	use syn::parse_quote;
+
+	#[test]
+	fn is_option_works() {
+		assert!(is_option(&parse_quote!(Option<T>)));
+		// could be a type alias.
+		assert!(is_option(&parse_quote!(Option)));
+		assert!(is_option(&parse_quote!(std::option::Option<R>)));
+		assert!(!is_option(&parse_quote!(foo::bar::Option::Booyah)));
+	}
 }

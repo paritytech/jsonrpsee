@@ -28,38 +28,38 @@
 
 use std::net::SocketAddr;
 
-use futures_channel::oneshot;
+use futures::channel::oneshot;
 use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
 use serde_json::value::RawValue;
 
 mod rpc_impl {
 	use jsonrpsee::{
 		proc_macros::rpc,
-		types::{async_trait, JsonRpcResult},
+		types::{async_trait, RpcResult},
 		ws_server::SubscriptionSink,
 	};
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
 		#[method(name = "foo")]
-		async fn async_method(&self, param_a: u8, param_b: String) -> JsonRpcResult<u16>;
+		async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
 		#[method(name = "bar")]
-		fn sync_method(&self) -> JsonRpcResult<u16>;
+		fn sync_method(&self) -> RpcResult<u16>;
 
-		#[subscription(name = "sub", unsub = "unsub", item = String)]
-		fn sub(&self);
+		#[subscription(name = "sub", item = String)]
+		fn sub(&self) -> RpcResult<()>;
 
-		#[subscription(name = "echo", unsub = "no_more_echo", item = u32)]
-		fn sub_with_params(&self, val: u32);
+		#[subscription(name = "echo", aliases = "alias_echo", item = u32)]
+		fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 
 		#[method(name = "params")]
-		fn params(&self, a: u8, b: &str) -> JsonRpcResult<String> {
+		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
 			Ok(format!("Called with: {}, {}", a, b))
 		}
 
 		#[method(name = "optional_params")]
-		fn optional_params(&self, a: u32, b: Option<u32>, c: Option<u32>) -> JsonRpcResult<String> {
+		fn optional_params(&self, a: u32, b: Option<u32>, c: Option<u32>) -> RpcResult<String> {
 			Ok(format!("Called with: {}, {:?}, {:?}", a, b, c))
 		}
 
@@ -70,12 +70,12 @@ mod rpc_impl {
 			b: &'_ str,
 			c: std::borrow::Cow<'_, str>,
 			d: Option<beef::Cow<'_, str>>,
-		) -> JsonRpcResult<String> {
+		) -> RpcResult<String> {
 			Ok(format!("Called with: {}, {}, {}, {:?}", a, b, c, d))
 		}
 
 		#[method(name = "zero_copy_cow")]
-		fn zero_copy_cow(&self, a: std::borrow::Cow<'_, str>, b: beef::Cow<'_, str>) -> JsonRpcResult<String> {
+		fn zero_copy_cow(&self, a: std::borrow::Cow<'_, str>, b: beef::Cow<'_, str>) -> RpcResult<String> {
 			Ok(format!("Zero copy params: {}, {}", matches!(a, std::borrow::Cow::Borrowed(_)), b.is_borrowed()))
 		}
 	}
@@ -84,40 +84,40 @@ mod rpc_impl {
 	pub trait ChainApi<Number, Hash, Header, SignedBlock> {
 		/// Get header of a relay chain block.
 		#[method(name = "getHeader")]
-		fn header(&self, hash: Option<Hash>) -> JsonRpcResult<Option<Header>>;
+		fn header(&self, hash: Option<Hash>) -> RpcResult<Option<Header>>;
 
 		/// Get header and body of a relay chain block.
 		#[method(name = "getBlock")]
-		async fn block(&self, hash: Option<Hash>) -> JsonRpcResult<Option<SignedBlock>>;
+		async fn block(&self, hash: Option<Hash>) -> RpcResult<Option<SignedBlock>>;
 
 		/// Get hash of the n-th block in the canon chain.
 		///
 		/// By default returns latest block hash.
 		#[method(name = "getBlockHash")]
-		fn block_hash(&self, hash: Hash) -> JsonRpcResult<Option<Hash>>;
+		fn block_hash(&self, hash: Hash) -> RpcResult<Option<Hash>>;
 
 		/// Get hash of the last finalized block in the canon chain.
 		#[method(name = "getFinalizedHead")]
-		fn finalized_head(&self) -> JsonRpcResult<Hash>;
+		fn finalized_head(&self) -> RpcResult<Hash>;
 
 		/// All head subscription
-		#[subscription(name = "subscribeAllHeads", unsub = "unsubscribeAllHeads", item = Header)]
-		fn subscribe_all_heads(&self, hash: Hash);
+		#[subscription(name = "subscribeAllHeads", item = Header)]
+		fn subscribe_all_heads(&self, hash: Hash) -> RpcResult<()>;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
 	#[rpc(client, server, namespace = "generic_call")]
 	pub trait OnlyGenericCall<I, R> {
 		#[method(name = "getHeader")]
-		fn call(&self, input: I) -> JsonRpcResult<R>;
+		fn call(&self, input: I) -> RpcResult<R>;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
 	#[rpc(client, server, namespace = "generic_sub")]
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
-		#[subscription(name = "sub", unsub = "unsub", item = Vec<R>)]
-		fn sub(&self, hash: Input);
+		#[subscription(name = "sub", item = Vec<R>)]
+		fn sub(&self, hash: Input) -> RpcResult<()>;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -128,7 +128,7 @@ mod rpc_impl {
 		R: Copy + Clone,
 	{
 		#[method(name = "getHeader")]
-		fn call(&self, input: I) -> JsonRpcResult<R>;
+		fn call(&self, input: I) -> RpcResult<R>;
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -139,43 +139,45 @@ mod rpc_impl {
 		R: Copy + Clone,
 	{
 		#[method(name = "getHeader")]
-		fn call(&self, input: I) -> JsonRpcResult<R>;
+		fn call(&self, input: I) -> RpcResult<R>;
 	}
 
 	pub struct RpcServerImpl;
 
 	#[async_trait]
 	impl RpcServer for RpcServerImpl {
-		async fn async_method(&self, _param_a: u8, _param_b: String) -> JsonRpcResult<u16> {
+		async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
 			Ok(42u16)
 		}
 
-		fn sync_method(&self) -> JsonRpcResult<u16> {
+		fn sync_method(&self) -> RpcResult<u16> {
 			Ok(10u16)
 		}
 
-		fn sub(&self, mut sink: SubscriptionSink) {
-			sink.send(&"Response_A").unwrap();
-			sink.send(&"Response_B").unwrap();
+		fn sub(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+			sink.send(&"Response_A")?;
+			sink.send(&"Response_B")?;
+			Ok(())
 		}
 
-		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) {
-			sink.send(&val).unwrap();
-			sink.send(&val).unwrap();
+		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> RpcResult<()> {
+			sink.send(&val)?;
+			sink.send(&val)?;
+			Ok(())
 		}
 	}
 
 	#[async_trait]
 	impl OnlyGenericCallServer<String, String> for RpcServerImpl {
-		fn call(&self, _: String) -> JsonRpcResult<String> {
+		fn call(&self, _: String) -> RpcResult<String> {
 			Ok("hello".to_string())
 		}
 	}
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		fn sub(&self, mut sink: SubscriptionSink, _: String) {
-			sink.send(&"hello").unwrap();
+		fn sub(&self, mut sink: SubscriptionSink, _: String) -> RpcResult<()> {
+			sink.send(&"hello")
 		}
 	}
 }
@@ -254,7 +256,8 @@ async fn macro_optional_param_parsing() {
 	// Named params using a map
 	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
 	let result = module.call("foo_optional_params", params).await.unwrap();
-	assert_eq!(result, r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params"},"id":0}"#);
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params. Expected one of '[', ']' or ',' but found \"{\\\"a\\\": 22, \\\"c\\\": 50}\""},"id":0}"#;
+	assert_eq!(result, expected);
 }
 
 #[tokio::test]

@@ -27,14 +27,9 @@
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::types::{
 	traits::{Client, SubscriptionClient},
-	v2::{
-		error::JsonRpcError,
-		params::{Id, JsonRpcParams},
-		request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificationSer},
-		response::JsonRpcResponse,
-	},
-	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionMessage,
-	TEN_MB_SIZE_BYTES,
+	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
+	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionKind,
+	SubscriptionMessage, TEN_MB_SIZE_BYTES,
 };
 use crate::{
 	helpers::{
@@ -53,8 +48,6 @@ use futures::{
 };
 use tokio::sync::Mutex;
 
-use jsonrpsee_types::v2::params::JsonRpcSubscriptionParams;
-use jsonrpsee_types::SubscriptionKind;
 use serde::de::DeserializeOwned;
 use std::{
 	borrow::Cow,
@@ -192,7 +185,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			connection_timeout: Duration::from_secs(10),
 			origin_header: None,
 			max_concurrent_requests: 256,
-			max_notifs_per_subscription: 4,
+			max_notifs_per_subscription: 1024,
 		}
 	}
 }
@@ -234,14 +227,15 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
+	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription
+	/// will be dropped.
 	///
-	/// You can also prevent the subscription being dropped by calling [`Subscription::next()`](crate::types::Subscription) frequently enough
-	/// such that the buffer capacity doesn't exceeds.
+	/// You can also prevent the subscription being dropped by calling
+	/// [`Subscription::next()`](crate::types::Subscription) frequently enough such that the buffer capacity doesn't
+	/// exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
 	/// because it is passed to [`futures::channel::mpsc::channel`].
-	///
 	pub fn max_notifs_per_subscription(mut self, max: usize) -> Self {
 		self.max_notifs_per_subscription = max;
 		self
@@ -304,12 +298,18 @@ impl WsClient {
 	}
 }
 
+impl Drop for WsClient {
+	fn drop(&mut self) {
+		self.to_back.close_channel();
+	}
+}
+
 #[async_trait]
 impl Client for WsClient {
-	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
+	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
-		let notif = JsonRpcNotificationSer::new(method, params);
+		let notif = NotificationSer::new(method, params);
 		let raw = serde_json::to_string(&notif).map_err(|e| {
 			self.id_guard.reclaim_request_id();
 			Error::ParseError(e)
@@ -333,13 +333,13 @@ impl Client for WsClient {
 		}
 	}
 
-	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
-		let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(req_id), method, params)).map_err(|e| {
+		let raw = serde_json::to_string(&RequestSer::new(Id::Number(req_id), method, params)).map_err(|e| {
 			self.id_guard.reclaim_request_id();
 			Error::ParseError(e)
 		})?;
@@ -367,7 +367,7 @@ impl Client for WsClient {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -375,7 +375,7 @@ impl Client for WsClient {
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(JsonRpcCallSer::new(Id::Number(batch_ids[idx]), method, params));
+			batches.push(RequestSer::new(Id::Number(batch_ids[idx]), method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -420,7 +420,7 @@ impl SubscriptionClient for WsClient {
 	async fn subscribe<'a, N>(
 		&self,
 		subscribe_method: &'a str,
-		params: JsonRpcParams<'a>,
+		params: ParamsSer<'a>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<N>, Error>
 	where
@@ -434,7 +434,7 @@ impl SubscriptionClient for WsClient {
 
 		let ids = self.id_guard.next_request_ids(2)?;
 		let raw =
-			serde_json::to_string(&JsonRpcCallSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
+			serde_json::to_string(&RequestSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
 				self.id_guard.reclaim_request_id();
 				Error::ParseError(e)
 			})?;
@@ -528,7 +528,7 @@ async fn background_task(
 			// There is nothing to do just terminate.
 			Either::Left((None, _)) => {
 				log::trace!("[backend]: frontend dropped; terminate client");
-				return;
+				break;
 			}
 
 			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
@@ -614,7 +614,7 @@ async fn background_task(
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
-				if let Ok(single) = serde_json::from_slice::<JsonRpcResponse<_>>(&raw) {
+				if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
 					log::debug!("[backend]: recv method_call {:?}", single);
 					match process_single_response(&mut manager, single, max_notifs_per_subscription) {
 						Ok(Some(unsub)) => {
@@ -623,26 +623,24 @@ async fn background_task(
 						Ok(None) => (),
 						Err(err) => {
 							let _ = front_error.send(err);
-							return;
+							break;
 						}
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) =
-					serde_json::from_slice::<JsonRpcNotification<JsonRpcSubscriptionParams<_>>>(&raw)
-				{
-					log::debug!("[backend]: recv subscription {:?}", notif);
-					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
+				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(&raw) {
+					log::debug!("[backend]: recv subscription {:?}", response);
+					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
 				}
 				// Incoming Notification
-				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotification<_>>(&raw) {
+				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(&raw) {
 					log::debug!("[backend]: recv notification {:?}", notif);
 					let _ = process_notification(&mut manager, notif);
 				}
 				// Batch response.
-				else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcResponse<_>>>(&raw) {
+				else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(&raw) {
 					log::debug!("[backend]: recv batch {:?}", batch);
 					if let Err(e) = process_batch_response(&mut manager, batch) {
 						let _ = front_error.send(e);
@@ -650,7 +648,7 @@ async fn background_task(
 					}
 				}
 				// Error response
-				else if let Ok(err) = serde_json::from_slice::<JsonRpcError>(&raw) {
+				else if let Ok(err) = serde_json::from_slice::<RpcError>(&raw) {
 					log::debug!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);
@@ -664,19 +662,22 @@ async fn background_task(
 						serde_json::from_slice::<serde_json::Value>(&raw)
 					);
 					let _ = front_error.send(Error::Custom("Unparsable response".into()));
-					return;
+					break;
 				}
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
 				let _ = front_error.send(Error::Transport(e.into()));
-				return;
+				break;
 			}
 			Either::Right((None, _)) => {
 				log::error!("[backend]: WebSocket receiver dropped; terminate client");
 				let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
-				return;
+				break;
 			}
 		}
 	}
+
+	// Send close message to the server.
+	let _ = sender.close().await;
 }

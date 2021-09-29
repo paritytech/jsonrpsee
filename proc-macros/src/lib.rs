@@ -54,23 +54,24 @@ pub(crate) mod visitor;
 /// For servers, it will generate a trait mostly equivalent to the input, with two main
 /// differences:
 ///
-/// - The trait will have one additional (already implemented) method, `into_rpc`, which
-///   turns any object that implements the server trait into an `RpcModule`.
-/// - For subscription methods, there will be one additional argument inserted right
-///   after `&self`: `subscription_sink: SubscriptionSink`. It should be used to
-///   actually maintain the subscription.
+/// - The trait will have one additional (already implemented) method, `into_rpc`, which turns any object that
+///   implements the server trait into an `RpcModule`.
+/// - For subscription methods, there will be one additional argument inserted right after `&self`: `subscription_sink:
+///   SubscriptionSink`. It should be used to actually maintain the subscription.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
 /// correspondingly, `FooClient`.
 ///
-/// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait must be implemented on your type first.
+/// To use the `FooClient`, just import it in the context. To use the server, the `FooServer` trait must be implemented
+/// on your type first.
+///
+/// Note: you need to import the `jsonrpsee` façade crate in your code for the macro to work properly.
 ///
 /// ## Prerequisites
 ///
-/// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`.
-///   If you want to implement this trait on some type that is not thread-safe, consider
-///   using `Arc<RwLock<..>>`.
+/// - Implementors of the server trait must be `Sync`, `Send`, `Sized` and `'static`. If you want to implement this
+///   trait on some type that is not thread-safe, consider using `Arc<RwLock<..>>`.
 ///
 /// ## Examples
 ///
@@ -143,8 +144,8 @@ pub(crate) mod visitor;
 /// - `server`: generate `<Trait>Server` trait for the server implementation.
 /// - `client`: generate `<Trait>Client` extension trait that builds RPC clients to invoke a concrete RPC
 ///   implementation's methods conveniently.
-/// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace
-///   `foo` and method `spam`, the resulting method name will be `foo_spam`.
+/// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
+///   method `spam`, the resulting method name will be `foo_spam`.
 ///
 /// **Trait requirements:**
 ///
@@ -203,19 +204,19 @@ pub(crate) mod visitor;
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc, types::{async_trait, JsonRpcResult}, ws_server::SubscriptionSink};
+///     use jsonrpsee::{proc_macros::rpc, types::{async_trait, RpcResult}, ws_server::SubscriptionSink};
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
 ///     #[rpc(client, server, namespace = "foo")]
 ///     pub trait MyRpc {
 ///         #[method(name = "foo")]
-///         async fn async_method(&self, param_a: u8, param_b: String) -> JsonRpcResult<u16>;
+///         async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 ///
 ///         #[method(name = "bar")]
-///         fn sync_method(&self) -> JsonRpcResult<u16>;
+///         fn sync_method(&self) -> RpcResult<u16>;
 ///
-///         #[subscription(name = "sub", unsub = "unsub", item = String)]
-///         fn sub(&self);
+///         #[subscription(name = "sub", item = String)]
+///         fn sub(&self) -> RpcResult<()>;
 ///     }
 ///
 ///     // Structure that will implement the `MyRpcServer` trait.
@@ -225,20 +226,20 @@ pub(crate) mod visitor;
 ///     // Note that the trait name we use is `MyRpcServer`, not `MyRpc`!
 ///     #[async_trait]
 ///     impl MyRpcServer for RpcServerImpl {
-///         async fn async_method(&self, _param_a: u8, _param_b: String) -> JsonRpcResult<u16> {
+///         async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
 ///             Ok(42u16)
 ///         }
 ///
-///         fn sync_method(&self) -> JsonRpcResult<u16> {
+///         fn sync_method(&self) -> RpcResult<u16> {
 ///             Ok(10u16)
 ///         }
 ///
 ///         // We could've spawned a `tokio` future that yields values while our program works,
 ///         // but for simplicity of the example we will only send two values and then close
 ///         // the subscription.
-///         fn sub(&self, mut sink: SubscriptionSink) {
-///             sink.send(&"Response_A").unwrap();
-///             sink.send(&"Response_B").unwrap();
+///         fn sub(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+///             sink.send(&"Response_A")?;
+///             sink.send(&"Response_B")
 ///         }
 ///     }
 /// }

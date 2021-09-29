@@ -66,21 +66,21 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 	module.register_method("notif", |_, _| Ok("")).unwrap();
 	module
 		.register_method("should_err", |_, ctx| {
-			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.err().map_err(CallError::Failed)?;
 			Ok("err")
 		})
 		.unwrap();
 
 	module
 		.register_method("should_ok", |_, ctx| {
-			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(CallError::Failed)?;
 			Ok("ok")
 		})
 		.unwrap();
 	module
 		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(CallError::Failed)?;
 				Ok("ok")
 			}
 			.boxed()
@@ -158,11 +158,12 @@ async fn single_method_call_with_multiple_params_of_different_types() {
 async fn single_method_call_with_faulty_params_returns_err() {
 	let addr = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"this should be a number\", expected u64 at line 1 column 26"},"id":1}"#;
 
-	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["this should be a number"],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, invalid_params(Id::Num(1)));
+	assert_eq!(response.body, expected);
 }
 
 #[tokio::test]
@@ -334,7 +335,8 @@ async fn invalid_json_id_missing_value() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
-	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
+	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
+	// Null.
 	assert_eq!(response.body, parse_error(Id::Null));
 }
 

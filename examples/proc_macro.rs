@@ -45,8 +45,8 @@ where
 	async fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>, Error>;
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
-	#[subscription(name = "subscribeStorage", unsub = "unsubscribeStorage", item = Vec<Hash>)]
-	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
+	#[subscription(name = "subscribeStorage", item = Vec<Hash>)]
+	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> Result<(), Error>;
 }
 
 pub struct RpcServerImpl;
@@ -61,8 +61,12 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		Ok(vec![storage_key])
 	}
 
-	fn subscribe_storage(&self, mut sink: SubscriptionSink, _keys: Option<Vec<ExampleStorageKey>>) {
-		sink.send(&vec![[0; 32]]).unwrap();
+	fn subscribe_storage(
+		&self,
+		mut sink: SubscriptionSink,
+		_keys: Option<Vec<ExampleStorageKey>>,
+	) -> Result<(), Error> {
+		sink.send(&vec![[0; 32]])
 	}
 }
 

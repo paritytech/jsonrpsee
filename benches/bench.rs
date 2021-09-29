@@ -6,8 +6,7 @@ use jsonrpsee::{
 	types::traits::SubscriptionClient,
 	types::{
 		traits::Client,
-		v2::params::{Id, JsonRpcParams},
-		v2::request::JsonRpcCallSer,
+		v2::{Id, ParamsSer, RequestSer},
 	},
 	ws_client::WsClientBuilder,
 };
@@ -55,7 +54,7 @@ impl RequestType {
 	}
 }
 
-fn v2_serialize(req: JsonRpcCallSer<'_>) -> String {
+fn v2_serialize(req: RequestSer<'_>) -> String {
 	serde_json::to_string(&req).unwrap()
 }
 
@@ -63,16 +62,16 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 	crit.bench_function("jsonrpsee_types_v2_array_ref", |b| {
 		b.iter(|| {
 			let params = &[1_u64.into(), 2_u32.into()];
-			let params = JsonRpcParams::ArrayRef(params);
-			let request = JsonRpcCallSer::new(Id::Number(0), "say_hello", params);
+			let params = ParamsSer::ArrayRef(params);
+			let request = RequestSer::new(Id::Number(0), "say_hello", params);
 			v2_serialize(request);
 		})
 	});
 
 	crit.bench_function("jsonrpsee_types_v2_vec", |b| {
 		b.iter(|| {
-			let params = JsonRpcParams::Array(vec![1_u64.into(), 2_u32.into()]);
-			let request = JsonRpcCallSer::new(Id::Number(0), "say_hello", params);
+			let params = ParamsSer::Array(vec![1_u64.into(), 2_u32.into()]);
+			let request = RequestSer::new(Id::Number(0), "say_hello", params);
 			v2_serialize(request);
 		})
 	});
@@ -87,6 +86,7 @@ trait RequestBencher {
 		let client = Arc::new(HttpClientBuilder::default().build(&url).unwrap());
 		run_round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		run_concurrent_round_trip(&rt, crit, client, "http_concurrent_round_trip", Self::REQUEST_TYPE);
+		run_http_concurrent_connections(&rt, crit, &url, "http_concurrent_connections", Self::REQUEST_TYPE);
 	}
 
 	fn batched_http_requests(crit: &mut Criterion) {
@@ -103,6 +103,7 @@ trait RequestBencher {
 			Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 		run_round_trip(&rt, crit, client.clone(), "ws_round_trip", Self::REQUEST_TYPE);
 		run_concurrent_round_trip(&rt, crit, client, "ws_concurrent_round_trip", Self::REQUEST_TYPE);
+		run_ws_concurrent_connections(&rt, crit, &url, "ws_concurrent_connections", Self::REQUEST_TYPE);
 	}
 
 	fn batched_ws_requests(crit: &mut Criterion) {
@@ -136,7 +137,7 @@ impl RequestBencher for AsyncBencher {
 fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Client>, name: &str, request: RequestType) {
 	crit.bench_function(&request.group_name(name), |b| {
 		b.to_async(rt).iter(|| async {
-			black_box(client.request::<String>(request.method_name(), JsonRpcParams::NoParams).await.unwrap());
+			black_box(client.request::<String>(request.method_name(), ParamsSer::NoParams).await.unwrap());
 		})
 	});
 }
@@ -146,7 +147,7 @@ fn run_sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl 
 	group.bench_function("subscribe", |b| {
 		b.to_async(rt).iter_with_large_drop(|| async {
 			black_box(
-				client.subscribe::<String>(SUB_METHOD_NAME, JsonRpcParams::NoParams, UNSUB_METHOD_NAME).await.unwrap(),
+				client.subscribe::<String>(SUB_METHOD_NAME, ParamsSer::NoParams, UNSUB_METHOD_NAME).await.unwrap(),
 			);
 		})
 	});
@@ -158,7 +159,7 @@ fn run_sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl 
 				tokio::task::block_in_place(|| {
 					tokio::runtime::Handle::current().block_on(async {
 						client
-							.subscribe::<String>(SUB_METHOD_NAME, JsonRpcParams::NoParams, UNSUB_METHOD_NAME)
+							.subscribe::<String>(SUB_METHOD_NAME, ParamsSer::NoParams, UNSUB_METHOD_NAME)
 							.await
 							.unwrap()
 					})
@@ -177,10 +178,7 @@ fn run_sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl 
 		b.iter_with_setup(
 			|| {
 				rt.block_on(async {
-					client
-						.subscribe::<String>(SUB_METHOD_NAME, JsonRpcParams::NoParams, UNSUB_METHOD_NAME)
-						.await
-						.unwrap()
+					client.subscribe::<String>(SUB_METHOD_NAME, ParamsSer::NoParams, UNSUB_METHOD_NAME).await.unwrap()
 				})
 			},
 			|sub| {
@@ -203,7 +201,7 @@ fn run_round_trip_with_batch(
 ) {
 	let mut group = crit.benchmark_group(request.group_name(name));
 	for batch_size in [2, 5, 10, 50, 100usize].iter() {
-		let batch = vec![(request.method_name(), JsonRpcParams::NoParams); *batch_size];
+		let batch = vec![(request.method_name(), ParamsSer::NoParams); *batch_size];
 		group.throughput(Throughput::Elements(*batch_size as u64));
 		group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
 			b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
@@ -228,7 +226,70 @@ fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
 							let _ = black_box(
-								client.request::<String>(request.method_name(), JsonRpcParams::NoParams).await.unwrap(),
+								client.request::<String>(request.method_name(), ParamsSer::NoParams).await.unwrap(),
+							);
+						})
+					});
+					join_all(tasks).await;
+				},
+			)
+		});
+	}
+	group.finish();
+}
+
+fn run_ws_concurrent_connections(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
+	let mut group = crit.benchmark_group(request.group_name(name));
+	for conns in [2, 4, 8, 16, 32, 64] {
+		group.bench_function(format!("{}", conns), |b| {
+			b.to_async(rt).iter_with_setup(
+				|| {
+					let mut clients = Vec::new();
+					// We have to use `block_in_place` here since `b.to_async(rt)` automatically enters the
+					// runtime context and simply calling `block_on` here will cause the code to panic.
+					tokio::task::block_in_place(|| {
+						tokio::runtime::Handle::current().block_on(async {
+							for _ in 0..conns {
+								clients.push(WsClientBuilder::default().build(url).await.unwrap());
+							}
+						})
+					});
+
+					clients
+				},
+				|clients| async {
+					let tasks = clients.into_iter().map(|client| {
+						rt.spawn(async move {
+							let _ = black_box(
+								client.request::<String>(request.method_name(), ParamsSer::NoParams).await.unwrap(),
+							);
+						})
+					});
+					join_all(tasks).await;
+				},
+			)
+		});
+	}
+	group.finish();
+}
+
+fn run_http_concurrent_connections(
+	rt: &TokioRuntime,
+	crit: &mut Criterion,
+	url: &str,
+	name: &str,
+	request: RequestType,
+) {
+	let mut group = crit.benchmark_group(request.group_name(name));
+	for conns in [2, 4, 8, 16, 32, 64] {
+		group.bench_function(format!("{}", conns), |b| {
+			b.to_async(rt).iter_with_setup(
+				|| (0..conns).map(|_| HttpClientBuilder::default().build(url).unwrap()),
+				|clients| async {
+					let tasks = clients.map(|client| {
+						rt.spawn(async move {
+							let _ = black_box(
+								client.request::<String>(request.method_name(), ParamsSer::NoParams).await.unwrap(),
 							);
 						})
 					});
