@@ -159,11 +159,11 @@ impl Client for HttpClient {
 		let mut ordered_requests = Vec::with_capacity(batch.len());
 		let mut request_set = FnvHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
+		let ids = self.id_guard.next_request_ids(batch.len())?;
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
-			let id = self.id_guard.next_request_id()?;
-			batch_request.push(RequestSer::new(Id::Number(id), method, params));
-			ordered_requests.push(id);
-			request_set.insert(id, pos);
+			batch_request.push(RequestSer::new(Id::Number(ids[pos]), method, params));
+			ordered_requests.push(ids[pos]);
+			request_set.insert(ids[pos], pos);
 		}
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(|e| {
