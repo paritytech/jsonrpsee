@@ -148,6 +148,9 @@ pub enum Error {
 	/// Failed to register a resource due to a name conflict
 	#[error("Resource name already taken: {0}")]
 	ResourceNameAlreadyTaken(&'static str),
+	/// Failed to initialize resources for a method
+	#[error("Resource name `{0}` not found for method `{1}`")]
+	ResourceNameNotFoundForMethod(&'static str, &'static str),
 	/// Failed to register a resource due to a maximum number of resources already registered
 	#[error("Maximum number of resources reached")]
 	MaxResourcesReached,

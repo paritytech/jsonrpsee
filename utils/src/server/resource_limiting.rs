@@ -43,13 +43,15 @@ impl ResourceBuilder {
 	pub fn build(self) -> ResourcesInternal {
 		let mut caps = [0; RESOURCE_COUNT];
 		let mut labels = [""; RESOURCE_COUNT];
+		let mut defaults = [0; RESOURCE_COUNT];
 
-		for (idx, Resource { label, capacity, .. }) in self.table.into_iter().enumerate() {
+		for (idx, Resource { label, capacity, default }) in self.table.into_iter().enumerate() {
 			caps[idx] = capacity;
 			labels[idx] = label;
+			defaults[idx] = default;
 		}
 
-		ResourcesInternal { totals: Mutex::new([0; RESOURCE_COUNT]), caps, labels }
+		ResourcesInternal { totals: Mutex::new([0; RESOURCE_COUNT]), caps, labels, defaults }
 	}
 }
 
@@ -57,7 +59,8 @@ impl ResourceBuilder {
 pub struct ResourcesInternal {
 	totals: Mutex<ResourceMap<u16>>,
 	caps: ResourceMap<u16>,
-	labels: ResourceMap<&'static str>,
+	pub labels: ResourceMap<&'static str>,
+	pub defaults: ResourceMap<u16>,
 }
 
 impl ResourcesInternal {

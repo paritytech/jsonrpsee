@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::helpers::{send_error, send_response};
-use crate::server::resource_limiting::{ResourceMap, ResourceVec};
+use crate::server::resource_limiting::{ResourceMap, ResourceVec, ResourcesInternal};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -201,6 +201,29 @@ impl Methods {
 			Entry::Occupied(_) => Err(Error::MethodAlreadyRegistered(name.into())),
 			Entry::Vacant(vacant) => Ok(vacant.insert(callback)),
 		}
+	}
+
+	fn initialize(&mut self, resources: &ResourcesInternal) -> Result<(), Error> {
+		let callbacks = self.mut_callbacks();
+
+		for (&method_name, callback) in callbacks.iter_mut() {
+			if let MethodResources::Uninitialized(uninit) = &callback.resources {
+				let mut map = resources.defaults;
+
+				for &(label, units) in uninit.iter() {
+					let idx = match resources.labels.iter().position(|&l| l == label) {
+						Some(idx) => idx,
+						None => return Err(Error::ResourceNameNotFoundForMethod(label, method_name)),
+					};
+
+					map[idx] = units;
+				}
+
+				callback.resources = MethodResources::Initialized(map);
+			}
+		}
+
+		Ok(())
 	}
 
 	/// Helper for obtaining a mut ref to the callbacks HashMap.
