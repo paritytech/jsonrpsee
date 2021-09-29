@@ -28,7 +28,7 @@ use crate::stream::EitherStream;
 use futures::io::{BufReader, BufWriter};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{borrow::Cow, io, net::SocketAddr, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -195,24 +195,21 @@ impl<'a> WsTransportClientBuilder<'a> {
 		self,
 		mut tls_connector: Option<TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let mut sockaddrs = self.target.sockaddrs;
-		let mut path_and_query = PathBuf::from(self.target.path_and_query);
-		let mut host = self.target.host;
-		let mut host_header = self.target.host_header;
+		let mut target = self.target;
 
 		let mut err = None;
 
 		for _ in 0..MAX_REDIRECTIONS_ALLOWED {
-			let sockaddr = match sockaddrs.pop() {
+			let sockaddr = match target.sockaddrs.pop() {
 				Some(addr) => addr,
-				None => return err.unwrap_or(Err(WsHandshakeError::NoAddressFound(host))),
+				None => return err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host))),
 			};
 
-			let tcp_stream = connect(sockaddr, self.timeout, &host, &tls_connector).await?;
+			let tcp_stream = connect(sockaddr, self.timeout, &target.host, &tls_connector).await?;
 			let mut client = WsHandshakeClient::new(
 				BufReader::new(BufWriter::new(tcp_stream)),
-				&host_header,
-				path_and_query.to_str().expect("valid UTF-8 checked by Url::parse; qed"),
+				&target.host_header,
+				&target.path_and_query,
 			);
 			if let Some(origin) = self.origin_header.as_ref() {
 				client.set_origin(origin);
@@ -235,10 +232,6 @@ impl<'a> WsTransportClientBuilder<'a> {
 						// redirection with absolute path => need to lookup.
 						Ok(url) => {
 							let target = Target::parse(url)?;
-							sockaddrs = target.sockaddrs;
-							path_and_query = PathBuf::from(target.path_and_query);
-							host = target.host;
-							host_header = target.host_header;
 							tls_connector = match target.mode {
 								Mode::Tls => {
 									let mut client_config = rustls::ClientConfig::default();
@@ -257,12 +250,18 @@ impl<'a> WsTransportClientBuilder<'a> {
 						) => {
 							// replace the entire path if `location` is `/`.
 							if location.starts_with('/') {
-								path_and_query = location.into();
+								target.path_and_query = location.into();
 							} else {
 								// join paths such that the leaf is replaced with `location`.
-								let strip_last_child =
-									Path::new(&path_and_query).ancestors().nth(1).unwrap_or_else(|| Path::new("/"));
-								path_and_query = strip_last_child.join(location);
+								let strip_last_child = Path::new(&target.path_and_query)
+									.ancestors()
+									.nth(1)
+									.unwrap_or_else(|| Path::new("/"));
+								target.path_and_query = strip_last_child
+									.join(location)
+									.to_str()
+									.expect("valid UTF-8 checked by Url::parse; qed")
+									.to_string();
 							}
 						}
 						Err(e) => {
@@ -272,7 +271,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 				}
 			};
 		}
-		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(host)))
+		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host)))
 	}
 }
 
