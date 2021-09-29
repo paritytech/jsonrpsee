@@ -1,71 +1,46 @@
-use std::convert::TryFrom;
-use std::sync::{
-	atomic::{AtomicU32, Ordering},
-	Arc,
-};
+use arrayvec::ArrayVec;
 use parking_lot::Mutex;
+use jsonrpsee_types::error::Error;
 
 const RESOURCE_COUNT: usize = 8;
 
 pub type ResourceMap<T> = [T; RESOURCE_COUNT];
 
 /// Resource definition
+#[derive(Debug)]
 pub struct Resource {
 	/// Human readable label for a resource, e.g.: "CPU", "Memory"...
 	label: &'static str,
 	/// Max capacity of arbitrary units of the resource
-	capacity: u32,
+	capacity: u16,
 	/// Default amount of units running a method costs
-	default: u32,
+	default: u16,
 }
 
-/// Id referencing a resource for `O(1)` lookups
-#[derive(Debug, Clone, Copy)]
-pub struct ResourceId(usize);
-
+#[derive(Debug)]
 pub struct ResourceBuilder {
-	table: Vec<Resource>,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-	#[error("Invalid resource id: {0:?}")]
-	InvalidResourceId(ResourceId),
-	#[error("Resource at capacity: {0}")]
-	ResourceAtCapacity(&'static str),
-	#[error("Resource name already taken: {0}")]
-	ResourceNameAlreadyTaken(&'static str),
-	#[error("Maximum number of resources reached")]
-	MaxResourcesReached,
+	table: ArrayVec<Resource, RESOURCE_COUNT>,
 }
 
 impl ResourceBuilder {
 	pub fn new() -> Self {
-		ResourceBuilder { table: Vec::new() }
+		ResourceBuilder { table: ArrayVec::new() }
 	}
 
-	pub fn get(&self, label: &str) -> Option<(ResourceId, &Resource)> {
+	pub fn get(&self, label: &str) -> Option<(usize, &Resource)> {
 		self.table
 			.iter()
 			.enumerate()
 			.find(|(_, resource)| resource.label == label)
-			.map(|(id, resource)| (ResourceId(id), resource))
+			.map(|(id, resource)| (id, resource))
 	}
 
-	pub fn register_resource(&mut self, label: &'static str, capacity: u32, default: u32) -> Result<ResourceId, Error> {
+	pub fn register(&mut self, label: &'static str, capacity: u16, default: u16) -> Result<(), Error> {
 		if self.get(label).is_some() {
 			return Err(Error::ResourceNameAlreadyTaken(label));
 		}
 
-		if self.table.len() >= RESOURCE_COUNT {
-			return Err(Error::MaxResourcesReached);
-		}
-
-		let id = ResourceId(self.table.len());
-
-		self.table.push(Resource { label, capacity, default });
-
-		Ok(id)
+		self.table.try_push(Resource { label, capacity, default }).map_err(|_| Error::MaxResourcesReached)
 	}
 
 	pub fn build(self) -> ResourcesInternal {
@@ -87,13 +62,13 @@ impl ResourceBuilder {
 
 #[derive(Debug)]
 pub struct ResourcesInternal {
-	totals: Mutex<ResourceMap<u32>>,
-	caps: ResourceMap<u32>,
+	totals: Mutex<ResourceMap<u16>>,
+	caps: ResourceMap<u16>,
 	labels: ResourceMap<&'static str>,
 }
 
 impl ResourcesInternal {
-	pub fn claim(&self, units: ResourceMap<u32>) -> Result<ClaimedResource, Error> {
+	pub fn claim(&self, units: ResourceMap<u16>) -> Result<ClaimedResource, Error> {
 		let mut totals = self.totals.lock();
 		let mut sum = *totals;
 
@@ -113,8 +88,8 @@ impl ResourcesInternal {
 
 /// RAII style "lock" for claimed resources, will automatically release them once dropped.
 pub struct ClaimedResource<'a> {
-	totals: &'a Mutex<ResourceMap<u32>>,
-	units: ResourceMap<u32>,
+	totals: &'a Mutex<ResourceMap<u16>>,
+	units: ResourceMap<u16>,
 }
 
 impl Drop for ClaimedResource<'_> {

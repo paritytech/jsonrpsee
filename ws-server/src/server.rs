@@ -44,6 +44,7 @@ use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, send_error};
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
+use jsonrpsee_utils::server::resource_limiting::ResourceBuilder;
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
@@ -350,6 +351,7 @@ impl Default for Settings {
 #[derive(Debug)]
 pub struct Builder {
 	settings: Settings,
+	resources: ResourceBuilder,
 }
 
 impl Builder {
@@ -363,6 +365,12 @@ impl Builder {
 	pub fn max_connections(mut self, max: u64) -> Self {
 		self.settings.max_connections = max;
 		self
+	}
+
+	pub fn register_resource(&mut self, label: &'static str, capacity: u16, default: u16) -> Result<(), Error> {
+		self.resources.register(label, capacity, default)?;
+
+		Ok(())
 	}
 
 	/// Set a list of allowed origins. During the handshake, the `Origin` header will be
@@ -447,6 +455,6 @@ impl Builder {
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { settings: Settings::default() }
+		Self { settings: Settings::default(), resources: ResourceBuilder::new() }
 	}
 }
