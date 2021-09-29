@@ -4,6 +4,7 @@ use jsonrpsee_types::error::Error;
 
 const RESOURCE_COUNT: usize = 8;
 
+pub type ResourceVec<T> = ArrayVec<T, RESOURCE_COUNT>;
 pub type ResourceMap<T> = [T; RESOURCE_COUNT];
 
 /// Resource definition
@@ -19,12 +20,12 @@ pub struct Resource {
 
 #[derive(Debug)]
 pub struct ResourceBuilder {
-	table: ArrayVec<Resource, RESOURCE_COUNT>,
+	table: ResourceVec<Resource>,
 }
 
 impl ResourceBuilder {
 	pub fn new() -> Self {
-		ResourceBuilder { table: ArrayVec::new() }
+		ResourceBuilder { table: ResourceVec::new() }
 	}
 
 	pub fn get(&self, label: &str) -> Option<(usize, &Resource)> {

@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::helpers::{send_error, send_response};
-use crate::server::resource_limiting::ResourceMap;
+use crate::server::resource_limiting::{ResourceMap, ResourceVec};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -84,9 +84,9 @@ enum MethodKind {
 #[derive(Clone, Debug)]
 enum MethodResources {
 	/// Unintialized resource table, mapping string label to units.
-	Uninitialized(&'static [(&'static str, u32)]),
+	Uninitialized(Box<[(&'static str, u16)]>),
 	/// Intialized resource table containing units for each `ResourceId`.
-	Initialized(ResourceMap<u32>),
+	Initialized(ResourceMap<u16>),
 }
 
 /// Method callback wrapper that contains a sync or async closure,
@@ -95,6 +95,24 @@ enum MethodResources {
 pub struct MethodCallback {
 	callback: MethodKind,
 	resources: MethodResources,
+}
+
+pub struct MethodResourcesBuilder<'a> {
+	build: ResourceVec<(&'static str, u16)>,
+	in_place: &'a mut MethodResources,
+}
+
+impl<'a> MethodResourcesBuilder<'a> {
+	fn resource(mut self, label: &'static str, units: u16) -> Result<Self, Error> {
+		self.build.try_push((label, units)).map_err(|_| Error::MaxResourcesReached)?;
+		Ok(self)
+	}
+}
+
+impl<'a> Drop for MethodResourcesBuilder<'a> {
+	fn drop(&mut self) {
+		*self.in_place = MethodResources::Uninitialized(self.build[..].into());
+	}
 }
 
 impl MethodCallback {
@@ -313,7 +331,7 @@ impl<Context> From<RpcModule<Context>> for Methods {
 
 impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// Register a new synchronous RPC method, which computes the response with the given callback.
-	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<MethodResourcesBuilder, Error>
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
@@ -323,8 +341,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		self.methods.mut_callbacks().insert(
-			method_name,
+		let callback = self.methods.mut_callbacks().entry(method_name).or_insert(
 			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
@@ -358,7 +375,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			})),
 		);
 
-		Ok(())
+		Ok(MethodResourcesBuilder {
+			build: ResourceVec::new(),
+			in_place: &mut callback.resources,
+		})
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
