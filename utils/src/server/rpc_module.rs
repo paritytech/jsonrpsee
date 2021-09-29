@@ -99,7 +99,7 @@ pub struct MethodCallback {
 
 pub struct MethodResourcesBuilder<'a> {
 	build: ResourceVec<(&'static str, u16)>,
-	in_place: &'a mut MethodResources,
+	callback: &'a mut MethodCallback,
 }
 
 impl<'a> MethodResourcesBuilder<'a> {
@@ -111,7 +111,7 @@ impl<'a> MethodResourcesBuilder<'a> {
 
 impl<'a> Drop for MethodResourcesBuilder<'a> {
 	fn drop(&mut self) {
-		*self.in_place = MethodResources::Uninitialized(self.build[..].into());
+		self.callback.resources = MethodResources::Uninitialized(self.build[..].into());
 	}
 }
 
@@ -119,14 +119,14 @@ impl MethodCallback {
 	fn new_sync(callback: SyncMethod) -> Self {
 		MethodCallback {
 			callback: MethodKind::Sync(callback),
-			resources: MethodResources::Initialized(ResourceMap::default()),
+			resources: MethodResources::Uninitialized([].into()),
 		}
 	}
 
 	fn new_async(callback: AsyncMethod<'static>) -> Self {
 		MethodCallback {
 			callback: MethodKind::Async(callback),
-			resources: MethodResources::Initialized(ResourceMap::default()),
+			resources: MethodResources::Uninitialized([].into()),
 		}
 	}
 
@@ -377,12 +377,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		Ok(MethodResourcesBuilder {
 			build: ResourceVec::new(),
-			in_place: &mut callback.resources,
+			callback,
 		})
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
-	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<MethodResourcesBuilder, Error>
 	where
 		R: Serialize + Send + Sync + 'static,
 		F: Fn(Params<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, Error>> + Copy + Send + Sync + 'static,
@@ -391,8 +391,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		self.methods.mut_callbacks().insert(
-			method_name,
+		let callback = self.methods.mut_callbacks().entry(method_name).or_insert(
 			MethodCallback::new_async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
@@ -431,7 +430,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			})),
 		);
 
-		Ok(())
+		Ok(MethodResourcesBuilder {
+			build: ResourceVec::new(),
+			callback,
+		})
 	}
 
 	/// Register a new RPC subscription that invokes callback on every subscription request.
