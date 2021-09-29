@@ -43,8 +43,8 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, send_error};
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
 use jsonrpsee_utils::server::resource_limiting::ResourceBuilder;
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;

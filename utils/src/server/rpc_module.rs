@@ -117,17 +117,11 @@ impl<'a> Drop for MethodResourcesBuilder<'a> {
 
 impl MethodCallback {
 	fn new_sync(callback: SyncMethod) -> Self {
-		MethodCallback {
-			callback: MethodKind::Sync(callback),
-			resources: MethodResources::Uninitialized([].into()),
-		}
+		MethodCallback { callback: MethodKind::Sync(callback), resources: MethodResources::Uninitialized([].into()) }
 	}
 
 	fn new_async(callback: AsyncMethod<'static>) -> Self {
-		MethodCallback {
-			callback: MethodKind::Async(callback),
-			resources: MethodResources::Uninitialized([].into()),
-		}
+		MethodCallback { callback: MethodKind::Async(callback), resources: MethodResources::Uninitialized([].into()) }
 	}
 
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
@@ -331,7 +325,11 @@ impl<Context> From<RpcModule<Context>> for Methods {
 
 impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// Register a new synchronous RPC method, which computes the response with the given callback.
-	pub fn register_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<MethodResourcesBuilder, Error>
+	pub fn register_method<R, F>(
+		&mut self,
+		method_name: &'static str,
+		callback: F,
+	) -> Result<MethodResourcesBuilder, Error>
 	where
 		Context: Send + Sync + 'static,
 		R: Serialize,
@@ -341,8 +339,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		let callback = self.methods.mut_callbacks().entry(method_name).or_insert(
-			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
+		// We are always inserting, but `or_insert` is convenient to get a mut ref to callback.
+		let callback = self.methods.mut_callbacks().entry(method_name).or_insert(MethodCallback::new_sync(Arc::new(
+			move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(Error::Call(CallError::InvalidParams(e))) => {
@@ -372,17 +371,18 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						send_error(id, tx, err)
 					}
 				};
-			})),
-		);
+			},
+		)));
 
-		Ok(MethodResourcesBuilder {
-			build: ResourceVec::new(),
-			callback,
-		})
+		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
-	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<MethodResourcesBuilder, Error>
+	pub fn register_async_method<R, F>(
+		&mut self,
+		method_name: &'static str,
+		callback: F,
+	) -> Result<MethodResourcesBuilder, Error>
 	where
 		R: Serialize + Send + Sync + 'static,
 		F: Fn(Params<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, Error>> + Copy + Send + Sync + 'static,
@@ -391,8 +391,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		let ctx = self.ctx.clone();
 
-		let callback = self.methods.mut_callbacks().entry(method_name).or_insert(
-			MethodCallback::new_async(Arc::new(move |id, params, tx, _| {
+		// We are always inserting, but `or_insert` is convenient to get a mut ref to callback.
+		let callback = self.methods.mut_callbacks().entry(method_name).or_insert(MethodCallback::new_async(Arc::new(
+			move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
@@ -427,13 +428,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 				};
 				future.boxed()
-			})),
-		);
+			},
+		)));
 
-		Ok(MethodResourcesBuilder {
-			build: ResourceVec::new(),
-			callback,
-		})
+		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
 	/// Register a new RPC subscription that invokes callback on every subscription request.

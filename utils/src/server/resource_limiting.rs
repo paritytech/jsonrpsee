@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
-use parking_lot::Mutex;
 use jsonrpsee_types::error::Error;
+use parking_lot::Mutex;
 
 const RESOURCE_COUNT: usize = 8;
 
@@ -29,11 +29,7 @@ impl ResourceBuilder {
 	}
 
 	pub fn get(&self, label: &str) -> Option<(usize, &Resource)> {
-		self.table
-			.iter()
-			.enumerate()
-			.find(|(_, resource)| resource.label == label)
-			.map(|(id, resource)| (id, resource))
+		self.table.iter().enumerate().find(|(_, resource)| resource.label == label).map(|(id, resource)| (id, resource))
 	}
 
 	pub fn register(&mut self, label: &'static str, capacity: u16, default: u16) -> Result<(), Error> {
@@ -53,11 +49,7 @@ impl ResourceBuilder {
 			labels[idx] = label;
 		}
 
-		ResourcesInternal {
-			totals: Mutex::new([0; RESOURCE_COUNT]),
-			caps,
-			labels,
-		}
+		ResourcesInternal { totals: Mutex::new([0; RESOURCE_COUNT]), caps, labels }
 	}
 }
 
