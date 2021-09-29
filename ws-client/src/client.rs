@@ -26,6 +26,7 @@
 
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
 use crate::types::{
+	RequestIdGuard,
 	traits::{Client, SubscriptionClient},
 	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
 	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionKind,
@@ -51,7 +52,6 @@ use tokio::sync::Mutex;
 use serde::de::DeserializeOwned;
 use std::{
 	borrow::Cow,
-	sync::atomic::{AtomicU64, AtomicUsize, Ordering},
 	time::Duration,
 };
 
@@ -101,67 +101,6 @@ pub struct WsClient {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_guard: RequestIdGuard,
-}
-
-#[derive(Debug)]
-struct RequestIdGuard {
-	// Current pending requests.
-	current_pending: AtomicUsize,
-	/// Max concurrent pending requests allowed.
-	max_concurrent_requests: usize,
-	/// Get the next request ID.
-	current_id: AtomicU64,
-}
-
-impl RequestIdGuard {
-	fn new(limit: usize) -> Self {
-		Self { current_pending: AtomicUsize::new(0), max_concurrent_requests: limit, current_id: AtomicU64::new(0) }
-	}
-
-	fn get_slot(&self) -> Result<(), Error> {
-		self.current_pending
-			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
-				if val >= self.max_concurrent_requests {
-					None
-				} else {
-					Some(val + 1)
-				}
-			})
-			.map(|_| ())
-			.map_err(|_| Error::MaxSlotsExceeded)
-	}
-
-	/// Attempts to get the next request ID.
-	///
-	/// Fails if request limit has been exceeded.
-	fn next_request_id(&self) -> Result<u64, Error> {
-		self.get_slot()?;
-		let id = self.current_id.fetch_add(1, Ordering::SeqCst);
-		Ok(id)
-	}
-
-	/// Attempts to get the `n` number next IDs that only counts as one request.
-	///
-	/// Fails if request limit has been exceeded.
-	fn next_request_ids(&self, len: usize) -> Result<Vec<u64>, Error> {
-		self.get_slot()?;
-		let mut batch = Vec::with_capacity(len);
-		for _ in 0..len {
-			batch.push(self.current_id.fetch_add(1, Ordering::SeqCst));
-		}
-		Ok(batch)
-	}
-
-	fn reclaim_request_id(&self) {
-		// NOTE we ignore the error here, since we are simply saturating at 0
-		let _ = self.current_pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
-			if val > 0 {
-				Some(val - 1)
-			} else {
-				None
-			}
-		});
-	}
 }
 
 /// Configuration.
