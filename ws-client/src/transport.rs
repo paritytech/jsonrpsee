@@ -256,7 +256,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 						) => {
 							// replace the entire path if `location` is `/`.
 							if location.starts_with('/') {
-								target.path_and_query = location.into();
+								target.path_and_query = location;
 							} else {
 								// join paths such that the leaf is replaced with `location`.
 								let strip_last_child = Path::new(&target.path_and_query)
