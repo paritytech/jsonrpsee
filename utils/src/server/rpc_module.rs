@@ -43,6 +43,7 @@ use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
+use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -97,12 +98,14 @@ pub struct MethodCallback {
 	resources: MethodResources,
 }
 
+/// Builder for configuring resources used by a method.
 pub struct MethodResourcesBuilder<'a> {
 	build: ResourceVec<(&'static str, u16)>,
 	callback: &'a mut MethodCallback,
 }
 
 impl<'a> MethodResourcesBuilder<'a> {
+	///
 	fn resource(mut self, label: &'static str, units: u16) -> Result<Self, Error> {
 		self.build.try_push((label, units)).map_err(|_| Error::MaxResourcesReached)?;
 		Ok(self)
@@ -179,12 +182,25 @@ impl Methods {
 		Self::default()
 	}
 
-	fn verify_method_name(&mut self, name: &str) -> Result<(), Error> {
+	fn verify_method_name(&mut self, name: &'static str) -> Result<(), Error> {
 		if self.callbacks.contains_key(name) {
 			return Err(Error::MethodAlreadyRegistered(name.into()));
 		}
 
 		Ok(())
+	}
+
+	/// Inserts the method callback for a given name, or returns an error if the name was already taken.
+	/// On success returns a mut reference to just inserted callback.
+	fn verify_and_insert(
+		&mut self,
+		name: &'static str,
+		callback: MethodCallback,
+	) -> Result<&mut MethodCallback, Error> {
+		match self.mut_callbacks().entry(name) {
+			Entry::Occupied(_) => Err(Error::MethodAlreadyRegistered(name.into())),
+			Entry::Vacant(vacant) => Ok(vacant.insert(callback)),
+		}
 	}
 
 	/// Helper for obtaining a mut ref to the callbacks HashMap.
@@ -335,13 +351,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		R: Serialize,
 		F: Fn(Params, &Context) -> Result<R, Error> + Send + Sync + 'static,
 	{
-		self.methods.verify_method_name(method_name)?;
-
 		let ctx = self.ctx.clone();
-
-		// We are always inserting, but `or_insert` is convenient to get a mut ref to callback.
-		let callback = self.methods.mut_callbacks().entry(method_name).or_insert(MethodCallback::new_sync(Arc::new(
-			move |id, params, tx, _| {
+		let callback = self.methods.verify_and_insert(
+			method_name,
+			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
 					Err(Error::Call(CallError::InvalidParams(e))) => {
@@ -371,8 +384,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						send_error(id, tx, err)
 					}
 				};
-			},
-		)));
+			})),
+		)?;
 
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
@@ -387,13 +400,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		R: Serialize + Send + Sync + 'static,
 		F: Fn(Params<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, Error>> + Copy + Send + Sync + 'static,
 	{
-		self.methods.verify_method_name(method_name)?;
-
 		let ctx = self.ctx.clone();
-
-		// We are always inserting, but `or_insert` is convenient to get a mut ref to callback.
-		let callback = self.methods.mut_callbacks().entry(method_name).or_insert(MethodCallback::new_async(Arc::new(
-			move |id, params, tx, _| {
+		let callback = self.methods.verify_and_insert(
+			method_name,
+			MethodCallback::new_async(Arc::new(move |id, params, tx, _| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
@@ -428,8 +438,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 				};
 				future.boxed()
-			},
-		)));
+			})),
+		)?;
 
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
