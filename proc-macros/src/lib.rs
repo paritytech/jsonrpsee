@@ -248,21 +248,13 @@ pub(crate) mod visitor;
 /// use rpc_impl::{MyRpcClient, MyRpcServer, RpcServerImpl};
 ///
 /// pub async fn websocket_server() -> SocketAddr {
-///     let (server_started_tx, server_started_rx) = oneshot::channel();
+///     let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+///     let addr = server.local_addr().unwrap();
 ///
-///     std::thread::spawn(move || {
-///         let rt = tokio::runtime::Runtime::new().unwrap();
-///         let server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
-///         // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
+///     // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
+///     server.start(RpcServerImpl.into_rpc()).unwrap();
 ///
-///         rt.block_on(async move {
-///             server_started_tx.send(server.local_addr().unwrap()).unwrap();
-///
-///             server.start(RpcServerImpl.into_rpc()).unwrap().await
-///         });
-///     });
-///
-///     server_started_rx.await.unwrap()
+///     addr
 /// }
 ///
 /// // In the main function, we start the server, create a client connected to this server,

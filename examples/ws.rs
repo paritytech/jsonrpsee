@@ -49,6 +49,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module)?);
+	server.start(module)?;
 	Ok(addr)
 }

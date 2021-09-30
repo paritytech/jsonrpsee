@@ -70,10 +70,13 @@ impl Server {
 	}
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
-	pub fn start(self, methods: impl Into<Methods>) -> Result<impl Future<Output = ()>, Error> {
+	pub fn start(self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
 		let methods = methods.into().initialize_resources(&self.resources)?;
+		let handle = self.stop_handle();
 
-		Ok(self.start_inner(methods))
+		tokio::spawn(self.start_inner(methods));
+
+		Ok(handle)		
 	}
 
 	async fn start_inner(self, methods: Methods) {

@@ -91,6 +91,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(RpcServerImpl.into_rpc())?);
+	server.start(RpcServerImpl.into_rpc())?;
 	Ok(addr)
 }
