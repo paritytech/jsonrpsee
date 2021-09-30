@@ -54,7 +54,8 @@ use std::sync::Arc;
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
-pub type AsyncMethod<'a> = Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
+pub type AsyncMethod<'a> =
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -128,8 +129,23 @@ impl MethodCallback {
 		MethodCallback { callback: MethodKind::Async(callback), resources: MethodResources::Uninitialized([].into()) }
 	}
 
+	/// Attempt to claim resources prior to executing a method. On success returns a guard that releases
+	/// claimed resources when dropped.
+	pub fn claim<'r>(&self, name: &str, resources: &'r Resources) -> Result<ResourceGuard<'r>, Error> {
+		match self.resources {
+			MethodResources::Uninitialized(_) => Err(Error::UninitializedMethod(name.into())),
+			MethodResources::Initialized(units) => resources.claim(units),
+		}
+	}
+
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId, claimed: Option<ResourceGuard>) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(
+		&self,
+		tx: &MethodSink,
+		req: Request<'_>,
+		conn_id: ConnectionId,
+		claimed: Option<ResourceGuard>,
+	) -> Option<BoxFuture<'static, ()>> {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
 
@@ -257,10 +273,35 @@ impl Methods {
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, tx: &MethodSink, req: Request, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		log::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id, None),
+			None => {
+				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
+				None
+			}
+		}
+	}
+
+	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
+	pub fn execute_with_resources(
+		&self,
+		tx: &MethodSink,
+		req: Request,
+		conn_id: ConnectionId,
+		resources: &Resources,
+	) -> Option<BoxFuture<'static, ()>> {
+		log::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
+		match self.callbacks.get(&*req.method) {
+			Some(callback) => match callback.claim(&req.method, resources) {
+				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard)),
+				Err(err) => {
+					log::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+					send_error(req.id, tx, ErrorCode::ServerIsBusy.into());
+					None
+				}
+			},
 			None => {
 				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
 				None

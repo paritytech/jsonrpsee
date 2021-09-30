@@ -27,6 +27,7 @@
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, StopHandle, StopMonitor};
@@ -76,12 +77,12 @@ impl Server {
 
 		tokio::spawn(self.start_inner(methods));
 
-		Ok(handle)		
+		Ok(handle)
 	}
 
 	async fn start_inner(self, methods: Methods) {
 		let stop_monitor = self.stop_monitor;
-		// let resources = self.resources;
+		let resources = Arc::new(self.resources);
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
@@ -106,7 +107,13 @@ impl Server {
 
 					connections.add(Box::pin(handshake(
 						socket,
-						HandshakeResponse::Accept { conn_id: id, methods, cfg, stop_monitor: &stop_monitor },
+						HandshakeResponse::Accept {
+							conn_id: id,
+							methods,
+							resources: &resources,
+							cfg,
+							stop_monitor: &stop_monitor,
+						},
 					)));
 
 					id = id.wrapping_add(1);
@@ -155,8 +162,16 @@ impl<'a> Future for Incoming<'a> {
 }
 
 enum HandshakeResponse<'a> {
-	Reject { status_code: u16 },
-	Accept { conn_id: ConnectionId, methods: &'a Methods, cfg: &'a Settings, stop_monitor: &'a StopMonitor },
+	Reject {
+		status_code: u16,
+	},
+	Accept {
+		conn_id: ConnectionId,
+		methods: &'a Methods,
+		resources: &'a Arc<Resources>,
+		cfg: &'a Settings,
+		stop_monitor: &'a StopMonitor,
+	},
 }
 
 async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -> Result<(), Error> {
@@ -176,7 +191,7 @@ async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -
 
 			Ok(())
 		}
-		HandshakeResponse::Accept { conn_id, methods, cfg, stop_monitor } => {
+		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor } => {
 			let key = {
 				let req = server.receive_request().await?;
 				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
@@ -202,6 +217,7 @@ async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -
 				server,
 				conn_id,
 				methods.clone(),
+				resources.clone(),
 				cfg.max_request_body_size,
 				stop_monitor.clone(),
 			))
@@ -219,6 +235,7 @@ async fn background_task(
 	server: SokettoServer<'_, BufReader<BufWriter<Compat<tokio::net::TcpStream>>>>,
 	conn_id: ConnectionId,
 	methods: Methods,
+	resources: Arc<Resources>,
 	max_request_body_size: u32,
 	stop_server: StopMonitor,
 ) -> Result<(), Error> {
@@ -268,7 +285,7 @@ async fn background_task(
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 					log::debug!("recv: {:?}", req);
-					if let Some(fut) = methods.execute(&tx, req, conn_id) {
+					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
 						method_executors.add(fut);
 					}
 				} else {
@@ -284,7 +301,10 @@ async fn background_task(
 						// complete batch response back to the client over `tx`.
 						let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
 
-						for fut in batch.into_iter().filter_map(|req| methods.execute(&tx_batch, req, conn_id)) {
+						for fut in batch
+							.into_iter()
+							.filter_map(|req| methods.execute_with_resources(&tx_batch, req, conn_id, &resources))
+						{
 							method_executors.add(fut);
 						}
 

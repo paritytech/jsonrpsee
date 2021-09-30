@@ -87,7 +87,6 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) 
 		})
 		.unwrap();
 
-
 	let addr = server.local_addr().unwrap();
 	let stop_handle = server.start(module).unwrap();
 
@@ -102,7 +101,7 @@ pub async fn websocket_server() -> SocketAddr {
 	let addr = server.local_addr().unwrap();
 
 	server.start(module).unwrap();
-	
+
 	addr
 }
 

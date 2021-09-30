@@ -151,6 +151,9 @@ pub enum Error {
 	/// Failed to initialize resources for a method
 	#[error("Resource name `{0}` not found for method `{1}`")]
 	ResourceNameNotFoundForMethod(&'static str, &'static str),
+	/// Trying to claim resources for a method, but method has not been initialized
+	#[error("Method `{0}` has uninitialized resources")]
+	UninitializedMethod(Box<str>),
 	/// Failed to register a resource due to a maximum number of resources already registered
 	#[error("Maximum number of resources reached")]
 	MaxResourcesReached,
