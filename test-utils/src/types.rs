@@ -34,7 +34,7 @@ use futures_util::{
 	stream::{self, StreamExt},
 };
 use serde::{Deserialize, Serialize};
-use soketto::handshake::{self, server::Response, Error as SokettoError, Server};
+use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
 use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -312,5 +312,59 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 			}
 			_ = next_exit => break,
 		}
+	}
+}
+
+// Run a `WebSocket server` that performs some re-directions for testing.
+pub fn ws_server_with_redirect(other_server: String) -> String {
+	let addr = ([127, 0, 0, 1], 0).into();
+
+	let service = hyper::service::make_service_fn(move |_| {
+		let other_server = other_server.clone();
+		async move {
+			Ok::<_, hyper::Error>(hyper::service::service_fn(move |req| {
+				let other_server = other_server.clone();
+				async move { handler(req, other_server).await }
+			}))
+		}
+	});
+	let server = hyper::Server::bind(&addr).serve(service);
+	let addr = server.local_addr();
+
+	tokio::spawn(async move { server.await });
+	format!("ws://{}", addr)
+}
+
+/// Handle incoming HTTP Requests.
+async fn handler(
+	req: hyper::Request<Body>,
+	other_server: String,
+) -> Result<hyper::Response<Body>, soketto::BoxedError> {
+	if is_upgrade_request(&req) {
+		match req.uri().to_string().as_str() {
+			"/myblock/two" => {
+				let response = hyper::Response::builder()
+					.status(301)
+					.header("Location", other_server)
+					.body(Body::empty())
+					.unwrap();
+				Ok(response)
+			}
+			"/myblock/one" => {
+				let response =
+					hyper::Response::builder().status(301).header("Location", "two").body(Body::empty()).unwrap();
+				Ok(response)
+			}
+			_ => {
+				let response = hyper::Response::builder()
+					.status(301)
+					.header("Location", "/myblock/one")
+					.body(Body::empty())
+					.unwrap();
+				Ok(response)
+			}
+		}
+	} else {
+		panic!("expect upgrade to WS");
 	}
 }

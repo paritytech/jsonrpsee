@@ -263,3 +263,18 @@ fn assert_error_response(err: Error, exp: ErrorObject) {
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
 	};
 }
+
+#[tokio::test]
+async fn redirections() {
+	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), String::new())
+		.with_default_timeout()
+		.await
+		.unwrap();
+
+	let server_url = format!("ws://{}", server.local_addr());
+	let redirect_url = jsonrpsee_test_utils::types::ws_server_with_redirect(server_url);
+
+	// The client will first connect to a server that only performs re-directions and finally
+	// redirect to another server to complete the handshake.
+	assert!(matches!(WsClientBuilder::default().build(&redirect_url).with_default_timeout().await, Ok(Ok(_))));
+}

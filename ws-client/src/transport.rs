@@ -196,18 +196,25 @@ impl<'a> WsTransportClientBuilder<'a> {
 		mut tls_connector: Option<TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut target = self.target;
+		let mut used_sockaddrs = Vec::new();
 
 		let mut err = None;
 
 		for _ in 0..MAX_REDIRECTIONS_ALLOWED {
+			log::debug!("Connecting to target: {:?}", target);
+
 			let sockaddr = match target.sockaddrs.pop() {
-				Some(addr) => addr,
+				Some(addr) => {
+					used_sockaddrs.push(addr);
+					addr
+				}
 				None => return err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host))),
 			};
 
 			let tcp_stream = match connect(sockaddr, self.timeout, &target.host, &tls_connector).await {
 				Ok(stream) => stream,
 				Err(e) => {
+					log::error!("Failed to connect to sockaddr: {:?}", sockaddr);
 					err = Some(Err(e));
 					continue;
 				}
@@ -223,6 +230,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 			// Perform the initial handshake.
 			match client.handshake().await {
 				Ok(ServerResponse::Accepted { .. }) => {
+					log::info!("Connection established to target: {:?}", target);
 					let mut builder = client.into_builder();
 					builder.set_max_message_size(self.max_request_body_size as usize);
 					let (sender, receiver) = builder.finish();
@@ -230,14 +238,16 @@ impl<'a> WsTransportClientBuilder<'a> {
 				}
 
 				Ok(ServerResponse::Rejected { status_code }) => {
+					log::debug!("Connection rejected: {:?}", status_code);
 					err = Some(Err(WsHandshakeError::Rejected { status_code }));
 				}
 				Ok(ServerResponse::Redirect { status_code, location }) => {
-					log::trace!("recv redirection: status_code: {}, location: {}", status_code, location);
+					log::trace!("redirection: status_code: {}, location: {}", status_code, location);
 					match url::Url::parse(&location) {
 						// redirection with absolute path => need to lookup.
 						Ok(url) => {
-							let target = Target::parse(url)?;
+							target = Target::parse(url)?;
+							used_sockaddrs.clear();
 							tls_connector = match target.mode {
 								Mode::Tls => {
 									let mut client_config = rustls::ClientConfig::default();
@@ -269,6 +279,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 									.expect("valid UTF-8 checked by Url::parse; qed")
 									.to_string();
 							}
+							std::mem::swap(&mut target.sockaddrs, &mut used_sockaddrs);
 						}
 						Err(e) => {
 							err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
