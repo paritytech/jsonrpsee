@@ -48,7 +48,10 @@ impl Resources {
 		let mut sum = *totals;
 
 		for idx in 0..RESOURCE_COUNT {
-			sum[idx] += units[idx];
+			sum[idx] = match sum[idx].checked_add(units[idx]) {
+				Some(s) => s,
+				None => return Err(Error::ResourceAtCapacity(self.labels[idx])),
+			};
 
 			if sum[idx] > self.capacities[idx] {
 				return Err(Error::ResourceAtCapacity(self.labels[idx]));
