@@ -34,7 +34,6 @@ impl Resources {
 
 		self.labels.try_push(label).map_err(|_| Error::MaxResourcesReached)?;
 
-
 		self.capacities[idx] = capacity;
 		self.defaults[idx] = default;
 
@@ -42,9 +41,9 @@ impl Resources {
 	}
 
 	/// Attempt to claim units for each resource, incrementing current totals.
-	/// If successful returns a `ClaimedGuard` which decrements the totals by the same
+	/// If successful returns a `ResourceGuard` which decrements the totals by the same
 	/// amounts once dropped.
-	pub fn claim(&self, units: ResourceTable<u16>) -> Result<ClaimedGuard, Error> {
+	pub fn claim(&self, units: ResourceTable<u16>) -> Result<ResourceGuard, Error> {
 		let mut totals = self.totals.lock();
 		let mut sum = *totals;
 
@@ -58,18 +57,18 @@ impl Resources {
 
 		*totals = sum;
 
-		Ok(ClaimedGuard { totals: &self.totals, units })
+		Ok(ResourceGuard { totals: &self.totals, units })
 	}
 }
 
 /// RAII style "lock" for claimed resources, will automatically release them once dropped.
 #[derive(Debug)]
-pub struct ClaimedGuard<'a> {
+pub struct ResourceGuard<'a> {
 	totals: &'a Mutex<ResourceTable<u16>>,
 	units: ResourceTable<u16>,
 }
 
-impl Drop for ClaimedGuard<'_> {
+impl Drop for ResourceGuard<'_> {
 	fn drop(&mut self) {
 		for (sum, claimed) in self.totals.lock().iter_mut().zip(self.units) {
 			*sum -= claimed;

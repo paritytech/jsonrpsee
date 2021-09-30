@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::server::helpers::{send_error, send_response};
-use crate::server::resource_limiting::{ResourceTable, ResourceVec, Resources};
+use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -54,7 +54,7 @@ use std::sync::Arc;
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler.
-pub type AsyncMethod<'a> = Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId) -> BoxFuture<'a, ()>>;
+pub type AsyncMethod<'a> = Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -129,7 +129,7 @@ impl MethodCallback {
 	}
 
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId, claimed: Option<ResourceGuard>) -> Option<BoxFuture<'static, ()>> {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
 
@@ -156,7 +156,7 @@ impl MethodCallback {
 					conn_id
 				);
 
-				Some((callback)(id, params, tx, conn_id))
+				Some((callback)(id, params, tx, conn_id, claimed))
 			}
 		}
 	}
@@ -260,7 +260,7 @@ impl Methods {
 	pub fn execute(&self, tx: &MethodSink, req: Request<'_>, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		log::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
-			Some(callback) => callback.execute(tx, req, conn_id),
+			Some(callback) => callback.execute(tx, req, conn_id, None),
 			None => {
 				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
 				None
@@ -428,7 +428,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, tx, _| {
+			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed, _| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
@@ -461,6 +461,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							send_error(id, &tx, err)
 						}
 					};
+
+					drop(claimed);
 				};
 				future.boxed()
 			})),
@@ -528,6 +530,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 
 					send_response(id.clone(), method_sink, sub_id);
+
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
 						method: subscribe_method_name,
