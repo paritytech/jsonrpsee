@@ -47,14 +47,14 @@ impl Resources {
 		let mut totals = self.totals.lock();
 		let mut sum = *totals;
 
-		for idx in 0..RESOURCE_COUNT {
-			sum[idx] = match sum[idx].checked_add(units[idx]) {
-				Some(s) => s,
-				None => return Err(Error::ResourceAtCapacity(self.labels[idx])),
-			};
+		for (idx, sum) in sum.iter_mut().enumerate() {
+			match sum.checked_add(units[idx]) {
+				Some(s) if s <= self.capacities[idx] => *sum = s,
+				_ => {
+					let label = self.labels.get(idx).copied().unwrap_or("<UNKNOWN>");
 
-			if sum[idx] > self.capacities[idx] {
-				return Err(Error::ResourceAtCapacity(self.labels[idx]));
+					return Err(Error::ResourceAtCapacity(label));
+				}
 			}
 		}
 
