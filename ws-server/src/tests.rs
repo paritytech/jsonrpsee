@@ -112,7 +112,7 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 	let addr = server.local_addr().unwrap();
 
 	let stop_handle = server.stop_handle();
-	let join_handle = tokio::spawn(server.start(module));
+	let join_handle = tokio::spawn(server.start(module).unwrap());
 	(addr, join_handle, stop_handle)
 }
 
@@ -161,7 +161,7 @@ async fn server_with_context() -> SocketAddr {
 
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(server.start(rpc_module));
+	tokio::spawn(server.start(rpc_module).unwrap());
 	addr
 }
 
@@ -173,7 +173,7 @@ async fn can_set_the_max_request_body_size() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
-	tokio::spawn(server.start(module));
+	tokio::spawn(server.start(module).unwrap());
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -197,7 +197,7 @@ async fn can_set_max_connections() {
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(server.start(module));
+	tokio::spawn(server.start(module).unwrap());
 
 	let conn1 = WebSocketTestClient::new(addr).await;
 	let conn2 = WebSocketTestClient::new(addr).await;

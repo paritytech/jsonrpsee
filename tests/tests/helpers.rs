@@ -95,7 +95,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) 
 
 		rt.block_on(async move {
 			server_started_tx.send((server.local_addr().unwrap(), server.stop_handle())).unwrap();
-			server.start(module).await
+			server.start(module).unwrap().await
 		});
 	});
 
@@ -114,7 +114,7 @@ pub async fn websocket_server() -> SocketAddr {
 		rt.block_on(async move {
 			server_started_tx.send(server.local_addr().unwrap()).unwrap();
 
-			server.start(module).await
+			server.start(module).unwrap().await
 		});
 	});
 

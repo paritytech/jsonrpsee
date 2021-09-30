@@ -258,7 +258,7 @@ pub(crate) mod visitor;
 ///         rt.block_on(async move {
 ///             server_started_tx.send(server.local_addr().unwrap()).unwrap();
 ///
-///             server.start(RpcServerImpl.into_rpc()).await
+///             server.start(RpcServerImpl.into_rpc()).unwrap().await
 ///         });
 ///     });
 ///

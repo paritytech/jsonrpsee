@@ -66,6 +66,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		Ok(())
 	})?;
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module));
+	tokio::spawn(server.start(module)?);
 	Ok(addr)
 }

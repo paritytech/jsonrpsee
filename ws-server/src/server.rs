@@ -70,10 +70,15 @@ impl Server {
 	}
 
 	/// Start responding to connections requests. This will block current thread until the server is stopped.
-	pub async fn start(self, methods: impl Into<Methods>) {
+	pub fn start(self, methods: impl Into<Methods>) -> Result<impl Future<Output = ()>, Error> {
+		let methods = methods.into().initialize_resources(&self.resources)?;
+
+		Ok(self.start_inner(methods))
+	}
+
+	async fn start_inner(self, methods: Methods) {
 		let stop_monitor = self.stop_monitor;
-		let resources = self.resources;
-		let methods = methods.into().initialize_resources(&resources).unwrap(); // TODO: fix
+		// let resources = self.resources;
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
