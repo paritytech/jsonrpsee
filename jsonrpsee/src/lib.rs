@@ -52,6 +52,10 @@ pub use jsonrpsee_http_client as http_client;
 #[cfg(feature = "jsonrpsee-ws-client")]
 pub use jsonrpsee_ws_client as ws_client;
 
+/// JSON-RPC client convenience macro to build params.
+#[cfg(any(feature = "http-client", feature = "ws-client"))]
+pub use jsonrpsee_utils::rpc_params;
+
 /// JSON-RPC HTTP server.
 #[cfg(feature = "jsonrpsee-http-server")]
 pub use jsonrpsee_http_server as http_server;
@@ -67,10 +71,6 @@ pub use jsonrpsee_proc_macros as proc_macros;
 /// Common types used to implement JSON-RPC server and client.
 #[cfg(feature = "jsonrpsee-types")]
 pub use jsonrpsee_types as types;
-
-/// JSON-RPC WebSocket client convinience macro to build params.
-#[cfg(feature = "ws-client")]
-pub use jsonrpsee_utils::rpc_params;
 
 /// Set of RPC methods that can be mounted to the server.
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
