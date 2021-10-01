@@ -32,7 +32,6 @@ use jsonrpsee::{
 };
 use std::net::SocketAddr;
 
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
