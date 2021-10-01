@@ -35,3 +35,7 @@ pub mod http_helpers;
 /// Shared code for JSON-RPC servers.
 #[cfg(feature = "server")]
 pub mod server;
+
+/// Shared code for JSON-RPC clients.
+#[cfg(feature = "client")]
+pub mod client;
