@@ -30,6 +30,7 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 /// Subscription kind
 #[derive(Debug)]
@@ -182,5 +183,69 @@ impl<Notif> Drop for Subscription<Notif> {
 			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
 		};
 		let _ = self.to_back.send(msg).now_or_never();
+	}
+}
+
+#[derive(Debug)]
+/// Keep track of request IDs.
+pub struct RequestIdGuard {
+	// Current pending requests.
+	current_pending: AtomicUsize,
+	/// Max concurrent pending requests allowed.
+	max_concurrent_requests: usize,
+	/// Get the next request ID.
+	current_id: AtomicU64,
+}
+
+impl RequestIdGuard {
+	/// Create a new `RequestIdGuard` with the provided concurrency limit.
+	pub fn new(limit: usize) -> Self {
+		Self { current_pending: AtomicUsize::new(0), max_concurrent_requests: limit, current_id: AtomicU64::new(0) }
+	}
+
+	fn get_slot(&self) -> Result<(), Error> {
+		self.current_pending
+			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
+				if val >= self.max_concurrent_requests {
+					None
+				} else {
+					Some(val + 1)
+				}
+			})
+			.map(|_| ())
+			.map_err(|_| Error::MaxSlotsExceeded)
+	}
+
+	/// Attempts to get the next request ID.
+	///
+	/// Fails if request limit has been exceeded.
+	pub fn next_request_id(&self) -> Result<u64, Error> {
+		self.get_slot()?;
+		let id = self.current_id.fetch_add(1, Ordering::SeqCst);
+		Ok(id)
+	}
+
+	/// Attempts to get the `n` number next IDs that only counts as one request.
+	///
+	/// Fails if request limit has been exceeded.
+	pub fn next_request_ids(&self, len: usize) -> Result<Vec<u64>, Error> {
+		self.get_slot()?;
+		let mut batch = Vec::with_capacity(len);
+		for _ in 0..len {
+			batch.push(self.current_id.fetch_add(1, Ordering::SeqCst));
+		}
+		Ok(batch)
+	}
+
+	/// Decrease the currently pending counter by one (saturated at 0).
+	pub fn reclaim_request_id(&self) {
+		// NOTE we ignore the error here, since we are simply saturating at 0
+		let _ = self.current_pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
+			if val > 0 {
+				Some(val - 1)
+			} else {
+				None
+			}
+		});
 	}
 }

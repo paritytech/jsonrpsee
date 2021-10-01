@@ -94,6 +94,21 @@ async fn http_method_call_works() {
 }
 
 #[tokio::test]
+async fn http_concurrent_method_call_limits_works() {
+	let server_addr = http_server().await;
+	let uri = format!("http://{}", server_addr);
+	let client = HttpClientBuilder::default().max_concurrent_requests(1).build(&uri).unwrap();
+
+	let (first, second) = tokio::join!(
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+	);
+
+	assert!(first.is_ok());
+	assert!(matches!(second, Err(Error::MaxSlotsExceeded)));
+}
+
+#[tokio::test]
 async fn ws_subscription_several_clients() {
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
@@ -187,10 +202,29 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 }
 
 #[tokio::test]
-async fn ws_more_request_than_buffer_should_not_deadlock() {
+async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = Arc::new(WsClientBuilder::default().max_concurrent_requests(2).build(&server_url).await.unwrap());
+
+	let mut requests = Vec::new();
+
+	for _ in 0..6 {
+		let c = client.clone();
+		requests.push(tokio::spawn(async move { c.request::<String>("say_hello", ParamsSer::NoParams).await }));
+	}
+
+	for req in requests {
+		let _ = req.await.unwrap();
+	}
+}
+
+#[tokio::test]
+async fn http_making_more_requests_than_allowed_should_not_deadlock() {
+	let server_addr = http_server().await;
+	let server_url = format!("http://{}", server_addr);
+	let client = HttpClientBuilder::default().max_concurrent_requests(2).build(&server_url).unwrap();
+	let client = Arc::new(client);
 
 	let mut requests = Vec::new();
 
@@ -263,7 +297,6 @@ async fn server_should_be_able_to_close_subscriptions() {
 }
 
 #[tokio::test]
-#[cfg_attr(target_os = "windows", ignore)]
 async fn ws_close_pending_subscription_when_server_terminated() {
 	let (server_addr, handle) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
