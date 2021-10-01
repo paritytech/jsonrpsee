@@ -264,6 +264,7 @@ fn assert_error_response(err: Error, exp: ErrorObject) {
 	};
 }
 
+#[cfg_attr(target_os = "windows", ignore)]
 #[tokio::test]
 async fn redirections() {
 	let expected = "abc 123";
