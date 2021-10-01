@@ -129,11 +129,9 @@ impl RpcDescription {
 
 				if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
-						rpc.register_async_method(#rpc_method_name, |params, context| {
-							async move {
-								#parsing
-								context.as_ref().#rust_method_name(#params_seq).await
-							}
+						rpc.register_async_method(#rpc_method_name, |params, context| async move {
+							#parsing
+							context.as_ref().#rust_method_name(#params_seq).await
 						})
 					})
 				} else {
