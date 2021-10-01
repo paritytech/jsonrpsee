@@ -32,7 +32,7 @@ use crate::types::{
 };
 use crate::WsClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
+use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
@@ -276,7 +276,7 @@ async fn redirections() {
 	.unwrap();
 
 	let server_url = format!("ws://{}", server.local_addr());
-	let redirect_url = jsonrpsee_test_utils::types::ws_server_with_redirect(server_url);
+	let redirect_url = jsonrpsee_test_utils::mocks::ws_server_with_redirect(server_url);
 
 	// The client will first connect to a server that only performs re-directions and finally
 	// redirect to another server to complete the handshake.
