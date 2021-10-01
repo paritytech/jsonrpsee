@@ -25,28 +25,29 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::{traits::SubscriptionClient, v2::ParamsSer, Error, Subscription},
+	rpc_params,
+	types::{traits::SubscriptionClient, Error, Subscription},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
 
-const NUM_SUBSCRIPTION_RESPONSES: usize = 10;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+	const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 	env_logger::init();
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await?;
+		client.subscribe("subscribe_hello", rpc_params!(), "unsubscribe_hello").await?;
 
 	let mut i = 0;
 	while i <= NUM_SUBSCRIPTION_RESPONSES {
 		let r = subscribe_hello.next().await;
-		log::debug!("received {:?}", r);
+		println!("received {:?}", r);
 		i += 1;
 	}
 
