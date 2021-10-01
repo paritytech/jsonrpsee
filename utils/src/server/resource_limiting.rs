@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use arrayvec::ArrayVec;
 use jsonrpsee_types::error::Error;
 use parking_lot::Mutex;
@@ -10,10 +12,10 @@ pub type ResourceTable<T> = [T; RESOURCE_COUNT];
 pub type ResourceVec<T> = ArrayVec<T, RESOURCE_COUNT>;
 
 /// User defined resources used by the JSON-RPC server.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Resources {
 	/// Current unit values that are being used by concurrent method executions (0 for empty slots)
-	totals: Mutex<ResourceTable<u16>>,
+	totals: Arc<Mutex<ResourceTable<u16>>>,
 	/// Unit capacities for every registered resource (0 for empty slots)
 	pub capacities: ResourceTable<u16>,
 	/// Default unit values a method execution uses for every registered resource (0 for empty slots)
@@ -60,18 +62,18 @@ impl Resources {
 
 		*totals = sum;
 
-		Ok(ResourceGuard { totals: &self.totals, units })
+		Ok(ResourceGuard { totals: self.totals.clone(), units })
 	}
 }
 
 /// RAII style "lock" for claimed resources, will automatically release them once dropped.
 #[derive(Debug)]
-pub struct ResourceGuard<'a> {
-	totals: &'a Mutex<ResourceTable<u16>>,
+pub struct ResourceGuard {
+	totals: Arc<Mutex<ResourceTable<u16>>>,
 	units: ResourceTable<u16>,
 }
 
-impl Drop for ResourceGuard<'_> {
+impl Drop for ResourceGuard {
 	fn drop(&mut self) {
 		for (sum, claimed) in self.totals.lock().iter_mut().zip(self.units) {
 			*sum -= claimed;

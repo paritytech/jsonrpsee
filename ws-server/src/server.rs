@@ -27,7 +27,6 @@
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, StopHandle, StopMonitor};
@@ -82,7 +81,7 @@ impl Server {
 
 	async fn start_inner(self, methods: Methods) {
 		let stop_monitor = self.stop_monitor;
-		let resources = Arc::new(self.resources);
+		let resources = self.resources;
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
@@ -168,7 +167,7 @@ enum HandshakeResponse<'a> {
 	Accept {
 		conn_id: ConnectionId,
 		methods: &'a Methods,
-		resources: &'a Arc<Resources>,
+		resources: &'a Resources,
 		cfg: &'a Settings,
 		stop_monitor: &'a StopMonitor,
 	},
@@ -235,7 +234,7 @@ async fn background_task(
 	server: SokettoServer<'_, BufReader<BufWriter<Compat<tokio::net::TcpStream>>>>,
 	conn_id: ConnectionId,
 	methods: Methods,
-	resources: Arc<Resources>,
+	resources: Resources,
 	max_request_body_size: u32,
 	stop_server: StopMonitor,
 ) -> Result<(), Error> {

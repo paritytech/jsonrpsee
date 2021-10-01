@@ -133,7 +133,7 @@ impl MethodCallback {
 
 	/// Attempt to claim resources prior to executing a method. On success returns a guard that releases
 	/// claimed resources when dropped.
-	pub fn claim<'r>(&self, name: &str, resources: &'r Resources) -> Result<ResourceGuard<'r>, Error> {
+	pub fn claim<'r>(&self, name: &str, resources: &Resources) -> Result<ResourceGuard, Error> {
 		match self.resources {
 			MethodResources::Uninitialized(_) => Err(Error::UninitializedMethod(name.into())),
 			MethodResources::Initialized(units) => resources.claim(units),
@@ -465,7 +465,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed, _| {
+			MethodCallback::new_async(Arc::new(move |id, params, tx, _conn_id, claimed| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
