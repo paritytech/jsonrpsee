@@ -25,17 +25,29 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::Error,
+	types::{Error, v2::ParamsSer, traits::Client},
+	ws_client::WsClientBuilder,
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
 };
+use tokio::time::sleep;
+
+use std::time::Duration;
 use std::net::SocketAddr;
 
 pub async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = WsServerBuilder::default().register_resource("CPU", 6, 2)?.build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 
-	module.register_async_method("say_hello", |_, _| async move { Ok("hello") })?;
+	module.register_async_method("say_hello", |_, _| async move { 
+		sleep(Duration::from_millis(200)).await;
+		Ok("hello")
+	})?;
+
+	module.register_async_method("expensive_call", |_, _| async move {
+		sleep(Duration::from_millis(100)).await;
+		Ok("hello expensive call")
+	})?.resource("CPU", 3)?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(module)?;
@@ -43,7 +55,50 @@ pub async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
 	Ok((addr, handle))
 }
 
-#[test]
-fn foo() {
-	// panic!("Oh no");
+fn assert_server_busy(fail: Result<String, Error>) {
+	match fail {
+		Err(Error::Request(msg)) => {
+			let err: serde_json::Value = serde_json::from_str(&msg).unwrap();
+
+			assert_eq!(err["error"]["code"], -32604);
+			assert_eq!(err["error"]["message"], "Server is busy, try again later");
+		},
+		fail => panic!("Expected error, got: {:?}", fail),
+	}
+}
+
+#[tokio::test]
+async fn server_rejects_requests_if_resources_are_claimed() {
+	let (server_addr, stop_handle) = websocket_server().await.unwrap();
+
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// 2 units (default) per call, so 4th call exceeds cap
+	let (pass1, pass2, pass3, fail): (Result<String, _>, Result<String, _>, Result<String, _>, Result<String, _>) = tokio::join!(
+		client.request("say_hello", ParamsSer::NoParams),
+		client.request("say_hello", ParamsSer::NoParams),
+		client.request("say_hello", ParamsSer::NoParams),
+		client.request("say_hello", ParamsSer::NoParams),
+	);
+
+	assert!(pass1.is_ok());
+	assert!(pass2.is_ok());
+	assert!(pass3.is_ok());
+	assert_server_busy(fail);
+
+	// 3 units per call, so 3rd call exceeds cap
+	let (pass1, pass2, fail): (Result<String, _>, Result<String, _>, Result<String, _>) = tokio::join!(
+		client.request("expensive_call", ParamsSer::NoParams),
+		client.request("expensive_call", ParamsSer::NoParams),
+		client.request("expensive_call", ParamsSer::NoParams),
+	);
+
+	assert!(pass1.is_ok());
+	assert!(pass2.is_ok());
+	assert_server_busy(fail);
+
+	// Client being active prevents the server from shutting down?!
+	drop(client);
+	stop_handle.stop().unwrap().await;
 }
