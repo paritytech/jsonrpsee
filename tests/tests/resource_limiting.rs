@@ -25,29 +25,31 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::{Error, v2::ParamsSer, traits::Client},
+	types::{traits::Client, v2::ParamsSer, Error},
 	ws_client::WsClientBuilder,
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
 };
 use tokio::time::sleep;
 
-use std::time::Duration;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 pub async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
 	let server = WsServerBuilder::default().register_resource("CPU", 6, 2)?.build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 
-	module.register_async_method("say_hello", |_, _| async move { 
+	module.register_async_method("say_hello", |_, _| async move {
 		sleep(Duration::from_millis(200)).await;
 		Ok("hello")
 	})?;
 
-	module.register_async_method("expensive_call", |_, _| async move {
-		sleep(Duration::from_millis(100)).await;
-		Ok("hello expensive call")
-	})?.resource("CPU", 3)?;
+	module
+		.register_async_method("expensive_call", |_, _| async move {
+			sleep(Duration::from_millis(100)).await;
+			Ok("hello expensive call")
+		})?
+		.resource("CPU", 3)?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(module)?;
@@ -62,7 +64,7 @@ fn assert_server_busy(fail: Result<String, Error>) {
 
 			assert_eq!(err["error"]["code"], -32604);
 			assert_eq!(err["error"]["message"], "Server is busy, try again later");
-		},
+		}
 		fail => panic!("Expected error, got: {:?}", fail),
 	}
 }
