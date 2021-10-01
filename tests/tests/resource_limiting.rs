@@ -75,11 +75,11 @@ async fn server_rejects_requests_if_resources_are_claimed() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	// 2 units (default) per call, so 4th call exceeds cap
-	let (pass1, pass2, pass3, fail): (Result<String, _>, Result<String, _>, Result<String, _>, Result<String, _>) = tokio::join!(
-		client.request("say_hello", ParamsSer::NoParams),
-		client.request("say_hello", ParamsSer::NoParams),
-		client.request("say_hello", ParamsSer::NoParams),
-		client.request("say_hello", ParamsSer::NoParams),
+	let (pass1, pass2, pass3, fail) = tokio::join!(
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", ParamsSer::NoParams),
 	);
 
 	assert!(pass1.is_ok());
@@ -88,10 +88,10 @@ async fn server_rejects_requests_if_resources_are_claimed() {
 	assert_server_busy(fail);
 
 	// 3 units per call, so 3rd call exceeds cap
-	let (pass1, pass2, fail): (Result<String, _>, Result<String, _>, Result<String, _>) = tokio::join!(
-		client.request("expensive_call", ParamsSer::NoParams),
-		client.request("expensive_call", ParamsSer::NoParams),
-		client.request("expensive_call", ParamsSer::NoParams),
+	let (pass1, pass2, fail) = tokio::join!(
+		client.request::<String>("expensive_call", ParamsSer::NoParams),
+		client.request::<String>("expensive_call", ParamsSer::NoParams),
+		client.request::<String>("expensive_call", ParamsSer::NoParams),
 	);
 
 	assert!(pass1.is_ok());
