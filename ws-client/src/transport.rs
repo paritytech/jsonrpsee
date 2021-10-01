@@ -40,7 +40,6 @@ use tokio_rustls::{
 
 type TlsOrPlain = EitherStream<TcpStream, TlsStream<TcpStream>>;
 
-// TODO(niklasad1): make this configurable.
 const MAX_REDIRECTIONS_ALLOWED: usize = 5;
 
 /// Sending end of WebSocket transport.
