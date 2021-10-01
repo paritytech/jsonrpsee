@@ -77,11 +77,9 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 		})
 		.unwrap();
 	module
-		.register_async_method("should_ok_async", |_p, ctx| {
-			async move {
-				let _ = ctx.ok().map_err(CallError::Failed)?;
-				Ok("ok")
-			}
+		.register_async_method("should_ok_async", |_p, ctx| async move {
+			let _ = ctx.ok().map_err(CallError::Failed)?;
+			Ok("ok")
 		})
 		.unwrap();
 

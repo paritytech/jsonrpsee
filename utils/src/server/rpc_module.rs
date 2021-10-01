@@ -44,9 +44,9 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::fmt::Debug;
+use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use std::future::Future;
 
 /// A `Method` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:

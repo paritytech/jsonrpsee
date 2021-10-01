@@ -86,12 +86,10 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 		})
 		.unwrap();
 	module
-		.register_async_method("add_async", |params, _| {
-			async move {
-				let params: Vec<u64> = params.parse()?;
-				let sum: u64 = params.into_iter().sum();
-				Ok(sum)
-			}
+		.register_async_method("add_async", |params, _| async move {
+			let params: Vec<u64> = params.parse()?;
+			let sum: u64 = params.into_iter().sum();
+			Ok(sum)
 		})
 		.unwrap();
 	module
