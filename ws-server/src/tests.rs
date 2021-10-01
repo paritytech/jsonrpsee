@@ -29,7 +29,6 @@
 use crate::types::error::{CallError, Error};
 use crate::{future::StopHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
-use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -83,17 +82,13 @@ async fn server_with_handles() -> (SocketAddr, StopHandle) {
 				futures_util::future::ready(()).await;
 				Ok("hello")
 			}
-			.boxed()
 		})
 		.unwrap();
 	module
-		.register_async_method("add_async", |params, _| {
-			async move {
-				let params: Vec<u64> = params.parse()?;
-				let sum: u64 = params.into_iter().sum();
-				Ok(sum)
-			}
-			.boxed()
+		.register_async_method("add_async", |params, _| async move {
+			let params: Vec<u64> = params.parse()?;
+			let sum: u64 = params.into_iter().sum();
+			Ok(sum)
 		})
 		.unwrap();
 	module
@@ -142,7 +137,6 @@ async fn server_with_context() -> SocketAddr {
 				// Call some async function inside.
 				Ok(futures_util::future::ready("ok!").await)
 			}
-			.boxed()
 		})
 		.unwrap();
 
@@ -153,7 +147,6 @@ async fn server_with_context() -> SocketAddr {
 				// Async work that returns an error
 				futures_util::future::err::<(), _>(anyhow!("nah").into()).await
 			}
-			.boxed()
 		})
 		.unwrap();
 

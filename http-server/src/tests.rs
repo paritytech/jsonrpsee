@@ -31,7 +31,6 @@ use std::net::SocketAddr;
 use crate::types::error::{CallError, Error};
 use crate::{server::StopHandle, HttpServerBuilder, RpcModule};
 
-use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -48,7 +47,7 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
-	module.register_async_method("say_hello_async", |_, _| async move { Ok("lo") }.boxed()).unwrap();
+	module.register_async_method("say_hello_async", |_, _| async move { Ok("lo") }).unwrap();
 	module
 		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
@@ -78,12 +77,9 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<Result<(), Error>>, St
 		})
 		.unwrap();
 	module
-		.register_async_method("should_ok_async", |_p, ctx| {
-			async move {
-				let _ = ctx.ok().map_err(CallError::Failed)?;
-				Ok("ok")
-			}
-			.boxed()
+		.register_async_method("should_ok_async", |_p, ctx| async move {
+			let _ = ctx.ok().map_err(CallError::Failed)?;
+			Ok("ok")
 		})
 		.unwrap();
 

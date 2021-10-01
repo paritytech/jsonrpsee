@@ -24,12 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::net::SocketAddr;
 use jsonrpsee::{
 	types::Error,
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
 };
+use std::net::SocketAddr;
 
 pub async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
