@@ -315,7 +315,8 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 	}
 }
 
-// Run a `WebSocket server` that performs some re-directions for testing.
+// Run a WebSocket server running on localhost that redirects requests for testing.
+// Requests to any url except for `/myblock/two` will redirect one or two times (HTTP 301) and eventually end up in `/myblock/two`.
 pub fn ws_server_with_redirect(other_server: String) -> String {
 	let addr = ([127, 0, 0, 1], 0).into();
 
