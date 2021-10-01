@@ -44,6 +44,7 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::fmt::Debug;
+use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -324,10 +325,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 
 	/// Register a new asynchronous RPC method, which computes the response with the given callback.
-	pub fn register_async_method<R, F>(&mut self, method_name: &'static str, callback: F) -> Result<(), Error>
+	pub fn register_async_method<R, Fun, Fut>(&mut self, method_name: &'static str, callback: Fun) -> Result<(), Error>
 	where
 		R: Serialize + Send + Sync + 'static,
-		F: Fn(Params<'static>, Arc<Context>) -> BoxFuture<'static, Result<R, Error>> + Copy + Send + Sync + 'static,
+		Fut: Future<Output = Result<R, Error>> + Send,
+		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Copy + Send + Sync + 'static,
 	{
 		self.methods.verify_method_name(method_name)?;
 
@@ -682,7 +684,7 @@ mod tests {
 		module
 			.register_async_method("roo", |params, ctx| {
 				let ns: Vec<u8> = params.parse().expect("valid params please");
-				async move { Ok(ctx.roo(ns)) }.boxed()
+				async move { Ok(ctx.roo(ns)) }
 			})
 			.unwrap();
 		let result = module.call_with("roo", vec![12, 13]).await.unwrap();
