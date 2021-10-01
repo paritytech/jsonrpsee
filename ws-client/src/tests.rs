@@ -284,7 +284,8 @@ async fn redirections() {
 	// It's an ok client
 	let client = match client {
 		Ok(Ok(client)) => client,
-		_ => panic!("WsClient builder failed"),
+		Ok(Err(e)) => panic!("WsClient builder failed with: {:?}", e),
+		Err(e) => panic!("WsClient builder timed out with: {:?}", e),
 	};
 	// It's connected
 	assert!(client.is_connected());
