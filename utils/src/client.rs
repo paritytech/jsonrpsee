@@ -24,35 +24,26 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, RpcModule},
-	rpc_params,
-	types::traits::Client,
-};
-use std::net::SocketAddr;
+//! Shared utilities for `jsonrpsee` clients.
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-	env_logger::init();
-
-	let server_addr = run_server().await?;
-	let url = format!("http://{}", server_addr);
-
-	let client = HttpClientBuilder::default().build(url)?;
-	let params = rpc_params!(1_u64, 2, 3);
-	let response: Result<String, _> = client.request("say_hello", params).await;
-	println!("r: {:?}", response);
-
-	Ok(())
+#[doc(hidden)]
+pub mod __reexports {
+	pub use jsonrpsee_types::{to_json_value, v2::ParamsSer};
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
-	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("lo"))?;
-
-	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module));
-	Ok(addr)
+#[macro_export]
+/// Convert the given values to a [`ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
+macro_rules! rpc_params {
+	($($param:expr),*) => {
+		{
+			let mut __params = vec![];
+			$(
+				__params.push($crate::client::__reexports::to_json_value($param).expect("json serialization is infallible; qed."));
+			)*
+			$crate::client::__reexports::ParamsSer::Array(__params)
+		}
+	};
+	() => {
+		$crate::client::__reexports::ParamsSer::NoParams,
+	}
 }

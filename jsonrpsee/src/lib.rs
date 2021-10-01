@@ -34,6 +34,10 @@ pub use http_client;
 #[cfg(feature = "client")]
 pub use ws_client;
 
+/// JSON RPC WebSocket client convenience macro to build params.
+#[cfg(feature = "client")]
+pub use utils::rpc_params;
+
 /// JSON RPC HTTP server.
 #[cfg(feature = "server")]
 pub use http_server;
