@@ -281,9 +281,11 @@ async fn redirections() {
 	// The client will first connect to a server that only performs re-directions and finally
 	// redirect to another server to complete the handshake.
 	let client = WsClientBuilder::default().build(&redirect_url).with_default_timeout().await;
-	// It's a client
-	assert!(matches!(client, Ok(Ok(_))));
-	let client = client.expect("tokio timers work").expect("WsClient builder works");
+	// It's an ok client
+	let client = match client {
+		Ok(Ok(client)) => client,
+		_ => panic!("WsClient builder failed")
+	};
 	// It's connected
 	assert!(client.is_connected());
 	// It works
