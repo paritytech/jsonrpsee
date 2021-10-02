@@ -40,7 +40,7 @@ pub async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
 	let mut module = RpcModule::new(());
 
 	module.register_async_method("say_hello", |_, _| async move {
-		sleep(Duration::from_millis(200)).await;
+		sleep(Duration::from_millis(50)).await;
 		Ok("hello")
 	})?;
 

@@ -55,7 +55,7 @@ use std::sync::Arc;
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
-/// Similar to [`SyncMethod`], but represents an asynchronous handler.
+/// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
@@ -210,7 +210,7 @@ impl Methods {
 	}
 
 	/// Inserts the method callback for a given name, or returns an error if the name was already taken.
-	/// On success returns a mut reference to just inserted callback.
+	/// On success it returns a mut reference to the [`MethodCallback`] just inserted.
 	fn verify_and_insert(
 		&mut self,
 		name: &'static str,
@@ -286,7 +286,7 @@ impl Methods {
 		}
 	}
 
-	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
+	/// Attempt to execute a callback while checking that the call does not exhaust the available resources, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute_with_resources(
 		&self,
 		tx: &MethodSink,
@@ -499,6 +499,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						}
 					};
 
+					// Release claimed resources
 					drop(claimed);
 				};
 				future.boxed()

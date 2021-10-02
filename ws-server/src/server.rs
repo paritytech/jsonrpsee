@@ -396,7 +396,7 @@ impl Builder {
 		self
 	}
 
-	/// Register a new resource type. Errors if `label` was already registered, or if number of
+	/// Register a new resource kind. Errors if `label` is already registered, or if number of
 	/// registered resources would exceed 8.
 	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
 		self.resources.register(label, capacity, default)?;

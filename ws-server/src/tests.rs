@@ -543,7 +543,6 @@ async fn stop_works() {
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
-	// join_handle.with_default_timeout().await.expect("Timeout").expect("Join error");
 
 	// After server was stopped, attempt to stop it again should result in an error.
 	assert!(matches!(stop_handle.stop(), Err(Error::AlreadyStopped)));
