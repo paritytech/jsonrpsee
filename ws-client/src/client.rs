@@ -111,6 +111,7 @@ pub struct WsClientBuilder<'a> {
 	origin_header: Option<Header<'a>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
+	max_redirections: usize,
 }
 
 impl<'a> Default for WsClientBuilder<'a> {
@@ -123,6 +124,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			origin_header: None,
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
+			max_redirections: 10,
 		}
 	}
 }
@@ -178,6 +180,12 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
+	/// Set the max number of redirections to perform until a connection is regarded as failed.
+	pub fn max_redirections(mut self, redirect: usize) -> Self {
+		self.max_redirections = redirect;
+		self
+	}
+
 	/// Build the client with specified URL to connect to.
 	/// If the port number is missing from the URL, the default port number is used.
 	///
@@ -203,6 +211,7 @@ impl<'a> WsClientBuilder<'a> {
 			timeout: self.connection_timeout,
 			origin_header: self.origin_header,
 			max_request_body_size: self.max_request_body_size,
+			max_redirections: self.max_redirections,
 		};
 
 		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(e.into()))?;

@@ -40,8 +40,6 @@ use tokio_rustls::{
 
 type TlsOrPlain = EitherStream<TcpStream, TlsStream<TcpStream>>;
 
-const MAX_REDIRECTIONS_ALLOWED: usize = 5;
-
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
 pub struct Sender {
@@ -68,6 +66,8 @@ pub struct WsTransportClientBuilder<'a> {
 	pub origin_header: Option<Header<'a>>,
 	/// Max payload size
 	pub max_request_body_size: u32,
+	/// Max number of redirections.
+	pub max_redirections: usize,
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -195,104 +195,98 @@ impl<'a> WsTransportClientBuilder<'a> {
 		mut tls_connector: Option<TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut target = self.target;
-		let mut used_sockaddrs = Vec::new();
 		let origin = self.origin_header.map(|o| [o]);
 		let mut err = None;
 
-		for _ in 0..MAX_REDIRECTIONS_ALLOWED {
+		for _ in 0..self.max_redirections {
 			// TODO(niklasad1): this should be debug.
 			log::error!("Connecting to target: {:?}", target);
 
-			let sockaddr = match target.sockaddrs.pop() {
-				Some(addr) => {
-					used_sockaddrs.push(addr);
-					addr
+			for sockaddr in target.sockaddrs.clone() {
+				let tcp_stream = match connect(sockaddr, self.timeout, &target.host, &tls_connector).await {
+					Ok(stream) => stream,
+					Err(e) => {
+						// TODO(niklasad1): this should be debug.
+						log::error!("Failed to connect to sockaddr: {:?}", sockaddr);
+						err = Some(Err(e));
+						continue;
+					}
+				};
+				let mut client = WsHandshakeClient::new(
+					BufReader::new(BufWriter::new(tcp_stream)),
+					&target.host_header,
+					&target.path_and_query,
+				);
+				if let Some(origin) = &origin {
+					client.set_headers(origin);
 				}
-				None => return err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host))),
-			};
+				// Perform the initial handshake.
+				match client.handshake().await {
+					Ok(ServerResponse::Accepted { .. }) => {
+						// TODO(niklasad1): this should be debug.
+						log::error!("Connection established to target: {:?}", target);
+						let mut builder = client.into_builder();
+						builder.set_max_message_size(self.max_request_body_size as usize);
+						let (sender, receiver) = builder.finish();
+						return Ok((Sender { inner: sender }, Receiver { inner: receiver }));
+					}
 
-			let tcp_stream = match connect(sockaddr, self.timeout, &target.host, &tls_connector).await {
-				Ok(stream) => stream,
-				Err(e) => {
-					// TODO(niklasad1): this should be debug.
-					log::error!("Failed to connect to sockaddr: {:?}", sockaddr);
-					err = Some(Err(e));
-					continue;
-				}
-			};
-			let mut client = WsHandshakeClient::new(
-				BufReader::new(BufWriter::new(tcp_stream)),
-				&target.host_header,
-				&target.path_and_query,
-			);
-			if let Some(origin) = &origin {
-				client.set_headers(origin);
-			}
-			// Perform the initial handshake.
-			match client.handshake().await {
-				Ok(ServerResponse::Accepted { .. }) => {
-					// TODO(niklasad1): this should be debug.
-					log::error!("Connection established to target: {:?}", target);
-					let mut builder = client.into_builder();
-					builder.set_max_message_size(self.max_request_body_size as usize);
-					let (sender, receiver) = builder.finish();
-					return Ok((Sender { inner: sender }, Receiver { inner: receiver }));
-				}
-
-				Ok(ServerResponse::Rejected { status_code }) => {
-					// TODO(niklasad1): this should be debug.
-					log::error!("Connection rejected: {:?}", status_code);
-					err = Some(Err(WsHandshakeError::Rejected { status_code }));
-				}
-				Ok(ServerResponse::Redirect { status_code, location }) => {
-					log::trace!("Redirection: status_code: {}, location: {}", status_code, location);
-					match url::Url::parse(&location) {
-						// redirection with absolute path => need to lookup.
-						Ok(url) => {
-							target = Target::parse(url)?;
-							used_sockaddrs.clear();
-							tls_connector = match target.mode {
-								Mode::Tls => {
-									let mut client_config = rustls::ClientConfig::default();
-									if let CertificateStore::Native = self.certificate_store {
-										client_config.root_store = rustls_native_certs::load_native_certs()
-											.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
+					Ok(ServerResponse::Rejected { status_code }) => {
+						// TODO(niklasad1): this should be debug.
+						log::error!("Connection rejected: {:?}", status_code);
+						err = Some(Err(WsHandshakeError::Rejected { status_code }));
+					}
+					Ok(ServerResponse::Redirect { status_code, location }) => {
+						log::error!("Redirection: status_code: {}, location: {}", status_code, location);
+						match url::Url::parse(&location) {
+							// redirection with absolute path => need to lookup.
+							Ok(url) => {
+								target = Target::parse(url)?;
+								tls_connector = match target.mode {
+									Mode::Tls => {
+										let mut client_config = rustls::ClientConfig::default();
+										if let CertificateStore::Native = self.certificate_store {
+											client_config.root_store = rustls_native_certs::load_native_certs()
+												.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
+										}
+										Some(Arc::new(client_config).into())
 									}
-									Some(Arc::new(client_config).into())
-								}
-								Mode::Plain => None,
-							};
-						}
-						// redirection is relative, either `/baz` or `bar`.
-						Err(
-							url::ParseError::RelativeUrlWithoutBase | url::ParseError::RelativeUrlWithCannotBeABaseBase,
-						) => {
-							// replace the entire path if `location` is `/`.
-							if location.starts_with('/') {
-								target.path_and_query = location;
-							} else {
-								// join paths such that the leaf is replaced with `location`.
-								let strip_last_child = Path::new(&target.path_and_query)
-									.ancestors()
-									.nth(1)
-									.unwrap_or_else(|| Path::new("/"));
-								target.path_and_query = strip_last_child
-									.join(location)
-									.to_str()
-									.expect("valid UTF-8 checked by Url::parse; qed")
-									.to_string();
+									Mode::Plain => None,
+								};
+								break;
 							}
-							std::mem::swap(&mut target.sockaddrs, &mut used_sockaddrs);
-						}
-						Err(e) => {
-							err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
-						}
-					};
-				}
-				Err(e) => {
-					err = Some(Err(e.into()));
-				}
-			};
+							// redirection is relative, either `/baz` or `bar`.
+							Err(
+								url::ParseError::RelativeUrlWithoutBase
+								| url::ParseError::RelativeUrlWithCannotBeABaseBase,
+							) => {
+								// replace the entire path if `location` is `/`.
+								if location.starts_with('/') {
+									target.path_and_query = location;
+								} else {
+									// join paths such that the leaf is replaced with `location`.
+									let strip_last_child = Path::new(&target.path_and_query)
+										.ancestors()
+										.nth(1)
+										.unwrap_or_else(|| Path::new("/"));
+									target.path_and_query = strip_last_child
+										.join(location)
+										.to_str()
+										.expect("valid UTF-8 checked by Url::parse; qed")
+										.to_string();
+								}
+								break;
+							}
+							Err(e) => {
+								err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
+							}
+						};
+					}
+					Err(e) => {
+						err = Some(Err(e.into()));
+					}
+				};
+			}
 		}
 		err.unwrap_or(Err(WsHandshakeError::NoAddressFound(target.host)))
 	}

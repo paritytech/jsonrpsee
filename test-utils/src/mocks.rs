@@ -341,6 +341,7 @@ async fn handler(
 	other_server: String,
 ) -> Result<hyper::Response<Body>, soketto::BoxedError> {
 	if is_upgrade_request(&req) {
+		log::error!("{:?}", req.uri().path());
 		let path = PathBuf::from_slash(req.uri().path());
 
 		if path == PathBuf::from_slash("/myblock/two") {
