@@ -96,42 +96,42 @@ pub enum CertificateStore {
 #[derive(Debug, Error)]
 pub enum WsHandshakeError {
 	/// Failed to load system certs
-	#[error("Failed to load system certs: {}", 0)]
+	#[error("Failed to load system certs: {0}")]
 	CertificateStore(io::Error),
 
 	/// Invalid URL.
-	#[error("Invalid url: {}", 0)]
+	#[error("Invalid URL: {0}")]
 	Url(Cow<'static, str>),
 
 	/// Error when opening the TCP socket.
-	#[error("Error when opening the TCP socket: {}", 0)]
+	#[error("Error when opening the TCP socket: {0}")]
 	Io(io::Error),
 
 	/// Error in the transport layer.
-	#[error("Error in the WebSocket handshake: {}", 0)]
+	#[error("Error in the WebSocket handshake: {0}")]
 	Transport(#[source] soketto::handshake::Error),
 
 	/// Invalid DNS name error for TLS
-	#[error("Invalid DNS name: {}", 0)]
+	#[error("Invalid DNS name: {0}")]
 	InvalidDnsName(#[source] InvalidDNSNameError),
 
 	/// Server rejected the handshake.
-	#[error("Connection rejected with status code: {}", status_code)]
+	#[error("Connection rejected with status code: {status_code}")]
 	Rejected {
 		/// HTTP status code that the server returned.
 		status_code: u16,
 	},
 
 	/// Timeout while trying to connect.
-	#[error("Connection timeout exceeded: {}", 0)]
+	#[error("Connection timeout exceeded: {0:?}")]
 	Timeout(Duration),
 
 	/// Failed to resolve IP addresses for this hostname.
-	#[error("Failed to resolve IP addresses for this hostname: {}", 0)]
+	#[error("Failed to resolve IP addresses for this hostname: {0}")]
 	ResolutionFailed(io::Error),
 
 	/// Couldn't find any IP address for this hostname.
-	#[error("No IP address found for this hostname: {}", 0)]
+	#[error("No IP address found for this hostname: {0}")]
 	NoAddressFound(String),
 }
 
@@ -200,7 +200,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 		let mut err = None;
 
 		for _ in 0..MAX_REDIRECTIONS_ALLOWED {
-			log::debug!("Connecting to target: {:?}", target);
+			// TODO(niklasad1): this should be debug.
+			log::info!("Connecting to target: {:?}", target);
 
 			let sockaddr = match target.sockaddrs.pop() {
 				Some(addr) => {
@@ -241,7 +242,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 					err = Some(Err(WsHandshakeError::Rejected { status_code }));
 				}
 				Ok(ServerResponse::Redirect { status_code, location }) => {
-					log::trace!("redirection: status_code: {}, location: {}", status_code, location);
+					log::trace!("Redirection: status_code: {}, location: {}", status_code, location);
 					match url::Url::parse(&location) {
 						// redirection with absolute path => need to lookup.
 						Ok(url) => {

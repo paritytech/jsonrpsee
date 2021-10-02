@@ -264,9 +264,10 @@ fn assert_error_response(err: Error, exp: ErrorObject) {
 	};
 }
 
-#[cfg_attr(target_os = "windows", ignore)]
+//#[cfg_attr(target_os = "windows", ignore)]
 #[tokio::test]
 async fn redirections() {
+	env_logger::try_init();
 	let expected = "abc 123";
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
