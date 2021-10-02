@@ -33,10 +33,9 @@ use futures_util::{
 	sink::SinkExt,
 	stream::{self, StreamExt},
 };
-use path_slash::PathBufExt;
 use serde::{Deserialize, Serialize};
 use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
-use std::{io, net::SocketAddr, path::PathBuf, time::Duration};
+use std::{io, net::SocketAddr, path::Path, time::Duration};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
@@ -341,25 +340,32 @@ async fn handler(
 	other_server: String,
 ) -> Result<hyper::Response<Body>, soketto::BoxedError> {
 	if is_upgrade_request(&req) {
-		log::error!("{:?}", req.uri().path());
-		let path = PathBuf::from_slash(req.uri().path());
+		let path = req.uri().path();
+		log::error!("{:?}", path);
 
-		if path == PathBuf::from_slash("/myblock/two") {
-			let response =
-				hyper::Response::builder().status(301).header("Location", other_server).body(Body::empty()).unwrap();
-			Ok(response)
-		} else if path == PathBuf::from_slash("/myblock/one") {
-			let response =
-				hyper::Response::builder().status(301).header("Location", "two").body(Body::empty()).unwrap();
-			Ok(response)
-		} else {
-			let path = PathBuf::from_slash("/myblock/one");
-			let response = hyper::Response::builder()
-				.status(301)
-				.header("Location", path.to_str().expect("valid utf8 must be used"))
-				.body(Body::empty())
-				.unwrap();
-			Ok(response)
+		match path {
+			"/myblock/two" => {
+				let response = hyper::Response::builder()
+					.status(301)
+					.header("Location", other_server)
+					.body(Body::empty())
+					.unwrap();
+				Ok(response)
+			}
+			"/myblock/one" => {
+				let response =
+					hyper::Response::builder().status(301).header("Location", "two").body(Body::empty()).unwrap();
+				Ok(response)
+			}
+			_ => {
+				let path = Path::new("/myblock/one");
+				let response = hyper::Response::builder()
+					.status(301)
+					.header("Location", path.to_str().expect("valid utf8; checked above"))
+					.body(Body::empty())
+					.unwrap();
+				Ok(response)
+			}
 		}
 	} else {
 		panic!("expect upgrade to WS");
