@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::stream::EitherStream;
+use crate::{client::Header, stream::EitherStream};
 use futures::io::{BufReader, BufWriter};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
@@ -65,7 +65,7 @@ pub struct WsTransportClientBuilder<'a> {
 	pub timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header is passed.
-	pub origin_header: Option<Cow<'a, str>>,
+	pub origin_header: Option<Header<'a>>,
 	/// Max payload size
 	pub max_request_body_size: u32,
 }
@@ -196,7 +196,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut target = self.target;
 		let mut used_sockaddrs = Vec::new();
-
+		let origin = self.origin_header.map(|o| [o]);
 		let mut err = None;
 
 		for _ in 0..MAX_REDIRECTIONS_ALLOWED {
@@ -225,8 +225,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 				&target.host_header,
 				&target.path_and_query,
 			);
-			if let Some(origin) = self.origin_header.as_ref() {
-				client.set_origin(origin);
+			if let Some(origin) = &origin {
+				client.set_headers(origin);
 			}
 			// Perform the initial handshake.
 			match client.handshake().await {

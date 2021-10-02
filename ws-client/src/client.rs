@@ -49,7 +49,9 @@ use futures::{
 use tokio::sync::Mutex;
 
 use serde::de::DeserializeOwned;
-use std::{borrow::Cow, time::Duration};
+use std::time::Duration;
+
+pub use soketto::handshake::client::Header;
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -106,7 +108,7 @@ pub struct WsClientBuilder<'a> {
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	origin_header: Option<Cow<'a, str>>,
+	origin_header: Option<Header<'a>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 }
@@ -151,8 +153,8 @@ impl<'a> WsClientBuilder<'a> {
 	}
 
 	/// Set origin header to pass during the handshake.
-	pub fn origin_header(mut self, origin: &'a str) -> Self {
-		self.origin_header = Some(Cow::Borrowed(origin));
+	pub fn origin_header(mut self, origin: Header<'a>) -> Self {
+		self.origin_header = Some(origin);
 		self
 	}
 
