@@ -358,10 +358,9 @@ async fn handler(
 				Ok(response)
 			}
 			_ => {
-				let path = Path::new("/myblock/one");
 				let response = hyper::Response::builder()
 					.status(301)
-					.header("Location", path.to_str().expect("valid utf8; checked above"))
+					.header("Location", "/myblock/one")
 					.body(Body::empty())
 					.unwrap();
 				Ok(response)
