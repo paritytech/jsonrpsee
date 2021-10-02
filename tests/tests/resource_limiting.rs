@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
+	proc_macros::rpc,
 	types::{traits::Client, v2::ParamsSer, Error},
 	ws_client::WsClientBuilder,
 	ws_server::{WsServerBuilder, WsStopHandle},
@@ -57,6 +58,35 @@ async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
 	Ok((addr, handle))
 }
 
+async fn websocket_server_macro() -> Result<(SocketAddr, WsStopHandle), Error> {
+	let server = WsServerBuilder::default().register_resource("CPU", 6, 2)?.build("127.0.0.1:0").await?;
+
+	#[rpc(server)]
+	pub trait Rpc {
+		#[method(name = "say_hello")]
+		async fn hello(&self) -> Result<&'static str, Error> {
+			sleep(Duration::from_millis(50)).await;
+			Ok("hello")
+		}
+
+		#[method(name = "expensive_call")]
+		// #[method(name = "expensive_call", resource("CPU", 3))]
+		async fn expensive(&self) -> Result<&'static str, Error> {
+			sleep(Duration::from_millis(100)).await;
+			Ok("hello expensive call")
+		}
+	}
+
+	struct Module;
+
+	impl RpcServer for Module {}
+
+	let addr = server.local_addr()?;
+	let handle = server.start(Module.into_rpc())?;
+
+	Ok((addr, handle))
+}
+
 fn assert_server_busy(fail: Result<String, Error>) {
 	match fail {
 		Err(Error::Request(msg)) => {
@@ -69,10 +99,8 @@ fn assert_server_busy(fail: Result<String, Error>) {
 	}
 }
 
-#[tokio::test]
-async fn server_rejects_requests_if_resources_are_claimed() {
-	let (server_addr, stop_handle) = websocket_server().await.unwrap();
 
+async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHandle) {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -103,4 +131,19 @@ async fn server_rejects_requests_if_resources_are_claimed() {
 	// Client being active prevents the server from shutting down?!
 	drop(client);
 	stop_handle.stop().unwrap().await;
+}
+
+
+#[tokio::test]
+async fn server_rejects_requests_if_resources_are_claimed() {
+	let (server_addr, stop_handle) = websocket_server().await.unwrap();
+
+	run_tests_on_ws_server(server_addr, stop_handle).await;
+}
+
+#[tokio::test]
+async fn server_rejects_requests_if_resources_are_claimed_macro() {
+	let (server_addr, stop_handle) = websocket_server_macro().await.unwrap();
+
+	run_tests_on_ws_server(server_addr, stop_handle).await;
 }
