@@ -35,7 +35,7 @@ use tokio::time::sleep;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-pub async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
+async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
 	let server = WsServerBuilder::default().register_resource("CPU", 6, 2)?.build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 

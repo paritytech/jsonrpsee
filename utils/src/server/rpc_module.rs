@@ -161,6 +161,9 @@ impl MethodCallback {
 				);
 				(callback)(id, params, tx, conn_id);
 
+				// Release claimed resources
+				drop(claimed);
+
 				None
 			}
 			MethodKind::Async(callback) => {
