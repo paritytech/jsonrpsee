@@ -201,7 +201,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 		for _ in 0..MAX_REDIRECTIONS_ALLOWED {
 			// TODO(niklasad1): this should be debug.
-			log::info!("Connecting to target: {:?}", target);
+			log::error!("Connecting to target: {:?}", target);
 
 			let sockaddr = match target.sockaddrs.pop() {
 				Some(addr) => {
@@ -214,6 +214,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 			let tcp_stream = match connect(sockaddr, self.timeout, &target.host, &tls_connector).await {
 				Ok(stream) => stream,
 				Err(e) => {
+					// TODO(niklasad1): this should be debug.
 					log::error!("Failed to connect to sockaddr: {:?}", sockaddr);
 					err = Some(Err(e));
 					continue;
@@ -230,7 +231,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 			// Perform the initial handshake.
 			match client.handshake().await {
 				Ok(ServerResponse::Accepted { .. }) => {
-					log::info!("Connection established to target: {:?}", target);
+					// TODO(niklasad1): this should be debug.
+					log::error!("Connection established to target: {:?}", target);
 					let mut builder = client.into_builder();
 					builder.set_max_message_size(self.max_request_body_size as usize);
 					let (sender, receiver) = builder.finish();
@@ -238,7 +240,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 				}
 
 				Ok(ServerResponse::Rejected { status_code }) => {
-					log::debug!("Connection rejected: {:?}", status_code);
+					// TODO(niklasad1): this should be debug.
+					log::error!("Connection rejected: {:?}", status_code);
 					err = Some(Err(WsHandshakeError::Rejected { status_code }));
 				}
 				Ok(ServerResponse::Redirect { status_code, location }) => {
