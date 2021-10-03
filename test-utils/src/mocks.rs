@@ -35,7 +35,7 @@ use futures_util::{
 };
 use serde::{Deserialize, Serialize};
 use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
-use std::{io, net::SocketAddr, path::Path, time::Duration};
+use std::{io, net::SocketAddr, time::Duration};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 

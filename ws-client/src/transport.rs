@@ -26,9 +26,9 @@
 
 use crate::{client::Header, stream::EitherStream};
 use futures::io::{BufReader, BufWriter};
+use http::Uri;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use std::path::Path;
 use std::{borrow::Cow, io, net::SocketAddr, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -238,44 +238,47 @@ impl<'a> WsTransportClientBuilder<'a> {
 					}
 					Ok(ServerResponse::Redirect { status_code, location }) => {
 						log::error!("Redirection: status_code: {}, location: {}", status_code, location);
-						match url::Url::parse(&location) {
+						// TODO(niklasad1): should query params still be used after redirection?!
+						match location.parse::<Uri>() {
 							// redirection with absolute path => need to lookup.
-							Ok(url) => {
-								target = Target::parse(url)?;
-								tls_connector = match target.mode {
-									Mode::Tls => {
-										let mut client_config = rustls::ClientConfig::default();
-										if let CertificateStore::Native = self.certificate_store {
-											client_config.root_store = rustls_native_certs::load_native_certs()
-												.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
+							Ok(uri) => {
+								// Absolute URI.
+								if uri.scheme().is_some() {
+									// TODO(niklasad1): this is duplicated work
+									target = Target::parse(&location)?;
+									tls_connector = match target.mode {
+										Mode::Tls => {
+											let mut client_config = rustls::ClientConfig::default();
+											if let CertificateStore::Native = self.certificate_store {
+												client_config.root_store = rustls_native_certs::load_native_certs()
+													.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
+											}
+											Some(Arc::new(client_config).into())
 										}
-										Some(Arc::new(client_config).into())
-									}
-									Mode::Plain => None,
-								};
-								break;
-							}
-							// redirection is relative, either `/baz` or `bar`.
-							Err(
-								url::ParseError::RelativeUrlWithoutBase
-								| url::ParseError::RelativeUrlWithCannotBeABaseBase,
-							) => {
-								// replace the entire path if `location` is `/`.
-								if location.starts_with('/') {
-									target.path_and_query = location;
-								} else {
-									// join paths such that the leaf is replaced with `location`.
-									let strip_last_child = Path::new(&target.path_and_query)
-										.ancestors()
-										.nth(1)
-										.unwrap_or_else(|| Path::new("/"));
-									target.path_and_query = strip_last_child
-										.join(location)
-										.to_str()
-										.expect("valid UTF-8 checked by Url::parse; qed")
-										.to_string();
+										Mode::Plain => None,
+									};
+									break;
 								}
-								break;
+								// Relative URI.
+								else {
+									// Replace the entire path_and_query if `location` starts with `/` or `//`.
+									if location.starts_with('/') {
+										target.path_and_query = location;
+									} else {
+										match target.path_and_query.rfind("/") {
+											Some(offset) => {
+												target.path_and_query.replace_range(offset + 1.., &location)
+											}
+											None => {
+												err = Some(Err(WsHandshakeError::Url(
+													"URI relative reference must contain `/` or `//`".to_owned().into(),
+												)));
+												continue;
+											}
+										};
+									}
+									break;
+								}
 							}
 							Err(e) => {
 								err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
