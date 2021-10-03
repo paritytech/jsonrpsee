@@ -29,7 +29,15 @@ use futures::io::{BufReader, BufWriter};
 use http::Uri;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use std::{borrow::Cow, io, net::SocketAddr, sync::Arc, time::Duration};
+use std::convert::TryInto;
+use std::{
+	borrow::Cow,
+	convert::TryFrom,
+	io,
+	net::{SocketAddr, ToSocketAddrs},
+	sync::Arc,
+	time::Duration,
+};
 use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio_rustls::{
@@ -199,15 +207,13 @@ impl<'a> WsTransportClientBuilder<'a> {
 		let mut err = None;
 
 		for _ in 0..self.max_redirections {
-			// TODO(niklasad1): this should be debug.
-			log::error!("Connecting to target: {:?}", target);
+			log::debug!("Connecting to target: {:?}", target);
 
 			for sockaddr in target.sockaddrs.clone() {
 				let tcp_stream = match connect(sockaddr, self.timeout, &target.host, &tls_connector).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						// TODO(niklasad1): this should be debug.
-						log::error!("Failed to connect to sockaddr: {:?}", sockaddr);
+						log::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
@@ -223,8 +229,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 				// Perform the initial handshake.
 				match client.handshake().await {
 					Ok(ServerResponse::Accepted { .. }) => {
-						// TODO(niklasad1): this should be debug.
-						log::error!("Connection established to target: {:?}", target);
+						log::info!("Connection established to target: {:?}", target);
 						let mut builder = client.into_builder();
 						builder.set_max_message_size(self.max_request_body_size as usize);
 						let (sender, receiver) = builder.finish();
@@ -232,20 +237,17 @@ impl<'a> WsTransportClientBuilder<'a> {
 					}
 
 					Ok(ServerResponse::Rejected { status_code }) => {
-						// TODO(niklasad1): this should be debug.
-						log::error!("Connection rejected: {:?}", status_code);
+						log::debug!("Connection rejected: {:?}", status_code);
 						err = Some(Err(WsHandshakeError::Rejected { status_code }));
 					}
 					Ok(ServerResponse::Redirect { status_code, location }) => {
-						log::error!("Redirection: status_code: {}, location: {}", status_code, location);
-						// TODO(niklasad1): should query params still be used after redirection?!
+						log::debug!("Redirection: status_code: {}, location: {}", status_code, location);
 						match location.parse::<Uri>() {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
 								if uri.scheme().is_some() {
-									// TODO(niklasad1): this is duplicated work
-									target = Target::parse(&location)?;
+									target = uri.try_into()?;
 									tls_connector = match target.mode {
 										Mode::Tls => {
 											let mut client_config = rustls::ClientConfig::default();
@@ -361,34 +363,32 @@ pub struct Target {
 	path_and_query: String,
 }
 
-impl Target {
-	/// Parse an URL String to a WebSocket address.
-	pub fn parse(url: impl AsRef<str>) -> Result<Self, WsHandshakeError> {
-		let url =
-			url::Url::parse(url.as_ref()).map_err(|e| WsHandshakeError::Url(format!("Invalid URL: {}", e).into()))?;
-		let mode = match url.scheme() {
-			"ws" => Mode::Plain,
-			"wss" => Mode::Tls,
+impl TryFrom<Uri> for Target {
+	type Error = WsHandshakeError;
+
+	fn try_from(uri: Uri) -> Result<Self, Self::Error> {
+		let mode = match uri.scheme_str() {
+			Some("ws") => Mode::Plain,
+			Some("wss") => Mode::Tls,
 			_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
 		};
-		let host =
-			url.host_str().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
-		let port = url.port_or_known_default().ok_or_else(|| WsHandshakeError::Url("No port number in URL".into()))?;
+		let host = uri.host().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
+		let port = uri
+			.port_u16()
+			.ok_or_else(|| WsHandshakeError::Url("No port number in URL (default port is not supported)".into()))?;
 		let host_header = format!("{}:{}", host, port);
-		let mut path_and_query = url.path().to_owned();
-		if let Some(query) = url.query() {
-			path_and_query.push('?');
-			path_and_query.push_str(query);
-		}
-		// NOTE: `Url::socket_addrs` is using the default port if it's missing (ws:// - 80, wss:// - 443)
-		let sockaddrs = url.socket_addrs(|| None).map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self { sockaddrs, host, host_header, mode, path_and_query })
+		let parts = uri.into_parts();
+		let path_and_query = parts.path_and_query.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
+		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
+		Ok(Self { sockaddrs: sockaddrs.collect(), host, host_header, mode, path_and_query: path_and_query.to_string() })
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{Mode, Target, WsHandshakeError};
+	use super::{Mode, Target, Uri, WsHandshakeError};
+	use http::uri::InvalidUri;
+	use std::convert::TryInto;
 
 	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
 		assert_eq!(&target.host, host);
@@ -397,53 +397,51 @@ mod tests {
 		assert_eq!(&target.path_and_query, path_and_query);
 	}
 
+	fn parse_target(uri: &str) -> Result<Target, WsHandshakeError> {
+		uri.parse::<Uri>().map_err(|e: InvalidUri| WsHandshakeError::Url(e.to_string().into()))?.try_into()
+	}
+
 	#[test]
 	fn ws_works() {
-		let target = Target::parse("ws://127.0.0.1:9933").unwrap();
+		let target = parse_target("ws://127.0.0.1:9933").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
 	}
 
 	#[test]
 	fn wss_works() {
-		let target = Target::parse("wss://kusama-rpc.polkadot.io:443").unwrap();
+		let target = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap();
 		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:443", Mode::Tls, "/");
 	}
 
 	#[test]
 	fn faulty_url_scheme() {
-		let err = Target::parse("http://kusama-rpc.polkadot.io:443").unwrap_err();
+		let err = parse_target("http://kusama-rpc.polkadot.io:443").unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
 	#[test]
 	fn faulty_port() {
-		let err = Target::parse("ws://127.0.0.1:-43").unwrap_err();
+		let err = parse_target("ws://127.0.0.1:-43").unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Url(_)));
-		let err = Target::parse("ws://127.0.0.1:99999").unwrap_err();
+		let err = parse_target("ws://127.0.0.1:99999").unwrap_err();
 		assert!(matches!(err, WsHandshakeError::Url(_)));
-	}
-
-	#[test]
-	fn default_port_works() {
-		let target = Target::parse("ws://127.0.0.1").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:80", Mode::Plain, "/");
 	}
 
 	#[test]
 	fn url_with_path_works() {
-		let target = Target::parse("wss://127.0.0.1/my-special-path").unwrap();
+		let target = parse_target("wss://127.0.0.1:443/my-special-path").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
-		let target = Target::parse("wss://127.0.0.1/my?name1=value1&name2=value2").unwrap();
+		let target = parse_target("wss://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
-		let target = Target::parse("wss://127.0.0.1/my.htm#ignore").unwrap();
+		let target = parse_target("wss://127.0.0.1:443/my.htm#ignore").unwrap();
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my.htm");
 	}
 }

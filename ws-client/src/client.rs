@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
+use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
 use crate::types::{
 	traits::{Client, SubscriptionClient},
 	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
@@ -46,9 +46,11 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+use http::uri::{InvalidUri, Uri};
 use tokio::sync::Mutex;
 
 use serde::de::DeserializeOwned;
+use std::convert::TryInto;
 use std::time::Duration;
 
 pub use soketto::handshake::client::Header;
@@ -187,17 +189,12 @@ impl<'a> WsClientBuilder<'a> {
 	}
 
 	/// Build the client with specified URL to connect to.
-	/// If the port number is missing from the URL, the default port number is used.
-	///
-	///
-	/// `ws://host` - port 80 is used
-	///
-	/// `wss://host` - port 443 is used
+	/// You must provide the port number in the URL.
 	///
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build(self, url: &'a str) -> Result<WsClient, Error> {
+	pub async fn build(self, uri: &'a str) -> Result<WsClient, Error> {
 		let certificate_store = self.certificate_store;
 		let max_capacity_per_subscription = self.max_notifs_per_subscription;
 		let max_concurrent_requests = self.max_concurrent_requests;
@@ -205,9 +202,11 @@ impl<'a> WsClientBuilder<'a> {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 
+		let uri: Uri = uri.parse().map_err(|e: InvalidUri| Error::Transport(e.into()))?;
+
 		let builder = WsTransportClientBuilder {
 			certificate_store,
-			target: Target::parse(url).map_err(|e| Error::Transport(e.into()))?,
+			target: uri.try_into().map_err(|e: WsHandshakeError| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
 			origin_header: self.origin_header,
 			max_request_body_size: self.max_request_body_size,
