@@ -264,7 +264,6 @@ fn assert_error_response(err: Error, exp: ErrorObject) {
 	};
 }
 
-//#[cfg_attr(target_os = "windows", ignore)]
 #[tokio::test]
 async fn redirections() {
 	let _ = env_logger::try_init();
