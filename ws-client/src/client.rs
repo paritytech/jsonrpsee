@@ -126,7 +126,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			origin_header: None,
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
-			max_redirections: 10,
+			max_redirections: 5,
 		}
 	}
 }

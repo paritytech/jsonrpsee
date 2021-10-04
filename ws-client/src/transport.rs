@@ -267,7 +267,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 									if location.starts_with('/') {
 										target.path_and_query = location;
 									} else {
-										match target.path_and_query.rfind("/") {
+										match target.path_and_query.rfind('/') {
 											Some(offset) => {
 												target.path_and_query.replace_range(offset + 1.., &location)
 											}
