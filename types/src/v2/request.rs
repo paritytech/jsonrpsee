@@ -176,9 +176,9 @@ mod test {
 			// Without ID field.
 			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, Some(params)),
 			// Without params field
-			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":null}"#, Some(id), None),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(id), None),
 			// Without params and ID.
-			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":null}"#, None, None),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[]}"#, None, None),
 		];
 
 		for (ser, id, params) in test_vector.iter().cloned() {

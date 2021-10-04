@@ -32,7 +32,7 @@ use alloc::collections::BTreeMap;
 use anyhow::anyhow;
 use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
-use serde::ser::Serializer;
+use serde::ser::{SerializeSeq, Serializer};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::fmt;
@@ -259,6 +259,9 @@ impl<'a> ParamsSequence<'a> {
 #[serde(untagged)]
 pub enum ParamsSer<'a> {
 	/// No params.
+	///
+	/// Serialized as an empty array `[]`.
+	#[serde(serialize_with = "ser_empty_array")]
 	NoParams,
 	/// Positional params (heap allocated).
 	Array(Vec<JsonValue>),
@@ -266,6 +269,13 @@ pub enum ParamsSer<'a> {
 	ArrayRef(&'a [JsonValue]),
 	/// Params by name.
 	Map(BTreeMap<&'a str, JsonValue>),
+}
+
+fn ser_empty_array<S>(s: S) -> Result<S::Ok, S::Error>
+where
+	S: Serializer,
+{
+	s.serialize_seq(Some(0))?.end()
 }
 
 impl<'a> From<BTreeMap<&'a str, JsonValue>> for ParamsSer<'a> {
@@ -401,7 +411,7 @@ mod test {
 	#[test]
 	fn params_serialize() {
 		let test_vector = &[
-			("null", ParamsSer::NoParams),
+			("[]", ParamsSer::NoParams),
 			("[42,23]", ParamsSer::Array(serde_json::from_str("[42,23]").unwrap())),
 			(
 				r#"{"a":42,"b":null,"c":"aa"}"#,
