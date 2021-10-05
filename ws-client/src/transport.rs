@@ -215,7 +215,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		for _ in 0..self.max_redirections {
 			log::debug!("Connecting to target: {:?}", target);
 
-			// The sockaddrs might get reused if the server replies with a URI relative resource.
+			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
 				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, &tls_connector).await {
