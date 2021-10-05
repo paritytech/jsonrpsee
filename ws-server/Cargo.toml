@@ -16,7 +16,7 @@ jsonrpsee-types = { path = "../types", version = "0.3.0" }
 jsonrpsee-utils = { path = "../utils", version = "0.3.0", features = ["server"] }
 log = "0.4"
 serde_json = { version = "1", features = ["raw_value"] }
-soketto = "0.6"
+soketto = "0.7"
 tokio = { version = "1", features = ["net", "rt-multi-thread", "macros"] }
 tokio-util = { version = "0.6", features = ["compat"] }
 

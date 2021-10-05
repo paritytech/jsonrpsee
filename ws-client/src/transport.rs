@@ -24,10 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use arrayvec::ArrayVec;
 use futures::io::{BufReader, BufWriter};
 use futures::prelude::*;
 use soketto::connection;
-use soketto::handshake::client::{Client as WsRawClient, ServerResponse};
+use soketto::handshake::client::{Client as WsRawClient, Header, ServerResponse};
 use std::{borrow::Cow, io, net::SocketAddr, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -234,9 +235,14 @@ impl<'a> WsTransportClientBuilder<'a> {
 			&self.target.host_header,
 			&self.target.path_and_query,
 		);
+
+		let mut headers: ArrayVec<Header, 1> = ArrayVec::new();
+
 		if let Some(origin) = self.origin_header.as_ref() {
-			client.set_origin(origin);
+			headers.push(Header { name: "Origin", value: origin.as_bytes() });
 		}
+
+		client.set_headers(&headers);
 
 		// Perform the initial handshake.
 		match client.handshake().await? {
