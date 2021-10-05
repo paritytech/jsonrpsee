@@ -258,7 +258,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 									target = uri.try_into()?;
 									tls_connector = match target.mode {
 										Mode::Tls => {
-											let mut client_config = rustls::ClientConfig::default();
+											let mut client_config = ClientConfig::default();
 											if let CertificateStore::Native = self.certificate_store {
 												client_config.root_store = rustls_native_certs::load_native_certs()
 													.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
