@@ -43,6 +43,7 @@ use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio_rustls::{
 	client::TlsStream,
+	rustls::ClientConfig,
 	webpki::{DNSNameRef, InvalidDNSNameError},
 	TlsConnector,
 };
@@ -186,7 +187,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let connector = match self.target.mode {
 			Mode::Tls => {
-				let mut client_config = rustls::ClientConfig::default();
+				let mut client_config = ClientConfig::default();
 				if let CertificateStore::Native = self.certificate_store {
 					client_config.root_store = rustls_native_certs::load_native_certs()
 						.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
