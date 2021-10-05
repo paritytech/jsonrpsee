@@ -209,8 +209,10 @@ impl<'a> WsTransportClientBuilder<'a> {
 		for _ in 0..self.max_redirections {
 			log::debug!("Connecting to target: {:?}", target);
 
-			for sockaddr in target.sockaddrs.clone() {
-				let tcp_stream = match connect(sockaddr, self.timeout, &target.host, &tls_connector).await {
+			// The sockaddrs might get reused if the server replies with a URI relative resource.
+			let sockaddrs = std::mem::take(&mut target.sockaddrs);
+			for sockaddr in &sockaddrs {
+				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, &tls_connector).await {
 					Ok(stream) => stream,
 					Err(e) => {
 						log::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
@@ -273,12 +275,17 @@ impl<'a> WsTransportClientBuilder<'a> {
 											}
 											None => {
 												err = Some(Err(WsHandshakeError::Url(
-													"URI relative reference must contain `/` or `//`".to_owned().into(),
+													format!(
+														"path_and_query: {}; this is a bug it must contain `/` please open issue",
+														location
+													)
+													.into(),
 												)));
 												continue;
 											}
 										};
 									}
+									target.sockaddrs = sockaddrs;
 									break;
 								}
 							}
