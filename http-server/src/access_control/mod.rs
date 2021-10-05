@@ -130,13 +130,13 @@ impl AccessControlBuilder {
 		self
 	}
 
-	/// Reset default to allow all origins.
+	/// Allow all origins.
 	pub fn allow_all_origins(mut self) -> Self {
 		self.allowed_headers = AccessControlAllowHeaders::Any;
 		self
 	}
 
-	/// Reset default to allow all headers.
+	/// Allow all headers.
 	pub fn allow_all_headers(mut self) -> Self {
 		self.allowed_origins = None;
 		self
