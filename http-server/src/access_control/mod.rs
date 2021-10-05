@@ -124,7 +124,7 @@ impl AccessControlBuilder {
 		Self::default()
 	}
 
-	/// Reset default to allow all hosts.
+	/// Allow all hosts.
 	pub fn allow_all_hosts(mut self) -> Self {
 		self.allowed_hosts = AllowHosts::Any;
 		self
