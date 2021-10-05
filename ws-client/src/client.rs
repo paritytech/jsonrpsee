@@ -50,8 +50,7 @@ use http::uri::{InvalidUri, Uri};
 use tokio::sync::Mutex;
 
 use serde::de::DeserializeOwned;
-use std::convert::TryInto;
-use std::time::Duration;
+use std::{borrow::Cow, convert::TryInto, time::Duration};
 
 pub use soketto::handshake::client::Header;
 
@@ -110,7 +109,7 @@ pub struct WsClientBuilder<'a> {
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	origin_header: Option<Header<'a>>,
+	origin_header: Option<Cow<'a, str>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
@@ -157,7 +156,7 @@ impl<'a> WsClientBuilder<'a> {
 	}
 
 	/// Set origin header to pass during the handshake.
-	pub fn origin_header(mut self, origin: Header<'a>) -> Self {
+	pub fn origin_header(mut self, origin: Cow<'a, str>) -> Self {
 		self.origin_header = Some(origin);
 		self
 	}

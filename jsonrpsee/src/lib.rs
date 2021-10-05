@@ -24,42 +24,54 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! jsonrpsee wrapper crate.
+//! Jsonrpsee wrapper crate.
+//!
+//! <br>
+//!
+//! # Optional features
+//!
+//! The `jsonrpsee` crate composes JSON-RPC functionality behind optional feature
+//! flags to provide for client and server communication over specific protocols.
+//! There are no default features, all functionality must be opted in to accordingly.
+//! The following features are avaliable.
+//!
+//! - **`http-client`** - JSON-RPC client functionality over HTTP protocol.
+//! - **`http-server`** - JSON-RPC server functionality over HTTP protocol.
+//! - **`ws-client`** - JSON-RPC client functionality over WebSocket protocol.
+//! - **`ws-server`** - JSON-RPC server functionality over WebSocket protocol.
+//! - **`macros`** - JSON-RPC API generation convenience by derive macros.
+//! - **`client`** - Enables `http-client` and `ws-client` features.
+//! - **`server`** - Enables `http-server` and `ws-server` features.
+//! - **`full`** - Enables `client`, `server` and `macros` features.
 
-/// JSON RPC HTTP client.
-#[cfg(feature = "client")]
-pub use http_client;
+/// JSON-RPC HTTP client.
+#[cfg(feature = "jsonrpsee-http-client")]
+pub use jsonrpsee_http_client as http_client;
 
-/// JSON RPC WebSocket client.
-#[cfg(feature = "client")]
-pub use ws_client;
+/// JSON-RPC WebSocket client.
+#[cfg(feature = "jsonrpsee-ws-client")]
+pub use jsonrpsee_ws_client as ws_client;
 
-/// JSON RPC WebSocket client convenience macro to build params.
-#[cfg(feature = "client")]
-pub use utils::rpc_params;
+/// JSON-RPC client convenience macro to build params.
+#[cfg(any(feature = "http-client", feature = "ws-client"))]
+pub use jsonrpsee_utils::rpc_params;
 
-/// JSON RPC HTTP server.
-#[cfg(feature = "server")]
-pub use http_server;
+/// JSON-RPC HTTP server.
+#[cfg(feature = "jsonrpsee-http-server")]
+pub use jsonrpsee_http_server as http_server;
 
-/// JSON RPC WebSocket server.
-#[cfg(feature = "server")]
-pub use ws_server;
+/// JSON-RPC WebSocket server.
+#[cfg(feature = "jsonrpsee-ws-server")]
+pub use jsonrpsee_ws_server as ws_server;
+
+/// Procedural macros for JSON-RPC implementations.
+#[cfg(feature = "jsonrpsee-proc-macros")]
+pub use jsonrpsee_proc_macros as proc_macros;
+
+/// Common types used to implement JSON-RPC server and client.
+#[cfg(feature = "jsonrpsee-types")]
+pub use jsonrpsee_types as types;
 
 /// Set of RPC methods that can be mounted to the server.
-#[cfg(feature = "server")]
-pub use utils::server::rpc_module::{RpcModule, SubscriptionSink};
-
-/// Procedural macros for JSON RPC implementations.
-#[cfg(feature = "macros")]
-pub use proc_macros;
-
-/// Common types used to implement JSON RPC server and client.
-#[cfg(any(feature = "types", feature = "macros"))]
-pub mod types {
-	pub use ::types::*;
-
-	/// Set of RPC methods that can be mounted to the server.
-	#[cfg(feature = "server")]
-	pub use utils::server::rpc_module::{RpcModule, SubscriptionSink};
-}
+#[cfg(any(feature = "http-server", feature = "ws-server"))]
+pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SubscriptionSink};

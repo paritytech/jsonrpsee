@@ -24,11 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{client::Header, stream::EitherStream};
+use crate::stream::EitherStream;
+use arrayvec::ArrayVec;
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
 use soketto::connection;
-use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
+use soketto::handshake::client::{Client as WsHandshakeClient, Header, ServerResponse};
 use std::convert::TryInto;
 use std::{
 	borrow::Cow,
@@ -71,7 +72,7 @@ pub struct WsTransportClientBuilder<'a> {
 	pub timeout: Duration,
 	/// `Origin` header to pass during the HTTP handshake. If `None`, no
 	/// `Origin` header is passed.
-	pub origin_header: Option<Header<'a>>,
+	pub origin_header: Option<Cow<'a, str>>,
 	/// Max payload size
 	pub max_request_body_size: u32,
 	/// Max number of redirections.
@@ -203,8 +204,12 @@ impl<'a> WsTransportClientBuilder<'a> {
 		mut tls_connector: Option<TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut target = self.target;
-		let origin = self.origin_header.map(|o| [o]);
+		let mut headers: ArrayVec<Header, 1> = ArrayVec::new();
 		let mut err = None;
+
+		if let Some(origin) = self.origin_header.as_ref() {
+			headers.push(Header { name: "Origin", value: origin.as_bytes() });
+		}
 
 		for _ in 0..self.max_redirections {
 			log::debug!("Connecting to target: {:?}", target);
@@ -225,9 +230,9 @@ impl<'a> WsTransportClientBuilder<'a> {
 					&target.host_header,
 					&target.path_and_query,
 				);
-				if let Some(origin) = &origin {
-					client.set_headers(origin);
-				}
+
+				client.set_headers(&headers);
+
 				// Perform the initial handshake.
 				match client.handshake().await {
 					Ok(ServerResponse::Accepted { .. }) => {
