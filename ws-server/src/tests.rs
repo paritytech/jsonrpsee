@@ -30,7 +30,7 @@ use crate::types::error::{CallError, Error};
 use crate::{future::StopHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
+use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 use std::fmt;

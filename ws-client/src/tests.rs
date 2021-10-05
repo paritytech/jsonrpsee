@@ -32,7 +32,7 @@ use crate::types::{
 };
 use crate::WsClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
+use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
@@ -262,4 +262,35 @@ fn assert_error_response(err: Error, exp: ErrorObject) {
 		}
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
 	};
+}
+
+#[tokio::test]
+async fn redirections() {
+	let _ = env_logger::try_init();
+	let expected = "abc 123";
+	let server = WebSocketTestServer::with_hardcoded_response(
+		"127.0.0.1:0".parse().unwrap(),
+		ok_response(expected.into(), Id::Num(0)),
+	)
+	.with_default_timeout()
+	.await
+	.unwrap();
+
+	let server_url = format!("ws://{}", server.local_addr());
+	let redirect_url = jsonrpsee_test_utils::mocks::ws_server_with_redirect(server_url);
+
+	// The client will first connect to a server that only performs re-directions and finally
+	// redirect to another server to complete the handshake.
+	let client = WsClientBuilder::default().build(&redirect_url).with_default_timeout().await;
+	// It's an ok client
+	let client = match client {
+		Ok(Ok(client)) => client,
+		Ok(Err(e)) => panic!("WsClient builder failed with: {:?}", e),
+		Err(e) => panic!("WsClient builder timed out with: {:?}", e),
+	};
+	// It's connected
+	assert!(client.is_connected());
+	// It works
+	let response = client.request::<String>("anything", ParamsSer::NoParams).with_default_timeout().await.unwrap();
+	assert_eq!(response.unwrap(), String::from(expected));
 }
