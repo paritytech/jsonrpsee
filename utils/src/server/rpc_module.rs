@@ -531,30 +531,38 @@ impl SubscriptionSink {
 	}
 
 	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
-		let res = if let Some(conn) = self.is_connected.as_ref() {
-			if !conn.is_canceled() {
+		let res = match self.is_connected.as_ref() {
+			Some(conn) if !conn.is_canceled() => {
 				// unbounded send only fails if the receiver has been dropped.
-				self.inner.unbounded_send(msg).map_err(|_| subscription_closed_err(self.uniq_sub.sub_id))
-			} else {
-				Err(subscription_closed_err(self.uniq_sub.sub_id))
+				self.inner.unbounded_send(msg).map_err(|_| {
+					Some(SubscriptionClosedError::new("Closed by the client (connection reset)", self.uniq_sub.sub_id))
+				})
 			}
-		} else {
-			Err(subscription_closed_err(self.uniq_sub.sub_id))
+			Some(_) => Err(Some(SubscriptionClosedError::new("Closed by unsubscribe call", self.uniq_sub.sub_id))),
+			// NOTE(niklasad1): this should be unreachble, after the first error is detected the subscription is closed.
+			None => Err(None),
 		};
 
-		if let Err(e) = &res {
-			self.close(e.to_string());
+		if let Err(Some(e)) = &res {
+			self.inner_close(e);
 		}
 
-		res
+		res.map_err(|e| {
+			let err = e.unwrap_or_else(|| SubscriptionClosedError::new("Close reason unknown", self.uniq_sub.sub_id));
+			Error::SubscriptionClosed(err)
+		})
 	}
 
 	/// Close the subscription sink with a customized error message.
-	pub fn close(&mut self, close_reason: String) {
+	pub fn close(&mut self, msg: &str) {
+		let err = SubscriptionClosedError::new(msg, self.uniq_sub.sub_id);
+		self.inner_close(&err);
+	}
+
+	fn inner_close(&mut self, err: &SubscriptionClosedError) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
-			let msg =
-				self.build_message(&SubscriptionClosedError::from(close_reason)).expect("valid json infallible; qed");
+			let msg = self.build_message(err).expect("valid json infallible; qed");
 			let _ = sink.unbounded_send(msg);
 		}
 	}
@@ -562,12 +570,9 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		self.close(format!("Subscription: {} closed", self.uniq_sub.sub_id));
+		let err = SubscriptionClosedError::new("Closed by the server", self.uniq_sub.sub_id);
+		self.inner_close(&err);
 	}
-}
-
-fn subscription_closed_err(sub_id: u64) -> Error {
-	Error::SubscriptionClosed(format!("Subscription {} closed", sub_id).into())
 }
 
 /// Wrapper struct that maintains a subscription for testing.
@@ -793,7 +798,8 @@ mod tests {
 		}
 
 		// The subscription is now closed
-		let (val, _) = my_sub.next::<SubscriptionClosedError>().await;
-		assert_eq!(val, format!("Subscription: {} closed", my_sub.subscription_id()).into());
+		let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await;
+		assert_eq!(sub_closed_err.subscription_id(), my_sub.subscription_id());
+		assert_eq!(sub_closed_err.close_reason(), "Closed by the server");
 	}
 }
