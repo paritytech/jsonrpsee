@@ -35,10 +35,10 @@ use serde_json::value::RawValue;
 #[async_trait]
 pub trait Client {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
-	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error>;
+	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error>;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
 	where
 		R: DeserializeOwned;
 
@@ -48,7 +48,7 @@ pub trait Client {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone;
 }
@@ -71,7 +71,7 @@ pub trait SubscriptionClient: Client {
 	async fn subscribe<'a, Notif>(
 		&self,
 		subscribe_method: &'a str,
-		params: ParamsSer<'a>,
+		params: Option<ParamsSer<'a>>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<Notif>, Error>
 	where

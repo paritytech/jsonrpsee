@@ -34,6 +34,7 @@ use crate::WsClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_utils::rpc_params;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]
@@ -55,7 +56,7 @@ async fn notif_works() {
 		.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
-	assert!(client.notification("notif", ParamsSer::NoParams).with_default_timeout().await.unwrap().is_ok());
+	assert!(client.notification("notif", None).with_default_timeout().await.unwrap().is_ok());
 }
 
 #[tokio::test]
@@ -116,7 +117,7 @@ async fn subscription_works() {
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
 		let mut sub: Subscription<String> = client
-			.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello")
+			.subscribe("subscribe_hello", None, "unsubscribe_hello")
 			.with_default_timeout()
 			.await
 			.unwrap()
@@ -189,11 +190,7 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 
 #[tokio::test]
 async fn batch_request_works() {
-	let batch_request = vec![
-		("say_hello", ParamsSer::NoParams),
-		("say_goodbye", ParamsSer::Array(vec![0_u64.into(), 1.into(), 2.into()])),
-		("get_swag", ParamsSer::NoParams),
-	];
+	let batch_request = vec![("say_hello", None), ("say_goodbye", Some(rpc_params![0_u64, 1, 2])), ("get_swag", None)];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
@@ -202,11 +199,7 @@ async fn batch_request_works() {
 
 #[tokio::test]
 async fn batch_request_out_of_order_response() {
-	let batch_request = vec![
-		("say_hello", ParamsSer::NoParams),
-		("say_goodbye", ParamsSer::Array(vec![0_u64.into(), 1.into(), 2.into()])),
-		("get_swag", ParamsSer::NoParams),
-	];
+	let batch_request = vec![("say_hello", None), ("say_goodbye", Some(rpc_params!(0_u64, 1, 2))), ("get_swag", None)];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
@@ -225,14 +218,14 @@ async fn is_connected_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	assert!(client.is_connected());
-	client.request::<String>("say_hello", ParamsSer::NoParams).with_default_timeout().await.unwrap().unwrap_err();
+	client.request::<String>("say_hello", None).with_default_timeout().await.unwrap().unwrap_err();
 	// give the background thread some time to terminate.
 	std::thread::sleep(std::time::Duration::from_millis(100));
 	assert!(!client.is_connected())
 }
 
 async fn run_batch_request_with_response<'a>(
-	batch: Vec<(&'a str, ParamsSer<'a>)>,
+	batch: Vec<(&'a str, Option<ParamsSer<'a>>)>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
@@ -251,7 +244,7 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 		.unwrap();
 	let uri = format!("ws://{}", server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
-	client.request("say_hello", ParamsSer::NoParams).with_default_timeout().await.unwrap()
+	client.request("say_hello", None).with_default_timeout().await.unwrap()
 }
 
 fn assert_error_response(err: Error, exp: ErrorObject) {

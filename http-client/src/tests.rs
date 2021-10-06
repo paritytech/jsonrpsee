@@ -33,6 +33,7 @@ use crate::HttpClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::types::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_utils::rpc_params;
 
 #[tokio::test]
 async fn method_call_works() {
@@ -50,7 +51,7 @@ async fn notification_works() {
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	client
-		.notification("i_dont_care_about_the_response_because_the_server_should_not_respond", ParamsSer::NoParams)
+		.notification("i_dont_care_about_the_response_because_the_server_should_not_respond", None)
 		.with_default_timeout()
 		.await
 		.unwrap()
@@ -110,11 +111,8 @@ async fn subscription_response_to_request() {
 
 #[tokio::test]
 async fn batch_request_works() {
-	let batch_request = vec![
-		("say_hello", ParamsSer::NoParams),
-		("say_goodbye", ParamsSer::Array(vec![0_u64.into(), 1.into(), 2.into()])),
-		("get_swag", ParamsSer::NoParams),
-	];
+	let batch_request =
+		vec![("say_hello", Some(rpc_params! {})), ("say_goodbye", Some(rpc_params![0_u64, 1, 2])), ("get_swag", None)];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
@@ -123,11 +121,8 @@ async fn batch_request_works() {
 
 #[tokio::test]
 async fn batch_request_out_of_order_response() {
-	let batch_request = vec![
-		("say_hello", ParamsSer::NoParams),
-		("say_goodbye", ParamsSer::Array(vec![0_u64.into(), 1.into(), 2.into()])),
-		("get_swag", ParamsSer::NoParams),
-	];
+	let batch_request =
+		vec![("say_hello", Some(rpc_params! {})), ("say_goodbye", Some(rpc_params![0_u64, 1, 2])), ("get_swag", None)];
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
@@ -135,7 +130,7 @@ async fn batch_request_out_of_order_response() {
 }
 
 async fn run_batch_request_with_response<'a>(
-	batch: Vec<(&'a str, ParamsSer<'a>)>,
+	batch: Vec<(&'a str, Option<ParamsSer<'a>>)>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
@@ -148,7 +143,7 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
-	client.request("say_hello", ParamsSer::NoParams).with_default_timeout().await.unwrap()
+	client.request("say_hello", None).with_default_timeout().await.unwrap()
 }
 
 fn assert_jsonrpc_error_response(err: Error, exp: ErrorObject) {

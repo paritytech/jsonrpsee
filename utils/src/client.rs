@@ -44,6 +44,6 @@ macro_rules! rpc_params {
 		}
 	};
 	() => {
-		$crate::client::__reexports::ParamsSer::NoParams,
+		$crate::client::__reexports::ParamsSer::Array(vec![])
 	}
 }

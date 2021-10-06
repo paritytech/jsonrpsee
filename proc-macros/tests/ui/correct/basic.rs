@@ -2,7 +2,8 @@
 
 use jsonrpsee::{
 	proc_macros::rpc,
-	types::{async_trait, to_json_value, traits::Client, v2::params::ParamsSer, RpcResult},
+	rpc_params,
+	types::{async_trait, traits::Client, RpcResult},
 	ws_client::*,
 	ws_server::{SubscriptionSink, WsServerBuilder},
 };
@@ -98,20 +99,11 @@ async fn main() {
 	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
 
 	assert_eq!(client.array_params(vec![1]).await.unwrap(), 1);
-	assert_eq!(
-		client
-			.request::<u64>("foo_array_params", vec![to_json_value(Vec::<u64>::new()).unwrap()].into())
-			.await
-			.unwrap(),
-		0
-	);
+	assert_eq!(client.request::<u64>("foo_array_params", Some(rpc_params![Vec::<u64>::new()])).await.unwrap(), 0);
 
-	assert_eq!(client.request::<bool>("foo_optional_param", vec![].into()).await.unwrap(), false);
-	assert_eq!(client.request::<bool>("foo_optional_param", ParamsSer::NoParams).await.unwrap(), false);
-	assert_eq!(
-		client.request::<bool>("foo_optional_param", vec![to_json_value(Some(1)).unwrap()].into()).await.unwrap(),
-		true
-	);
+	assert_eq!(client.request::<bool>("foo_optional_param", Some(rpc_params![])).await.unwrap(), false);
+	assert_eq!(client.request::<bool>("foo_optional_param", None).await.unwrap(), false);
+	assert_eq!(client.request::<bool>("foo_optional_param", Some(rpc_params![1])).await.unwrap(), true);
 
 	let mut sub = client.sub().await.unwrap();
 	let first_recv = sub.next().await.unwrap();

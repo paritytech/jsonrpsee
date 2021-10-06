@@ -80,12 +80,13 @@ pub struct RequestSer<'a> {
 	/// Name of the method to be invoked.
 	pub method: &'a str,
 	/// Parameter values of the request.
-	pub params: ParamsSer<'a>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub params: Option<ParamsSer<'a>>,
 }
 
 impl<'a> RequestSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(id: Id<'a>, method: &'a str, params: ParamsSer<'a>) -> Self {
+	pub fn new(id: Id<'a>, method: &'a str, params: Option<ParamsSer<'a>>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
 	}
 }
@@ -98,12 +99,13 @@ pub struct NotificationSer<'a> {
 	/// Name of the method to be invoked.
 	pub method: &'a str,
 	/// Parameter values of the request.
-	pub params: ParamsSer<'a>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub params: Option<ParamsSer<'a>>,
 }
 
 impl<'a> NotificationSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(method: &'a str, params: ParamsSer<'a>) -> Self {
+	pub fn new(method: &'a str, params: Option<ParamsSer<'a>>) -> Self {
 		Self { jsonrpc: TwoPointZero, method, params }
 	}
 }
@@ -176,9 +178,9 @@ mod test {
 			// Without ID field.
 			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, Some(params)),
 			// Without params field
-			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[]}"#, Some(id), None),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(id), None),
 			// Without params and ID.
-			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[]}"#, None, None),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, None),
 		];
 
 		for (ser, id, params) in test_vector.iter().cloned() {
@@ -186,7 +188,7 @@ mod test {
 				jsonrpc: TwoPointZero,
 				method,
 				id: id.unwrap_or(Id::Null),
-				params: params.unwrap_or(ParamsSer::NoParams),
+				params,
 			})
 			.unwrap();
 
@@ -197,7 +199,7 @@ mod test {
 	#[test]
 	fn serialize_notif() {
 		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","params":["hello"]}"#;
-		let req = NotificationSer::new("say_hello", vec!["hello".into()].into());
+		let req = NotificationSer::new("say_hello", Some(vec!["hello".into()].into()));
 		let ser = serde_json::to_string(&req).unwrap();
 		assert_eq!(exp, ser);
 	}

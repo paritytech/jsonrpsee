@@ -30,3 +30,4 @@ rustls-native-certs = "0.5.0"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
+jsonrpsee-utils = { path = "../utils" }
