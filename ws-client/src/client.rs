@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
+use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
 use crate::types::{
 	traits::{Client, SubscriptionClient},
 	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
@@ -46,10 +46,13 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+use http::uri::{InvalidUri, Uri};
 use tokio::sync::Mutex;
 
 use serde::de::DeserializeOwned;
-use std::{borrow::Cow, time::Duration};
+use std::{borrow::Cow, convert::TryInto, time::Duration};
+
+pub use soketto::handshake::client::Header;
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -109,6 +112,7 @@ pub struct WsClientBuilder<'a> {
 	origin_header: Option<Cow<'a, str>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
+	max_redirections: usize,
 }
 
 impl<'a> Default for WsClientBuilder<'a> {
@@ -121,6 +125,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			origin_header: None,
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
+			max_redirections: 5,
 		}
 	}
 }
@@ -151,8 +156,8 @@ impl<'a> WsClientBuilder<'a> {
 	}
 
 	/// Set origin header to pass during the handshake.
-	pub fn origin_header(mut self, origin: &'a str) -> Self {
-		self.origin_header = Some(Cow::Borrowed(origin));
+	pub fn origin_header(mut self, origin: Cow<'a, str>) -> Self {
+		self.origin_header = Some(origin);
 		self
 	}
 
@@ -176,18 +181,19 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
+	/// Set the max number of redirections to perform until a connection is regarded as failed.
+	pub fn max_redirections(mut self, redirect: usize) -> Self {
+		self.max_redirections = redirect;
+		self
+	}
+
 	/// Build the client with specified URL to connect to.
-	/// If the port number is missing from the URL, the default port number is used.
-	///
-	///
-	/// `ws://host` - port 80 is used
-	///
-	/// `wss://host` - port 443 is used
+	/// You must provide the port number in the URL.
 	///
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build(self, url: &'a str) -> Result<WsClient, Error> {
+	pub async fn build(self, uri: &'a str) -> Result<WsClient, Error> {
 		let certificate_store = self.certificate_store;
 		let max_capacity_per_subscription = self.max_notifs_per_subscription;
 		let max_concurrent_requests = self.max_concurrent_requests;
@@ -195,12 +201,15 @@ impl<'a> WsClientBuilder<'a> {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 
+		let uri: Uri = uri.parse().map_err(|e: InvalidUri| Error::Transport(e.into()))?;
+
 		let builder = WsTransportClientBuilder {
 			certificate_store,
-			target: Target::parse(url).map_err(|e| Error::Transport(e.into()))?,
+			target: uri.try_into().map_err(|e: WsHandshakeError| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
 			origin_header: self.origin_header,
 			max_request_body_size: self.max_request_body_size,
+			max_redirections: self.max_redirections,
 		};
 
 		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(e.into()))?;

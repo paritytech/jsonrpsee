@@ -31,7 +31,7 @@ use crate::types::{
 };
 use crate::HttpClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::Id;
+use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_utils::rpc_params;
 
