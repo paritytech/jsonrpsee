@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -27,10 +27,10 @@
 #![cfg(test)]
 
 use crate::types::error::{CallError, Error};
-use crate::{server::StopHandle, RpcModule, WsServerBuilder};
-use futures_util::FutureExt;
+use crate::{future::StopHandle, RpcModule, WsServerBuilder};
+use anyhow::anyhow;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, TestContext, WebSocketTestClient};
+use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 use std::fmt;
@@ -54,10 +54,11 @@ async fn server() -> SocketAddr {
 
 /// Spawns a dummy `JSONRPC v2 WebSocket`
 /// It has the following methods:
-/// 	sync methods: `say_hello` and `add`
-///		async: `say_hello_async` and `add_sync`
-/// 	other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns `CallError::Failed`), `sleep_for`
-/// Returns the address together with handles for server future and server stop.
+///     sync methods: `say_hello` and `add`
+///     async: `say_hello_async` and `add_sync`
+///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns
+/// 			`CallError::Failed`), `sleep_for` Returns the address together with handles for server future
+///				and server stop.
 async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
@@ -82,21 +83,19 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 				futures_util::future::ready(()).await;
 				Ok("hello")
 			}
-			.boxed()
 		})
 		.unwrap();
 	module
-		.register_async_method("add_async", |params, _| {
-			async move {
-				let params: Vec<u64> = params.parse()?;
-				let sum: u64 = params.into_iter().sum();
-				Ok(sum)
-			}
-			.boxed()
+		.register_async_method("add_async", |params, _| async move {
+			let params: Vec<u64> = params.parse()?;
+			let sum: u64 = params.into_iter().sum();
+			Ok(sum)
 		})
 		.unwrap();
-	module.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams)).unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(CallError::Failed(Box::new(MyAppError)))).unwrap();
+	module
+		.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams(anyhow!("buh!")).into()))
+		.unwrap();
+	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
 	module
 		.register_method("sleep_for", |params, _| {
 			let sleep: Vec<u64> = params.parse()?;
@@ -121,14 +120,14 @@ async fn server_with_context() -> SocketAddr {
 
 	rpc_module
 		.register_method("should_err", |_p, ctx| {
-			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.err().map_err(CallError::Failed)?;
 			Ok("err")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_method("should_ok", |_p, ctx| {
-			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(CallError::Failed)?;
 			Ok("ok")
 		})
 		.unwrap();
@@ -136,22 +135,20 @@ async fn server_with_context() -> SocketAddr {
 	rpc_module
 		.register_async_method("should_ok_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(CallError::Failed)?;
 				// Call some async function inside.
 				Ok(futures_util::future::ready("ok!").await)
 			}
-			.boxed()
 		})
 		.unwrap();
 
 	rpc_module
 		.register_async_method("err_async", |_p, ctx| {
 			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+				let _ = ctx.ok().map_err(CallError::Failed)?;
 				// Async work that returns an error
-				futures_util::future::err::<(), CallError>(CallError::Failed(String::from("nah").into())).await
+				futures_util::future::err::<(), _>(anyhow!("nah").into()).await
 			}
-			.boxed()
 		})
 		.unwrap();
 
@@ -202,12 +199,9 @@ async fn can_set_max_connections() {
 	assert!(conn2.is_ok());
 	// Third connection is rejected
 	assert!(conn3.is_err());
-
-	let err = match conn3 {
-		Err(soketto::handshake::Error::Io(err)) => err,
-		_ => panic!("Invalid error kind; expected std::io::Error"),
-	};
-	assert_eq!(err.kind(), std::io::ErrorKind::ConnectionReset);
+	if !matches!(conn3, Err(WebSocketTestError::RejectedWithStatusCode(429))) {
+		panic!("Expected RejectedWithStatusCode(429), got: {:#?}", conn3);
+	}
 
 	// Decrement connection count
 	drop(conn2);
@@ -291,6 +285,52 @@ async fn batch_method_call_where_some_calls_fail() {
 }
 
 #[tokio::test]
+async fn garbage_request_fails() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"dsdfs fsdsfds"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{ "#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"{sds}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"["#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"[dsds]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+
+	let req = r#"[]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, invalid_request(Id::Null));
+
+	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, parse_error(Id::Null));
+}
+
+#[tokio::test]
 async fn single_method_call_with_params_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -305,10 +345,11 @@ async fn single_method_call_with_faulty_params_returns_err() {
 	let _ = env_logger::try_init();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
 
-	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["should be a number"],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, invalid_params(Id::Num(1)));
+	assert_eq!(response, expected);
 }
 
 #[tokio::test]
@@ -388,7 +429,8 @@ async fn invalid_json_id_missing_value() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
+	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
+	// Null.
 	assert_eq!(response, parse_error(Id::Null));
 }
 
@@ -498,14 +540,13 @@ async fn can_register_modules() {
 #[tokio::test]
 async fn stop_works() {
 	let _ = env_logger::try_init();
-	let (_addr, join_handle, mut stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
-	stop_handle.stop().with_default_timeout().await.unwrap().unwrap();
-	stop_handle.wait_for_stop().with_default_timeout().await.unwrap();
+	let (_addr, join_handle, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	stop_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
 	join_handle.with_default_timeout().await.expect("Timeout").expect("Join error");
 
 	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(stop_handle.stop().with_default_timeout().await.unwrap(), Err(Error::AlreadyStopped)));
+	assert!(matches!(stop_handle.stop(), Err(Error::AlreadyStopped)));
 }

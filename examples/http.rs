@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -27,7 +27,8 @@
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
 	http_server::{HttpServerBuilder, HttpStopHandle, RpcModule},
-	types::{traits::Client, JsonValue},
+	rpc_params,
+	types::traits::Client,
 };
 use std::net::SocketAddr;
 
@@ -38,10 +39,9 @@ async fn main() -> anyhow::Result<()> {
 	let (server_addr, _handle) = run_server().await?;
 	let url = format!("http://{}", server_addr);
 
-	let params: &[JsonValue] = &[1_u64.into(), 2.into(), 3.into()];
-
 	let client = HttpClientBuilder::default().build(url)?;
-	let response: Result<String, _> = client.request("say_hello", params.into()).await;
+	let params = rpc_params!(1_u64, 2, 3);
+	let response: Result<String, _> = client.request("say_hello", params).await;
 	println!("r: {:?}", response);
 
 	Ok(())

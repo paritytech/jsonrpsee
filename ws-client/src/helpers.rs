@@ -1,10 +1,33 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::v2::{
-	error::JsonRpcError,
-	params::{Id, JsonRpcParams, JsonRpcSubscriptionParams, SubscriptionId},
-	request::{JsonRpcCallSer, JsonRpcNotification},
-	response::JsonRpcResponse,
+	Id, Notification, ParamsSer, RequestSer, Response, RpcError, SubscriptionId, SubscriptionResponse,
 };
 use crate::types::{Error, RequestMessage};
 use futures::channel::{mpsc, oneshot};
@@ -14,7 +37,7 @@ use std::time::Duration;
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
-pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<JsonRpcResponse<JsonValue>>) -> Result<(), Error> {
+pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<JsonValue>>) -> Result<(), Error> {
 	let mut digest = Vec::with_capacity(rps.len());
 	let mut ordered_responses = vec![JsonValue::Null; rps.len()];
 	let mut rps_unordered: Vec<_> = Vec::with_capacity(rps.len());
@@ -47,19 +70,19 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<JsonRpcResp
 ///
 /// Returns `Ok()` if the response was successfully sent to the frontend.
 /// Return `Err(None)` if the subscription was not found.
-/// Returns `Err(Some(msg))` if the subscription was full.
+/// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
 pub fn process_subscription_response(
 	manager: &mut RequestManager,
-	notif: JsonRpcNotification<JsonRpcSubscriptionParams<JsonValue>>,
+	response: SubscriptionResponse<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
-	let sub_id = notif.params.subscription;
+	let sub_id = response.params.subscription;
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => return Err(None),
 	};
 
 	match manager.as_subscription_mut(&request_id) {
-		Some(send_back_sink) => match send_back_sink.try_send(notif.params.result) {
+		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
 			Err(err) => {
 				log::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
@@ -69,7 +92,7 @@ pub fn process_subscription_response(
 			}
 		},
 		None => {
-			log::error!("Subscription ID: {:?} not an active subscription", sub_id);
+			log::error!("Subscription ID: {:?} is not an active subscription", sub_id);
 			Err(None)
 		}
 	}
@@ -79,7 +102,7 @@ pub fn process_subscription_response(
 ///
 /// Returns Ok() if the response was successfully handled
 /// Returns Err() if there was no handler for the method
-pub fn process_notification(manager: &mut RequestManager, notif: JsonRpcNotification<JsonValue>) -> Result<(), Error> {
+pub fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) -> Result<(), Error> {
 	match manager.as_notification_handler_mut(notif.method.to_owned()) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
@@ -103,7 +126,7 @@ pub fn process_notification(manager: &mut RequestManager, notif: JsonRpcNotifica
 /// Returns `Err(_)` if the response couldn't be handled.
 pub fn process_single_response(
 	manager: &mut RequestManager,
-	response: JsonRpcResponse<JsonValue>,
+	response: Response<JsonValue>,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
 	let response_id = response.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
@@ -167,8 +190,8 @@ pub fn build_unsubscribe_message(
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
 	// TODO: https://github.com/paritytech/jsonrpsee/issues/275
-	let params = JsonRpcParams::ArrayRef(sub_id_slice);
-	let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
+	let params = ParamsSer::ArrayRef(sub_id_slice);
+	let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 
@@ -176,7 +199,7 @@ pub fn build_unsubscribe_message(
 ///
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
-pub fn process_error_response(manager: &mut RequestManager, err: JsonRpcError) -> Result<(), Error> {
+pub fn process_error_response(manager: &mut RequestManager, err: RpcError) -> Result<(), Error> {
 	let id = err.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
@@ -198,8 +221,8 @@ pub async fn call_with_timeout<T>(
 	timeout: Duration,
 	rx: oneshot::Receiver<Result<T, Error>>,
 ) -> Result<Result<T, Error>, oneshot::Canceled> {
-	let timeout = crate::tokio::sleep(timeout);
-	crate::tokio::select! {
+	let timeout = tokio::time::sleep(timeout);
+	tokio::select! {
 		res = rx => res,
 		_ = timeout => Ok(Err(Error::RequestTimeout))
 	}

@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -24,9 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use futures_channel::oneshot;
+use futures::channel::oneshot;
 use jsonrpsee::{
 	http_server::{HttpServerBuilder, HttpStopHandle},
+	types::Error,
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
 };
@@ -47,7 +48,9 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) 
 		module
 			.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
 				std::thread::spawn(move || loop {
-					let _ = sink.send(&"hello from subscription");
+					if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello from subscription") {
+						break;
+					}
 					std::thread::sleep(Duration::from_millis(50));
 				});
 				Ok(())
@@ -57,7 +60,9 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) 
 		module
 			.register_subscription("subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
 				std::thread::spawn(move || loop {
-					let _ = sink.send(&1337);
+					if let Err(Error::SubscriptionClosed(_)) = sink.send(&1337) {
+						break;
+					}
 					std::thread::sleep(Duration::from_millis(100));
 				});
 				Ok(())
@@ -69,7 +74,9 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) 
 				let mut count: usize = params.one()?;
 				std::thread::spawn(move || loop {
 					count = count.wrapping_add(1);
-					let _ = sink.send(&count);
+					if let Err(Error::SubscriptionClosed(_)) = sink.send(&count) {
+						break;
+					}
 					std::thread::sleep(Duration::from_millis(100));
 				});
 				Ok(())

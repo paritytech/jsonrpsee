@@ -1,5 +1,5 @@
-error: `#[subscription]` got unknown `magic` argument. Supported arguments are `item`, `name`, `unsub`
+error: `#[subscription]` got unknown `magic` argument. Supported arguments are `aliases`, `item`, `name`, `unsubscribe_aliases`
  --> $DIR/sub_unsupported_field.rs:6:2
   |
-6 |     #[subscription(name = "sub", unsub = "unsub", item = u8, magic = true)]
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+6 |     #[subscription(name = "sub", item = u8, magic = true)]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

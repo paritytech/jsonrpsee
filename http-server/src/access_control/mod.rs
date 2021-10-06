@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -26,22 +26,21 @@
 
 //! Access control based on HTTP headers
 
-mod cors;
+pub(crate) mod cors;
 pub(crate) mod hosts;
 mod matcher;
 
-pub(crate) use cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
 use hosts::{AllowHosts, Host};
 
+use cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
 use hyper::header;
-use jsonrpsee_utils::hyper_helpers;
+use jsonrpsee_utils::http_helpers;
 
 /// Define access on control on HTTP layer.
 #[derive(Clone, Debug)]
 pub struct AccessControl {
 	allow_hosts: AllowHosts,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,
-	cors_max_age: Option<u32>,
 	cors_allow_headers: AccessControlAllowHeaders,
 	continue_on_invalid_cors: bool,
 }
@@ -49,14 +48,14 @@ pub struct AccessControl {
 impl AccessControl {
 	/// Validate incoming request by http HOST
 	pub fn deny_host(&self, request: &hyper::Request<hyper::Body>) -> bool {
-		!hosts::is_host_valid(hyper_helpers::read_header_value(request.headers(), "host"), &self.allow_hosts)
+		!hosts::is_host_valid(http_helpers::read_header_value(request.headers(), "host"), &self.allow_hosts)
 	}
 
 	/// Validate incoming request by CORS origin
 	pub fn deny_cors_origin(&self, request: &hyper::Request<hyper::Body>) -> bool {
 		let header = cors::get_cors_allow_origin(
-			hyper_helpers::read_header_value(request.headers(), "origin"),
-			hyper_helpers::read_header_value(request.headers(), "host"),
+			http_helpers::read_header_value(request.headers(), "origin"),
+			http_helpers::read_header_value(request.headers(), "host"),
 			&self.cors_allow_origin,
 		)
 		.map(|origin| {
@@ -75,7 +74,7 @@ impl AccessControl {
 	/// Validate incoming request by CORS header
 	pub fn deny_cors_header(&self, request: &hyper::Request<hyper::Body>) -> bool {
 		let headers = request.headers().keys().map(|name| name.as_str());
-		let requested_headers = hyper_helpers::read_header_values(request.headers(), "access-control-request-headers")
+		let requested_headers = http_helpers::read_header_values(request.headers(), "access-control-request-headers")
 			.filter_map(|val| val.to_str().ok())
 			.flat_map(|val| val.split(", "))
 			.flat_map(|val| val.split(','));
@@ -92,7 +91,6 @@ impl Default for AccessControl {
 		Self {
 			allow_hosts: AllowHosts::Any,
 			cors_allow_origin: None,
-			cors_max_age: None,
 			cors_allow_headers: AccessControlAllowHeaders::Any,
 			continue_on_invalid_cors: false,
 		}
@@ -104,7 +102,6 @@ impl Default for AccessControl {
 pub struct AccessControlBuilder {
 	allow_hosts: AllowHosts,
 	cors_allow_origin: Option<Vec<AccessControlAllowOrigin>>,
-	cors_max_age: Option<u32>,
 	cors_allow_headers: AccessControlAllowHeaders,
 	continue_on_invalid_cors: bool,
 }
@@ -114,7 +111,6 @@ impl Default for AccessControlBuilder {
 		Self {
 			allow_hosts: AllowHosts::Any,
 			cors_allow_origin: None,
-			cors_max_age: None,
 			cors_allow_headers: AccessControlAllowHeaders::Any,
 			continue_on_invalid_cors: false,
 		}
@@ -153,12 +149,6 @@ impl AccessControlBuilder {
 		self
 	}
 
-	/// Configure CORS max age.
-	pub fn cors_max_age(mut self, max_age: u32) -> Self {
-		self.cors_max_age = Some(max_age);
-		self
-	}
-
 	/// Configure which CORS header that is allowed.
 	pub fn cors_allow_header(mut self, header: String) -> Self {
 		let allow_headers = match self.cors_allow_headers {
@@ -183,7 +173,6 @@ impl AccessControlBuilder {
 		AccessControl {
 			allow_hosts: self.allow_hosts,
 			cors_allow_origin: self.cors_allow_origin,
-			cors_max_age: self.cors_max_age,
 			cors_allow_headers: self.cors_allow_headers,
 			continue_on_invalid_cors: self.continue_on_invalid_cors,
 		}

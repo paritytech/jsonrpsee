@@ -24,9 +24,26 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Shared modules for the JSON-RPC servers.
+//! Shared utilities for `jsonrpsee` clients.
 
-/// Helpers.
-pub mod helpers;
-/// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
-pub mod rpc_module;
+#[doc(hidden)]
+pub mod __reexports {
+	pub use jsonrpsee_types::{to_json_value, v2::ParamsSer};
+}
+
+#[macro_export]
+/// Convert the given values to a [`ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
+macro_rules! rpc_params {
+	($($param:expr),*) => {
+		{
+			let mut __params = vec![];
+			$(
+				__params.push($crate::client::__reexports::to_json_value($param).expect("json serialization is infallible; qed."));
+			)*
+			$crate::client::__reexports::ParamsSer::Array(__params)
+		}
+	};
+	() => {
+		$crate::client::__reexports::ParamsSer::NoParams,
+	}
+}

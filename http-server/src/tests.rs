@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -31,9 +31,8 @@ use std::net::SocketAddr;
 use crate::types::error::{CallError, Error};
 use crate::{server::StopHandle, HttpServerBuilder, RpcModule};
 
-use futures_util::FutureExt;
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
+use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
@@ -43,7 +42,7 @@ async fn server() -> (SocketAddr, StopHandle) {
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
-	module.register_async_method("say_hello_async", |_, _| async move { Ok("lo") }.boxed()).unwrap();
+	module.register_async_method("say_hello_async", |_, _| async move { Ok("lo") }).unwrap();
 	module
 		.register_method("add", |params, _| {
 			let params: Vec<u64> = params.parse()?;
@@ -61,24 +60,21 @@ async fn server() -> (SocketAddr, StopHandle) {
 	module.register_method("notif", |_, _| Ok("")).unwrap();
 	module
 		.register_method("should_err", |_, ctx| {
-			let _ = ctx.err().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.err().map_err(CallError::Failed)?;
 			Ok("err")
 		})
 		.unwrap();
 
 	module
 		.register_method("should_ok", |_, ctx| {
-			let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
+			let _ = ctx.ok().map_err(CallError::Failed)?;
 			Ok("ok")
 		})
 		.unwrap();
 	module
-		.register_async_method("should_ok_async", |_p, ctx| {
-			async move {
-				let _ = ctx.ok().map_err(|e| CallError::Failed(e.into()))?;
-				Ok("ok")
-			}
-			.boxed()
+		.register_async_method("should_ok_async", |_p, ctx| async move {
+			let _ = ctx.ok().map_err(CallError::Failed)?;
+			Ok("ok")
 		})
 		.unwrap();
 
@@ -152,11 +148,12 @@ async fn single_method_call_with_multiple_params_of_different_types() {
 async fn single_method_call_with_faulty_params_returns_err() {
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
+	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"this should be a number\", expected u64 at line 1 column 26"},"id":1}"#;
 
-	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["Invalid"],"id":1}"#;
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":["this should be a number"],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
-	assert_eq!(response.body, invalid_params(Id::Num(1)));
+	assert_eq!(response.body, expected);
 }
 
 #[tokio::test]
@@ -265,6 +262,52 @@ async fn invalid_batched_method_calls() {
 }
 
 #[tokio::test]
+async fn garbage_request_fails() {
+	let (addr, _handle) = server().await;
+	let uri = to_http_uri(addr);
+
+	let req = r#"dsdfs fsdsfds"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{ "#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"{sds}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"["#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"[dsds]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+
+	let req = r#"[]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, invalid_request(Id::Null));
+
+	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	assert_eq!(response.body, parse_error(Id::Null));
+}
+
+#[tokio::test]
 async fn should_return_method_not_found() {
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
@@ -282,7 +325,8 @@ async fn invalid_json_id_missing_value() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id"}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
-	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
+	// If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be
+	// Null.
 	assert_eq!(response.body, parse_error(Id::Null));
 }
 

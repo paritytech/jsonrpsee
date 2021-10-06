@@ -1,3 +1,29 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 use futures_channel::mpsc::{self, Receiver, Sender};
 use futures_channel::oneshot;
 use futures_util::{
@@ -8,10 +34,8 @@ use futures_util::{
 	stream::{self, StreamExt},
 };
 use serde::{Deserialize, Serialize};
-use soketto::handshake::{self, server::Response, Error as SokettoError, Server};
-use std::io;
-use std::net::SocketAddr;
-use std::time::Duration;
+use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
+use std::{io, net::SocketAddr, time::Duration};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
@@ -62,8 +86,21 @@ impl std::fmt::Debug for WebSocketTestClient {
 	}
 }
 
+#[derive(Debug)]
+pub enum WebSocketTestError {
+	Redirect,
+	RejectedWithStatusCode(u16),
+	Soketto(SokettoError),
+}
+
+impl From<io::Error> for WebSocketTestError {
+	fn from(err: io::Error) -> Self {
+		WebSocketTestError::Soketto(SokettoError::Io(err))
+	}
+}
+
 impl WebSocketTestClient {
-	pub async fn new(url: SocketAddr) -> Result<Self, SokettoError> {
+	pub async fn new(url: SocketAddr) -> Result<Self, WebSocketTestError> {
 		let socket = TcpStream::connect(url).await?;
 		let mut client = handshake::Client::new(BufReader::new(BufWriter::new(socket.compat())), "test-client", "/");
 		match client.handshake().await {
@@ -71,13 +108,11 @@ impl WebSocketTestClient {
 				let (tx, rx) = client.into_builder().finish();
 				Ok(Self { tx, rx })
 			}
-			Ok(handshake::ServerResponse::Redirect { .. }) => {
-				Err(SokettoError::Io(io::Error::new(io::ErrorKind::Other, "Redirection not supported in tests")))
+			Ok(handshake::ServerResponse::Redirect { .. }) => Err(WebSocketTestError::Redirect),
+			Ok(handshake::ServerResponse::Rejected { status_code }) => {
+				Err(WebSocketTestError::RejectedWithStatusCode(status_code))
 			}
-			Ok(handshake::ServerResponse::Rejected { .. }) => {
-				Err(SokettoError::Io(io::Error::new(io::ErrorKind::Other, "Rejected")))
-			}
-			Err(err) => Err(err),
+			Err(err) => Err(WebSocketTestError::Soketto(err)),
 		}
 	}
 
@@ -119,7 +154,8 @@ pub struct WebSocketTestServer {
 }
 
 impl WebSocketTestServer {
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every connection.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded response` for every
+	// connection.
 	pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
 		let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
@@ -129,7 +165,8 @@ impl WebSocketTestServer {
 		Self { local_addr, exit: tx }
 	}
 
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every connection.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every
+	// connection.
 	pub async fn with_hardcoded_notification(sockaddr: SocketAddr, notification: String) -> Self {
 		let (tx, rx) = mpsc::channel::<()>(1);
 		let (addr_tx, addr_rx) = oneshot::channel();
@@ -148,7 +185,8 @@ impl WebSocketTestServer {
 		Self { local_addr, exit: tx }
 	}
 
-	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription response.
+	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured subscription ID and subscription
+	// response.
 	//
 	// NOTE: ignores the actual subscription and unsubscription method.
 	pub async fn with_hardcoded_subscription(
@@ -272,5 +310,62 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 			}
 			_ = next_exit => break,
 		}
+	}
+}
+
+// Run a WebSocket server running on localhost that redirects requests for testing.
+// Requests to any url except for `/myblock/two` will redirect one or two times (HTTP 301) and eventually end up in `/myblock/two`.
+pub fn ws_server_with_redirect(other_server: String) -> String {
+	let addr = ([127, 0, 0, 1], 0).into();
+
+	let service = hyper::service::make_service_fn(move |_| {
+		let other_server = other_server.clone();
+		async move {
+			Ok::<_, hyper::Error>(hyper::service::service_fn(move |req| {
+				let other_server = other_server.clone();
+				async move { handler(req, other_server).await }
+			}))
+		}
+	});
+	let server = hyper::Server::bind(&addr).serve(service);
+	let addr = server.local_addr();
+
+	tokio::spawn(async move { server.await });
+	format!("ws://{}", addr)
+}
+
+/// Handle incoming HTTP Requests.
+async fn handler(
+	req: hyper::Request<Body>,
+	other_server: String,
+) -> Result<hyper::Response<Body>, soketto::BoxedError> {
+	if is_upgrade_request(&req) {
+		log::debug!("{:?}", req);
+
+		match req.uri().path() {
+			"/myblock/two" => {
+				let response = hyper::Response::builder()
+					.status(301)
+					.header("Location", other_server)
+					.body(Body::empty())
+					.unwrap();
+				Ok(response)
+			}
+			"/myblock/one" => {
+				let response =
+					hyper::Response::builder().status(301).header("Location", "two").body(Body::empty()).unwrap();
+				Ok(response)
+			}
+			_ => {
+				let response = hyper::Response::builder()
+					.status(301)
+					.header("Location", "/myblock/one")
+					.body(Body::empty())
+					.unwrap();
+				Ok(response)
+			}
+		}
+	} else {
+		panic!("expect upgrade to WS");
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -24,18 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::tokio::Mutex;
-use crate::transport::{Receiver as WsReceiver, Sender as WsSender, Target, WsTransportClientBuilder};
+use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
 use crate::types::{
 	traits::{Client, SubscriptionClient},
-	v2::{
-		error::JsonRpcError,
-		params::{Id, JsonRpcParams},
-		request::{JsonRpcCallSer, JsonRpcNotification, JsonRpcNotificationSer},
-		response::JsonRpcResponse,
-	},
-	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionMessage,
-	TEN_MB_SIZE_BYTES,
+	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
+	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestIdGuard, RequestMessage, Subscription,
+	SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
 };
 use crate::{
 	helpers::{
@@ -52,15 +46,13 @@ use futures::{
 	prelude::*,
 	sink::SinkExt,
 };
+use http::uri::{InvalidUri, Uri};
+use tokio::sync::Mutex;
 
-use jsonrpsee_types::v2::params::JsonRpcSubscriptionParams;
-use jsonrpsee_types::SubscriptionKind;
 use serde::de::DeserializeOwned;
-use std::{
-	borrow::Cow,
-	sync::atomic::{AtomicU64, AtomicUsize, Ordering},
-	time::Duration,
-};
+use std::{borrow::Cow, convert::TryInto, time::Duration};
+
+pub use soketto::handshake::client::Header;
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -110,67 +102,6 @@ pub struct WsClient {
 	id_guard: RequestIdGuard,
 }
 
-#[derive(Debug)]
-struct RequestIdGuard {
-	// Current pending requests.
-	current_pending: AtomicUsize,
-	/// Max concurrent pending requests allowed.
-	max_concurrent_requests: usize,
-	/// Get the next request ID.
-	current_id: AtomicU64,
-}
-
-impl RequestIdGuard {
-	fn new(limit: usize) -> Self {
-		Self { current_pending: AtomicUsize::new(0), max_concurrent_requests: limit, current_id: AtomicU64::new(0) }
-	}
-
-	fn get_slot(&self) -> Result<(), Error> {
-		self.current_pending
-			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
-				if val >= self.max_concurrent_requests {
-					None
-				} else {
-					Some(val + 1)
-				}
-			})
-			.map(|_| ())
-			.map_err(|_| Error::MaxSlotsExceeded)
-	}
-
-	/// Attempts to get the next request ID.
-	///
-	/// Fails if request limit has been exceeded.
-	fn next_request_id(&self) -> Result<u64, Error> {
-		self.get_slot()?;
-		let id = self.current_id.fetch_add(1, Ordering::SeqCst);
-		Ok(id)
-	}
-
-	/// Attempts to get the `n` number next IDs that only counts as one request.
-	///
-	/// Fails if request limit has been exceeded.
-	fn next_request_ids(&self, len: usize) -> Result<Vec<u64>, Error> {
-		self.get_slot()?;
-		let mut batch = Vec::with_capacity(len);
-		for _ in 0..len {
-			batch.push(self.current_id.fetch_add(1, Ordering::SeqCst));
-		}
-		Ok(batch)
-	}
-
-	fn reclaim_request_id(&self) {
-		// NOTE we ignore the error here, since we are simply saturating at 0
-		let _ = self.current_pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
-			if val > 0 {
-				Some(val - 1)
-			} else {
-				None
-			}
-		});
-	}
-}
-
 /// Configuration.
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder<'a> {
@@ -181,6 +112,7 @@ pub struct WsClientBuilder<'a> {
 	origin_header: Option<Cow<'a, str>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
+	max_redirections: usize,
 }
 
 impl<'a> Default for WsClientBuilder<'a> {
@@ -192,7 +124,8 @@ impl<'a> Default for WsClientBuilder<'a> {
 			connection_timeout: Duration::from_secs(10),
 			origin_header: None,
 			max_concurrent_requests: 256,
-			max_notifs_per_subscription: 4,
+			max_notifs_per_subscription: 1024,
+			max_redirections: 5,
 		}
 	}
 }
@@ -223,8 +156,8 @@ impl<'a> WsClientBuilder<'a> {
 	}
 
 	/// Set origin header to pass during the handshake.
-	pub fn origin_header(mut self, origin: &'a str) -> Self {
-		self.origin_header = Some(Cow::Borrowed(origin));
+	pub fn origin_header(mut self, origin: Cow<'a, str>) -> Self {
+		self.origin_header = Some(origin);
 		self
 	}
 
@@ -234,31 +167,33 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription will be dropped.
+	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription
+	/// will be dropped.
 	///
-	/// You can also prevent the subscription being dropped by calling [`Subscription::next()`](crate::types::Subscription) frequently enough
-	/// such that the buffer capacity doesn't exceeds.
+	/// You can also prevent the subscription being dropped by calling
+	/// [`Subscription::next()`](crate::types::Subscription) frequently enough such that the buffer capacity doesn't
+	/// exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
 	/// because it is passed to [`futures::channel::mpsc::channel`].
-	///
 	pub fn max_notifs_per_subscription(mut self, max: usize) -> Self {
 		self.max_notifs_per_subscription = max;
 		self
 	}
 
+	/// Set the max number of redirections to perform until a connection is regarded as failed.
+	pub fn max_redirections(mut self, redirect: usize) -> Self {
+		self.max_redirections = redirect;
+		self
+	}
+
 	/// Build the client with specified URL to connect to.
-	/// If the port number is missing from the URL, the default port number is used.
-	///
-	///
-	/// `ws://host` - port 80 is used
-	///
-	/// `wss://host` - port 443 is used
+	/// You must provide the port number in the URL.
 	///
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build(self, url: &'a str) -> Result<WsClient, Error> {
+	pub async fn build(self, uri: &'a str) -> Result<WsClient, Error> {
 		let certificate_store = self.certificate_store;
 		let max_capacity_per_subscription = self.max_notifs_per_subscription;
 		let max_concurrent_requests = self.max_concurrent_requests;
@@ -266,17 +201,20 @@ impl<'a> WsClientBuilder<'a> {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 
+		let uri: Uri = uri.parse().map_err(|e: InvalidUri| Error::Transport(e.into()))?;
+
 		let builder = WsTransportClientBuilder {
 			certificate_store,
-			target: Target::parse(url).map_err(|e| Error::Transport(Box::new(e)))?,
+			target: uri.try_into().map_err(|e: WsHandshakeError| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
 			origin_header: self.origin_header,
 			max_request_body_size: self.max_request_body_size,
+			max_redirections: self.max_redirections,
 		};
 
-		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(Box::new(e)))?;
+		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(e.into()))?;
 
-		crate::tokio::spawn(async move {
+		tokio::spawn(async move {
 			background_task(sender, receiver, from_front, err_tx, max_capacity_per_subscription).await;
 		});
 		Ok(WsClient {
@@ -304,12 +242,18 @@ impl WsClient {
 	}
 }
 
+impl Drop for WsClient {
+	fn drop(&mut self) {
+		self.to_back.close_channel();
+	}
+}
+
 #[async_trait]
 impl Client for WsClient {
-	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
+	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
-		let notif = JsonRpcNotificationSer::new(method, params);
+		let notif = NotificationSer::new(method, params);
 		let raw = serde_json::to_string(&notif).map_err(|e| {
 			self.id_guard.reclaim_request_id();
 			Error::ParseError(e)
@@ -319,9 +263,9 @@ impl Client for WsClient {
 		let mut sender = self.to_back.clone();
 		let fut = sender.send(FrontToBack::Notification(raw));
 
-		let timeout = crate::tokio::sleep(self.request_timeout);
+		let timeout = tokio::time::sleep(self.request_timeout);
 
-		let res = crate::tokio::select! {
+		let res = tokio::select! {
 			x = fut => x,
 			_ = timeout => return Err(Error::RequestTimeout)
 		};
@@ -333,13 +277,13 @@ impl Client for WsClient {
 		}
 	}
 
-	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
-		let raw = serde_json::to_string(&JsonRpcCallSer::new(Id::Number(req_id), method, params)).map_err(|e| {
+		let raw = serde_json::to_string(&RequestSer::new(Id::Number(req_id), method, params)).map_err(|e| {
 			self.id_guard.reclaim_request_id();
 			Error::ParseError(e)
 		})?;
@@ -367,7 +311,7 @@ impl Client for WsClient {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -375,7 +319,7 @@ impl Client for WsClient {
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(JsonRpcCallSer::new(Id::Number(batch_ids[idx]), method, params));
+			batches.push(RequestSer::new(Id::Number(batch_ids[idx]), method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -420,7 +364,7 @@ impl SubscriptionClient for WsClient {
 	async fn subscribe<'a, N>(
 		&self,
 		subscribe_method: &'a str,
-		params: JsonRpcParams<'a>,
+		params: ParamsSer<'a>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<N>, Error>
 	where
@@ -434,7 +378,7 @@ impl SubscriptionClient for WsClient {
 
 		let ids = self.id_guard.next_request_ids(2)?;
 		let raw =
-			serde_json::to_string(&JsonRpcCallSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
+			serde_json::to_string(&RequestSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
 				self.id_guard.reclaim_request_id();
 				Error::ParseError(e)
 			})?;
@@ -528,7 +472,7 @@ async fn background_task(
 			// There is nothing to do just terminate.
 			Either::Left((None, _)) => {
 				log::trace!("[backend]: frontend dropped; terminate client");
-				return;
+				break;
 			}
 
 			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
@@ -562,7 +506,7 @@ async fn background_task(
 						.expect("ID unused checked above; qed"),
 					Err(e) => {
 						log::warn!("[backend]: client request failed: {:?}", e);
-						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(Box::new(e)))));
+						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
 					}
 				}
 			}
@@ -579,7 +523,7 @@ async fn background_task(
 					.expect("Request ID unused checked above; qed"),
 				Err(e) => {
 					log::warn!("[backend]: client subscription failed: {:?}", e);
-					let _ = sub.send_back.send(Err(Error::Transport(Box::new(e))));
+					let _ = sub.send_back.send(Err(Error::Transport(e.into())));
 				}
 			},
 			// User dropped a subscription.
@@ -614,7 +558,7 @@ async fn background_task(
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
-				if let Ok(single) = serde_json::from_slice::<JsonRpcResponse<_>>(&raw) {
+				if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
 					log::debug!("[backend]: recv method_call {:?}", single);
 					match process_single_response(&mut manager, single, max_notifs_per_subscription) {
 						Ok(Some(unsub)) => {
@@ -623,26 +567,24 @@ async fn background_task(
 						Ok(None) => (),
 						Err(err) => {
 							let _ = front_error.send(err);
-							return;
+							break;
 						}
 					}
 				}
 				// Subscription response.
-				else if let Ok(notif) =
-					serde_json::from_slice::<JsonRpcNotification<JsonRpcSubscriptionParams<_>>>(&raw)
-				{
-					log::debug!("[backend]: recv subscription {:?}", notif);
-					if let Err(Some(unsub)) = process_subscription_response(&mut manager, notif) {
+				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(&raw) {
+					log::debug!("[backend]: recv subscription {:?}", response);
+					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
 				}
 				// Incoming Notification
-				else if let Ok(notif) = serde_json::from_slice::<JsonRpcNotification<_>>(&raw) {
+				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(&raw) {
 					log::debug!("[backend]: recv notification {:?}", notif);
 					let _ = process_notification(&mut manager, notif);
 				}
 				// Batch response.
-				else if let Ok(batch) = serde_json::from_slice::<Vec<JsonRpcResponse<_>>>(&raw) {
+				else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(&raw) {
 					log::debug!("[backend]: recv batch {:?}", batch);
 					if let Err(e) = process_batch_response(&mut manager, batch) {
 						let _ = front_error.send(e);
@@ -650,7 +592,7 @@ async fn background_task(
 					}
 				}
 				// Error response
-				else if let Ok(err) = serde_json::from_slice::<JsonRpcError>(&raw) {
+				else if let Ok(err) = serde_json::from_slice::<RpcError>(&raw) {
 					log::debug!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);
@@ -664,19 +606,22 @@ async fn background_task(
 						serde_json::from_slice::<serde_json::Value>(&raw)
 					);
 					let _ = front_error.send(Error::Custom("Unparsable response".into()));
-					return;
+					break;
 				}
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				log::error!("Error: {:?} terminating client", e);
-				let _ = front_error.send(Error::Transport(Box::new(e)));
-				return;
+				let _ = front_error.send(Error::Transport(e.into()));
+				break;
 			}
 			Either::Right((None, _)) => {
 				log::error!("[backend]: WebSocket receiver dropped; terminate client");
 				let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
-				return;
+				break;
 			}
 		}
 	}
+
+	// Send close message to the server.
+	let _ = sender.close().await;
 }

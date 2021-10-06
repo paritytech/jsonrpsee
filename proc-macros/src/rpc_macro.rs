@@ -1,29 +1,54 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 //! Declaration of the JSON RPC generator procedural macros.
 
-use self::respan::Respan;
+use crate::{attributes, helpers::extract_doc_comments, respan::Respan};
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::Attribute;
 
-mod attributes;
-mod lifetimes;
-mod render_client;
-mod render_server;
-mod respan;
-
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
-	pub name: syn::LitStr,
+	pub name: String,
+	pub docs: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
+	pub aliases: Vec<String>,
 }
 
 impl RpcMethod {
 	pub fn from_item(mut method: syn::TraitItemMethod) -> Result<Self, syn::Error> {
 		let attributes = attributes::Method::from_attributes(&method.attrs).respan(&method.attrs.first())?;
 		let sig = method.sig.clone();
-		let name = attributes.name;
+		let name = attributes.name.value();
+		let docs = extract_doc_comments(&method.attrs);
+		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -44,26 +69,33 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { name, params, returns, signature: method })
+		Ok(Self { aliases, name, params, returns, signature: method, docs })
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct RpcSubscription {
-	pub name: syn::LitStr,
-	pub unsub_method: syn::LitStr,
+	pub name: String,
+	pub docs: TokenStream2,
+	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemMethod,
+	pub aliases: Vec<String>,
+	pub unsubscribe_aliases: Vec<String>,
 }
 
 impl RpcSubscription {
 	pub fn from_item(mut sub: syn::TraitItemMethod) -> Result<Self, syn::Error> {
 		let attributes = attributes::Subscription::from_attributes(&sub.attrs).respan(&sub.attrs.first())?;
 		let sig = sub.sig.clone();
-		let name = attributes.name;
-		let unsub_method = attributes.unsub;
+		let name = attributes.name.value();
+		let docs = extract_doc_comments(&sub.attrs);
+		let unsubscribe = build_unsubscribe_method(&name);
 		let item = attributes.item;
+		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
+		let unsubscribe_aliases =
+			attributes.unsubscribe_aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -79,24 +111,24 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsub_method, params, item, signature: sub })
+		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, item, signature: sub, aliases, docs })
 	}
 }
 
 #[derive(Debug)]
 pub struct RpcDescription {
 	/// Path to the `jsonrpsee` client types part.
-	jsonrpsee_client_path: Option<TokenStream2>,
+	pub(crate) jsonrpsee_client_path: Option<TokenStream2>,
 	/// Path to the `jsonrpsee` server types part.
-	jsonrpsee_server_path: Option<TokenStream2>,
+	pub(crate) jsonrpsee_server_path: Option<TokenStream2>,
 	/// Data about RPC declaration
-	attrs: attributes::Rpc,
+	pub(crate) attrs: attributes::Rpc,
 	/// Trait definition in which all the attributes were stripped.
-	trait_def: syn::ItemTrait,
+	pub(crate) trait_def: syn::ItemTrait,
 	/// List of RPC methods defined in the trait.
-	methods: Vec<RpcMethod>,
-	/// List of RPC subscritpions defined in the trait.
-	subscriptions: Vec<RpcSubscription>,
+	pub(crate) methods: Vec<RpcMethod>,
+	/// List of RPC subscriptions defined in the trait.
+	pub(crate) subscriptions: Vec<RpcSubscription>,
 }
 
 impl RpcDescription {
@@ -148,9 +180,6 @@ impl RpcDescription {
 					if method.sig.asyncness.is_some() {
 						return Err(syn::Error::new_spanned(&method, "Subscription methods must not be `async`"));
 					}
-					if !matches!(method.sig.output, syn::ReturnType::Default) {
-						return Err(syn::Error::new_spanned(&method, "Subscription methods must not return anything"));
-					}
 
 					let sub_data = RpcSubscription::from_item(method.clone())?;
 					subscriptions.push(sub_data);
@@ -186,14 +215,14 @@ impl RpcDescription {
 
 	/// Formats the identifier as a path relative to the resolved
 	/// `jsonrpsee` client path.
-	fn jrps_client_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
+	pub(crate) fn jrps_client_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 		quote! { #jsonrpsee::#item }
 	}
 
 	/// Formats the identifier as a path relative to the resolved
 	/// `jsonrpsee` server path.
-	fn jrps_server_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
+	pub(crate) fn jrps_server_item(&self, item: impl quote::ToTokens) -> TokenStream2 {
 		let jsonrpsee = self.jsonrpsee_server_path.as_ref().unwrap();
 		quote! { #jsonrpsee::#item }
 	}
@@ -202,11 +231,11 @@ impl RpcDescription {
 	/// Examples:
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
 	/// For no namespace and method `makeSpam` it will be just `makeSpam.
-	fn rpc_identifier(&self, method: &syn::LitStr) -> String {
+	pub(crate) fn rpc_identifier(&self, method: &str) -> String {
 		if let Some(ns) = &self.attrs.namespace {
-			format!("{}_{}", ns.value(), method.value())
+			format!("{}_{}", ns.value(), method.trim())
 		} else {
-			method.value()
+			method.to_string()
 		}
 	}
 }
@@ -218,4 +247,15 @@ fn has_attr(attrs: &[Attribute], ident: &str) -> bool {
 		}
 	}
 	false
+}
+
+fn build_unsubscribe_method(existing_method: &str) -> String {
+	let method = existing_method.trim();
+	let mut new_method = String::from("unsubscribe");
+	if method.starts_with("subscribe") {
+		new_method.extend(method.chars().skip(9));
+	} else {
+		new_method.push_str(method);
+	}
+	new_method
 }

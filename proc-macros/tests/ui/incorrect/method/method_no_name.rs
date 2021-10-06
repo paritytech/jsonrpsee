@@ -4,7 +4,7 @@ use jsonrpsee::proc_macros::rpc;
 #[rpc(client, server)]
 pub trait NoMethodName {
 	#[method()]
-	async fn async_method(&self) -> u8;
+	async fn async_method(&self) -> jsonrpsee::types::RpcResult<u8>;
 }
 
 fn main() {}

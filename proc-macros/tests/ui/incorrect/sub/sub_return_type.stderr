@@ -1,6 +1,0 @@
-error: Subscription methods must not return anything
- --> $DIR/sub_return_type.rs:6:2
-  |
-6 | /     #[subscription(name = "sub", unsub = "unsub", item = u8)]
-7 | |     fn sub(&self) -> u8;
-  | |________________________^

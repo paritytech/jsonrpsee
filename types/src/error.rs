@@ -1,3 +1,29 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::fmt;
@@ -21,11 +47,11 @@ impl<T: fmt::Display> fmt::Display for Mismatch<T> {
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
 	/// Invalid params in the call.
-	#[error("Invalid params in the call")]
-	InvalidParams,
+	#[error("Invalid params in the call: {0}")]
+	InvalidParams(#[source] anyhow::Error),
 	/// The call failed (let jsonrpsee assign default error code and error message).
 	#[error("RPC Call failed: {0}")]
-	Failed(Box<dyn std::error::Error + Send + Sync>),
+	Failed(#[from] anyhow::Error),
 	/// Custom error with specific JSON-RPC error code, message and data.
 	#[error("RPC Call failed: code: {code}, message: {message}, data: {data:?}")]
 	Custom {
@@ -38,6 +64,24 @@ pub enum CallError {
 	},
 }
 
+impl CallError {
+	/// Create `CallError` from a generic error.
+	pub fn from_std_error<E>(err: E) -> Self
+	where
+		E: std::error::Error + Send + Sync + 'static,
+	{
+		CallError::Failed(err.into())
+	}
+}
+
+// NOTE(niklasad1): this `From` impl is a bit opinionated to regard all generic errors as `CallError`.
+// In practice this should be the most common use case for users of this library.
+impl From<anyhow::Error> for Error {
+	fn from(err: anyhow::Error) -> Self {
+		Error::Call(CallError::Failed(err))
+	}
+}
+
 /// Error type.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -46,7 +90,7 @@ pub enum Error {
 	Call(#[from] CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
-	Transport(#[source] Box<dyn std::error::Error + Send + Sync>),
+	Transport(#[source] anyhow::Error),
 	/// JSON-RPC request error.
 	#[error("JSON-RPC request error: {0:?}")]
 	Request(String),
@@ -103,10 +147,22 @@ pub enum Error {
 	Custom(String),
 }
 
+impl Error {
+	/// Create `Error::CallError` from a generic error.
+	/// Useful if you don't care about specific JSON-RPC error code and
+	/// just wants to return your custom error type.
+	pub fn to_call_error<E>(err: E) -> Self
+	where
+		E: std::error::Error + Send + Sync + 'static,
+	{
+		Error::Call(CallError::from_std_error(err))
+	}
+}
+
 /// Error type with a special `subscription_closed` field to detect that
 /// a subscription has been closed to distinguish valid items produced
 /// by the server on the subscription stream from an error.
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct SubscriptionClosedError {
 	subscription_closed: String,
 }
@@ -123,6 +179,9 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 	/// Request was too large.
 	#[error("The request was too big")]
 	TooLarge,
+	/// Malformed request
+	#[error("Malformed request")]
+	Malformed,
 	/// Concrete transport error.
 	#[error("Transport error: {0}")]
 	Inner(T),
@@ -130,24 +189,24 @@ pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 
 impl From<std::io::Error> for Error {
 	fn from(io_err: std::io::Error) -> Error {
-		Error::Transport(Box::new(io_err))
+		Error::Transport(io_err.into())
 	}
 }
 
 impl From<soketto::handshake::Error> for Error {
 	fn from(handshake_err: soketto::handshake::Error) -> Error {
-		Error::Transport(Box::new(handshake_err))
+		Error::Transport(handshake_err.into())
 	}
 }
 
 impl From<soketto::connection::Error> for Error {
 	fn from(conn_err: soketto::connection::Error) -> Error {
-		Error::Transport(Box::new(conn_err))
+		Error::Transport(conn_err.into())
 	}
 }
 
 impl From<hyper::Error> for Error {
 	fn from(hyper_err: hyper::Error) -> Error {
-		Error::Transport(Box::new(hyper_err))
+		Error::Transport(hyper_err.into())
 	}
 }

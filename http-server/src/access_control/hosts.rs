@@ -1,4 +1,4 @@
-// Copyright 2019 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -141,7 +141,7 @@ impl std::ops::Deref for Host {
 
 /// Specifies if domains should be validated.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum DomainsValidation<T> {
+pub enum DomainsValidation<T> {
 	/// Allow only domains on the list.
 	AllowOnly(Vec<T>),
 	/// Disable domains validation completely.
@@ -193,38 +193,38 @@ mod tests {
 	#[test]
 	fn should_reject_when_there_is_no_header() {
 		let valid = is_host_valid(None, &AllowHosts::Any);
-		assert_eq!(valid, false);
+		assert!(!valid);
 		let valid = is_host_valid(None, &AllowHosts::Only(vec![]));
-		assert_eq!(valid, false);
+		assert!(!valid);
 	}
 
 	#[test]
 	fn should_reject_when_validation_is_disabled() {
 		let valid = is_host_valid(Some("any"), &AllowHosts::Any);
-		assert_eq!(valid, true);
+		assert!(valid);
 	}
 
 	#[test]
 	fn should_reject_if_header_not_on_the_list() {
 		let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec![]));
-		assert_eq!(valid, false);
+		assert!(!valid);
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list() {
 		let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec!["parity.io".into()]));
-		assert_eq!(valid, true);
+		assert!(valid);
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list_with_port() {
 		let valid = is_host_valid(Some("parity.io:443"), &AllowHosts::Only(vec!["parity.io:443".into()]));
-		assert_eq!(valid, true);
+		assert!(valid);
 	}
 
 	#[test]
 	fn should_support_wildcards() {
 		let valid = is_host_valid(Some("parity.web3.site:8180"), &AllowHosts::Only(vec!["*.web3.site:*".into()]));
-		assert_eq!(valid, true);
+		assert!(valid);
 	}
 }

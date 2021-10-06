@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Parity Technologies (UK) Ltd.
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -27,18 +27,12 @@
 use crate::transport::HttpTransportClient;
 use crate::types::{
 	traits::Client,
-	v2::{
-		error::JsonRpcError,
-		params::{Id, JsonRpcParams},
-		request::{JsonRpcCallSer, JsonRpcNotificationSer},
-		response::JsonRpcResponse,
-	},
-	Error, TEN_MB_SIZE_BYTES,
+	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
+	Error, RequestIdGuard, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
 use fnv::FnvHashMap;
 use serde::de::DeserializeOwned;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 /// Http Client Builder.
@@ -46,6 +40,7 @@ use std::time::Duration;
 pub struct HttpClientBuilder {
 	max_request_body_size: u32,
 	request_timeout: Duration,
+	max_concurrent_requests: usize,
 }
 
 impl HttpClientBuilder {
@@ -61,17 +56,31 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Set max concurrent requests.
+	pub fn max_concurrent_requests(mut self, max: usize) -> Self {
+		self.max_concurrent_requests = max;
+		self
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
 		let transport =
-			HttpTransportClient::new(target, self.max_request_body_size).map_err(|e| Error::Transport(Box::new(e)))?;
-		Ok(HttpClient { transport, request_id: AtomicU64::new(0), request_timeout: self.request_timeout })
+			HttpTransportClient::new(target, self.max_request_body_size).map_err(|e| Error::Transport(e.into()))?;
+		Ok(HttpClient {
+			transport,
+			id_guard: RequestIdGuard::new(self.max_concurrent_requests),
+			request_timeout: self.request_timeout,
+		})
 	}
 }
 
 impl Default for HttpClientBuilder {
 	fn default() -> Self {
-		Self { max_request_body_size: TEN_MB_SIZE_BYTES, request_timeout: Duration::from_secs(60) }
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			request_timeout: Duration::from_secs(60),
+			max_concurrent_requests: 256,
+		}
 	}
 }
 
@@ -80,44 +89,54 @@ impl Default for HttpClientBuilder {
 pub struct HttpClient {
 	/// HTTP transport client.
 	transport: HttpTransportClient,
-	/// Request ID that wraps around when overflowing.
-	request_id: AtomicU64,
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
+	/// Request ID manager.
+	id_guard: RequestIdGuard,
 }
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<'a>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<(), Error> {
-		let notif = JsonRpcNotificationSer::new(method, params);
+	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
+		let notif = NotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?);
-		match crate::tokio::timeout(self.request_timeout, fut).await {
+		match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(ok)) => Ok(ok),
 			Err(_) => Err(Error::RequestTimeout),
-			Ok(Err(e)) => Err(Error::Transport(Box::new(e))),
+			Ok(Err(e)) => Err(Error::Transport(e.into())),
 		}
 	}
 
 	/// Perform a request towards the server.
-	async fn request<'a, R>(&self, method: &'a str, params: JsonRpcParams<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
-		// NOTE: `fetch_add` wraps on overflow which is intended.
-		let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-		let request = JsonRpcCallSer::new(Id::Number(id), method, params);
+		// NOTE: the IDs wrap on overflow which is intended.
+		let id = self.id_guard.next_request_id()?;
+		let request = RequestSer::new(Id::Number(id), method, params);
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
-		let body = match crate::tokio::timeout(self.request_timeout, fut).await {
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(|e| {
+			self.id_guard.reclaim_request_id();
+			Error::ParseError(e)
+		})?);
+		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
-			Err(_e) => return Err(Error::RequestTimeout),
-			Ok(Err(e)) => return Err(Error::Transport(Box::new(e))),
+			Err(_e) => {
+				self.id_guard.reclaim_request_id();
+				return Err(Error::RequestTimeout);
+			}
+			Ok(Err(e)) => {
+				self.id_guard.reclaim_request_id();
+				return Err(Error::Transport(e.into()));
+			}
 		};
 
-		let response: JsonRpcResponse<_> = match serde_json::from_slice(&body) {
+		self.id_guard.reclaim_request_id();
+		let response: Response<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				let err: RpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 				return Err(Error::Request(err.to_string()));
 			}
 		};
@@ -131,7 +150,7 @@ impl Client for HttpClient {
 		}
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, JsonRpcParams<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -140,25 +159,31 @@ impl Client for HttpClient {
 		let mut ordered_requests = Vec::with_capacity(batch.len());
 		let mut request_set = FnvHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
+		let ids = self.id_guard.next_request_ids(batch.len())?;
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
-			let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-			batch_request.push(JsonRpcCallSer::new(Id::Number(id), method, params));
-			ordered_requests.push(id);
-			request_set.insert(id, pos);
+			batch_request.push(RequestSer::new(Id::Number(ids[pos]), method, params));
+			ordered_requests.push(ids[pos]);
+			request_set.insert(ids[pos], pos);
 		}
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(|e| {
+			self.id_guard.reclaim_request_id();
+			Error::ParseError(e)
+		})?);
 
-		let body = match crate::tokio::timeout(self.request_timeout, fut).await {
+		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => return Err(Error::RequestTimeout),
-			Ok(Err(e)) => return Err(Error::Transport(Box::new(e))),
+			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
-		let rps: Vec<JsonRpcResponse<_>> = match serde_json::from_slice(&body) {
+		let rps: Vec<Response<_>> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: JsonRpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				let err: RpcError = serde_json::from_slice(&body).map_err(|e| {
+					self.id_guard.reclaim_request_id();
+					Error::ParseError(e)
+				})?;
 				return Err(Error::Request(err.to_string()));
 			}
 		};
