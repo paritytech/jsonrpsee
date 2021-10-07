@@ -25,11 +25,15 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::visitor::{FindAllParams, FindSubscriptionParams};
-use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2::{Punct, Spacing, Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use std::collections::HashSet;
 use syn::{parse_quote, punctuated::Punctuated, visit::Visit, Token};
+
+pub(crate) fn punct_is(p: &Punct, expect: char) -> bool {
+	p.as_char() == expect && p.spacing() == Spacing::Alone
+}
 
 /// Search for client-side `jsonrpsee` in `Cargo.toml`.
 pub(crate) fn find_jsonrpsee_client_crate() -> Result<proc_macro2::TokenStream, syn::Error> {

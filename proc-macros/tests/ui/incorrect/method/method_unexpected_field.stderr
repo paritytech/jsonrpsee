@@ -1,5 +1,5 @@
-error: `#[method]` got unknown `magic` argument. Supported arguments are `aliases`, `name`
- --> $DIR/method_unexpected_field.rs:6:2
+error: Unknown argument `magic`, expected one of: `aliases`, `name`
+ --> $DIR/method_unexpected_field.rs:6:25
   |
 6 |     #[method(name = "foo", magic = false)]
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |                            ^^^^^

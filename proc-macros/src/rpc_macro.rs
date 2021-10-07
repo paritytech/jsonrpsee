@@ -26,11 +26,15 @@
 
 //! Declaration of the JSON RPC generator procedural macros.
 
-use crate::{attributes, helpers::extract_doc_comments, respan::Respan};
+use crate::{
+	attributes::{self, Attr},
+	helpers::extract_doc_comments,
+	respan::Respan,
+};
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::Attribute;
+use syn::{spanned::Spanned, Attribute};
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
@@ -44,11 +48,20 @@ pub struct RpcMethod {
 
 impl RpcMethod {
 	pub fn from_item(mut method: syn::TraitItemMethod) -> Result<Self, syn::Error> {
-		let attributes = attributes::Method::from_attributes(&method.attrs).respan(&method.attrs.first())?;
+		let attr = Attr::find_and_parse(&method.attrs, "method", method.span())?;
+
+		attr.only_allowed(&["aliases", "name"])?;
+
 		let sig = method.sig.clone();
-		let name = attributes.name.value();
+		let name = attr.require_argument("name")?.lit_str()?;
 		let docs = extract_doc_comments(&method.attrs);
-		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
+		let aliases = attr
+			.get_argument("aliases")?
+			.map(|a| a.lit_str())
+			.transpose()?
+			.map(|a| a.split(',').map(Into::into).collect())
+			.unwrap_or_default();
+
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
@@ -87,15 +100,30 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(mut sub: syn::TraitItemMethod) -> Result<Self, syn::Error> {
-		let attributes = attributes::Subscription::from_attributes(&sub.attrs).respan(&sub.attrs.first())?;
+		let attr = Attr::find_and_parse(&sub.attrs, "subscription", sub.span())?;
+
+		attr.only_allowed(&["aliases", "item", "name", "unsubscribe_aliases"])?;
+
+		// let attributes = attributes::Subscription::from_attributes(&sub.attrs).respan(&sub.attrs.first())?;
 		let sig = sub.sig.clone();
-		let name = attributes.name.value();
+		let name = attr.require_argument("name")?.lit_str()?;
 		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = build_unsubscribe_method(&name);
-		let item = attributes.item;
-		let aliases = attributes.aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
-		let unsubscribe_aliases =
-			attributes.unsubscribe_aliases.map(|a| a.value().split(',').map(Into::into).collect()).unwrap_or_default();
+		let item = attr.require_argument("item")?.value()?;
+		let aliases = attr
+			.get_argument("aliases")?
+			.map(|a| a.lit_str())
+			.transpose()?
+			.map(|a| a.split(',').map(Into::into).collect())
+			.unwrap_or_default();
+
+		let unsubscribe_aliases = attr
+			.get_argument("unsubscribe_aliases")?
+			.map(|a| a.lit_str())
+			.transpose()?
+			.map(|a| a.split(',').map(Into::into).collect())
+			.unwrap_or_default();
+
 		let params: Vec<_> = sig
 			.inputs
 			.into_iter()
