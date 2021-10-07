@@ -15,7 +15,7 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
-//criterion_group!(types_benches, jsonrpsee_types_v2);
+criterion_group!(types_benches, jsonrpsee_types_v2);
 criterion_group!(
 	sync_benches,
 	SyncBencher::http_requests,
@@ -30,8 +30,8 @@ criterion_group!(
 	AsyncBencher::websocket_requests,
 	AsyncBencher::batched_ws_requests
 );
-//criterion_group!(subscriptions, AsyncBencher::subscriptions);
-criterion_main!(/*types_benches, sync_benches,*/ async_benches /*subscriptions*/,);
+criterion_group!(subscriptions, AsyncBencher::subscriptions);
+criterion_main!(types_benches, sync_benches, async_benches, subscriptions);
 
 #[derive(Debug, Clone, Copy)]
 enum RequestType {

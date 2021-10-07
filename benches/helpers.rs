@@ -3,7 +3,6 @@ use jsonrpsee::{
 	http_server::HttpServerBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
-use tokio::runtime::Runtime;
 
 pub(crate) const SYNC_METHOD_NAME: &str = "say_hello";
 pub(crate) const ASYNC_METHOD_NAME: &str = "say_hello_async";
@@ -75,7 +74,6 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 	io.add_method(ASYNC_METHOD_NAME, |_| async { Ok(Value::String("lo".to_string())) });
 
 	let server = ServerBuilder::new(io)
-		.max_payload(usize::MAX)
 		.event_loop_executor(handle)
 		.start(&"127.0.0.1:0".parse().unwrap())
 		.expect("Server must start with no issues");
@@ -87,5 +85,5 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 /// Get number of concurrent tasks based on the num_cpus.
 pub fn concurrent_tasks() -> Vec<usize> {
 	let cores = num_cpus::get();
-	vec![cores / 4, cores / 2, cores /*cores * 2, cores * 4*/]
+	vec![cores / 4, cores / 2, cores, cores * 2, cores * 4]
 }
