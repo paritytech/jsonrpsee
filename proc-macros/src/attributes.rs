@@ -24,10 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::helpers::punct_is;
+use crate::helpers::is_punct;
 use proc_macro2::{Delimiter, Span, TokenStream as TokenStream2, TokenTree};
 use std::fmt;
-use syn::spanned::Spanned;
+use syn::{spanned::Spanned, Error};
 
 #[derive(Debug)]
 pub(crate) struct Attr {
@@ -54,7 +54,7 @@ impl Attr {
 		let syn_attr = hay
 			.iter()
 			.find(|syn_attr| syn_attr.path.is_ident(name))
-			.ok_or_else(|| syn::Error::new(host, format!("Missing attribute `#[{}]`", name)))?;
+			.ok_or_else(|| Error::new(host, format!("Missing attribute `#[{}]`", name)))?;
 
 		Self::from_syn(syn_attr.clone())
 	}
@@ -70,27 +70,27 @@ impl Attr {
 			Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis => {
 				match tokens.next() {
 					None => (),
-					Some(token) => return Err(syn::Error::new(token.span(), "Unexpected token after `(...)` group")),
+					Some(token) => return Err(Error::new(token.span(), "Unexpected token after `(...)` group")),
 				}
 				group.stream().into_iter()
 			}
 			None => {
 				return Ok(Attr { path: attr.path, arguments: Vec::new() });
 			}
-			_ => return Err(syn::Error::new(span, "Expected `(...)`")),
+			_ => return Err(Error::new(span, "Expected `(...)`")),
 		};
 
 		while let Some(token) = tokens.next() {
 			let label = match token {
 				TokenTree::Ident(ident) => ident,
-				_ => return Err(syn::Error::new(token.span(), "Expected argument identifier")),
+				_ => return Err(Error::new(token.span(), "Expected argument identifier")),
 			};
 
 			let kind = match tokens.next() {
-				Some(TokenTree::Punct(punct)) if punct_is(&punct, '=') => Self::parse_value(label.span(), &mut tokens)?,
-				Some(TokenTree::Punct(punct)) if punct_is(&punct, ',') => ArgumentKind::Flag,
+				Some(token) if is_punct(&token, '=') => Self::parse_value(label.span(), &mut tokens)?,
+				Some(token) if is_punct(&token, ',') => ArgumentKind::Flag,
 				None => ArgumentKind::Flag,
-				_ => return Err(syn::Error::new(label.span(), "Expected `=`, or `,` after the argument identifier")),
+				_ => return Err(Error::new(label.span(), "Expected `=`, or `,` after the argument identifier")),
 			};
 
 			arguments.push(Argument { label, kind });
@@ -102,11 +102,11 @@ impl Attr {
 	}
 
 	fn parse_value(span: Span, tokens: impl Iterator<Item = TokenTree>) -> syn::Result<ArgumentKind> {
-		let value: TokenStream2 =
-			tokens.take_while(|token| !matches!(token, TokenTree::Punct(punct) if punct_is(&punct, ','))).collect();
+		// We assume that the value can be anything up until the coma
+		let value: TokenStream2 = tokens.take_while(|token| !is_punct(token, ',')).collect();
 
 		if value.is_empty() {
-			return Err(syn::Error::new(span, "Missing value after `=`"));
+			return Err(Error::new(span, "Missing value after `=`"));
 		}
 
 		Ok(ArgumentKind::Value(value))
@@ -119,19 +119,19 @@ impl Attr {
 		assert!(N != 0, "Calling `Attr::retain` with an empty `allowed` list, this is a bug, please report it");
 
 		let mut result: [syn::Result<Argument>; N] =
-			allowed.map(|name| Err(syn::Error::new(self.path.span(), MissingArgument(name))));
+			allowed.map(|name| Err(Error::new(self.path.span(), MissingArgument(name))));
 
 		for argument in self.arguments {
 			if let Some(idx) = allowed.iter().position(|allowed_ident| argument.label == allowed_ident) {
 				// If this position in the `result` array already contains an argument,
 				// it means we got a duplicate definition
 				if let Ok(old) = &result[idx] {
-					return Err(syn::Error::new(old.label.span(), format!("Duplicate argument `{}`", old.label)));
+					return Err(Error::new(old.label.span(), format!("Duplicate argument `{}`", old.label)));
 				}
 
 				result[idx] = Ok(argument);
 			} else {
-				return Err(syn::Error::new(argument.label.span(), UnknownArgument(&argument.label, &allowed)));
+				return Err(Error::new(argument.label.span(), UnknownArgument(&argument.label, &allowed)));
 			}
 		}
 
@@ -176,7 +176,7 @@ impl Argument {
 		match self.kind {
 			ArgumentKind::Flag => Ok(()),
 			ArgumentKind::Value(value) => {
-				Err(syn::Error::new(value.span(), "Expected a flag argument without a value"))
+				Err(Error::new(value.span(), "Expected a flag argument without a value"))
 			}
 		}
 	}
@@ -188,7 +188,7 @@ impl Argument {
 	{
 		match self.kind {
 			ArgumentKind::Value(value) => syn::parse2(value),
-			ArgumentKind::Flag => Err(syn::Error::new(self.label.span(), "Expected `=` after the argument identifier")),
+			ArgumentKind::Flag => Err(Error::new(self.label.span(), "Expected `=` after the argument identifier")),
 			// ArgumentKind::Group(group) => {
 			// 	let span = match (group.first(), group.last()) {
 			// 		(Some(start), Some(end)) => {
@@ -197,7 +197,7 @@ impl Argument {
 			// 		_ => None,
 			// 	}.unwrap_or_else(|| self.label.span());
 
-			// 	Err(syn::Error::new(span, format!("Expected a value assignment for `{}`, but got a group instead", self.label)))
+			// 	Err(Error::new(span, format!("Expected a value assignment for `{}`, but got a group instead", self.label)))
 			// }
 		}
 	}
@@ -205,21 +205,5 @@ impl Argument {
 	/// Asserts tthat the argument is `key = "string"` and gets the value of the string
 	pub fn string(self) -> syn::Result<String> {
 		self.value::<syn::LitStr>().map(|lit| lit.value())
-	}
-}
-
-pub trait ArgumentExt {
-	fn flag(self) -> syn::Result<bool>;
-}
-
-impl ArgumentExt for syn::Result<Argument> {
-	fn flag(self) -> syn::Result<bool> {
-		match self {
-			Err(_) => Ok(false),
-			Ok(argument) => {
-				argument.flag()?;
-				Ok(true)
-			}
-		}
 	}
 }

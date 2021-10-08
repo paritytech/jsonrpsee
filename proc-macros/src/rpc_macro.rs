@@ -27,7 +27,7 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{Argument, ArgumentExt, Attr},
+	attributes::{Argument, Attr},
 	helpers::extract_doc_comments,
 };
 
@@ -159,8 +159,8 @@ impl RpcDescription {
 	pub fn from_item(attr: syn::Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
 		let [client, server, namespace] = Attr::from_syn(attr)?.retain(["client", "server", "namespace"])?;
 
-		let needs_server = server.flag()?;
-		let needs_client = client.flag()?;
+		let needs_server = server.ok().map(Argument::flag).transpose()?.is_some();
+		let needs_client = client.ok().map(Argument::flag).transpose()?.is_some();
 		let namespace = namespace.ok().map(Argument::string).transpose()?;
 
 		if !needs_server && !needs_client {
