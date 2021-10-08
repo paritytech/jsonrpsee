@@ -116,13 +116,14 @@ impl Attr {
 	///
 	/// Errors if there is an argument with a name that's not on the list, or if there is a duplicate definition.
 	pub fn retain<const N: usize>(self, allowed: [&str; N]) -> syn::Result<[syn::Result<Argument>; N]> {
+		// TODO: is there a static assert for const generics?
 		assert!(N != 0, "Calling `Attr::retain` with an empty `allowed` list, this is a bug, please report it");
 
 		let mut result: [syn::Result<Argument>; N] =
 			allowed.map(|name| Err(Error::new(self.path.span(), MissingArgument(name))));
 
 		for argument in self.arguments {
-			if let Some(idx) = allowed.iter().position(|allowed_ident| argument.label == allowed_ident) {
+			if let Some(idx) = allowed.iter().position(|probe| argument.label == probe) {
 				// If this position in the `result` array already contains an argument,
 				// it means we got a duplicate definition
 				if let Ok(old) = &result[idx] {

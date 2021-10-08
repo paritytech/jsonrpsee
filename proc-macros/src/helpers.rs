@@ -31,6 +31,7 @@ use quote::quote;
 use std::collections::HashSet;
 use syn::{parse_quote, punctuated::Punctuated, visit::Visit, Token};
 
+/// Tests if a `TokenTree` is a lone punct token matching `char`
 pub(crate) fn is_punct(tt: &TokenTree, expect: char) -> bool {
 	match tt {
 		TokenTree::Punct(p) if p.as_char() == expect && p.spacing() == Spacing::Alone => true,

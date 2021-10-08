@@ -53,8 +53,7 @@ impl RpcMethod {
 		let sig = method.sig.clone();
 		let name = name?.string()?;
 		let docs = extract_doc_comments(&method.attrs);
-		let aliases =
-			aliases.and_then(Argument::string).map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default();
+		let aliases = parse_aliases(aliases)?;
 
 		let params: Vec<_> = sig
 			.inputs
@@ -103,14 +102,8 @@ impl RpcSubscription {
 		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = build_unsubscribe_method(&name);
 		let item = item?.value()?;
-
-		let aliases =
-			aliases.and_then(Argument::string).map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default();
-
-		let unsubscribe_aliases = unsubscribe_aliases
-			.and_then(Argument::string)
-			.map(|a| a.split(',').map(Into::into).collect())
-			.unwrap_or_default();
+		let aliases = parse_aliases(aliases)?;
+		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
 		let params: Vec<_> = sig
 			.inputs
@@ -276,6 +269,12 @@ impl RpcDescription {
 			method.to_string()
 		}
 	}
+}
+
+fn parse_aliases(arg: syn::Result<Argument>) -> syn::Result<Vec<String>> {
+	let aliases = arg.ok().map(Argument::string).transpose()?;
+
+	Ok(aliases.map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default())
 }
 
 fn has_attr(attrs: &[Attribute], ident: &str) -> bool {
