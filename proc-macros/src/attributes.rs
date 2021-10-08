@@ -71,13 +71,6 @@ impl AttributeMeta {
 
 			let tokens = (&mut tokens).take_while(|t| !is_punct(t, ',')).collect();
 
-			// let kind = match tokens.next() {
-			// 	Some(token) if is_punct(&token, '=') => Self::parse_value(label.span(), &mut tokens)?,
-			// 	Some(token) if is_punct(&token, ',') => ArgumentKind::Flag,
-			// 	None => ArgumentKind::Flag,
-			// 	_ => return Err(Error::new(label.span(), "Expected `=`, or `,` after the argument identifier")),
-			// };
-
 			arguments.push(Argument { label, tokens });
 		}
 
@@ -85,17 +78,6 @@ impl AttributeMeta {
 
 		Ok(AttributeMeta { path, arguments })
 	}
-
-	// fn parse_value(span: Span, tokens: impl Iterator<Item = TokenTree>) -> syn::Result<ArgumentKind> {
-	// 	// We assume that the value can be anything up until the coma
-	// 	let value: TokenStream2 = tokens.take_while(|token| !is_punct(token, ',')).collect();
-
-	// 	if value.is_empty() {
-	// 		return Err(Error::new(span, "Missing value after `=`"));
-	// 	}
-
-	// 	Ok(ArgumentKind::Value(value))
-	// }
 
 	/// Attempt to get a list of `Argument`s from a list of names in order.
 	///
@@ -161,6 +143,7 @@ impl<T: fmt::Display> fmt::Display for UnknownArgument<'_, T> {
 }
 
 impl Argument {
+	/// Asserts that the argument is just a simple `flag` without any value present
 	pub fn flag(self) -> syn::Result<()> {
 		if self.tokens.is_empty() {
 			Ok(())
