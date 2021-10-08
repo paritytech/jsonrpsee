@@ -25,6 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
+	http_client::HttpClientBuilder,
+	http_server::HttpServerBuilder,
 	proc_macros::rpc,
 	types::{traits::Client, v2::ParamsSer, Error},
 	ws_client::WsClientBuilder,
@@ -102,6 +104,19 @@ async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsStopHa
 	Ok((addr, handle))
 }
 
+async fn http_server(module: RpcModule<()>) -> Result<SocketAddr, Error> {
+	let server = HttpServerBuilder::default()
+		.register_resource("CPU", 6, 2)?
+		.register_resource("MEM", 10, 1)?
+		.build("127.0.0.1:0".parse().unwrap())?;
+
+	let addr = server.local_addr()?;
+
+	tokio::spawn(server.start(module));
+
+	Ok(addr)
+}
+
 fn assert_server_busy(fail: Result<String, Error>) {
 	match fail {
 		Err(Error::Request(msg)) => {
@@ -151,16 +166,56 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 	stop_handle.stop().unwrap().await;
 }
 
+async fn run_tests_on_http_server(server_addr: SocketAddr) {
+	let server_url = format!("http://{}", server_addr);
+	let client = HttpClientBuilder::default().build(&server_url).unwrap();
+
+	// 2 CPU units (default) per call, so 4th call exceeds cap
+	let (a, b, c, d) = tokio::join!(
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", ParamsSer::NoParams),
+	);
+
+	// HTTP does not guarantee ordering
+	let mut passes = 0;
+
+	for result in [a, b, c, d] {
+		if result.is_ok() {
+			passes += 1;
+		} else {
+			assert_server_busy(result);
+		}
+	}
+
+	assert_eq!(passes, 3);
+}
+
 #[tokio::test]
-async fn server_rejects_requests_if_resources_are_claimed() {
+async fn ws_server_with_manual_module() {
 	let (server_addr, stop_handle) = websocket_server(module_manual().unwrap()).await.unwrap();
 
 	run_tests_on_ws_server(server_addr, stop_handle).await;
 }
 
 #[tokio::test]
-async fn server_rejects_requests_if_resources_are_claimed_macro() {
+async fn ws_server_with_macro_module() {
 	let (server_addr, stop_handle) = websocket_server(module_macro()).await.unwrap();
 
 	run_tests_on_ws_server(server_addr, stop_handle).await;
+}
+
+#[tokio::test]
+async fn http_server_with_manual_module() {
+	let server_addr = http_server(module_manual().unwrap()).await.unwrap();
+
+	run_tests_on_http_server(server_addr).await;
+}
+
+#[tokio::test]
+async fn http_server_with_macro_module() {
+	let server_addr = http_server(module_macro()).await.unwrap();
+
+	run_tests_on_http_server(server_addr).await;
 }
