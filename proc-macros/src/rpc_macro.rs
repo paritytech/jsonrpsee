@@ -27,9 +27,8 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{self, Attr},
+	attributes::{Argument, ArgumentExt, Attr},
 	helpers::extract_doc_comments,
-	respan::Respan,
 };
 
 use proc_macro2::TokenStream as TokenStream2;
@@ -47,20 +46,15 @@ pub struct RpcMethod {
 }
 
 impl RpcMethod {
-	pub fn from_item(mut method: syn::TraitItemMethod) -> Result<Self, syn::Error> {
+	pub fn from_item(mut method: syn::TraitItemMethod) -> syn::Result<Self> {
 		let attr = Attr::find_and_parse(&method.attrs, "method", method.span())?;
-
-		attr.only_allowed(&["aliases", "name"])?;
+		let [aliases, name] = attr.retain(["aliases", "name"])?;
 
 		let sig = method.sig.clone();
-		let name = attr.require_argument("name")?.lit_str()?;
+		let name = name?.string()?;
 		let docs = extract_doc_comments(&method.attrs);
-		let aliases = attr
-			.get_argument("aliases")?
-			.map(|a| a.lit_str())
-			.transpose()?
-			.map(|a| a.split(',').map(Into::into).collect())
-			.unwrap_or_default();
+		let aliases =
+			aliases.and_then(Argument::string).map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default();
 
 		let params: Vec<_> = sig
 			.inputs
@@ -99,28 +93,22 @@ pub struct RpcSubscription {
 }
 
 impl RpcSubscription {
-	pub fn from_item(mut sub: syn::TraitItemMethod) -> Result<Self, syn::Error> {
+	pub fn from_item(mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
 		let attr = Attr::find_and_parse(&sub.attrs, "subscription", sub.span())?;
+		let [aliases, item, name, unsubscribe_aliases] =
+			attr.retain(["aliases", "item", "name", "unsubscribe_aliases"])?;
 
-		attr.only_allowed(&["aliases", "item", "name", "unsubscribe_aliases"])?;
-
-		// let attributes = attributes::Subscription::from_attributes(&sub.attrs).respan(&sub.attrs.first())?;
 		let sig = sub.sig.clone();
-		let name = attr.require_argument("name")?.lit_str()?;
+		let name = name?.string()?;
 		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = build_unsubscribe_method(&name);
-		let item = attr.require_argument("item")?.value()?;
-		let aliases = attr
-			.get_argument("aliases")?
-			.map(|a| a.lit_str())
-			.transpose()?
-			.map(|a| a.split(',').map(Into::into).collect())
-			.unwrap_or_default();
+		let item = item?.value()?;
 
-		let unsubscribe_aliases = attr
-			.get_argument("unsubscribe_aliases")?
-			.map(|a| a.lit_str())
-			.transpose()?
+		let aliases =
+			aliases.and_then(Argument::string).map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default();
+
+		let unsubscribe_aliases = unsubscribe_aliases
+			.and_then(Argument::string)
 			.map(|a| a.split(',').map(Into::into).collect())
 			.unwrap_or_default();
 
@@ -149,8 +137,16 @@ pub struct RpcDescription {
 	pub(crate) jsonrpsee_client_path: Option<TokenStream2>,
 	/// Path to the `jsonrpsee` server types part.
 	pub(crate) jsonrpsee_server_path: Option<TokenStream2>,
-	/// Data about RPC declaration
-	pub(crate) attrs: attributes::Rpc,
+	/// Switch denoting that server trait must be generated.
+	/// Assuming that trait to which attribute is applied is named `Foo`, the generated
+	/// server trait will have `FooServer` name.
+	pub(crate) needs_server: bool,
+	/// Switch denoting that client extension trait must be generated.
+	/// Assuming that trait to which attribute is applied is named `Foo`, the generated
+	/// client trait will have `FooClient` name.
+	pub(crate) needs_client: bool,
+	/// Optional prefix for RPC namespace.
+	pub(crate) namespace: Option<String>,
 	/// Trait definition in which all the attributes were stripped.
 	pub(crate) trait_def: syn::ItemTrait,
 	/// List of RPC methods defined in the trait.
@@ -160,19 +156,24 @@ pub struct RpcDescription {
 }
 
 impl RpcDescription {
-	pub fn from_item(attr: syn::Attribute, mut item: syn::ItemTrait) -> Result<Self, syn::Error> {
-		let attrs = attributes::Rpc::from_attributes(&[attr.clone()]).respan(&attr)?;
-		if !attrs.is_correct() {
+	pub fn from_item(attr: syn::Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
+		let [client, server, namespace] = Attr::from_syn(attr)?.retain(["client", "server", "namespace"])?;
+
+		let needs_server = server.flag()?;
+		let needs_client = client.flag()?;
+		let namespace = namespace.ok().map(Argument::string).transpose()?;
+
+		if !needs_server && !needs_client {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
 		}
 
 		let jsonrpsee_client_path = crate::helpers::find_jsonrpsee_client_crate().ok();
 		let jsonrpsee_server_path = crate::helpers::find_jsonrpsee_server_crate().ok();
 
-		if attrs.needs_client() && jsonrpsee_client_path.is_none() {
+		if needs_client && jsonrpsee_client_path.is_none() {
 			return Err(syn::Error::new_spanned(&item.ident, "Unable to locate 'jsonrpsee' client dependency"));
 		}
-		if attrs.needs_server() && jsonrpsee_server_path.is_none() {
+		if needs_server && jsonrpsee_server_path.is_none() {
 			return Err(syn::Error::new_spanned(&item.ident, "Unable to locate 'jsonrpsee' server dependency"));
 		}
 
@@ -228,12 +229,21 @@ impl RpcDescription {
 			return Err(syn::Error::new_spanned(&item, "RPC cannot be empty"));
 		}
 
-		Ok(Self { jsonrpsee_client_path, jsonrpsee_server_path, attrs, trait_def: item, methods, subscriptions })
+		Ok(Self {
+			jsonrpsee_client_path,
+			jsonrpsee_server_path,
+			needs_server,
+			needs_client,
+			namespace,
+			trait_def: item,
+			methods,
+			subscriptions,
+		})
 	}
 
 	pub fn render(self) -> Result<TokenStream2, syn::Error> {
-		let server_impl = if self.attrs.needs_server() { self.render_server()? } else { TokenStream2::new() };
-		let client_impl = if self.attrs.needs_client() { self.render_client()? } else { TokenStream2::new() };
+		let server_impl = if self.needs_server { self.render_server()? } else { TokenStream2::new() };
+		let client_impl = if self.needs_client { self.render_client()? } else { TokenStream2::new() };
 
 		Ok(quote! {
 			#server_impl
@@ -260,8 +270,8 @@ impl RpcDescription {
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
 	/// For no namespace and method `makeSpam` it will be just `makeSpam.
 	pub(crate) fn rpc_identifier(&self, method: &str) -> String {
-		if let Some(ns) = &self.attrs.namespace {
-			format!("{}_{}", ns.value(), method.trim())
+		if let Some(ns) = &self.namespace {
+			format!("{}_{}", ns, method.trim())
 		} else {
 			method.to_string()
 		}
