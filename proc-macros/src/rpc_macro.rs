@@ -27,7 +27,7 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{optional, Argument, AttributeMeta, Resource},
+	attributes::{optional, Argument, AttributeMeta, MissingArgument, Resource},
 	helpers::extract_doc_comments,
 };
 
@@ -273,7 +273,7 @@ impl RpcDescription {
 	}
 }
 
-fn parse_aliases(arg: syn::Result<Argument>) -> syn::Result<Vec<String>> {
+fn parse_aliases(arg: Result<Argument, MissingArgument>) -> syn::Result<Vec<String>> {
 	let aliases = optional(arg, Argument::string)?;
 
 	Ok(aliases.map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default())

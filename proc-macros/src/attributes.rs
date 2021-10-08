@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use proc_macro2::{TokenStream as TokenStream2, TokenTree};
+use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use std::fmt;
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
@@ -91,15 +91,17 @@ impl AttributeMeta {
 	/// Attempt to get a list of `Argument`s from a list of names in order.
 	///
 	/// Errors if there is an argument with a name that's not on the list, or if there is a duplicate definition.
-	pub fn retain<const N: usize>(self, allowed: [&str; N]) -> syn::Result<[syn::Result<Argument>; N]> {
+	pub fn retain<'a, const N: usize>(
+		self,
+		allowed: [&'a str; N],
+	) -> syn::Result<[Result<Argument, MissingArgument<'a>>; N]> {
 		// TODO: is there a static assert for const generics?
 		assert!(
 			N != 0,
 			"Calling `AttributeMeta::retain` with an empty `allowed` list, this is a bug, please report it"
 		);
 
-		let mut result: [Result<Argument, _>; N] =
-			allowed.map(|name| Err(Error::new(self.path.span(), MissingArgument(name))));
+		let mut result: [Result<Argument, _>; N] = allowed.map(|name| Err(MissingArgument(self.path.span(), name)));
 
 		for argument in self.arguments {
 			if let Some(idx) = allowed.iter().position(|probe| argument.label == probe) {
@@ -119,15 +121,21 @@ impl AttributeMeta {
 	}
 }
 
-struct MissingArgument<'a>(&'a str);
+pub(crate) struct MissingArgument<'a>(Span, &'a str);
 
 struct UnknownArgument<'a, T>(T, &'a [&'a str]);
 
 impl fmt::Display for MissingArgument<'_> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let MissingArgument(missing) = self;
+		let MissingArgument(_, missing) = self;
 
 		write!(f, "Missing argument `{}`", missing)
+	}
+}
+
+impl From<MissingArgument<'_>> for Error {
+	fn from(missing: MissingArgument) -> Self {
+		Error::new(missing.0, missing)
 	}
 }
 
@@ -184,7 +192,7 @@ impl Argument {
 	}
 }
 
-pub(crate) fn optional<T, F>(arg: syn::Result<Argument>, transform: F) -> syn::Result<Option<T>>
+pub(crate) fn optional<T, F>(arg: Result<Argument, MissingArgument>, transform: F) -> syn::Result<Option<T>>
 where
 	F: Fn(Argument) -> syn::Result<T>,
 {
