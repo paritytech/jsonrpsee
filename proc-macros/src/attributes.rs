@@ -91,11 +91,7 @@ impl AttributeMeta {
 	/// Attempt to get a list of `Argument`s from a list of names in order.
 	///
 	/// Errors if there is an argument with a name that's not on the list, or if there is a duplicate definition.
-	pub fn retain<'a, const N: usize>(
-		self,
-		allowed: [&'a str; N],
-	) -> syn::Result<[Result<Argument, MissingArgument<'a>>; N]> {
-		// TODO: is there a static assert for const generics?
+	pub fn retain<const N: usize>(self, allowed: [&str; N]) -> syn::Result<[Result<Argument, MissingArgument>; N]> {
 		assert!(
 			N != 0,
 			"Calling `AttributeMeta::retain` with an empty `allowed` list, this is a bug, please report it"
@@ -113,7 +109,13 @@ impl AttributeMeta {
 
 				result[idx] = Ok(argument);
 			} else {
-				return Err(Error::new(argument.label.span(), UnknownArgument(&argument.label, &allowed)));
+				let mut err_str = format!("Unknown argument `{}`, expected one of: `", &argument.label);
+
+				err_str.push_str(allowed[0]);
+				err_str.extend(allowed[1..].iter().flat_map(|&label| ["`, `", label]));
+				err_str.push('`');
+
+				return Err(Error::new(argument.label.span(), err_str));
 			}
 		}
 
@@ -122,8 +124,6 @@ impl AttributeMeta {
 }
 
 pub(crate) struct MissingArgument<'a>(Span, &'a str);
-
-struct UnknownArgument<'a, T>(T, &'a [&'a str]);
 
 impl fmt::Display for MissingArgument<'_> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -136,26 +136,6 @@ impl fmt::Display for MissingArgument<'_> {
 impl From<MissingArgument<'_>> for Error {
 	fn from(missing: MissingArgument) -> Self {
 		Error::new(missing.0, missing)
-	}
-}
-
-impl<T: fmt::Display> fmt::Display for UnknownArgument<'_, T> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let UnknownArgument(unknown, expected) = self;
-
-		write!(f, "Unknown argument `{}`, expected one of: ", unknown)?;
-
-		let mut expected = expected.iter();
-
-		if let Some(first) = expected.next() {
-			write!(f, "`{}`", first)?;
-		}
-
-		for tail in expected {
-			write!(f, ", `{}`", tail)?;
-		}
-
-		Ok(())
 	}
 }
 
