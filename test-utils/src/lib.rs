@@ -32,7 +32,7 @@ use std::{future::Future, time::Duration};
 use tokio::time::{timeout, Timeout};
 
 pub mod helpers;
-pub mod types;
+pub mod mocks;
 
 /// Helper extension trait which allows to limit execution time for the futures.
 /// It is helpful in tests to ensure that no future will ever get stuck forever.

@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::{Body, HttpResponse, Id, Uri};
+use crate::mocks::{Body, HttpResponse, Id, Uri};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Request, Response, Server};
 use serde_json::Value;

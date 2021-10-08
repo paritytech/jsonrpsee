@@ -10,16 +10,23 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee"
 
 [dependencies]
-http-client = { path = "../http-client", version = "0.3.0", package = "jsonrpsee-http-client", optional = true }
-http-server = { path = "../http-server", version = "0.3.0", package = "jsonrpsee-http-server", optional = true }
-ws-client = { path = "../ws-client", version = "0.3.0", package = "jsonrpsee-ws-client", optional = true }
-ws-server = { path = "../ws-server", version = "0.3.0", package = "jsonrpsee-ws-server", optional = true }
-proc-macros = { path = "../proc-macros", version = "0.3.0", package = "jsonrpsee-proc-macros", optional = true }
-utils = { path = "../utils", version = "0.3.0", package = "jsonrpsee-utils", optional = true }
-types = { path = "../types", version = "0.3.0", package = "jsonrpsee-types", optional = true }
+# No support for namespaced features yet so workspace dependencies are prefixed with `jsonrpsee-`.
+# See https://github.com/rust-lang/cargo/issues/5565 for more details.
+jsonrpsee-http-client = { path = "../http-client", version = "0.3.0", package = "jsonrpsee-http-client", optional = true }
+jsonrpsee-http-server = { path = "../http-server", version = "0.3.0", package = "jsonrpsee-http-server", optional = true }
+jsonrpsee-ws-client = { path = "../ws-client", version = "0.3.0", package = "jsonrpsee-ws-client", optional = true }
+jsonrpsee-ws-server = { path = "../ws-server", version = "0.3.0", package = "jsonrpsee-ws-server", optional = true }
+jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.3.0", package = "jsonrpsee-proc-macros", optional = true }
+jsonrpsee-utils = { path = "../utils", version = "0.3.0", package = "jsonrpsee-utils", optional = true }
+jsonrpsee-types = { path = "../types", version = "0.3.0", package = "jsonrpsee-types", optional = true }
 
 [features]
-client = ["http-client", "ws-client", "types"]
-server = ["http-server", "ws-server", "utils", "types"]
-macros = ["proc-macros", "types"]
-full = ["client", "server", "macros", "utils"]
+http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-utils/client"]
+http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-utils"]
+ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-utils/client"]
+ws-server = ["jsonrpsee-ws-server", "jsonrpsee-types", "jsonrpsee-utils"]
+macros = ["jsonrpsee-proc-macros", "jsonrpsee-types"]
+
+client = ["http-client", "ws-client"]
+server = ["http-server", "ws-server"]
+full = ["client", "server", "macros"]

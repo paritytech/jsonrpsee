@@ -32,7 +32,7 @@ use crate::types::error::{CallError, Error};
 use crate::{server::StopHandle, HttpServerBuilder, RpcModule};
 
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::types::{Id, StatusCode, TestContext};
+use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 use tokio::task::JoinHandle;
