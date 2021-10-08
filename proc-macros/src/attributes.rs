@@ -27,10 +27,10 @@
 use crate::helpers::is_punct;
 use proc_macro2::{Delimiter, Span, TokenStream as TokenStream2, TokenTree};
 use std::fmt;
-use syn::{spanned::Spanned, Error};
+use syn::{spanned::Spanned, Attribute, Error};
 
 #[derive(Debug)]
-pub(crate) struct Attr {
+pub(crate) struct AttributeMeta {
 	pub path: syn::Path,
 	pub arguments: Vec<Argument>,
 }
@@ -49,19 +49,10 @@ pub(crate) enum ArgumentKind {
 	// Group(Vec<TokenStream2>),
 }
 
-impl Attr {
-	pub fn find_and_parse(hay: &[syn::Attribute], name: &str, host: Span) -> syn::Result<Attr> {
-		let syn_attr = hay
-			.iter()
-			.find(|syn_attr| syn_attr.path.is_ident(name))
-			.ok_or_else(|| Error::new(host, format!("Missing attribute `#[{}]`", name)))?;
-
-		Self::from_syn(syn_attr.clone())
-	}
-
-	/// Parses `syn::Attribute` with plain `TokenStream` into a more robust `Attr` with
+impl AttributeMeta {
+	/// Parses `Attribute` with plain `TokenStream` into a more robust `AttributeMeta` with
 	/// a collection `Arguments`.
-	pub fn from_syn(attr: syn::Attribute) -> syn::Result<Attr> {
+	pub fn parse(attr: Attribute) -> syn::Result<AttributeMeta> {
 		let span = attr.tokens.span();
 		let mut tokens = attr.tokens.clone().into_iter();
 		let mut arguments = Vec::new();
@@ -75,7 +66,7 @@ impl Attr {
 				group.stream().into_iter()
 			}
 			None => {
-				return Ok(Attr { path: attr.path, arguments: Vec::new() });
+				return Ok(AttributeMeta { path: attr.path, arguments: Vec::new() });
 			}
 			_ => return Err(Error::new(span, "Expected `(...)`")),
 		};
@@ -98,7 +89,7 @@ impl Attr {
 
 		let path = attr.path;
 
-		Ok(Attr { path, arguments })
+		Ok(AttributeMeta { path, arguments })
 	}
 
 	fn parse_value(span: Span, tokens: impl Iterator<Item = TokenTree>) -> syn::Result<ArgumentKind> {
@@ -117,7 +108,10 @@ impl Attr {
 	/// Errors if there is an argument with a name that's not on the list, or if there is a duplicate definition.
 	pub fn retain<const N: usize>(self, allowed: [&str; N]) -> syn::Result<[syn::Result<Argument>; N]> {
 		// TODO: is there a static assert for const generics?
-		assert!(N != 0, "Calling `Attr::retain` with an empty `allowed` list, this is a bug, please report it");
+		assert!(
+			N != 0,
+			"Calling `AttributeMeta::retain` with an empty `allowed` list, this is a bug, please report it"
+		);
 
 		let mut result: [syn::Result<Argument>; N] =
 			allowed.map(|name| Err(Error::new(self.path.span(), MissingArgument(name))));
@@ -176,9 +170,7 @@ impl Argument {
 	pub fn flag(self) -> syn::Result<()> {
 		match self.kind {
 			ArgumentKind::Flag => Ok(()),
-			ArgumentKind::Value(value) => {
-				Err(Error::new(value.span(), "Expected a flag argument without a value"))
-			}
+			ArgumentKind::Value(value) => Err(Error::new(value.span(), "Expected a flag argument without a value")),
 		}
 	}
 

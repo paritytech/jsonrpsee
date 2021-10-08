@@ -27,13 +27,13 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{Argument, Attr},
+	attributes::{Argument, AttributeMeta},
 	helpers::extract_doc_comments,
 };
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{spanned::Spanned, Attribute};
+use syn::Attribute;
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
@@ -46,14 +46,14 @@ pub struct RpcMethod {
 }
 
 impl RpcMethod {
-	pub fn from_item(mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let attr = Attr::find_and_parse(&method.attrs, "method", method.span())?;
-		let [aliases, name] = attr.retain(["aliases", "name"])?;
+	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
+		let [aliases, name] = AttributeMeta::parse(attr)?.retain(["aliases", "name"])?;
+
+		let aliases = parse_aliases(aliases)?;
+		let name = name?.string()?;
 
 		let sig = method.sig.clone();
-		let name = name?.string()?;
 		let docs = extract_doc_comments(&method.attrs);
-		let aliases = parse_aliases(aliases)?;
 
 		let params: Vec<_> = sig
 			.inputs
@@ -92,18 +92,18 @@ pub struct RpcSubscription {
 }
 
 impl RpcSubscription {
-	pub fn from_item(mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let attr = Attr::find_and_parse(&sub.attrs, "subscription", sub.span())?;
+	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
 		let [aliases, item, name, unsubscribe_aliases] =
-			attr.retain(["aliases", "item", "name", "unsubscribe_aliases"])?;
+			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "unsubscribe_aliases"])?;
+
+		let aliases = parse_aliases(aliases)?;
+		let name = name?.string()?;
+		let item = item?.value()?;
+		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
 		let sig = sub.sig.clone();
-		let name = name?.string()?;
 		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = build_unsubscribe_method(&name);
-		let item = item?.value()?;
-		let aliases = parse_aliases(aliases)?;
-		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
 		let params: Vec<_> = sig
 			.inputs
@@ -149,8 +149,8 @@ pub struct RpcDescription {
 }
 
 impl RpcDescription {
-	pub fn from_item(attr: syn::Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
-		let [client, server, namespace] = Attr::from_syn(attr)?.retain(["client", "server", "namespace"])?;
+	pub fn from_item(attr: Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
+		let [client, server, namespace] = AttributeMeta::parse(attr)?.retain(["client", "server", "namespace"])?;
 
 		let needs_server = server.ok().map(Argument::flag).transpose()?.is_some();
 		let needs_client = client.ok().map(Argument::flag).transpose()?.is_some();
@@ -185,13 +185,13 @@ impl RpcDescription {
 
 				let mut is_method = false;
 				let mut is_sub = false;
-				if has_attr(&method.attrs, "method") {
+				if let Some(attr) = find_attr(&method.attrs, "method") {
 					is_method = true;
 
-					let method_data = RpcMethod::from_item(method.clone())?;
+					let method_data = RpcMethod::from_item(attr.clone(), method.clone())?;
 					methods.push(method_data);
 				}
-				if has_attr(&method.attrs, "subscription") {
+				if let Some(attr) = find_attr(&method.attrs, "subscription") {
 					is_sub = true;
 					if is_method {
 						return Err(syn::Error::new_spanned(
@@ -203,7 +203,7 @@ impl RpcDescription {
 						return Err(syn::Error::new_spanned(&method, "Subscription methods must not be `async`"));
 					}
 
-					let sub_data = RpcSubscription::from_item(method.clone())?;
+					let sub_data = RpcSubscription::from_item(attr.clone(), method.clone())?;
 					subscriptions.push(sub_data);
 				}
 
@@ -277,13 +277,8 @@ fn parse_aliases(arg: syn::Result<Argument>) -> syn::Result<Vec<String>> {
 	Ok(aliases.map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default())
 }
 
-fn has_attr(attrs: &[Attribute], ident: &str) -> bool {
-	for attr in attrs.iter().filter_map(|a| a.path.get_ident()) {
-		if attr == ident {
-			return true;
-		}
-	}
-	false
+fn find_attr<'a>(attrs: &'a [Attribute], ident: &str) -> Option<&'a Attribute> {
+	attrs.iter().find(|a| a.path.is_ident(ident))
 }
 
 fn build_unsubscribe_method(existing_method: &str) -> String {
