@@ -589,13 +589,17 @@ impl TestSubscription {
 		self.sub_id
 	}
 
-	/// Get the next element of type T from the underlying stream.
+	/// Returns `Some((val, sub_id))` for the next element of type T from the underlying stream,
+	/// otherwise `None` if the subscruption was closed.
 	///
-	/// Panics if the stream was closed or if the decoding the value as `T`.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> (T, jsonrpsee_types::v2::SubscriptionId) {
-		let raw = self.rx.next().await.expect("subscription not closed");
-		let val: SubscriptionResponse<T> = serde_json::from_str(&raw).expect("valid response");
-		(val.params.result, val.params.subscription)
+	/// # Panics
+	///
+	/// If the decoding the value as `T` fails.
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, jsonrpsee_types::v2::SubscriptionId)> {
+		let raw = self.rx.next().await?;
+		let val: SubscriptionResponse<T> =
+			serde_json::from_str(&raw).expect("valid response in TestSubscription::next()");
+		Some((val.params.result, val.params.subscription))
 	}
 }
 
