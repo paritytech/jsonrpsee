@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::helpers::is_punct;
-use proc_macro2::{Delimiter, Span, TokenStream as TokenStream2, TokenTree};
+use proc_macro2::{Delimiter, TokenStream as TokenStream2, TokenTree};
 use std::fmt;
 use syn::{spanned::Spanned, Attribute, Error};
 
@@ -38,15 +38,7 @@ pub(crate) struct AttributeMeta {
 #[derive(Debug)]
 pub(crate) struct Argument {
 	pub label: syn::Ident,
-	pub kind: ArgumentKind,
-}
-
-#[non_exhaustive]
-#[derive(Debug)]
-pub(crate) enum ArgumentKind {
-	Flag,
-	Value(TokenStream2),
-	// Group(Vec<TokenStream2>),
+	pub tokens: TokenStream2,
 }
 
 impl AttributeMeta {
@@ -77,14 +69,16 @@ impl AttributeMeta {
 				_ => return Err(Error::new(token.span(), "Expected argument identifier")),
 			};
 
-			let kind = match tokens.next() {
-				Some(token) if is_punct(&token, '=') => Self::parse_value(label.span(), &mut tokens)?,
-				Some(token) if is_punct(&token, ',') => ArgumentKind::Flag,
-				None => ArgumentKind::Flag,
-				_ => return Err(Error::new(label.span(), "Expected `=`, or `,` after the argument identifier")),
-			};
+			let tokens = (&mut tokens).take_while(|t| !is_punct(t, ',')).collect();
 
-			arguments.push(Argument { label, kind });
+			// let kind = match tokens.next() {
+			// 	Some(token) if is_punct(&token, '=') => Self::parse_value(label.span(), &mut tokens)?,
+			// 	Some(token) if is_punct(&token, ',') => ArgumentKind::Flag,
+			// 	None => ArgumentKind::Flag,
+			// 	_ => return Err(Error::new(label.span(), "Expected `=`, or `,` after the argument identifier")),
+			// };
+
+			arguments.push(Argument { label, tokens });
 		}
 
 		let path = attr.path;
@@ -92,16 +86,16 @@ impl AttributeMeta {
 		Ok(AttributeMeta { path, arguments })
 	}
 
-	fn parse_value(span: Span, tokens: impl Iterator<Item = TokenTree>) -> syn::Result<ArgumentKind> {
-		// We assume that the value can be anything up until the coma
-		let value: TokenStream2 = tokens.take_while(|token| !is_punct(token, ',')).collect();
+	// fn parse_value(span: Span, tokens: impl Iterator<Item = TokenTree>) -> syn::Result<ArgumentKind> {
+	// 	// We assume that the value can be anything up until the coma
+	// 	let value: TokenStream2 = tokens.take_while(|token| !is_punct(token, ',')).collect();
 
-		if value.is_empty() {
-			return Err(Error::new(span, "Missing value after `=`"));
-		}
+	// 	if value.is_empty() {
+	// 		return Err(Error::new(span, "Missing value after `=`"));
+	// 	}
 
-		Ok(ArgumentKind::Value(value))
-	}
+	// 	Ok(ArgumentKind::Value(value))
+	// }
 
 	/// Attempt to get a list of `Argument`s from a list of names in order.
 	///
@@ -168,9 +162,10 @@ impl<T: fmt::Display> fmt::Display for UnknownArgument<'_, T> {
 
 impl Argument {
 	pub fn flag(self) -> syn::Result<()> {
-		match self.kind {
-			ArgumentKind::Flag => Ok(()),
-			ArgumentKind::Value(value) => Err(Error::new(value.span(), "Expected a flag argument without a value")),
+		if self.tokens.is_empty() {
+			Ok(())
+		} else {
+			Err(Error::new(self.tokens.span(), "Expected a flag argument"))
 		}
 	}
 
@@ -179,20 +174,15 @@ impl Argument {
 	where
 		T: syn::parse::Parse,
 	{
-		match self.kind {
-			ArgumentKind::Value(value) => syn::parse2(value),
-			ArgumentKind::Flag => Err(Error::new(self.label.span(), "Expected `=` after the argument identifier")),
-			// ArgumentKind::Group(group) => {
-			// 	let span = match (group.first(), group.last()) {
-			// 		(Some(start), Some(end)) => {
-			// 			start.span().join(end.span())
-			// 		},
-			// 		_ => None,
-			// 	}.unwrap_or_else(|| self.label.span());
+		let span = self.tokens.span();
+		let mut tokens = self.tokens.into_iter();
 
-			// 	Err(Error::new(span, format!("Expected a value assignment for `{}`, but got a group instead", self.label)))
-			// }
+		match tokens.next() {
+			Some(token) if is_punct(&token, '=') => (),
+			_ => return Err(Error::new(span, "Expected `=` after argument identifier")),
 		}
+
+		syn::parse2(tokens.collect())
 	}
 
 	/// Asserts tthat the argument is `key = "string"` and gets the value of the string
