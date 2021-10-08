@@ -33,7 +33,7 @@ use crate::{
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Attribute, Token,punctuated::Punctuated};
+use syn::{punctuated::Punctuated, Attribute, Token};
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {

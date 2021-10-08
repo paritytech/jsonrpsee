@@ -26,9 +26,9 @@
 
 use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use std::fmt;
-use syn::{spanned::Spanned, Attribute, Error, Token};
+use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
-use syn::parse::{Parse, Parser, ParseStream};
+use syn::{spanned::Spanned, Attribute, Error, Token};
 
 pub(crate) struct AttributeMeta {
 	pub path: syn::Path,
@@ -60,20 +60,13 @@ impl Parse for Argument {
 			}
 		}
 
-		Ok(Argument {
-			label,
-			tokens: tokens.into_iter().collect(),
-		})
+		Ok(Argument { label, tokens: tokens.into_iter().collect() })
 	}
 }
 
 impl Parse for Resource {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
-		Ok(Resource {
-			name: input.parse()?,
-			assign: input.parse()?,
-			value: input.parse()?,
-		})
+		Ok(Resource { name: input.parse()?, assign: input.parse()?, value: input.parse()? })
 	}
 }
 
@@ -197,4 +190,3 @@ where
 {
 	arg.ok().map(transform).transpose()
 }
-
