@@ -84,12 +84,12 @@ enum MethodKind {
 	Async(AsyncMethod<'static>),
 }
 
-/// Information about resources the method uses during its execution.
+/// Information about resources the method uses during its execution. Lazily initialized when the the server starts.
 #[derive(Clone, Debug)]
 enum MethodResources {
-	/// Unintialized resource table, mapping string label to units.
+	/// Uninitialized resource table, mapping string label to units.
 	Uninitialized(Box<[(&'static str, u16)]>),
-	/// Intialized resource table containing units for each `ResourceId`.
+	/// Initialized resource table containing units for each `ResourceId`.
 	Initialized(ResourceTable<u16>),
 }
 
