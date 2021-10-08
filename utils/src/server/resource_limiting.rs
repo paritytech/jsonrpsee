@@ -12,7 +12,9 @@ pub type ResourceTable<T> = [T; RESOURCE_COUNT];
 /// Variable size table, mapping a resource to a (unitless) value indicating the amount of the resource that is available to RPC calls.
 pub type ResourceVec<T> = ArrayVec<T, RESOURCE_COUNT>;
 
-/// User defined resources available to be used by calls on the JSON-RPC server. Each of the 8 possible resource kinds, for instance "cpu", "io", "nanobots", store a maximum `capacity` and a default. A value of `0` means no limits for the given resource.
+/// User defined resources available to be used by calls on the JSON-RPC server.
+/// Each of the 8 possible resource kinds, for instance "cpu", "io", "nanobots",
+/// store a maximum `capacity` and a default. A value of `0` means no limits for the given resource.
 #[derive(Debug, Default, Clone)]
 pub struct Resources {
 	/// Resources currently in use by executing calls. 0 for unused resource kinds.
