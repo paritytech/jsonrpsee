@@ -168,7 +168,7 @@ impl Argument {
 		syn::parse2(tokens.collect())
 	}
 
-	/// Asserts tthat the argument is `key = "string"` and gets the value of the string
+	/// Asserts that the argument is `key = "string"` and gets the value of the string
 	pub fn string(self) -> syn::Result<String> {
 		self.value::<syn::LitStr>().map(|lit| lit.value())
 	}
