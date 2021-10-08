@@ -90,7 +90,7 @@ enum MethodResources {
 	/// Uninitialized resource table, mapping string label to units.
 	Uninitialized(Box<[(&'static str, u16)]>),
 	/// Initialized resource table containing units for each `ResourceId`.
-	Initialized(ResourceTable<u16>),
+	Initialized(ResourceTable),
 }
 
 /// Method callback wrapper that contains a sync or async closure,

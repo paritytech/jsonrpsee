@@ -8,7 +8,7 @@ use parking_lot::Mutex;
 const RESOURCE_COUNT: usize = 8;
 
 /// Fixed size table, mapping a resource to a (unitless) value indicating the amount of the resource that is available to RPC calls.
-pub type ResourceTable<T> = [T; RESOURCE_COUNT];
+pub type ResourceTable = [u16; RESOURCE_COUNT];
 /// Variable size table, mapping a resource to a (unitless) value indicating the amount of the resource that is available to RPC calls.
 pub type ResourceVec<T> = ArrayVec<T, RESOURCE_COUNT>;
 
@@ -18,11 +18,11 @@ pub type ResourceVec<T> = ArrayVec<T, RESOURCE_COUNT>;
 #[derive(Debug, Default, Clone)]
 pub struct Resources {
 	/// Resources currently in use by executing calls. 0 for unused resource kinds.
-	totals: Arc<Mutex<ResourceTable<u16>>>,
+	totals: Arc<Mutex<ResourceTable>>,
 	/// Max capacity for all resource kinds
-	pub capacities: ResourceTable<u16>,
+	pub capacities: ResourceTable,
 	/// Default value for all resource kinds; unless a method has a resource limit defined, this is the cost of a call (0 means no default limit)
-	pub defaults: ResourceTable<u16>,
+	pub defaults: ResourceTable,
 	/// Labels for every registered resource
 	pub labels: ResourceVec<&'static str>,
 }
@@ -48,7 +48,7 @@ impl Resources {
 	/// Attempt to claim `units` units for each resource, incrementing current totals.
 	/// If successful, returns a [`ResourceGuard`] which decrements the totals by the same
 	/// amounts once dropped.
-	pub fn claim(&self, units: ResourceTable<u16>) -> Result<ResourceGuard, Error> {
+	pub fn claim(&self, units: ResourceTable) -> Result<ResourceGuard, Error> {
 		let mut totals = self.totals.lock();
 		let mut sum = *totals;
 
@@ -72,8 +72,8 @@ impl Resources {
 /// RAII style "lock" for claimed resources, will automatically release them once dropped.
 #[derive(Debug)]
 pub struct ResourceGuard {
-	totals: Arc<Mutex<ResourceTable<u16>>>,
-	units: ResourceTable<u16>,
+	totals: Arc<Mutex<ResourceTable>>,
+	units: ResourceTable,
 }
 
 impl Drop for ResourceGuard {

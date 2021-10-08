@@ -377,7 +377,7 @@ impl Default for Settings {
 }
 
 /// Builder to configure and create a JSON-RPC Websocket server
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Builder {
 	settings: Settings,
 	resources: Resources,
@@ -482,11 +482,5 @@ impl Builder {
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
 		Ok(Server { listener, cfg: self.settings, stop_monitor, resources })
-	}
-}
-
-impl Default for Builder {
-	fn default() -> Self {
-		Self { settings: Settings::default(), resources: Resources::default() }
 	}
 }
