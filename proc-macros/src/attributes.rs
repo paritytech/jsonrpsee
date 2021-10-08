@@ -24,57 +24,73 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::helpers::is_punct;
-use proc_macro2::{Delimiter, TokenStream as TokenStream2, TokenTree};
+use proc_macro2::{TokenStream as TokenStream2, TokenTree};
 use std::fmt;
-use syn::{spanned::Spanned, Attribute, Error};
+use syn::{spanned::Spanned, Attribute, Error, Token};
+use syn::punctuated::Punctuated;
+use syn::parse::{Parse, Parser, ParseStream};
 
-#[derive(Debug)]
 pub(crate) struct AttributeMeta {
 	pub path: syn::Path,
-	pub arguments: Vec<Argument>,
+	pub arguments: Punctuated<Argument, Token![,]>,
 }
 
-#[derive(Debug)]
 pub(crate) struct Argument {
 	pub label: syn::Ident,
 	pub tokens: TokenStream2,
+}
+
+#[derive(Debug, Clone)]
+pub struct Resource {
+	pub name: syn::LitStr,
+	pub assign: Token![=],
+	pub value: syn::LitInt,
+}
+
+impl Parse for Argument {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let label = input.parse()?;
+
+		let mut tokens = Vec::new();
+
+		while !input.peek(Token![,]) {
+			match input.parse::<TokenTree>() {
+				Ok(token) => tokens.push(token),
+				Err(_) => break,
+			}
+		}
+
+		Ok(Argument {
+			label,
+			tokens: tokens.into_iter().collect(),
+		})
+	}
+}
+
+impl Parse for Resource {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		Ok(Resource {
+			name: input.parse()?,
+			assign: input.parse()?,
+			value: input.parse()?,
+		})
+	}
+}
+
+fn parenthesized<T: Parse>(input: ParseStream) -> syn::Result<Punctuated<T, Token![,]>> {
+	let content;
+
+	syn::parenthesized!(content in input);
+
+	content.parse_terminated(T::parse)
 }
 
 impl AttributeMeta {
 	/// Parses `Attribute` with plain `TokenStream` into a more robust `AttributeMeta` with
 	/// a collection `Arguments`.
 	pub fn parse(attr: Attribute) -> syn::Result<AttributeMeta> {
-		let span = attr.tokens.span();
-		let mut tokens = attr.tokens.clone().into_iter();
-		let mut arguments = Vec::new();
-
-		let mut tokens = match tokens.next() {
-			Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis => {
-				match tokens.next() {
-					None => (),
-					Some(token) => return Err(Error::new(token.span(), "Unexpected token after `(...)` group")),
-				}
-				group.stream().into_iter()
-			}
-			None => {
-				return Ok(AttributeMeta { path: attr.path, arguments: Vec::new() });
-			}
-			_ => return Err(Error::new(span, "Expected `(...)`")),
-		};
-
-		while let Some(token) = tokens.next() {
-			let label = match token {
-				TokenTree::Ident(ident) => ident,
-				_ => return Err(Error::new(token.span(), "Expected argument identifier")),
-			};
-
-			let tokens = (&mut tokens).take_while(|t| !is_punct(t, ',')).collect();
-
-			arguments.push(Argument { label, tokens });
-		}
-
 		let path = attr.path;
+		let arguments = parenthesized.parse2(attr.tokens)?;
 
 		Ok(AttributeMeta { path, arguments })
 	}
@@ -89,7 +105,7 @@ impl AttributeMeta {
 			"Calling `AttributeMeta::retain` with an empty `allowed` list, this is a bug, please report it"
 		);
 
-		let mut result: [syn::Result<Argument>; N] =
+		let mut result: [Result<Argument, _>; N] =
 			allowed.map(|name| Err(Error::new(self.path.span(), MissingArgument(name))));
 
 		for argument in self.arguments {
@@ -153,19 +169,20 @@ impl Argument {
 	}
 
 	/// Asserts that the argument is `key = value` pair and parses the value into `T`
-	pub fn value<T>(self) -> syn::Result<T>
-	where
-		T: syn::parse::Parse,
-	{
-		let span = self.tokens.span();
-		let mut tokens = self.tokens.into_iter();
-
-		match tokens.next() {
-			Some(token) if is_punct(&token, '=') => (),
-			_ => return Err(Error::new(span, "Expected `=` after argument identifier")),
+	pub fn value<T: Parse>(self) -> syn::Result<T> {
+		fn value_parser<T: Parse>(stream: ParseStream) -> syn::Result<T> {
+			stream.parse::<Token![=]>()?;
+			stream.parse()
 		}
 
-		syn::parse2(tokens.collect())
+		value_parser.parse2(self.tokens)
+	}
+
+	pub fn group<T>(self) -> syn::Result<Punctuated<T, Token![,]>>
+	where
+		T: Parse,
+	{
+		parenthesized.parse2(self.tokens)
 	}
 
 	/// Asserts that the argument is `key = "string"` and gets the value of the string
@@ -173,3 +190,11 @@ impl Argument {
 		self.value::<syn::LitStr>().map(|lit| lit.value())
 	}
 }
+
+pub(crate) fn optional<T, F>(arg: syn::Result<Argument>, transform: F) -> syn::Result<Option<T>>
+where
+	F: Fn(Argument) -> syn::Result<T>,
+{
+	arg.ok().map(transform).transpose()
+}
+

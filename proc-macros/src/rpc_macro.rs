@@ -27,13 +27,13 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{Argument, AttributeMeta},
+	attributes::{optional, Argument, AttributeMeta, Resource},
 	helpers::extract_doc_comments,
 };
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::Attribute;
+use syn::{Attribute, Token,punctuated::Punctuated};
 
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
@@ -43,14 +43,16 @@ pub struct RpcMethod {
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
+	pub resources: Punctuated<Resource, Token![,]>,
 }
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, name] = AttributeMeta::parse(attr)?.retain(["aliases", "name"])?;
+		let [aliases, name, resources] = AttributeMeta::parse(attr)?.retain(["aliases", "name", "resources"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let name = name?.string()?;
+		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = method.sig.clone();
 		let docs = extract_doc_comments(&method.attrs);
@@ -75,7 +77,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, name, params, returns, signature: method, docs })
+		Ok(Self { aliases, name, params, returns, signature: method, docs, resources })
 	}
 }
 
@@ -152,9 +154,9 @@ impl RpcDescription {
 	pub fn from_item(attr: Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
 		let [client, server, namespace] = AttributeMeta::parse(attr)?.retain(["client", "server", "namespace"])?;
 
-		let needs_server = server.ok().map(Argument::flag).transpose()?.is_some();
-		let needs_client = client.ok().map(Argument::flag).transpose()?.is_some();
-		let namespace = namespace.ok().map(Argument::string).transpose()?;
+		let needs_server = optional(server, Argument::flag)?.is_some();
+		let needs_client = optional(client, Argument::flag)?.is_some();
+		let namespace = optional(namespace, Argument::string)?;
 
 		if !needs_server && !needs_client {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
@@ -272,7 +274,7 @@ impl RpcDescription {
 }
 
 fn parse_aliases(arg: syn::Result<Argument>) -> syn::Result<Vec<String>> {
-	let aliases = arg.ok().map(Argument::string).transpose()?;
+	let aliases = optional(arg, Argument::string)?;
 
 	Ok(aliases.map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default())
 }
