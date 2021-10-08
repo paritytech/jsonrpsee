@@ -36,8 +36,7 @@ use tokio::time::sleep;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
-	let server = WsServerBuilder::default().register_resource("CPU", 6, 2)?.build("127.0.0.1:0").await?;
+fn module_manual() -> Result<RpcModule<()>, Error> {
 	let mut module = RpcModule::new(());
 
 	module.register_async_method("say_hello", |_, _| async move {
@@ -47,20 +46,23 @@ async fn websocket_server() -> Result<(SocketAddr, WsStopHandle), Error> {
 
 	module
 		.register_async_method("expensive_call", |_, _| async move {
-			sleep(Duration::from_millis(100)).await;
+			sleep(Duration::from_millis(50)).await;
 			Ok("hello expensive call")
 		})?
 		.resource("CPU", 3)?;
 
-	let addr = server.local_addr()?;
-	let handle = server.start(module)?;
+	module
+		.register_async_method("memory_hog", |_, _| async move {
+			sleep(Duration::from_millis(50)).await;
+			Ok("hello memory hog")
+		})?
+		.resource("CPU", 0)?
+		.resource("MEM", 8)?;
 
-	Ok((addr, handle))
+	Ok(module)
 }
 
-async fn websocket_server_macro() -> Result<(SocketAddr, WsStopHandle), Error> {
-	let server = WsServerBuilder::default().register_resource("CPU", 6, 2)?.build("127.0.0.1:0").await?;
-
+fn module_macro() -> RpcModule<()> {
 	#[rpc(server)]
 	pub trait Rpc {
 		#[method(name = "say_hello")]
@@ -71,17 +73,31 @@ async fn websocket_server_macro() -> Result<(SocketAddr, WsStopHandle), Error> {
 
 		#[method(name = "expensive_call", resources("CPU" = 3))]
 		async fn expensive(&self) -> Result<&'static str, Error> {
-			sleep(Duration::from_millis(100)).await;
+			sleep(Duration::from_millis(50)).await;
 			Ok("hello expensive call")
+		}
+
+		#[method(name = "memory_hog", resources("CPU" = 0, "MEM" = 8))]
+		async fn memory(&self) -> Result<&'static str, Error> {
+			sleep(Duration::from_millis(50)).await;
+			Ok("hello memory hog")
 		}
 	}
 
-	struct Module;
+	impl RpcServer for () {}
 
-	impl RpcServer for Module {}
+	().into_rpc()
+}
+
+async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsStopHandle), Error> {
+	let server = WsServerBuilder::default()
+		.register_resource("CPU", 6, 2)?
+		.register_resource("MEM", 10, 1)?
+		.build("127.0.0.1:0")
+		.await?;
 
 	let addr = server.local_addr()?;
-	let handle = server.start(Module.into_rpc())?;
+	let handle = server.start(module)?;
 
 	Ok((addr, handle))
 }
@@ -102,7 +118,7 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	// 2 units (default) per call, so 4th call exceeds cap
+	// 2 CPU units (default) per call, so 4th call exceeds cap
 	let (pass1, pass2, pass3, fail) = tokio::join!(
 		client.request::<String>("say_hello", ParamsSer::NoParams),
 		client.request::<String>("say_hello", ParamsSer::NoParams),
@@ -115,16 +131,20 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 	assert!(pass3.is_ok());
 	assert_server_busy(fail);
 
-	// 3 units per call, so 3rd call exceeds cap
-	let (pass1, pass2, fail) = tokio::join!(
+	// 3 CPU units per call, so 3rd call exceeds CPU cap, but we can still get on MEM
+	let (pass_cpu1, pass_cpu2, fail_cpu, pass_mem, fail_mem) = tokio::join!(
 		client.request::<String>("expensive_call", ParamsSer::NoParams),
 		client.request::<String>("expensive_call", ParamsSer::NoParams),
 		client.request::<String>("expensive_call", ParamsSer::NoParams),
+		client.request::<String>("memory_hog", ParamsSer::NoParams),
+		client.request::<String>("memory_hog", ParamsSer::NoParams),
 	);
 
-	assert!(pass1.is_ok());
-	assert!(pass2.is_ok());
-	assert_server_busy(fail);
+	assert!(pass_cpu1.is_ok());
+	assert!(pass_cpu2.is_ok());
+	assert_server_busy(fail_cpu);
+	assert!(pass_mem.is_ok());
+	assert_server_busy(fail_mem);
 
 	// Client being active prevents the server from shutting down?!
 	drop(client);
@@ -133,14 +153,14 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 
 #[tokio::test]
 async fn server_rejects_requests_if_resources_are_claimed() {
-	let (server_addr, stop_handle) = websocket_server().await.unwrap();
+	let (server_addr, stop_handle) = websocket_server(module_manual().unwrap()).await.unwrap();
 
 	run_tests_on_ws_server(server_addr, stop_handle).await;
 }
 
 #[tokio::test]
 async fn server_rejects_requests_if_resources_are_claimed_macro() {
-	let (server_addr, stop_handle) = websocket_server_macro().await.unwrap();
+	let (server_addr, stop_handle) = websocket_server(module_macro()).await.unwrap();
 
 	run_tests_on_ws_server(server_addr, stop_handle).await;
 }
