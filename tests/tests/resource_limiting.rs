@@ -69,8 +69,7 @@ async fn websocket_server_macro() -> Result<(SocketAddr, WsStopHandle), Error> {
 			Ok("hello")
 		}
 
-		#[method(name = "expensive_call")]
-		// #[method(name = "expensive_call", resource("CPU", 3))]
+		#[method(name = "expensive_call", resources("CPU" = 3))]
 		async fn expensive(&self) -> Result<&'static str, Error> {
 			sleep(Duration::from_millis(100)).await;
 			Ok("hello expensive call")
@@ -98,7 +97,6 @@ fn assert_server_busy(fail: Result<String, Error>) {
 		fail => panic!("Expected error, got: {:?}", fail),
 	}
 }
-
 
 async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHandle) {
 	let server_url = format!("ws://{}", server_addr);
@@ -132,7 +130,6 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 	drop(client);
 	stop_handle.stop().unwrap().await;
 }
-
 
 #[tokio::test]
 async fn server_rejects_requests_if_resources_are_claimed() {
