@@ -180,11 +180,23 @@ impl Error {
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct SubscriptionClosedError {
 	subscription_closed: String,
+	id: u64,
 }
 
-impl From<String> for SubscriptionClosedError {
-	fn from(msg: String) -> Self {
-		Self { subscription_closed: msg }
+impl SubscriptionClosedError {
+	/// Create a new subscription closed error.
+	pub fn new(reason: impl Into<String>, id: u64) -> Self {
+		Self { subscription_closed: reason.into(), id }
+	}
+
+	/// Get the reason why the subscription was closed.
+	pub fn close_reason(&self) -> &str {
+		&self.subscription_closed
+	}
+
+	/// Get the subscription ID.
+	pub fn subscription_id(&self) -> u64 {
+		self.id
 	}
 }
 
