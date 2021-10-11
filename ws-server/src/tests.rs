@@ -35,7 +35,6 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
-use tokio::task::JoinHandle;
 
 /// Applications can/should provide their own error.
 #[derive(Debug)]
@@ -59,7 +58,7 @@ async fn server() -> SocketAddr {
 ///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns
 /// 			`CallError::Failed`), `sleep_for` Returns the address together with handles for server future
 ///				and server stop.
-async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
+async fn server_with_handles() -> (SocketAddr, StopHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
@@ -106,9 +105,8 @@ async fn server_with_handles() -> (SocketAddr, JoinHandle<()>, StopHandle) {
 
 	let addr = server.local_addr().unwrap();
 
-	let stop_handle = server.stop_handle();
-	let join_handle = tokio::spawn(server.start(module));
-	(addr, join_handle, stop_handle)
+	let stop_handle = server.start(module).unwrap();
+	(addr, stop_handle)
 }
 
 /// Run server with user provided context.
@@ -133,28 +131,24 @@ async fn server_with_context() -> SocketAddr {
 		.unwrap();
 
 	rpc_module
-		.register_async_method("should_ok_async", |_p, ctx| {
-			async move {
-				let _ = ctx.ok().map_err(CallError::Failed)?;
-				// Call some async function inside.
-				Ok(futures_util::future::ready("ok!").await)
-			}
+		.register_async_method("should_ok_async", |_p, ctx| async move {
+			let _ = ctx.ok().map_err(CallError::Failed)?;
+			// Call some async function inside.
+			Ok(futures_util::future::ready("ok!").await)
 		})
 		.unwrap();
 
 	rpc_module
-		.register_async_method("err_async", |_p, ctx| {
-			async move {
-				let _ = ctx.ok().map_err(CallError::Failed)?;
-				// Async work that returns an error
-				futures_util::future::err::<(), _>(anyhow!("nah").into()).await
-			}
+		.register_async_method("err_async", |_p, ctx| async move {
+			let _ = ctx.ok().map_err(CallError::Failed)?;
+			// Async work that returns an error
+			futures_util::future::err::<(), _>(anyhow!("nah").into()).await
 		})
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(server.start(rpc_module));
+	server.start(rpc_module).unwrap();
 	addr
 }
 
@@ -166,7 +160,7 @@ async fn can_set_the_max_request_body_size() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
-	tokio::spawn(server.start(module));
+	let handle = server.start(module).unwrap();
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -179,6 +173,8 @@ async fn can_set_the_max_request_body_size() {
 	let req = "shorty";
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
+
+	handle.stop().unwrap();
 }
 
 #[tokio::test]
@@ -190,7 +186,7 @@ async fn can_set_max_connections() {
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	tokio::spawn(server.start(module));
+	let handle = server.start(module).unwrap();
 
 	let conn1 = WebSocketTestClient::new(addr).await;
 	let conn2 = WebSocketTestClient::new(addr).await;
@@ -208,6 +204,8 @@ async fn can_set_max_connections() {
 	// Can connect again
 	let conn4 = WebSocketTestClient::new(addr).await;
 	assert!(conn4.is_ok());
+
+	handle.stop().unwrap();
 }
 
 #[tokio::test]
@@ -540,12 +538,11 @@ async fn can_register_modules() {
 #[tokio::test]
 async fn stop_works() {
 	let _ = env_logger::try_init();
-	let (_addr, join_handle, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	let (_addr, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
 	stop_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
-	join_handle.with_default_timeout().await.expect("Timeout").expect("Join error");
 
 	// After server was stopped, attempt to stop it again should result in an error.
 	assert!(matches!(stop_handle.stop(), Err(Error::AlreadyStopped)));

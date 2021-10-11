@@ -356,7 +356,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 		})
 		.unwrap();
 
-	tokio::spawn(async move { server.start(module).await });
+	server.start(module).unwrap();
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 

@@ -41,7 +41,7 @@ pub async fn ws_server() -> String {
 			.unwrap();
 
 		server_started_tx.send(server.local_addr().unwrap()).unwrap();
-		server.start(module).await
+		server.start(module).unwrap()
 	});
 	format!("ws://{}", server_started_rx.await.unwrap())
 }

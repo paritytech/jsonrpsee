@@ -142,6 +142,21 @@ pub enum Error {
 	/// List passed into `set_allowed_origins` was empty
 	#[error("Must set at least one allowed value for the {0} header")]
 	EmptyAllowList(&'static str),
+	/// Failed to execute a method because a resource was already at capacity
+	#[error("Resource at capacity: {0}")]
+	ResourceAtCapacity(&'static str),
+	/// Failed to register a resource due to a name conflict
+	#[error("Resource name already taken: {0}")]
+	ResourceNameAlreadyTaken(&'static str),
+	/// Failed to initialize resources for a method at startup
+	#[error("Resource name `{0}` not found for method `{1}`")]
+	ResourceNameNotFoundForMethod(&'static str, &'static str),
+	/// Trying to claim resources for a method execution, but the method resources have not been initialized
+	#[error("Method `{0}` has uninitialized resources")]
+	UninitializedMethod(Box<str>),
+	/// Failed to register a resource due to a maximum number of resources already registered
+	#[error("Maximum number of resources reached")]
+	MaxResourcesReached,
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),
