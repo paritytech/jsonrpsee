@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{response, AccessControl};
-use futures_channel::{mpsc, oneshot};
+use futures_channel::mpsc;
 use futures_util::future::join_all;
 use futures_util::stream::StreamExt;
 use hyper::{
@@ -142,18 +142,14 @@ impl Default for Builder {
 /// Handle used to stop the running server.
 #[derive(Debug)]
 pub struct StopHandle {
-	stop_sender: oneshot::Sender<()>,
+	stop_sender: mpsc::Sender<()>,
 	stop_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl StopHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
-	///
-	/// Returns a future that can be awaited for when the server shuts down.
-	pub fn stop(self) -> Result<tokio::task::JoinHandle<()>, Error> {
-		let sender = self.stop_sender;
-		let mut handle = self.stop_handle;
-		let stop = sender.send(()).and_then(|_| Ok(handle.take()));
+	pub fn stop(mut self) -> Result<tokio::task::JoinHandle<()>, Error> {
+		let stop = self.stop_sender.try_send(()).and_then(|_| Ok(self.stop_handle.take()));
 		match stop {
 			Ok(Some(handle)) => Ok(handle),
 			_ => Err(Error::AlreadyStopped),
@@ -188,7 +184,7 @@ impl Server {
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
-		let (tx, rx) = oneshot::channel();
+		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
 		let resources = self.resources;
 		let methods = methods.into().initialize_resources(&resources)?;
@@ -295,9 +291,7 @@ impl Server {
 
 		let handle = rt.spawn(async move {
 			let server = listener.serve(make_service);
-			server.with_graceful_shutdown(async move {
-				rx.await.ok();
-			});
+			let _ = server.with_graceful_shutdown(async move { rx.next().await.map_or((), |_| ()) }).await;
 		});
 
 		Ok(StopHandle { stop_handle: Some(handle), stop_sender: tx })
