@@ -69,12 +69,15 @@ impl Server {
 		self.stop_monitor.handle()
 	}
 
-	/// Start responding to connections requests. This will block current thread until the server is stopped.
-	pub fn start(self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
+	/// Start responding to connections requests. This will run on the tokio runtime until the server is stopped.
+	pub fn start(mut self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
 		let methods = methods.into().initialize_resources(&self.resources)?;
 		let handle = self.stop_handle();
 
-		tokio::spawn(self.start_inner(methods));
+		match self.cfg.tokio_runtime.take() {
+			Some(rt) => rt.spawn(self.start_inner(methods)),
+			None => tokio::spawn(self.start_inner(methods)),
+		};
 
 		Ok(handle)
 	}
@@ -363,6 +366,8 @@ struct Settings {
 	allowed_origins: AllowedValue,
 	/// Policy by which to accept or deny incoming requests based on the `Host` header.
 	allowed_hosts: AllowedValue,
+	/// Custom tokio runtime to run the server on.
+	tokio_runtime: Option<tokio::runtime::Handle>,
 }
 
 impl Default for Settings {
@@ -372,6 +377,7 @@ impl Default for Settings {
 			max_connections: MAX_CONNECTIONS,
 			allowed_origins: AllowedValue::Any,
 			allowed_hosts: AllowedValue::Any,
+			tokio_runtime: None,
 		}
 	}
 }
@@ -474,6 +480,13 @@ impl Builder {
 	pub fn allow_all_hosts(mut self) -> Self {
 		self.settings.allowed_hosts = AllowedValue::Any;
 		self
+	}
+
+	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
+	///
+	/// Default: [`tokio::spawn`]
+	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) {
+		self.settings.tokio_runtime = Some(rt);
 	}
 
 	/// Finalize the configuration of the server. Consumes the [`Builder`].

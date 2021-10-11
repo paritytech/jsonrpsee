@@ -59,6 +59,8 @@ pub struct Builder {
 	resources: Resources,
 	max_request_body_size: u32,
 	keep_alive: bool,
+	/// Custom tokio runtime to run the server on.
+	tokio_runtime: Option<tokio::runtime::Handle>,
 }
 
 impl Builder {
@@ -90,6 +92,13 @@ impl Builder {
 		Ok(self)
 	}
 
+	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
+	///
+	/// Default: [`tokio::spawn`]
+	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) {
+		self.tokio_runtime = Some(rt);
+	}
+
 	/// Finalizes the configuration of the server.
 	pub fn build(self, addr: SocketAddr) -> Result<Server, Error> {
 		let domain = Domain::for_address(addr);
@@ -113,6 +122,7 @@ impl Builder {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
 		})
 	}
 }
@@ -124,6 +134,7 @@ impl Default for Builder {
 			resources: Resources::default(),
 			access_control: AccessControl::default(),
 			keep_alive: true,
+			tokio_runtime: None,
 		}
 	}
 }
@@ -159,6 +170,8 @@ pub struct Server {
 	access_control: AccessControl,
 	/// Tracker for currently used resources on the server
 	resources: Resources,
+	/// Custom tokio runtime to run the server on.
+	tokio_runtime: Option<tokio::runtime::Handle>,
 }
 
 impl Server {
@@ -168,7 +181,7 @@ impl Server {
 	}
 
 	/// Start the server.
-	pub fn start(self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
+	pub fn start(mut self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
@@ -271,10 +284,16 @@ impl Server {
 			}
 		});
 
-		let handle = tokio::spawn(async move {
+		let rt = match self.tokio_runtime.take() {
+			Some(rt) => rt,
+			None => tokio::runtime::Handle::current(),
+		};
+
+		let handle = rt.spawn(async move {
 			let server = listener.serve(make_service);
 			let _ = server.with_graceful_shutdown(async move { rx.next().await.map_or((), |_| ()) }).await;
 		});
+
 		Ok(StopHandle { stop_handle: Some(handle), stop_sender: tx })
 	}
 }
