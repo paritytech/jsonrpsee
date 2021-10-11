@@ -135,10 +135,10 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 
 	// 2 CPU units (default) per call, so 4th call exceeds cap
 	let (pass1, pass2, pass3, fail) = tokio::join!(
-		client.request::<String>("say_hello", ParamsSer::NoParams),
-		client.request::<String>("say_hello", ParamsSer::NoParams),
-		client.request::<String>("say_hello", ParamsSer::NoParams),
-		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", None),
+		client.request::<String>("say_hello", None),
+		client.request::<String>("say_hello", None),
+		client.request::<String>("say_hello", None),
 	);
 
 	assert!(pass1.is_ok());
@@ -148,11 +148,11 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 
 	// 3 CPU units per call, so 3rd call exceeds CPU cap, but we can still get on MEM
 	let (pass_cpu1, pass_cpu2, fail_cpu, pass_mem, fail_mem) = tokio::join!(
-		client.request::<String>("expensive_call", ParamsSer::NoParams),
-		client.request::<String>("expensive_call", ParamsSer::NoParams),
-		client.request::<String>("expensive_call", ParamsSer::NoParams),
-		client.request::<String>("memory_hog", ParamsSer::NoParams),
-		client.request::<String>("memory_hog", ParamsSer::NoParams),
+		client.request::<String>("expensive_call", None),
+		client.request::<String>("expensive_call", None),
+		client.request::<String>("expensive_call", None),
+		client.request::<String>("memory_hog", None),
+		client.request::<String>("memory_hog", None),
 	);
 
 	assert!(pass_cpu1.is_ok());
@@ -172,10 +172,10 @@ async fn run_tests_on_http_server(server_addr: SocketAddr) {
 
 	// 2 CPU units (default) per call, so 4th call exceeds cap
 	let (a, b, c, d) = tokio::join!(
-		client.request::<String>("say_hello", ParamsSer::NoParams),
-		client.request::<String>("say_hello", ParamsSer::NoParams),
-		client.request::<String>("say_hello", ParamsSer::NoParams),
-		client.request::<String>("say_hello", ParamsSer::NoParams),
+		client.request::<String>("say_hello", None),
+		client.request::<String>("say_hello", None),
+		client.request::<String>("say_hello", None),
+		client.request::<String>("say_hello", None),
 	);
 
 	// HTTP does not guarantee ordering
