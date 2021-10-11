@@ -42,12 +42,12 @@ async fn main() -> anyhow::Result<()> {
 
 	// Subscription with a single parameter
 	let mut sub_params_one =
-		client.subscribe::<Option<char>>("sub_one_param", Some(rpc_params![3]), "unsub_one_param").await?;
+		client.subscribe::<Option<char>>("sub_one_param", rpc_params![3], "unsub_one_param").await?;
 	println!("subscription with one param: {:?}", sub_params_one.next().await);
 
 	// Subscription with multiple parameters
 	let mut sub_params_two =
-		client.subscribe::<String>("sub_params_two", Some(rpc_params![2, 5]), "unsub_params_two").await?;
+		client.subscribe::<String>("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
 	println!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())

@@ -41,7 +41,7 @@ async fn main() -> anyhow::Result<()> {
 
 	let client = HttpClientBuilder::default().build(url)?;
 	let params = rpc_params!(1_u64, 2, 3);
-	let response: Result<String, _> = client.request("say_hello", Some(params)).await;
+	let response: Result<String, _> = client.request("say_hello", params).await;
 	println!("r: {:?}", response);
 
 	Ok(())

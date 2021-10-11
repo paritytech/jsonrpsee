@@ -40,10 +40,10 @@ macro_rules! rpc_params {
 			$(
 				__params.push($crate::client::__reexports::to_json_value($param).expect("json serialization is infallible; qed."));
 			)*
-			$crate::client::__reexports::ParamsSer::Array(__params)
+			Some($crate::client::__reexports::ParamsSer::Array(__params))
 		}
 	};
 	() => {
-		$crate::client::__reexports::ParamsSer::Array(vec![])
+		None
 	}
 }

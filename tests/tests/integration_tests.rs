@@ -66,7 +66,7 @@ async fn ws_subscription_with_input_works() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut add_one: Subscription<u64> =
-		client.subscribe("subscribe_add_one", Some(rpc_params![1]), "unsubscribe_add_one").await.unwrap();
+		client.subscribe("subscribe_add_one", rpc_params![1], "unsubscribe_add_one").await.unwrap();
 
 	for i in 2..4 {
 		let next = add_one.next().await.unwrap().unwrap();
