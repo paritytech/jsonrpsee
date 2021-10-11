@@ -41,6 +41,7 @@ use jsonrpsee_types::{
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, prepare_error, send_error},
+	resource_limiting::Resources,
 	rpc_module::Methods,
 };
 
@@ -55,6 +56,7 @@ use std::{
 #[derive(Debug)]
 pub struct Builder {
 	access_control: AccessControl,
+	resources: Resources,
 	max_request_body_size: u32,
 	keep_alive: bool,
 }
@@ -80,6 +82,14 @@ impl Builder {
 		self
 	}
 
+	/// Register a new resource kind. Errors if `label` is already registered, or if number of
+	/// registered resources would exceed 8.
+	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
+		self.resources.register(label, capacity, default)?;
+
+		Ok(self)
+	}
+
 	/// Finalizes the configuration of the server.
 	pub fn build(self, addr: SocketAddr) -> Result<Server, Error> {
 		let domain = Domain::for_address(addr);
@@ -102,13 +112,19 @@ impl Builder {
 			local_addr,
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
+			resources: self.resources,
 		})
 	}
 }
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { max_request_body_size: TEN_MB_SIZE_BYTES, access_control: AccessControl::default(), keep_alive: true }
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			resources: Resources::default(),
+			access_control: AccessControl::default(),
+			keep_alive: true,
+		}
 	}
 }
 
@@ -144,6 +160,8 @@ pub struct Server {
 	max_request_body_size: u32,
 	/// Access control
 	access_control: AccessControl,
+	/// Tracker for currently used resources on the server
+	resources: Resources,
 }
 
 impl Server {
@@ -153,21 +171,24 @@ impl Server {
 	}
 
 	/// Start the server.
-	pub fn start(self, methods: impl Into<Methods>) -> StopHandle {
+	pub fn start(self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
-		let methods = methods.into();
 		let listener = self.listener;
+		let resources = self.resources;
+		let methods = methods.into().initialize_resources(&resources)?;
 
 		let make_service = make_service_fn(move |_| {
 			let methods = methods.clone();
 			let access_control = access_control.clone();
+			let resources = resources.clone();
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
+					let resources = resources.clone();
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -201,7 +222,7 @@ impl Server {
 						if is_single {
 							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								if let Some(fut) = methods.execute(&tx, req, 0) {
+								if let Some(fut) = methods.execute_with_resources(&tx, req, 0, &resources) {
 									fut.await;
 								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
@@ -214,7 +235,12 @@ impl Server {
 						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							if !batch.is_empty() {
-								join_all(batch.into_iter().filter_map(|req| methods.execute(&tx, req, 0))).await;
+								join_all(
+									batch
+										.into_iter()
+										.filter_map(|req| methods.execute_with_resources(&tx, req, 0, &resources)),
+								)
+								.await;
 							} else {
 								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
 								// Array with at least one value, the response from the Server MUST be a single
@@ -252,7 +278,7 @@ impl Server {
 			let server = listener.serve(make_service);
 			let _ = server.with_graceful_shutdown(async move { rx.next().await.map_or((), |_| ()) }).await;
 		});
-		StopHandle { stop_handle: Some(handle), stop_sender: tx }
+		Ok(StopHandle { stop_handle: Some(handle), stop_sender: tx })
 	}
 }
 

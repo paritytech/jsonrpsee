@@ -30,4 +30,5 @@ thiserror = "1"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
+jsonrpsee-utils = { path = "../utils" }
 env_logger = "0.9"

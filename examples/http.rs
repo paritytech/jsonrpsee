@@ -53,6 +53,6 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpStopHandle)> {
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 
 	let addr = server.local_addr()?;
-	let stop_handle = server.start(module);
+	let stop_handle = server.start(module)?;
 	Ok((addr, stop_handle))
 }

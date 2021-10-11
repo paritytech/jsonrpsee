@@ -26,7 +26,7 @@
 
 use jsonrpsee::{
 	rpc_params,
-	types::{traits::SubscriptionClient, v2::ParamsSer},
+	types::traits::SubscriptionClient,
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
@@ -42,12 +42,12 @@ async fn main() -> anyhow::Result<()> {
 
 	// Subscription with a single parameter
 	let mut sub_params_one =
-		client.subscribe::<Option<char>>("sub_one_param", rpc_params!(3), "unsub_one_param").await?;
+		client.subscribe::<Option<char>>("sub_one_param", rpc_params![3], "unsub_one_param").await?;
 	println!("subscription with one param: {:?}", sub_params_one.next().await);
 
 	// Subscription with multiple parameters
-	let params = ParamsSer::Array(vec![2.into(), 5.into()]);
-	let mut sub_params_two = client.subscribe::<String>("sub_params_two", params, "unsub_params_two").await?;
+	let mut sub_params_two =
+		client.subscribe::<String>("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
 	println!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
@@ -79,6 +79,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.unwrap();
 
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module));
+	server.start(module)?;
 	Ok(addr)
 }

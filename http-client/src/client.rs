@@ -97,7 +97,7 @@ pub struct HttpClient {
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
+	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
 		let notif = NotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?);
 		match tokio::time::timeout(self.request_timeout, fut).await {
@@ -108,7 +108,7 @@ impl Client for HttpClient {
 	}
 
 	/// Perform a request towards the server.
-	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
@@ -150,7 +150,7 @@ impl Client for HttpClient {
 		}
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{

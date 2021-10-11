@@ -78,7 +78,7 @@ async fn server() -> (SocketAddr, StopHandle) {
 		})
 		.unwrap();
 
-	let stop_handle = server.start(module);
+	let stop_handle = server.start(module).unwrap();
 	(addr, stop_handle)
 }
 
