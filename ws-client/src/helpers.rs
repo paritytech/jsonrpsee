@@ -191,7 +191,7 @@ pub fn build_unsubscribe_message(
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
 	// TODO: https://github.com/paritytech/jsonrpsee/issues/275
 	let params = ParamsSer::ArrayRef(sub_id_slice);
-	let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
+	let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), &unsub, Some(params))).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 

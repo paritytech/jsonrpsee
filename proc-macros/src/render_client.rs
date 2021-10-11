@@ -101,10 +101,10 @@ impl RpcDescription {
 				quote! { #serde_json::to_value(&#param)? }
 			});
 			quote! {
-				vec![ #(#params),* ].into()
+				Some(vec![ #(#params),* ].into())
 			}
 		} else {
-			self.jrps_client_item(quote! { types::v2::params::ParamsSer::NoParams })
+			quote! { None }
 		};
 
 		// Doc-comment to be associated with the method.
@@ -144,10 +144,10 @@ impl RpcDescription {
 				quote! { #serde_json::to_value(&#param)? }
 			});
 			quote! {
-				vec![ #(#params),* ].into()
+				Some(vec![ #(#params),* ].into())
 			}
 		} else {
-			self.jrps_client_item(quote! { types::v2::params::ParamsSer::NoParams })
+			quote! { None }
 		};
 
 		// Doc-comment to be associated with the method.

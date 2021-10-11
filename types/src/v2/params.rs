@@ -258,8 +258,6 @@ impl<'a> ParamsSequence<'a> {
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ParamsSer<'a> {
-	/// No params.
-	NoParams,
 	/// Positional params (heap allocated).
 	Array(Vec<JsonValue>),
 	/// Positional params (slice).
@@ -401,7 +399,7 @@ mod test {
 	#[test]
 	fn params_serialize() {
 		let test_vector = &[
-			("null", ParamsSer::NoParams),
+			("[]", ParamsSer::Array(serde_json::from_str("[]").unwrap())),
 			("[42,23]", ParamsSer::Array(serde_json::from_str("[42,23]").unwrap())),
 			(
 				r#"{"a":42,"b":null,"c":"aa"}"#,

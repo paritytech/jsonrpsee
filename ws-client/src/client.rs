@@ -250,7 +250,7 @@ impl Drop for WsClient {
 
 #[async_trait]
 impl Client for WsClient {
-	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
+	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
 		let notif = NotificationSer::new(method, params);
@@ -277,7 +277,7 @@ impl Client for WsClient {
 		}
 	}
 
-	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
@@ -311,7 +311,7 @@ impl Client for WsClient {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -364,7 +364,7 @@ impl SubscriptionClient for WsClient {
 	async fn subscribe<'a, N>(
 		&self,
 		subscribe_method: &'a str,
-		params: ParamsSer<'a>,
+		params: Option<ParamsSer<'a>>,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<N>, Error>
 	where
