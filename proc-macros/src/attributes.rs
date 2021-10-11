@@ -51,16 +51,27 @@ impl Parse for Argument {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let label = input.parse()?;
 
-		let mut tokens = Vec::new();
+		let mut tokens = TokenStream2::new();
+		let mut scope = 0usize;
 
-		while !input.peek(Token![,]) {
+		loop {
+			if scope == 0 && input.peek(Token![,]) {
+				break;
+			}
+
+			if input.peek(Token![<]) {
+				scope += 1;
+			} else if input.peek(Token![>]) {
+				scope = scope.saturating_sub(1);
+			}
+
 			match input.parse::<TokenTree>() {
-				Ok(token) => tokens.push(token),
+				Ok(token) => tokens.extend([token]),
 				Err(_) => break,
 			}
 		}
 
-		Ok(Argument { label, tokens: tokens.into_iter().collect() })
+		Ok(Argument { label, tokens })
 	}
 }
 
