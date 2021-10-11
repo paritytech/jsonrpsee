@@ -28,7 +28,7 @@ use jsonrpsee::{
 	http_client::HttpClientBuilder,
 	http_server::HttpServerBuilder,
 	proc_macros::rpc,
-	types::{traits::Client, v2::ParamsSer, Error},
+	types::{traits::Client, Error},
 	ws_client::WsClientBuilder,
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
