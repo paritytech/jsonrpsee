@@ -17,7 +17,7 @@ pub async fn http_server() -> (String, HttpStopHandle) {
 	module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
 	module.register_async_method(ASYNC_METHOD_NAME, |_, _| async { Ok("lo") }).unwrap();
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(module);
+	let handle = server.start(module).unwrap();
 	(format!("http://{}", addr), handle)
 }
 
