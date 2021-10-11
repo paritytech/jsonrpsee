@@ -91,23 +91,6 @@ fn module_macro() -> RpcModule<()> {
 	().into_rpc()
 }
 
-#[tokio::test]
-async fn parse_angle_braces() {
-	// This needs to compile
-	#[rpc(server)]
-	pub trait Rpc {
-		#[subscription(
-			name = "submitAndWatchExtrinsic",
-			aliases = "author_extrinsicUpdate",
-			unsubscribe_aliases = "author_unwatchExtrinsic",
-			// Arguments are being parsed the nearest comma,
-			// angle braces need to be accounted for manually.
-			item = TransactionStatus<Hash, BlockHash>,
-		)]
-		fn dummy_subscription(&self) -> Result<(), Error>;
-	}
-}
-
 async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsStopHandle), Error> {
 	let server = WsServerBuilder::default()
 		.register_resource("CPU", 6, 2)?

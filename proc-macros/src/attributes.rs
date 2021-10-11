@@ -54,6 +54,9 @@ impl Parse for Argument {
 		let mut tokens = TokenStream2::new();
 		let mut scope = 0usize;
 
+		// Need to read to till either the end of the stream,
+		// or the nearest comma token that's not contained
+		// inside angle brackets.
 		loop {
 			if scope == 0 && input.peek(Token![,]) {
 				break;
