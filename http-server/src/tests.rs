@@ -380,10 +380,6 @@ async fn can_register_modules() {
 #[tokio::test]
 async fn stop_works() {
 	let _ = env_logger::try_init();
-	let (_addr, mut stop_handle) = server().with_default_timeout().await.unwrap();
-	stop_handle.stop().with_default_timeout().await.unwrap().unwrap();
-	stop_handle.wait_for_stop().with_default_timeout().await.unwrap();
-
-	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(stop_handle.stop().with_default_timeout().await.unwrap(), Err(Error::AlreadyStopped)));
+	let (_addr, stop_handle) = server().with_default_timeout().await.unwrap();
+	assert!(matches!(stop_handle.stop().unwrap().await, Ok(_)));
 }

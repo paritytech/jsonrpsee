@@ -28,7 +28,7 @@ use jsonrpsee::{
 	http_client::HttpClientBuilder,
 	http_server::{HttpServerBuilder, HttpStopHandle},
 	proc_macros::rpc,
-	types::{traits::Client, v2::ParamsSer, Error},
+	types::{traits::Client, Error},
 	ws_client::WsClientBuilder,
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
@@ -165,7 +165,7 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 	stop_handle.stop().unwrap().await;
 }
 
-async fn run_tests_on_http_server(server_addr: SocketAddr, mut stop_handle: HttpStopHandle) {
+async fn run_tests_on_http_server(server_addr: SocketAddr, stop_handle: HttpStopHandle) {
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
@@ -190,8 +190,7 @@ async fn run_tests_on_http_server(server_addr: SocketAddr, mut stop_handle: Http
 
 	assert_eq!(passes, 3);
 
-	stop_handle.stop().await.unwrap();
-	stop_handle.wait_for_stop().await;
+	stop_handle.stop().unwrap().await.unwrap();
 }
 
 #[tokio::test]

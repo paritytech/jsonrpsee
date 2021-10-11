@@ -27,7 +27,7 @@
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::future::join_all;
-use futures_util::{stream::StreamExt, SinkExt};
+use futures_util::stream::StreamExt;
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
 	service::{make_service_fn, service_fn},
@@ -137,14 +137,11 @@ pub struct StopHandle {
 
 impl StopHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
-	pub async fn stop(&mut self) -> Result<(), Error> {
-		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
-	}
-
-	/// Blocks indefinitely until the server is stopped.
-	pub async fn wait_for_stop(&mut self) {
-		if let Some(stop) = self.stop_handle.take() {
-			let _ = stop.await;
+	pub fn stop(mut self) -> Result<tokio::task::JoinHandle<()>, Error> {
+		let stop = self.stop_sender.try_send(()).and_then(|_| Ok(self.stop_handle.take()));
+		match stop {
+			Ok(Some(handle)) => Ok(handle),
+			_ => Err(Error::AlreadyStopped),
 		}
 	}
 }
