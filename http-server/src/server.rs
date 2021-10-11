@@ -149,7 +149,7 @@ pub struct StopHandle {
 impl StopHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
 	pub fn stop(mut self) -> Result<tokio::task::JoinHandle<()>, Error> {
-		let stop = self.stop_sender.try_send(()).and_then(|_| Ok(self.stop_handle.take()));
+		let stop = self.stop_sender.try_send(()).map(|_| self.stop_handle.take());
 		match stop {
 			Ok(Some(handle)) => Ok(handle),
 			_ => Err(Error::AlreadyStopped),
