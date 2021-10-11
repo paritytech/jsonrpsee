@@ -1,6 +1,6 @@
 use futures_channel::oneshot;
 use jsonrpsee::{
-	http_server::HttpServerBuilder,
+	http_server::{HttpServerBuilder, HttpStopHandle},
 	ws_server::{RpcModule, WsServerBuilder},
 };
 
@@ -10,18 +10,15 @@ pub(crate) const SUB_METHOD_NAME: &str = "sub";
 pub(crate) const UNSUB_METHOD_NAME: &str = "unsub";
 
 /// Run jsonrpsee HTTP server for benchmarks.
-pub async fn http_server() -> String {
-	let (server_started_tx, server_started_rx) = oneshot::channel();
-	tokio::spawn(async move {
-		let server =
-			HttpServerBuilder::default().max_request_body_size(u32::MAX).build("127.0.0.1:0".parse().unwrap()).unwrap();
-		let mut module = RpcModule::new(());
-		module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
-		module.register_async_method(ASYNC_METHOD_NAME, |_, _| async { Ok("lo") }).unwrap();
-		server_started_tx.send(server.local_addr().unwrap()).unwrap();
-		server.start(module).await
-	});
-	format!("http://{}", server_started_rx.await.unwrap())
+pub async fn http_server() -> (String, HttpStopHandle) {
+	let server =
+		HttpServerBuilder::default().max_request_body_size(u32::MAX).build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
+	module.register_async_method(ASYNC_METHOD_NAME, |_, _| async { Ok("lo") }).unwrap();
+	let addr = server.local_addr().unwrap();
+	let handle = server.start(module).unwrap();
+	(format!("http://{}", addr), handle)
 }
 
 /// Run jsonrpsee WebSocket server for benchmarks.

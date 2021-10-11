@@ -82,7 +82,7 @@ trait RequestBencher {
 
 	fn http_requests(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
-		let url = rt.block_on(helpers::http_server());
+		let (url, _handle) = rt.block_on(helpers::http_server());
 		let client = Arc::new(HttpClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url).unwrap());
 		run_round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		run_concurrent_round_trip(&rt, crit, client, "http_concurrent_round_trip", Self::REQUEST_TYPE);
@@ -91,7 +91,7 @@ trait RequestBencher {
 
 	fn batched_http_requests(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
-		let url = rt.block_on(helpers::http_server());
+		let (url, _handle) = rt.block_on(helpers::http_server());
 		let client = Arc::new(HttpClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url).unwrap());
 		run_round_trip_with_batch(&rt, crit, client, "http batch requests", Self::REQUEST_TYPE);
 	}

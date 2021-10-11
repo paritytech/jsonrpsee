@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	http_server::HttpServerBuilder,
+	http_server::{HttpServerBuilder, HttpStopHandle},
 	types::Error,
 	ws_server::{WsServerBuilder, WsStopHandle},
 	RpcModule,
@@ -105,13 +105,13 @@ pub async fn websocket_server() -> SocketAddr {
 	addr
 }
 
-pub async fn http_server() -> SocketAddr {
+pub async fn http_server() -> (SocketAddr, HttpStopHandle) {
 	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 	module.register_method("notif", |_, _| Ok("")).unwrap();
 
-	tokio::spawn(server.start(module));
-	addr
+	let handle = server.start(module).unwrap();
+	(addr, handle)
 }

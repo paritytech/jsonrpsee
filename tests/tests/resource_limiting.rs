@@ -26,7 +26,7 @@
 
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
-	http_server::HttpServerBuilder,
+	http_server::{HttpServerBuilder, HttpStopHandle},
 	proc_macros::rpc,
 	types::{traits::Client, Error},
 	ws_client::WsClientBuilder,
@@ -104,17 +104,16 @@ async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsStopHa
 	Ok((addr, handle))
 }
 
-async fn http_server(module: RpcModule<()>) -> Result<SocketAddr, Error> {
+async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpStopHandle), Error> {
 	let server = HttpServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
 		.build("127.0.0.1:0".parse().unwrap())?;
 
 	let addr = server.local_addr()?;
+	let handle = server.start(module)?;
 
-	tokio::spawn(server.start(module));
-
-	Ok(addr)
+	Ok((addr, handle))
 }
 
 fn assert_server_busy(fail: Result<String, Error>) {
@@ -166,7 +165,7 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 	stop_handle.stop().unwrap().await;
 }
 
-async fn run_tests_on_http_server(server_addr: SocketAddr) {
+async fn run_tests_on_http_server(server_addr: SocketAddr, stop_handle: HttpStopHandle) {
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
@@ -190,6 +189,8 @@ async fn run_tests_on_http_server(server_addr: SocketAddr) {
 	}
 
 	assert_eq!(passes, 3);
+
+	stop_handle.stop().unwrap().await.unwrap();
 }
 
 #[tokio::test]
@@ -208,14 +209,14 @@ async fn ws_server_with_macro_module() {
 
 #[tokio::test]
 async fn http_server_with_manual_module() {
-	let server_addr = http_server(module_manual().unwrap()).await.unwrap();
+	let (server_addr, stop_handle) = http_server(module_manual().unwrap()).await.unwrap();
 
-	run_tests_on_http_server(server_addr).await;
+	run_tests_on_http_server(server_addr, stop_handle).await;
 }
 
 #[tokio::test]
 async fn http_server_with_macro_module() {
-	let server_addr = http_server(module_macro()).await.unwrap();
+	let (server_addr, stop_handle) = http_server(module_macro()).await.unwrap();
 
-	run_tests_on_http_server(server_addr).await;
+	run_tests_on_http_server(server_addr, stop_handle).await;
 }

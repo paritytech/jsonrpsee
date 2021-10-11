@@ -85,7 +85,7 @@ async fn ws_method_call_works() {
 
 #[tokio::test]
 async fn http_method_call_works() {
-	let server_addr = http_server().await;
+	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	let response: String = client.request("say_hello", None).await.unwrap();
@@ -94,7 +94,7 @@ async fn http_method_call_works() {
 
 #[tokio::test]
 async fn http_concurrent_method_call_limits_works() {
-	let server_addr = http_server().await;
+	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().max_concurrent_requests(1).build(&uri).unwrap();
 
@@ -217,7 +217,7 @@ async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 
 #[tokio::test]
 async fn http_making_more_requests_than_allowed_should_not_deadlock() {
-	let server_addr = http_server().await;
+	let (server_addr, _handle) = http_server().await;
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().max_concurrent_requests(2).build(&server_url).unwrap();
 	let client = Arc::new(client);
