@@ -12,6 +12,8 @@ The v0.4 release is a breaking change.
 
 ### [Added]
 
+- Document resource limiting (#510)
+
 - Resource limiting [#500](https://github.com/paritytech/jsonrpsee/pull/500)
 
 - Support http redirects when doing the ws handshake [#397](https://github.com/paritytech/jsonrpsee/pull/397)
