@@ -1,3 +1,75 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+//! # Resource Limiting
+//!
+//! This module handles limiting the capacity of the server to respond to requests.
+//!
+//! Each method will claim the specified number of units (or the default) for the duration of its execution
+//! Any method execution that would cause the total sum of claimed resource units to exceed
+//! the `capacity` of that resource will be denied execution, immediately returning JSON-RPC error object with code `-32604`.
+//!
+//! Resources can be defined directly using the [`WsServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource)
+//! or [`HttpServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource) method.
+//!
+//! To specify a different than default number of units a method should use, use the `resources` argument in the
+//! `#[method]` attribute:
+//!
+//! ```
+//! # use jsonrpsee::{types::RpcResult, proc_macros::rpc};
+//! #
+//! #[rpc(server)]
+//! pub trait Rpc {
+//! 	#[method(name = "my_expensive_method", resources("cpu" = 5, "mem" = 2))]
+//! 	async fn my_expensive_method(&self) -> RpcResult<&'static str> {
+//! 		// Do work
+//! 		Ok("hello")
+//! 	}
+//! }
+//! ```
+//!
+//! Alternatively, you can use the `resource` method when creating a module manually without the help of the macro:
+//!
+//! ```
+//! # use jsonrpsee::{RpcModule, types::RpcResult};
+//! #
+//! # fn main() -> RpcResult<()> {
+//! #
+//!	let mut module = RpcModule::new(());
+//!
+//! module
+//! 	.register_async_method("my_expensive_method", |_, _| async move {
+//! 		// Do work
+//! 		Ok("hello")
+//! 	})?
+//!		.resource("cpu", 5)?
+//!		.resource("mem", 2)?;
+//! # Ok(())
+//! # }
+
 use std::sync::Arc;
 
 use arrayvec::ArrayVec;

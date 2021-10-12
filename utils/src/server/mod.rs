@@ -28,7 +28,6 @@
 
 /// Helpers.
 pub mod helpers;
-/// Resource limiting helpers
 pub mod resource_limiting;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
 pub mod rpc_module;
