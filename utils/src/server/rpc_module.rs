@@ -239,7 +239,13 @@ impl Methods {
 						None => return Err(Error::ResourceNameNotFoundForMethod(label, method_name)),
 					};
 
-					map[idx] = units;
+					// If resource capacity set to `0`, we ignore the unit value of the method
+					// and set it to `0` as well, effectively making the resource unlimited.
+					if resources.capacities[idx] == 0 {
+						map[idx] = 0;
+					} else {
+						map[idx] = units;
+					}
 				}
 
 				callback.resources = MethodResources::Initialized(map);
