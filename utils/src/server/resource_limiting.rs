@@ -43,11 +43,11 @@
 //! #
 //! #[rpc(server)]
 //! pub trait Rpc {
-//! 	#[method(name = "my_expensive_method", resources("cpu" = 5, "mem" = 2))]
-//! 	async fn my_expensive_method(&self) -> RpcResult<&'static str> {
-//! 		// Do work
-//! 		Ok("hello")
-//! 	}
+//!     #[method(name = "my_expensive_method", resources("cpu" = 5, "mem" = 2))]
+//!     async fn my_expensive_method(&self) -> RpcResult<&'static str> {
+//! 	    // Do work
+//!         Ok("hello")
+//!     }
 //! }
 //! ```
 //!
@@ -61,12 +61,12 @@
 //!	let mut module = RpcModule::new(());
 //!
 //! module
-//! 	.register_async_method("my_expensive_method", |_, _| async move {
-//! 		// Do work
-//! 		Ok("hello")
-//! 	})?
-//!		.resource("cpu", 5)?
-//!		.resource("mem", 2)?;
+//!     .register_async_method("my_expensive_method", |_, _| async move {
+//!         // Do work
+//!         Ok("hello")
+//!     })?
+//!	    .resource("cpu", 5)?
+//!	    .resource("mem", 2)?;
 //! # Ok(())
 //! # }
 
