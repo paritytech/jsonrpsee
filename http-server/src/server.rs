@@ -87,8 +87,8 @@ impl Builder {
 	/// Register a new resource kind. Errors if `label` is already registered, or if number of
 	/// registered resources would exceed 8.
 	///
-	/// Every method will temporarily lock either the `default` or otherwise specified number of units during its
-	/// execution. Any method execution that would cause the total sum of locked resource units to exceed
+	/// Each method will claim the specified number of units (or the default) for the duration of its execution
+	/// Any method execution that would cause the total sum of claimed resource units to exceed
 	/// the `capacity` of that resource will be denied execution, immediately returning JSON-RPC error object with code `-32604`.
 	///
 	/// ---
