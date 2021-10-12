@@ -29,19 +29,19 @@
 //! This module handles limiting the capacity of the server to respond to requests.
 //!
 //! `jsonrpsee` is agnostic about the types of resources available on the server, and the units used are arbitrary.
-//! The units are used to model the availability of a resource, be it anything mundane like CPU or Memory,
-//! or anything more exotic like API accesses to a 3rd party service, or a use of some external hardware
+//! The units are used to model the availability of a resource, be it something mundane like CPU or Memory,
+//! or more exotic things like remote API access to a 3rd party service, or use of some external hardware
 //! that's under the control of the server.
 //!
 //! To get the most out of this feature, we suggest benchmarking individual methods to see how many resources they
 //! consume, in particular anything critical that is expected to result in a lot of stress on the server,
-//! and then defining your units such that the limits can be adjusted for different hardware configurations.
+//! and then defining your units such that the limits (`capacity`) can be adjusted for different hardware configurations.
 //!
 //! Resources can be defined using the [`WsServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource)
 //! or [`HttpServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource) method
 //! for the WebSocket and HTTP server respectively.
 //!
-//! Each method will claim the specified number of units (or the default) for the duration of its execution
+//! Each method will claim the specified number of units (or the default) for the duration of its execution. 
 //! Any method execution that would cause the total sum of claimed resource units to exceed
 //! the `capacity` of that resource will be denied execution, immediately returning JSON-RPC error object with code `-32604`.
 //!
