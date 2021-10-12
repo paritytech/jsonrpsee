@@ -1,3 +1,94 @@
+// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+//
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+
+//! # Resource Limiting
+//!
+//! This module handles limiting the capacity of the server to respond to requests.
+//!
+//! `jsonrpsee` is agnostic about the types of resources available on the server, and the units used are arbitrary.
+//! The units are used to model the availability of a resource, be it something mundane like CPU or Memory,
+//! or more exotic things like remote API access to a 3rd party service, or use of some external hardware
+//! that's under the control of the server.
+//!
+//! To get the most out of this feature, we suggest benchmarking individual methods to see how many resources they
+//! consume, in particular anything critical that is expected to result in a lot of stress on the server,
+//! and then defining your units such that the limits (`capacity`) can be adjusted for different hardware configurations.
+//!
+//! Up to 8 resources can be defined using the [`WsServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource)
+//! or [`HttpServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource) method
+//! for the WebSocket and HTTP server respectively.
+//!
+//! Each method will claim the specified number of units (or the default) for the duration of its execution.
+//! Any method execution that would cause the total sum of claimed resource units to exceed
+//! the `capacity` of that resource will be denied execution, immediately returning JSON-RPC error object with code `-32604`.
+//!
+//! Setting the execution cost to `0` equates to the method effectively not being limited by a given resource. Likewise setting the
+//! `capacity` to `0` disables any limiting for a given resource.
+//!
+//! To specify a different than default number of units a method should use, use the `resources` argument in the
+//! `#[method]` attribute:
+//!
+//! ```
+//! # use jsonrpsee::{types::RpcResult, proc_macros::rpc};
+//! #
+//! #[rpc(server)]
+//! pub trait Rpc {
+//!     #[method(name = "my_expensive_method", resources("cpu" = 5, "mem" = 2))]
+//!     async fn my_expensive_method(&self) -> RpcResult<&'static str> {
+//! 	    // Do work
+//!         Ok("hello")
+//!     }
+//! }
+//! ```
+//!
+//! Alternatively, you can use the `resource` method when creating a module manually without the help of the macro:
+//!
+//! ```
+//! # use jsonrpsee::{RpcModule, types::RpcResult};
+//! #
+//! # fn main() -> RpcResult<()> {
+//! #
+//!	let mut module = RpcModule::new(());
+//!
+//! module
+//!     .register_async_method("my_expensive_method", |_, _| async move {
+//!         // Do work
+//!         Ok("hello")
+//!     })?
+//!	    .resource("cpu", 5)?
+//!	    .resource("mem", 2)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Each resource needs to have a unique name, such as `"cpu"` or `"memory"`, which can then be used across all
+//! [`RpcModule`s](crate::server::rpc_module::RpcModule). In case a module definition uses a resource label not
+//! defined on the server, starting the server with such a module will result in a runtime error containing the
+//! information about the offending method.
+
 use std::sync::Arc;
 
 use arrayvec::ArrayVec;
