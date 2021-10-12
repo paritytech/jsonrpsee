@@ -68,7 +68,8 @@ impl Parse for Argument {
 			}
 
 			input.parse::<TokenTree>().ok()
-		}).collect();
+		})
+		.collect();
 
 		Ok(Argument { label, tokens })
 	}
