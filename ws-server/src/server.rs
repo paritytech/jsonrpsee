@@ -448,10 +448,9 @@ impl Builder {
 	/// ```
 	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
 		self.resources.register(label, capacity, default)?;
-	
 		Ok(self)
 	}
-	///
+
 	/// Set a list of allowed origins. During the handshake, the `Origin` header will be
 	/// checked against the list, connections without a matching origin will be denied.
 	/// Values should be hostnames with protocol.
