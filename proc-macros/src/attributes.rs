@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
-use std::fmt;
+use std::{fmt, iter};
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
 use syn::{spanned::Spanned, Attribute, Error, Token};
@@ -51,15 +51,14 @@ impl Parse for Argument {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let label = input.parse()?;
 
-		let mut tokens = TokenStream2::new();
 		let mut scope = 0usize;
 
 		// Need to read to till either the end of the stream,
 		// or the nearest comma token that's not contained
 		// inside angle brackets.
-		loop {
+		let tokens = iter::from_fn(move || {
 			if scope == 0 && input.peek(Token![,]) {
-				break;
+				return None;
 			}
 
 			if input.peek(Token![<]) {
@@ -68,11 +67,8 @@ impl Parse for Argument {
 				scope = scope.saturating_sub(1);
 			}
 
-			match input.parse::<TokenTree>() {
-				Ok(token) => tokens.extend([token]),
-				Err(_) => break,
-			}
-		}
+			input.parse::<TokenTree>().ok()
+		}).collect();
 
 		Ok(Argument { label, tokens })
 	}

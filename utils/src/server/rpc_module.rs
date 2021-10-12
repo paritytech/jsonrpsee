@@ -254,7 +254,7 @@ impl Methods {
 		Arc::make_mut(&mut self.callbacks)
 	}
 
-	/// Merge two [`Methods`]'s by adding all [`MethodKind`]s from `other` into `self`.
+	/// Merge two [`Methods`]'s by adding all [`MethodCallback`]s from `other` into `self`.
 	/// Fails if any of the methods in `other` is present already.
 	pub fn merge(&mut self, other: impl Into<Methods>) -> Result<(), Error> {
 		let mut other = other.into();

@@ -86,6 +86,48 @@ impl Builder {
 
 	/// Register a new resource kind. Errors if `label` is already registered, or if number of
 	/// registered resources would exceed 8.
+	///
+	/// Every method will temporarily lock either the `default` or otherwise specified number of units during its
+	/// execution. Any method execution that would cause the total sum of locked resource units to exceed
+	/// the `capacity` of that resource will be denied execution, immediately returning JSON-RPC error object with code `-32604`.
+	///
+	/// ---
+	///
+	/// To specify a different than default number of units a method should use, use the `resources` argument in the
+	/// `#[method]` attribute:
+	///
+	/// ```
+	/// # use jsonrpsee::{types::RpcResult, proc_macros::rpc};
+	/// #
+	/// #[rpc(server)]
+	/// pub trait Rpc {
+	/// 	#[method(name = "my_expensive_method", resources("cpu" = 5, "mem" = 2))]
+	/// 	async fn my_expensive_method(&self) -> RpcResult<&'static str> {
+	/// 		// Do work
+	/// 		Ok("hello")
+	/// 	}
+	/// }
+	/// ```
+	///
+	/// Alternatively, you can use the `resource` method when creating a module manually without the help of the macro:
+	///
+	/// ```
+	/// # use jsonrpsee::{RpcModule, types::RpcResult};
+	/// #
+	/// # fn main() -> RpcResult<()> {
+	/// #
+	///	let mut module = RpcModule::new(());
+	///
+	/// module
+	/// 	.register_async_method("my_expensive_method", |_, _| async move {
+	/// 		// Do work
+	/// 		Ok("hello")
+	/// 	})?
+	///		.resource("cpu", 5)?
+	///		.resource("mem", 2)?;
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
 		self.resources.register(label, capacity, default)?;
 
