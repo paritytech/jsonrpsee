@@ -487,8 +487,9 @@ impl Builder {
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
 	///
 	/// Default: [`tokio::spawn`]
-	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) {
+	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) -> Self {
 		self.settings.tokio_runtime = Some(rt);
+		self
 	}
 
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
