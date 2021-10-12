@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog].
 [changed] Resource Limiting [#500](https://github.com/paritytech/jsonrpsee/pull/500)
 
 [changed] fix http client bench with request limit [#506](https://github.com/paritytech/jsonrpsee/pull/506)
+
 [changed] ws client redirections [#397](https://github.com/paritytech/jsonrpsee/pull/397)
 
 [changed] deps: remove rustls [#502](https://github.com/paritytech/jsonrpsee/pull/502)
