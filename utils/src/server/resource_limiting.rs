@@ -41,7 +41,7 @@
 //! or [`HttpServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource) method
 //! for the WebSocket and HTTP server respectively.
 //!
-//! Each method will claim the specified number of units (or the default) for the duration of its execution. 
+//! Each method will claim the specified number of units (or the default) for the duration of its execution.
 //! Any method execution that would cause the total sum of claimed resource units to exceed
 //! the `capacity` of that resource will be denied execution, immediately returning JSON-RPC error object with code `-32604`.
 //!
