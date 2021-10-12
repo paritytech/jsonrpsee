@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.4.1] – 2021-10-12
+
+The v0.4.1 release is a bug fix.
+
+### [Fixed]
+
+-  fix: nit in ServerBuilder::custom_tokio_runtime [#512](https://github.com/paritytech/jsonrpsee/pull/512)
+
 ## [v0.4.0] – 2021-10-12
 
 The v0.4 release is a breaking change.
