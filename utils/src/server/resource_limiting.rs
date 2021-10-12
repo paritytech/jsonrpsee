@@ -37,13 +37,16 @@
 //! consume, in particular anything critical that is expected to result in a lot of stress on the server,
 //! and then defining your units such that the limits (`capacity`) can be adjusted for different hardware configurations.
 //!
-//! Resources can be defined using the [`WsServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource)
+//! Up to 8 resources can be defined using the [`WsServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource)
 //! or [`HttpServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource) method
 //! for the WebSocket and HTTP server respectively.
 //!
 //! Each method will claim the specified number of units (or the default) for the duration of its execution.
 //! Any method execution that would cause the total sum of claimed resource units to exceed
 //! the `capacity` of that resource will be denied execution, immediately returning JSON-RPC error object with code `-32604`.
+//!
+//! Setting the execution cost to `0` equates to the method effectively not being limited by a given resource. Likewise setting the
+//! `capacity` to `0` disables any limiting for a given resource.
 //!
 //! To specify a different than default number of units a method should use, use the `resources` argument in the
 //! `#[method]` attribute:
@@ -79,6 +82,12 @@
 //!	    .resource("mem", 2)?;
 //! # Ok(())
 //! # }
+//! ```
+//!
+//! Each resource needs to have a unique name, such as `"cpu"` or `"memory"`, which can then be used across all
+//! [`RpcModule`s](crate::server::rpc_module::RpcModule). In case a module definition uses a resource label not
+//! defined on the server, starting the server with such a module will result in a runtime error containing the
+//! information about the offending method.
 
 use std::sync::Arc;
 
