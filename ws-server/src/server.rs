@@ -402,11 +402,13 @@ impl Builder {
 		self
 	}
 
-	/// Register a new resource kind. Errors if `label` is already registered, or if number of
-	/// registered resources would exceed 8.
+	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
+	/// registered resources on this server instance would exceed 8.
+	///
+	/// See the module documentation for [`resurce_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
+	/// for details.
 	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
 		self.resources.register(label, capacity, default)?;
-
 		Ok(self)
 	}
 
