@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-utils"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for jsonrpsee"
 edition = "2018"
@@ -13,7 +13,7 @@ thiserror = { version = "1", optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
-jsonrpsee-types = { path = "../types", version = "0.3.0", optional = true }
+jsonrpsee-types = { path = "../types", version = "0.4.0", optional = true }
 log = { version = "0.4", optional = true }
 rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
