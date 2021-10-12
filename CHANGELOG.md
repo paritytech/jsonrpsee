@@ -8,115 +8,94 @@ The format is based on [Keep a Changelog].
 
 ## [v0.4.0] – 2021-10-12
 
-[changed] [http server]: use tokio::spawn internally in `HttpServer::start` and return `StopHandle` [#402](https://github.com/paritytech/jsonrpsee/pull/402)
+The v0.4 release is a breaking change.
 
-[changed] Proc macro Argument parsing should permit commas inside angle brackets [#509](https://github.com/paritytech/jsonrpsee/pull/509)
+[Added]
 
-[changed] ParamsSer::NoParams no more [#508](https://github.com/paritytech/jsonrpsee/pull/508)
+Resource limiting [#500](https://github.com/paritytech/jsonrpsee/pull/500)
 
-[changed] [http server]: use similar API for host and origin filtering as `WS` [#473](https://github.com/paritytech/jsonrpsee/pull/473)
+Support http redirects when doing the ws handshake [#397](https://github.com/paritytech/jsonrpsee/pull/397)
 
-[changed] remove `ParamsSer::NoParams` [#501](https://github.com/paritytech/jsonrpsee/pull/501)
+Add convenience `rpc_params` macro to build params in http and ws clients [#498](https://github.com/paritytech/jsonrpsee/pull/498)
 
-[changed] improve SubscriptionClosed error [#504](https://github.com/paritytech/jsonrpsee/pull/504)
+Method alias attribute for proc macros [#442](https://github.com/paritytech/jsonrpsee/pull/442)
 
-[changed] Resource Limiting [#500](https://github.com/paritytech/jsonrpsee/pull/500)
+Add benchmarks for concurrent connections [#430](https://github.com/paritytech/jsonrpsee/pull/430)
 
-[changed] fix http client bench with request limit [#506](https://github.com/paritytech/jsonrpsee/pull/506)
+Support generic type params in the proc macro [#436](https://github.com/paritytech/jsonrpsee/pull/436)
 
-[changed] ws client redirections [#397](https://github.com/paritytech/jsonrpsee/pull/397)
 
-[changed] deps: remove rustls [#502](https://github.com/paritytech/jsonrpsee/pull/502)
+[Changed]
 
-[changed] Update soketto requirement from 0.6 to 0.7 [#493](https://github.com/paritytech/jsonrpsee/pull/493)
+use tokio::spawn internally in `HttpServer::start` and return `StopHandle` [#402](https://github.com/paritytech/jsonrpsee/pull/402)
 
-[changed] expose the `rpc_params` macro to both http and ws clients [#498](https://github.com/paritytech/jsonrpsee/pull/498)
+remove `ParamsSer::NoParams` [#501](https://github.com/paritytech/jsonrpsee/pull/501)
 
-[changed] Improve feature configuration [#494](https://github.com/paritytech/jsonrpsee/pull/494)
+http server uses similar API for host and origin filtering as `WS` [#473](https://github.com/paritytech/jsonrpsee/pull/473)
 
-[changed] Add macro to build params [#496](https://github.com/paritytech/jsonrpsee/pull/496)
+`SubscriptionClosed` errors carry more information [#504](https://github.com/paritytech/jsonrpsee/pull/504)
 
-[changed] Unbox async futures [#495](https://github.com/paritytech/jsonrpsee/pull/495)
+Improve feature configuration for faster builds and leaner build artifacts [#494](https://github.com/paritytech/jsonrpsee/pull/494)
 
-[changed] Un-ignore test that is flaky on windows [#491](https://github.com/paritytech/jsonrpsee/pull/491)
+Unbox async futures [#495](https://github.com/paritytech/jsonrpsee/pull/495)
 
-[changed] Share the request id code between the http and websocket clients [#490](https://github.com/paritytech/jsonrpsee/pull/490)
+WS clients default subscription buffer set to 1024 items [#475](https://github.com/paritytech/jsonrpsee/pull/475)
 
-[changed] wrapper struct for test subscription [#489](https://github.com/paritytech/jsonrpsee/pull/489)
+Re-export `v2` submodules [#469](https://github.com/paritytech/jsonrpsee/pull/469)
 
-[changed] fix: ws server terminate subscriptions when connection is closed by the client. [#483](https://github.com/paritytech/jsonrpsee/pull/483)
+Replace internal `array_impl macro` with const generics [#470](https://github.com/paritytech/jsonrpsee/pull/470)
 
-[changed] less deps [#484](https://github.com/paritytech/jsonrpsee/pull/484)
+Rename and reorganize many public types [#462](https://github.com/paritytech/jsonrpsee/pull/462)
 
-[changed] examples: remove weather [#479](https://github.com/paritytech/jsonrpsee/pull/479)
+Export acl types [#466](https://github.com/paritytech/jsonrpsee/pull/466)
 
-[changed] [ws client]: default subscription buffer 1024 [#475](https://github.com/paritytech/jsonrpsee/pull/475)
+Propagate cause of `InvalidParams` [#463](https://github.com/paritytech/jsonrpsee/pull/463)
 
-[changed] Ignore troublesome test on windows [#471](https://github.com/paritytech/jsonrpsee/pull/471)
+Reject overflowing connection with status code 429 [#456](https://github.com/paritytech/jsonrpsee/pull/456)
 
-[changed] Re-export `v2` submodules [#469](https://github.com/paritytech/jsonrpsee/pull/469)
+Test helper for calling and converting types to JSON-RPC params [#458](https://github.com/paritytech/jsonrpsee/pull/458)
 
-[changed] replace `array_impl macro` with const generics [#470](https://github.com/paritytech/jsonrpsee/pull/470)
+Make it possible to treat empty JSON response as no params [#446](https://github.com/paritytech/jsonrpsee/pull/446)
 
-[changed] Rename and reorg types [#462](https://github.com/paritytech/jsonrpsee/pull/462)
+Methods generated by the proc macro return `Result` [#435](https://github.com/paritytech/jsonrpsee/pull/435)
 
-[changed] [http server]: export acl types + remove cors_max_age [#466](https://github.com/paritytech/jsonrpsee/pull/466)
+Concurrent polling on async methods [#424](https://github.com/paritytech/jsonrpsee/pull/424)
 
-[changed] Fix build warnings [#465](https://github.com/paritytech/jsonrpsee/pull/465)
+Sniff the first byte to glean if the incoming request is a single or batch request [#419](https://github.com/paritytech/jsonrpsee/pull/419)
 
-[changed] Propagate cause of `InvalidParams` [#463](https://github.com/paritytech/jsonrpsee/pull/463)
+Upgrade hyper to 0.14.x [#427](https://github.com/paritytech/jsonrpsee/pull/427)
 
-[changed] Reject overflowing connection with status code 429 [#456](https://github.com/paritytech/jsonrpsee/pull/456)
+Proc macro params optimizations and tests. [#421](https://github.com/paritytech/jsonrpsee/pull/421)
 
-[changed] Remove unstable rustfmt comment wrapping/limiting [#464](https://github.com/paritytech/jsonrpsee/pull/464)
 
-[changed] [rpc module] test helper for calling and converting types to JSON-RPC params   [#458](https://github.com/paritytech/jsonrpsee/pull/458)
+[Fixed]
 
-[changed] Let rustfmt wrap comments at the 120 width boundary [#461](https://github.com/paritytech/jsonrpsee/pull/461)
+Proc macro Argument parsing should permit commas inside angle brackets [#509](https://github.com/paritytech/jsonrpsee/pull/509)
 
-[changed] fix(proc macros): subscriptions must return result [#455](https://github.com/paritytech/jsonrpsee/pull/455)
+Fix http client bench with request limit [#506](https://github.com/paritytech/jsonrpsee/pull/506)
 
-[changed] cleanup after #453 [#454](https://github.com/paritytech/jsonrpsee/pull/454)
+Fixed flaky test on windows [#491](https://github.com/paritytech/jsonrpsee/pull/491)
 
-[changed] fix(proc macros): generate documentation for trait methods. [#453](https://github.com/paritytech/jsonrpsee/pull/453)
+Share the request id code between the http and websocket clients [#490](https://github.com/paritytech/jsonrpsee/pull/490)
 
-[changed] Tidy `StopHandle` [#425](https://github.com/paritytech/jsonrpsee/pull/425)
+WS server terminates subscriptions when connection is closed by the client. [#483](https://github.com/paritytech/jsonrpsee/pull/483)
 
-[changed] feat: alias attribute for proc macros [#442](https://github.com/paritytech/jsonrpsee/pull/442)
+Subscription code generated by the proc macro generated returns `Result` [#455](https://github.com/paritytech/jsonrpsee/pull/455)
 
-[changed] Make it possible to treat empty JSON response as no params [#446](https://github.com/paritytech/jsonrpsee/pull/446)
+Proc macro generates documentation for trait methods. [#453](https://github.com/paritytech/jsonrpsee/pull/453)
 
-[changed] benches: add benchmark for concurrent connections [#430](https://github.com/paritytech/jsonrpsee/pull/430)
+Fix errors with generics when using the proc macro [#433](https://github.com/paritytech/jsonrpsee/pull/433)
 
-[changed] [proc macros]: support generic type params [#436](https://github.com/paritytech/jsonrpsee/pull/436)
+WS client uses query part of the URL [#429](https://github.com/paritytech/jsonrpsee/pull/429)
 
-[changed] Add license headers where missing and update year [#439](https://github.com/paritytech/jsonrpsee/pull/439)
 
-[changed] Cleanup proc-macros [#438](https://github.com/paritytech/jsonrpsee/pull/438)
+[Removed]
 
-[changed] [proc macros] force proc macro api to return `Result` [#435](https://github.com/paritytech/jsonrpsee/pull/435)
+Remove rustls [#502](https://github.com/paritytech/jsonrpsee/pull/502)
 
-[changed] Fix errors with generics when using the proc macro [#433](https://github.com/paritytech/jsonrpsee/pull/433)
+Remove cors_max_age [#466](https://github.com/paritytech/jsonrpsee/pull/466)
 
-[changed] Concurrent polling on async methods [#424](https://github.com/paritytech/jsonrpsee/pull/424)
-
-[changed] Don't allocate until we know it's worth it [#420](https://github.com/paritytech/jsonrpsee/pull/420)
-
-[changed] [clients]: remove tokio 0.2 runtime support [#432](https://github.com/paritytech/jsonrpsee/pull/432)
-
-[changed] Sniff the first byte to glean if the incoming request is a single or batch request [#419](https://github.com/paritytech/jsonrpsee/pull/419)
-
-[changed] [proc macros]: remove old code and tests. [#431](https://github.com/paritytech/jsonrpsee/pull/431)
-
-[changed] fix most clippy warnings [#434](https://github.com/paritytech/jsonrpsee/pull/434)
-
-[changed] deps(hyper): require 0.14.10 [#427](https://github.com/paritytech/jsonrpsee/pull/427)
-
-[changed] fix(ws client): use query part of URL. [#429](https://github.com/paritytech/jsonrpsee/pull/429)
-
-[changed] Proc macro params optimizations and tests. [#421](https://github.com/paritytech/jsonrpsee/pull/421)
-
-[changed] Update env_logger requirement from 0.8 to 0.9 [#418](https://github.com/paritytech/jsonrpsee/pull/418)
+Remove support for tokio 0.2 runtimes [#432](https://github.com/paritytech/jsonrpsee/pull/432)
 
 
 ## [v0.3.0] – 2021-07-12
