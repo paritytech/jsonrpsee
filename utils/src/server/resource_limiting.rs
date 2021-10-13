@@ -58,7 +58,7 @@
 //! pub trait Rpc {
 //!     #[method(name = "my_expensive_method", resources("cpu" = 5, "mem" = 2))]
 //!     async fn my_expensive_method(&self) -> RpcResult<&'static str> {
-//! 	    // Do work
+//!         // Do work
 //!         Ok("hello")
 //!     }
 //! }
@@ -71,15 +71,15 @@
 //! #
 //! # fn main() -> RpcResult<()> {
 //! #
-//!	let mut module = RpcModule::new(());
+//! let mut module = RpcModule::new(());
 //!
 //! module
 //!     .register_async_method("my_expensive_method", |_, _| async move {
 //!         // Do work
 //!         Ok("hello")
 //!     })?
-//!	    .resource("cpu", 5)?
-//!	    .resource("mem", 2)?;
+//!     .resource("cpu", 5)?
+//!     .resource("mem", 2)?;
 //! # Ok(())
 //! # }
 //! ```

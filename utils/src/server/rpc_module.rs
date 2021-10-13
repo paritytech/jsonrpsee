@@ -24,18 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::helpers::{send_error, send_response};
+use crate::server::helpers::{send_call_error, send_error, send_response};
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::{
-	error::{CallError, Error, SubscriptionClosedError},
+	error::{Error, SubscriptionClosedError},
 	traits::ToRpcParams,
 	v2::{
-		error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
-		ErrorCode, ErrorObject, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId,
-		SubscriptionPayload, SubscriptionResponse, TwoPointZero,
+		ErrorCode, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
+		SubscriptionResponse, TwoPointZero,
 	},
 	DeserializeOwned,
 };
@@ -427,32 +426,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res),
-					Err(Error::Call(CallError::InvalidParams(e))) => {
-						let error = ErrorObject { code: ErrorCode::InvalidParams, message: &e.to_string(), data: None };
-						send_error(id, tx, error)
-					}
-					Err(Error::Call(CallError::Failed(e))) => {
-						let err = ErrorObject {
-							code: ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
-							message: &e.to_string(),
-							data: None,
-						};
-						send_error(id, tx, err)
-					}
-					Err(Error::Call(CallError::Custom { code, message, data })) => {
-						let err = ErrorObject { code: code.into(), message: &message, data: data.as_deref() };
-						send_error(id, tx, err)
-					}
-					// This should normally not happen because the most common use case is to
-					// return `Error::Call` in `register_method`.
-					Err(e) => {
-						let err = ErrorObject {
-							code: ErrorCode::ServerError(UNKNOWN_ERROR_CODE),
-							message: &e.to_string(),
-							data: None,
-						};
-						send_error(id, tx, err)
-					}
+					Err(err) => send_call_error(id, tx, err),
 				};
 			})),
 		)?;
@@ -479,33 +453,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let future = async move {
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res),
-						Err(Error::Call(CallError::InvalidParams(e))) => {
-							let error =
-								ErrorObject { code: ErrorCode::InvalidParams, message: &e.to_string(), data: None };
-							send_error(id, &tx, error)
-						}
-						Err(Error::Call(CallError::Failed(e))) => {
-							let err = ErrorObject {
-								code: ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE),
-								message: &e.to_string(),
-								data: None,
-							};
-							send_error(id, &tx, err)
-						}
-						Err(Error::Call(CallError::Custom { code, message, data })) => {
-							let err = ErrorObject { code: code.into(), message: &message, data: data.as_deref() };
-							send_error(id, &tx, err)
-						}
-						// This should normally not happen because the most common use case is to
-						// return `Error::Call` in `register_async_method`.
-						Err(e) => {
-							let err = ErrorObject {
-								code: ErrorCode::ServerError(UNKNOWN_ERROR_CODE),
-								message: &e.to_string(),
-								data: None,
-							};
-							send_error(id, &tx, err)
-						}
+						Err(err) => send_call_error(id, &tx, err),
 					};
 
 					// Release claimed resources
