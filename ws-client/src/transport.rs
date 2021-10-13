@@ -267,7 +267,6 @@ impl<'a> WsTransportClientBuilder<'a> {
 										}
 										Mode::Plain => None,
 									};
-									break;
 								}
 								// Relative URI.
 								else {
@@ -292,8 +291,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 										};
 									}
 									target.sockaddrs = sockaddrs;
-									break;
 								}
+								break;
 							}
 							Err(e) => {
 								err = Some(Err(WsHandshakeError::Url(e.to_string().into())));

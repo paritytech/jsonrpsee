@@ -79,7 +79,7 @@ pub fn send_call_error(id: Id, tx: &MethodSink, err: Error) {
 
 	let err = ErrorObject { code, message: &message, data: data.as_deref() };
 
-	send_error(id, &tx, err)
+	send_error(id, tx, err)
 }
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
