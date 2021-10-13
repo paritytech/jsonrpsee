@@ -27,7 +27,11 @@
 use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::v2::{ErrorCode, ErrorObject, Id, InvalidRequest, Response, RpcError, TwoPointZero};
+use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::v2::{
+	error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
+	ErrorCode, ErrorObject, Id, InvalidRequest, Response, RpcError, TwoPointZero,
+};
 use serde::Serialize;
 
 /// Helper for sending JSON-RPC responses to the client
@@ -60,6 +64,22 @@ pub fn send_error(id: Id, tx: &MethodSink, error: ErrorObject) {
 	if let Err(err) = tx.unbounded_send(json) {
 		log::error!("Could not send error response to the client: {:?}", err)
 	}
+}
+
+/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
+pub fn send_call_error(id: Id, tx: &MethodSink, err: Error) {
+	let (code, message, data) = match err {
+		Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
+		Error::Call(CallError::Failed(e)) => (ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None),
+		Error::Call(CallError::Custom { code, message, data }) => (code.into(), message, data),
+		// This should normally not happen because the most common use case is to
+		// return `Error::Call` in `register_async_method`.
+		e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
+	};
+
+	let err = ErrorObject { code, message: &message, data: data.as_deref() };
+
+	send_error(id, &tx, err)
 }
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
