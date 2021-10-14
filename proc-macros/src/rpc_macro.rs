@@ -38,6 +38,7 @@ use syn::{punctuated::Punctuated, Attribute, Token};
 #[derive(Debug, Clone)]
 pub struct RpcMethod {
 	pub name: String,
+	pub blocking: bool,
 	pub docs: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub returns: Option<syn::Type>,
@@ -48,9 +49,11 @@ pub struct RpcMethod {
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, name, resources] = AttributeMeta::parse(attr)?.retain(["aliases", "name", "resources"])?;
+		let [aliases, blocking, name, resources] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "resources"])?;
 
 		let aliases = parse_aliases(aliases)?;
+		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
 		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
@@ -77,7 +80,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, name, params, returns, signature: method, docs, resources })
+		Ok(Self { aliases, blocking, name, params, returns, signature: method, docs, resources })
 	}
 }
 
