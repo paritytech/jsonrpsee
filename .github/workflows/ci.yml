@@ -34,7 +34,8 @@ jobs:
           uses: rhysd/github-action-benchmark@v1
           with:
             tool: 'cargo'
-            output-file-path: output.txtfail-on-alert: true
+            output-file-path: output.txt
+            fail-on-alert: true
             github-token: ${{ secrets.GITHUB_TOKEN }}
             auto-push: true
             gh-pages-branch: "gh-pages-v0.3"
