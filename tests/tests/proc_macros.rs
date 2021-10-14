@@ -290,7 +290,8 @@ async fn multiple_blocking_calls_overlap() {
 	let module = RpcServerImpl.into_rpc();
 
 	let params = RawValue::from_string("[]".into()).ok();
-	let futures = std::iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(16);
+	// MacOS CI has very limited number of cores, so running on 2 to be safe
+	let futures = std::iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(2);
 	let now = Instant::now();
 	let results = futures::future::join_all(futures).await;
 	let elapsed = now.elapsed();
