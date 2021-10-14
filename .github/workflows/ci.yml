@@ -13,6 +13,38 @@ on:
       - master
 
 jobs:
+  check-style:
+    name: Check style
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v2.3.4
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: clippy, rustfmt
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Cargo fmt
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Cargo clippy
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: clippy
+
+      - name: Check rustdoc links
+        run: RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
+
   check-code:
     name: Check
     runs-on: ubuntu-latest
@@ -90,30 +122,86 @@ jobs:
           command: check
           args: --manifest-path examples/Cargo.toml
 
-
-  bench:
-    name: Run benchmarks
+  tests:
+    name: Run tests Ubuntu
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Sources
-        uses: actions/checkout@v2
+      - name: Checkout sources
+        uses: actions/checkout@v2.3.4
 
       - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1.0.7
         with:
           profile: minimal
           toolchain: stable
           override: true
 
-      - name: Cargo bench
-        run: cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Store benchmark result
-        uses: rhysd/github-action-benchmark@v1
+      - name: Cargo build
+        uses: actions-rs/cargo@v1.0.3
         with:
-          tool: 'cargo'
-          output-file-path: output.txt
-          fail-on-alert: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
-          gh-pages-branch: "gh-pages-v0.3"
+          command: build
+          args: --workspace
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+
+  tests_macos:
+    name: Run tests macos
+    runs-on: macos-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2.3.4
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: build
+          args: --workspace
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+
+  tests_windows:
+    name: Run tests Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2.3.4
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Cargo build
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: build
+          args: --workspace
+
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
