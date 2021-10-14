@@ -153,8 +153,11 @@ impl RpcDescription {
 						#resources
 					})
 				} else {
+					let register_kind =
+						if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
+
 					handle_register_result(quote! {
-						rpc.register_method(#rpc_method_name, |params, context| {
+						rpc.#register_kind(#rpc_method_name, |params, context| {
 							#parsing
 							context.#rust_method_name(#params_seq)
 						})

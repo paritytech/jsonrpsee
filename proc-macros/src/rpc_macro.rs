@@ -33,6 +33,7 @@ use crate::{
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use syn::spanned::Spanned;
 use syn::{punctuated::Punctuated, Attribute, Token};
 
 #[derive(Debug, Clone)]
@@ -59,6 +60,10 @@ impl RpcMethod {
 
 		let sig = method.sig.clone();
 		let docs = extract_doc_comments(&method.attrs);
+
+		if blocking && sig.asyncness.is_some() {
+			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
+		}
 
 		let params: Vec<_> = sig
 			.inputs

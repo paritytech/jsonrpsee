@@ -466,7 +466,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
-	/// Register a new synchronous RPC method, which computes the response with the given callback.
+	/// Register a new **blocking** synchronous RPC method, which computes the response with the given callback.
+	/// Unlike the regular [`register_method`](RpcModule::register_method), this method can block its thread and perform expensive computations.
 	pub fn register_blocking_method<R, F>(
 		&mut self,
 		method_name: &'static str,
