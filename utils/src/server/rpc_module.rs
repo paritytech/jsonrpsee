@@ -466,6 +466,42 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
+	/// Register a new synchronous RPC method, which computes the response with the given callback.
+	pub fn register_blocking_method<R, F>(
+		&mut self,
+		method_name: &'static str,
+		callback: F,
+	) -> Result<MethodResourcesBuilder, Error>
+	where
+		Context: Send + Sync + 'static,
+		R: Serialize,
+		F: Fn(Params, Arc<Context>) -> Result<R, Error> + Copy + Send + Sync + 'static,
+	{
+		let ctx = self.ctx.clone();
+		let callback = self.methods.verify_and_insert(
+			method_name,
+			MethodCallback::new_async(Arc::new(move |id, params, tx, _conn_id, claimed| {
+				let ctx = ctx.clone();
+
+				tokio::task::spawn_blocking(move || {
+					match callback(params, ctx) {
+						Ok(res) => send_response(id, &tx, res),
+						Err(err) => send_call_error(id, &tx, err),
+					};
+
+					// Release claimed resources
+					drop(claimed);
+				})
+				.map(|err| {
+					log::error!("Join error for blocking RPC method: {:?}", err);
+				})
+				.boxed()
+			})),
+		)?;
+
+		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
+	}
+
 	/// Register a new RPC subscription that invokes callback on every subscription request.
 	/// The callback itself takes three parameters:
 	///     - [`Params`]: JSONRPC parameters in the subscription request.
