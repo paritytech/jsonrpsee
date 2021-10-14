@@ -26,6 +26,7 @@
 
 //! Example of using proc macro to generate working client and server.
 
+use std::iter;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
@@ -290,8 +291,13 @@ async fn multiple_blocking_calls_overlap() {
 	let module = RpcServerImpl.into_rpc();
 
 	let params = RawValue::from_string("[]".into()).ok();
-	// MacOS CI has very limited number of cores, so running on 2 to be safe
-	let futures = std::iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(2);
+
+	// Dry-run to initialize blocking threadpool
+	let futures = iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
+	futures::future::join_all(futures).await;
+
+	// Measured run
+	let futures = iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
 	let now = Instant::now();
 	let results = futures::future::join_all(futures).await;
 	let elapsed = now.elapsed();
