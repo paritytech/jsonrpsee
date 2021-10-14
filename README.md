@@ -1,6 +1,6 @@
 # jsonrpsee
 
-JSON-RPC library designed for async/await in Rust.
+JSON-RPC library designed for async/await in Rust......
 
 Designed to be the successor to [ParityTech's JSONRPC crate](https://github.com/paritytech/jsonrpc/).
 
