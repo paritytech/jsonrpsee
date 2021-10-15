@@ -21,6 +21,7 @@ criterion_group!(
 	SyncBencher::http_requests,
 	SyncBencher::batched_http_requests,
 	SyncBencher::websocket_requests,
+	// TODO: https://github.com/paritytech/jsonrpsee/issues/528
 	// SyncBencher::batched_ws_requests,
 );
 criterion_group!(
@@ -28,6 +29,7 @@ criterion_group!(
 	AsyncBencher::http_requests,
 	AsyncBencher::batched_http_requests,
 	AsyncBencher::websocket_requests,
+	// TODO: https://github.com/paritytech/jsonrpsee/issues/528
 	// AsyncBencher::batched_ws_requests
 );
 criterion_group!(subscriptions, AsyncBencher::subscriptions);
