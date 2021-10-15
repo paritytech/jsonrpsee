@@ -278,12 +278,12 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 				 match &mode {
 					ServerMode::Subscription { subscription_response, .. } => {
 						if let Err(e) = sender.send_text(&subscription_response).await {
-							log::warn!("send response to subscription: {:?}", e);
+							tracing::warn!("send response to subscription: {:?}", e);
 						}
 					},
 					ServerMode::Notification(n) => {
 						if let Err(e) = sender.send_text(&n).await {
-							log::warn!("send notification: {:?}", e);
+							tracing::warn!("send notification: {:?}", e);
 						}
 					},
 					_ => {}
@@ -296,12 +296,12 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 					match &mode {
 						ServerMode::Response(r) => {
 							if let Err(e) = sender.send_text(&r).await {
-								log::warn!("send response to request error: {:?}", e);
+								tracing::warn!("send response to request error: {:?}", e);
 							}
 						},
 						ServerMode::Subscription { subscription_id, .. } => {
 							if let Err(e) = sender.send_text(&subscription_id).await {
-								log::warn!("send subscription id error: {:?}", e);
+								tracing::warn!("send subscription id error: {:?}", e);
 							}
 						},
 						_ => {}
@@ -340,7 +340,7 @@ async fn handler(
 	other_server: String,
 ) -> Result<hyper::Response<Body>, soketto::BoxedError> {
 	if is_upgrade_request(&req) {
-		log::debug!("{:?}", req);
+		tracing::debug!("{:?}", req);
 
 		match req.uri().path() {
 			"/myblock/two" => {

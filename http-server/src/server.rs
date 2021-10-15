@@ -222,7 +222,7 @@ impl Server {
 							Err(GenericTransportError::TooLarge) => return Ok::<_, HyperError>(response::too_large()),
 							Err(GenericTransportError::Malformed) => return Ok::<_, HyperError>(response::malformed()),
 							Err(GenericTransportError::Inner(e)) => {
-								log::error!("Internal error reading request body: {}", e);
+								tracing::error!("Internal error reading request body: {}", e);
 								return Ok::<_, HyperError>(response::internal_error());
 							}
 						};
@@ -281,7 +281,7 @@ impl Server {
 						} else {
 							collect_batch_response(rx).await
 						};
-						log::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
+						tracing::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))

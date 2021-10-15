@@ -161,7 +161,7 @@ impl Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	pub async fn send(&mut self, body: String) -> Result<(), WsError> {
-		log::debug!("send: {}", body);
+		tracing::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
 		Ok(())
@@ -213,7 +213,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		}
 
 		for _ in 0..self.max_redirections {
-			log::debug!("Connecting to target: {:?}", target);
+			tracing::debug!("Connecting to target: {:?}", target);
 
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
@@ -221,7 +221,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, &tls_connector).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						log::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
@@ -237,7 +237,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 				// Perform the initial handshake.
 				match client.handshake().await {
 					Ok(ServerResponse::Accepted { .. }) => {
-						log::info!("Connection established to target: {:?}", target);
+						tracing::info!("Connection established to target: {:?}", target);
 						let mut builder = client.into_builder();
 						builder.set_max_message_size(self.max_request_body_size as usize);
 						let (sender, receiver) = builder.finish();
@@ -245,11 +245,11 @@ impl<'a> WsTransportClientBuilder<'a> {
 					}
 
 					Ok(ServerResponse::Rejected { status_code }) => {
-						log::debug!("Connection rejected: {:?}", status_code);
+						tracing::debug!("Connection rejected: {:?}", status_code);
 						err = Some(Err(WsHandshakeError::Rejected { status_code }));
 					}
 					Ok(ServerResponse::Redirect { status_code, location }) => {
-						log::debug!("Redirection: status_code: {}, location: {}", status_code, location);
+						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
 						match location.parse::<Uri>() {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
@@ -321,7 +321,7 @@ async fn connect(
 		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
-				log::warn!("set nodelay failed: {:?}", err);
+				tracing::warn!("set nodelay failed: {:?}", err);
 			}
 			match tls_connector {
 				None => Ok(TlsOrPlain::Plain(socket)),

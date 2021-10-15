@@ -33,13 +33,16 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	env_logger::init();
+	// init tracing `FmtSubscriber`.
+	let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
+	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", None).await?;
-	println!("r: {:?}", response);
+	tracing::info!("response: {:?}", response);
 
 	Ok(())
 }

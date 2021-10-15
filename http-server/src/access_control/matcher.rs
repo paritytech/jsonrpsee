@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use globset::{GlobBuilder, GlobMatcher};
-use log::warn;
 use std::{fmt, hash};
+use tracing::warn;
 
 /// Pattern that can be matched to string.
 pub(crate) trait Pattern {
