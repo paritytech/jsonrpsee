@@ -689,10 +689,10 @@ window.BENCHMARK_DATA = {
             "name": "paritytech",
             "username": "paritytech"
           },
-          "id": "20eb409249b943624c0f5909aa7ebbc45a47fb0c",
-          "message": "testme",
+          "id": "2891ca11f7da6be8022a9e165eaa9a90017d3d43",
+          "message": "v0.4.1",
           "timestamp": "2021-10-15T13:13:38Z",
-          "url": "https://github.com/paritytech/jsonrpsee/pull/529/commits/20eb409249b943624c0f5909aa7ebbc45a47fb0c"
+          "url": "https://github.com/paritytech/jsonrpsee/commit/2891ca11f7da6be8022a9e165eaa9a90017d3d43"
         },
         "date": 1634329095677,
         "tool": "cargo",
