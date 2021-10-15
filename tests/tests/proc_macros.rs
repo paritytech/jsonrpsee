@@ -286,17 +286,13 @@ async fn macro_zero_copy_cow() {
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
 }
 
+#[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
 	let module = RpcServerImpl.into_rpc();
 
 	let params = RawValue::from_string("[]".into()).ok();
 
-	// Dry-run to initialize blocking threadpool
-	let futures = iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
-	futures::future::join_all(futures).await;
-
-	// Measured run
 	let futures = iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
 	let now = Instant::now();
 	let results = futures::future::join_all(futures).await;
