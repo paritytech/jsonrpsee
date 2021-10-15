@@ -56,7 +56,7 @@ use std::sync::Arc;
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -169,14 +169,14 @@ impl MethodCallback {
 				let tx = tx.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
-				log::trace!(
+				tracing::trace!(
 					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_id={:?}",
 					params,
 					id,
 					conn_id
 				);
 
-				Some((callback)(id, params, tx, conn_id, claimed))
+				Some((callback)(id, params, tx, claimed))
 			}
 		}
 	}
@@ -284,7 +284,7 @@ impl Methods {
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(&self, tx: &MethodSink, req: Request, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
-		log::trace!("[Methods::execute] Executing request: {:?}", req);
+		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id, None),
 			None => {
@@ -302,12 +302,12 @@ impl Methods {
 		conn_id: ConnectionId,
 		resources: &Resources,
 	) -> Option<BoxFuture<'static, ()>> {
-		log::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
+		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => match callback.claim(&req.method, resources) {
 				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard)),
 				Err(err) => {
-					log::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
 					send_error(req.id, tx, ErrorCode::ServerIsBusy.into());
 					None
 				}
@@ -350,7 +350,7 @@ impl Methods {
 	/// [`SubscriptionId`] and a channel on which subscription JSON payloads can be received.
 	pub async fn test_subscription(&self, method: &str, params: impl ToRpcParams) -> TestSubscription {
 		let params = params.to_rpc_params().expect("valid JSON-RPC params");
-		log::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
+		tracing::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
 		let req =
 			Request { jsonrpc: TwoPointZero, id: Id::Number(0), method: Cow::borrowed(method), params: Some(&params) };
 
@@ -448,7 +448,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, tx, _conn_id, claimed| {
+			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
@@ -460,6 +460,43 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					drop(claimed);
 				};
 				future.boxed()
+			})),
+		)?;
+
+		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
+	}
+
+	/// Register a new **blocking** synchronous RPC method, which computes the response with the given callback.
+	/// Unlike the regular [`register_method`](RpcModule::register_method), this method can block its thread and perform expensive computations.
+	pub fn register_blocking_method<R, F>(
+		&mut self,
+		method_name: &'static str,
+		callback: F,
+	) -> Result<MethodResourcesBuilder, Error>
+	where
+		Context: Send + Sync + 'static,
+		R: Serialize,
+		F: Fn(Params, Arc<Context>) -> Result<R, Error> + Copy + Send + Sync + 'static,
+	{
+		let ctx = self.ctx.clone();
+		let callback = self.methods.verify_and_insert(
+			method_name,
+			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
+				let ctx = ctx.clone();
+
+				tokio::task::spawn_blocking(move || {
+					match callback(params, ctx) {
+						Ok(res) => send_response(id, &tx, res),
+						Err(err) => send_call_error(id, &tx, err),
+					};
+
+					// Release claimed resources
+					drop(claimed);
+				})
+				.map(|err| {
+					log::error!("Join error for blocking RPC method: {:?}", err);
+				})
+				.boxed()
 			})),
 		)?;
 
@@ -534,7 +571,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						is_connected: Some(conn_tx),
 					};
 					if let Err(err) = callback(params, sink, ctx.clone()) {
-						log::error!(
+						tracing::error!(
 							"subscribe call '{}' failed: {:?}, request id={:?}",
 							subscribe_method_name,
 							err,
@@ -553,7 +590,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let sub_id = match params.one() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
-							log::error!(
+							tracing::error!(
 								"unsubscribe call '{}' failed: couldn't parse subscription id, request id={:?}",
 								unsubscribe_method_name,
 								id
@@ -865,7 +902,7 @@ mod tests {
 			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
 				let mut stream_data = vec!['0', '1', '2'];
 				std::thread::spawn(move || loop {
-					log::debug!("This is your friendly subscription sending data.");
+					tracing::debug!("This is your friendly subscription sending data.");
 					if let Some(letter) = stream_data.pop() {
 						if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
 							return;

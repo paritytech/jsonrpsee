@@ -32,7 +32,6 @@ use rpc_macro::RpcDescription;
 
 mod attributes;
 mod helpers;
-mod lifetimes;
 mod render_client;
 mod render_server;
 mod rpc_macro;
@@ -163,6 +162,8 @@ pub(crate) mod visitor;
 /// **Arguments:**
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
+/// - `aliases`: list of name aliases for the RPC method as a comma separated string.
+/// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
 ///
 /// **Method requirements:**
 ///
@@ -214,6 +215,9 @@ pub(crate) mod visitor;
 ///         #[method(name = "bar")]
 ///         fn sync_method(&self) -> RpcResult<u16>;
 ///
+///         #[method(name = "baz", blocking)]
+///         fn blocking_method(&self) -> RpcResult<u16>;
+///
 ///         #[subscription(name = "sub", item = String)]
 ///         fn sub(&self) -> RpcResult<()>;
 ///     }
@@ -226,11 +230,18 @@ pub(crate) mod visitor;
 ///     #[async_trait]
 ///     impl MyRpcServer for RpcServerImpl {
 ///         async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
-///             Ok(42u16)
+///             Ok(42)
 ///         }
 ///
 ///         fn sync_method(&self) -> RpcResult<u16> {
-///             Ok(10u16)
+///             Ok(10)
+///         }
+///
+///         fn blocking_method(&self) -> RpcResult<u16> {
+///             // This will block current thread for 1 second, which is fine since we marked
+///             // this method as `blocking` above.
+///             std::thread::sleep(std::time::Duration::from_millis(1000));
+///             Ok(11)
 ///         }
 ///
 ///         // We could've spawned a `tokio` future that yields values while our program works,

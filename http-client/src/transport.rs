@@ -39,7 +39,7 @@ impl HttpTransportClient {
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
-		log::debug!("send: {}", body);
+		tracing::debug!("send: {}", body);
 
 		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);

@@ -63,7 +63,7 @@ async fn server_with_handles() -> (SocketAddr, StopHandle) {
 	let mut module = RpcModule::new(());
 	module
 		.register_method("say_hello", |_, _| {
-			log::debug!("server respond to hello");
+			tracing::debug!("server respond to hello");
 			Ok("hello")
 		})
 		.unwrap();
@@ -77,7 +77,7 @@ async fn server_with_handles() -> (SocketAddr, StopHandle) {
 	module
 		.register_async_method("say_hello_async", |_, _| {
 			async move {
-				log::debug!("server respond to hello");
+				tracing::debug!("server respond to hello");
 				// Call some async function inside.
 				futures_util::future::ready(()).await;
 				Ok("hello")

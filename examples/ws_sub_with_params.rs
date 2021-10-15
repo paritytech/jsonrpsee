@@ -34,7 +34,10 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	env_logger::init();
+	// init tracing `FmtSubscriber`.
+	let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
+	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
@@ -43,12 +46,12 @@ async fn main() -> anyhow::Result<()> {
 	// Subscription with a single parameter
 	let mut sub_params_one =
 		client.subscribe::<Option<char>>("sub_one_param", rpc_params![3], "unsub_one_param").await?;
-	println!("subscription with one param: {:?}", sub_params_one.next().await);
+	tracing::info!("subscription with one param: {:?}", sub_params_one.next().await);
 
 	// Subscription with multiple parameters
 	let mut sub_params_two =
 		client.subscribe::<String>("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
-	println!("subscription with two params: {:?}", sub_params_two.next().await);
+	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
 }
