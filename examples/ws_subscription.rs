@@ -36,19 +36,19 @@ use std::net::SocketAddr;
 async fn main() -> anyhow::Result<()> {
 	const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 	env_logger::init();
-	// let addr = run_server().await?;
-	let url = format!("ws://{}", "127.0.0.1:3030");
+	let addr = run_server().await?;
+	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let mut subscribe_hello: Subscription<String> =
 		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 
-	let r = subscribe_hello.next().await;
-	println!("received {:?}", r);
-
-	drop(subscribe_hello);
-
-	tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+	let mut i = 0;
+	while i <= NUM_SUBSCRIPTION_RESPONSES {
+		let r = subscribe_hello.next().await;
+		println!("received {:?}", r);
+		i += 1;
+	}
 
 	Ok(())
 }
