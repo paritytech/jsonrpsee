@@ -206,7 +206,7 @@ jobs:
         with:
           command: test
 
-  bench_v0.3:
+  bench-v0.3:
     name: Bench v0.3
     runs-on: ubuntu-latest
     steps:
@@ -242,7 +242,7 @@ jobs:
           comment-on-alert: true
           auto-push: true
 
-  bench_v0.2:
+  bench-v0.2:
     name: Bench v0.2
     runs-on: ubuntu-latest
     steps:
