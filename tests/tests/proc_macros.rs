@@ -28,7 +28,6 @@
 
 use std::iter;
 use std::net::SocketAddr;
-use std::time::{Duration, Instant};
 
 use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
 use serde_json::value::RawValue;
@@ -290,6 +289,8 @@ async fn macro_zero_copy_cow() {
 #[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
+	use std::time::{Duration, Instant};
+
 	let module = RpcServerImpl.into_rpc();
 
 	let params = RawValue::from_string("[]".into()).ok();
