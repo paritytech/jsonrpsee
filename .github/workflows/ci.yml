@@ -220,8 +220,8 @@ jobs:
           toolchain: nightly
           override: true
 
-      - name:                      Rust Cache
-        uses:                      Swatinem/rust-cache@v1.3.0
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
 
       - name: Run benchmark jsonrpsee
         with:
