@@ -212,6 +212,8 @@ jobs:
 
       - name: Checkout Sources
         uses: actions/checkout@v2.3.4
+        with:
+          ref: "v0.3.x"
 
       - name: Install Rust nightly toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -224,8 +226,6 @@ jobs:
         uses: Swatinem/rust-cache@v1.3.0
 
       - name: Run benchmark jsonrpsee
-        with:
-          ref: "v0.3.x"
         run: cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
 
       - name: Store benchmark jsonrpsee
