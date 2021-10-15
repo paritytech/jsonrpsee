@@ -56,7 +56,7 @@ use std::sync::Arc;
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -176,7 +176,7 @@ impl MethodCallback {
 					conn_id
 				);
 
-				Some((callback)(id, params, tx, conn_id, claimed))
+				Some((callback)(id, params, tx, claimed))
 			}
 		}
 	}
@@ -448,7 +448,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, tx, _conn_id, claimed| {
+			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
@@ -460,6 +460,43 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					drop(claimed);
 				};
 				future.boxed()
+			})),
+		)?;
+
+		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
+	}
+
+	/// Register a new **blocking** synchronous RPC method, which computes the response with the given callback.
+	/// Unlike the regular [`register_method`](RpcModule::register_method), this method can block its thread and perform expensive computations.
+	pub fn register_blocking_method<R, F>(
+		&mut self,
+		method_name: &'static str,
+		callback: F,
+	) -> Result<MethodResourcesBuilder, Error>
+	where
+		Context: Send + Sync + 'static,
+		R: Serialize,
+		F: Fn(Params, Arc<Context>) -> Result<R, Error> + Copy + Send + Sync + 'static,
+	{
+		let ctx = self.ctx.clone();
+		let callback = self.methods.verify_and_insert(
+			method_name,
+			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
+				let ctx = ctx.clone();
+
+				tokio::task::spawn_blocking(move || {
+					match callback(params, ctx) {
+						Ok(res) => send_response(id, &tx, res),
+						Err(err) => send_call_error(id, &tx, err),
+					};
+
+					// Release claimed resources
+					drop(claimed);
+				})
+				.map(|err| {
+					log::error!("Join error for blocking RPC method: {:?}", err);
+				})
+				.boxed()
 			})),
 		)?;
 

@@ -26,6 +26,7 @@
 
 //! Example of using proc macro to generate working client and server.
 
+use std::iter;
 use std::net::SocketAddr;
 
 use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
@@ -76,6 +77,12 @@ mod rpc_impl {
 		#[method(name = "zero_copy_cow")]
 		fn zero_copy_cow(&self, a: std::borrow::Cow<'_, str>, b: beef::Cow<'_, str>) -> RpcResult<String> {
 			Ok(format!("Zero copy params: {}, {}", matches!(a, std::borrow::Cow::Borrowed(_)), b.is_borrowed()))
+		}
+
+		#[method(name = "blocking_call", blocking)]
+		fn blocking_call(&self) -> RpcResult<u32> {
+			std::thread::sleep(std::time::Duration::from_millis(50));
+			Ok(42)
 		}
 	}
 
@@ -276,4 +283,28 @@ async fn macro_zero_copy_cow() {
 	let result = module.call("foo_zero_copy_cow", params).await.unwrap();
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
+}
+
+// Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.
+#[cfg(not(target_os = "macos"))]
+#[tokio::test]
+async fn multiple_blocking_calls_overlap() {
+	use std::time::{Duration, Instant};
+
+	let module = RpcServerImpl.into_rpc();
+
+	let params = RawValue::from_string("[]".into()).ok();
+
+	let futures = iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
+	let now = Instant::now();
+	let results = futures::future::join_all(futures).await;
+	let elapsed = now.elapsed();
+
+	for result in results {
+		let result = serde_json::from_str::<serde_json::Value>(&result.unwrap()).unwrap();
+		assert_eq!(result["result"], 42);
+	}
+
+	// Each request takes 50ms, added 10ms margin for scheduling
+	assert!(elapsed < Duration::from_millis(60), "Expected less than 60ms, got {:?}", elapsed);
 }
