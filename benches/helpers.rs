@@ -89,7 +89,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 /// Run jsonrpsee WebSocket server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
 pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws_server::WsStopHandle) {
-	use jsonrpsee::ws_server::{WsServerBuilder, RpcModule};
+	use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 	let server = WsServerBuilder::default()
 		.max_request_body_size(u32::MAX)
