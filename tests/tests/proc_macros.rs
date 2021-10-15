@@ -250,12 +250,10 @@ async fn macro_optional_param_parsing() {
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, None, Some(70)","id":0}"#);
 
-	// TODO: https://github.com/paritytech/jsonrpsee/issues/445
 	// Named params using a map
 	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
 	let result = module.call("foo_optional_params", params).await.unwrap();
-	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params. Expected one of '[', ']' or ',' but found \"{\\\"a\\\": 22, \\\"c\\\": 50}\""},"id":0}"#;
-	assert_eq!(result, expected);
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
 }
 
 #[tokio::test]
