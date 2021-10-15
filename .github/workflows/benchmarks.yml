@@ -31,6 +31,7 @@ jobs:
         with:
           tool: 'cargo'
           output-file-path: output.txt
+          benchmark-data-dir-path: "bench/dev"
           fail-on-alert: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
           comment-on-alert: true

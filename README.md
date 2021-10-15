@@ -48,4 +48,6 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 
 ## Benchmarks
 
-Daily benchmarks are published at https://paritytech.github.io/jsonrpsee/dev/bench/
+- Daily benchmarks are published at https://paritytech.github.io/jsonrpsee/bench/dev/
+- Benchmarks per release is published at https://paritytech.github.io/jsonrpsee/bench/release/
+- Benchmarks compared to [jsonrpc crate](https://github.com/paritytech/jsonrpc/) are published at https://paritytech.github.io/jsonrpsee/bench/jsonrpc/ (jsonrpsee is the left column)

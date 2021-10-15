@@ -152,7 +152,7 @@ impl MethodCallback {
 
 		match &self.callback {
 			MethodKind::Sync(callback) => {
-				log::trace!(
+				tracing::trace!(
 					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
 					params,
 					id,
