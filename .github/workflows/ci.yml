@@ -205,3 +205,40 @@ jobs:
         uses: actions-rs/cargo@v1.0.3
         with:
           command: test
+
+  bench:
+    name: Test bench
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout Sources
+        uses: actions/checkout@v2.3.4
+        with: 
+          ref: v0.3.x
+
+      - name: Install Rust nightly toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+      - name: Run benchmark
+        run: |
+          git --no-pager log -n 1
+          cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
+
+      - name: Store benchmark result
+        uses: rhysd/github-action-benchmark@v1
+        with:
+          tool: 'cargo'
+          benchmark-data-dir-path: 'dev/v0.3'
+          output-file-path: output.txt
+          fail-on-alert: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-alert: true
+          auto-push: true
+
