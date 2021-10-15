@@ -321,18 +321,13 @@ impl RpcDescription {
 
 		// Code to decode sequence of parameters from a JSON object (aka map).
 		let decode_map = {
-			let generics = (0..params.len())
-				.map(|n| quote::format_ident!("G{}", n));
+			let generics = (0..params.len()).map(|n| quote::format_ident!("G{}", n));
 
 			let serde = self.jrps_server_item(quote! { types::__reexports::serde });
 			let serde_crate = serde.to_string();
-			let fields = params
-				.iter()
-				.zip(generics.clone())
-				.map(|((name, _), ty)| {
-					quote! { #name: #ty, }
-				})
-				.collect::<Vec<_>>();
+			let fields = params.iter().zip(generics.clone()).map(|((name, _), ty)| {
+				quote! { #name: #ty, }
+			});
 			let destruct = params.iter().map(|(name, _)| quote! { parsed.#name });
 			let types = params.iter().map(|(_, ty)| ty);
 
