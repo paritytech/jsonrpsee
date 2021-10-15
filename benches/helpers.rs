@@ -1,11 +1,10 @@
-use std::sync::atomic::AtomicU64;
-
 pub(crate) const SYNC_METHOD_NAME: &str = "say_hello";
 pub(crate) const ASYNC_METHOD_NAME: &str = "say_hello_async";
 pub(crate) const SUB_METHOD_NAME: &str = "sub";
 pub(crate) const UNSUB_METHOD_NAME: &str = "unsub";
 
 /// Run jsonrpc HTTP server for benchmarks.
+#[cfg(feature = "jsonrpc-crate")]
 pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_http_server::Server) {
 	use jsonrpc_http_server::jsonrpc_core::*;
 	use jsonrpc_http_server::*;
@@ -25,11 +24,12 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_htt
 }
 
 /// Run jsonrpc WebSocket server for benchmarks.
+#[cfg(feature = "jsonrpc-crate")]
 pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_server::Server) {
 	use jsonrpc_pubsub::{PubSubHandler, Session, Subscriber, SubscriptionId};
 	use jsonrpc_ws_server::jsonrpc_core::*;
 	use jsonrpc_ws_server::*;
-	use std::sync::atomic::Ordering;
+	use std::sync::atomic::{AtomicU64, Ordering};
 
 	const ID: AtomicU64 = AtomicU64::new(0);
 
@@ -66,6 +66,50 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 
 	let addr = *server.addr();
 	(format!("ws://{}", addr), server)
+}
+
+/// Run jsonrpsee HTTP server for benchmarks.
+#[cfg(not(feature = "jsonrpc-crate"))]
+pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::http_server::HttpStopHandle) {
+	use jsonrpsee::http_server::{HttpServerBuilder, RpcModule};
+
+	let server = HttpServerBuilder::default()
+		.max_request_body_size(u32::MAX)
+		.custom_tokio_runtime(handle)
+		.build("127.0.0.1:0".parse().unwrap())
+		.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
+	module.register_async_method(ASYNC_METHOD_NAME, |_, _| async { Ok("lo") }).unwrap();
+	let addr = server.local_addr().unwrap();
+	let handle = server.start(module).unwrap();
+	(format!("http://{}", addr), handle)
+}
+
+/// Run jsonrpsee WebSocket server for benchmarks.
+#[cfg(not(feature = "jsonrpc-crate"))]
+pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws_server::WsStopHandle) {
+	use jsonrpsee::ws_server::{WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default()
+		.max_request_body_size(u32::MAX)
+		.custom_tokio_runtime(handle)
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
+	module.register_async_method(ASYNC_METHOD_NAME, |_, _| async { Ok("lo") }).unwrap();
+	module
+		.register_subscription(SUB_METHOD_NAME, UNSUB_METHOD_NAME, |_params, mut sink, _ctx| {
+			let x = "Hello";
+			tokio::spawn(async move { sink.send(&x) });
+			Ok(())
+		})
+		.unwrap();
+	let addr = format!("ws://{}", server.local_addr().unwrap());
+	let handle = server.start(module).unwrap();
+	(addr, handle)
 }
 
 /// Get number of concurrent tasks based on the num_cpus.

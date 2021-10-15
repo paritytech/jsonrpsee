@@ -40,7 +40,8 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", "127.0.0.1:3030");
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let mut subscribe_hello: Subscription<String> = client.subscribe("sub", rpc_params!(), "unsub").await?;
+	let mut subscribe_hello: Subscription<String> =
+		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 
 	let r = subscribe_hello.next().await;
 	println!("received {:?}", r);
@@ -65,6 +66,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		Ok(())
 	})?;
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module));
+	server.start(module)?;
 	Ok(addr)
 }

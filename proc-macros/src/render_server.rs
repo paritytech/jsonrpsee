@@ -26,6 +26,7 @@
 
 use super::lifetimes::replace_lifetimes;
 use super::RpcDescription;
+use crate::attributes::Resource;
 use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
@@ -127,19 +128,40 @@ impl RpcDescription {
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
+				let resources = method.resources.iter().map(|resource| {
+					let Resource { name, value, .. } = resource;
+
+					quote! { .resource(#name, #value)? }
+				});
+				let resources = if method.resources.is_empty() {
+					TokenStream2::new()
+				} else {
+					quote! {
+						.and_then(|resource_builder| {
+							resource_builder #(#resources)*;
+							Ok(())
+						})
+					}
+				};
+
 				if method.signature.sig.asyncness.is_some() {
 					handle_register_result(quote! {
 						rpc.register_async_method(#rpc_method_name, |params, context| async move {
 							#parsing
 							context.as_ref().#rust_method_name(#params_seq).await
 						})
+						#resources
 					})
 				} else {
+					let register_kind =
+						if method.blocking { quote!(register_blocking_method) } else { quote!(register_method) };
+
 					handle_register_result(quote! {
-						rpc.register_method(#rpc_method_name, |params, context| {
+						rpc.#register_kind(#rpc_method_name, |params, context| {
 							#parsing
 							context.#rust_method_name(#params_seq)
 						})
+						#resources
 					})
 				}
 			})

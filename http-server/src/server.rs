@@ -27,7 +27,7 @@
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::future::join_all;
-use futures_util::{lock::Mutex, stream::StreamExt, SinkExt};
+use futures_util::stream::StreamExt;
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
 	service::{make_service_fn, service_fn},
@@ -41,6 +41,7 @@ use jsonrpsee_types::{
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, prepare_error, send_error},
+	resource_limiting::Resources,
 	rpc_module::Methods,
 };
 
@@ -49,15 +50,17 @@ use socket2::{Domain, Socket, Type};
 use std::{
 	cmp,
 	net::{SocketAddr, TcpListener},
-	sync::Arc,
 };
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
 pub struct Builder {
 	access_control: AccessControl,
+	resources: Resources,
 	max_request_body_size: u32,
 	keep_alive: bool,
+	/// Custom tokio runtime to run the server on.
+	tokio_runtime: Option<tokio::runtime::Handle>,
 }
 
 impl Builder {
@@ -81,6 +84,25 @@ impl Builder {
 		self
 	}
 
+	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
+	/// registered resources on this server instance would exceed 8.
+	///
+	/// See the module documentation for [`resurce_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
+	/// for details.
+	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
+		self.resources.register(label, capacity, default)?;
+
+		Ok(self)
+	}
+
+	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
+	///
+	/// Default: [`tokio::spawn`]
+	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) -> Self {
+		self.tokio_runtime = Some(rt);
+		self
+	}
+
 	/// Finalizes the configuration of the server.
 	pub fn build(self, addr: SocketAddr) -> Result<Server, Error> {
 		let domain = Domain::for_address(addr);
@@ -98,40 +120,44 @@ impl Builder {
 
 		let listener = hyper::Server::from_tcp(listener)?;
 
-		let stop_pair = mpsc::channel(1);
 		Ok(Server {
 			listener,
 			local_addr,
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
-			stop_pair,
-			stop_handle: Arc::new(Mutex::new(())),
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
 		})
 	}
 }
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { max_request_body_size: TEN_MB_SIZE_BYTES, access_control: AccessControl::default(), keep_alive: true }
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			resources: Resources::default(),
+			access_control: AccessControl::default(),
+			keep_alive: true,
+			tokio_runtime: None,
+		}
 	}
 }
 
 /// Handle used to stop the running server.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StopHandle {
 	stop_sender: mpsc::Sender<()>,
-	stop_handle: Arc<Mutex<()>>,
+	stop_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl StopHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
-	pub async fn stop(&mut self) -> Result<(), Error> {
-		self.stop_sender.send(()).await.map_err(|_| Error::AlreadyStopped)
-	}
-
-	/// Blocks indefinitely until the server is stopped.
-	pub async fn wait_for_stop(&self) {
-		self.stop_handle.lock().await;
+	pub fn stop(mut self) -> Result<tokio::task::JoinHandle<()>, Error> {
+		let stop = self.stop_sender.try_send(()).map(|_| self.stop_handle.take());
+		match stop {
+			Ok(Some(handle)) => Ok(handle),
+			_ => Err(Error::AlreadyStopped),
+		}
 	}
 }
 
@@ -146,10 +172,10 @@ pub struct Server {
 	max_request_body_size: u32,
 	/// Access control
 	access_control: AccessControl,
-	/// Pair of channels to stop the server.
-	stop_pair: (mpsc::Sender<()>, mpsc::Receiver<()>),
-	/// Stop handle that indicates whether server has been stopped.
-	stop_handle: Arc<Mutex<()>>,
+	/// Tracker for currently used resources on the server
+	resources: Resources,
+	/// Custom tokio runtime to run the server on.
+	tokio_runtime: Option<tokio::runtime::Handle>,
 }
 
 impl Server {
@@ -158,30 +184,25 @@ impl Server {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
 	}
 
-	/// Returns the handle to stop the running server.
-	pub fn stop_handle(&self) -> StopHandle {
-		StopHandle { stop_sender: self.stop_pair.0.clone(), stop_handle: self.stop_handle.clone() }
-	}
-
 	/// Start the server.
-	pub async fn start(self, methods: impl Into<Methods>) -> Result<(), Error> {
-		// Lock the stop mutex so existing stop handles can wait for server to stop.
-		// It will be unlocked once this function returns.
-		let _stop_handle = self.stop_handle.lock().await;
-
+	pub fn start(mut self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
-		let mut stop_receiver = self.stop_pair.1;
-		let methods = methods.into();
+		let (tx, mut rx) = mpsc::channel(1);
+		let listener = self.listener;
+		let resources = self.resources;
+		let methods = methods.into().initialize_resources(&resources)?;
 
 		let make_service = make_service_fn(move |_| {
 			let methods = methods.clone();
 			let access_control = access_control.clone();
+			let resources = resources.clone();
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
+					let resources = resources.clone();
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -215,7 +236,7 @@ impl Server {
 						if is_single {
 							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								if let Some(fut) = methods.execute(&tx, req, 0) {
+								if let Some(fut) = methods.execute_with_resources(&tx, req, 0, &resources) {
 									fut.await;
 								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
@@ -228,7 +249,12 @@ impl Server {
 						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							if !batch.is_empty() {
-								join_all(batch.into_iter().filter_map(|req| methods.execute(&tx, req, 0))).await;
+								join_all(
+									batch
+										.into_iter()
+										.filter_map(|req| methods.execute_with_resources(&tx, req, 0, &resources)),
+								)
+								.await;
 							} else {
 								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
 								// Array with at least one value, the response from the Server MUST be a single
@@ -262,13 +288,17 @@ impl Server {
 			}
 		});
 
-		let server = self.listener.serve(make_service);
-		server
-			.with_graceful_shutdown(async move {
-				stop_receiver.next().await;
-			})
-			.await
-			.map_err(Into::into)
+		let rt = match self.tokio_runtime.take() {
+			Some(rt) => rt,
+			None => tokio::runtime::Handle::current(),
+		};
+
+		let handle = rt.spawn(async move {
+			let server = listener.serve(make_service);
+			let _ = server.with_graceful_shutdown(async move { rx.next().await.map_or((), |_| ()) }).await;
+		});
+
+		Ok(StopHandle { stop_handle: Some(handle), stop_sender: tx })
 	}
 }
 

@@ -26,7 +26,7 @@
 
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, RpcModule},
+	http_server::{HttpServerBuilder, HttpStopHandle, RpcModule},
 	rpc_params,
 	types::traits::Client,
 };
@@ -36,7 +36,7 @@ use std::net::SocketAddr;
 async fn main() -> anyhow::Result<()> {
 	env_logger::init();
 
-	let server_addr = run_server().await?;
+	let (server_addr, _handle) = run_server().await?;
 	let url = format!("http://{}", server_addr);
 
 	let client = HttpClientBuilder::default().build(url)?;
@@ -47,12 +47,12 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
+async fn run_server() -> anyhow::Result<(SocketAddr, HttpStopHandle)> {
 	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module));
-	Ok(addr)
+	let stop_handle = server.start(module)?;
+	Ok((addr, stop_handle))
 }
