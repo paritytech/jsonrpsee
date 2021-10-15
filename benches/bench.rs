@@ -21,17 +21,17 @@ criterion_group!(
 	SyncBencher::http_requests,
 	SyncBencher::batched_http_requests,
 	SyncBencher::websocket_requests,
-	SyncBencher::batched_ws_requests,
+	// SyncBencher::batched_ws_requests,
 );
 criterion_group!(
 	async_benches,
 	AsyncBencher::http_requests,
 	AsyncBencher::batched_http_requests,
 	AsyncBencher::websocket_requests,
-	AsyncBencher::batched_ws_requests
+	// AsyncBencher::batched_ws_requests
 );
 criterion_group!(subscriptions, AsyncBencher::subscriptions);
-criterion_main!(/*types_benches, sync_benches, */async_benches, subscriptions);
+criterion_main!(types_benches, sync_benches, async_benches, subscriptions);
 
 #[derive(Debug, Clone, Copy)]
 enum RequestType {
