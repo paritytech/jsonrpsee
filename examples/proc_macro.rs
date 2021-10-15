@@ -72,7 +72,9 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	env_logger::init();
+	// init tracing `FmtSubscriber`.
+	let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
+	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
 	let (server_addr, _handle) = run_server().await?;
 	let url = format!("ws://{}", server_addr);

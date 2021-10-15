@@ -32,7 +32,6 @@ use rpc_macro::RpcDescription;
 
 mod attributes;
 mod helpers;
-mod lifetimes;
 mod render_client;
 mod render_server;
 mod rpc_macro;

@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use super::lifetimes::replace_lifetimes;
 use super::RpcDescription;
 use crate::attributes::Resource;
 use crate::helpers::{generate_where_clause, is_option};
@@ -295,7 +294,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return Err(e.into())
 							}
 						};
@@ -305,7 +304,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								log::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return Err(e.into())
 							}
 						};
@@ -316,56 +315,41 @@ impl RpcDescription {
 			quote! {
 				let mut seq = params.sequence();
 				#(#decode_fields);*
+				(#params_fields)
 			}
 		};
 
 		// Code to decode sequence of parameters from a JSON object (aka map).
-		let _decode_map = {
-			let mut generics = None;
+		let decode_map = {
+			let generics = (0..params.len()).map(|n| quote::format_ident!("G{}", n));
 
 			let serde = self.jrps_server_item(quote! { types::__reexports::serde });
 			let serde_crate = serde.to_string();
-			let fields = params
-				.iter()
-				.map(|(name, ty)| {
-					let mut ty = ty.clone();
-
-					if replace_lifetimes(&mut ty) {
-						generics = Some(());
-						quote! {
-							#[serde(borrow)]
-							#name: #ty,
-						}
-					} else {
-						quote! { #name: #ty, }
-					}
-				})
-				.collect::<Vec<_>>();
+			let fields = params.iter().zip(generics.clone()).map(|((name, _), ty)| {
+				quote! { #name: #ty, }
+			});
 			let destruct = params.iter().map(|(name, _)| quote! { parsed.#name });
-			let generics = generics.map(|()| quote! { <'a> });
+			let types = params.iter().map(|(_, ty)| ty);
 
 			quote! {
 				#[derive(#serde::Deserialize)]
 				#[serde(crate = #serde_crate)]
-				struct ParamsObject#generics {
+				struct ParamsObject<#(#generics,)*> {
 					#(#fields)*
 				}
 
-				let parsed: ParamsObject = params.parse()?;
+				let parsed: ParamsObject<#(#types,)*> = params.parse()?;
 
 				(#(#destruct),*)
 			}
 		};
 
-		// Parsing of `serde_json::Value`.
 		let parsing = quote! {
-			// TODO: https://github.com/paritytech/jsonrpsee/issues/445
-			/*let (#params_fields) = if params.is_object() {
+			let (#params_fields) = if params.is_object() {
 				#decode_map
 			} else {
 				#decode_array
-			};*/
-			#decode_array;
+			};
 		};
 
 		(parsing, params_fields)

@@ -14,7 +14,7 @@ futures-channel = { version = "0.3.14", default-features = false, optional = tru
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
 jsonrpsee-types = { path = "../types", version = "0.4.1", optional = true }
-log = { version = "0.4", optional = true }
+tracing = { version = "0.1", optional = true }
 rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
@@ -33,7 +33,7 @@ server = [
 	"rustc-hash",
 	"serde",
 	"serde_json",
-	"log",
+	"tracing",
 	"parking_lot",
 	"rand",
 	"tokio",

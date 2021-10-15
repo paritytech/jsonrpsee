@@ -34,7 +34,9 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	env_logger::init();
+	// init tracing `FmtSubscriber`.
+	let subscriber = tracing_subscriber::FmtSubscriber::new();
+	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
 	let (server_addr, _handle) = run_server().await?;
 	let url = format!("http://{}", server_addr);
@@ -42,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
 	let client = HttpClientBuilder::default().build(url)?;
 	let params = rpc_params!(1_u64, 2, 3);
 	let response: Result<String, _> = client.request("say_hello", params).await;
-	println!("r: {:?}", response);
+	tracing::info!("r: {:?}", response);
 
 	Ok(())
 }
