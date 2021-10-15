@@ -94,12 +94,12 @@ impl Server {
 			match connections.select_with(&mut incoming).await {
 				Ok((socket, _addr)) => {
 					if let Err(e) = socket.set_nodelay(true) {
-						log::error!("Could not set NODELAY on socket: {:?}", e);
+						tracing::error!("Could not set NODELAY on socket: {:?}", e);
 						continue;
 					}
 
 					if connections.count() >= self.cfg.max_connections as usize {
-						log::warn!("Too many connections. Try again in a while.");
+						tracing::warn!("Too many connections. Try again in a while.");
 						connections.add(Box::pin(handshake(socket, HandshakeResponse::Reject { status_code: 429 })));
 						continue;
 					}
@@ -121,7 +121,7 @@ impl Server {
 					id = id.wrapping_add(1);
 				}
 				Err(IncomingError::Io(err)) => {
-					log::error!("Error while awaiting a new connection: {:?}", err);
+					tracing::error!("Error while awaiting a new connection: {:?}", err);
 				}
 				Err(IncomingError::Shutdown) => break,
 			}
@@ -251,7 +251,7 @@ async fn background_task(
 		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
-					log::debug!("send: {}", response);
+					tracing::debug!("send: {}", response);
 					let _ = sender.send_text(response).await;
 					let _ = sender.flush().await;
 				}
@@ -272,13 +272,13 @@ async fn background_task(
 		data.clear();
 
 		if let Err(e) = method_executors.select_with(receiver.receive_data(&mut data)).await {
-			log::error!("Could not receive WS data: {:?}; closing connection", e);
+			tracing::error!("Could not receive WS data: {:?}; closing connection", e);
 			tx.close_channel();
 			return Err(e.into());
 		}
 
 		if data.len() > max_request_body_size as usize {
-			log::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
+			tracing::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
 			send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
 			continue;
 		}
@@ -286,7 +286,7 @@ async fn background_task(
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					log::debug!("recv: {:?}", req);
+					tracing::debug!("recv: {:?}", req);
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
 						method_executors.add(fut);
 					}
@@ -315,7 +315,7 @@ async fn background_task(
 						rx_batch.close();
 						let results = collect_batch_response(rx_batch).await;
 						if let Err(err) = tx.unbounded_send(results) {
-							log::error!("Error sending batch response to the client: {:?}", err)
+							tracing::error!("Error sending batch response to the client: {:?}", err)
 						}
 					} else {
 						send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
@@ -346,7 +346,7 @@ impl AllowedValue {
 		if let (AllowedValue::OneOf(list), Some(value)) = (self, value) {
 			if !list.iter().any(|o| o.as_bytes() == value) {
 				let error = format!("{} denied: {}", header, String::from_utf8_lossy(value));
-				log::warn!("{}", error);
+				tracing::warn!("{}", error);
 				return Err(Error::Request(error));
 			}
 		}

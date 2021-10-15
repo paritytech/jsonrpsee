@@ -39,14 +39,14 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize) {
 	let json = match serde_json::to_string(&Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
 		Ok(json) => json,
 		Err(err) => {
-			log::error!("Error serializing response: {:?}", err);
+			tracing::error!("Error serializing response: {:?}", err);
 
 			return send_error(id, tx, ErrorCode::InternalError.into());
 		}
 	};
 
 	if let Err(err) = tx.unbounded_send(json) {
-		log::error!("Error sending response to the client: {:?}", err)
+		tracing::error!("Error sending response to the client: {:?}", err)
 	}
 }
 
@@ -55,14 +55,14 @@ pub fn send_error(id: Id, tx: &MethodSink, error: ErrorObject) {
 	let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
 		Ok(json) => json,
 		Err(err) => {
-			log::error!("Error serializing error message: {:?}", err);
+			tracing::error!("Error serializing error message: {:?}", err);
 
 			return;
 		}
 	};
 
 	if let Err(err) = tx.unbounded_send(json) {
-		log::error!("Could not send error response to the client: {:?}", err)
+		tracing::error!("Could not send error response to the client: {:?}", err)
 	}
 }
 

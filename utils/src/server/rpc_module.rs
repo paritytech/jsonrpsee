@@ -152,7 +152,7 @@ impl MethodCallback {
 
 		match &self.callback {
 			MethodKind::Sync(callback) => {
-				log::trace!(
+				tracing::trace!(
 					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
 					params,
 					id,
@@ -169,7 +169,7 @@ impl MethodCallback {
 				let tx = tx.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
-				log::trace!(
+				tracing::trace!(
 					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_id={:?}",
 					params,
 					id,
@@ -284,7 +284,7 @@ impl Methods {
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(&self, tx: &MethodSink, req: Request, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
-		log::trace!("[Methods::execute] Executing request: {:?}", req);
+		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id, None),
 			None => {
@@ -302,12 +302,12 @@ impl Methods {
 		conn_id: ConnectionId,
 		resources: &Resources,
 	) -> Option<BoxFuture<'static, ()>> {
-		log::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
+		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => match callback.claim(&req.method, resources) {
 				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard)),
 				Err(err) => {
-					log::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
 					send_error(req.id, tx, ErrorCode::ServerIsBusy.into());
 					None
 				}
@@ -350,7 +350,7 @@ impl Methods {
 	/// [`SubscriptionId`] and a channel on which subscription JSON payloads can be received.
 	pub async fn test_subscription(&self, method: &str, params: impl ToRpcParams) -> TestSubscription {
 		let params = params.to_rpc_params().expect("valid JSON-RPC params");
-		log::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
+		tracing::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
 		let req =
 			Request { jsonrpc: TwoPointZero, id: Id::Number(0), method: Cow::borrowed(method), params: Some(&params) };
 
@@ -534,7 +534,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						is_connected: Some(conn_tx),
 					};
 					if let Err(err) = callback(params, sink, ctx.clone()) {
-						log::error!(
+						tracing::error!(
 							"subscribe call '{}' failed: {:?}, request id={:?}",
 							subscribe_method_name,
 							err,
@@ -553,7 +553,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let sub_id = match params.one() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
-							log::error!(
+							tracing::error!(
 								"unsubscribe call '{}' failed: couldn't parse subscription id, request id={:?}",
 								unsubscribe_method_name,
 								id
@@ -865,7 +865,7 @@ mod tests {
 			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
 				let mut stream_data = vec!['0', '1', '2'];
 				std::thread::spawn(move || loop {
-					log::debug!("This is your friendly subscription sending data.");
+					tracing::debug!("This is your friendly subscription sending data.");
 					if let Some(letter) = stream_data.pop() {
 						if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
 							return;
