@@ -224,27 +224,17 @@ jobs:
         uses:                      Swatinem/rust-cache@v1.3.0
 
       - name: Run benchmark jsonrpsee
+        with:
+          ref: "v0.3.x"
         run: cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
 
       - name: Store benchmark jsonrpsee
         uses: rhysd/github-action-benchmark@v1
         with:
           tool: 'cargo'
+          benchmark-data-dir-path: "dev/v0.3"
           output-file-path: output.txt
           fail-on-alert: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
-          gh-pages-branch: "gh-pages-v0.3"
-      
-      - name: Run benchmark jsonrpc
-        run: cargo bench --features jsonrpc-crate -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
-
-      - name: Store benchmark jsonrpc
-        uses: rhysd/github-action-benchmark@v1
-        with:
-          tool: 'cargo'
-          output-file-path: output.txt
-          fail-on-alert: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
-          gh-pages-branch: "gh-pages-v0.3"
+          gh-pages-branch: "gh-pages"
