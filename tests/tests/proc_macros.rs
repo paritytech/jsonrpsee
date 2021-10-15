@@ -286,6 +286,7 @@ async fn macro_zero_copy_cow() {
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
 }
 
+// Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.
 #[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
