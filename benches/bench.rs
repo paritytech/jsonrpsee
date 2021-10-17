@@ -20,13 +20,17 @@ criterion_group!(
 	sync_benches,
 	SyncBencher::http_requests,
 	SyncBencher::batched_http_requests,
-	SyncBencher::websocket_requests
+	SyncBencher::websocket_requests,
+	// TODO: https://github.com/paritytech/jsonrpsee/issues/528
+	// SyncBencher::batched_ws_requests,
 );
 criterion_group!(
 	async_benches,
 	AsyncBencher::http_requests,
 	AsyncBencher::batched_http_requests,
-	AsyncBencher::websocket_requests
+	AsyncBencher::websocket_requests,
+	// TODO: https://github.com/paritytech/jsonrpsee/issues/528
+	// AsyncBencher::batched_ws_requests
 );
 criterion_group!(subscriptions, AsyncBencher::subscriptions);
 criterion_main!(types_benches, sync_benches, async_benches, subscriptions);
@@ -82,7 +86,7 @@ trait RequestBencher {
 
 	fn http_requests(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
-		let (url, _handle) = rt.block_on(helpers::http_server());
+		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
 		let client = Arc::new(HttpClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url).unwrap());
 		run_round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		run_concurrent_round_trip(&rt, crit, client, "http_concurrent_round_trip", Self::REQUEST_TYPE);
@@ -91,14 +95,14 @@ trait RequestBencher {
 
 	fn batched_http_requests(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
-		let (url, _handle) = rt.block_on(helpers::http_server());
+		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
 		let client = Arc::new(HttpClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url).unwrap());
 		run_round_trip_with_batch(&rt, crit, client, "http batch requests", Self::REQUEST_TYPE);
 	}
 
 	fn websocket_requests(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
-		let url = rt.block_on(helpers::ws_server());
+		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
 		let client =
 			Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 		run_round_trip(&rt, crit, client.clone(), "ws_round_trip", Self::REQUEST_TYPE);
@@ -108,7 +112,7 @@ trait RequestBencher {
 
 	fn batched_ws_requests(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
-		let url = rt.block_on(helpers::ws_server());
+		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
 		let client =
 			Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 		run_round_trip_with_batch(&rt, crit, client, "ws batch requests", Self::REQUEST_TYPE);
@@ -116,7 +120,7 @@ trait RequestBencher {
 
 	fn subscriptions(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
-		let url = rt.block_on(helpers::ws_server());
+		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
 		let client =
 			Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 		run_sub_round_trip(&rt, crit, client, "subscriptions");

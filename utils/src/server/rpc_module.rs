@@ -494,7 +494,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					drop(claimed);
 				})
 				.map(|err| {
-					log::error!("Join error for blocking RPC method: {:?}", err);
+					tracing::error!("Join error for blocking RPC method: {:?}", err);
 				})
 				.boxed()
 			})),
