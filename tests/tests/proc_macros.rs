@@ -26,7 +26,6 @@
 
 //! Example of using proc macro to generate working client and server.
 
-use std::iter;
 use std::net::SocketAddr;
 
 use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
@@ -293,7 +292,7 @@ async fn multiple_blocking_calls_overlap() {
 
 	let params = RawValue::from_string("[]".into()).ok();
 
-	let futures = iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
+	let futures = std::iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
 	let now = Instant::now();
 	let results = futures::future::join_all(futures).await;
 	let elapsed = now.elapsed();
