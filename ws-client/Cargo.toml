@@ -11,7 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 tokio = { version = "1", features = ["net", "time", "rt-multi-thread", "macros"] }
-tokio-rustls = "0.22"
+tokio-rustls = "0.23"
 tokio-util = { version = "0.6", features = ["compat"] }
 
 arrayvec = "0.7.1"
