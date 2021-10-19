@@ -60,13 +60,15 @@ fmt:
   stage:                           lint
   <<:                              *kubernetes-env
   script:
+    - rustup component add rustfmt
     - cargo fmt --all -- --check
 
 clippy:
   stage:                           lint
   <<:                              *docker-env
   script:
-    - cargo +nightly clippy --all --verbose
+    - rustup component add clippy
+    - cargo clippy --all --verbose
     - RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
 
 #### stage:                       test
