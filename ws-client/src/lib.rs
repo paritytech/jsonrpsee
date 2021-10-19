@@ -48,5 +48,5 @@ pub mod transport;
 #[cfg(test)]
 mod tests;
 
-pub use client::{WsClient, WsClientBuilder};
+pub use client::{Header, WsClient, WsClientBuilder};
 pub use jsonrpsee_types as types;
