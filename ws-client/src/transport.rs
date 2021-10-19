@@ -41,12 +41,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio_rustls::{
-	client::TlsStream,
-	rustls::ClientConfig,
-	webpki::{DNSNameRef, InvalidDNSNameError},
-	TlsConnector,
-};
+use tokio_rustls::{client::TlsStream, rustls, webpki::InvalidDnsNameError, TlsConnector};
 
 type TlsOrPlain = EitherStream<TcpStream, TlsStream<TcpStream>>;
 
@@ -123,7 +118,7 @@ pub enum WsHandshakeError {
 
 	/// Invalid DNS name error for TLS
 	#[error("Invalid DNS name: {0}")]
-	InvalidDnsName(#[source] InvalidDNSNameError),
+	InvalidDnsName(#[source] InvalidDnsNameError),
 
 	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {status_code}")]
@@ -187,12 +182,17 @@ impl<'a> WsTransportClientBuilder<'a> {
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let connector = match self.target.mode {
 			Mode::Tls => {
-				let mut client_config = ClientConfig::default();
-				if let CertificateStore::Native = self.certificate_store {
-					client_config.root_store = rustls_native_certs::load_native_certs()
-						.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
-				}
-				Some(Arc::new(client_config).into())
+				let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
+				root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+					rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+						ta.subject,
+						ta.spki,
+						ta.name_constraints,
+					)
+				}));
+
+				let tls_connector = build_tls_config(&self.certificate_store)?;
+				Some(tls_connector)
 			}
 			Mode::Plain => None,
 		};
@@ -256,16 +256,14 @@ impl<'a> WsTransportClientBuilder<'a> {
 								// Absolute URI.
 								if uri.scheme().is_some() {
 									target = uri.try_into()?;
-									tls_connector = match target.mode {
-										Mode::Tls => {
-											let mut client_config = ClientConfig::default();
-											if let CertificateStore::Native = self.certificate_store {
-												client_config.root_store = rustls_native_certs::load_native_certs()
-													.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
-											}
-											Some(Arc::new(client_config).into())
+									match target.mode {
+										Mode::Tls if tls_connector.is_none() => {
+											tls_connector = Some(build_tls_config(&self.certificate_store)?);
 										}
-										Mode::Plain => None,
+										Mode::Tls => (),
+										Mode::Plain => {
+											tls_connector = None;
+										}
 									};
 								}
 								// Relative URI.
@@ -326,8 +324,8 @@ async fn connect(
 			match tls_connector {
 				None => Ok(TlsOrPlain::Plain(socket)),
 				Some(connector) => {
-					let dns_name = DNSNameRef::try_from_ascii_str(host)?;
-					let tls_stream = connector.connect(dns_name, socket).await?;
+					let server_name: rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {} {:?}", host, e).into()))?;
+					let tls_stream = connector.connect(server_name, socket).await?;
 					Ok(TlsOrPlain::Tls(tls_stream))
 				}
 			}
@@ -342,8 +340,8 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-impl From<InvalidDNSNameError> for WsHandshakeError {
-	fn from(err: InvalidDNSNameError) -> WsHandshakeError {
+impl From<InvalidDnsNameError> for WsHandshakeError {
+	fn from(err: InvalidDnsNameError) -> WsHandshakeError {
 		WsHandshakeError::InvalidDnsName(err)
 	}
 }
@@ -394,6 +392,27 @@ impl TryFrom<Uri> for Target {
 		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
 		Ok(Self { sockaddrs: sockaddrs.collect(), host, host_header, mode, path_and_query: path_and_query.to_string() })
 	}
+}
+
+// NOTE: this is slow and should be used sparringly.
+fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHandshakeError> {
+	let root_store = match cert_store {
+		CertificateStore::Native => {
+			todo!("need rustls-native-certificates v0.6");
+		}
+		_ => {
+			let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
+			root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
+			}));
+			root_store
+		}
+	};
+
+	let config =
+		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(root_store).with_no_client_auth();
+
+	Ok(Arc::new(config).into())
 }
 
 #[cfg(test)]
