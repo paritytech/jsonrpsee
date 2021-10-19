@@ -60,7 +60,7 @@ fmt:
   stage:                           lint
   <<:                              *kubernetes-env
   script:
-    - cargo +nightly fmt --all -- --check
+    - cargo fmt --all -- --check
 
 clippy:
   stage:                           lint
