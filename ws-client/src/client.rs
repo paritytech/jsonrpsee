@@ -108,14 +108,14 @@ pub struct WsClient {
 ///
 /// no_run```
 ///
-/// use jsonrpsee_ws_client::{WsClientBuilder, Header};
+/// use jsonrpsee_ws_client::WsClientBuilder;
 ///
 /// #[tokio::main]
 /// async fn main() {
 ///     // build client
 ///     let client = WsClientBuilder::default()
-///          .custom_headers(&[Header { name: "Origin", value: "localhost".as_bytes() }])
-///          .build("ws://localhost:443")
+///          .custom_header("Origin", "localhost")
+///          .build("wss://localhost:443")
 ///          .await
 ///          .unwrap();
 ///
@@ -129,7 +129,7 @@ pub struct WsClientBuilder<'a> {
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	custom_headers: Option<&'a [Header<'a>]>,
+	custom_headers: Vec<Header<'a>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
@@ -142,7 +142,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
-			custom_headers: None,
+			custom_headers: Vec::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,
@@ -175,9 +175,12 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set custom headers to pass during the handshake.
-	pub fn custom_headers(mut self, headers: &'a [Header]) -> Self {
-		self.custom_headers = Some(headers);
+	/// Set a custom header to pass during the handshake.
+	///
+	/// You have to ensure that headers doesn't conflict if this is called more than once.
+	/// Because it is not checked that the headers doesn't conflict.
+	pub fn custom_header(mut self, header: &'a str, value: &'a str) -> Self {
+		self.custom_headers.push(Header { name: header, value: value.as_bytes() });
 		self
 	}
 
