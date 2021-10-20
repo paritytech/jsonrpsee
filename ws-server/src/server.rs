@@ -287,7 +287,7 @@ async fn background_task(
 					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
 					continue;
 				}
-				// NOTE: io::Error might happen if the remove peer terminated connection.
+				// NOTE: io::Error might happen if the removed peer terminated connection.
 				e @ _ => {
 					tracing::error!("WS recv error: {:?} => terminate connection {}", e, conn_id);
 				}
