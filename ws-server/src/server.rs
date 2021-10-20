@@ -240,11 +240,13 @@ async fn background_task(
 	conn_id: ConnectionId,
 	methods: Methods,
 	resources: Resources,
-	_max_request_body_size: u32,
+	max_request_body_size: u32,
 	stop_server: StopMonitor,
 ) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
-	let (mut sender, mut receiver) = server.into_builder().finish();
+	let mut builder = server.into_builder();
+	builder.set_max_message_size(max_request_body_size as usize);
+	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 	let stop_server2 = stop_server.clone();
 
@@ -275,23 +277,23 @@ async fn background_task(
 		data.clear();
 
 		if let Err(err) = method_executors.select_with(receiver.receive_data(&mut data)).await {
-			match err {
+			match &err {
 				SokettoError::Closed => {
 					tracing::info!("Remote peer terminated the connection: {}", conn_id);
-					tx.close_channel();
-					return Ok(());
 				}
+				// NOTE(niklasad1): this seems to put soketto is some weird state...
 				SokettoError::MessageTooLarge { current, maximum } => {
 					tracing::warn!("Request is too big ({} bytes, max is {})", current, maximum);
 					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
+					continue;
 				}
 				// NOTE: io::Error might happen if the remove peer terminated connection.
 				e @ _ => {
 					tracing::error!("WS recv error: {:?} => terminate connection {}", e, conn_id);
-					tx.close_channel();
-					return Err(e.into());
 				}
-			}
+			};
+			tx.close_channel();
+			return Err(err.into());
 		};
 
 		match data.get(0) {
