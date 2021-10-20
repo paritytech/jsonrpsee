@@ -285,7 +285,7 @@ async fn background_task(
 					tracing::warn!("Request is too big ({} bytes, max is {})", current, maximum);
 					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
 				}
-				// NOTE: io::Error might happen if the remove peer terminated connection.
+				// NOTE: io::Error might happen if the removed peer terminated connection.
 				e @ _ => {
 					tracing::error!("WS recv error: {:?} => terminate connection {}", e, conn_id);
 					tx.close_channel();
