@@ -102,4 +102,4 @@ benchmarks:
     # run nightly by schedule
     - if: $CI_PIPELINE_SOURCE == "schedule"
   script:
-    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
+    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher
