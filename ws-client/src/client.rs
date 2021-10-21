@@ -175,7 +175,7 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set a custom header to pass during the handshake.
+	/// Set a custom header passed to the server during the handshake.
 	///
 	/// You have to ensure that headers doesn't conflict if this is called more than once.
 	/// Because it is not checked that the headers doesn't conflict.
