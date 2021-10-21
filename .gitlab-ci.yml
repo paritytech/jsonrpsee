@@ -73,14 +73,33 @@ clippy:
 
 #### stage:                       test
 
-test:
+check-code:
   stage:                           test
   <<:                              *docker-env
   script:
     - cargo check --all-targets
+    - cargo check --manifest-path http-client/Cargo.toml
+    - cargo check --manifest-path http-server/Cargo.toml
+    - cargo check --manifest-path ws-client/Cargo.toml
+    - cargo check --manifest-path ws-server/Cargo.toml
+    - cargo check --manifest-path types/Cargo.toml
+    - cargo check --manifest-path utils/Cargo.toml
+    - cargo check --manifest-path proc-macros/Cargo.toml
+    - cargo check --manifest-path test-utils/Cargo.toml
+    - cargo check --manifest-path examples/Cargo.toml
+
+test:
+  stage:                           test
+  <<:                              *docker-env
+  script:
+    - cargo build --workspace
+    - cargo test
 
 benchmarks:
   stage:                           test
   <<:                              *docker-env
+  rules:
+    # run nightly by schedule
+    - if: $CI_PIPELINE_SOURCE == "schedule"
   script:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
