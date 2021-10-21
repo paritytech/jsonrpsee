@@ -177,8 +177,7 @@ impl<'a> WsClientBuilder<'a> {
 
 	/// Set a custom header passed to the server during the handshake.
 	///
-	/// You have to ensure that headers doesn't conflict if this is called more than once.
-	/// Because it is not checked that the headers doesn't conflict.
+	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
 	pub fn custom_header(mut self, header: &'a str, value: &'a str) -> Self {
 		self.custom_headers.push(Header { name: header, value: value.as_bytes() });
 		self
