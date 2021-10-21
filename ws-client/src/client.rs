@@ -106,7 +106,7 @@ pub struct WsClient {
 ///
 /// # Examples
 ///
-/// no_run```
+/// ```no_run
 ///
 /// use jsonrpsee_ws_client::WsClientBuilder;
 ///
@@ -114,7 +114,7 @@ pub struct WsClient {
 /// async fn main() {
 ///     // build client
 ///     let client = WsClientBuilder::default()
-///          .custom_header("Any-Header-You-Like", "42")
+///          .add_header("Any-Header-You-Like", "42")
 ///          .build("wss://localhost:443")
 ///          .await
 ///          .unwrap();
@@ -129,7 +129,7 @@ pub struct WsClientBuilder<'a> {
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	custom_headers: Vec<Header<'a>>,
+	headers: Vec<Header<'a>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
@@ -142,7 +142,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
-			custom_headers: Vec::new(),
+			headers: Vec::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,
@@ -178,8 +178,8 @@ impl<'a> WsClientBuilder<'a> {
 	/// Set a custom header passed to the server during the handshake.
 	///
 	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
-	pub fn custom_header(mut self, header: &'a str, value: &'a str) -> Self {
-		self.custom_headers.push(Header { name: header, value: value.as_bytes() });
+	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
+		self.headers.push(Header { name, value: value.as_bytes() });
 		self
 	}
 
@@ -229,7 +229,7 @@ impl<'a> WsClientBuilder<'a> {
 			certificate_store,
 			target: uri.try_into().map_err(|e: WsHandshakeError| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
-			custom_headers: self.custom_headers,
+			headers: self.headers,
 			max_request_body_size: self.max_request_body_size,
 			max_redirections: self.max_redirections,
 		};

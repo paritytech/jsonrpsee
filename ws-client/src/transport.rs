@@ -72,7 +72,7 @@ pub struct WsTransportClientBuilder<'a> {
 	pub timeout: Duration,
 	/// Custom headers to pass during the HTTP handshake. If `None`, no
 	/// custom header is passed.
-	pub custom_headers: Vec<Header<'a>>,
+	pub headers: Vec<Header<'a>>,
 	/// Max payload size
 	pub max_request_body_size: u32,
 	/// Max number of redirections.
@@ -226,7 +226,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 					&target.path_and_query,
 				);
 
-				client.set_headers(&self.custom_headers);
+				client.set_headers(&self.headers);
 
 				// Perform the initial handshake.
 				match client.handshake().await {
