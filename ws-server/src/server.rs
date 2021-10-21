@@ -276,10 +276,14 @@ async fn background_task(
 	while !stop_server.shutdown_requested() {
 		data.clear();
 
-		if let Err(err) = method_executors.select_with(receiver.receive_data(&mut data)).await {
+		tracing::info!("try recv data: {:?}", data);
+		if let Err(err) = receiver.receive_data(&mut data).await {
+			tracing::info!("err: {:?}", err);
 			match &err {
 				SokettoError::Closed => {
 					tracing::info!("Remote peer terminated the connection: {}", conn_id);
+					tx.close_channel();
+					return Ok(());
 				}
 				// NOTE(niklasad1): this seems to put soketto is some weird state...
 				SokettoError::MessageTooLarge { current, maximum } => {
@@ -287,15 +291,24 @@ async fn background_task(
 					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
 					continue;
 				}
-				// NOTE: io::Error might happen if the removed peer terminated connection.
-				e @ _ => {
-					tracing::error!("WS recv error: {:?} => terminate connection {}", e, conn_id);
+				SokettoError::Io(err) => {
+					tracing::error!("I/O Error: {:?} => terminate connection {}", err, conn_id);
+				}
+				SokettoError::UnexpectedOpCode(err) => {
+					tracing::error!("Invalid OP Code: {:?} => terminate connection {}", err, conn_id);
+				}
+				SokettoError::Utf8(err) => {
+					tracing::error!("UTF8 error: {:?} => terminate connection {}", err, conn_id);
+				}
+				err => {
+					tracing::error!("WS recv error: {:?} => terminate connection {}", err, conn_id);
 				}
 			};
 			tx.close_channel();
 			return Err(err.into());
 		};
 
+		tracing::info!("data_len: {:?}", data.len());
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
