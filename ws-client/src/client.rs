@@ -114,7 +114,7 @@ pub struct WsClient {
 /// async fn main() {
 ///     // build client
 ///     let client = WsClientBuilder::default()
-///          .custom_header("Origin", "localhost")
+///          .custom_header("Any-Header-You-Like", "42")
 ///          .build("wss://localhost:443")
 ///          .await
 ///          .unwrap();
