@@ -256,7 +256,8 @@ async fn background_task(
 			match rx.next().await {
 				Some(response) => {
 					// TODO: check length of response https://github.com/paritytech/jsonrpsee/issues/536
-					tracing::debug!("send: {}", response);
+					tracing::debug!("send {} bytes", response.len());
+					tracing::trace!("send: {}", response);
 					let _ = sender.send_text_owned(response).await;
 					let _ = sender.flush().await;
 				}
@@ -276,9 +277,7 @@ async fn background_task(
 	while !stop_server.shutdown_requested() {
 		data.clear();
 
-		tracing::info!("try recv data: {:?}", data);
 		if let Err(err) = receiver.receive_data(&mut data).await {
-			tracing::info!("err: {:?}", err);
 			match &err {
 				SokettoError::Closed => {
 					tracing::info!("Remote peer terminated the connection: {}", conn_id);
@@ -287,32 +286,29 @@ async fn background_task(
 				}
 				// NOTE(niklasad1): this seems to put soketto is some weird state...
 				SokettoError::MessageTooLarge { current, maximum } => {
-					tracing::warn!("Request is too big ({} bytes, max is {})", current, maximum);
+					tracing::warn!(
+						"WS transport error: message is too big error ({} bytes, max is {})",
+						current,
+						maximum
+					);
 					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
 					continue;
 				}
-				SokettoError::Io(err) => {
-					tracing::error!("I/O Error: {:?} => terminate connection {}", err, conn_id);
-				}
-				SokettoError::UnexpectedOpCode(err) => {
-					tracing::error!("Invalid OP Code: {:?} => terminate connection {}", err, conn_id);
-				}
-				SokettoError::Utf8(err) => {
-					tracing::error!("UTF8 error: {:?} => terminate connection {}", err, conn_id);
-				}
+				// These errors can not be gracefully handled, so just log them and terminate the connection.
 				err => {
-					tracing::error!("WS recv error: {:?} => terminate connection {}", err, conn_id);
+					tracing::error!("WS transport error: {:?} => terminate connection {}", err, conn_id);
 				}
 			};
 			tx.close_channel();
 			return Err(err.into());
 		};
 
-		tracing::info!("data_len: {:?}", data.len());
+		tracing::debug!("read {} bytes", data.len());
+
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					tracing::debug!("recv: {:?}", req);
+					tracing::trace!("recv: {:?}", req);
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
 						method_executors.add(fut);
 					}
@@ -323,6 +319,7 @@ async fn background_task(
 			}
 			Some(b'[') => {
 				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
+					tracing::trace!("recv: {:?}", batch);
 					if !batch.is_empty() {
 						// Batch responses must be sent back as a single message so we read the results from each
 						// request in the batch and read the results off of a new channel, `rx_batch`, and then send the

@@ -33,8 +33,8 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
+use std::fmt;
 use std::net::SocketAddr;
-use std::{env, fmt};
 
 /// Applications can/should provide their own error.
 #[derive(Debug)]
@@ -154,10 +154,6 @@ async fn server_with_context() -> SocketAddr {
 
 #[tokio::test]
 async fn can_set_the_max_request_body_size() {
-	env_logger::try_init();
-	let subscriber = tracing_subscriber::FmtSubscriber::builder().with_max_level(tracing::Level::TRACE).finish();
-	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 10 bytes
 	let server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
@@ -174,15 +170,14 @@ async fn can_set_the_max_request_body_size() {
 	assert_eq!(response, oversized_request());
 
 	// Still invalid, but not oversized
-	/*let req = "shorty";
+	let req = "shorty";
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));*/
+	assert_eq!(response, parse_error(Id::Null));
 
 	handle.stop().unwrap();
 }
 
 #[tokio::test]
-#[ignore]
 async fn can_set_max_connections() {
 	let addr = "127.0.0.1:0";
 	// Server that accepts max 2 connections
@@ -214,7 +209,6 @@ async fn can_set_max_connections() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn single_method_calls_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -228,7 +222,6 @@ async fn single_method_calls_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn async_method_calls_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
@@ -242,7 +235,6 @@ async fn async_method_calls_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn slow_method_calls_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -254,7 +246,6 @@ async fn slow_method_calls_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn batch_method_call_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -272,7 +263,6 @@ async fn batch_method_call_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn batch_method_call_where_some_calls_fail() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -293,7 +283,6 @@ async fn batch_method_call_where_some_calls_fail() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn garbage_request_fails() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
@@ -340,7 +329,6 @@ async fn garbage_request_fails() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn single_method_call_with_params_works() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -351,7 +339,6 @@ async fn single_method_call_with_params_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn single_method_call_with_faulty_params_returns_err() {
 	let _ = env_logger::try_init();
 	let addr = server().await;
@@ -364,7 +351,6 @@ async fn single_method_call_with_faulty_params_returns_err() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn single_method_call_with_faulty_context() {
 	let addr = server_with_context().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -375,7 +361,6 @@ async fn single_method_call_with_faulty_context() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn single_method_call_with_ok_context() {
 	let addr = server_with_context().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -386,7 +371,6 @@ async fn single_method_call_with_ok_context() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn async_method_call_with_ok_context() {
 	let addr = server_with_context().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
@@ -397,7 +381,6 @@ async fn async_method_call_with_ok_context() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn async_method_call_with_params() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
@@ -408,7 +391,6 @@ async fn async_method_call_with_params() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn async_method_call_that_fails() {
 	let addr = server_with_context().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
@@ -419,7 +401,6 @@ async fn async_method_call_that_fails() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn single_method_send_binary() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -430,7 +411,6 @@ async fn single_method_send_binary() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn should_return_method_not_found() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -441,7 +421,6 @@ async fn should_return_method_not_found() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn invalid_json_id_missing_value() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -454,7 +433,6 @@ async fn invalid_json_id_missing_value() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn invalid_request_object() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -465,7 +443,6 @@ async fn invalid_request_object() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn register_methods_works() {
 	let mut module = RpcModule::new(());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
@@ -479,7 +456,6 @@ async fn register_methods_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
@@ -489,7 +465,6 @@ async fn register_same_subscribe_unsubscribe_is_err() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn parse_error_request_should_not_close_connection() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -503,7 +478,6 @@ async fn parse_error_request_should_not_close_connection() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn invalid_request_should_not_close_connection() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -517,7 +491,6 @@ async fn invalid_request_should_not_close_connection() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -539,7 +512,6 @@ async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn can_register_modules() {
 	let cx = String::new();
 	let mut mod1 = RpcModule::new(cx);
@@ -564,7 +536,6 @@ async fn can_register_modules() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn stop_works() {
 	let _ = env_logger::try_init();
 	let (_addr, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
