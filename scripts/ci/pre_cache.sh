@@ -3,8 +3,8 @@
 set -u
 
 # if there is no directory for this $CI_COMMIT_REF_NAME/$CI_JOB_NAME
-# create such directory and
-# copy recursively all the files from the newest dir which has $CI_JOB_NAME, if it exists
+# create such directory and copy recursively all the files from the newest dir which has
+#  $CI_JOB_NAME, if it exists.
 
 # cache lives in /ci-cache/${CI_PROJECT_NAME}/${2}/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}
 
