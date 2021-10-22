@@ -77,7 +77,7 @@ check-code:
   stage:                           test
   <<:                              *docker-env
   script:
-    - cargo check --all-targets
+    - cargo check --all-targets --all-features
     - cargo check --manifest-path http-client/Cargo.toml
     - cargo check --manifest-path http-server/Cargo.toml
     - cargo check --manifest-path ws-client/Cargo.toml
