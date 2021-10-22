@@ -60,6 +60,7 @@ fmt:
   stage:                           lint
   <<:                              *kubernetes-env
   script:
+    # FIXME: remove after stable fmt added to ci-linux
     - rustup component add rustfmt
     - cargo fmt --all -- --check
 
@@ -67,8 +68,9 @@ clippy:
   stage:                           lint
   <<:                              *docker-env
   script:
+    # FIXME: remove after stable clippy added to ci-linux
     - rustup component add clippy
-    - cargo clippy --all --verbose
+    - cargo clippy --all-targets --verbose
     - RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
 
 #### stage:                       test
@@ -92,7 +94,6 @@ test:
   stage:                           test
   <<:                              *docker-env
   script:
-    - cargo build --workspace
     - cargo test
 
 benchmarks:
