@@ -95,6 +95,7 @@ pub struct RpcSubscription {
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
+	pub param_format: String,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
@@ -103,12 +104,16 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, unsubscribe_aliases] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_format, unsubscribe_aliases] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "param_format", "unsubscribe_aliases"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let name = name?.string()?;
 		let item = item?.value()?;
+		let param_format = match param_format {
+			Ok(param_format) => param_format.string()?,
+			Err(_) => String::from("array"),
+		};
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
 		let sig = sub.sig.clone();
@@ -130,7 +135,7 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, item, signature: sub, aliases, docs })
+		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, param_format, item, signature: sub, aliases, docs })
 	}
 }
 
