@@ -24,7 +24,7 @@ tracing = "0.1"
 pin-project = "1"
 
 # TODO(niklasad1): duplicated
-rustls-native-certs = "0.5.0"
+rustls-native-certs = "0.6.0"
 webpki-roots = "0.22.0"
 
 serde = "1"

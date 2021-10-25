@@ -182,15 +182,6 @@ impl<'a> WsTransportClientBuilder<'a> {
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let connector = match self.target.mode {
 			Mode::Tls => {
-				let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
-				root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
-					rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-						ta.subject,
-						ta.spki,
-						ta.name_constraints,
-					)
-				}));
-
 				let tls_connector = build_tls_config(&self.certificate_store)?;
 				Some(tls_connector)
 			}
@@ -396,21 +387,33 @@ impl TryFrom<Uri> for Target {
 
 // NOTE: this is slow and should be used sparringly.
 fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHandshakeError> {
-	let root_store = match cert_store {
+	let mut roots = tokio_rustls::rustls::RootCertStore::empty();
+
+	match cert_store {
 		CertificateStore::Native => {
-			todo!("need rustls-native-certificates v0.6");
+			let mut first_error = None;
+			for cert in rustls_native_certs::load_native_certs().map_err(|e| WsHandshakeError::CertificateStore(e))? {
+				let cert = rustls::Certificate(cert.0);
+				if let Err(err) = roots.add(&cert) {
+					tracing::warn!("failed to parse der: {:?} {:?}", cert.0, err);
+					first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
+				}
+			}
+			if roots.is_empty() {
+				let err =
+					first_error.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No certificate found"));
+				return Err(WsHandshakeError::CertificateStore(err));
+			}
 		}
 		_ => {
-			let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
-			root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
 				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
 			}));
-			root_store
 		}
 	};
 
 	let config =
-		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(root_store).with_no_client_auth();
+		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(roots).with_no_client_auth();
 
 	Ok(Arc::new(config).into())
 }
