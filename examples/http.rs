@@ -35,7 +35,7 @@ use std::net::SocketAddr;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	// init tracing `FmtSubscriber`.
-	let subscriber = tracing_subscriber::FmtSubscriber::new();
+	let subscriber = tracing_subscriber::FmtSubscriber::builder().with_max_level(tracing::Level::DEBUG).finish();
 	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
 	let (server_addr, _handle) = run_server().await?;

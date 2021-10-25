@@ -45,6 +45,8 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize) {
 		}
 	};
 
+	tracing::debug!("send {} bytes", json.len());
+	tracing::debug!("send {}", json);
 	if let Err(err) = tx.unbounded_send(json) {
 		tracing::error!("Error sending response to the client: {:?}", err)
 	}

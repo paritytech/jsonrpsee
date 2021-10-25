@@ -51,6 +51,7 @@ use std::{
 	cmp,
 	net::{SocketAddr, TcpListener},
 };
+use tracing_futures::Instrument;
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
@@ -235,9 +236,13 @@ impl Server {
 						// Single request or notification
 						if is_single {
 							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
+								let span = tracing::span!(tracing::Level::DEBUG, "method_call", %req.method);
+								let _enter = span.enter();
+								tracing::debug!("recv {} bytes", body.len());
+								tracing::trace!("recv: {:?}", req);
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 								if let Some(fut) = methods.execute_with_resources(&tx, req, 0, &resources) {
-									fut.await;
+									fut.await.in_current_span();
 								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
 								return Ok::<_, HyperError>(response::ok_response("".into()));
@@ -248,6 +253,10 @@ impl Server {
 
 						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
+							let span = tracing::span!(tracing::Level::DEBUG, "batch_call", batch = batch.len());
+							let _enter = span.enter();
+							tracing::debug!("recv {} bytes", body.len());
+							tracing::trace!("recv: {:?}", batch);
 							if !batch.is_empty() {
 								join_all(
 									batch
@@ -281,7 +290,7 @@ impl Server {
 						} else {
 							collect_batch_response(rx).await
 						};
-						tracing::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
+						tracing::trace!("send: {:?}", &response[..cmp::min(response.len(), 1024)]);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))

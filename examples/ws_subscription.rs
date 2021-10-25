@@ -37,7 +37,7 @@ const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	// init tracing `FmtSubscriber`.
-	let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
+	let subscriber = tracing_subscriber::FmtSubscriber::builder().with_max_level(tracing::Level::DEBUG).finish();
 	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
 	let addr = run_server().await?;

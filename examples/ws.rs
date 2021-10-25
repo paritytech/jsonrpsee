@@ -34,7 +34,7 @@ use std::net::SocketAddr;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	// init tracing `FmtSubscriber`.
-	let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
+	let subscriber = tracing_subscriber::FmtSubscriber::builder().with_max_level(tracing::Level::TRACE).finish();
 	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
 	let addr = run_server().await?;
@@ -50,7 +50,10 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("lo"))?;
+	module.register_method("say_hello", |_, _| {
+		std::thread::sleep(std::time::Duration::from_secs(10));
+		Ok("lo")
+	})?;
 	let addr = server.local_addr()?;
 	server.start(module)?;
 	Ok(addr)

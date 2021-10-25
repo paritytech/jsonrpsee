@@ -15,6 +15,7 @@ futures-util = { version = "0.3.14", default-features = false, features = ["io",
 jsonrpsee-types = { path = "../types", version = "0.4.1" }
 jsonrpsee-utils = { path = "../utils", version = "0.4.1", features = ["server"] }
 tracing = "0.1"
+tracing-futures = { version = "0.2.5", features = ["futures-03"] }
 serde_json = { version = "1", features = ["raw_value"] }
 soketto = "0.7"
 tokio = { version = "1", features = ["net", "rt-multi-thread", "macros"] }

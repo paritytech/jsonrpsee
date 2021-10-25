@@ -41,6 +41,7 @@ use futures_util::stream::StreamExt;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use tracing_futures::Instrument;
 
 use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, send_error};
 use jsonrpsee_utils::server::resource_limiting::Resources;
@@ -251,7 +252,6 @@ async fn background_task(
 		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
-					tracing::debug!("send: {}", response);
 					let _ = sender.send_text(response).await;
 					let _ = sender.flush().await;
 				}
@@ -286,9 +286,13 @@ async fn background_task(
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					tracing::debug!("recv: {:?}", req);
+					let span = tracing::span!(tracing::Level::DEBUG, "method_call", %req.method);
+					let _enter = span.enter();
+					tracing::debug!("recv {} bytes", data.len());
+					tracing::trace!("recv: {:?}", req);
+
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
-						method_executors.add(fut);
+						fut.await.in_current_span();
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
@@ -297,6 +301,11 @@ async fn background_task(
 			}
 			Some(b'[') => {
 				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
+					let span = tracing::span!(tracing::Level::DEBUG, "batch_call", batch = batch.len());
+					let _enter = span.enter();
+					tracing::debug!("recv {} bytes", data.len());
+					tracing::trace!("recv: {:?}", batch);
+
 					if !batch.is_empty() {
 						// Batch responses must be sent back as a single message so we read the results from each
 						// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
@@ -307,7 +316,7 @@ async fn background_task(
 							.into_iter()
 							.filter_map(|req| methods.execute_with_resources(&tx_batch, req, conn_id, &resources))
 						{
-							method_executors.add(fut);
+							method_executors.add(fut.in_current_span());
 						}
 
 						// Closes the receiving half of a channel without dropping it. This prevents any further

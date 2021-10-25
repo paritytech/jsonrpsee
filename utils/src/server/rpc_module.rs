@@ -152,12 +152,6 @@ impl MethodCallback {
 
 		match &self.callback {
 			MethodKind::Sync(callback) => {
-				tracing::trace!(
-					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
-					params,
-					id,
-					conn_id
-				);
 				(callback)(id, params, tx, conn_id);
 
 				// Release claimed resources
@@ -169,12 +163,6 @@ impl MethodCallback {
 				let tx = tx.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
-				tracing::trace!(
-					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_id={:?}",
-					params,
-					id,
-					conn_id
-				);
 
 				Some((callback)(id, params, tx, claimed))
 			}
@@ -284,7 +272,6 @@ impl Methods {
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(&self, tx: &MethodSink, req: Request, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
-		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id, None),
 			None => {
@@ -302,7 +289,6 @@ impl Methods {
 		conn_id: ConnectionId,
 		resources: &Resources,
 	) -> Option<BoxFuture<'static, ()>> {
-		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => match callback.claim(&req.method, resources) {
 				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard)),
@@ -424,8 +410,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
+				let now = std::time::Instant::now();
 				match callback(params, &*ctx) {
-					Ok(res) => send_response(id, tx, res),
+					Ok(res) => {
+						let rp = send_response(id, &tx, res);
+						tracing::debug!("finished {:?}", now.elapsed());
+						rp
+					}
 					Err(err) => send_call_error(id, tx, err),
 				};
 			})),
@@ -449,10 +440,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
+				let now = std::time::Instant::now();
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
-						Ok(res) => send_response(id, &tx, res),
+						Ok(res) => {
+							let rp = send_response(id, &tx, res);
+							tracing::debug!("finished {:?}", now.elapsed());
+							rp
+						}
 						Err(err) => send_call_error(id, &tx, err),
 					};
 
@@ -482,11 +478,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
+				let now = std::time::Instant::now();
 				let ctx = ctx.clone();
 
 				tokio::task::spawn_blocking(move || {
 					match callback(params, ctx) {
-						Ok(res) => send_response(id, &tx, res),
+						Ok(res) => {
+							let rp = send_response(id, &tx, res);
+							tracing::debug!("finished {:?}", now.elapsed());
+							rp
+						}
 						Err(err) => send_call_error(id, &tx, err),
 					};
 
@@ -550,6 +551,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
 				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn_id| {
+					let now = std::time::Instant::now();
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
@@ -579,6 +581,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 						send_error(id, method_sink, ErrorCode::ServerError(-1).into());
 					}
+					tracing::debug!("finished {:?}", now.elapsed());
 				})),
 			);
 		}
@@ -587,6 +590,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
 				MethodCallback::new_sync(Arc::new(move |id, params, tx, conn_id| {
+					let now = std::time::Instant::now();
 					let sub_id = match params.one() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -601,6 +605,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
 					send_response(id, tx, "Unsubscribed");
+					tracing::debug!("finished {:?}", now.elapsed());
 				})),
 			);
 		}
