@@ -47,10 +47,7 @@ use jsonrpsee_utils::server::{
 
 use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
-use std::{
-	cmp,
-	net::{SocketAddr, TcpListener},
-};
+use std::net::{SocketAddr, TcpListener};
 use tracing_futures::Instrument;
 
 /// Builder to create JSON-RPC HTTP server.
@@ -238,8 +235,8 @@ impl Server {
 							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 								let span = tracing::span!(tracing::Level::DEBUG, "method_call", %req.method);
 								let _enter = span.enter();
-								tracing::debug!("recv {} bytes", body.len());
-								tracing::trace!("recv: {:?}", req);
+								tracing::debug!(rx_method_call_len = body.len());
+								tracing::trace!(rx_method_call = ?req);
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 								if let Some(fut) = methods.execute_with_resources(&tx, req, 0, &resources) {
 									fut.await.in_current_span();
@@ -255,8 +252,8 @@ impl Server {
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							let span = tracing::span!(tracing::Level::DEBUG, "batch_call", batch = batch.len());
 							let _enter = span.enter();
-							tracing::debug!("recv {} bytes", body.len());
-							tracing::trace!("recv: {:?}", batch);
+							tracing::debug!(rx_batch_call_len = batch.len());
+							tracing::trace!(rx_batch = ?batch);
 							if !batch.is_empty() {
 								join_all(
 									batch
@@ -290,7 +287,8 @@ impl Server {
 						} else {
 							collect_batch_response(rx).await
 						};
-						tracing::trace!("send: {:?}", &response[..cmp::min(response.len(), 1024)]);
+						tracing::debug!(tx_batch_call_len = response.len());
+						tracing::trace!(tx_batch = ?response);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))

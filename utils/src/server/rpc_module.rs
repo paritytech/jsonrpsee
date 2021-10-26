@@ -414,7 +414,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				match callback(params, &*ctx) {
 					Ok(res) => {
 						let rp = send_response(id, &tx, res);
-						tracing::debug!("finished {:?}", now.elapsed());
+						tracing::debug!(execution_time = ?now.elapsed());
 						rp
 					}
 					Err(err) => send_call_error(id, tx, err),
@@ -446,7 +446,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					match callback(params, ctx).await {
 						Ok(res) => {
 							let rp = send_response(id, &tx, res);
-							tracing::debug!("finished {:?}", now.elapsed());
+							tracing::debug!(execution_time = ?now.elapsed());
 							rp
 						}
 						Err(err) => send_call_error(id, &tx, err),
@@ -485,7 +485,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					match callback(params, ctx) {
 						Ok(res) => {
 							let rp = send_response(id, &tx, res);
-							tracing::debug!("finished {:?}", now.elapsed());
+							tracing::debug!(execution_time = ?now.elapsed());
 							rp
 						}
 						Err(err) => send_call_error(id, &tx, err),
@@ -581,7 +581,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 						send_error(id, method_sink, ErrorCode::ServerError(-1).into());
 					}
-					tracing::debug!("finished {:?}", now.elapsed());
+					tracing::debug!(execution_time_ms = ?now.elapsed().as_millis());
 				})),
 			);
 		}
@@ -605,7 +605,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
 					send_response(id, tx, "Unsubscribed");
-					tracing::debug!("finished {:?}", now.elapsed());
+					tracing::debug!(execution_time_ms = ?now.elapsed().as_millis());
 				})),
 			);
 		}

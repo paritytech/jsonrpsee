@@ -31,11 +31,12 @@ use jsonrpsee::{
 	types::traits::Client,
 };
 use std::net::SocketAddr;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	// init tracing `FmtSubscriber`.
-	let subscriber = tracing_subscriber::FmtSubscriber::builder().with_max_level(tracing::Level::DEBUG).finish();
+	let filter = EnvFilter::try_from_default_env()?.add_directive("jsonrpsee[method_call]=trace".parse()?);
+	let subscriber = FmtSubscriber::builder().with_env_filter(filter).finish();
 	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
 	let (server_addr, _handle) = run_server().await?;

@@ -288,8 +288,8 @@ async fn background_task(
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 					let span = tracing::span!(tracing::Level::DEBUG, "method_call", %req.method);
 					let _enter = span.enter();
-					tracing::debug!("recv {} bytes", data.len());
-					tracing::trace!("recv: {:?}", req);
+					tracing::debug!(rx_method_call_len = data.len());
+					tracing::trace!(rx_method_call = ?req);
 
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
 						fut.await.in_current_span();
@@ -303,8 +303,8 @@ async fn background_task(
 				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
 					let span = tracing::span!(tracing::Level::DEBUG, "batch_call", batch = batch.len());
 					let _enter = span.enter();
-					tracing::debug!("recv {} bytes", data.len());
-					tracing::trace!("recv: {:?}", batch);
+					tracing::debug!(rx_batch_call_len = data.len());
+					tracing::trace!(rx_batch = ?batch);
 
 					if !batch.is_empty() {
 						// Batch responses must be sent back as a single message so we read the results from each
