@@ -392,16 +392,16 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHan
 	match cert_store {
 		CertificateStore::Native => {
 			let mut first_error = None;
-			for cert in rustls_native_certs::load_native_certs().map_err(|e| WsHandshakeError::CertificateStore(e))? {
+			let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
+			for cert in certs {
 				let cert = rustls::Certificate(cert.0);
 				if let Err(err) = roots.add(&cert) {
-					tracing::warn!("failed to parse der: {:?} {:?}", cert.0, err);
 					first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
 				}
 			}
 			if roots.is_empty() {
-				let err =
-					first_error.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No certificate found"));
+				let err = first_error
+					.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No valid certificate found"));
 				return Err(WsHandshakeError::CertificateStore(err));
 			}
 		}
