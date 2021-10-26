@@ -297,6 +297,7 @@ async fn background_task(
 			}
 			Some(b'[') => {
 				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
+					tracing::trace!("batch: {:?}", batch);
 					if !batch.is_empty() {
 						// Batch responses must be sent back as a single message so we read the results from each
 						// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
@@ -309,10 +310,12 @@ async fn background_task(
 						{
 							method_executors.add(fut);
 						}
+						tracing::info!("futures added");
 
 						// Closes the receiving half of a channel without dropping it. This prevents any further
 						// messages from being sent on the channel.
 						rx_batch.close();
+						tracing::info!("close batch channel");
 						let results = collect_batch_response(rx_batch).await;
 						if let Err(err) = tx.unbounded_send(results) {
 							tracing::error!("Error sending batch response to the client: {:?}", err)

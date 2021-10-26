@@ -360,3 +360,26 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
 	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError { .. }));
 }
+
+#[tokio::test]
+async fn ws_batch_works() {
+	let subscriber = tracing_subscriber::FmtSubscriber::builder()
+		// all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+		// will be written to stdout.
+		.with_max_level(tracing::Level::TRACE)
+		// completes the builder.
+		.finish();
+
+	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+	let server_addr = websocket_server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = Arc::new(WsClientBuilder::default().build(&server_url).await.unwrap());
+
+	let mut batch = Vec::new();
+
+	batch.push(("say_hello", rpc_params![]));
+	batch.push(("slow_hello", rpc_params![]));
+
+	let response: Vec<String> = client.batch_request(batch).await.unwrap();
+}
