@@ -581,7 +581,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 						send_error(id, method_sink, ErrorCode::ServerError(-1).into());
 					}
-					tracing::debug!(execution_time_ms = ?now.elapsed().as_millis());
+					tracing::debug!(execution_time = ?now.elapsed());
 				})),
 			);
 		}
@@ -605,7 +605,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
 					send_response(id, tx, "Unsubscribed");
-					tracing::debug!(execution_time_ms = ?now.elapsed().as_millis());
+					tracing::debug!(execution_time = ?now.elapsed());
 				})),
 			);
 		}
