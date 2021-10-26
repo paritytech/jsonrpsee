@@ -159,7 +159,12 @@ impl RpcDescription {
 				});
 				let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 				quote! {
-					Some(#jsonrpsee::types::v2::ParamsSer::Map(std::collections::BTreeMap::<&str, #jsonrpsee::types::JsonValue>::from(vec![#(#params),*].into())))
+					Some(#jsonrpsee::types::v2::ParamsSer::Map(
+							std::collections::BTreeMap::<&str, #jsonrpsee::types::JsonValue>::from(
+								vec![#(#params),*].into()
+								)
+							)
+						)
 				}
 			} else {
 				quote! {
