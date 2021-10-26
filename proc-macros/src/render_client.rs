@@ -152,6 +152,7 @@ impl RpcDescription {
 					},
 					_ => None,
 				});
+				// Combine parameter names and values into tuples.
 				let params = param_names.zip(params).map(|pair| {
 					let key = pair.0;
 					let value = pair.1;
@@ -161,7 +162,7 @@ impl RpcDescription {
 				quote! {
 					Some(#jsonrpsee::types::v2::ParamsSer::Map(
 							std::collections::BTreeMap::<&str, #jsonrpsee::types::JsonValue>::from(
-								vec![#(#params),*].into()
+								[#(#params),*]
 								)
 							)
 						)
