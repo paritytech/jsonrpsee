@@ -36,8 +36,9 @@ use crate::types::{
 	TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
+use futures_util::future::FutureExt;
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::StreamExt;
+use futures_util::stream::{self, StreamExt};
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
@@ -296,13 +297,10 @@ async fn background_task(
 				}
 			}
 			Some(b'[') => {
-				// NOTE(niklasad1): we must move deserialization into the async block below
-				// because `Request` uses `serde(borrow)` and that buffer is used again
-				// for the next iteration of the loop.
-
+				// Make sure the following variables are not moved into async closure below.
 				let d = std::mem::take(&mut data);
-				let r = &resources;
-				let m = &methods;
+				let resources = &resources;
+				let methods = &methods;
 				let tx2 = tx.clone();
 
 				let fut = async move {
@@ -312,17 +310,19 @@ async fn background_task(
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
 						if !batch.is_empty() {
-							let futs = batch
-								.into_iter()
-								.filter_map(|req| m.execute_with_resources(&tx_batch, req, conn_id, r));
-							futures_util::future::join_all(futs).await;
+							let methods_stream =
+								stream::iter(batch.into_iter().filter_map(|req| {
+									methods.execute_with_resources(&tx_batch, req, conn_id, &resources)
+								}));
 
-							// All methods has now completed by `join_all` above
-							// Closes the receiving half of a channel without dropping it. This prevents any further
-							// messages from being sent on the channel.
-							rx_batch.close();
+							let results = methods_stream
+								.for_each_concurrent(None, |item| item)
+								.then(|_| {
+									rx_batch.close();
+									collect_batch_response(rx_batch)
+								})
+								.await;
 
-							let results = collect_batch_response(rx_batch).await;
 							if let Err(err) = tx2.unbounded_send(results) {
 								tracing::error!("Error sending batch response to the client: {:?}", err)
 							}
