@@ -314,7 +314,7 @@ async fn background_task(
 						if !batch.is_empty() {
 							let futs = batch
 								.into_iter()
-								.filter_map(|req| m.execute_with_resources(&tx_batch, req, conn_id, &r));
+								.filter_map(|req| m.execute_with_resources(&tx_batch, req, conn_id, r));
 							futures_util::future::join_all(futs).await;
 
 							// All methods has now completed by `join_all` above

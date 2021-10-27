@@ -381,5 +381,5 @@ async fn ws_batch_works() {
 	batch.push(("say_hello", rpc_params![]));
 	batch.push(("slow_hello", rpc_params![]));
 
-	let response: Vec<String> = client.batch_request(batch).await.unwrap();
+	assert!(client.batch_request::<String>(batch).await.is_ok())
 }
