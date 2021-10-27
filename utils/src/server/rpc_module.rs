@@ -305,15 +305,15 @@ impl Methods {
 		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => match callback.claim(&req.method, resources) {
-				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard)),
+				Ok(guard) => callback.execute(&tx, req, conn_id, Some(guard)),
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					send_error(req.id, tx, ErrorCode::ServerIsBusy.into());
+					send_error(req.id, &tx, ErrorCode::ServerIsBusy.into());
 					None
 				}
 			},
 			None => {
-				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
+				send_error(req.id, &tx, ErrorCode::MethodNotFound.into());
 				None
 			}
 		}

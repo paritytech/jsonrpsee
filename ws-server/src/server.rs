@@ -264,12 +264,10 @@ async fn background_task(
 		// will be possible.
 	});
 
-	// Buffer for incoming data.
-	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
 
 	while !stop_server.shutdown_requested() {
-		data.clear();
+		let mut data = Vec::new();
 
 		if let Err(e) = method_executors.select_with(receiver.receive_data(&mut data)).await {
 			tracing::error!("Could not receive WS data: {:?}; closing connection", e);
@@ -296,37 +294,46 @@ async fn background_task(
 				}
 			}
 			Some(b'[') => {
-				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
-					tracing::trace!("batch: {:?}", batch);
-					if !batch.is_empty() {
-						// Batch responses must be sent back as a single message so we read the results from each
-						// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
-						// complete batch response back to the client over `tx`.
-						let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
+				// NOTE(niklasad1): we must move deserialization into the async block below
+				// because `Request` uses `serde(borrow)` and that buffer is used again
+				// for the next iteration of the loop.
 
-						for fut in batch
-							.into_iter()
-							.filter_map(|req| methods.execute_with_resources(&tx_batch, req, conn_id, &resources))
-						{
-							method_executors.add(fut);
-						}
-						tracing::info!("futures added");
+				let d = std::mem::take(&mut data);
+				let r = &resources;
+				let m = &methods;
+				let tx2 = tx.clone();
 
-						// Closes the receiving half of a channel without dropping it. This prevents any further
-						// messages from being sent on the channel.
-						rx_batch.close();
-						tracing::info!("close batch channel");
-						let results = collect_batch_response(rx_batch).await;
-						if let Err(err) = tx.unbounded_send(results) {
-							tracing::error!("Error sending batch response to the client: {:?}", err)
+				let fut = async move {
+					// Batch responses must be sent back as a single message so we read the results from each
+					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
+					// complete batch response back to the client over `tx`.
+					let (tx_batch, mut rx_batch) = mpsc::unbounded();
+					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
+						if !batch.is_empty() {
+							let futs = batch
+								.into_iter()
+								.filter_map(|req| m.execute_with_resources(&tx_batch, req, conn_id, &r));
+							futures_util::future::join_all(futs).await;
+
+							// All methods has now completed by `join_all` above
+							// Closes the receiving half of a channel without dropping it. This prevents any further
+							// messages from being sent on the channel.
+							rx_batch.close();
+
+							let results = collect_batch_response(rx_batch).await;
+							if let Err(err) = tx2.unbounded_send(results) {
+								tracing::error!("Error sending batch response to the client: {:?}", err)
+							}
+						} else {
+							send_error(Id::Null, &tx2, ErrorCode::InvalidRequest.into());
 						}
 					} else {
-						send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
+						let (id, code) = prepare_error(&data);
+						send_error(id, &tx2, code.into());
 					}
-				} else {
-					let (id, code) = prepare_error(&data);
-					send_error(id, &tx, code.into());
-				}
+				};
+
+				method_executors.add(Box::pin(fut));
 			}
 			_ => send_error(Id::Null, &tx, ErrorCode::ParseError.into()),
 		}
