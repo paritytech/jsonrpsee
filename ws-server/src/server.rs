@@ -264,10 +264,12 @@ async fn background_task(
 		// will be possible.
 	});
 
+	// Buffer for incoming data.
+	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
 
 	while !stop_server.shutdown_requested() {
-		let mut data = Vec::new();
+		data.clear();
 
 		if let Err(e) = method_executors.select_with(receiver.receive_data(&mut data)).await {
 			tracing::error!("Could not receive WS data: {:?}; closing connection", e);
@@ -328,7 +330,7 @@ async fn background_task(
 							send_error(Id::Null, &tx2, ErrorCode::InvalidRequest.into());
 						}
 					} else {
-						let (id, code) = prepare_error(&data);
+						let (id, code) = prepare_error(&d);
 						send_error(id, &tx2, code.into());
 					}
 				};
