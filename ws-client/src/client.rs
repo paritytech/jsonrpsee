@@ -276,10 +276,7 @@ impl Client for WsClient {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
 		let notif = NotificationSer::new(method, params);
-		let raw = serde_json::to_string(&notif).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?;
+		let raw = serde_json::to_string(&notif).map_err(|e| Error::ParseError(e))?;
 		tracing::trace!("[frontend]: send notification: {:?}", raw);
 
 		let mut sender = self.to_back.clone();
@@ -292,7 +289,6 @@ impl Client for WsClient {
 			_ = timeout => return Err(Error::RequestTimeout)
 		};
 
-		self.id_guard.reclaim_request_id();
 		match res {
 			Ok(()) => Ok(()),
 			Err(_) => Err(self.read_error_from_backend().await),
@@ -305,26 +301,22 @@ impl Client for WsClient {
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
-		let raw = serde_json::to_string(&RequestSer::new(Id::Number(req_id), method, params)).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?;
+		let id = *req_id.inner();
+		let raw = serde_json::to_string(&RequestSer::new(Id::Number(id), method, params))
+			.map_err(|e| Error::ParseError(e))?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Request(RequestMessage { raw, id: req_id, send_back: Some(send_back_tx) }))
+			.send(FrontToBack::Request(RequestMessage { raw, id, send_back: Some(send_back_tx) }))
 			.await
 			.is_err()
 		{
-			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-
-		self.id_guard.reclaim_request_id();
 		let json_value = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
@@ -341,30 +333,24 @@ impl Client for WsClient {
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(RequestSer::new(Id::Number(batch_ids[idx]), method, params));
+			batches.push(RequestSer::new(Id::Number(batch_ids.inner()[idx]), method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
-		let raw = serde_json::to_string(&batches).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?;
+		let raw = serde_json::to_string(&batches).map_err(|e| Error::ParseError(e))?;
 		tracing::trace!("[frontend]: send batch request: {:?}", raw);
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids.inner().clone(), send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
-			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-
-		self.id_guard.reclaim_request_id();
 		let json_values = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
@@ -399,11 +385,8 @@ impl SubscriptionClient for WsClient {
 		}
 
 		let ids = self.id_guard.next_request_ids(2)?;
-		let raw =
-			serde_json::to_string(&RequestSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
-				self.id_guard.reclaim_request_id();
-				Error::ParseError(e)
-			})?;
+		let raw = serde_json::to_string(&RequestSer::new(Id::Number(ids.inner()[0]), subscribe_method, params))
+			.map_err(|e| Error::ParseError(e))?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -411,21 +394,19 @@ impl SubscriptionClient for WsClient {
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				raw,
-				subscribe_id: ids[0],
-				unsubscribe_id: ids[1],
+				subscribe_id: ids.inner()[0],
+				unsubscribe_id: ids.inner()[1],
 				unsubscribe_method: unsubscribe_method.to_owned(),
 				send_back: send_back_tx,
 			}))
 			.await
 			.is_err()
 		{
-			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
-		self.id_guard.reclaim_request_id();
 		let (notifs_rx, id) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),

@@ -112,27 +112,20 @@ impl Client for HttpClient {
 	where
 		R: DeserializeOwned,
 	{
-		// NOTE: the IDs wrap on overflow which is intended.
 		let id = self.id_guard.next_request_id()?;
-		let request = RequestSer::new(Id::Number(id), method, params);
+		let request = RequestSer::new(Id::Number(*id.inner()), method, params);
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?);
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(|e| Error::ParseError(e))?);
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => {
-				self.id_guard.reclaim_request_id();
 				return Err(Error::RequestTimeout);
 			}
 			Ok(Err(e)) => {
-				self.id_guard.reclaim_request_id();
 				return Err(Error::Transport(e.into()));
 			}
 		};
 
-		self.id_guard.reclaim_request_id();
 		let response: Response<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
@@ -143,7 +136,7 @@ impl Client for HttpClient {
 
 		let response_id = response.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 
-		if response_id == id {
+		if response_id == *id.inner() {
 			Ok(response.result)
 		} else {
 			Err(Error::InvalidRequestId)
@@ -161,15 +154,13 @@ impl Client for HttpClient {
 
 		let ids = self.id_guard.next_request_ids(batch.len())?;
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
-			batch_request.push(RequestSer::new(Id::Number(ids[pos]), method, params));
-			ordered_requests.push(ids[pos]);
-			request_set.insert(ids[pos], pos);
+			batch_request.push(RequestSer::new(Id::Number(ids.inner()[pos]), method, params));
+			ordered_requests.push(ids.inner()[pos]);
+			request_set.insert(ids.inner()[pos], pos);
 		}
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?);
+		let fut =
+			self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(|e| Error::ParseError(e))?);
 
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
@@ -180,10 +171,7 @@ impl Client for HttpClient {
 		let rps: Vec<Response<_>> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: RpcError = serde_json::from_slice(&body).map_err(|e| {
-					self.id_guard.reclaim_request_id();
-					Error::ParseError(e)
-				})?;
+				let err: RpcError = serde_json::from_slice(&body).map_err(|e| Error::ParseError(e))?;
 				return Err(Error::Request(err.to_string()));
 			}
 		};
