@@ -312,7 +312,7 @@ async fn background_task(
 						if !batch.is_empty() {
 							let methods_stream =
 								stream::iter(batch.into_iter().filter_map(|req| {
-									methods.execute_with_resources(&tx_batch, req, conn_id, &resources)
+									methods.execute_with_resources(&tx_batch, req, conn_id, resources)
 								}));
 
 							let results = methods_stream
