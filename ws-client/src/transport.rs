@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::stream::EitherStream;
+use crate::{stream::EitherStream, types::CertificateStore};
 use arrayvec::ArrayVec;
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
@@ -82,16 +82,6 @@ pub enum Mode {
 	Plain,
 	/// TLS mode (`wss://` URL).
 	Tls,
-}
-
-/// What certificate store to use
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum CertificateStore {
-	/// Use the native system certificate store
-	Native,
-	/// Use webPki's certificate store
-	WebPki,
 }
 
 /// Error that can happen during the WebSocket handshake.
@@ -405,10 +395,14 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHan
 				return Err(WsHandshakeError::CertificateStore(err));
 			}
 		}
-		_ => {
+		CertificateStore::WebPki => {
 			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
 				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
 			}));
+		}
+		_ => {
+			let err = io::Error::new(io::ErrorKind::NotFound, "Invalid certificate store");
+			return Err(WsHandshakeError::CertificateStore(err));
 		}
 	};
 

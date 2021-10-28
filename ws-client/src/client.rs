@@ -28,8 +28,8 @@ use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeEr
 use crate::types::{
 	traits::{Client, SubscriptionClient},
 	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
-	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestIdGuard, RequestMessage, Subscription,
-	SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
+	BatchMessage, CertificateStore, Error, FrontToBack, RegisterNotificationMessage, RequestIdGuard, RequestMessage,
+	Subscription, SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
 };
 use crate::{
 	helpers::{
@@ -37,7 +37,6 @@ use crate::{
 		process_notification, process_single_response, process_subscription_response, stop_subscription,
 	},
 	manager::RequestManager,
-	transport::CertificateStore,
 };
 use async_trait::async_trait;
 use futures::{
