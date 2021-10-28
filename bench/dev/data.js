@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1635294175370,
+  "lastUpdate": 1635380635376,
   "repoUrl": "https://github.com/paritytech/jsonrpsee",
   "entries": {
     "Benchmark": [
@@ -4079,6 +4079,346 @@ window.BENCHMARK_DATA = {
             "name": "subscriptions/unsub",
             "value": 1351,
             "range": "± 493",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Niklas Adolfsson",
+            "username": "niklasad1",
+            "email": "niklasadolfsson1@gmail.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "926f8914b0233bf335824f409d30bc23bf4a205b",
+          "message": "feat(ws client): support custom headers. (#535)\n\n* feat(ws client): support custom headers.\r\n\r\nClosing #531\r\n\r\n* remove empty line\r\n\r\n* address grumbles: more user-friendly API\r\n\r\n* Update ws-client/src/client.rs\r\n\r\nCo-authored-by: David <dvdplm@gmail.com>\r\n\r\n* Update ws-client/src/client.rs\r\n\r\nCo-authored-by: David <dvdplm@gmail.com>\r\n\r\n* Update ws-client/src/client.rs\r\n\r\nCo-authored-by: David <dvdplm@gmail.com>\r\n\r\n* address grumbles\r\n\r\nCo-authored-by: David <dvdplm@gmail.com>",
+          "timestamp": "2021-10-21T11:46:41Z",
+          "url": "https://github.com/paritytech/jsonrpsee/commit/926f8914b0233bf335824f409d30bc23bf4a205b"
+        },
+        "date": 1635380634414,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "jsonrpsee_types_v2_array_ref",
+            "value": 180,
+            "range": "± 18",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "jsonrpsee_types_v2_vec",
+            "value": 208,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip",
+            "value": 183441,
+            "range": "± 28976",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/0",
+            "value": 97,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/1",
+            "value": 174723,
+            "range": "± 12436",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/2",
+            "value": 158771,
+            "range": "± 14265",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/4",
+            "value": 251118,
+            "range": "± 17463",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/8",
+            "value": 438808,
+            "range": "± 59377",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/2",
+            "value": 1919313,
+            "range": "± 93760",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/4",
+            "value": 3639059,
+            "range": "± 146123",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/8",
+            "value": 7066352,
+            "range": "± 300924",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/16",
+            "value": 13733105,
+            "range": "± 527618",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/32",
+            "value": 27446185,
+            "range": "± 959039",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/64",
+            "value": 54795233,
+            "range": "± 2748442",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip",
+            "value": 115646,
+            "range": "± 8823",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/0",
+            "value": 100,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/1",
+            "value": 124530,
+            "range": "± 10250",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/2",
+            "value": 143266,
+            "range": "± 22436",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/4",
+            "value": 177389,
+            "range": "± 137434",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/8",
+            "value": 203880,
+            "range": "± 13113",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/2",
+            "value": 185815,
+            "range": "± 92910",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/4",
+            "value": 294775,
+            "range": "± 35550",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/8",
+            "value": 496570,
+            "range": "± 116048",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/16",
+            "value": 1018896,
+            "range": "± 108381",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/32",
+            "value": 1892315,
+            "range": "± 320749",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/64",
+            "value": 3535575,
+            "range": "± 557831",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip",
+            "value": 174232,
+            "range": "± 25858",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/0",
+            "value": 100,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/1",
+            "value": 172817,
+            "range": "± 15486",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/2",
+            "value": 154280,
+            "range": "± 21011",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/4",
+            "value": 246329,
+            "range": "± 22171",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/8",
+            "value": 430097,
+            "range": "± 35269",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/2",
+            "value": 1911610,
+            "range": "± 247135",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/4",
+            "value": 3565198,
+            "range": "± 307235",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/8",
+            "value": 6899989,
+            "range": "± 430969",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/16",
+            "value": 13574383,
+            "range": "± 748602",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/32",
+            "value": 26952325,
+            "range": "± 1005009",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/64",
+            "value": 53834462,
+            "range": "± 2972843",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip",
+            "value": 112309,
+            "range": "± 13259",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/0",
+            "value": 98,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/1",
+            "value": 127057,
+            "range": "± 23773",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/2",
+            "value": 145645,
+            "range": "± 11772",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/4",
+            "value": 174865,
+            "range": "± 30524",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/8",
+            "value": 198744,
+            "range": "± 14248",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/2",
+            "value": 182057,
+            "range": "± 45512",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/4",
+            "value": 311358,
+            "range": "± 64864",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/8",
+            "value": 509392,
+            "range": "± 65462",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/16",
+            "value": 1010825,
+            "range": "± 86700",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/32",
+            "value": 1965311,
+            "range": "± 173635",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/64",
+            "value": 3618067,
+            "range": "± 520736",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe",
+            "value": 137542,
+            "range": "± 45003",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe_response",
+            "value": 20926,
+            "range": "± 3744",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/unsub",
+            "value": 1593,
+            "range": "± 417",
             "unit": "ns/iter"
           }
         ]
