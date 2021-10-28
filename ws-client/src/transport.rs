@@ -60,6 +60,8 @@ pub struct Receiver {
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 #[derive(Debug)]
 pub struct WsTransportClientBuilder<'a> {
+	/// What certificate store to use
+	pub certificate_store: CertificateStore,
 	/// Remote WebSocket target.
 	pub target: Target,
 	/// Timeout for the connection.
@@ -82,13 +84,23 @@ pub enum Mode {
 	Tls,
 }
 
+/// What certificate store to use
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CertificateStore {
+	/// Use the native system certificate store
+	Native,
+	/// Use webPki's certificate store
+	WebPki,
+}
+
 /// Error that can happen during the WebSocket handshake.
 ///
 /// If multiple IP addresses are attempted, only the last error is returned, similar to how
 /// [`std::net::TcpStream::connect`] behaves.
 #[derive(Debug, Error)]
 pub enum WsHandshakeError {
-	/// Failed to load system certificates
+	/// Failed to load system certs
 	#[error("Failed to load system certs: {0}")]
 	CertificateStore(io::Error),
 
@@ -170,7 +182,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let connector = match self.target.mode {
 			Mode::Tls => {
-				let tls_connector = build_tls_config()?;
+				let tls_connector = build_tls_config(&self.certificate_store)?;
 				Some(tls_connector)
 			}
 			Mode::Plain => None,
@@ -237,7 +249,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 									target = uri.try_into()?;
 									match target.mode {
 										Mode::Tls if tls_connector.is_none() => {
-											tls_connector = Some(build_tls_config()?);
+											tls_connector = Some(build_tls_config(&self.certificate_store)?);
 										}
 										Mode::Tls => (),
 										Mode::Plain => {
@@ -374,21 +386,31 @@ impl TryFrom<Uri> for Target {
 }
 
 // NOTE: this is slow and should be used sparringly.
-fn build_tls_config() -> Result<TlsConnector, WsHandshakeError> {
+fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHandshakeError> {
 	let mut roots = tokio_rustls::rustls::RootCertStore::empty();
 
-	let mut first_error = None;
-	let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
-	for cert in certs {
-		let cert = rustls::Certificate(cert.0);
-		if let Err(err) = roots.add(&cert) {
-			first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
+	match cert_store {
+		CertificateStore::Native => {
+			let mut first_error = None;
+			let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
+			for cert in certs {
+				let cert = rustls::Certificate(cert.0);
+				if let Err(err) = roots.add(&cert) {
+					first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
+				}
+			}
+			if roots.is_empty() {
+				let err = first_error
+					.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No valid certificate found"));
+				return Err(WsHandshakeError::CertificateStore(err));
+			}
 		}
-	}
-	if roots.is_empty() {
-		let err = first_error.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No valid certificate found"));
-		return Err(WsHandshakeError::CertificateStore(err));
-	}
+		_ => {
+			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
+			}));
+		}
+	};
 
 	let config =
 		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(roots).with_no_client_auth();
