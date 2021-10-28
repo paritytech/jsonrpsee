@@ -37,7 +37,6 @@ use crate::{
 		process_notification, process_single_response, process_subscription_response, stop_subscription,
 	},
 	manager::RequestManager,
-	transport::CertificateStore,
 };
 use async_trait::async_trait;
 use futures::{
@@ -105,7 +104,6 @@ pub struct WsClient {
 /// Configuration.
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder<'a> {
-	certificate_store: CertificateStore,
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
@@ -118,7 +116,6 @@ pub struct WsClientBuilder<'a> {
 impl<'a> Default for WsClientBuilder<'a> {
 	fn default() -> Self {
 		Self {
-			certificate_store: CertificateStore::Native,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
@@ -131,12 +128,6 @@ impl<'a> Default for WsClientBuilder<'a> {
 }
 
 impl<'a> WsClientBuilder<'a> {
-	/// Set whether to use system certificates
-	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
-		self.certificate_store = certificate_store;
-		self
-	}
-
 	/// Set max request body size.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
@@ -194,7 +185,6 @@ impl<'a> WsClientBuilder<'a> {
 	///
 	/// Panics if being called outside of `tokio` runtime context.
 	pub async fn build(self, uri: &'a str) -> Result<WsClient, Error> {
-		let certificate_store = self.certificate_store;
 		let max_capacity_per_subscription = self.max_notifs_per_subscription;
 		let max_concurrent_requests = self.max_concurrent_requests;
 		let request_timeout = self.request_timeout;
@@ -204,7 +194,6 @@ impl<'a> WsClientBuilder<'a> {
 		let uri: Uri = uri.parse().map_err(|e: InvalidUri| Error::Transport(e.into()))?;
 
 		let builder = WsTransportClientBuilder {
-			certificate_store,
 			target: uri.try_into().map_err(|e: WsHandshakeError| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
 			origin_header: self.origin_header,

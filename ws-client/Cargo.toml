@@ -10,27 +10,22 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
-tokio = { version = "1", features = ["net", "time", "rt-multi-thread", "macros"] }
-tokio-rustls = "0.23"
-tokio-util = { version = "0.6", features = ["compat"] }
-
 arrayvec = "0.7.1"
 async-trait = "0.1"
 fnv = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 http = "0.2"
 jsonrpsee-types = { path = "../types", version = "0.4.1" }
-tracing = "0.1"
 pin-project = "1"
-
-# TODO(niklasad1): duplicated
 rustls-native-certs = "0.6.0"
-webpki-roots = "0.22.0"
-
 serde = "1"
 serde_json = "1"
 soketto = "0.7"
 thiserror = "1"
+tokio = { version = "1", features = ["net", "time", "rt-multi-thread", "macros"] }
+tokio-rustls = "0.23"
+tokio-util = { version = "0.6", features = ["compat"] }
+tracing = "0.1"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
