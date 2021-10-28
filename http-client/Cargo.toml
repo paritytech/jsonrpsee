@@ -11,17 +11,17 @@ documentation = "https://docs.rs/jsonrpsee-http-client"
 
 [dependencies]
 async-trait = "0.1"
-hyper-rustls = { version = "0.22", features = ["webpki-tokio"] }
+fnv = "1"
 hyper = { version = "0.14.10", features = ["client", "http1", "http2", "tcp"] }
+hyper-rustls = { version = "0.22", features = ["webpki-tokio"] }
 jsonrpsee-types = { path = "../types", version = "0.4.1" }
 jsonrpsee-utils = { path = "../utils", version = "0.4.1", features = ["http-helpers"] }
-tracing = "0.1"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1", features = ["time"] }
 thiserror = "1.0"
+tokio = { version = "1", features = ["time"] }
+tracing = "0.1"
 url = "2.2"
-fnv = "1"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
