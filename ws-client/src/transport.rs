@@ -369,7 +369,7 @@ impl TryFrom<Uri> for Target {
 	}
 }
 
-// NOTE: this is slow and should be used sparringly.
+// NOTE: this is slow and should be used sparingly.
 fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHandshakeError> {
 	let mut roots = tokio_rustls::rustls::RootCertStore::empty();
 
