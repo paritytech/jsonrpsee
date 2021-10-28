@@ -25,7 +25,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{stream::EitherStream, types::CertificateStore};
-use arrayvec::ArrayVec;
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
 use soketto::connection;
@@ -66,9 +65,9 @@ pub struct WsTransportClientBuilder<'a> {
 	pub target: Target,
 	/// Timeout for the connection.
 	pub timeout: Duration,
-	/// `Origin` header to pass during the HTTP handshake. If `None`, no
-	/// `Origin` header is passed.
-	pub origin_header: Option<Cow<'a, str>>,
+	/// Custom headers to pass during the HTTP handshake. If `None`, no
+	/// custom header is passed.
+	pub headers: Vec<Header<'a>>,
 	/// Max payload size
 	pub max_request_body_size: u32,
 	/// Max number of redirections.
@@ -186,12 +185,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 		mut tls_connector: Option<TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut target = self.target;
-		let mut headers: ArrayVec<Header, 1> = ArrayVec::new();
 		let mut err = None;
-
-		if let Some(origin) = self.origin_header.as_ref() {
-			headers.push(Header { name: "Origin", value: origin.as_bytes() });
-		}
 
 		for _ in 0..self.max_redirections {
 			tracing::debug!("Connecting to target: {:?}", target);
@@ -213,7 +207,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 					&target.path_and_query,
 				);
 
-				client.set_headers(&headers);
+				client.set_headers(&self.headers);
 
 				// Perform the initial handshake.
 				match client.handshake().await {

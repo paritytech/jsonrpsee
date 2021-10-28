@@ -49,7 +49,7 @@ use http::uri::{InvalidUri, Uri};
 use tokio::sync::Mutex;
 
 use serde::de::DeserializeOwned;
-use std::{borrow::Cow, convert::TryInto, time::Duration};
+use std::{convert::TryInto, time::Duration};
 
 pub use soketto::handshake::client::Header;
 
@@ -101,14 +101,34 @@ pub struct WsClient {
 	id_guard: RequestIdGuard,
 }
 
-/// Configuration.
+/// Builder for [`WsClient`].
+///
+/// # Examples
+///
+/// ```no_run
+///
+/// use jsonrpsee_ws_client::WsClientBuilder;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     // build client
+///     let client = WsClientBuilder::default()
+///          .add_header("Any-Header-You-Like", "42")
+///          .build("wss://localhost:443")
+///          .await
+///          .unwrap();
+///
+///     // use client....
+/// }
+///
+/// ```
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder<'a> {
 	certificate_store: CertificateStore,
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	origin_header: Option<Cow<'a, str>>,
+	headers: Vec<Header<'a>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
@@ -121,7 +141,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
-			origin_header: None,
+			headers: Vec::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,
@@ -154,9 +174,11 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set origin header to pass during the handshake.
-	pub fn origin_header(mut self, origin: Cow<'a, str>) -> Self {
-		self.origin_header = Some(origin);
+	/// Set a custom header passed to the server during the handshake.
+	///
+	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
+	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
+		self.headers.push(Header { name, value: value.as_bytes() });
 		self
 	}
 
@@ -206,7 +228,7 @@ impl<'a> WsClientBuilder<'a> {
 			certificate_store,
 			target: uri.try_into().map_err(|e: WsHandshakeError| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
-			origin_header: self.origin_header,
+			headers: self.headers,
 			max_request_body_size: self.max_request_body_size,
 			max_redirections: self.max_redirections,
 		};

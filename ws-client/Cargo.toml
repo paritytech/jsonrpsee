@@ -10,7 +10,6 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
-arrayvec = "0.7.1"
 async-trait = "0.1"
 fnv = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
@@ -29,6 +28,7 @@ tracing = "0.1"
 webpki-roots = "0.22.0"
 
 [dev-dependencies]
-jsonrpsee-test-utils = { path = "../test-utils" }
-jsonrpsee-utils = { path = "../utils" }
 env_logger = "0.9"
+jsonrpsee-test-utils = { path = "../test-utils" }
+jsonrpsee-utils = { path = "../utils", features = ["client"] }
+tokio = { version = "1", features = ["macros"] }
