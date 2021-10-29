@@ -100,8 +100,28 @@ impl RpcDescription {
 			let params = method.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-			quote! {
-				Some(vec![ #(#params),* ].into())
+			if method.param_format == "map" {
+				// Extract parameter names.
+				let param_names = extract_param_names(&method.signature.sig);
+				// Combine parameter names and values into tuples.
+				let params = param_names.iter().zip(params).map(|pair| {
+					let key = pair.0;
+					let value = pair.1;
+					quote! { (#key, #value) }
+				});
+				let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
+				quote! {
+					Some(#jsonrpsee::types::v2::ParamsSer::Map(
+							std::collections::BTreeMap::<&str, #jsonrpsee::types::JsonValue>::from(
+								[#(#params),*]
+								)
+							)
+						)
+				}
+			} else {
+				quote! {
+					Some(vec![ #(#params),* ].into())
+				}
 			}
 		} else {
 			quote! { None }
@@ -145,15 +165,9 @@ impl RpcDescription {
 			});
 			if sub.param_format == "map" {
 				// Extract parameter names.
-				let param_names = rust_method_params.iter().filter_map(|param| match param {
-					FnArg::Typed(PatType { pat, .. }) => match &**pat {
-						Pat::Ident(PatIdent { ident, .. }) => Some(ident.to_string()),
-						_ => None,
-					},
-					_ => None,
-				});
+				let param_names = extract_param_names(&sub.signature.sig);
 				// Combine parameter names and values into tuples.
-				let params = param_names.zip(params).map(|pair| {
+				let params = param_names.iter().zip(params).map(|pair| {
 					let key = pair.0;
 					let value = pair.1;
 					quote! { (#key, #value) }
@@ -187,4 +201,14 @@ impl RpcDescription {
 		};
 		Ok(method)
 	}
+}
+
+fn extract_param_names(sig: &syn::Signature) -> Vec<String> {
+	sig.inputs.iter().filter_map(|param| match param {
+		FnArg::Typed(PatType { pat, .. }) => match &**pat {
+			Pat::Ident(PatIdent { ident, .. }) => Some(ident.to_string()),
+			_ => None,
+		},
+		_ => None,
+	}).collect()
 }

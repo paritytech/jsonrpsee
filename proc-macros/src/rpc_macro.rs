@@ -42,6 +42,7 @@ pub struct RpcMethod {
 	pub blocking: bool,
 	pub docs: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
+	pub param_format: String,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
@@ -50,12 +51,16 @@ pub struct RpcMethod {
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, blocking, name, resources] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "resources"])?;
+		let [aliases, blocking, name, param_format, resources] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_format", "resources"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
+		let param_format = match param_format {
+			Ok(param_format) => param_format.string()?,
+			Err(_) => String::from("array"),
+		};
 		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = method.sig.clone();
@@ -85,7 +90,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, returns, signature: method, docs, resources })
+		Ok(Self { aliases, blocking, name, params, param_format, returns, signature: method, docs, resources })
 	}
 }
 
