@@ -249,3 +249,13 @@ impl RequestIdGuard {
 		});
 	}
 }
+
+/// What certificate store to use
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CertificateStore {
+	/// Use the native system certificate store
+	Native,
+	/// Use WebPKI's certificate store
+	WebPki,
+}
