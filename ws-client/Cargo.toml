@@ -11,7 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 tokio = { version = "1", features = ["net", "time", "rt-multi-thread", "macros"] }
-tokio-rustls = "0.22"
+tokio-rustls = { version = "0.22", optional = true }
 tokio-util = { version = "0.6", features = ["compat"] }
 
 async-trait = "0.1"
@@ -26,9 +26,14 @@ serde_json = "1"
 soketto = "0.7"
 thiserror = "1"
 tracing = "0.1"
+webpki-roots = "0.21"
 
 [dev-dependencies]
 env_logger = "0.9"
 jsonrpsee-test-utils = { path = "../test-utils" }
 jsonrpsee-utils = { path = "../utils" }
 tokio = { version = "1", features = ["macros"] }
+
+[features]
+default = ["tls"]
+tls = ["tokio-rustls"]

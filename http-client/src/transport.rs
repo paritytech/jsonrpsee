@@ -8,11 +8,29 @@
 
 use crate::types::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
-use hyper_rustls::HttpsConnector;
 use jsonrpsee_utils::http_helpers;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
+
+#[derive(Debug, Clone)]
+enum HyperClient {
+	/// Hyper client with https connector.
+	#[cfg(feature = "tls")]
+	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>>),
+	/// Hyper client with http connector.
+	Http(Client<HttpConnector>),
+}
+
+impl HyperClient {
+	fn request(&self, req: hyper::Request<hyper::Body>) -> hyper::client::ResponseFuture {
+		match self {
+			Self::Http(client) => client.request(req),
+			#[cfg(feature = "tls")]
+			Self::Https(client) => client.request(req),
+		}
+	}
+}
 
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
@@ -20,7 +38,7 @@ pub(crate) struct HttpTransportClient {
 	/// Target to connect to.
 	target: url::Url,
 	/// HTTP client
-	client: Client<HttpsConnector<HttpConnector>>,
+	client: HyperClient,
 	/// Configurable max request body size
 	max_request_body_size: u32,
 }
@@ -29,13 +47,27 @@ impl HttpTransportClient {
 	/// Initializes a new HTTP client.
 	pub(crate) fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
-		if target.scheme() == "http" || target.scheme() == "https" {
-			let connector = HttpsConnector::with_native_roots();
-			let client = Client::builder().build::<_, hyper::Body>(connector);
-			Ok(HttpTransportClient { target, client, max_request_body_size })
-		} else {
-			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
-		}
+		let client = match target.scheme() {
+			"http" => {
+				let connector = HttpConnector::new();
+				let client = Client::builder().build::<_, hyper::Body>(connector);
+				HyperClient::Http(client)
+			}
+			#[cfg(feature = "tls")]
+			"https" => {
+				let connector = hyper_rustls::HttpsConnector::with_native_roots();
+				let client = Client::builder().build::<_, hyper::Body>(connector);
+				HyperClient::Https(client)
+			}
+			_ => {
+				#[cfg(feature = "tls")]
+				let err = "URL scheme not supported, expects 'http' or 'https'";
+				#[cfg(not(feature = "tls"))]
+				let err = "URL scheme not supported, expects 'http'";
+				return Err(Error::Url(err.into()));
+			}
+		};
+		Ok(Self { target, client, max_request_body_size })
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {

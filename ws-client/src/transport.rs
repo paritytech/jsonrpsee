@@ -40,25 +40,17 @@ use std::{
 };
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio_rustls::{
-	client::TlsStream,
-	rustls::ClientConfig,
-	webpki::{DNSNameRef, InvalidDNSNameError},
-	TlsConnector,
-};
-
-type TlsOrPlain = EitherStream<TcpStream, TlsStream<TcpStream>>;
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
 pub struct Sender {
-	inner: connection::Sender<BufReader<BufWriter<TlsOrPlain>>>,
+	inner: connection::Sender<BufReader<BufWriter<EitherStream>>>,
 }
 
 /// Receiving end of WebSocket transport.
 #[derive(Debug)]
 pub struct Receiver {
-	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
+	inner: connection::Receiver<BufReader<BufWriter<EitherStream>>>,
 }
 
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
@@ -121,8 +113,9 @@ pub enum WsHandshakeError {
 	Transport(#[source] soketto::handshake::Error),
 
 	/// Invalid DNS name error for TLS
+	#[cfg(feature = "tls")]
 	#[error("Invalid DNS name: {0}")]
-	InvalidDnsName(#[source] InvalidDNSNameError),
+	InvalidDnsName(#[source] tokio_rustls::webpki::InvalidDNSNameError),
 
 	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {status_code}")]
@@ -184,25 +177,10 @@ impl Receiver {
 impl<'a> WsTransportClientBuilder<'a> {
 	/// Try to establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let connector = match self.target.mode {
-			Mode::Tls => {
-				let mut client_config = ClientConfig::default();
-				if let CertificateStore::Native = self.certificate_store {
-					client_config.root_store = rustls_native_certs::load_native_certs()
-						.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
-				}
-				Some(Arc::new(client_config).into())
-			}
-			Mode::Plain => None,
-		};
-
-		self.try_connect(connector).await
+		self.try_connect().await
 	}
 
-	async fn try_connect(
-		self,
-		mut tls_connector: Option<TlsConnector>,
-	) -> Result<(Sender, Receiver), WsHandshakeError> {
+	async fn try_connect(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut target = self.target;
 		let mut err = None;
 
@@ -212,14 +190,15 @@ impl<'a> WsTransportClientBuilder<'a> {
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
-				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, &tls_connector).await {
-					Ok(stream) => stream,
-					Err(e) => {
-						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
-						err = Some(Err(e));
-						continue;
-					}
-				};
+				let tcp_stream =
+					match connect(*sockaddr, self.timeout, &target.host, &self.certificate_store, &target.mode).await {
+						Ok(stream) => stream,
+						Err(e) => {
+							tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+							err = Some(Err(e));
+							continue;
+						}
+					};
 				let mut client = WsHandshakeClient::new(
 					BufReader::new(BufWriter::new(tcp_stream)),
 					&target.host_header,
@@ -250,17 +229,6 @@ impl<'a> WsTransportClientBuilder<'a> {
 								// Absolute URI.
 								if uri.scheme().is_some() {
 									target = uri.try_into()?;
-									tls_connector = match target.mode {
-										Mode::Tls => {
-											let mut client_config = ClientConfig::default();
-											if let CertificateStore::Native = self.certificate_store {
-												client_config.root_store = rustls_native_certs::load_native_certs()
-													.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
-											}
-											Some(Arc::new(client_config).into())
-										}
-										Mode::Plain => None,
-									};
 								}
 								// Relative URI.
 								else {
@@ -303,12 +271,14 @@ impl<'a> WsTransportClientBuilder<'a> {
 	}
 }
 
+#[cfg(feature = "tls")]
 async fn connect(
 	sockaddr: SocketAddr,
 	timeout_dur: Duration,
 	host: &str,
-	tls_connector: &Option<TlsConnector>,
-) -> Result<EitherStream<TcpStream, TlsStream<TcpStream>>, WsHandshakeError> {
+	cert_store: &CertificateStore,
+	mode: &Mode,
+) -> Result<EitherStream, WsHandshakeError> {
 	let socket = TcpStream::connect(sockaddr);
 	let timeout = tokio::time::sleep(timeout_dur);
 	tokio::select! {
@@ -317,14 +287,37 @@ async fn connect(
 			if let Err(err) = socket.set_nodelay(true) {
 				tracing::warn!("set nodelay failed: {:?}", err);
 			}
-			match tls_connector {
-				None => Ok(TlsOrPlain::Plain(socket)),
-				Some(connector) => {
-					let dns_name = DNSNameRef::try_from_ascii_str(host)?;
+			match mode {
+				Mode::Plain => Ok(EitherStream::Plain(socket)),
+				Mode::Tls => {
+					// TODO(niklasad1): cache this.
+					let connector = build_tls_config(cert_store)?;
+					let dns_name = tokio_rustls::webpki::DNSNameRef::try_from_ascii_str(host)?;
 					let tls_stream = connector.connect(dns_name, socket).await?;
-					Ok(TlsOrPlain::Tls(tls_stream))
+					Ok(EitherStream::Tls(tls_stream))
 				}
 			}
+		}
+		_ = timeout => Err(WsHandshakeError::Timeout(timeout_dur))
+	}
+}
+
+#[cfg(not(feature = "tls"))]
+async fn connect(
+	sockaddr: SocketAddr,
+	timeout_dur: Duration,
+	host: &str,
+	cert_store: &CertificateStore,
+) -> Result<EitherStream, WsHandshakeError> {
+	let socket = TcpStream::connect(sockaddr);
+	let timeout = tokio::time::sleep(timeout_dur);
+	tokio::select! {
+		socket = socket => {
+			let socket = socket?;
+			if let Err(err) = socket.set_nodelay(true) {
+				tracing::warn!("set nodelay failed: {:?}", err);
+			}
+			Ok(EitherStream::Plain(socket))
 		}
 		_ = timeout => Err(WsHandshakeError::Timeout(timeout_dur))
 	}
@@ -336,8 +329,9 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-impl From<InvalidDNSNameError> for WsHandshakeError {
-	fn from(err: InvalidDNSNameError) -> WsHandshakeError {
+#[cfg(feature = "tls")]
+impl From<tokio_rustls::webpki::InvalidDNSNameError> for WsHandshakeError {
+	fn from(err: tokio_rustls::webpki::InvalidDNSNameError) -> WsHandshakeError {
 		WsHandshakeError::InvalidDnsName(err)
 	}
 }
@@ -375,6 +369,7 @@ impl TryFrom<Uri> for Target {
 	fn try_from(uri: Uri) -> Result<Self, Self::Error> {
 		let mode = match uri.scheme_str() {
 			Some("ws") => Mode::Plain,
+			#[cfg(feature = "tls")]
 			Some("wss") => Mode::Tls,
 			_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
 		};
@@ -388,6 +383,21 @@ impl TryFrom<Uri> for Target {
 		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
 		Ok(Self { sockaddrs: sockaddrs.collect(), host, host_header, mode, path_and_query: path_and_query.to_string() })
 	}
+}
+
+#[cfg(feature = "tls")]
+fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsConnector, WsHandshakeError> {
+	let mut client_config = tokio_rustls::rustls::ClientConfig::default();
+	match cert_store {
+		CertificateStore::Native => {
+			client_config.root_store =
+				rustls_native_certs::load_native_certs().map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
+		}
+		CertificateStore::WebPki => {
+			client_config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+		}
+	};
+	Ok(Arc::new(client_config).into())
 }
 
 #[cfg(test)]

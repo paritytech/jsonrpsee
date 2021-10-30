@@ -245,7 +245,7 @@ async fn https_works() {
 #[tokio::test]
 #[ignore]
 async fn wss_works() {
-	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
+	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io:443").await.unwrap();
 	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
