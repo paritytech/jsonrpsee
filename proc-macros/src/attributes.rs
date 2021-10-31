@@ -43,7 +43,7 @@ pub(crate) struct Argument {
 #[derive(Debug, Clone)]
 pub enum ParamFormat {
 	Array,
-	Map
+	Map,
 }
 
 #[derive(Debug, Clone)]
@@ -198,8 +198,8 @@ where
 
 pub(crate) fn parse_param_format(arg: Result<Argument, MissingArgument>) -> ParamFormat {
 	match optional(arg, Argument::string).unwrap().as_deref() {
-			None | Some("array") => ParamFormat::Array,
-			Some("map") => ParamFormat::Map,
-			err => panic!("param_format must be either `map` or `array`, got {:?}", err)
+		None | Some("array") => ParamFormat::Array,
+		Some("map") => ParamFormat::Map,
+		err => panic!("param_format must be either `map` or `array`, got {:?}", err),
 	}
 }
