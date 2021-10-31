@@ -23,7 +23,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-
+use crate::attributes::ParamFormat;
 use crate::helpers::generate_where_clause;
 use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
@@ -100,8 +100,8 @@ impl RpcDescription {
 			let params = method.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-			match method.param_format.as_deref() {
-				Some("map") => {
+			match method.param_format {
+				ParamFormat::Map => {
 					// Extract parameter names.
 					let param_names = extract_param_names(&method.signature.sig);
 					// Combine parameter names and values into tuples.
@@ -120,12 +120,11 @@ impl RpcDescription {
 							)
 					}
 				}
-				Some("array") => {
+				ParamFormat::Array => {
 					quote! {
 						Some(vec![ #(#params),* ].into())
 					}
 				}
-				_ => panic!(""), // FIXME
 			}
 		} else {
 			quote! { None }
@@ -167,8 +166,8 @@ impl RpcDescription {
 			let params = sub.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-			match sub.param_format.as_deref() {
-				Some("map") => {
+			match sub.param_format {
+				ParamFormat::Map => {
 					// Extract parameter names.
 					let param_names = extract_param_names(&sub.signature.sig);
 					// Combine parameter names and values into tuples.
@@ -187,12 +186,11 @@ impl RpcDescription {
 							)
 					}
 				}
-				Some("array") => {
+				ParamFormat::Array => {
 					quote! {
 						Some(vec![ #(#params),* ].into())
 					}
 				}
-				_ => panic!(""), // FIXME
 			}
 		} else {
 			quote! { None }

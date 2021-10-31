@@ -27,7 +27,7 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{optional, Argument, AttributeMeta, MissingArgument, Resource},
+	attributes::{optional, parse_param_format, Argument, AttributeMeta, MissingArgument, ParamFormat, Resource},
 	helpers::extract_doc_comments,
 };
 
@@ -42,7 +42,7 @@ pub struct RpcMethod {
 	pub blocking: bool,
 	pub docs: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
-	pub param_format: Option<String>,
+	pub param_format: ParamFormat,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
@@ -57,7 +57,7 @@ impl RpcMethod {
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
-		let param_format = optional(param_format, Argument::string)?.or(Some("array".into()));
+		let param_format = parse_param_format(param_format);
 		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = method.sig.clone();
@@ -97,7 +97,7 @@ pub struct RpcSubscription {
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
-	pub param_format: Option<String>,
+	pub param_format: ParamFormat,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
@@ -112,7 +112,7 @@ impl RpcSubscription {
 		let aliases = parse_aliases(aliases)?;
 		let name = name?.string()?;
 		let item = item?.value()?;
-		let param_format = optional(param_format, Argument::string)?.or(Some("array".into()));
+		let param_format = parse_param_format(param_format);
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
 		let sig = sub.sig.clone();
