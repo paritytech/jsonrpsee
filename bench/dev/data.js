@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1635639754605,
+  "lastUpdate": 1635726224111,
   "repoUrl": "https://github.com/paritytech/jsonrpsee",
   "entries": {
     "Benchmark": [
@@ -5439,6 +5439,346 @@ window.BENCHMARK_DATA = {
             "name": "subscriptions/unsub",
             "value": 964,
             "range": "± 135",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "dependabot[bot]",
+            "username": "dependabot[bot]",
+            "email": "49699333+dependabot[bot]@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "68154226650808d795d018989ea269c60c47c96d",
+          "message": "clients: add support for `webpki and native certificate stores` (#533)\n\n* Update tokio-rustls requirement from 0.22 to 0.23\r\n\r\nUpdates the requirements on [tokio-rustls](https://github.com/tokio-rs/tls) to permit the latest version.\r\n- [Release notes](https://github.com/tokio-rs/tls/releases)\r\n- [Commits](https://github.com/tokio-rs/tls/commits)\r\n\r\n---\r\nupdated-dependencies:\r\n- dependency-name: tokio-rustls\r\n  dependency-type: direct:production\r\n...\r\n\r\nSigned-off-by: dependabot[bot] <support@github.com>\r\n\r\n* push fixes but requires rustls-native-certs v0.6\r\n\r\n* update native certs to 0.6.0\r\n\r\n* fix clippy warnings\r\n\r\n* remove webpki roots support\r\n\r\n* Revert \"remove webpki roots support\"\r\n\r\nThis reverts commit 1144d567b343049ab7c967d320fc2fe162ba0f7c.\r\n\r\n* support both native cert store and webpki\r\n\r\n* sort deps in Cargo.toml\r\n\r\n* Update ws-client/src/transport.rs\r\n\r\nCo-authored-by: David <dvdplm@gmail.com>\r\n\r\nCo-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>\r\nCo-authored-by: Niklas Adolfsson <niklasadolfsson1@gmail.com>\r\nCo-authored-by: David <dvdplm@gmail.com>",
+          "timestamp": "2021-10-29T19:42:13Z",
+          "url": "https://github.com/paritytech/jsonrpsee/commit/68154226650808d795d018989ea269c60c47c96d"
+        },
+        "date": 1635726223556,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "jsonrpsee_types_v2_array_ref",
+            "value": 173,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "jsonrpsee_types_v2_vec",
+            "value": 193,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip",
+            "value": 144956,
+            "range": "± 4900",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/0",
+            "value": 106,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/1",
+            "value": 129387,
+            "range": "± 6951",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/2",
+            "value": 111318,
+            "range": "± 2721",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/4",
+            "value": 181806,
+            "range": "± 6993",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/8",
+            "value": 314248,
+            "range": "± 5643",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/2",
+            "value": 1819437,
+            "range": "± 36836",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/4",
+            "value": 3514170,
+            "range": "± 63653",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/8",
+            "value": 6985949,
+            "range": "± 119699",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/16",
+            "value": 13801840,
+            "range": "± 356508",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/32",
+            "value": 27238797,
+            "range": "± 405544",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/64",
+            "value": 54779874,
+            "range": "± 1823891",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip",
+            "value": 74803,
+            "range": "± 2329",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/0",
+            "value": 105,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/1",
+            "value": 98167,
+            "range": "± 2008",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/2",
+            "value": 106786,
+            "range": "± 23785",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/4",
+            "value": 112624,
+            "range": "± 3270",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/8",
+            "value": 171126,
+            "range": "± 3638",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/2",
+            "value": 134757,
+            "range": "± 4570",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/4",
+            "value": 225595,
+            "range": "± 5136",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/8",
+            "value": 390818,
+            "range": "± 42793",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/16",
+            "value": 783953,
+            "range": "± 44852",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/32",
+            "value": 1507387,
+            "range": "± 74000",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/64",
+            "value": 2927009,
+            "range": "± 223062",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip",
+            "value": 144237,
+            "range": "± 6013",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/0",
+            "value": 99,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/1",
+            "value": 127525,
+            "range": "± 3346",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/2",
+            "value": 106482,
+            "range": "± 3361",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/4",
+            "value": 179944,
+            "range": "± 9483",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/8",
+            "value": 308279,
+            "range": "± 7679",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/2",
+            "value": 1834309,
+            "range": "± 29993",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/4",
+            "value": 3563315,
+            "range": "± 64651",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/8",
+            "value": 7048937,
+            "range": "± 73616",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/16",
+            "value": 13757960,
+            "range": "± 160540",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/32",
+            "value": 27706673,
+            "range": "± 388367",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/64",
+            "value": 55500002,
+            "range": "± 684280",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip",
+            "value": 75095,
+            "range": "± 2689",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/0",
+            "value": 98,
+            "range": "± 2",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/1",
+            "value": 94044,
+            "range": "± 1773",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/2",
+            "value": 105102,
+            "range": "± 3678",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/4",
+            "value": 114336,
+            "range": "± 3599",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/8",
+            "value": 168896,
+            "range": "± 8510",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/2",
+            "value": 135095,
+            "range": "± 4402",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/4",
+            "value": 221475,
+            "range": "± 5068",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/8",
+            "value": 385957,
+            "range": "± 30213",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/16",
+            "value": 786641,
+            "range": "± 27477",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/32",
+            "value": 1544345,
+            "range": "± 71324",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/64",
+            "value": 2937119,
+            "range": "± 245117",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe",
+            "value": 89082,
+            "range": "± 3138",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe_response",
+            "value": 18566,
+            "range": "± 2663",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/unsub",
+            "value": 1000,
+            "range": "± 127",
             "unit": "ns/iter"
           }
         ]
