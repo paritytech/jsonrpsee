@@ -268,3 +268,13 @@ mod tests {
 		assert!(guard.next_request_id().is_ok());
 	}
 }
+
+/// What certificate store to use
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CertificateStore {
+	/// Use the native system certificate store
+	Native,
+	/// Use WebPKI's certificate store
+	WebPki,
+}

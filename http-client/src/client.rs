@@ -28,7 +28,7 @@ use crate::transport::HttpTransportClient;
 use crate::types::{
 	traits::Client,
 	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
-	Error, RequestIdGuard, TEN_MB_SIZE_BYTES,
+	CertificateStore, Error, RequestIdGuard, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
 use fnv::FnvHashMap;
@@ -41,6 +41,7 @@ pub struct HttpClientBuilder {
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
+	certificate_store: CertificateStore,
 }
 
 impl HttpClientBuilder {
@@ -62,10 +63,16 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Set which certificate store to use.
+	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
+		self.certificate_store = certificate_store;
+		self
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
-		let transport =
-			HttpTransportClient::new(target, self.max_request_body_size).map_err(|e| Error::Transport(e.into()))?;
+		let transport = HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store)
+			.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
 			id_guard: RequestIdGuard::new(self.max_concurrent_requests),
@@ -80,6 +87,7 @@ impl Default for HttpClientBuilder {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
+			certificate_store: CertificateStore::Native,
 		}
 	}
 }
