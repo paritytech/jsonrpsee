@@ -123,7 +123,7 @@ impl Client for HttpClient {
 		let id = self.id_guard.next_request_id()?;
 		let request = RequestSer::new(Id::Number(*id.inner()), method, params);
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(|e| Error::ParseError(e))?);
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => {
@@ -168,7 +168,7 @@ impl Client for HttpClient {
 		}
 
 		let fut =
-			self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(|e| Error::ParseError(e))?);
+			self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
 
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
@@ -176,13 +176,11 @@ impl Client for HttpClient {
 			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
-		let rps: Vec<Response<_>> = match serde_json::from_slice(&body) {
-			Ok(response) => response,
-			Err(_) => {
-				let err: RpcError = serde_json::from_slice(&body).map_err(|e| Error::ParseError(e))?;
-				return Err(Error::Request(err.to_string()));
-			}
-		};
+		let rps: Vec<Response<_>> =
+			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<RpcError>(&body) {
+				Ok(e) => Error::Request(e.to_string()),
+				Err(e) => Error::ParseError(e),
+			})?;
 
 		// NOTE: `R::default` is placeholder and will be replaced in loop below.
 		let mut responses = vec![R::default(); ordered_requests.len()];

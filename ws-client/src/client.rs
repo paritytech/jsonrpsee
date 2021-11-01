@@ -275,7 +275,7 @@ impl Client for WsClient {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_guard.next_request_id()?;
 		let notif = NotificationSer::new(method, params);
-		let raw = serde_json::to_string(&notif).map_err(|e| Error::ParseError(e))?;
+		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send notification: {:?}", raw);
 
 		let mut sender = self.to_back.clone();
@@ -302,7 +302,7 @@ impl Client for WsClient {
 		let req_id = self.id_guard.next_request_id()?;
 		let id = *req_id.inner();
 		let raw = serde_json::to_string(&RequestSer::new(Id::Number(id), method, params))
-			.map_err(|e| Error::ParseError(e))?;
+			.map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
@@ -337,7 +337,7 @@ impl Client for WsClient {
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
-		let raw = serde_json::to_string(&batches).map_err(|e| Error::ParseError(e))?;
+		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send batch request: {:?}", raw);
 		if self
 			.to_back
@@ -385,7 +385,7 @@ impl SubscriptionClient for WsClient {
 
 		let ids = self.id_guard.next_request_ids(2)?;
 		let raw = serde_json::to_string(&RequestSer::new(Id::Number(ids.inner()[0]), subscribe_method, params))
-			.map_err(|e| Error::ParseError(e))?;
+			.map_err(Error::ParseError)?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
