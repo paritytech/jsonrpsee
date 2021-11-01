@@ -301,8 +301,7 @@ impl Client for WsClient {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let req_id = self.id_guard.next_request_id()?;
 		let id = *req_id.inner();
-		let raw = serde_json::to_string(&RequestSer::new(Id::Number(id), method, params))
-			.map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&RequestSer::new(Id::Number(id), method, params)).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
 
 		if self

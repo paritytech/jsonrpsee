@@ -167,8 +167,7 @@ impl Client for HttpClient {
 			request_set.insert(ids.inner()[pos], pos);
 		}
 
-		let fut =
-			self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
 
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
