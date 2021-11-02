@@ -164,6 +164,7 @@ pub(crate) mod visitor;
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `aliases`: list of name aliases for the RPC method as a comma separated string.
 /// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
+/// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
 /// **Method requirements:**
 ///
@@ -180,6 +181,7 @@ pub(crate) mod visitor;
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `unsub` (mandatory): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
 /// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
+/// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
 /// **Method requirements:**
 ///
