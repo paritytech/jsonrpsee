@@ -23,7 +23,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-use crate::attributes::ParamFormat;
+use crate::attributes::ParamKind;
 use crate::helpers::generate_where_clause;
 use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
@@ -100,27 +100,26 @@ impl RpcDescription {
 			let params = method.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-			match method.param_format {
-				ParamFormat::Map => {
+			match method.param_kind {
+				ParamKind::Map => {
 					// Extract parameter names.
 					let param_names = extract_param_names(&method.signature.sig);
 					// Combine parameter names and values into tuples.
 					let params = param_names.iter().zip(params).map(|pair| {
-						let key = pair.0;
+						let param = pair.0;
 						let value = pair.1;
-						quote! { (#key, #value) }
+						quote! { (#param, #value) }
 					});
-					let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 					quote! {
-						Some(#jsonrpsee::types::v2::ParamsSer::Map(
-								std::collections::BTreeMap::<&str, #jsonrpsee::types::JsonValue>::from(
+						Some(types::v2::ParamsSer::Map(
+								std::collections::BTreeMap::<&str, #serde_json::Value>::from(
 									[#(#params),*]
 									)
 								)
 							)
 					}
 				}
-				ParamFormat::Array => {
+				ParamKind::Array => {
 					quote! {
 						Some(vec![ #(#params),* ].into())
 					}
@@ -166,27 +165,26 @@ impl RpcDescription {
 			let params = sub.params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-			match sub.param_format {
-				ParamFormat::Map => {
+			match sub.param_kind {
+				ParamKind::Map => {
 					// Extract parameter names.
 					let param_names = extract_param_names(&sub.signature.sig);
 					// Combine parameter names and values into tuples.
 					let params = param_names.iter().zip(params).map(|pair| {
-						let key = pair.0;
+						let param = pair.0;
 						let value = pair.1;
-						quote! { (#key, #value) }
+						quote! { (#param, #value) }
 					});
-					let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 					quote! {
-						Some(#jsonrpsee::types::v2::ParamsSer::Map(
-								std::collections::BTreeMap::<&str, #jsonrpsee::types::JsonValue>::from(
+						Some(types::v2::ParamsSer::Map(
+								std::collections::BTreeMap::<&str, #serde_json::Value>::from(
 									[#(#params),*]
 									)
 								)
 							)
 					}
 				}
-				ParamFormat::Array => {
+				ParamKind::Array => {
 					quote! {
 						Some(vec![ #(#params),* ].into())
 					}

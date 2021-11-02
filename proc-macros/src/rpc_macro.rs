@@ -27,7 +27,7 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{optional, parse_param_format, Argument, AttributeMeta, MissingArgument, ParamFormat, Resource},
+	attributes::{optional, parse_param_kind, Argument, AttributeMeta, MissingArgument, ParamKind, Resource},
 	helpers::extract_doc_comments,
 };
 
@@ -42,7 +42,7 @@ pub struct RpcMethod {
 	pub blocking: bool,
 	pub docs: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
-	pub param_format: ParamFormat,
+	pub param_kind: ParamKind,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
@@ -51,13 +51,13 @@ pub struct RpcMethod {
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, blocking, name, param_format, resources] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_format", "resources"])?;
+		let [aliases, blocking, name, param_kind, resources] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "resources"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
-		let param_format = parse_param_format(param_format);
+		let param_kind = parse_param_kind(param_kind);
 		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = method.sig.clone();
@@ -87,7 +87,7 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_format, returns, signature: method, docs, resources })
+		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, resources })
 	}
 }
 
@@ -97,7 +97,7 @@ pub struct RpcSubscription {
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
-	pub param_format: ParamFormat,
+	pub param_kind: ParamKind,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
@@ -106,13 +106,13 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, param_format, unsubscribe_aliases] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "param_format", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_kind, unsubscribe_aliases] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let name = name?.string()?;
 		let item = item?.value()?;
-		let param_format = parse_param_format(param_format);
+		let param_kind = parse_param_kind(param_kind);
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
 		let sig = sub.sig.clone();
@@ -134,7 +134,7 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, param_format, item, signature: sub, aliases, docs })
+		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, param_kind, item, signature: sub, aliases, docs })
 	}
 }
 

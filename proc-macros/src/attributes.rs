@@ -41,7 +41,7 @@ pub(crate) struct Argument {
 }
 
 #[derive(Debug, Clone)]
-pub enum ParamFormat {
+pub enum ParamKind {
 	Array,
 	Map,
 }
@@ -196,10 +196,10 @@ where
 	arg.ok().map(transform).transpose()
 }
 
-pub(crate) fn parse_param_format(arg: Result<Argument, MissingArgument>) -> ParamFormat {
+pub(crate) fn parse_param_kind(arg: Result<Argument, MissingArgument>) -> ParamKind {
 	match optional(arg, Argument::string).unwrap().as_deref() {
-		None | Some("array") => ParamFormat::Array,
-		Some("map") => ParamFormat::Map,
-		err => panic!("param_format must be either `map` or `array`, got {:?}", err),
+		None | Some("array") => ParamKind::Array,
+		Some("map") => ParamKind::Map,
+		err => panic!("param_kind must be either `map` or `array`, got {:?}", err),
 	}
 }

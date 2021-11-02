@@ -9,10 +9,10 @@ use std::net::SocketAddr;
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
-	#[method(name="method_with_array_param", param_format="array")]
+	#[method(name="method_with_array_param", param_kind="array")]
 	async fn method_with_array_param(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
-	#[method(name="method_with_map_param", param_format="map")]
+	#[method(name="method_with_map_param", param_kind="map")]
 	async fn method_with_map_param(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
 	#[method(name="method_with_default_param")]
@@ -59,5 +59,5 @@ async fn main() {
 
 	assert_eq!(client.method_with_array_param(0, "a".into()).await.unwrap(), 42);
 	assert_eq!(client.method_with_map_param(0, "a".into()).await.unwrap(), 42);
-	assert_eq!(client.method_with_array_param(0, "a".into()).await.unwrap(), 42);
+	assert_eq!(client.method_with_default_param(0, "a".into()).await.unwrap(), 42);
 }
