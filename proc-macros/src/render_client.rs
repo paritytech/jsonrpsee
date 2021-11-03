@@ -96,7 +96,7 @@ impl RpcDescription {
 
 		// Encoded parameters for the request.
 		let parameters = self.encode_params(&method.params, &method.param_kind, &method.signature);
-				// Doc-comment to be associated with the method.
+		// Doc-comment to be associated with the method.
 		let docs = &method.docs;
 
 		let method = quote! {
