@@ -57,7 +57,7 @@ impl RpcMethod {
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
-		let param_kind = parse_param_kind(param_kind);
+		let param_kind = parse_param_kind(param_kind)?;
 		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = method.sig.clone();
@@ -112,7 +112,7 @@ impl RpcSubscription {
 		let aliases = parse_aliases(aliases)?;
 		let name = name?.string()?;
 		let item = item?.value()?;
-		let param_kind = parse_param_kind(param_kind);
+		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
 		let sig = sub.sig.clone();

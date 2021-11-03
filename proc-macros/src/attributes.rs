@@ -196,10 +196,13 @@ where
 	arg.ok().map(transform).transpose()
 }
 
-pub(crate) fn parse_param_kind(arg: Result<Argument, MissingArgument>) -> ParamKind {
-	match optional(arg, Argument::string).unwrap().as_deref() {
-		None | Some("array") => ParamKind::Array,
-		Some("map") => ParamKind::Map,
-		err => panic!("param_kind must be either `map` or `array`, got {:?}", err),
+pub(crate) fn parse_param_kind(arg: Result<Argument, MissingArgument>) -> syn::Result<ParamKind> {
+	let kind: Option<syn::Ident> = optional(arg, Argument::value)?;
+
+	match kind {
+		None => Ok(ParamKind::Array),
+		Some(ident) if ident == "array" => Ok(ParamKind::Array),
+		Some(ident) if ident == "map" => Ok(ParamKind::Map),
+		ident => Err(Error::new(ident.span(), "param_kind must be either `map` or `array`")),
 	}
 }

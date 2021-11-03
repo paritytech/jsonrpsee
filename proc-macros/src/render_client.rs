@@ -95,41 +95,8 @@ impl RpcDescription {
 		};
 
 		// Encoded parameters for the request.
-		let parameters = if !method.params.is_empty() {
-			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
-			let params = method.params.iter().map(|(param, _param_type)| {
-				quote! { #serde_json::to_value(&#param)? }
-			});
-			match method.param_kind {
-				ParamKind::Map => {
-					// Extract parameter names.
-					let param_names = extract_param_names(&method.signature.sig);
-					// Combine parameter names and values into tuples.
-					let params = param_names.iter().zip(params).map(|pair| {
-						let param = pair.0;
-						let value = pair.1;
-						quote! { (#param, #value) }
-					});
-					quote! {
-						Some(types::v2::ParamsSer::Map(
-								std::collections::BTreeMap::<&str, #serde_json::Value>::from(
-									[#(#params),*]
-									)
-								)
-							)
-					}
-				}
-				ParamKind::Array => {
-					quote! {
-						Some(vec![ #(#params),* ].into())
-					}
-				}
-			}
-		} else {
-			quote! { None }
-		};
-
-		// Doc-comment to be associated with the method.
+		let parameters = self.encode_params(&method.params, &method.param_kind, &method.signature);
+				// Doc-comment to be associated with the method.
 		let docs = &method.docs;
 
 		let method = quote! {
@@ -160,15 +127,34 @@ impl RpcDescription {
 		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
 
 		// Encoded parameters for the request.
-		let parameters = if !sub.params.is_empty() {
+		let parameters = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
+		// Doc-comment to be associated with the method.
+		let docs = &sub.docs;
+
+		let method = quote! {
+			#docs
+			async fn #rust_method_name(#rust_method_params) -> #returns {
+				self.subscribe(#rpc_sub_name, #parameters, #rpc_unsub_name).await
+			}
+		};
+		Ok(method)
+	}
+
+	fn encode_params(
+		&self,
+		params: &Vec<(syn::PatIdent, syn::Type)>,
+		param_kind: &ParamKind,
+		signature: &syn::TraitItemMethod,
+	) -> TokenStream2 {
+		if !params.is_empty() {
 			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
-			let params = sub.params.iter().map(|(param, _param_type)| {
+			let params = params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
-			match sub.param_kind {
+			match param_kind {
 				ParamKind::Map => {
 					// Extract parameter names.
-					let param_names = extract_param_names(&sub.signature.sig);
+					let param_names = extract_param_names(&signature.sig);
 					// Combine parameter names and values into tuples.
 					let params = param_names.iter().zip(params).map(|pair| {
 						let param = pair.0;
@@ -192,18 +178,7 @@ impl RpcDescription {
 			}
 		} else {
 			quote! { None }
-		};
-
-		// Doc-comment to be associated with the method.
-		let docs = &sub.docs;
-
-		let method = quote! {
-			#docs
-			async fn #rust_method_name(#rust_method_params) -> #returns {
-				self.subscribe(#rpc_sub_name, #parameters, #rpc_unsub_name).await
-			}
-		};
-		Ok(method)
+		}
 	}
 }
 

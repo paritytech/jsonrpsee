@@ -12,7 +12,7 @@ pub trait Rpc {
 	#[method(name = "method_with_array_param", param_kind = array)]
 	async fn method_with_array_param(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
-	#[method(name="method_with_map_param", param_kind="map")]
+	#[method(name="method_with_map_param", param_kind= map)]
 	async fn method_with_map_param(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
 	#[method(name="method_with_default_param")]
