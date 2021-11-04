@@ -70,7 +70,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 
 /// Run jsonrpsee HTTP server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
-pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::http_server::HttpStopHandle) {
+pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::http_server::HttpServerHandle) {
 	use jsonrpsee::http_server::{HttpServerBuilder, RpcModule};
 
 	let server = HttpServerBuilder::default()
@@ -88,7 +88,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 
 /// Run jsonrpsee WebSocket server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
-pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws_server::WsStopHandle) {
+pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws_server::WsServerHandle) {
 	use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 	let server = WsServerBuilder::default()

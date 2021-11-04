@@ -26,8 +26,7 @@
 
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
-use futures_util::future::join_all;
-use futures_util::stream::StreamExt;
+use futures_util::{future::join_all, stream::StreamExt, FutureExt};
 use hyper::{
 	server::{conn::AddrIncoming, Builder as HyperBuilder},
 	service::{make_service_fn, service_fn},
@@ -49,7 +48,10 @@ use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
 use std::{
 	cmp,
+	future::Future,
 	net::{SocketAddr, TcpListener},
+	pin::Pin,
+	task::{Context, Poll},
 };
 
 /// Builder to create JSON-RPC HTTP server.
@@ -143,21 +145,34 @@ impl Default for Builder {
 	}
 }
 
-/// Handle used to stop the running server.
+/// Handle used to run or stop the server.
 #[derive(Debug)]
-pub struct StopHandle {
+pub struct ServerHandle {
 	stop_sender: mpsc::Sender<()>,
-	stop_handle: Option<tokio::task::JoinHandle<()>>,
+	pub(crate) handle: Option<tokio::task::JoinHandle<()>>,
 }
 
-impl StopHandle {
+impl ServerHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
 	pub fn stop(mut self) -> Result<tokio::task::JoinHandle<()>, Error> {
-		let stop = self.stop_sender.try_send(()).map(|_| self.stop_handle.take());
+		let stop = self.stop_sender.try_send(()).map(|_| self.handle.take());
 		match stop {
 			Ok(Some(handle)) => Ok(handle),
 			_ => Err(Error::AlreadyStopped),
 		}
+	}
+}
+
+impl Future for ServerHandle {
+	type Output = ();
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		let handle = match &mut self.handle {
+			Some(handle) => handle,
+			None => return Poll::Ready(()),
+		};
+
+		handle.poll_unpin(cx).map(|_| ())
 	}
 }
 
@@ -185,7 +200,7 @@ impl Server {
 	}
 
 	/// Start the server.
-	pub fn start(mut self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
+	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let access_control = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
@@ -298,7 +313,7 @@ impl Server {
 			let _ = server.with_graceful_shutdown(async move { rx.next().await.map_or((), |_| ()) }).await;
 		});
 
-		Ok(StopHandle { stop_handle: Some(handle), stop_sender: tx })
+		Ok(ServerHandle { handle: Some(handle), stop_sender: tx })
 	}
 }
 

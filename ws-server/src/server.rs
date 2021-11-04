@@ -29,7 +29,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::future::{FutureDriver, StopHandle, StopMonitor};
+use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::{
 	error::Error,
 	v2::{ErrorCode, Id, Request},
@@ -66,14 +66,14 @@ impl Server {
 	}
 
 	/// Returns the handle to stop the running server.
-	pub fn stop_handle(&self) -> StopHandle {
+	pub fn server_handle(&self) -> ServerHandle {
 		self.stop_monitor.handle()
 	}
 
 	/// Start responding to connections requests. This will run on the tokio runtime until the server is stopped.
-	pub fn start(mut self, methods: impl Into<Methods>) -> Result<StopHandle, Error> {
+	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let methods = methods.into().initialize_resources(&self.resources)?;
-		let handle = self.stop_handle();
+		let handle = self.server_handle();
 
 		match self.cfg.tokio_runtime.take() {
 			Some(rt) => rt.spawn(self.start_inner(methods)),

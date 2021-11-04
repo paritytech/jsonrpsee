@@ -166,16 +166,17 @@ impl StopMonitor {
 		self.0.shutdown_requested.load(Ordering::Relaxed)
 	}
 
-	pub(crate) fn handle(&self) -> StopHandle {
-		StopHandle(Arc::downgrade(&self.0))
+	pub(crate) fn handle(&self) -> ServerHandle {
+		ServerHandle(Arc::downgrade(&self.0))
 	}
 }
 
-/// Handle that is able to stop the running server.
+/// Handle that is able to stop the running server or wait for it to finish
+/// its execution.
 #[derive(Debug, Clone)]
-pub struct StopHandle(Weak<MonitorInner>);
+pub struct ServerHandle(Weak<MonitorInner>);
 
-impl StopHandle {
+impl ServerHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
 	///
 	/// Returns a future that can be awaited for when the server shuts down.
@@ -187,6 +188,16 @@ impl StopHandle {
 			}
 		}
 		Err(Error::AlreadyStopped)
+	}
+}
+
+impl Future for ServerHandle {
+	type Output = ();
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		let mut shutdown_waiter = ShutdownWaiter(self.0.clone());
+
+		shutdown_waiter.poll_unpin(cx)
 	}
 }
 
