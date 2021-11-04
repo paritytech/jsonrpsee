@@ -70,7 +70,7 @@ clippy:
   script:
     # FIXME: remove after stable clippy added to ci-linux
     - rustup component add clippy
-    - cargo clippy --all-targets --verbose
+    - cargo clippy --all-targets
     - RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
 
 #### stage:                       test
