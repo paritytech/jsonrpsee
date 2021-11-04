@@ -556,8 +556,8 @@ async fn run_forever() {
 
 	let _ = env_logger::try_init();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
-	// Timed out.
-	server_handle.with_timeout(TIMEOUT).await.unwrap_err();
+
+	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
 
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 
