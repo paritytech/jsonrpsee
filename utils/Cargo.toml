@@ -43,4 +43,4 @@ client = ["jsonrpsee-types"]
 [dev-dependencies]
 serde_json = "1.0"
 tokio = { version = "1", features = ["macros", "rt"] }
-jsonrpsee = { path = "../jsonrpsee" }
+jsonrpsee = { path = "../jsonrpsee", features = ["server", "macros"] }

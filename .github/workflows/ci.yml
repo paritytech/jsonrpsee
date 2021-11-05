@@ -40,7 +40,7 @@ jobs:
       - name: Cargo clippy
         uses: actions-rs/cargo@v1.0.3
         with:
-          command: clippy
+          command: clippy --all-targets
 
       - name: Check rustdoc links
         run: RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
@@ -59,68 +59,14 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo check all targets (use Cargo.toml in workspace)
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --all-targets
-
-      - name: Cargo check HTTP client
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path http-client/Cargo.toml
-
-      - name: Cargo check HTTP server
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path http-server/Cargo.toml
-
-      - name: Cargo check WS client
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path ws-client/Cargo.toml
-
-      - name: Cargo check WS server
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path ws-server/Cargo.toml
-
-      - name: Cargo check types
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path types/Cargo.toml
-
-      - name: Cargo check utils
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path utils/Cargo.toml
-
-      - name: Cargo check proc macros
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path proc-macros/Cargo.toml
-
-      - name: Cargo check test utils
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path test-utils/Cargo.toml
-
-      - name: Cargo check examples
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: check
-          args: --manifest-path examples/Cargo.toml
+      - name: Cargo check all targets and features
+        run: cargo hack check --workspace --each-feature --all-targets
 
   tests:
     name: Run tests Ubuntu
@@ -139,16 +85,11 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo build
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: build
-          args: --workspace
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
 
       - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
+        run: cargo hack test --workspace --each-feature --all-targets
 
   tests_macos:
     name: Run tests macos
@@ -167,16 +108,11 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo build
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: build
-          args: --workspace
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
 
       - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
+        run: cargo hack test --workspace --each-feature --all-targets
 
   tests_windows:
     name: Run tests Windows
@@ -195,13 +131,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo build
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: build
-          args: --workspace
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
 
       - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
+        run: cargo hack test --workspace --each-feature
