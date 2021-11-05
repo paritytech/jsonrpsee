@@ -40,7 +40,8 @@ jobs:
       - name: Cargo clippy
         uses: actions-rs/cargo@v1.0.3
         with:
-          command: clippy --all-targets
+          command: clippy
+          args: --all-targets
 
       - name: Check rustdoc links
         run: RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
