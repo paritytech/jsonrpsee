@@ -86,11 +86,11 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Install cargo-hack
-        run: cargo install cargo-hack
-
       - name: Cargo test
-        run: cargo hack test --workspace --each-feature --all-targets
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+          args: --workspace
 
   tests_macos:
     name: Run tests macos
@@ -109,11 +109,11 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Install cargo-hack
-        run: cargo install cargo-hack
-
       - name: Cargo test
-        run: cargo hack test --workspace --each-feature --all-targets
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+          args: --workspace
 
   tests_windows:
     name: Run tests Windows
@@ -132,8 +132,8 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Install cargo-hack
-        run: cargo install cargo-hack
-
       - name: Cargo test
-        run: cargo hack test --workspace --each-feature
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+          args: --workspace
