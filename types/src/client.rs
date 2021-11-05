@@ -189,7 +189,7 @@ impl<Notif> Drop for Subscription<Notif> {
 
 #[derive(Debug)]
 /// Keep track of request IDs.
-pub struct RequestIdGuard {
+pub struct RequestIdManager {
 	// Current pending requests.
 	current_pending: Arc<()>,
 	/// Max concurrent pending requests allowed.
@@ -198,7 +198,7 @@ pub struct RequestIdGuard {
 	current_id: AtomicU64,
 }
 
-impl RequestIdGuard {
+impl RequestIdManager {
 	/// Create a new `RequestIdGuard` with the provided concurrency limit.
 	pub fn new(limit: usize) -> Self {
 		Self { current_pending: Arc::new(()), max_concurrent_requests: limit, current_id: AtomicU64::new(0) }
@@ -216,34 +216,34 @@ impl RequestIdGuard {
 	/// Attempts to get the next request ID.
 	///
 	/// Fails if request limit has been exceeded.
-	pub fn next_request_id(&self) -> Result<RequestId<u64>, Error> {
+	pub fn next_request_id(&self) -> Result<RequestIdGuard<u64>, Error> {
 		let rc = self.get_slot()?;
 		let id = self.current_id.fetch_add(1, Ordering::SeqCst);
-		Ok(RequestId { _rc: rc, id })
+		Ok(RequestIdGuard { _rc: rc, id })
 	}
 
 	/// Attempts to get the `n` number next IDs that only counts as one request.
 	///
 	/// Fails if request limit has been exceeded.
-	pub fn next_request_ids(&self, len: usize) -> Result<RequestId<Vec<u64>>, Error> {
+	pub fn next_request_ids(&self, len: usize) -> Result<RequestIdGuard<Vec<u64>>, Error> {
 		let rc = self.get_slot()?;
 		let mut ids = Vec::with_capacity(len);
 		for _ in 0..len {
 			ids.push(self.current_id.fetch_add(1, Ordering::SeqCst));
 		}
-		Ok(RequestId { _rc: rc, id: ids })
+		Ok(RequestIdGuard { _rc: rc, id: ids })
 	}
 }
 
 /// Reference counted request ID.
 #[derive(Debug)]
-pub struct RequestId<T> {
+pub struct RequestIdGuard<T> {
 	id: T,
 	/// Reference count decreased when dropped.
 	_rc: Arc<()>,
 }
 
-impl<T> RequestId<T> {
+impl<T> RequestIdGuard<T> {
 	/// Get the actual ID.
 	pub fn inner(&self) -> &T {
 		&self.id
@@ -252,20 +252,20 @@ impl<T> RequestId<T> {
 
 #[cfg(test)]
 mod tests {
-	use super::RequestIdGuard;
+	use super::RequestIdManager;
 
 	#[test]
 	fn request_id_guard_works() {
-		let guard = RequestIdGuard::new(2);
-		let _first = guard.next_request_id().unwrap();
+		let manager = RequestIdManager::new(2);
+		let _first = manager.next_request_id().unwrap();
 
 		{
-			let _second = guard.next_request_ids(13).unwrap();
-			assert!(guard.next_request_id().is_err());
+			let _second = manager.next_request_ids(13).unwrap();
+			assert!(manager.next_request_id().is_err());
 			// second dropped here.
 		}
 
-		assert!(guard.next_request_id().is_ok());
+		assert!(manager.next_request_id().is_ok());
 	}
 }
 

@@ -28,7 +28,7 @@ use crate::transport::HttpTransportClient;
 use crate::types::{
 	traits::Client,
 	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
-	CertificateStore, Error, RequestIdGuard, TEN_MB_SIZE_BYTES,
+	CertificateStore, Error, RequestIdManager, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
 use fnv::FnvHashMap;
@@ -75,7 +75,7 @@ impl HttpClientBuilder {
 			.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
-			id_guard: RequestIdGuard::new(self.max_concurrent_requests),
+			id_manager: RequestIdManager::new(self.max_concurrent_requests),
 			request_timeout: self.request_timeout,
 		})
 	}
@@ -100,7 +100,7 @@ pub struct HttpClient {
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
-	id_guard: RequestIdGuard,
+	id_manager: RequestIdManager,
 }
 
 #[async_trait]
@@ -120,7 +120,7 @@ impl Client for HttpClient {
 	where
 		R: DeserializeOwned,
 	{
-		let id = self.id_guard.next_request_id()?;
+		let id = self.id_manager.next_request_id()?;
 		let request = RequestSer::new(Id::Number(*id.inner()), method, params);
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
@@ -160,7 +160,7 @@ impl Client for HttpClient {
 		let mut ordered_requests = Vec::with_capacity(batch.len());
 		let mut request_set = FnvHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
-		let ids = self.id_guard.next_request_ids(batch.len())?;
+		let ids = self.id_manager.next_request_ids(batch.len())?;
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			batch_request.push(RequestSer::new(Id::Number(ids.inner()[pos]), method, params));
 			ordered_requests.push(ids.inner()[pos]);

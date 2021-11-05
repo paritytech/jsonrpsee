@@ -28,7 +28,7 @@ use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeEr
 use crate::types::{
 	traits::{Client, SubscriptionClient},
 	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
-	BatchMessage, CertificateStore, Error, FrontToBack, RegisterNotificationMessage, RequestIdGuard, RequestMessage,
+	BatchMessage, CertificateStore, Error, FrontToBack, RegisterNotificationMessage, RequestIdManager, RequestMessage,
 	Subscription, SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
 };
 use crate::{
@@ -98,7 +98,7 @@ pub struct WsClient {
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
-	id_guard: RequestIdGuard,
+	id_manager: RequestIdManager,
 }
 
 /// Builder for [`WsClient`].
@@ -242,7 +242,7 @@ impl<'a> WsClientBuilder<'a> {
 			to_back,
 			request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
-			id_guard: RequestIdGuard::new(max_concurrent_requests),
+			id_manager: RequestIdManager::new(max_concurrent_requests),
 		})
 	}
 }
@@ -273,7 +273,7 @@ impl Drop for WsClient {
 impl Client for WsClient {
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
 		// NOTE: we use this to guard against max number of concurrent requests.
-		let _req_id = self.id_guard.next_request_id()?;
+		let _req_id = self.id_manager.next_request_id()?;
 		let notif = NotificationSer::new(method, params);
 		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send notification: {:?}", raw);
@@ -299,7 +299,7 @@ impl Client for WsClient {
 		R: DeserializeOwned,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let req_id = self.id_guard.next_request_id()?;
+		let req_id = self.id_manager.next_request_id()?;
 		let id = *req_id.inner();
 		let raw = serde_json::to_string(&RequestSer::new(Id::Number(id), method, params)).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
@@ -327,7 +327,7 @@ impl Client for WsClient {
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
-		let batch_ids = self.id_guard.next_request_ids(batch.len())?;
+		let batch_ids = self.id_manager.next_request_ids(batch.len())?;
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
@@ -382,7 +382,7 @@ impl SubscriptionClient for WsClient {
 			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
 		}
 
-		let ids = self.id_guard.next_request_ids(2)?;
+		let ids = self.id_manager.next_request_ids(2)?;
 		let raw = serde_json::to_string(&RequestSer::new(Id::Number(ids.inner()[0]), subscribe_method, params))
 			.map_err(Error::ParseError)?;
 
