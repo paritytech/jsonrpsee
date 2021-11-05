@@ -98,6 +98,13 @@ pub async fn websocket_server() -> SocketAddr {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
+	module
+		.register_async_method("slow_hello", |_, _| async {
+			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+			Ok("hello")
+		})
+		.unwrap();
+
 	let addr = server.local_addr().unwrap();
 
 	server.start(module).unwrap();
