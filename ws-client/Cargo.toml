@@ -25,7 +25,7 @@ pin-project = "1"
 rustls-native-certs = "0.5.0"
 serde = "1"
 serde_json = "1"
-soketto = "0.7"
+soketto = { git = "https://github.com/paritytech/soketto", rev = "d9f05b9ab794a3edacf6195d9e8f57751e3fea22" }
 thiserror = "1"
 
 [dev-dependencies]

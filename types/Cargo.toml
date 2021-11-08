@@ -19,5 +19,5 @@ tracing = { version = "0.1", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value", "std"] }
 thiserror = "1.0"
-soketto = "0.7"
+soketto = { git = "https://github.com/paritytech/soketto", rev = "d9f05b9ab794a3edacf6195d9e8f57751e3fea22" }
 hyper = "0.14.10"

@@ -36,6 +36,18 @@ use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
 
+fn init_logger() {
+	let _ = env_logger::try_init();
+	let subscriber = tracing_subscriber::FmtSubscriber::builder()
+		// all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+		// will be written to stdout.
+		.with_max_level(tracing::Level::TRACE)
+		// completes the builder.
+		.finish();
+
+	let _ = tracing::subscriber::set_global_default(subscriber);
+}
+
 /// Applications can/should provide their own error.
 #[derive(Debug)]
 struct MyAppError;
@@ -154,6 +166,8 @@ async fn server_with_context() -> SocketAddr {
 
 #[tokio::test]
 async fn can_set_the_max_request_body_size() {
+	init_logger();
+
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 10 bytes
 	let server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
@@ -223,6 +237,7 @@ async fn single_method_calls_works() {
 
 #[tokio::test]
 async fn async_method_calls_works() {
+	init_logger();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 

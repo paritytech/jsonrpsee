@@ -280,7 +280,7 @@ async fn background_task(
 		if let Err(err) = receiver.receive_data(&mut data).await {
 			match &err {
 				SokettoError::Closed => {
-					tracing::info!("Remote peer terminated the connection: {}", conn_id);
+					tracing::debug!("Remote peer terminated the connection: {}", conn_id);
 					tx.close_channel();
 					return Ok(());
 				}
@@ -303,11 +303,10 @@ async fn background_task(
 			return Err(err.into());
 		};
 
-		tracing::debug!("read {} bytes", data.len());
-
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
+					tracing::debug!("recv: call={}, bytes={}", req.method, data.len());
 					tracing::trace!("recv: {:?}", req);
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
 						method_executors.add(fut);
@@ -319,6 +318,7 @@ async fn background_task(
 			}
 			Some(b'[') => {
 				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
+					tracing::debug!("recv: batch calls_len={} bytes={}", batch.len(), data.len());
 					tracing::trace!("recv: {:?}", batch);
 					if !batch.is_empty() {
 						// Batch responses must be sent back as a single message so we read the results from each
