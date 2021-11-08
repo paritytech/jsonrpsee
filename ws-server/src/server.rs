@@ -279,7 +279,7 @@ async fn background_task(
 		data.clear();
 
 		if let Err(err) = receiver.receive_data(&mut data).await {
-			match &err {
+			match err {
 				SokettoError::Closed => {
 					tracing::debug!("Remote peer terminated the connection: {}", conn_id);
 					tx.close_channel();
@@ -298,10 +298,10 @@ async fn background_task(
 				// These errors can not be gracefully handled, so just log them and terminate the connection.
 				err => {
 					tracing::error!("WS transport error: {:?} => terminate connection {}", err, conn_id);
+					tx.close_channel();
+					return Err(err.into());
 				}
 			};
-			tx.close_channel();
-			return Err(err.into());
 		};
 
 		match data.get(0) {
@@ -310,6 +310,7 @@ async fn background_task(
 					tracing::debug!("recv: call={}, bytes={}", req.method, data.len());
 					tracing::trace!("recv: {:?}", req);
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
+						tracing::debug!("added method fut");
 						method_executors.add(fut);
 					}
 				} else {
@@ -330,6 +331,8 @@ async fn background_task(
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
+						tracing::debug!("recv: batch_calls={}, bytes={}", batch.len(), d.len());
+						tracing::trace!("recv: {:?}", batch);
 						if !batch.is_empty() {
 							let methods_stream =
 								stream::iter(batch.into_iter().filter_map(|req| {
