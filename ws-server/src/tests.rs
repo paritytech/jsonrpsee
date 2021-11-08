@@ -27,14 +27,16 @@
 #![cfg(test)]
 
 use crate::types::error::{CallError, Error};
-use crate::{future::StopHandle, RpcModule, WsServerBuilder};
+use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
+use futures_util::future::join;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 /// Applications can/should provide their own error.
 #[derive(Debug)]
@@ -58,7 +60,7 @@ async fn server() -> SocketAddr {
 ///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns
 /// 			`CallError::Failed`), `sleep_for` Returns the address together with handles for server future
 ///				and server stop.
-async fn server_with_handles() -> (SocketAddr, StopHandle) {
+async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
@@ -105,8 +107,8 @@ async fn server_with_handles() -> (SocketAddr, StopHandle) {
 
 	let addr = server.local_addr().unwrap();
 
-	let stop_handle = server.start(module).unwrap();
-	(addr, stop_handle)
+	let server_handle = server.start(module).unwrap();
+	(addr, server_handle)
 }
 
 /// Run server with user provided context.
@@ -538,12 +540,27 @@ async fn can_register_modules() {
 #[tokio::test]
 async fn stop_works() {
 	let _ = env_logger::try_init();
-	let (_addr, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
-	stop_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
+	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	server_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
 
 	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(stop_handle.stop(), Err(Error::AlreadyStopped)));
+	assert!(matches!(server_handle.stop(), Err(Error::AlreadyStopped)));
+}
+
+#[tokio::test]
+async fn run_forever() {
+	const TIMEOUT: Duration = Duration::from_millis(200);
+
+	let _ = env_logger::try_init();
+	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+
+	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
+
+	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+
+	// Send the shutdown request from one handle and await the server on the second one.
+	join(server_handle.clone().stop().unwrap(), server_handle).with_timeout(TIMEOUT).await.unwrap();
 }

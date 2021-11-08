@@ -25,15 +25,15 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	http_server::{HttpServerBuilder, HttpStopHandle},
+	http_server::{HttpServerBuilder, HttpServerHandle},
 	types::Error,
-	ws_server::{WsServerBuilder, WsStopHandle},
+	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
 use std::net::SocketAddr;
 use std::time::Duration;
 
-pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) {
+pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
 	let mut module = RpcModule::new(());
@@ -88,9 +88,9 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) 
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	let stop_handle = server.start(module).unwrap();
+	let server_handle = server.start(module).unwrap();
 
-	(addr, stop_handle)
+	(addr, server_handle)
 }
 
 pub async fn websocket_server() -> SocketAddr {
@@ -112,7 +112,7 @@ pub async fn websocket_server() -> SocketAddr {
 	addr
 }
 
-pub async fn http_server() -> (SocketAddr, HttpStopHandle) {
+pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
 	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
