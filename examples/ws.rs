@@ -43,10 +43,6 @@ async fn main() -> anyhow::Result<()> {
 	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", None).await?;
 	tracing::info!("response: {:?}", response);
-	drop(client);
-
-	tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
 
 	Ok(())
 }
