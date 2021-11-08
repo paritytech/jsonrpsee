@@ -17,7 +17,7 @@ jsonrpsee-utils = { path = "../utils", version = "0.4.1", features = ["server"] 
 tracing = "0.1"
 tracing-subscriber = "0.2.25"
 serde_json = { version = "1", features = ["raw_value"] }
-soketto = { git = "https://github.com/paritytech/soketto", rev = "d9f05b9ab794a3edacf6195d9e8f57751e3fea22" }
+soketto = "0.7.1"
 tokio = { version = "1", features = ["net", "rt-multi-thread", "macros"] }
 tokio-util = { version = "0.6", features = ["compat"] }
 
