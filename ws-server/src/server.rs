@@ -196,7 +196,7 @@ async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -
 			Ok(())
 		}
 		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor } => {
-			tracing::info!("Accepting new connection: {}", conn_id);
+			tracing::debug!("Accepting new connection: {}", conn_id);
 			let key = {
 				let req = server.receive_request().await?;
 				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
@@ -278,14 +278,13 @@ async fn background_task(
 	while !stop_server.shutdown_requested() {
 		data.clear();
 
-		if let Err(err) = receiver.receive_data(&mut data).await {
+		if let Err(err) = method_executors.select_with(receiver.receive_data(&mut data)).await {
 			match err {
 				SokettoError::Closed => {
 					tracing::debug!("Remote peer terminated the connection: {}", conn_id);
 					tx.close_channel();
 					return Ok(());
 				}
-				// NOTE(niklasad1): this seems to put soketto is some weird state...
 				SokettoError::MessageTooLarge { current, maximum } => {
 					tracing::warn!(
 						"WS transport error: message is too big error ({} bytes, max is {})",
@@ -304,13 +303,14 @@ async fn background_task(
 			};
 		};
 
+		tracing::debug!("recv {} bytes", data.len());
+
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					tracing::debug!("recv: call={}, bytes={}", req.method, data.len());
+					tracing::debug!("recv call={}", req.method);
 					tracing::trace!("recv: {:?}", req);
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
-						tracing::debug!("added method fut");
 						method_executors.add(fut);
 					}
 				} else {
@@ -331,7 +331,7 @@ async fn background_task(
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
-						tracing::debug!("recv: batch_calls={}, bytes={}", batch.len(), d.len());
+						tracing::debug!("recv batch={}", batch.len());
 						tracing::trace!("recv: {:?}", batch);
 						if !batch.is_empty() {
 							let methods_stream =
