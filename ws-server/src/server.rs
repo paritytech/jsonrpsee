@@ -296,7 +296,7 @@ async fn background_task(
 				}
 				// These errors can not be gracefully handled, so just log them and terminate the connection.
 				err => {
-					tracing::error!("WS transport error: {:?} => terminate connection {}", err, conn_id);
+					tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
 					tx.close_channel();
 					return Err(err.into());
 				}
