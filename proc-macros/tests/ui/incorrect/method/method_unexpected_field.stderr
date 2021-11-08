@@ -1,5 +1,5 @@
-error: Unknown argument `magic`, expected one of: `aliases`, `blocking`, `name`, `resources`
- --> $DIR/method_unexpected_field.rs:6:25
+error: Unknown argument `magic`, expected one of: `aliases`, `blocking`, `name`, `param_kind`, `resources`
+ --> tests/ui/incorrect/method/method_unexpected_field.rs:6:25
   |
 6 |     #[method(name = "foo", magic = false)]
   |                            ^^^^^

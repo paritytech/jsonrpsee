@@ -36,8 +36,9 @@ use crate::types::{
 	TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
+use futures_util::future::FutureExt;
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::StreamExt;
+use futures_util::stream::{self, StreamExt};
 use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -317,36 +318,45 @@ async fn background_task(
 				}
 			}
 			Some(b'[') => {
-				if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
-					tracing::debug!("recv: batch calls_len={} bytes={}", batch.len(), data.len());
-					tracing::trace!("recv: {:?}", batch);
-					if !batch.is_empty() {
-						// Batch responses must be sent back as a single message so we read the results from each
-						// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
-						// complete batch response back to the client over `tx`.
-						let (tx_batch, mut rx_batch) = mpsc::unbounded::<String>();
+				// Make sure the following variables are not moved into async closure below.
+				let d = std::mem::take(&mut data);
+				let resources = &resources;
+				let methods = &methods;
+				let tx2 = tx.clone();
 
-						for fut in batch
-							.into_iter()
-							.filter_map(|req| methods.execute_with_resources(&tx_batch, req, conn_id, &resources))
-						{
-							method_executors.add(fut);
-						}
+				let fut = async move {
+					// Batch responses must be sent back as a single message so we read the results from each
+					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
+					// complete batch response back to the client over `tx`.
+					let (tx_batch, mut rx_batch) = mpsc::unbounded();
+					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
+						if !batch.is_empty() {
+							let methods_stream =
+								stream::iter(batch.into_iter().filter_map(|req| {
+									methods.execute_with_resources(&tx_batch, req, conn_id, resources)
+								}));
 
-						// Closes the receiving half of a channel without dropping it. This prevents any further
-						// messages from being sent on the channel.
-						rx_batch.close();
-						let results = collect_batch_response(rx_batch).await;
-						if let Err(err) = tx.unbounded_send(results) {
-							tracing::error!("Error sending batch response to the client: {:?}", err)
+							let results = methods_stream
+								.for_each_concurrent(None, |item| item)
+								.then(|_| {
+									rx_batch.close();
+									collect_batch_response(rx_batch)
+								})
+								.await;
+
+							if let Err(err) = tx2.unbounded_send(results) {
+								tracing::error!("Error sending batch response to the client: {:?}", err)
+							}
+						} else {
+							send_error(Id::Null, &tx2, ErrorCode::InvalidRequest.into());
 						}
 					} else {
-						send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
+						let (id, code) = prepare_error(&d);
+						send_error(id, &tx2, code.into());
 					}
-				} else {
-					let (id, code) = prepare_error(&data);
-					send_error(id, &tx, code.into());
-				}
+				};
+
+				method_executors.add(Box::pin(fut));
 			}
 			_ => send_error(Id::Null, &tx, ErrorCode::ParseError.into()),
 		}

@@ -41,6 +41,12 @@ pub(crate) struct Argument {
 }
 
 #[derive(Debug, Clone)]
+pub enum ParamKind {
+	Array,
+	Map,
+}
+
+#[derive(Debug, Clone)]
 pub struct Resource {
 	pub name: syn::LitStr,
 	pub assign: Token![=],
@@ -188,4 +194,15 @@ where
 	F: Fn(Argument) -> syn::Result<T>,
 {
 	arg.ok().map(transform).transpose()
+}
+
+pub(crate) fn parse_param_kind(arg: Result<Argument, MissingArgument>) -> syn::Result<ParamKind> {
+	let kind: Option<syn::Ident> = optional(arg, Argument::value)?;
+
+	match kind {
+		None => Ok(ParamKind::Array),
+		Some(ident) if ident == "array" => Ok(ParamKind::Array),
+		Some(ident) if ident == "map" => Ok(ParamKind::Map),
+		ident => Err(Error::new(ident.span(), "param_kind must be either `map` or `array`")),
+	}
 }

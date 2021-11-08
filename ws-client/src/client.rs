@@ -28,8 +28,8 @@ use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeEr
 use crate::types::{
 	traits::{Client, SubscriptionClient},
 	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
-	BatchMessage, Error, FrontToBack, RegisterNotificationMessage, RequestIdGuard, RequestMessage, Subscription,
-	SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
+	BatchMessage, CertificateStore, Error, FrontToBack, RegisterNotificationMessage, RequestIdManager, RequestMessage,
+	Subscription, SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
 };
 use crate::{
 	helpers::{
@@ -37,7 +37,6 @@ use crate::{
 		process_notification, process_single_response, process_subscription_response, stop_subscription,
 	},
 	manager::RequestManager,
-	transport::CertificateStore,
 };
 use async_trait::async_trait;
 use futures::{
@@ -50,7 +49,7 @@ use http::uri::{InvalidUri, Uri};
 use tokio::sync::Mutex;
 
 use serde::de::DeserializeOwned;
-use std::{borrow::Cow, convert::TryInto, time::Duration};
+use std::{convert::TryInto, time::Duration};
 
 pub use soketto::handshake::client::Header;
 
@@ -99,17 +98,37 @@ pub struct WsClient {
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
-	id_guard: RequestIdGuard,
+	id_manager: RequestIdManager,
 }
 
-/// Configuration.
+/// Builder for [`WsClient`].
+///
+/// # Examples
+///
+/// ```no_run
+///
+/// use jsonrpsee_ws_client::WsClientBuilder;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     // build client
+///     let client = WsClientBuilder::default()
+///          .add_header("Any-Header-You-Like", "42")
+///          .build("wss://localhost:443")
+///          .await
+///          .unwrap();
+///
+///     // use client....
+/// }
+///
+/// ```
 #[derive(Clone, Debug)]
 pub struct WsClientBuilder<'a> {
 	certificate_store: CertificateStore,
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
-	origin_header: Option<Cow<'a, str>>,
+	headers: Vec<Header<'a>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
@@ -122,7 +141,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
-			origin_header: None,
+			headers: Vec::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,
@@ -155,9 +174,11 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set origin header to pass during the handshake.
-	pub fn origin_header(mut self, origin: Cow<'a, str>) -> Self {
-		self.origin_header = Some(origin);
+	/// Set a custom header passed to the server during the handshake.
+	///
+	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
+	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
+		self.headers.push(Header { name, value: value.as_bytes() });
 		self
 	}
 
@@ -207,7 +228,7 @@ impl<'a> WsClientBuilder<'a> {
 			certificate_store,
 			target: uri.try_into().map_err(|e: WsHandshakeError| Error::Transport(e.into()))?,
 			timeout: self.connection_timeout,
-			origin_header: self.origin_header,
+			headers: self.headers,
 			max_request_body_size: self.max_request_body_size,
 			max_redirections: self.max_redirections,
 		};
@@ -221,7 +242,7 @@ impl<'a> WsClientBuilder<'a> {
 			to_back,
 			request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
-			id_guard: RequestIdGuard::new(max_concurrent_requests),
+			id_manager: RequestIdManager::new(max_concurrent_requests),
 		})
 	}
 }
@@ -252,12 +273,9 @@ impl Drop for WsClient {
 impl Client for WsClient {
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
 		// NOTE: we use this to guard against max number of concurrent requests.
-		let _req_id = self.id_guard.next_request_id()?;
+		let _req_id = self.id_manager.next_request_id()?;
 		let notif = NotificationSer::new(method, params);
-		let raw = serde_json::to_string(&notif).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?;
+		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send notification: {:?}", raw);
 
 		let mut sender = self.to_back.clone();
@@ -270,7 +288,6 @@ impl Client for WsClient {
 			_ = timeout => return Err(Error::RequestTimeout)
 		};
 
-		self.id_guard.reclaim_request_id();
 		match res {
 			Ok(()) => Ok(()),
 			Err(_) => Err(self.read_error_from_backend().await),
@@ -282,27 +299,22 @@ impl Client for WsClient {
 		R: DeserializeOwned,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let req_id = self.id_guard.next_request_id()?;
-		let raw = serde_json::to_string(&RequestSer::new(Id::Number(req_id), method, params)).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?;
+		let req_id = self.id_manager.next_request_id()?;
+		let id = *req_id.inner();
+		let raw = serde_json::to_string(&RequestSer::new(Id::Number(id), method, params)).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Request(RequestMessage { raw, id: req_id, send_back: Some(send_back_tx) }))
+			.send(FrontToBack::Request(RequestMessage { raw, id, send_back: Some(send_back_tx) }))
 			.await
 			.is_err()
 		{
-			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-
-		self.id_guard.reclaim_request_id();
 		let json_value = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
@@ -315,34 +327,28 @@ impl Client for WsClient {
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
-		let batch_ids = self.id_guard.next_request_ids(batch.len())?;
+		let batch_ids = self.id_manager.next_request_ids(batch.len())?;
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(RequestSer::new(Id::Number(batch_ids[idx]), method, params));
+			batches.push(RequestSer::new(Id::Number(batch_ids.inner()[idx]), method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
-		let raw = serde_json::to_string(&batches).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?;
+		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send batch request: {:?}", raw);
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids.inner().clone(), send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
-			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-
-		self.id_guard.reclaim_request_id();
 		let json_values = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
@@ -376,12 +382,9 @@ impl SubscriptionClient for WsClient {
 			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
 		}
 
-		let ids = self.id_guard.next_request_ids(2)?;
-		let raw =
-			serde_json::to_string(&RequestSer::new(Id::Number(ids[0]), subscribe_method, params)).map_err(|e| {
-				self.id_guard.reclaim_request_id();
-				Error::ParseError(e)
-			})?;
+		let ids = self.id_manager.next_request_ids(2)?;
+		let raw = serde_json::to_string(&RequestSer::new(Id::Number(ids.inner()[0]), subscribe_method, params))
+			.map_err(Error::ParseError)?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -389,21 +392,19 @@ impl SubscriptionClient for WsClient {
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				raw,
-				subscribe_id: ids[0],
-				unsubscribe_id: ids[1],
+				subscribe_id: ids.inner()[0],
+				unsubscribe_id: ids.inner()[1],
 				unsubscribe_method: unsubscribe_method.to_owned(),
 				send_back: send_back_tx,
 			}))
 			.await
 			.is_err()
 		{
-			self.id_guard.reclaim_request_id();
 			return Err(self.read_error_from_backend().await);
 		}
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
-		self.id_guard.reclaim_request_id();
 		let (notifs_rx, id) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
