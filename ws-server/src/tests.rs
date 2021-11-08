@@ -35,17 +35,10 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 use std::fmt;
 use std::net::SocketAddr;
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 fn init_logger() {
-	let _ = env_logger::try_init();
-	let subscriber = tracing_subscriber::FmtSubscriber::builder()
-		// all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
-		// will be written to stdout.
-		.with_max_level(tracing::Level::TRACE)
-		// completes the builder.
-		.finish();
-
-	let _ = tracing::subscriber::set_global_default(subscriber);
+	let _ = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env()).try_init();
 }
 
 /// Applications can/should provide their own error.
@@ -355,7 +348,6 @@ async fn single_method_call_with_params_works() {
 
 #[tokio::test]
 async fn single_method_call_with_faulty_params_returns_err() {
-	let _ = env_logger::try_init();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
@@ -552,7 +544,7 @@ async fn can_register_modules() {
 
 #[tokio::test]
 async fn stop_works() {
-	let _ = env_logger::try_init();
+	init_logger();
 	let (_addr, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
 	stop_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
 
