@@ -308,7 +308,7 @@ async fn background_task(
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					tracing::debug!("recv call={}", req.method);
+					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: {:?}", req);
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
 						method_executors.add(fut);
