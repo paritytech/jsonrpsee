@@ -39,6 +39,7 @@ use futures_channel::mpsc;
 use futures_util::future::FutureExt;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::{self, StreamExt};
+use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
@@ -195,6 +196,7 @@ async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -
 			Ok(())
 		}
 		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor } => {
+			tracing::debug!("Accepting new connection: {}", conn_id);
 			let key = {
 				let req = server.receive_request().await?;
 				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
@@ -243,7 +245,9 @@ async fn background_task(
 	stop_server: StopMonitor,
 ) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
-	let (mut sender, mut receiver) = server.into_builder().finish();
+	let mut builder = server.into_builder();
+	builder.set_max_message_size(max_request_body_size as usize);
+	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 	let stop_server2 = stop_server.clone();
 
@@ -252,8 +256,10 @@ async fn background_task(
 		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
-					tracing::debug!("send: {}", response);
-					let _ = sender.send_text(response).await;
+					// TODO: check length of response https://github.com/paritytech/jsonrpsee/issues/536
+					tracing::debug!("send {} bytes", response.len());
+					tracing::trace!("send: {}", response);
+					let _ = sender.send_text_owned(response).await;
 					let _ = sender.flush().await;
 				}
 				None => break,
@@ -272,22 +278,38 @@ async fn background_task(
 	while !stop_server.shutdown_requested() {
 		data.clear();
 
-		if let Err(e) = method_executors.select_with(receiver.receive_data(&mut data)).await {
-			tracing::error!("Could not receive WS data: {:?}; closing connection", e);
-			tx.close_channel();
-			return Err(e.into());
-		}
+		if let Err(err) = method_executors.select_with(receiver.receive_data(&mut data)).await {
+			match err {
+				SokettoError::Closed => {
+					tracing::debug!("Remote peer terminated the connection: {}", conn_id);
+					tx.close_channel();
+					return Ok(());
+				}
+				SokettoError::MessageTooLarge { current, maximum } => {
+					tracing::warn!(
+						"WS transport error: message is too big error ({} bytes, max is {})",
+						current,
+						maximum
+					);
+					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
+					continue;
+				}
+				// These errors can not be gracefully handled, so just log them and terminate the connection.
+				err => {
+					tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
+					tx.close_channel();
+					return Err(err.into());
+				}
+			};
+		};
 
-		if data.len() > max_request_body_size as usize {
-			tracing::warn!("Request is too big ({} bytes, max is {})", data.len(), max_request_body_size);
-			send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
-			continue;
-		}
+		tracing::debug!("recv {} bytes", data.len());
 
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					tracing::debug!("recv: {:?}", req);
+					tracing::debug!("recv method call={}", req.method);
+					tracing::trace!("recv: req={:?}", req);
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
 						method_executors.add(fut);
 					}
@@ -309,6 +331,8 @@ async fn background_task(
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
+						tracing::debug!("recv batch len={}", batch.len());
+						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
 							let methods_stream =
 								stream::iter(batch.into_iter().filter_map(|req| {

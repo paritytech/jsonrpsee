@@ -34,9 +34,12 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
-use std::fmt;
-use std::net::SocketAddr;
-use std::time::Duration;
+use std::{fmt, net::SocketAddr, time::Duration};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
+
+fn init_logger() {
+	let _ = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env()).try_init();
+}
 
 /// Applications can/should provide their own error.
 #[derive(Debug)]
@@ -156,6 +159,8 @@ async fn server_with_context() -> SocketAddr {
 
 #[tokio::test]
 async fn can_set_the_max_request_body_size() {
+	init_logger();
+
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 10 bytes
 	let server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
@@ -225,6 +230,7 @@ async fn single_method_calls_works() {
 
 #[tokio::test]
 async fn async_method_calls_works() {
+	init_logger();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -342,7 +348,6 @@ async fn single_method_call_with_params_works() {
 
 #[tokio::test]
 async fn single_method_call_with_faulty_params_returns_err() {
-	let _ = env_logger::try_init();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
@@ -539,7 +544,7 @@ async fn can_register_modules() {
 
 #[tokio::test]
 async fn stop_works() {
-	let _ = env_logger::try_init();
+	init_logger();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 	server_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
 
@@ -554,7 +559,7 @@ async fn stop_works() {
 async fn run_forever() {
 	const TIMEOUT: Duration = Duration::from_millis(200);
 
-	let _ = env_logger::try_init();
+	init_logger();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 
 	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
