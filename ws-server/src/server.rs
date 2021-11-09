@@ -32,7 +32,7 @@ use std::task::{Context, Poll};
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::{
 	error::Error,
-	v2::{ErrorCode, Id, Request},
+	v2::{self, ErrorCode, Id, Request},
 	TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
@@ -41,6 +41,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::{self, StreamExt};
 use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
+use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
@@ -256,11 +257,31 @@ async fn background_task(
 		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
-					// TODO: check length of response https://github.com/paritytech/jsonrpsee/issues/536
-					tracing::debug!("send {} bytes", response.len());
-					tracing::trace!("send: {}", response);
-					let _ = sender.send_text_owned(response).await;
-					let _ = sender.flush().await;
+					if response.len() > max_request_body_size as usize {
+						tracing::warn!(
+							"WS Transport error: response to method call too large {}, max: {}",
+							response.len(),
+							max_request_body_size
+						);
+						// TODO(niklasad1): include `id` in the response and send back `response too big; id=id` here?!
+						// also we could terminate the connection...
+						let rp = serde_json::to_string(&v2::Response {
+							jsonrpc: v2::TwoPointZero,
+							id: v2::Id::Null,
+							result: "Response was too big",
+						})
+						.expect("valid JSON; qed");
+
+						if let Err(err) = send_ws_message(&mut sender, rp).await {
+							tracing::error!("WS transport error: {:?}", err);
+							break;
+						}
+					} else {
+						if let Err(err) = send_ws_message(&mut sender, response).await {
+							tracing::error!("WS transport error: {:?}", err);
+							break;
+						}
+					}
 				}
 				None => break,
 			};
@@ -535,4 +556,14 @@ impl Builder {
 		let resources = self.resources;
 		Ok(Server { listener, cfg: self.settings, stop_monitor, resources })
 	}
+}
+
+async fn send_ws_message(
+	sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>,
+	response: String,
+) -> Result<(), Error> {
+	tracing::debug!("send {} bytes", response.len());
+	tracing::trace!("send: {}", response);
+	sender.send_text_owned(response).await?;
+	sender.flush().await.map_err(Into::into)
 }
