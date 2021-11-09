@@ -28,7 +28,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	types::{async_trait, error::Error, Subscription},
 	ws_client::WsClientBuilder,
-	ws_server::{SubscriptionSink, WsServerBuilder, WsStopHandle},
+	ws_server::{SubscriptionSink, WsServerBuilder, WsServerHandle},
 };
 use std::net::SocketAddr;
 
@@ -90,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, WsStopHandle)> {
+async fn run_server() -> anyhow::Result<(SocketAddr, WsServerHandle)> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;

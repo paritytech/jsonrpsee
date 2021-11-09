@@ -26,11 +26,11 @@
 
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, HttpStopHandle},
+	http_server::{HttpServerBuilder, HttpServerHandle},
 	proc_macros::rpc,
 	types::{traits::Client, Error},
 	ws_client::WsClientBuilder,
-	ws_server::{WsServerBuilder, WsStopHandle},
+	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
 use tokio::time::sleep;
@@ -91,7 +91,7 @@ fn module_macro() -> RpcModule<()> {
 	().into_rpc()
 }
 
-async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsStopHandle), Error> {
+async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsServerHandle), Error> {
 	let server = WsServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
@@ -104,7 +104,7 @@ async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsStopHa
 	Ok((addr, handle))
 }
 
-async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpStopHandle), Error> {
+async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpServerHandle), Error> {
 	let server = HttpServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
@@ -128,7 +128,7 @@ fn assert_server_busy(fail: Result<String, Error>) {
 	}
 }
 
-async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHandle) {
+async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServerHandle) {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -162,10 +162,10 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, stop_handle: WsStopHand
 
 	// Client being active prevents the server from shutting down?!
 	drop(client);
-	stop_handle.stop().unwrap().await;
+	server_handle.stop().unwrap().await;
 }
 
-async fn run_tests_on_http_server(server_addr: SocketAddr, stop_handle: HttpStopHandle) {
+async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: HttpServerHandle) {
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
@@ -190,33 +190,33 @@ async fn run_tests_on_http_server(server_addr: SocketAddr, stop_handle: HttpStop
 
 	assert_eq!(passes, 3);
 
-	stop_handle.stop().unwrap().await.unwrap();
+	server_handle.stop().unwrap().await.unwrap();
 }
 
 #[tokio::test]
 async fn ws_server_with_manual_module() {
-	let (server_addr, stop_handle) = websocket_server(module_manual().unwrap()).await.unwrap();
+	let (server_addr, server_handle) = websocket_server(module_manual().unwrap()).await.unwrap();
 
-	run_tests_on_ws_server(server_addr, stop_handle).await;
+	run_tests_on_ws_server(server_addr, server_handle).await;
 }
 
 #[tokio::test]
 async fn ws_server_with_macro_module() {
-	let (server_addr, stop_handle) = websocket_server(module_macro()).await.unwrap();
+	let (server_addr, server_handle) = websocket_server(module_macro()).await.unwrap();
 
-	run_tests_on_ws_server(server_addr, stop_handle).await;
+	run_tests_on_ws_server(server_addr, server_handle).await;
 }
 
 #[tokio::test]
 async fn http_server_with_manual_module() {
-	let (server_addr, stop_handle) = http_server(module_manual().unwrap()).await.unwrap();
+	let (server_addr, server_handle) = http_server(module_manual().unwrap()).await.unwrap();
 
-	run_tests_on_http_server(server_addr, stop_handle).await;
+	run_tests_on_http_server(server_addr, server_handle).await;
 }
 
 #[tokio::test]
 async fn http_server_with_macro_module() {
-	let (server_addr, stop_handle) = http_server(module_macro()).await.unwrap();
+	let (server_addr, server_handle) = http_server(module_macro()).await.unwrap();
 
-	run_tests_on_http_server(server_addr, stop_handle).await;
+	run_tests_on_http_server(server_addr, server_handle).await;
 }

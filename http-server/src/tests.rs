@@ -27,16 +27,17 @@
 #![cfg(test)]
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use crate::types::error::{CallError, Error};
-use crate::{server::StopHandle, HttpServerBuilder, RpcModule};
+use crate::{server::ServerHandle, HttpServerBuilder, RpcModule};
 
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
-async fn server() -> (SocketAddr, StopHandle) {
+async fn server() -> (SocketAddr, ServerHandle) {
 	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
@@ -78,8 +79,8 @@ async fn server() -> (SocketAddr, StopHandle) {
 		})
 		.unwrap();
 
-	let stop_handle = server.start(module).unwrap();
-	(addr, stop_handle)
+	let server_handle = server.start(module).unwrap();
+	(addr, server_handle)
 }
 
 #[tokio::test]
@@ -380,6 +381,27 @@ async fn can_register_modules() {
 #[tokio::test]
 async fn stop_works() {
 	let _ = env_logger::try_init();
-	let (_addr, stop_handle) = server().with_default_timeout().await.unwrap();
-	assert!(matches!(stop_handle.stop().unwrap().await, Ok(_)));
+	let (_addr, server_handle) = server().with_default_timeout().await.unwrap();
+	assert!(matches!(server_handle.stop().unwrap().await, Ok(_)));
+}
+
+#[tokio::test]
+async fn run_forever() {
+	const TIMEOUT: Duration = Duration::from_millis(200);
+
+	let _ = env_logger::try_init();
+	let (_addr, server_handle) = server().with_default_timeout().await.unwrap();
+
+	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
+
+	let (_addr, server_handle) = server().await;
+	server_handle.handle.as_ref().unwrap().abort();
+
+	// Cancelled task is still considered to be finished without errors.
+	// A subject to change.
+	server_handle.with_timeout(TIMEOUT).await.unwrap();
+
+	let (_addr, mut server_handle) = server().with_default_timeout().await.unwrap();
+	server_handle.handle.take();
+	server_handle.with_timeout(TIMEOUT).await.unwrap();
 }
