@@ -2,6 +2,13 @@ stages:
   - lint
   - test
 
+.common-refs:                      &common-refs
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_REF_NAME == "main"
+    - if: $CI_COMMIT_REF_NAME == "master"
+    - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
 
 variables:                         &default-vars
   GIT_STRATEGY:                    fetch
@@ -59,6 +66,7 @@ variables:                         &default-vars
 fmt:
   stage:                           lint
   <<:                              *kubernetes-env
+  <<:                              *common-refs
   script:
     # FIXME: remove after stable fmt added to ci-linux
     - rustup component add rustfmt
@@ -67,6 +75,7 @@ fmt:
 clippy:
   stage:                           lint
   <<:                              *docker-env
+  <<:                              *common-refs
   script:
     # FIXME: remove after stable clippy added to ci-linux
     - rustup component add clippy
@@ -75,6 +84,7 @@ clippy:
 check-rustdoc-links:
   stage:                           lint
   <<:                              *docker-env
+  <<:                              *common-refs
   script:
     - RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --workspace --no-deps --document-private-items
 
@@ -83,6 +93,7 @@ check-rustdoc-links:
 check-code:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *common-refs
   script:
     - cargo install cargo-hack
     - cargo hack check --workspace --each-feature
@@ -90,6 +101,7 @@ check-code:
 test:
   stage:                           test
   <<:                              *docker-env
+  <<:                              *common-refs
   script:
     - cargo test
 
