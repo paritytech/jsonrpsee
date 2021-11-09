@@ -544,15 +544,9 @@ async fn can_register_modules() {
 
 #[tokio::test]
 async fn stop_works() {
-<<<<<<< HEAD
 	init_logger();
-	let (_addr, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
-	stop_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
-=======
-	let _ = env_logger::try_init();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 	server_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
->>>>>>> origin/master
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
@@ -565,7 +559,7 @@ async fn stop_works() {
 async fn run_forever() {
 	const TIMEOUT: Duration = Duration::from_millis(200);
 
-	let _ = env_logger::try_init();
+	init_logger();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 
 	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
