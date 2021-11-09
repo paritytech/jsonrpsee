@@ -1,11 +1,21 @@
 stages:
   - lint
   - test
+  - benchmark
+  - publish
+
+.vault-secrets:                    &vault-secrets
+  secrets:
+    GITHUB_TOKEN:
+      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
+      file:                        false
+    GITHUB_USER:
+      vault:                       cicd/gitlab/parity/GITHUB_USER@kv
+      file:                        false
 
 .common-refs:                      &common-refs
   rules:
     - if: $CI_PIPELINE_SOURCE == "web"
-    - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_COMMIT_REF_NAME == "main"
     - if: $CI_COMMIT_REF_NAME == "master"
     - if: $CI_COMMIT_REF_NAME =~ /^[0-9]+$/                         # PRs
@@ -106,7 +116,7 @@ test:
     - cargo test
 
 benchmarks:
-  stage:                           test
+  stage:                           benchmark
   <<:                              *docker-env
   <<:                              *collect-artifacts
   rules:
@@ -116,3 +126,37 @@ benchmarks:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | output.txt
     - mkdir artifacts
     - cp output.txt artifacts/
+
+publish-bench:
+  stage:                           publish
+  <<:                              *docker-env
+  <<:                              *vault-secrets
+  needs:
+    - job:                         benchmarks
+      artifacts:                   true
+  script:
+    - rm -rf /tmp/*
+    # Set git config
+    - rm -rf .git/config
+    - git config user.email "devops-team@parity.io"
+    - git config user.name "${GITHUB_USER}"
+    - git config remote.origin.url "https://${GITHUB_TOKEN}@github.com:paritytech/jsonrpsee.git"
+    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    - git fetch origin gh-pages
+    # Add artifacts to gh-pages
+    - mv artifacts/output.txt /tmp
+    - git checkout gh-pages
+    - mkdir bench/gitlab || echo "Dir exists"
+    - mv /tmp/output.txt bench/gitlab/output_$(date +"%m-%d-%y").txt
+    - rm -rf artifacts/
+    # Upload files
+    - git add --all --force
+    # `git commit` has an exit code of > 0 if there is nothing to commit.
+    # This causes GitLab to exit immediately and marks this job failed.
+    # We don't want to mark the entire job failed if there's nothing to
+    # publish though, hence the `|| true`.
+    - git commit -m "Updated docs for ${CI_COMMIT_REF_NAME}" ||
+        echo "___Nothing to commit___"
+    - git push origin gh-pages --force
+  after_script:
+    - rm -rf .git/ ./*
