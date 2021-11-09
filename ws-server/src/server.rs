@@ -256,7 +256,7 @@ async fn background_task(
 	tokio::spawn(async move {
 		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
-				Some(response) => {
+				Some(mut response) => {
 					if response.len() > max_request_body_size as usize {
 						tracing::warn!(
 							"WS Transport error: response to method call too large {}, max: {}",
@@ -265,22 +265,18 @@ async fn background_task(
 						);
 						// TODO(niklasad1): include `id` in the response and send back `response too big; id=id` here?!
 						// also we could terminate the connection...
-						let rp = serde_json::to_string(&v2::Response {
+						response = serde_json::to_string(&v2::Response {
 							jsonrpc: v2::TwoPointZero,
 							id: v2::Id::Null,
 							result: "Response was too big",
 						})
 						.expect("valid JSON; qed");
+					}
 
-						if let Err(err) = send_ws_message(&mut sender, rp).await {
-							tracing::error!("WS transport error: {:?}", err);
-							break;
-						}
-					} else {
-						if let Err(err) = send_ws_message(&mut sender, response).await {
-							tracing::error!("WS transport error: {:?}", err);
-							break;
-						}
+					// If websocket message send fail then terminate the connection.
+					if let Err(err) = send_ws_message(&mut sender, response).await {
+						tracing::error!("WS transport error: {:?}; terminate connection", err);
+						break;
 					}
 				}
 				None => break,
