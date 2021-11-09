@@ -296,7 +296,7 @@ async fn background_task(
 				}
 				// These errors can not be gracefully handled, so just log them and terminate the connection.
 				err => {
-					tracing::error!("WS transport error: {:?} => terminate connection {}", err, conn_id);
+					tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
 					tx.close_channel();
 					return Err(err.into());
 				}
@@ -308,8 +308,8 @@ async fn background_task(
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					tracing::debug!("recv call={}", req.method);
-					tracing::trace!("recv: {:?}", req);
+					tracing::debug!("recv method call={}", req.method);
+					tracing::trace!("recv: req={:?}", req);
 					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
 						method_executors.add(fut);
 					}
@@ -331,8 +331,8 @@ async fn background_task(
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
-						tracing::debug!("recv batch={}", batch.len());
-						tracing::trace!("recv: {:?}", batch);
+						tracing::debug!("recv batch len={}", batch.len());
+						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
 							let methods_stream =
 								stream::iter(batch.into_iter().filter_map(|req| {
