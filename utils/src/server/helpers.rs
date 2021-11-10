@@ -28,20 +28,69 @@ use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::v2::error::{OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::v2::{
 	error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
 	ErrorCode, ErrorObject, Id, InvalidRequest, Response, RpcError, TwoPointZero,
 };
 use serde::Serialize;
+use std::io;
+
+struct BoundedWriter {
+	max_len: usize,
+	buf: Vec<u8>,
+}
+
+impl BoundedWriter {
+	fn new(max_len: usize) -> Self {
+		Self { max_len, buf: Vec::new() }
+	}
+
+	fn to_json_string(self) -> String {
+		unsafe {
+			// serde doesn't emit invalid UTF-8.
+			String::from_utf8_unchecked(self.buf)
+		}
+	}
+}
+
+impl<'a> io::Write for &'a mut BoundedWriter {
+	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+		let len = self.buf.len() + buf.len();
+		if self.max_len >= len {
+			self.buf.extend(buf);
+			Ok(buf.len())
+		} else {
+			Err(io::Error::new(io::ErrorKind::OutOfMemory, "Memory capacity exceeded"))
+		}
+	}
+
+	fn flush(&mut self) -> io::Result<()> {
+		self.buf.clear();
+		Ok(())
+	}
+}
 
 /// Helper for sending JSON-RPC responses to the client
-pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize) {
-	let json = match serde_json::to_string(&Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
-		Ok(json) => json,
+pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_size: usize) {
+	let mut writer = BoundedWriter::new(max_call_size as usize);
+
+	let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
+		Ok(_) => writer.to_json_string(),
 		Err(err) => {
 			tracing::error!("Error serializing response: {:?}", err);
+			let io_err: std::io::Error = err.into();
 
-			return send_error(id, tx, ErrorCode::InternalError.into());
+			let err = match io_err.kind() {
+				io::ErrorKind::OutOfMemory => ErrorObject {
+					code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
+					message: OVERSIZED_RESPONSE_MSG,
+					data: None,
+				},
+				_ => ErrorCode::InternalError.into(),
+			};
+
+			return send_error(id, tx, err);
 		}
 	};
 
@@ -107,4 +156,34 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 	buf.pop();
 	buf.push(']');
 	buf
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{BoundedWriter, Id, Response, TwoPointZero};
+	use std::io::Write;
+
+	#[test]
+	#[ignore]
+	fn bounded_serializer_work() {
+		let mut writer = BoundedWriter::new(100);
+		let result = "success";
+
+		assert!(
+			serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: Id::Number(1), result }).is_ok()
+		);
+		assert_eq!(writer.to_json_string(), r#"{"jsonrpc":"2.0","result":"success","id":1}"#);
+	}
+
+	#[test]
+	fn bounded_serializer_cap_works() {
+		let mut writer = BoundedWriter::new(100);
+		// NOTE: `"` is part of the serialization so 101 characters.
+		assert!(serde_json::to_writer(&mut writer, &"x".repeat(99)).is_err());
+		(&mut writer).flush().unwrap();
+
+		assert!(serde_json::to_writer(&mut writer, &"a".repeat(48)).is_ok());
+		assert!(serde_json::to_writer(&mut writer, &"b".repeat(48)).is_ok());
+		assert!(serde_json::to_writer(&mut writer, &1).is_err());
+	}
 }

@@ -73,6 +73,13 @@ pub fn oversized_request() -> String {
 	r#"{"jsonrpc":"2.0","error":{"code":-32701,"message":"Request is too big"},"id":null}"#.into()
 }
 
+pub fn oversized_response(id: Id) -> String {
+	format!(
+		r#"{{"jsonrpc":"2.0","error":{{"code":-32702,"message":"Response is too big"}},"id":{}}}"#,
+		serde_json::to_string(&id).unwrap()
+	)
+}
+
 pub fn invalid_request(id: Id) -> String {
 	format!(
 		r#"{{"jsonrpc":"2.0","error":{{"code":-32600,"message":"Invalid request"}},"id":{}}}"#,

@@ -393,12 +393,19 @@ impl<Context> DerefMut for RpcModule<Context> {
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
 	methods: Methods,
+	/// The maximum size of a executed call.
+	max_call_size: usize,
 }
 
 impl<Context> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		Self { ctx: Arc::new(ctx), methods: Default::default() }
+		Self { ctx: Arc::new(ctx), methods: Default::default(), max_call_size: 10 * 1024 * 1024 }
+	}
+
+	/// Set the maximum size limit for a executed call.
+	pub fn set_max_call_size(&mut self, size: usize) {
+		self.max_call_size = size;
 	}
 }
 
@@ -421,11 +428,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		F: Fn(Params, &Context) -> Result<R, Error> + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
+		let max_call_size = self.max_call_size;
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
 				match callback(params, &*ctx) {
-					Ok(res) => send_response(id, tx, res),
+					Ok(res) => send_response(id, tx, res, max_call_size),
 					Err(err) => send_call_error(id, tx, err),
 				};
 			})),
@@ -446,13 +454,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Fun: (Fn(Params<'static>, Arc<Context>) -> Fut) + Copy + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
+		let max_call_size = self.max_call_size;
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
-						Ok(res) => send_response(id, &tx, res),
+						Ok(res) => send_response(id, &tx, res, max_call_size),
 						Err(err) => send_call_error(id, &tx, err),
 					};
 
@@ -479,6 +488,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		F: Fn(Params, Arc<Context>) -> Result<R, Error> + Copy + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.clone();
+		let max_call_size = self.max_call_size;
 		let callback = self.methods.verify_and_insert(
 			method_name,
 			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
@@ -486,7 +496,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 				tokio::task::spawn_blocking(move || {
 					match callback(params, ctx) {
-						Ok(res) => send_response(id, &tx, res),
+						Ok(res) => send_response(id, &tx, res, max_call_size),
 						Err(err) => send_call_error(id, &tx, err),
 					};
 
@@ -544,6 +554,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 
 		let subscribers = Subscribers::default();
+		let max_call_size = self.max_call_size;
 
 		{
 			let subscribers = subscribers.clone();
@@ -561,7 +572,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						sub_id
 					};
 
-					send_response(id.clone(), method_sink, sub_id);
+					send_response(id.clone(), method_sink, sub_id, max_call_size);
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
@@ -600,7 +611,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						}
 					};
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					send_response(id, tx, "Unsubscribed");
+					send_response(id, tx, "Unsubscribed", max_call_size);
 				})),
 			);
 		}

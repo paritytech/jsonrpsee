@@ -163,23 +163,24 @@ async fn can_set_the_max_request_body_size() {
 
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 10 bytes
-	let server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
+	let server = WsServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
+	module.set_max_call_size(100);
+	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
 	let addr = server.local_addr().unwrap();
 	let handle = server.start(module).unwrap();
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	// Invalid: too long
-	let req = "any string longer than 10 bytes";
+	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, oversized_request());
 
-	// Still invalid, but not oversized
-	let req = "shorty";
+	// Oversized response.
+	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));
+	assert_eq!(response, oversized_response(Id::Num(1)));
 
 	handle.stop().unwrap();
 }

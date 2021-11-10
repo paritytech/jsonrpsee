@@ -32,7 +32,7 @@ use std::task::{Context, Poll};
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::{
 	error::Error,
-	v2::{self, ErrorCode, Id, Request},
+	v2::{ErrorCode, Id, Request},
 	TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
@@ -256,23 +256,7 @@ async fn background_task(
 	tokio::spawn(async move {
 		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
-				Some(mut response) => {
-					if response.len() > max_request_body_size as usize {
-						tracing::warn!(
-							"WS Transport error: response to method call too large {}, max: {}",
-							response.len(),
-							max_request_body_size
-						);
-						// TODO(niklasad1): include `id` in the response and send back `response too big; id=id` here?!
-						// also we could terminate the connection...
-						response = serde_json::to_string(&v2::Response {
-							jsonrpc: v2::TwoPointZero,
-							id: v2::Id::Null,
-							result: "Response was too big",
-						})
-						.expect("valid JSON; qed");
-					}
-
+				Some(response) => {
 					// If websocket message send fail then terminate the connection.
 					if let Err(err) = send_ws_message(&mut sender, response).await {
 						tracing::error!("WS transport error: {:?}; terminate connection", err);
