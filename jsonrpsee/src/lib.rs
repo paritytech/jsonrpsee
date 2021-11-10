@@ -75,3 +75,9 @@ pub use jsonrpsee_types as types;
 /// Set of RPC methods that can be mounted to the server.
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
 pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SubscriptionSink};
+
+#[cfg(feature = "http-server")]
+pub use http_server::tracing;
+
+#[cfg(all(feature = "ws-server", not(feature = "http-server")))]
+pub use ws_server::tracing;

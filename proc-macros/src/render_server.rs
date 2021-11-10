@@ -285,6 +285,7 @@ impl RpcDescription {
 
 		let params_fields_seq = params.iter().map(|(name, _)| name);
 		let params_fields = quote! { #(#params_fields_seq),* };
+		let tracing = self.jrps_server_item(quote! { tracing });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -294,7 +295,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
 							Err(e) => {
-								tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return Err(e.into())
 							}
 						};
@@ -304,7 +305,7 @@ impl RpcDescription {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
 							Err(e) => {
-								tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								return Err(e.into())
 							}
 						};
