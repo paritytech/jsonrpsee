@@ -142,7 +142,7 @@ impl RpcDescription {
 
 	fn encode_params(
 		&self,
-		params: &Vec<(syn::PatIdent, syn::Type)>,
+		params: &[(syn::PatIdent, syn::Type)],
 		param_kind: &ParamKind,
 		signature: &syn::TraitItemMethod,
 	) -> TokenStream2 {
