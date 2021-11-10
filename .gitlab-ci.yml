@@ -4,7 +4,12 @@ stages:
   - benchmark
   - publish
 
-variables:
+variables:                         &default-vars
+  GIT_STRATEGY:                    fetch
+  GIT_DEPTH:                       100
+  CARGO_INCREMENTAL:               0
+  CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
+  CI_IMAGE:                        "paritytech/ci-linux:production"
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
   VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
@@ -29,13 +34,6 @@ variables:
 .schedule-refs:                    &schedule-refs
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
-
-variables:                         &default-vars
-  GIT_STRATEGY:                    fetch
-  GIT_DEPTH:                       100
-  CARGO_INCREMENTAL:               0
-  CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
-  CI_IMAGE:                        "paritytech/ci-linux:production"
 
 .rust-info-script:                 &rust-info-script
   - rustup show
