@@ -160,8 +160,6 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 	assert!(pass_mem.is_ok());
 	assert_server_busy(fail_mem);
 
-	// Client being active prevents the server from shutting down?!
-	drop(client);
 	server_handle.stop().unwrap().await;
 }
 

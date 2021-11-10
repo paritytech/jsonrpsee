@@ -90,7 +90,7 @@ impl Server {
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
-		let mut incoming = Incoming::new(self.listener, &stop_monitor);
+		let mut incoming = Monitored::new(Incoming(self.listener), &stop_monitor);
 
 		loop {
 			match connections.select_with(&mut incoming).await {
@@ -122,10 +122,10 @@ impl Server {
 
 					id = id.wrapping_add(1);
 				}
-				Err(IncomingError::Io(err)) => {
+				Err(MonitoredError::Selector(err)) => {
 					tracing::error!("Error while awaiting a new connection: {:?}", err);
 				}
-				Err(IncomingError::Shutdown) => break,
+				Err(MonitoredError::Shutdown) => break,
 			}
 		}
 
@@ -133,35 +133,53 @@ impl Server {
 	}
 }
 
-/// This is a glorified select listening to new connections, while also checking
-/// for `stop_receiver` signal.
-struct Incoming<'a> {
-	listener: TcpListener,
+/// This is a glorified select listening to new messages, while also checking the `stop_receiver` signal.
+struct Monitored<'a, F> {
+	future: F,
 	stop_monitor: &'a StopMonitor,
 }
 
-impl<'a> Incoming<'a> {
-	fn new(listener: TcpListener, stop_monitor: &'a StopMonitor) -> Self {
-		Incoming { listener, stop_monitor }
+impl<'a, F> Monitored<'a, F> {
+	fn new(future: F, stop_monitor: &'a StopMonitor) -> Self {
+		Monitored { future, stop_monitor }
 	}
 }
 
-enum IncomingError {
+enum MonitoredError<E> {
 	Shutdown,
-	Io(std::io::Error),
+	Selector(E),
 }
 
-impl<'a> Future for Incoming<'a> {
-	type Output = Result<(TcpStream, SocketAddr), IncomingError>;
+struct Incoming(TcpListener);
+
+impl<'a> Future for Monitored<'a, Incoming> {
+	type Output = Result<(TcpStream, SocketAddr), MonitoredError<std::io::Error>>;
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
 		if this.stop_monitor.shutdown_requested() {
-			return Poll::Ready(Err(IncomingError::Shutdown));
+			return Poll::Ready(Err(MonitoredError::Shutdown));
 		}
 
-		this.listener.poll_accept(cx).map_err(IncomingError::Io)
+		this.future.0.poll_accept(cx).map_err(MonitoredError::Selector)
+	}
+}
+
+impl<'a, 'f, F, T, E> Future for Monitored<'a, Pin<&'f mut F>>
+where
+	F: Future<Output = Result<T, E>>,
+{
+	type Output = Result<T, MonitoredError<E>>;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		if this.stop_monitor.shutdown_requested() {
+			return Poll::Ready(Err(MonitoredError::Shutdown));
+		}
+
+		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
 	}
 }
 
@@ -275,31 +293,39 @@ async fn background_task(
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
 
-	while !stop_server.shutdown_requested() {
+	loop {
 		data.clear();
 
-		if let Err(err) = method_executors.select_with(receiver.receive_data(&mut data)).await {
-			match err {
-				SokettoError::Closed => {
-					tracing::debug!("Remote peer terminated the connection: {}", conn_id);
-					tx.close_channel();
-					return Ok(());
-				}
-				SokettoError::MessageTooLarge { current, maximum } => {
-					tracing::warn!(
-						"WS transport error: message is too big error ({} bytes, max is {})",
-						current,
-						maximum
-					);
-					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
-					continue;
-				}
-				// These errors can not be gracefully handled, so just log them and terminate the connection.
-				err => {
-					tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
-					tx.close_channel();
-					return Err(err.into());
-				}
+		{
+			// Need the extra scope to drop this pinned future and reclaim access to `data`
+			let receive = receiver.receive_data(&mut data);
+
+			tokio::pin!(receive);
+
+			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
+				match err {
+					MonitoredError::Selector(SokettoError::Closed) => {
+						tracing::debug!("Remote peer terminated the connection: {}", conn_id);
+						tx.close_channel();
+						return Ok(());
+					}
+					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
+						tracing::warn!(
+							"WS transport error: message is too big error ({} bytes, max is {})",
+							current,
+							maximum
+						);
+						send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
+						continue;
+					}
+					// These errors can not be gracefully handled, so just log them and terminate the connection.
+					MonitoredError::Selector(err) => {
+						tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
+						tx.close_channel();
+						return Err(err.into());
+					}
+					MonitoredError::Shutdown => break,
+				};
 			};
 		};
 
