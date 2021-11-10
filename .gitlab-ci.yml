@@ -126,7 +126,7 @@ benchmarks:
   <<:                              *collect-artifacts
   <<:                              *schedule-refs
   script:
-    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | output.txt
+    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
     - mkdir artifacts
     - cp output.txt artifacts/
 
