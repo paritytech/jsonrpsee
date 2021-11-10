@@ -66,7 +66,6 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 	}
 
 	fn flush(&mut self) -> io::Result<()> {
-		self.buf.clear();
 		Ok(())
 	}
 }
