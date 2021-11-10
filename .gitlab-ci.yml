@@ -4,6 +4,11 @@ stages:
   - benchmark
   - publish
 
+variables:
+  VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
+  VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
+  VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
+
 .vault-secrets:                    &vault-secrets
   secrets:
     GITHUB_TOKEN:
