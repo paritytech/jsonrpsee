@@ -58,7 +58,7 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
 		let len = self.buf.len() + buf.len();
 		if self.max_len >= len {
-			self.buf.extend(buf);
+			self.buf.extend_from_slice(buf);
 			Ok(buf.len())
 		} else {
 			Err(io::Error::new(io::ErrorKind::OutOfMemory, "Memory capacity exceeded"))
