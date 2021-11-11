@@ -179,7 +179,7 @@ async fn can_set_the_max_request_body_size() {
 	// Oversized response.
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, oversized_response(Id::Num(1)));
+	assert_eq!(response, oversized_response(Id::Num(1), 100));
 
 	handle.stop().unwrap();
 }

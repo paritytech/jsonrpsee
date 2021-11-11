@@ -73,10 +73,11 @@ pub fn oversized_request() -> String {
 	r#"{"jsonrpc":"2.0","error":{"code":-32701,"message":"Request is too big"},"id":null}"#.into()
 }
 
-pub fn oversized_response(id: Id) -> String {
+pub fn oversized_response(id: Id, max_limit: u32) -> String {
 	format!(
-		r#"{{"jsonrpc":"2.0","error":{{"code":-32702,"message":"Response is too big"}},"id":{}}}"#,
-		serde_json::to_string(&id).unwrap()
+		r#"{{"jsonrpc":"2.0","error":{{"code":-32702,"message":"Response is too big","data":"Exceeded max limit {}"}},"id":{}}}"#,
+		max_limit,
+		serde_json::to_string(&id).unwrap(),
 	)
 }
 

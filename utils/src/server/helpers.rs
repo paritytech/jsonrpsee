@@ -28,12 +28,14 @@ use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::to_json_raw_value;
 use jsonrpsee_types::v2::error::{OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::v2::{
 	error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
 	ErrorCode, ErrorObject, Id, InvalidRequest, Response, RpcError, TwoPointZero,
 };
 use serde::Serialize;
+
 use std::io;
 
 /// Bounded writer that allows writing at most `max_len` bytes.
@@ -81,8 +83,8 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 }
 
 /// Helper for sending JSON-RPC responses to the client
-pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_size: u32) {
-	let mut writer = BoundedWriter::new(max_call_size as usize);
+pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_response_size: u32) {
+	let mut writer = BoundedWriter::new(max_response_size as usize);
 
 	let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
 		Ok(_) => {
@@ -92,17 +94,17 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_s
 		Err(err) => {
 			tracing::error!("Error serializing response: {:?}", err);
 
-			let err = if err.is_io() {
-				ErrorObject {
+			if err.is_io() {
+				let data = to_json_raw_value(&format!("Exceeded max limit {}", max_response_size)).ok();
+				let err = ErrorObject {
 					code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
 					message: OVERSIZED_RESPONSE_MSG,
-					data: None,
-				}
+					data: data.as_deref(),
+				};
+				return send_error(id, tx, err);
 			} else {
-				ErrorCode::InternalError.into()
-			};
-
-			return send_error(id, tx, err);
+				return send_error(id, tx, ErrorCode::InternalError.into());
+			}
 		}
 	};
 
