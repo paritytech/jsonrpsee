@@ -165,7 +165,6 @@ async fn can_set_the_max_request_body_size() {
 	// Rejects all requests larger than 10 bytes
 	let server = WsServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.set_max_call_size(100);
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
 	let addr = server.local_addr().unwrap();
 	let handle = server.start(module).unwrap();

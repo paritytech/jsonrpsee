@@ -81,7 +81,7 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 }
 
 /// Helper for sending JSON-RPC responses to the client
-pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_size: usize) {
+pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_size: u32) {
 	let mut writer = BoundedWriter::new(max_call_size as usize);
 
 	let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {

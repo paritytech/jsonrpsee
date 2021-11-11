@@ -251,7 +251,9 @@ impl Server {
 						if is_single {
 							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								if let Some(fut) = methods.execute_with_resources(&tx, req, 0, &resources) {
+								if let Some(fut) =
+									methods.execute_with_resources(&tx, req, 0, &resources, max_request_body_size)
+								{
 									fut.await;
 								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
@@ -264,11 +266,9 @@ impl Server {
 						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							if !batch.is_empty() {
-								join_all(
-									batch
-										.into_iter()
-										.filter_map(|req| methods.execute_with_resources(&tx, req, 0, &resources)),
-								)
+								join_all(batch.into_iter().filter_map(|req| {
+									methods.execute_with_resources(&tx, req, 0, &resources, max_request_body_size)
+								}))
 								.await;
 							} else {
 								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an

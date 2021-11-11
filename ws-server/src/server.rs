@@ -311,7 +311,9 @@ async fn background_task(
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
-					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
+					if let Some(fut) =
+						methods.execute_with_resources(&tx, req, conn_id, &resources, max_request_body_size)
+					{
 						method_executors.add(fut);
 					}
 				} else {
@@ -335,10 +337,15 @@ async fn background_task(
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
-							let methods_stream =
-								stream::iter(batch.into_iter().filter_map(|req| {
-									methods.execute_with_resources(&tx_batch, req, conn_id, resources)
-								}));
+							let methods_stream = stream::iter(batch.into_iter().filter_map(|req| {
+								methods.execute_with_resources(
+									&tx_batch,
+									req,
+									conn_id,
+									resources,
+									max_request_body_size,
+								)
+							}));
 
 							let results = methods_stream
 								.for_each_concurrent(None, |item| item)
