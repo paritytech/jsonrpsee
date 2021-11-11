@@ -53,6 +53,10 @@ pub struct Resource {
 	pub value: syn::LitInt,
 }
 
+pub struct Aliases {
+	pub list: Punctuated<syn::LitStr, Token![,]>,
+}
+
 impl Parse for Argument {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let label = input.parse()?;
@@ -84,6 +88,18 @@ impl Parse for Argument {
 impl Parse for Resource {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		Ok(Resource { name: input.parse()?, assign: input.parse()?, value: input.parse()? })
+	}
+}
+
+impl Parse for Aliases {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let content;
+
+		syn::bracketed!(content in input);
+
+		let list = content.parse_terminated(Parse::parse)?;
+
+		Ok(Aliases { list })
 	}
 }
 

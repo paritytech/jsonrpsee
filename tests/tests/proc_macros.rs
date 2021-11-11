@@ -49,7 +49,7 @@ mod rpc_impl {
 		#[subscription(name = "sub", item = String)]
 		fn sub(&self) -> RpcResult<()>;
 
-		#[subscription(name = "echo", aliases = "alias_echo", item = u32)]
+		#[subscription(name = "echo", aliases = ["alias_echo"], item = u32)]
 		fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 
 		#[method(name = "params")]

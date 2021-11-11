@@ -27,10 +27,11 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{optional, parse_param_kind, Argument, AttributeMeta, MissingArgument, ParamKind, Resource},
+	attributes::{optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, ParamKind, Resource},
 	helpers::extract_doc_comments,
 };
 
+use std::borrow::Cow;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::spanned::Spanned;
@@ -276,32 +277,25 @@ impl RpcDescription {
 	/// Examples:
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
 	/// For no namespace and method `makeSpam` it will be just `makeSpam.
-	pub(crate) fn rpc_identifier(&self, method: &str) -> String {
+	pub(crate) fn rpc_identifier<'a>(&self, method: &'a str) -> Cow<'a, str> {
 		if let Some(ns) = &self.namespace {
-			format!("{}_{}", ns, method.trim())
+			format!("{}_{}", ns, method).into()
 		} else {
-			method.to_string()
+			Cow::Borrowed(method)
 		}
 	}
 }
 
 fn parse_aliases(arg: Result<Argument, MissingArgument>) -> syn::Result<Vec<String>> {
-	let aliases = optional(arg, Argument::string)?;
+	let aliases = optional(arg, Argument::value::<Aliases>)?;
 
-	Ok(aliases.map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default())
+	Ok(aliases.map(|a| a.list.into_iter().map(|lit| lit.value()).collect()).unwrap_or_default())
 }
 
 fn find_attr<'a>(attrs: &'a [Attribute], ident: &str) -> Option<&'a Attribute> {
 	attrs.iter().find(|a| a.path.is_ident(ident))
 }
 
-fn build_unsubscribe_method(existing_method: &str) -> String {
-	let method = existing_method.trim();
-	let mut new_method = String::from("unsubscribe");
-	if method.starts_with("subscribe") {
-		new_method.extend(method.chars().skip(9));
-	} else {
-		new_method.push_str(method);
-	}
-	new_method
+fn build_unsubscribe_method(method: &str) -> String {
+	format!("unsubscribe{}", method.strip_prefix("subscribe").unwrap_or(method))
 }

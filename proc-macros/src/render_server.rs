@@ -205,8 +205,7 @@ impl RpcDescription {
 					.aliases
 					.iter()
 					.map(|alias| {
-						let alias = alias.trim().to_string();
-						check_name(&alias, rust_method_name.span());
+						check_name(alias, rust_method_name.span());
 						handle_register_result(quote! {
 							rpc.register_alias(#alias, #rpc_name)
 						})
@@ -229,8 +228,7 @@ impl RpcDescription {
 					.aliases
 					.iter()
 					.map(|alias| {
-						let alias = alias.trim().to_string();
-						check_name(&alias, rust_method_name.span());
+						check_name(alias, rust_method_name.span());
 						handle_register_result(quote! {
 							rpc.register_alias(#alias, #sub_name)
 						})
@@ -240,8 +238,7 @@ impl RpcDescription {
 					.unsubscribe_aliases
 					.iter()
 					.map(|alias| {
-						let alias = alias.trim().to_string();
-						check_name(&alias, rust_method_name.span());
+						check_name(alias, rust_method_name.span());
 						handle_register_result(quote! {
 							rpc.register_alias(#alias, #unsub_name)
 						})
