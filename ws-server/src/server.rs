@@ -41,6 +41,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::{self, StreamExt};
 use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
+use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
@@ -256,11 +257,11 @@ async fn background_task(
 		while !stop_server2.shutdown_requested() {
 			match rx.next().await {
 				Some(response) => {
-					// TODO: check length of response https://github.com/paritytech/jsonrpsee/issues/536
-					tracing::debug!("send {} bytes", response.len());
-					tracing::trace!("send: {}", response);
-					let _ = sender.send_text_owned(response).await;
-					let _ = sender.flush().await;
+					// If websocket message send fail then terminate the connection.
+					if let Err(err) = send_ws_message(&mut sender, response).await {
+						tracing::error!("WS transport error: {:?}; terminate connection", err);
+						break;
+					}
 				}
 				None => break,
 			};
@@ -310,7 +311,9 @@ async fn background_task(
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
-					if let Some(fut) = methods.execute_with_resources(&tx, req, conn_id, &resources) {
+					if let Some(fut) =
+						methods.execute_with_resources(&tx, req, conn_id, &resources, max_request_body_size)
+					{
 						method_executors.add(fut);
 					}
 				} else {
@@ -334,10 +337,15 @@ async fn background_task(
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
-							let methods_stream =
-								stream::iter(batch.into_iter().filter_map(|req| {
-									methods.execute_with_resources(&tx_batch, req, conn_id, resources)
-								}));
+							let methods_stream = stream::iter(batch.into_iter().filter_map(|req| {
+								methods.execute_with_resources(
+									&tx_batch,
+									req,
+									conn_id,
+									resources,
+									max_request_body_size,
+								)
+							}));
 
 							let results = methods_stream
 								.for_each_concurrent(None, |item| item)
@@ -535,4 +543,14 @@ impl Builder {
 		let resources = self.resources;
 		Ok(Server { listener, cfg: self.settings, stop_monitor, resources })
 	}
+}
+
+async fn send_ws_message(
+	sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>,
+	response: String,
+) -> Result<(), Error> {
+	tracing::debug!("send {} bytes", response.len());
+	tracing::trace!("send: {}", response);
+	sender.send_text_owned(response).await?;
+	sender.flush().await.map_err(Into::into)
 }

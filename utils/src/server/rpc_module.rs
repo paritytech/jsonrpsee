@@ -53,10 +53,11 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId, MaxResponseSize)>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
-pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
+pub type AsyncMethod<'a> = Arc<
+	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>, MaxResponseSize) -> BoxFuture<'a, ()>,
+>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -64,6 +65,8 @@ pub type ConnectionId = usize;
 pub type SubscriptionId = u64;
 /// Sink that is used to send back the result to the server for a specific method.
 pub type MethodSink = mpsc::UnboundedSender<String>;
+/// Max response size in bytes for a executed call.
+pub type MaxResponseSize = u32;
 
 type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Receiver<()>)>>>;
 
@@ -146,6 +149,7 @@ impl MethodCallback {
 		req: Request<'_>,
 		conn_id: ConnectionId,
 		claimed: Option<ResourceGuard>,
+		max_response_size: MaxResponseSize,
 	) -> Option<BoxFuture<'static, ()>> {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
@@ -158,7 +162,7 @@ impl MethodCallback {
 					id,
 					conn_id
 				);
-				(callback)(id, params, tx, conn_id);
+				(callback)(id, params, tx, conn_id, max_response_size);
 
 				// Release claimed resources
 				drop(claimed);
@@ -176,7 +180,7 @@ impl MethodCallback {
 					conn_id
 				);
 
-				Some((callback)(id, params, tx, claimed))
+				Some((callback)(id, params, tx, claimed, max_response_size))
 			}
 		}
 	}
@@ -283,10 +287,16 @@ impl Methods {
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, tx: &MethodSink, req: Request, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(
+		&self,
+		tx: &MethodSink,
+		req: Request,
+		conn_id: ConnectionId,
+		max_response_size: MaxResponseSize,
+	) -> Option<BoxFuture<'static, ()>> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
-			Some(callback) => callback.execute(tx, req, conn_id, None),
+			Some(callback) => callback.execute(tx, req, conn_id, None, max_response_size),
 			None => {
 				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
 				None
@@ -301,11 +311,12 @@ impl Methods {
 		req: Request,
 		conn_id: ConnectionId,
 		resources: &Resources,
+		max_response_size: MaxResponseSize,
 	) -> Option<BoxFuture<'static, ()>> {
 		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => match callback.claim(&req.method, resources) {
-				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard)),
+				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard), max_response_size),
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
 					send_error(req.id, tx, ErrorCode::ServerIsBusy.into());
@@ -339,7 +350,7 @@ impl Methods {
 
 		let (tx, mut rx) = mpsc::unbounded();
 
-		if let Some(fut) = self.execute(&tx, req, 0) {
+		if let Some(fut) = self.execute(&tx, req, 0, MaxResponseSize::MAX) {
 			fut.await;
 		}
 
@@ -356,7 +367,7 @@ impl Methods {
 
 		let (tx, mut rx) = mpsc::unbounded();
 
-		if let Some(fut) = self.execute(&tx, req, 0) {
+		if let Some(fut) = self.execute(&tx, req, 0, MaxResponseSize::MAX) {
 			fut.await;
 		}
 		let response = rx.next().await.expect("Could not establish subscription.");
@@ -423,9 +434,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
+			MethodCallback::new_sync(Arc::new(move |id, params, tx, _, max_response_size| {
 				match callback(params, &*ctx) {
-					Ok(res) => send_response(id, tx, res),
+					Ok(res) => send_response(id, tx, res, max_response_size),
 					Err(err) => send_call_error(id, tx, err),
 				};
 			})),
@@ -448,11 +459,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
+			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed, max_response_size| {
 				let ctx = ctx.clone();
 				let future = async move {
 					match callback(params, ctx).await {
-						Ok(res) => send_response(id, &tx, res),
+						Ok(res) => send_response(id, &tx, res, max_response_size),
 						Err(err) => send_call_error(id, &tx, err),
 					};
 
@@ -481,12 +492,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
+			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed, max_response_size| {
 				let ctx = ctx.clone();
 
 				tokio::task::spawn_blocking(move || {
 					match callback(params, ctx) {
-						Ok(res) => send_response(id, &tx, res),
+						Ok(res) => send_response(id, &tx, res, max_response_size),
 						Err(err) => send_call_error(id, &tx, err),
 					};
 
@@ -542,14 +553,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods.verify_method_name(subscribe_method_name)?;
 		self.methods.verify_method_name(unsubscribe_method_name)?;
 		let ctx = self.ctx.clone();
-
 		let subscribers = Subscribers::default();
 
 		{
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn_id| {
+				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn_id, max_response_size| {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 					let sub_id = {
 						const JS_NUM_MASK: SubscriptionId = !0 >> 11;
@@ -561,7 +571,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						sub_id
 					};
 
-					send_response(id.clone(), method_sink, sub_id);
+					send_response(id.clone(), method_sink, sub_id, max_response_size);
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
@@ -586,7 +596,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, tx, conn_id| {
+				MethodCallback::new_sync(Arc::new(move |id, params, tx, conn_id, max_response_size| {
 					let sub_id = match params.one() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -600,7 +610,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						}
 					};
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					send_response(id, tx, "Unsubscribed");
+					send_response(id, tx, "Unsubscribed", max_response_size);
 				})),
 			);
 		}
