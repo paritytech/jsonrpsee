@@ -31,9 +31,9 @@ use crate::{
 	helpers::extract_doc_comments,
 };
 
-use std::borrow::Cow;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use std::borrow::Cow;
 use syn::spanned::Spanned;
 use syn::{punctuated::Punctuated, Attribute, Token};
 
