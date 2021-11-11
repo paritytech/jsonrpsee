@@ -133,7 +133,7 @@ impl Server {
 	}
 }
 
-/// This is a glorified select listening to new messages, while also checking the `stop_receiver` signal.
+/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
 struct Monitored<'a, F> {
 	future: F,
 	stop_monitor: &'a StopMonitor,
@@ -305,13 +305,13 @@ async fn background_task(
 			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
-						tracing::debug!("Remote peer terminated the connection: {}", conn_id);
+						tracing::debug!("WS transport error: remote peer terminated the connection: {}", conn_id);
 						tx.close_channel();
 						return Ok(());
 					}
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
 						tracing::warn!(
-							"WS transport error: message is too big error ({} bytes, max is {})",
+							"WS transport error: outgoing message is too big error ({} bytes, max is {})",
 							current,
 							maximum
 						);
