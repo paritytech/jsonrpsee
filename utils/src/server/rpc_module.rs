@@ -298,7 +298,7 @@ impl Methods {
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(tx, req, conn_id, None, max_response_size),
 			None => {
-				send_error(req.id, tx, ErrorCode::MethodNotFound.into(), max_response_size);
+				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
 				None
 			}
 		}
@@ -319,12 +319,12 @@ impl Methods {
 				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard), max_response_size),
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					send_error(req.id, tx, ErrorCode::ServerIsBusy.into(), max_response_size);
+					send_error(req.id, tx, ErrorCode::ServerIsBusy.into());
 					None
 				}
 			},
 			None => {
-				send_error(req.id, tx, ErrorCode::MethodNotFound.into(), max_response_size);
+				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
 				None
 			}
 		}
@@ -437,7 +437,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::new_sync(Arc::new(move |id, params, tx, _, max_response_size| {
 				match callback(params, &*ctx) {
 					Ok(res) => send_response(id, tx, res, max_response_size),
-					Err(err) => send_call_error(id, tx, err, max_response_size),
+					Err(err) => send_call_error(id, tx, err),
 				};
 			})),
 		)?;
@@ -464,7 +464,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let future = async move {
 					match callback(params, ctx).await {
 						Ok(res) => send_response(id, &tx, res, max_response_size),
-						Err(err) => send_call_error(id, &tx, err, max_response_size),
+						Err(err) => send_call_error(id, &tx, err),
 					};
 
 					// Release claimed resources
@@ -498,7 +498,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				tokio::task::spawn_blocking(move || {
 					match callback(params, ctx) {
 						Ok(res) => send_response(id, &tx, res, max_response_size),
-						Err(err) => send_call_error(id, &tx, err, max_response_size),
+						Err(err) => send_call_error(id, &tx, err),
 					};
 
 					// Release claimed resources
@@ -587,7 +587,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							err,
 							id
 						);
-						send_error(id, method_sink, ErrorCode::ServerError(-1).into(), max_response_size);
+						send_error(id, method_sink, ErrorCode::ServerError(-1).into());
 					}
 				})),
 			);
@@ -605,7 +605,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								unsubscribe_method_name,
 								id
 							);
-							send_error(id, tx, ErrorCode::ServerError(-1).into(), max_response_size);
+							send_error(id, tx, ErrorCode::ServerError(-1).into());
 							return;
 						}
 					};
