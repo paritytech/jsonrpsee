@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
-	#[method(name = "foo", aliases = "fooAlias, Other")]
+	#[method(name = "foo", aliases = ["fooAlias", "Other"])]
 	async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
 	#[method(name = "optional_params")]
@@ -29,7 +29,7 @@ pub trait Rpc {
 	#[subscription(name = "sub", item = String)]
 	fn sub(&self) -> RpcResult<()>;
 
-	#[subscription(name = "echo", aliases = "ECHO", item = u32, unsubscribe_aliases = "NotInterested, listenNoMore")]
+	#[subscription(name = "echo", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
 	fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 }
 
