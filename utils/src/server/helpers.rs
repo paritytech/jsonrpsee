@@ -36,7 +36,7 @@ use jsonrpsee_types::v2::{
 use serde::Serialize;
 use std::io;
 
-/// Bounded writer that allow writing at most `max_len` bytes.
+/// Bounded writer that allows writing at most `max_len` bytes.
 ///
 /// ```
 ///    use jsonrpsee_utils::server::helpers::BoundedWriter;
