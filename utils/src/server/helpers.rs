@@ -36,21 +36,31 @@ use jsonrpsee_types::v2::{
 use serde::Serialize;
 use std::io;
 
-struct BoundedWriter {
+/// Bounded writer that allow writing at most `max_len` bytes.
+///
+/// ```
+///    use jsonrpsee_utils::server::helpers::BoundedWriter;
+///    use std::io::Write;
+///
+///    let mut writer = BoundedWriter::new(10);
+///    (&mut writer).write("hello".as_bytes()).unwrap();
+///    assert_eq!(std::str::from_utf8(&writer.into_bytes()).unwrap(), "hello");
+/// ```
+#[derive(Debug)]
+pub struct BoundedWriter {
 	max_len: usize,
 	buf: Vec<u8>,
 }
 
 impl BoundedWriter {
-	fn new(max_len: usize) -> Self {
-		Self { max_len, buf: Vec::new() }
+	/// Create a new bounded writer.
+	pub fn new(max_len: usize) -> Self {
+		Self { max_len, buf: Vec::with_capacity(128) }
 	}
 
-	fn to_json_string(self) -> String {
-		unsafe {
-			// serde doesn't emit invalid UTF-8.
-			String::from_utf8_unchecked(self.buf)
-		}
+	/// Consume the writer and extract the written bytes.
+	pub fn into_bytes(self) -> Vec<u8> {
+		self.buf
 	}
 }
 
@@ -75,18 +85,21 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_s
 	let mut writer = BoundedWriter::new(max_call_size as usize);
 
 	let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
-		Ok(_) => writer.to_json_string(),
+		Ok(_) => {
+			// Safety - serde_json does not emit invalid UTF-8.
+			unsafe { String::from_utf8_unchecked(writer.into_bytes()) }
+		}
 		Err(err) => {
 			tracing::error!("Error serializing response: {:?}", err);
-			let io_err: std::io::Error = err.into();
 
-			let err = match io_err.kind() {
-				io::ErrorKind::OutOfMemory => ErrorObject {
+			let err = if err.is_io() {
+				ErrorObject {
 					code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
 					message: OVERSIZED_RESPONSE_MSG,
 					data: None,
-				},
-				_ => ErrorCode::InternalError.into(),
+				}
+			} else {
+				ErrorCode::InternalError.into()
 			};
 
 			return send_error(id, tx, err);
@@ -160,10 +173,8 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 #[cfg(test)]
 mod tests {
 	use super::{BoundedWriter, Id, Response, TwoPointZero};
-	use std::io::Write;
 
 	#[test]
-	#[ignore]
 	fn bounded_serializer_work() {
 		let mut writer = BoundedWriter::new(100);
 		let result = "success";
@@ -171,7 +182,7 @@ mod tests {
 		assert!(
 			serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: Id::Number(1), result }).is_ok()
 		);
-		assert_eq!(writer.to_json_string(), r#"{"jsonrpc":"2.0","result":"success","id":1}"#);
+		assert_eq!(String::from_utf8(writer.into_bytes()).unwrap(), r#"{"jsonrpc":"2.0","result":"success","id":1}"#);
 	}
 
 	#[test]
@@ -179,10 +190,5 @@ mod tests {
 		let mut writer = BoundedWriter::new(100);
 		// NOTE: `"` is part of the serialization so 101 characters.
 		assert!(serde_json::to_writer(&mut writer, &"x".repeat(99)).is_err());
-		(&mut writer).flush().unwrap();
-
-		assert!(serde_json::to_writer(&mut writer, &"a".repeat(48)).is_ok());
-		assert!(serde_json::to_writer(&mut writer, &"b".repeat(48)).is_ok());
-		assert!(serde_json::to_writer(&mut writer, &1).is_err());
 	}
 }
