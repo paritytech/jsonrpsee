@@ -39,7 +39,7 @@ use std::task::{Context, Poll};
 use tokio::time::{self, Duration, Interval};
 
 /// Polling for server stop monitor interval in milliseconds.
-const POLLING_HEARTBEAT: u64 = 1000;
+const STOP_MONITOR_POLLING_INTERVAL: u64 = 1000;
 
 /// This is a flexible collection of futures that need to be driven to completion
 /// alongside some other future, such as connection handlers that need to be
@@ -49,16 +49,16 @@ const POLLING_HEARTBEAT: u64 = 1000;
 /// `select_with` providing some other future, the result of which you need.
 pub(crate) struct FutureDriver<F> {
 	futures: Vec<F>,
-	heartbeat: Interval,
+	stop_monitor_heartbeat: Interval,
 }
 
 impl<F> Default for FutureDriver<F> {
 	fn default() -> Self {
-		let mut heartbeat = time::interval(Duration::from_millis(POLLING_HEARTBEAT));
+		let mut heartbeat = time::interval(Duration::from_millis(STOP_MONITOR_POLLING_INTERVAL));
 
 		heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
-		FutureDriver { futures: Vec::new(), heartbeat }
+		FutureDriver { futures: Vec::new(), stop_monitor_heartbeat: heartbeat }
 	}
 }
 
@@ -102,10 +102,10 @@ where
 		}
 	}
 
-	fn poll_heartbeat(&mut self, cx: &mut Context) {
+	fn poll_stop_monitor_heartbeat(&mut self, cx: &mut Context) {
 		// We don't care about the ticks of the heartbeat, it's here only
 		// to periodically wake the `Waker` on `cx`.
-		let _ = self.heartbeat.poll_tick(cx);
+		let _ = self.stop_monitor_heartbeat.poll_tick(cx);
 	}
 }
 
@@ -147,7 +147,7 @@ where
 		let this = Pin::into_inner(self);
 
 		this.driver.drive(cx);
-		this.driver.poll_heartbeat(cx);
+		this.driver.poll_stop_monitor_heartbeat(cx);
 
 		this.selector.poll_unpin(cx)
 	}
