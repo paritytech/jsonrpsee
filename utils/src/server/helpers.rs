@@ -81,8 +81,8 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 }
 
 /// Helper for sending JSON-RPC responses to the client
-pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_size: u32) {
-	let mut writer = BoundedWriter::new(max_call_size as usize);
+pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_response_size: u32) {
+	let mut writer = BoundedWriter::new(max_response_size as usize);
 
 	let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
 		Ok(_) => {
@@ -102,7 +102,7 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_s
 				ErrorCode::InternalError.into()
 			};
 
-			return send_error(id, tx, err);
+			return send_error(id, tx, err, max_response_size);
 		}
 	};
 
@@ -112,12 +112,12 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_call_s
 }
 
 /// Helper for sending JSON-RPC errors to the client
-pub fn send_error(id: Id, tx: &MethodSink, error: ErrorObject) {
-	let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
-		Ok(json) => json,
+pub fn send_error(id: Id, tx: &MethodSink, error: ErrorObject, max_response_size: u32) {
+	let mut writer = BoundedWriter::new(max_response_size as usize);
+	let json = match serde_json::to_writer(&mut writer, &RpcError { jsonrpc: TwoPointZero, error, id }) {
+		Ok(_) => unsafe { String::from_utf8_unchecked(writer.into_bytes()) },
 		Err(err) => {
 			tracing::error!("Error serializing error message: {:?}", err);
-
 			return;
 		}
 	};
@@ -128,7 +128,7 @@ pub fn send_error(id: Id, tx: &MethodSink, error: ErrorObject) {
 }
 
 /// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
-pub fn send_call_error(id: Id, tx: &MethodSink, err: Error) {
+pub fn send_call_error(id: Id, tx: &MethodSink, err: Error, max_response_size: u32) {
 	let (code, message, data) = match err {
 		Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
 		Error::Call(CallError::Failed(e)) => (ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None),
@@ -140,7 +140,7 @@ pub fn send_call_error(id: Id, tx: &MethodSink, err: Error) {
 
 	let err = ErrorObject { code, message: &message, data: data.as_deref() };
 
-	send_error(id, tx, err)
+	send_error(id, tx, err, max_response_size)
 }
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain

@@ -292,7 +292,7 @@ async fn background_task(
 						current,
 						maximum
 					);
-					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
+					send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into(), max_request_body_size);
 					continue;
 				}
 				// These errors can not be gracefully handled, so just log them and terminate the connection.
@@ -318,7 +318,7 @@ async fn background_task(
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
-					send_error(id, &tx, code.into());
+					send_error(id, &tx, code.into(), max_request_body_size);
 				}
 			}
 			Some(b'[') => {
@@ -359,17 +359,17 @@ async fn background_task(
 								tracing::error!("Error sending batch response to the client: {:?}", err)
 							}
 						} else {
-							send_error(Id::Null, &tx2, ErrorCode::InvalidRequest.into());
+							send_error(Id::Null, &tx2, ErrorCode::InvalidRequest.into(), max_request_body_size);
 						}
 					} else {
 						let (id, code) = prepare_error(&d);
-						send_error(id, &tx2, code.into());
+						send_error(id, &tx2, code.into(), max_request_body_size);
 					}
 				};
 
 				method_executors.add(Box::pin(fut));
 			}
-			_ => send_error(Id::Null, &tx, ErrorCode::ParseError.into()),
+			_ => send_error(Id::Null, &tx, ErrorCode::ParseError.into(), max_request_body_size),
 		}
 	}
 

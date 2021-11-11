@@ -260,7 +260,7 @@ impl Server {
 								return Ok::<_, HyperError>(response::ok_response("".into()));
 							} else {
 								let (id, code) = prepare_error(&body);
-								send_error(id, &tx, code.into());
+								send_error(id, &tx, code.into(), max_request_body_size);
 							}
 
 						// Batch of requests or notifications
@@ -275,7 +275,7 @@ impl Server {
 								// Array with at least one value, the response from the Server MUST be a single
 								// Response object." – The Spec.
 								is_single = true;
-								send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
+								send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into(), max_request_body_size);
 							}
 						} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
@@ -285,7 +285,7 @@ impl Server {
 							// Response object." – The Spec.
 							is_single = true;
 							let (id, code) = prepare_error(&body);
-							send_error(id, &tx, code.into());
+							send_error(id, &tx, code.into(), max_request_body_size);
 						}
 
 						// Closes the receiving half of a channel without dropping it. This prevents any further
