@@ -81,7 +81,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 		.register_subscription("subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
-				sink.close("Server closed the stream because it was lazy".into())
+				sink.close("Server closed the stream because it was lazy")
 			});
 			Ok(())
 		})
