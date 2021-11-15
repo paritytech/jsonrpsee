@@ -135,7 +135,7 @@ benchmarks:
 
 publish-bench:
   stage:                           publish
-  <<:                              *docker-env
+  <<:                              *kubernetes-env
   <<:                              *schedule-refs
   needs:
     - job:                         benchmarks
