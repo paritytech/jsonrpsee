@@ -29,6 +29,9 @@ use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::v2::error::{INVALID_SUBSCRIPTION_CODE, INVALID_SUBSCRIPTION_MSG};
+use jsonrpsee_types::v2::ErrorObject;
 use jsonrpsee_types::{
 	error::{Error, SubscriptionClosedError},
 	traits::ToRpcParams,
@@ -609,8 +612,19 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							return;
 						}
 					};
-					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					send_response(id, tx, "Unsubscribed", max_response_size);
+					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some() {
+						send_response(id, tx, "Unsubscribed", max_response_size);
+					} else {
+						send_error(
+							id,
+							tx,
+							ErrorObject {
+								code: ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE),
+								message: INVALID_SUBSCRIPTION_MSG,
+								data: to_json_raw_value(&sub_id).ok().as_deref(),
+							},
+						)
+					}
 				})),
 			);
 		}
@@ -749,7 +763,7 @@ impl Drop for TestSubscription {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use jsonrpsee_types::v2;
+	use jsonrpsee_types::v2::{self, error::INVALID_SUBSCRIPTION_MSG, RpcError};
 	use serde::Deserialize;
 	use std::collections::HashMap;
 
@@ -937,5 +951,34 @@ mod tests {
 		let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await;
 		assert_eq!(sub_closed_err.subscription_id(), my_sub.subscription_id());
 		assert_eq!(sub_closed_err.close_reason(), "Closed by the server");
+	}
+
+	#[tokio::test]
+	async fn unsubscribe_twice_errors() {
+		let mut module = RpcModule::new(());
+		module.register_subscription("my_sub", "my_unsub", |_, _, _| Ok(())).unwrap();
+
+		fn deser_call<T: DeserializeOwned>(raw: String) -> T {
+			let out: Response<T> = serde_json::from_str(&raw).unwrap();
+			out.result
+		}
+
+		let sub_id: u64 = deser_call(module.call_with("my_sub", Vec::<()>::new()).await.unwrap());
+		let unsub: String = deser_call(module.call_with("my_unsub", [sub_id]).await.unwrap());
+		assert_eq!(&unsub, "Unsubscribed");
+		let raw = module.call_with("my_unsub", [sub_id]).await.unwrap();
+		let unsub_2: RpcError = serde_json::from_str(&raw).unwrap();
+		assert_eq!(
+			unsub_2,
+			RpcError {
+				jsonrpc: TwoPointZero,
+				error: v2::ErrorObject {
+					code: ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE),
+					message: INVALID_SUBSCRIPTION_MSG,
+					data: None
+				},
+				id: Id::Number(0)
+			}
+		)
 	}
 }
