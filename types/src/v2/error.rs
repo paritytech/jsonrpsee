@@ -73,7 +73,7 @@ impl<'a> From<ErrorCode> for ErrorObject<'a> {
 impl<'a> PartialEq for ErrorObject<'a> {
 	fn eq(&self, other: &Self) -> bool {
 		let this_raw = self.data.map(|r| r.get());
-		let other_raw = self.data.map(|r| r.get());
+		let other_raw = other.data.map(|r| r.get());
 		self.code == other.code && self.message == other.message && this_raw == other_raw
 	}
 }
@@ -107,7 +107,7 @@ pub const PARSE_ERROR_MSG: &str = "Parse error";
 pub const OVERSIZED_REQUEST_MSG: &str = "Request is too big";
 /// Oversized response message
 pub const OVERSIZED_RESPONSE_MSG: &str = "Response is too big";
-/// Invalid subscription ID in unsubscription.
+/// Invalid subscription ID.
 pub const INVALID_SUBSCRIPTION_MSG: &str = "Invalid subscription ID";
 /// Internal error message.
 pub const INTERNAL_ERROR_MSG: &str = "Internal error";

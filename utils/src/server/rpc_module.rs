@@ -608,10 +608,19 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								unsubscribe_method_name,
 								id
 							);
-							send_error(id, tx, ErrorCode::ServerError(-1).into());
+							send_error(
+								id,
+								tx,
+								ErrorObject {
+									code: ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE),
+									message: INVALID_SUBSCRIPTION_MSG,
+									data: to_json_raw_value(&"Subscription ID must be u64").ok().as_deref(),
+								},
+							);
 							return;
 						}
 					};
+
 					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some() {
 						send_response(id, tx, "Unsubscribed", max_response_size);
 					} else {
@@ -621,7 +630,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							ErrorObject {
 								code: ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE),
 								message: INVALID_SUBSCRIPTION_MSG,
-								data: to_json_raw_value(&sub_id).ok().as_deref(),
+								data: to_json_raw_value(&format!("ID={} is not active", sub_id)).ok().as_deref(),
 							},
 						)
 					}
@@ -712,6 +721,7 @@ impl SubscriptionSink {
 	fn inner_close(&mut self, err: &SubscriptionClosedError) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 			let msg = self.build_message(err).expect("valid json infallible; qed");
 			let _ = sink.unbounded_send(msg);
 		}
@@ -763,7 +773,7 @@ impl Drop for TestSubscription {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use jsonrpsee_types::v2::{self, error::INVALID_SUBSCRIPTION_MSG, RpcError};
+	use jsonrpsee_types::v2;
 	use serde::Deserialize;
 	use std::collections::HashMap;
 
@@ -951,34 +961,5 @@ mod tests {
 		let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await;
 		assert_eq!(sub_closed_err.subscription_id(), my_sub.subscription_id());
 		assert_eq!(sub_closed_err.close_reason(), "Closed by the server");
-	}
-
-	#[tokio::test]
-	async fn unsubscribe_twice_errors() {
-		let mut module = RpcModule::new(());
-		module.register_subscription("my_sub", "my_unsub", |_, _, _| Ok(())).unwrap();
-
-		fn deser_call<T: DeserializeOwned>(raw: String) -> T {
-			let out: Response<T> = serde_json::from_str(&raw).unwrap();
-			out.result
-		}
-
-		let sub_id: u64 = deser_call(module.call_with("my_sub", Vec::<()>::new()).await.unwrap());
-		let unsub: String = deser_call(module.call_with("my_unsub", [sub_id]).await.unwrap());
-		assert_eq!(&unsub, "Unsubscribed");
-		let raw = module.call_with("my_unsub", [sub_id]).await.unwrap();
-		let unsub_2: RpcError = serde_json::from_str(&raw).unwrap();
-		assert_eq!(
-			unsub_2,
-			RpcError {
-				jsonrpc: TwoPointZero,
-				error: v2::ErrorObject {
-					code: ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE),
-					message: INVALID_SUBSCRIPTION_MSG,
-					data: None
-				},
-				id: Id::Number(0)
-			}
-		)
 	}
 }
