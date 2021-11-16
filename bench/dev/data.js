@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1636936031262,
+  "lastUpdate": 1637022396639,
   "repoUrl": "https://github.com/paritytech/jsonrpsee",
   "entries": {
     "Benchmark": [
@@ -10539,6 +10539,346 @@ window.BENCHMARK_DATA = {
             "name": "subscriptions/unsub",
             "value": 1964,
             "range": "± 1206",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Maciej Hirsz",
+            "username": "maciejhirsz",
+            "email": "1096222+maciejhirsz@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7",
+          "message": "Periodically wake `DriverSelect` so we can poll whether or not `stop` had been called. (#556)\n\n* Fix some clippy issues\r\n\r\n* Add an interval to periodically wake the SelectDriver Waker\r\n\r\n* Apply suggestions from code review\r\n\r\nCo-authored-by: David <dvdplm@gmail.com>\r\n\r\n* Naming grumbles\r\n\r\nCo-authored-by: David <dvdplm@gmail.com>",
+          "timestamp": "2021-11-11T15:53:52Z",
+          "url": "https://github.com/paritytech/jsonrpsee/commit/aacf7c0ecdb71da345e7c5cb0283f5cb5a040bd7"
+        },
+        "date": 1637022395535,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "jsonrpsee_types_v2_array_ref",
+            "value": 198,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "jsonrpsee_types_v2_vec",
+            "value": 228,
+            "range": "± 13",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip",
+            "value": 192412,
+            "range": "± 98443",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/0",
+            "value": 98,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/1",
+            "value": 179142,
+            "range": "± 30970",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/2",
+            "value": 171662,
+            "range": "± 23416",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/4",
+            "value": 264239,
+            "range": "± 62625",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/8",
+            "value": 445085,
+            "range": "± 54546",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/2",
+            "value": 2039577,
+            "range": "± 183239",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/4",
+            "value": 3860398,
+            "range": "± 201414",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/8",
+            "value": 7609508,
+            "range": "± 380249",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/16",
+            "value": 14763485,
+            "range": "± 1034303",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/32",
+            "value": 29811848,
+            "range": "± 2064161",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/64",
+            "value": 58966892,
+            "range": "± 2890744",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip",
+            "value": 113256,
+            "range": "± 23660",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/0",
+            "value": 95,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/1",
+            "value": 126606,
+            "range": "± 10062",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/2",
+            "value": 143873,
+            "range": "± 30912",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/4",
+            "value": 174266,
+            "range": "± 16766",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/8",
+            "value": 210243,
+            "range": "± 30539",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/2",
+            "value": 200132,
+            "range": "± 18150",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/4",
+            "value": 319274,
+            "range": "± 79668",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/8",
+            "value": 543212,
+            "range": "± 59442",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/16",
+            "value": 1107195,
+            "range": "± 91617",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/32",
+            "value": 2160985,
+            "range": "± 194911",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/64",
+            "value": 4076774,
+            "range": "± 479785",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip",
+            "value": 194725,
+            "range": "± 15478",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/0",
+            "value": 97,
+            "range": "± 4",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/1",
+            "value": 181697,
+            "range": "± 24967",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/2",
+            "value": 164969,
+            "range": "± 17636",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/4",
+            "value": 261061,
+            "range": "± 23841",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/8",
+            "value": 451810,
+            "range": "± 40273",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/2",
+            "value": 2055229,
+            "range": "± 217216",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/4",
+            "value": 3797572,
+            "range": "± 223823",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/8",
+            "value": 7618696,
+            "range": "± 513610",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/16",
+            "value": 14838242,
+            "range": "± 885032",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/32",
+            "value": 29007955,
+            "range": "± 1506192",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/64",
+            "value": 58272458,
+            "range": "± 2974273",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip",
+            "value": 112112,
+            "range": "± 19614",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/0",
+            "value": 98,
+            "range": "± 8",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/1",
+            "value": 127417,
+            "range": "± 6587",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/2",
+            "value": 144611,
+            "range": "± 9409",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/4",
+            "value": 174356,
+            "range": "± 61734",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/8",
+            "value": 216710,
+            "range": "± 37002",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/2",
+            "value": 194475,
+            "range": "± 31892",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/4",
+            "value": 306684,
+            "range": "± 38946",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/8",
+            "value": 539160,
+            "range": "± 52636",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/16",
+            "value": 1100395,
+            "range": "± 133648",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/32",
+            "value": 2170384,
+            "range": "± 224026",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/64",
+            "value": 4030234,
+            "range": "± 503850",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe",
+            "value": 146746,
+            "range": "± 16643",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe_response",
+            "value": 26230,
+            "range": "± 4243",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/unsub",
+            "value": 1718,
+            "range": "± 1256",
             "unit": "ns/iter"
           }
         ]
