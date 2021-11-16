@@ -23,12 +23,12 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-
+use crate::attributes::ParamKind;
 use crate::helpers::generate_where_clause;
 use crate::rpc_macro::{RpcDescription, RpcMethod, RpcSubscription};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::TypeParam;
+use syn::{FnArg, Pat, PatIdent, PatType, TypeParam};
 
 impl RpcDescription {
 	pub(super) fn render_client(&self) -> Result<TokenStream2, syn::Error> {
@@ -95,18 +95,7 @@ impl RpcDescription {
 		};
 
 		// Encoded parameters for the request.
-		let parameters = if !method.params.is_empty() {
-			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
-			let params = method.params.iter().map(|(param, _param_type)| {
-				quote! { #serde_json::to_value(&#param)? }
-			});
-			quote! {
-				vec![ #(#params),* ].into()
-			}
-		} else {
-			self.jrps_client_item(quote! { types::v2::params::ParamsSer::NoParams })
-		};
-
+		let parameters = self.encode_params(&method.params, &method.param_kind, &method.signature);
 		// Doc-comment to be associated with the method.
 		let docs = &method.docs;
 
@@ -138,18 +127,7 @@ impl RpcDescription {
 		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
 
 		// Encoded parameters for the request.
-		let parameters = if !sub.params.is_empty() {
-			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
-			let params = sub.params.iter().map(|(param, _param_type)| {
-				quote! { #serde_json::to_value(&#param)? }
-			});
-			quote! {
-				vec![ #(#params),* ].into()
-			}
-		} else {
-			self.jrps_client_item(quote! { types::v2::params::ParamsSer::NoParams })
-		};
-
+		let parameters = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
 		// Doc-comment to be associated with the method.
 		let docs = &sub.docs;
 
@@ -161,4 +139,58 @@ impl RpcDescription {
 		};
 		Ok(method)
 	}
+
+	fn encode_params(
+		&self,
+		params: &[(syn::PatIdent, syn::Type)],
+		param_kind: &ParamKind,
+		signature: &syn::TraitItemMethod,
+	) -> TokenStream2 {
+		if !params.is_empty() {
+			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
+			let params = params.iter().map(|(param, _param_type)| {
+				quote! { #serde_json::to_value(&#param)? }
+			});
+			match param_kind {
+				ParamKind::Map => {
+					// Extract parameter names.
+					let param_names = extract_param_names(&signature.sig);
+					// Combine parameter names and values into tuples.
+					let params = param_names.iter().zip(params).map(|pair| {
+						let param = pair.0;
+						let value = pair.1;
+						quote! { (#param, #value) }
+					});
+					quote! {
+						Some(types::v2::ParamsSer::Map(
+								std::collections::BTreeMap::<&str, #serde_json::Value>::from(
+									[#(#params),*]
+									)
+								)
+							)
+					}
+				}
+				ParamKind::Array => {
+					quote! {
+						Some(vec![ #(#params),* ].into())
+					}
+				}
+			}
+		} else {
+			quote! { None }
+		}
+	}
+}
+
+fn extract_param_names(sig: &syn::Signature) -> Vec<String> {
+	sig.inputs
+		.iter()
+		.filter_map(|param| match param {
+			FnArg::Typed(PatType { pat, .. }) => match &**pat {
+				Pat::Ident(PatIdent { ident, .. }) => Some(ident.to_string()),
+				_ => None,
+			},
+			_ => None,
+		})
+		.collect()
 }

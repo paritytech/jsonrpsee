@@ -32,10 +32,10 @@ mod helpers;
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
+	rpc_params,
 	types::{
 		error::SubscriptionClosedError,
 		traits::{Client, SubscriptionClient},
-		v2::ParamsSer,
 		Error, JsonValue, Subscription,
 	},
 	ws_client::WsClientBuilder,
@@ -49,9 +49,8 @@ async fn ws_subscription_works() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut hello_sub: Subscription<String> =
-		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
-	let mut foo_sub: Subscription<u64> =
-		client.subscribe("subscribe_foo", ParamsSer::NoParams, "unsubscribe_foo").await.unwrap();
+		client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
+	let mut foo_sub: Subscription<u64> = client.subscribe("subscribe_foo", None, "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
 		let hello = hello_sub.next().await.unwrap();
@@ -67,7 +66,7 @@ async fn ws_subscription_with_input_works() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut add_one: Subscription<u64> =
-		client.subscribe("subscribe_add_one", vec![1.into()].into(), "unsubscribe_add_one").await.unwrap();
+		client.subscribe("subscribe_add_one", rpc_params![1], "unsubscribe_add_one").await.unwrap();
 
 	for i in 2..4 {
 		let next = add_one.next().await.unwrap().unwrap();
@@ -80,29 +79,27 @@ async fn ws_method_call_works() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let response: String = client.request("say_hello", ParamsSer::NoParams).await.unwrap();
+	let response: String = client.request("say_hello", None).await.unwrap();
 	assert_eq!(&response, "hello");
 }
 
 #[tokio::test]
 async fn http_method_call_works() {
-	let server_addr = http_server().await;
+	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
-	let response: String = client.request("say_hello", ParamsSer::NoParams).await.unwrap();
+	let response: String = client.request("say_hello", None).await.unwrap();
 	assert_eq!(&response, "hello");
 }
 
 #[tokio::test]
 async fn http_concurrent_method_call_limits_works() {
-	let server_addr = http_server().await;
+	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().max_concurrent_requests(1).build(&uri).unwrap();
 
-	let (first, second) = tokio::join!(
-		client.request::<String>("say_hello", ParamsSer::NoParams),
-		client.request::<String>("say_hello", ParamsSer::NoParams),
-	);
+	let (first, second) =
+		tokio::join!(client.request::<String>("say_hello", None), client.request::<String>("say_hello", None),);
 
 	assert!(first.is_ok());
 	assert!(matches!(second, Err(Error::MaxSlotsExceeded)));
@@ -117,9 +114,9 @@ async fn ws_subscription_several_clients() {
 	for _ in 0..10 {
 		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 		let hello_sub: Subscription<JsonValue> =
-			client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
+			client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 		let foo_sub: Subscription<JsonValue> =
-			client.subscribe("subscribe_foo", ParamsSer::NoParams, "unsubscribe_foo").await.unwrap();
+			client.subscribe("subscribe_foo", None, "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
 }
@@ -134,9 +131,8 @@ async fn ws_subscription_several_clients_with_drop() {
 		let client =
 			WsClientBuilder::default().max_notifs_per_subscription(u32::MAX as usize).build(&server_url).await.unwrap();
 		let hello_sub: Subscription<String> =
-			client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
-		let foo_sub: Subscription<u64> =
-			client.subscribe("subscribe_foo", ParamsSer::NoParams, "unsubscribe_foo").await.unwrap();
+			client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
+		let foo_sub: Subscription<u64> = client.subscribe("subscribe_foo", None, "unsubscribe_foo").await.unwrap();
 		clients.push((client, hello_sub, foo_sub))
 	}
 
@@ -178,7 +174,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 
 	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
 	let mut hello_sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
+		client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 
 	// don't poll the subscription stream for 2 seconds, should be full now.
 	tokio::time::sleep(Duration::from_secs(2)).await;
@@ -192,11 +188,11 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	assert!(hello_sub.next().await.unwrap().is_none());
 
 	// The client should still be useable => make sure it still works.
-	let _hello_req: JsonValue = client.request("say_hello", ParamsSer::NoParams).await.unwrap();
+	let _hello_req: JsonValue = client.request("say_hello", None).await.unwrap();
 
 	// The same subscription should be possible to register again.
 	let mut other_sub: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
+		client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 
 	other_sub.next().await.unwrap();
 }
@@ -211,7 +207,7 @@ async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 
 	for _ in 0..6 {
 		let c = client.clone();
-		requests.push(tokio::spawn(async move { c.request::<String>("say_hello", ParamsSer::NoParams).await }));
+		requests.push(tokio::spawn(async move { c.request::<String>("say_hello", None).await }));
 	}
 
 	for req in requests {
@@ -221,7 +217,7 @@ async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 
 #[tokio::test]
 async fn http_making_more_requests_than_allowed_should_not_deadlock() {
-	let server_addr = http_server().await;
+	let (server_addr, _handle) = http_server().await;
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().max_concurrent_requests(2).build(&server_url).unwrap();
 	let client = Arc::new(client);
@@ -230,7 +226,7 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 
 	for _ in 0..6 {
 		let c = client.clone();
-		requests.push(tokio::spawn(async move { c.request::<String>("say_hello", ParamsSer::NoParams).await }));
+		requests.push(tokio::spawn(async move { c.request::<String>("say_hello", None).await }));
 	}
 
 	for req in requests {
@@ -242,7 +238,7 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 #[ignore]
 async fn https_works() {
 	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
-	let response: String = client.request("system_chain", ParamsSer::NoParams).await.unwrap();
+	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
@@ -250,7 +246,7 @@ async fn https_works() {
 #[ignore]
 async fn wss_works() {
 	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
-	let response: String = client.request("system_chain", ParamsSer::NoParams).await.unwrap();
+	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
@@ -263,7 +259,7 @@ async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
 #[tokio::test]
 async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
 	let client = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂").unwrap();
-	let err: Result<(), Error> = client.request("system_chain", ParamsSer::NoParams).await;
+	let err: Result<(), Error> = client.request("system_chain", None).await;
 	assert!(matches!(err, Err(Error::Transport(_))));
 }
 
@@ -274,11 +270,9 @@ async fn ws_unsubscribe_releases_request_slots() {
 
 	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
 
-	let sub1: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
+	let sub1: Subscription<JsonValue> = client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 	drop(sub1);
-	let _: Subscription<JsonValue> =
-		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
+	let _: Subscription<JsonValue> = client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 }
 
 #[tokio::test]
@@ -288,8 +282,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<String> =
-		client.subscribe("subscribe_noop", ParamsSer::NoParams, "unsubscribe_noop").await.unwrap();
+	let mut sub: Subscription<String> = client.subscribe("subscribe_noop", None, "unsubscribe_noop").await.unwrap();
 
 	let res = sub.next().await;
 
@@ -303,15 +296,13 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<String> =
-		c1.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
+	let mut sub: Subscription<String> = c1.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 
 	assert!(matches!(sub.next().await, Ok(Some(_))));
 
 	handle.stop().unwrap().await;
 
-	let sub2: Result<Subscription<String>, _> =
-		c1.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await;
+	let sub2: Result<Subscription<String>, _> = c1.subscribe("subscribe_hello", None, "unsubscribe_hello").await;
 
 	// no new request should be accepted.
 	assert!(matches!(sub2, Err(_)));
@@ -356,12 +347,11 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 		})
 		.unwrap();
 
-	tokio::spawn(async move { server.start(module).await });
+	server.start(module).unwrap();
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut sub: Subscription<usize> =
-		client.subscribe("subscribe_hello", ParamsSer::NoParams, "unsubscribe_hello").await.unwrap();
+	let mut sub: Subscription<usize> = client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 
 	let res = sub.next().await.unwrap();
 
@@ -369,4 +359,19 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	drop(client);
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
 	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError { .. }));
+}
+
+#[tokio::test]
+async fn ws_batch_works() {
+	let server_addr = websocket_server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut batch = Vec::new();
+
+	batch.push(("say_hello", rpc_params![]));
+	batch.push(("slow_hello", rpc_params![]));
+
+	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
+	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 }

@@ -28,7 +28,7 @@ use crate::transport::HttpTransportClient;
 use crate::types::{
 	traits::Client,
 	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
-	Error, RequestIdGuard, TEN_MB_SIZE_BYTES,
+	CertificateStore, Error, RequestIdManager, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
 use fnv::FnvHashMap;
@@ -41,6 +41,7 @@ pub struct HttpClientBuilder {
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
+	certificate_store: CertificateStore,
 }
 
 impl HttpClientBuilder {
@@ -62,13 +63,19 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Set which certificate store to use.
+	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
+		self.certificate_store = certificate_store;
+		self
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
-		let transport =
-			HttpTransportClient::new(target, self.max_request_body_size).map_err(|e| Error::Transport(e.into()))?;
+		let transport = HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store)
+			.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
-			id_guard: RequestIdGuard::new(self.max_concurrent_requests),
+			id_manager: RequestIdManager::new(self.max_concurrent_requests),
 			request_timeout: self.request_timeout,
 		})
 	}
@@ -80,6 +87,7 @@ impl Default for HttpClientBuilder {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
+			certificate_store: CertificateStore::Native,
 		}
 	}
 }
@@ -92,12 +100,12 @@ pub struct HttpClient {
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
-	id_guard: RequestIdGuard,
+	id_manager: RequestIdManager,
 }
 
 #[async_trait]
 impl Client for HttpClient {
-	async fn notification<'a>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<(), Error> {
+	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
 		let notif = NotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?);
 		match tokio::time::timeout(self.request_timeout, fut).await {
@@ -108,31 +116,24 @@ impl Client for HttpClient {
 	}
 
 	/// Perform a request towards the server.
-	async fn request<'a, R>(&self, method: &'a str, params: ParamsSer<'a>) -> Result<R, Error>
+	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
 	{
-		// NOTE: the IDs wrap on overflow which is intended.
-		let id = self.id_guard.next_request_id()?;
-		let request = RequestSer::new(Id::Number(id), method, params);
+		let id = self.id_manager.next_request_id()?;
+		let request = RequestSer::new(Id::Number(*id.inner()), method, params);
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?);
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => {
-				self.id_guard.reclaim_request_id();
 				return Err(Error::RequestTimeout);
 			}
 			Ok(Err(e)) => {
-				self.id_guard.reclaim_request_id();
 				return Err(Error::Transport(e.into()));
 			}
 		};
 
-		self.id_guard.reclaim_request_id();
 		let response: Response<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
@@ -143,14 +144,14 @@ impl Client for HttpClient {
 
 		let response_id = response.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 
-		if response_id == id {
+		if response_id == *id.inner() {
 			Ok(response.result)
 		} else {
 			Err(Error::InvalidRequestId)
 		}
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, ParamsSer<'a>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
@@ -159,17 +160,14 @@ impl Client for HttpClient {
 		let mut ordered_requests = Vec::with_capacity(batch.len());
 		let mut request_set = FnvHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
-		let ids = self.id_guard.next_request_ids(batch.len())?;
+		let ids = self.id_manager.next_request_ids(batch.len())?;
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
-			batch_request.push(RequestSer::new(Id::Number(ids[pos]), method, params));
-			ordered_requests.push(ids[pos]);
-			request_set.insert(ids[pos], pos);
+			batch_request.push(RequestSer::new(Id::Number(ids.inner()[pos]), method, params));
+			ordered_requests.push(ids.inner()[pos]);
+			request_set.insert(ids.inner()[pos], pos);
 		}
 
-		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(|e| {
-			self.id_guard.reclaim_request_id();
-			Error::ParseError(e)
-		})?);
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
 
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
@@ -177,16 +175,11 @@ impl Client for HttpClient {
 			Ok(Err(e)) => return Err(Error::Transport(e.into())),
 		};
 
-		let rps: Vec<Response<_>> = match serde_json::from_slice(&body) {
-			Ok(response) => response,
-			Err(_) => {
-				let err: RpcError = serde_json::from_slice(&body).map_err(|e| {
-					self.id_guard.reclaim_request_id();
-					Error::ParseError(e)
-				})?;
-				return Err(Error::Request(err.to_string()));
-			}
-		};
+		let rps: Vec<Response<_>> =
+			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<RpcError>(&body) {
+				Ok(e) => Error::Request(e.to_string()),
+				Err(e) => Error::ParseError(e),
+			})?;
 
 		// NOTE: `R::default` is placeholder and will be replaced in loop below.
 		let mut responses = vec![R::default(); ordered_requests.len()];

@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::{traits::Client, v2::ParamsSer},
+	types::traits::Client,
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
@@ -33,13 +33,17 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	env_logger::init();
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", ParamsSer::NoParams).await?;
-	println!("r: {:?}", response);
+	let response: String = client.request("say_hello", None).await?;
+	tracing::info!("response: {:?}", response);
 
 	Ok(())
 }
@@ -49,6 +53,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module));
+	server.start(module)?;
 	Ok(addr)
 }

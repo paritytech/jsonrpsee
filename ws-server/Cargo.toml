@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-ws-server"
-version = "0.3.0"
+version = "0.4.1"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket server for JSON-RPC"
 edition = "2018"
@@ -12,15 +12,16 @@ documentation = "https://docs.rs/jsonrpsee-ws-server"
 [dependencies]
 futures-channel = "0.3.14"
 futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
-jsonrpsee-types = { path = "../types", version = "0.3.0" }
-jsonrpsee-utils = { path = "../utils", version = "0.3.0", features = ["server"] }
-log = "0.4"
+jsonrpsee-types = { path = "../types", version = "0.4.1" }
+jsonrpsee-utils = { path = "../utils", version = "0.4.1", features = ["server"] }
+tracing = "0.1"
 serde_json = { version = "1", features = ["raw_value"] }
-soketto = "0.7"
-tokio = { version = "1", features = ["net", "rt-multi-thread", "macros"] }
+soketto = "0.7.1"
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "time"] }
 tokio-util = { version = "0.6", features = ["compat"] }
 
 [dev-dependencies]
 anyhow = "1"
-env_logger = "0.9"
 jsonrpsee-test-utils = { path = "../test-utils" }
+jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
+tracing-subscriber = "0.2.25"

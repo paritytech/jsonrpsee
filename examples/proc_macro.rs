@@ -28,7 +28,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	types::{async_trait, error::Error, Subscription},
 	ws_client::WsClientBuilder,
-	ws_server::{SubscriptionSink, WsServerBuilder},
+	ws_server::{SubscriptionSink, WsServerBuilder, WsServerHandle},
 };
 use std::net::SocketAddr;
 
@@ -72,9 +72,12 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	env_logger::init();
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
 
-	let server_addr = run_server().await?;
+	let (server_addr, _handle) = run_server().await?;
 	let url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
@@ -87,10 +90,10 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
+async fn run_server() -> anyhow::Result<(SocketAddr, WsServerHandle)> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
-	tokio::spawn(async move { server.start(RpcServerImpl.into_rpc()).await });
-	Ok(addr)
+	let handle = server.start(RpcServerImpl.into_rpc())?;
+	Ok((addr, handle))
 }

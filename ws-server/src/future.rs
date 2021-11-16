@@ -36,6 +36,10 @@ use std::sync::{
 	Arc, Weak,
 };
 use std::task::{Context, Poll};
+use tokio::time::{self, Duration, Interval};
+
+/// Polling for server stop monitor interval in milliseconds.
+const STOP_MONITOR_POLLING_INTERVAL: u64 = 1000;
 
 /// This is a flexible collection of futures that need to be driven to completion
 /// alongside some other future, such as connection handlers that need to be
@@ -45,11 +49,16 @@ use std::task::{Context, Poll};
 /// `select_with` providing some other future, the result of which you need.
 pub(crate) struct FutureDriver<F> {
 	futures: Vec<F>,
+	stop_monitor_heartbeat: Interval,
 }
 
 impl<F> Default for FutureDriver<F> {
 	fn default() -> Self {
-		FutureDriver { futures: Vec::new() }
+		let mut heartbeat = time::interval(Duration::from_millis(STOP_MONITOR_POLLING_INTERVAL));
+
+		heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+
+		FutureDriver { futures: Vec::new(), stop_monitor_heartbeat: heartbeat }
 	}
 }
 
@@ -92,6 +101,12 @@ where
 			}
 		}
 	}
+
+	fn poll_stop_monitor_heartbeat(&mut self, cx: &mut Context) {
+		// We don't care about the ticks of the heartbeat, it's here only
+		// to periodically wake the `Waker` on `cx`.
+		let _ = self.stop_monitor_heartbeat.poll_tick(cx);
+	}
 }
 
 impl<F> Future for FutureDriver<F>
@@ -132,6 +147,7 @@ where
 		let this = Pin::into_inner(self);
 
 		this.driver.drive(cx);
+		this.driver.poll_stop_monitor_heartbeat(cx);
 
 		this.selector.poll_unpin(cx)
 	}
@@ -166,16 +182,17 @@ impl StopMonitor {
 		self.0.shutdown_requested.load(Ordering::Relaxed)
 	}
 
-	pub(crate) fn handle(&self) -> StopHandle {
-		StopHandle(Arc::downgrade(&self.0))
+	pub(crate) fn handle(&self) -> ServerHandle {
+		ServerHandle(Arc::downgrade(&self.0))
 	}
 }
 
-/// Handle that is able to stop the running server.
+/// Handle that is able to stop the running server or wait for it to finish
+/// its execution.
 #[derive(Debug, Clone)]
-pub struct StopHandle(Weak<MonitorInner>);
+pub struct ServerHandle(Weak<MonitorInner>);
 
-impl StopHandle {
+impl ServerHandle {
 	/// Requests server to stop. Returns an error if server was already stopped.
 	///
 	/// Returns a future that can be awaited for when the server shuts down.
@@ -187,6 +204,16 @@ impl StopHandle {
 			}
 		}
 		Err(Error::AlreadyStopped)
+	}
+}
+
+impl Future for ServerHandle {
+	type Output = ();
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		let mut shutdown_waiter = ShutdownWaiter(self.0.clone());
+
+		shutdown_waiter.poll_unpin(cx)
 	}
 }
 

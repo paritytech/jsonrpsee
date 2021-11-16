@@ -1,24 +1,26 @@
 [package]
 name = "jsonrpsee-utils"
-version = "0.3.0"
+version = "0.4.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for jsonrpsee"
 edition = "2018"
 license = "MIT"
 
 [dependencies]
+arrayvec = "0.7.1"
 beef = { version = "0.5.1", features = ["impl_serde"] }
 thiserror = { version = "1", optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
-jsonrpsee-types = { path = "../types", version = "0.3.0", optional = true }
-log = { version = "0.4", optional = true }
+jsonrpsee-types = { path = "../types", version = "0.4.1", optional = true }
+tracing = { version = "0.1", optional = true }
 rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 serde_json = { version = "1", features = ["raw_value"], optional = true }
 parking_lot = { version = "0.11", optional = true }
+tokio = { version = "1", features = ["rt"], optional = true }
 
 [features]
 default = []
@@ -31,13 +33,14 @@ server = [
 	"rustc-hash",
 	"serde",
 	"serde_json",
-	"log",
+	"tracing",
 	"parking_lot",
 	"rand",
+	"tokio",
 ]
 client = ["jsonrpsee-types"]
 
 [dev-dependencies]
 serde_json = "1.0"
 tokio = { version = "1", features = ["macros", "rt"] }
-jsonrpsee = { path = "../jsonrpsee" }
+jsonrpsee = { path = "../jsonrpsee", features = ["server", "macros"] }

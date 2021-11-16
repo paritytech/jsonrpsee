@@ -52,7 +52,7 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<Js
 	let batch_state = match manager.complete_pending_batch(digest) {
 		Some(state) => state,
 		None => {
-			log::warn!("Received unknown batch response");
+			tracing::warn!("Received unknown batch response");
 			return Err(Error::InvalidRequestId);
 		}
 	};
@@ -85,14 +85,14 @@ pub fn process_subscription_response(
 		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
 			Err(err) => {
-				log::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
+				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
 				let msg = build_unsubscribe_message(manager, request_id, sub_id)
 					.expect("request ID and subscription ID valid checked above; qed");
 				Err(Some(msg))
 			}
 		},
 		None => {
-			log::error!("Subscription ID: {:?} is not an active subscription", sub_id);
+			tracing::error!("Subscription ID: {:?} is not an active subscription", sub_id);
 			Err(None)
 		}
 	}
@@ -107,13 +107,13 @@ pub fn process_notification(manager: &mut RequestManager, notif: Notification<Js
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
 			Err(err) => {
-				log::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
+				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
 				let _ = manager.remove_notification_handler(notif.method.to_owned());
 				Err(Error::Internal(err.into_send_error()))
 			}
 		},
 		None => {
-			log::error!("Notification: {:?} not a registered method", notif.method);
+			tracing::error!("Notification: {:?} not a registered method", notif.method);
 			Err(Error::UnregisteredNotification(notif.method.to_owned()))
 		}
 	}
@@ -176,7 +176,7 @@ pub fn process_single_response(
 // NOTE: we don't count this a concurrent request as it's part of a subscription.
 pub async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManager, unsub: RequestMessage) {
 	if let Err(e) = sender.send(unsub.raw).await {
-		log::error!("Send unsubscribe request failed: {:?}", e);
+		tracing::error!("Send unsubscribe request failed: {:?}", e);
 		let _ = manager.complete_pending_call(unsub.id);
 	}
 }
@@ -191,7 +191,7 @@ pub fn build_unsubscribe_message(
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
 	// TODO: https://github.com/paritytech/jsonrpsee/issues/275
 	let params = ParamsSer::ArrayRef(sub_id_slice);
-	let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), &unsub, params)).ok()?;
+	let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), &unsub, Some(params))).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 

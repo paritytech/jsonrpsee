@@ -32,7 +32,7 @@ pub mod __reexports {
 }
 
 #[macro_export]
-/// Convert the given values to a [`ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
+/// Convert the given values to a [`jsonrpsee_types::v2::ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
 macro_rules! rpc_params {
 	($($param:expr),*) => {
 		{
@@ -40,10 +40,10 @@ macro_rules! rpc_params {
 			$(
 				__params.push($crate::client::__reexports::to_json_value($param).expect("json serialization is infallible; qed."));
 			)*
-			$crate::client::__reexports::ParamsSer::Array(__params)
+			Some($crate::client::__reexports::ParamsSer::Array(__params))
 		}
 	};
 	() => {
-		$crate::client::__reexports::ParamsSer::NoParams,
+		None
 	}
 }

@@ -24,8 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::stream::EitherStream;
-use arrayvec::ArrayVec;
+use crate::{stream::EitherStream, types::CertificateStore};
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
 use soketto::connection;
@@ -41,12 +40,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio_rustls::{
-	client::TlsStream,
-	rustls::ClientConfig,
-	webpki::{DNSNameRef, InvalidDNSNameError},
-	TlsConnector,
-};
+use tokio_rustls::{client::TlsStream, rustls, webpki::InvalidDnsNameError, TlsConnector};
 
 type TlsOrPlain = EitherStream<TcpStream, TlsStream<TcpStream>>;
 
@@ -71,9 +65,9 @@ pub struct WsTransportClientBuilder<'a> {
 	pub target: Target,
 	/// Timeout for the connection.
 	pub timeout: Duration,
-	/// `Origin` header to pass during the HTTP handshake. If `None`, no
-	/// `Origin` header is passed.
-	pub origin_header: Option<Cow<'a, str>>,
+	/// Custom headers to pass during the HTTP handshake. If `None`, no
+	/// custom header is passed.
+	pub headers: Vec<Header<'a>>,
 	/// Max payload size
 	pub max_request_body_size: u32,
 	/// Max number of redirections.
@@ -87,16 +81,6 @@ pub enum Mode {
 	Plain,
 	/// TLS mode (`wss://` URL).
 	Tls,
-}
-
-/// What certificate store to use
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum CertificateStore {
-	/// Use the native system certificate store
-	Native,
-	/// Use webPki's certificate store
-	WebPki,
 }
 
 /// Error that can happen during the WebSocket handshake.
@@ -123,7 +107,7 @@ pub enum WsHandshakeError {
 
 	/// Invalid DNS name error for TLS
 	#[error("Invalid DNS name: {0}")]
-	InvalidDnsName(#[source] InvalidDNSNameError),
+	InvalidDnsName(#[source] InvalidDnsNameError),
 
 	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {status_code}")]
@@ -161,7 +145,7 @@ impl Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	pub async fn send(&mut self, body: String) -> Result<(), WsError> {
-		log::debug!("send: {}", body);
+		tracing::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
 		Ok(())
@@ -187,12 +171,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let connector = match self.target.mode {
 			Mode::Tls => {
-				let mut client_config = ClientConfig::default();
-				if let CertificateStore::Native = self.certificate_store {
-					client_config.root_store = rustls_native_certs::load_native_certs()
-						.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
-				}
-				Some(Arc::new(client_config).into())
+				let tls_connector = build_tls_config(&self.certificate_store)?;
+				Some(tls_connector)
 			}
 			Mode::Plain => None,
 		};
@@ -205,15 +185,10 @@ impl<'a> WsTransportClientBuilder<'a> {
 		mut tls_connector: Option<TlsConnector>,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut target = self.target;
-		let mut headers: ArrayVec<Header, 1> = ArrayVec::new();
 		let mut err = None;
 
-		if let Some(origin) = self.origin_header.as_ref() {
-			headers.push(Header { name: "Origin", value: origin.as_bytes() });
-		}
-
 		for _ in 0..self.max_redirections {
-			log::debug!("Connecting to target: {:?}", target);
+			tracing::debug!("Connecting to target: {:?}", target);
 
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
@@ -221,7 +196,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, &tls_connector).await {
 					Ok(stream) => stream,
 					Err(e) => {
-						log::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
 						err = Some(Err(e));
 						continue;
 					}
@@ -232,12 +207,12 @@ impl<'a> WsTransportClientBuilder<'a> {
 					&target.path_and_query,
 				);
 
-				client.set_headers(&headers);
+				client.set_headers(&self.headers);
 
 				// Perform the initial handshake.
 				match client.handshake().await {
 					Ok(ServerResponse::Accepted { .. }) => {
-						log::info!("Connection established to target: {:?}", target);
+						tracing::info!("Connection established to target: {:?}", target);
 						let mut builder = client.into_builder();
 						builder.set_max_message_size(self.max_request_body_size as usize);
 						let (sender, receiver) = builder.finish();
@@ -245,29 +220,26 @@ impl<'a> WsTransportClientBuilder<'a> {
 					}
 
 					Ok(ServerResponse::Rejected { status_code }) => {
-						log::debug!("Connection rejected: {:?}", status_code);
+						tracing::debug!("Connection rejected: {:?}", status_code);
 						err = Some(Err(WsHandshakeError::Rejected { status_code }));
 					}
 					Ok(ServerResponse::Redirect { status_code, location }) => {
-						log::debug!("Redirection: status_code: {}, location: {}", status_code, location);
+						tracing::debug!("Redirection: status_code: {}, location: {}", status_code, location);
 						match location.parse::<Uri>() {
 							// redirection with absolute path => need to lookup.
 							Ok(uri) => {
 								// Absolute URI.
 								if uri.scheme().is_some() {
 									target = uri.try_into()?;
-									tls_connector = match target.mode {
-										Mode::Tls => {
-											let mut client_config = ClientConfig::default();
-											if let CertificateStore::Native = self.certificate_store {
-												client_config.root_store = rustls_native_certs::load_native_certs()
-													.map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
-											}
-											Some(Arc::new(client_config).into())
+									match target.mode {
+										Mode::Tls if tls_connector.is_none() => {
+											tls_connector = Some(build_tls_config(&self.certificate_store)?);
 										}
-										Mode::Plain => None,
+										Mode::Tls => (),
+										Mode::Plain => {
+											tls_connector = None;
+										}
 									};
-									break;
 								}
 								// Relative URI.
 								else {
@@ -292,8 +264,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 										};
 									}
 									target.sockaddrs = sockaddrs;
-									break;
 								}
+								break;
 							}
 							Err(e) => {
 								err = Some(Err(WsHandshakeError::Url(e.to_string().into())));
@@ -322,13 +294,13 @@ async fn connect(
 		socket = socket => {
 			let socket = socket?;
 			if let Err(err) = socket.set_nodelay(true) {
-				log::warn!("set nodelay failed: {:?}", err);
+				tracing::warn!("set nodelay failed: {:?}", err);
 			}
 			match tls_connector {
 				None => Ok(TlsOrPlain::Plain(socket)),
 				Some(connector) => {
-					let dns_name = DNSNameRef::try_from_ascii_str(host)?;
-					let tls_stream = connector.connect(dns_name, socket).await?;
+					let server_name: rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {} {:?}", host, e).into()))?;
+					let tls_stream = connector.connect(server_name, socket).await?;
 					Ok(TlsOrPlain::Tls(tls_stream))
 				}
 			}
@@ -343,8 +315,8 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-impl From<InvalidDNSNameError> for WsHandshakeError {
-	fn from(err: InvalidDNSNameError) -> WsHandshakeError {
+impl From<InvalidDnsNameError> for WsHandshakeError {
+	fn from(err: InvalidDnsNameError) -> WsHandshakeError {
 		WsHandshakeError::InvalidDnsName(err)
 	}
 }
@@ -395,6 +367,43 @@ impl TryFrom<Uri> for Target {
 		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
 		Ok(Self { sockaddrs: sockaddrs.collect(), host, host_header, mode, path_and_query: path_and_query.to_string() })
 	}
+}
+
+// NOTE: this is slow and should be used sparingly.
+fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHandshakeError> {
+	let mut roots = tokio_rustls::rustls::RootCertStore::empty();
+
+	match cert_store {
+		CertificateStore::Native => {
+			let mut first_error = None;
+			let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
+			for cert in certs {
+				let cert = rustls::Certificate(cert.0);
+				if let Err(err) = roots.add(&cert) {
+					first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
+				}
+			}
+			if roots.is_empty() {
+				let err = first_error
+					.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No valid certificate found"));
+				return Err(WsHandshakeError::CertificateStore(err));
+			}
+		}
+		CertificateStore::WebPki => {
+			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
+			}));
+		}
+		_ => {
+			let err = io::Error::new(io::ErrorKind::NotFound, "Invalid certificate store");
+			return Err(WsHandshakeError::CertificateStore(err));
+		}
+	};
+
+	let config =
+		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(roots).with_no_client_auth();
+
+	Ok(Arc::new(config).into())
 }
 
 #[cfg(test)]

@@ -38,7 +38,8 @@ mod server;
 #[cfg(test)]
 mod tests;
 
-pub use future::{ShutdownWaiter as WsShutdownWaiter, StopHandle as WsStopHandle};
+pub use future::{ServerHandle as WsServerHandle, ShutdownWaiter as WsShutdownWaiter};
 pub use jsonrpsee_types as types;
 pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SubscriptionSink};
 pub use server::{Builder as WsServerBuilder, Server as WsServer};
+pub use tracing;

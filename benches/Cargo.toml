@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-benchmarks"
-version = "0.3.0"
+version = "0.4.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Benchmarks for jsonrpsee"
 edition = "2018"
@@ -12,6 +12,9 @@ criterion = { version = "0.3", features = ["async_tokio", "html_reports"] }
 futures-channel = "0.3.15"
 futures-util = "0.3.15"
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
+jsonrpc-ws-server = "18.0.0"
+jsonrpc-http-server = "18.0.0"
+jsonrpc-pubsub = "18.0.0"
 num_cpus = "1"
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
@@ -20,3 +23,7 @@ tokio = { version = "1", features = ["full"] }
 name = "bench"
 path = "bench.rs"
 harness = false
+
+[features]
+# Run benchmarks against servers in https://github.com/paritytech/jsonrpc/
+jsonrpc-crate = []

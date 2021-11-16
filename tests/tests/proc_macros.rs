@@ -28,7 +28,6 @@
 
 use std::net::SocketAddr;
 
-use futures::channel::oneshot;
 use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
 use serde_json::value::RawValue;
 
@@ -50,7 +49,7 @@ mod rpc_impl {
 		#[subscription(name = "sub", item = String)]
 		fn sub(&self) -> RpcResult<()>;
 
-		#[subscription(name = "echo", aliases = "alias_echo", item = u32)]
+		#[subscription(name = "echo", aliases = ["alias_echo"], item = u32)]
 		fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 
 		#[method(name = "params")]
@@ -77,6 +76,12 @@ mod rpc_impl {
 		#[method(name = "zero_copy_cow")]
 		fn zero_copy_cow(&self, a: std::borrow::Cow<'_, str>, b: beef::Cow<'_, str>) -> RpcResult<String> {
 			Ok(format!("Zero copy params: {}, {}", matches!(a, std::borrow::Cow::Borrowed(_)), b.is_borrowed()))
+		}
+
+		#[method(name = "blocking_call", blocking)]
+		fn blocking_call(&self) -> RpcResult<u32> {
+			std::thread::sleep(std::time::Duration::from_millis(50));
+			Ok(42)
 		}
 	}
 
@@ -186,20 +191,12 @@ mod rpc_impl {
 use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
 
 pub async fn websocket_server() -> SocketAddr {
-	let (server_started_tx, server_started_rx) = oneshot::channel();
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let addr = server.local_addr().unwrap();
 
-	std::thread::spawn(move || {
-		let rt = tokio::runtime::Runtime::new().unwrap();
-		let server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
+	server.start(RpcServerImpl.into_rpc()).unwrap();
 
-		rt.block_on(async move {
-			server_started_tx.send(server.local_addr().unwrap()).unwrap();
-
-			server.start(RpcServerImpl.into_rpc()).await
-		});
-	});
-
-	server_started_rx.await.unwrap()
+	addr
 }
 
 #[tokio::test]
@@ -252,12 +249,10 @@ async fn macro_optional_param_parsing() {
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, None, Some(70)","id":0}"#);
 
-	// TODO: https://github.com/paritytech/jsonrpsee/issues/445
 	// Named params using a map
 	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
 	let result = module.call("foo_optional_params", params).await.unwrap();
-	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params. Expected one of '[', ']' or ',' but found \"{\\\"a\\\": 22, \\\"c\\\": 50}\""},"id":0}"#;
-	assert_eq!(result, expected);
+	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
 }
 
 #[tokio::test]
@@ -285,4 +280,28 @@ async fn macro_zero_copy_cow() {
 	let result = module.call("foo_zero_copy_cow", params).await.unwrap();
 
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
+}
+
+// Disabled on MacOS as GH CI timings on Mac vary wildly (~100ms) making this test fail.
+#[cfg(not(target_os = "macos"))]
+#[tokio::test]
+async fn multiple_blocking_calls_overlap() {
+	use std::time::{Duration, Instant};
+
+	let module = RpcServerImpl.into_rpc();
+
+	let params = RawValue::from_string("[]".into()).ok();
+
+	let futures = std::iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
+	let now = Instant::now();
+	let results = futures::future::join_all(futures).await;
+	let elapsed = now.elapsed();
+
+	for result in results {
+		let result = serde_json::from_str::<serde_json::Value>(&result.unwrap()).unwrap();
+		assert_eq!(result["result"], 42);
+	}
+
+	// Each request takes 50ms, added 10ms margin for scheduling
+	assert!(elapsed < Duration::from_millis(60), "Expected less than 60ms, got {:?}", elapsed);
 }

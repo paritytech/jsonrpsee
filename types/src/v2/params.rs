@@ -158,18 +158,18 @@ impl<'a> ParamsSequence<'a> {
 		T: Deserialize<'a>,
 	{
 		let mut json = self.0;
-		log::trace!("[next_inner] Params JSON: {:?}", json);
+		tracing::trace!("[next_inner] Params JSON: {:?}", json);
 		match json.as_bytes().get(0)? {
 			b']' => {
 				self.0 = "";
 
-				log::trace!("[next_inner] Reached end of sequence.");
+				tracing::trace!("[next_inner] Reached end of sequence.");
 				return None;
 			}
 			b'[' | b',' => json = &json[1..],
 			_ => {
 				let errmsg = format!("Invalid params. Expected one of '[', ']' or ',' but found {:?}", json);
-				log::error!("[next_inner] {}", errmsg);
+				tracing::error!("[next_inner] {}", errmsg);
 				return Some(Err(CallError::InvalidParams(anyhow!(errmsg))));
 			}
 		}
@@ -183,7 +183,7 @@ impl<'a> ParamsSequence<'a> {
 				Some(Ok(value))
 			}
 			Err(e) => {
-				log::error!(
+				tracing::error!(
 					"[next_inner] Deserialization to {:?} failed. Error: {:?}, input JSON: {:?}",
 					std::any::type_name::<T>(),
 					e,
@@ -258,8 +258,6 @@ impl<'a> ParamsSequence<'a> {
 #[derive(Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ParamsSer<'a> {
-	/// No params.
-	NoParams,
 	/// Positional params (heap allocated).
 	Array(Vec<JsonValue>),
 	/// Positional params (slice).
@@ -401,7 +399,7 @@ mod test {
 	#[test]
 	fn params_serialize() {
 		let test_vector = &[
-			("null", ParamsSer::NoParams),
+			("[]", ParamsSer::Array(serde_json::from_str("[]").unwrap())),
 			("[42,23]", ParamsSer::Array(serde_json::from_str("[42,23]").unwrap())),
 			(
 				r#"{"a":42,"b":null,"c":"aa"}"#,

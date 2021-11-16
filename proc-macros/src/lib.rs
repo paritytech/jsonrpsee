@@ -32,10 +32,8 @@ use rpc_macro::RpcDescription;
 
 mod attributes;
 mod helpers;
-mod lifetimes;
 mod render_client;
 mod render_server;
-mod respan;
 mod rpc_macro;
 pub(crate) mod visitor;
 
@@ -164,6 +162,9 @@ pub(crate) mod visitor;
 /// **Arguments:**
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
+/// - `aliases`: list of name aliases for the RPC method as a comma separated string.
+/// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
+/// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
 /// **Method requirements:**
 ///
@@ -180,6 +181,7 @@ pub(crate) mod visitor;
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `unsub` (mandatory): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
 /// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
+/// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
 /// **Method requirements:**
 ///
@@ -215,6 +217,9 @@ pub(crate) mod visitor;
 ///         #[method(name = "bar")]
 ///         fn sync_method(&self) -> RpcResult<u16>;
 ///
+///         #[method(name = "baz", blocking)]
+///         fn blocking_method(&self) -> RpcResult<u16>;
+///
 ///         #[subscription(name = "sub", item = String)]
 ///         fn sub(&self) -> RpcResult<()>;
 ///     }
@@ -227,11 +232,18 @@ pub(crate) mod visitor;
 ///     #[async_trait]
 ///     impl MyRpcServer for RpcServerImpl {
 ///         async fn async_method(&self, _param_a: u8, _param_b: String) -> RpcResult<u16> {
-///             Ok(42u16)
+///             Ok(42)
 ///         }
 ///
 ///         fn sync_method(&self) -> RpcResult<u16> {
-///             Ok(10u16)
+///             Ok(10)
+///         }
+///
+///         fn blocking_method(&self) -> RpcResult<u16> {
+///             // This will block current thread for 1 second, which is fine since we marked
+///             // this method as `blocking` above.
+///             std::thread::sleep(std::time::Duration::from_millis(1000));
+///             Ok(11)
 ///         }
 ///
 ///         // We could've spawned a `tokio` future that yields values while our program works,
@@ -248,21 +260,13 @@ pub(crate) mod visitor;
 /// use rpc_impl::{MyRpcClient, MyRpcServer, RpcServerImpl};
 ///
 /// pub async fn websocket_server() -> SocketAddr {
-///     let (server_started_tx, server_started_rx) = oneshot::channel();
+///     let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+///     let addr = server.local_addr().unwrap();
 ///
-///     std::thread::spawn(move || {
-///         let rt = tokio::runtime::Runtime::new().unwrap();
-///         let server = rt.block_on(WsServerBuilder::default().build("127.0.0.1:0")).unwrap();
-///         // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
+///     // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
+///     server.start(RpcServerImpl.into_rpc()).unwrap();
 ///
-///         rt.block_on(async move {
-///             server_started_tx.send(server.local_addr().unwrap()).unwrap();
-///
-///             server.start(RpcServerImpl.into_rpc()).await
-///         });
-///     });
-///
-///     server_started_rx.await.unwrap()
+///     addr
 /// }
 ///
 /// // In the main function, we start the server, create a client connected to this server,

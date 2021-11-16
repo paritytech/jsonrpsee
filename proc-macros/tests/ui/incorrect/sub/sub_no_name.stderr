@@ -1,5 +1,5 @@
-error: unexpected end of input, `#[subscription]` is missing `name` argument
- --> $DIR/sub_no_name.rs:6:2
+error: Missing argument `name`
+ --> $DIR/sub_no_name.rs:6:4
   |
 6 |     #[subscription(item = String)]
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |       ^^^^^^^^^^^^

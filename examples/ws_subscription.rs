@@ -32,21 +32,26 @@ use jsonrpsee::{
 };
 use std::net::SocketAddr;
 
+const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
-	env_logger::init();
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", rpc_params!(), "unsubscribe_hello").await?;
+		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 
 	let mut i = 0;
 	while i <= NUM_SUBSCRIPTION_RESPONSES {
 		let r = subscribe_hello.next().await;
-		println!("received {:?}", r);
+		tracing::info!("received {:?}", r);
 		i += 1;
 	}
 
@@ -66,6 +71,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		Ok(())
 	})?;
 	let addr = server.local_addr()?;
-	tokio::spawn(server.start(module));
+	server.start(module)?;
 	Ok(addr)
 }

@@ -82,6 +82,8 @@ impl<'a> PartialEq for ErrorObject<'a> {
 pub const PARSE_ERROR_CODE: i32 = -32700;
 /// Oversized request error code.
 pub const OVERSIZED_REQUEST_CODE: i32 = -32701;
+/// Oversized response error code.
+pub const OVERSIZED_RESPONSE_CODE: i32 = -32702;
 /// Internal error code.
 pub const INTERNAL_ERROR_CODE: i32 = -32603;
 /// Invalid params error code.
@@ -90,6 +92,8 @@ pub const INVALID_PARAMS_CODE: i32 = -32602;
 pub const INVALID_REQUEST_CODE: i32 = -32600;
 /// Method not found error code.
 pub const METHOD_NOT_FOUND_CODE: i32 = -32601;
+/// Server is busy error code.
+pub const SERVER_IS_BUSY_CODE: i32 = -32604;
 /// Custom server error when a call failed.
 pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Unknown error.
@@ -99,6 +103,8 @@ pub const UNKNOWN_ERROR_CODE: i32 = -32001;
 pub const PARSE_ERROR_MSG: &str = "Parse error";
 /// Oversized request message
 pub const OVERSIZED_REQUEST_MSG: &str = "Request is too big";
+/// Oversized response message
+pub const OVERSIZED_RESPONSE_MSG: &str = "Response is too big";
 /// Internal error message.
 pub const INTERNAL_ERROR_MSG: &str = "Internal error";
 /// Invalid params error message.
@@ -107,6 +113,8 @@ pub const INVALID_PARAMS_MSG: &str = "Invalid params";
 pub const INVALID_REQUEST_MSG: &str = "Invalid request";
 /// Method not found error message.
 pub const METHOD_NOT_FOUND_MSG: &str = "Method not found";
+/// Server is busy error message.
+pub const SERVER_IS_BUSY_MSG: &str = "Server is busy, try again later";
 /// Reserved for implementation-defined server-errors.
 pub const SERVER_ERROR_MSG: &str = "Server error";
 
@@ -122,6 +130,8 @@ pub enum ErrorCode {
 	InvalidRequest,
 	/// The method does not exist / is not available.
 	MethodNotFound,
+	/// Server is busy / resources are at capacity.
+	ServerIsBusy,
 	/// Invalid method parameter(s).
 	InvalidParams,
 	/// Internal JSON-RPC error.
@@ -139,6 +149,7 @@ impl ErrorCode {
 			OversizedRequest => OVERSIZED_REQUEST_CODE,
 			InvalidRequest => INVALID_REQUEST_CODE,
 			MethodNotFound => METHOD_NOT_FOUND_CODE,
+			ServerIsBusy => SERVER_IS_BUSY_CODE,
 			InvalidParams => INVALID_PARAMS_CODE,
 			InternalError => INTERNAL_ERROR_CODE,
 			ServerError(code) => code,
@@ -153,6 +164,7 @@ impl ErrorCode {
 			OversizedRequest => OVERSIZED_REQUEST_MSG,
 			InvalidRequest => INVALID_REQUEST_MSG,
 			MethodNotFound => METHOD_NOT_FOUND_MSG,
+			ServerIsBusy => SERVER_IS_BUSY_MSG,
 			InvalidParams => INVALID_PARAMS_MSG,
 			InternalError => INTERNAL_ERROR_MSG,
 			ServerError(_) => SERVER_ERROR_MSG,
