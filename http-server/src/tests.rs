@@ -38,7 +38,7 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
 async fn server() -> (SocketAddr, ServerHandle) {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let server = HttpServerBuilder::default().build("127.0.0.1:0").unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();

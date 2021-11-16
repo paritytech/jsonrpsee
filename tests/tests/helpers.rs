@@ -113,7 +113,7 @@ pub async fn websocket_server() -> SocketAddr {
 }
 
 pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let server = HttpServerBuilder::default().build("127.0.0.1:0").unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

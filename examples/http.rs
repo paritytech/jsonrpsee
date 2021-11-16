@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
+	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse::<SocketAddr>()?)?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 

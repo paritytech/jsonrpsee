@@ -76,7 +76,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 	let server = HttpServerBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.custom_tokio_runtime(handle)
-		.build("127.0.0.1:0".parse().unwrap())
+		.build("127.0.0.1:0")
 		.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();

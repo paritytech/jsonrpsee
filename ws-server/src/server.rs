@@ -563,11 +563,25 @@ impl Builder {
 	}
 
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
-	pub async fn build(self, addr: impl ToSocketAddrs) -> Result<Server, Error> {
-		let listener = TcpListener::bind(addr).await?;
+	///
+	/// ```rust
+	/// #[tokio::main]
+	/// async fn main() {
+	///   let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
+	///   // try several addresses
+	///   let addrs: &[std::net::SocketAddr] = &[
+	///       "127.0.0.1:10".parse::<std::net::SocketAddr>().unwrap(),
+	///       "127.0.0.1:0".parse::<std::net::SocketAddr>().unwrap(),
+	///   ];
+	///   let server = builder.build(addrs).await.unwrap();
+	/// }
+	/// ```
+	///
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server, Error> {
+		let listener = TcpListener::bind(addrs).await?;
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
-		Ok(Server { listener, cfg: self.settings, stop_monitor, resources })
+		return Ok(Server { listener, cfg: self.settings, stop_monitor, resources });
 	}
 }
 
