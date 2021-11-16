@@ -59,6 +59,22 @@ variables:                         &default-vars
   tags:
     - linux-docker
 
+.docker-benches-env:               &docker-benches-env
+  image:                           "${CI_IMAGE}"
+  before_script:
+    - *rust-info-script
+    - ./scripts/ci/pre_cache.sh
+    - sccache -s
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+  interruptible:                   true
+  tags:
+    - linux-docker-benches
+
 .kubernetes-env:                   &kubernetes-env
   image:                           "${CI_IMAGE}"
   retry:
@@ -125,7 +141,7 @@ test:
 
 benchmarks:
   stage:                           benchmark
-  <<:                              *docker-env
+  <<:                              *docker-benches-env
   <<:                              *collect-artifacts
   <<:                              *schedule-refs
   script:
