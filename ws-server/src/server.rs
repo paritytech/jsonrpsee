@@ -581,7 +581,7 @@ impl Builder {
 		let listener = TcpListener::bind(addrs).await?;
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
-		return Ok(Server { listener, cfg: self.settings, stop_monitor, resources });
+		Ok(Server { listener, cfg: self.settings, stop_monitor, resources })
 	}
 }
 

@@ -124,7 +124,7 @@ impl Builder {
 
 		for addr in addrs.to_socket_addrs()? {
 			let (listener, local_addr) = match self.inner_builder(addr) {
-				Ok(l) => l,
+				Ok(res) => res,
 				Err(e) => {
 					err = Some(e);
 					continue;
