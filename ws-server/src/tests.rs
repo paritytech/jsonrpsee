@@ -36,6 +36,7 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::v2::error::invalid_subscription_err;
 use serde_json::Value as JsonValue;
 use std::{fmt, net::SocketAddr, time::Duration};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
@@ -117,10 +118,9 @@ async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		.unwrap();
 	module
 		.register_subscription("subscribe_hello", "unsubscribe_hello", |_, sink, _| {
-			std::thread::spawn(move || {
-				// prevent the sink for being dropped and keep the subscription alive for testing.
+			std::thread::spawn(move || loop {
 				let _ = sink;
-				loop {}
+				std::thread::sleep(std::time::Duration::from_secs(30));
 			});
 			Ok(())
 		})
@@ -605,18 +605,9 @@ async fn unsubscribe_twice_should_indicate_error() {
 	let unsub_2 = client.send_request_text(unsub_call).await.unwrap();
 	let unsub_2_err: RpcError = serde_json::from_str(&unsub_2).unwrap();
 	let sub_id = to_json_raw_value(&sub_id).unwrap();
-	assert_eq!(
-		unsub_2_err,
-		RpcError {
-			jsonrpc: v2::TwoPointZero,
-			error: v2::ErrorObject {
-				code: v2::ErrorCode::ServerError(v2::error::INVALID_SUBSCRIPTION_CODE),
-				message: v2::error::INVALID_SUBSCRIPTION_MSG,
-				data: Some(&to_json_raw_value(&format!("ID={} is not active", sub_id)).unwrap()),
-			},
-			id: v2::Id::Number(2)
-		}
-	);
+
+	let err = Some(to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).unwrap());
+	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(2)));
 }
 
 #[tokio::test]
@@ -624,21 +615,10 @@ async fn unsubscribe_wrong_sub_id_type() {
 	init_logger();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
-	let data = to_json_raw_value(&"Subscription ID must be u64").unwrap();
 
 	let unsub =
-		client.send_request_text(call("unsubscribe_hello", vec!["string_is_not_supprted"], Id::Num(0))).await.unwrap();
+		client.send_request_text(call("unsubscribe_hello", vec!["string_is_not_supported"], Id::Num(0))).await.unwrap();
 	let unsub_2_err: RpcError = serde_json::from_str(&unsub).unwrap();
-	assert_eq!(
-		unsub_2_err,
-		RpcError {
-			jsonrpc: v2::TwoPointZero,
-			error: v2::ErrorObject {
-				code: v2::ErrorCode::ServerError(v2::error::INVALID_SUBSCRIPTION_CODE),
-				message: v2::error::INVALID_SUBSCRIPTION_MSG,
-				data: Some(&data),
-			},
-			id: v2::Id::Number(0)
-		}
-	);
+	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be integer").unwrap());
+	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(0)));
 }

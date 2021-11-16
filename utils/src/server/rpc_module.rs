@@ -30,8 +30,7 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::to_json_raw_value;
-use jsonrpsee_types::v2::error::{INVALID_SUBSCRIPTION_CODE, INVALID_SUBSCRIPTION_MSG};
-use jsonrpsee_types::v2::ErrorObject;
+use jsonrpsee_types::v2::error::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::{Error, SubscriptionClosedError},
 	traits::ToRpcParams,
@@ -590,7 +589,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							err,
 							id
 						);
-						send_error(id, method_sink, ErrorCode::ServerError(-1).into());
+						send_error(id, method_sink, ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into());
 					}
 				})),
 			);
@@ -608,15 +607,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								unsubscribe_method_name,
 								id
 							);
-							send_error(
-								id,
-								tx,
-								ErrorObject {
-									code: ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE),
-									message: INVALID_SUBSCRIPTION_MSG,
-									data: to_json_raw_value(&"Subscription ID must be u64").ok().as_deref(),
-								},
-							);
+							let err = to_json_raw_value(&"Invalid subscription ID type, must be integer").ok();
+							send_error(id, tx, invalid_subscription_err(err.as_deref()));
 							return;
 						}
 					};
@@ -624,15 +616,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some() {
 						send_response(id, tx, "Unsubscribed", max_response_size);
 					} else {
-						send_error(
-							id,
-							tx,
-							ErrorObject {
-								code: ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE),
-								message: INVALID_SUBSCRIPTION_MSG,
-								data: to_json_raw_value(&format!("ID={} is not active", sub_id)).ok().as_deref(),
-							},
-						)
+						let err = to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).ok();
+						send_error(id, tx, invalid_subscription_err(err.as_deref()))
 					}
 				})),
 			);

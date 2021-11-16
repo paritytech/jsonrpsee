@@ -44,6 +44,13 @@ pub struct RpcError<'a> {
 	pub id: Id<'a>,
 }
 
+impl<'a> RpcError<'a> {
+	/// Create a new `RpcError`.
+	pub fn new(error: ErrorObject<'a>, id: Id<'a>) -> Self {
+		Self { jsonrpc: TwoPointZero, error, id }
+	}
+}
+
 impl<'a> fmt::Display for RpcError<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
@@ -62,6 +69,13 @@ pub struct ErrorObject<'a> {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[serde(borrow)]
 	pub data: Option<&'a RawValue>,
+}
+
+impl<'a> ErrorObject<'a> {
+	/// Create a new `ErrorObject` with optional data.
+	pub fn new(code: ErrorCode, data: Option<&'a RawValue>) -> ErrorObject<'a> {
+		Self { code, message: code.message(), data }
+	}
 }
 
 impl<'a> From<ErrorCode> for ErrorObject<'a> {
@@ -214,6 +228,11 @@ impl serde::Serialize for ErrorCode {
 	{
 		serializer.serialize_i32(self.code())
 	}
+}
+
+/// Create a invalid subscription ID error.
+pub fn invalid_subscription_err(data: Option<&RawValue>) -> ErrorObject {
+	ErrorObject::new(ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE), data)
 }
 
 #[cfg(test)]
