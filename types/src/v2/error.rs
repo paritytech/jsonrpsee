@@ -98,8 +98,6 @@ pub const PARSE_ERROR_CODE: i32 = -32700;
 pub const OVERSIZED_REQUEST_CODE: i32 = -32701;
 /// Oversized response error code.
 pub const OVERSIZED_RESPONSE_CODE: i32 = -32702;
-/// Oversized response error code.
-pub const INVALID_SUBSCRIPTION_CODE: i32 = -32703;
 /// Internal error code.
 pub const INTERNAL_ERROR_CODE: i32 = -32603;
 /// Invalid params error code.
@@ -114,6 +112,8 @@ pub const SERVER_IS_BUSY_CODE: i32 = -32604;
 pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Unknown error.
 pub const UNKNOWN_ERROR_CODE: i32 = -32001;
+/// Invalid subscription error code.
+pub const INVALID_SUBSCRIPTION_CODE: i32 = -32002;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
@@ -121,8 +121,6 @@ pub const PARSE_ERROR_MSG: &str = "Parse error";
 pub const OVERSIZED_REQUEST_MSG: &str = "Request is too big";
 /// Oversized response message
 pub const OVERSIZED_RESPONSE_MSG: &str = "Response is too big";
-/// Invalid subscription ID.
-pub const INVALID_SUBSCRIPTION_MSG: &str = "Invalid subscription ID";
 /// Internal error message.
 pub const INTERNAL_ERROR_MSG: &str = "Internal error";
 /// Invalid params error message.
