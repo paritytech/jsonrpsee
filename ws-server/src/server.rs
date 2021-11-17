@@ -45,7 +45,7 @@ use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
-use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, send_error};
+use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_utils::server::resource_limiting::Resources;
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
 
@@ -269,6 +269,7 @@ async fn background_task(
 	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
 	let stop_server2 = stop_server.clone();
+	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
 
 	// Send results back to the client.
 	tokio::spawn(async move {
@@ -307,7 +308,7 @@ async fn background_task(
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
 						tracing::debug!("WS transport error: remote peer terminated the connection: {}", conn_id);
-						tx.close_channel();
+						sink.close();
 						return Ok(());
 					}
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
@@ -316,13 +317,13 @@ async fn background_task(
 							current,
 							maximum
 						);
-						send_error(Id::Null, &tx, ErrorCode::OversizedRequest.into());
+						sink.send_error(Id::Null, ErrorCode::OversizedRequest.into());
 						continue;
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
 						tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
-						tx.close_channel();
+						sink.close();
 						return Err(err.into());
 					}
 					MonitoredError::Shutdown => break,
@@ -338,13 +339,13 @@ async fn background_task(
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
 					if let Some(fut) =
-						methods.execute_with_resources(&tx, req, conn_id, &resources, max_request_body_size)
+						methods.execute_with_resources(&sink, req, conn_id, &resources)
 					{
 						method_executors.add(fut);
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
-					send_error(id, &tx, code.into());
+					sink.send_error(id, code.into());
 				}
 			}
 			Some(b'[') => {
@@ -352,24 +353,24 @@ async fn background_task(
 				let d = std::mem::take(&mut data);
 				let resources = &resources;
 				let methods = &methods;
-				let tx2 = tx.clone();
+				let sink = sink.clone();
 
 				let fut = async move {
 					// Batch responses must be sent back as a single message so we read the results from each
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
+					let sink_batch = MethodSink::new_with_limit(tx_batch, max_request_body_size);
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
 							let methods_stream = stream::iter(batch.into_iter().filter_map(|req| {
 								methods.execute_with_resources(
-									&tx_batch,
+									&sink_batch,
 									req,
 									conn_id,
 									resources,
-									max_request_body_size,
 								)
 							}));
 
@@ -381,21 +382,21 @@ async fn background_task(
 								})
 								.await;
 
-							if let Err(err) = tx2.unbounded_send(results) {
+							if let Err(err) = sink.send_raw(results) {
 								tracing::error!("Error sending batch response to the client: {:?}", err)
 							}
 						} else {
-							send_error(Id::Null, &tx2, ErrorCode::InvalidRequest.into());
+							sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
 						}
 					} else {
 						let (id, code) = prepare_error(&d);
-						send_error(id, &tx2, code.into());
+						sink.send_error(id, code.into());
 					}
 				};
 
 				method_executors.add(Box::pin(fut));
 			}
-			_ => send_error(Id::Null, &tx, ErrorCode::ParseError.into()),
+			_ => sink.send_error(Id::Null, ErrorCode::ParseError.into()),
 		}
 	}
 

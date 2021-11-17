@@ -39,7 +39,7 @@ use jsonrpsee_types::{
 };
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
-	helpers::{collect_batch_response, prepare_error, send_error},
+	helpers::{collect_batch_response, prepare_error, MethodSink},
 	resource_limiting::Resources,
 	rpc_module::Methods,
 };
@@ -244,6 +244,7 @@ impl Server {
 
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
+						let sink = MethodSink::new_with_limit(tx, max_request_body_size);
 
 						type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
@@ -252,7 +253,7 @@ impl Server {
 							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 								if let Some(fut) =
-									methods.execute_with_resources(&tx, req, 0, &resources, max_request_body_size)
+									methods.execute_with_resources(&sink, req, 0, &resources)
 								{
 									fut.await;
 								}
@@ -260,14 +261,14 @@ impl Server {
 								return Ok::<_, HyperError>(response::ok_response("".into()));
 							} else {
 								let (id, code) = prepare_error(&body);
-								send_error(id, &tx, code.into());
+								sink.send_error(id, code.into());
 							}
 
 						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							if !batch.is_empty() {
 								join_all(batch.into_iter().filter_map(|req| {
-									methods.execute_with_resources(&tx, req, 0, &resources, max_request_body_size)
+									methods.execute_with_resources(&sink, req, 0, &resources)
 								}))
 								.await;
 							} else {
@@ -275,7 +276,7 @@ impl Server {
 								// Array with at least one value, the response from the Server MUST be a single
 								// Response object." – The Spec.
 								is_single = true;
-								send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
+								sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
 							}
 						} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
@@ -285,7 +286,7 @@ impl Server {
 							// Response object." – The Spec.
 							is_single = true;
 							let (id, code) = prepare_error(&body);
-							send_error(id, &tx, code.into());
+							sink.send_error(id, code.into());
 						}
 
 						// Closes the receiving half of a channel without dropping it. This prevents any further

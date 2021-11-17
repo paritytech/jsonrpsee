@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::error::{CallError, Error};
@@ -82,67 +81,106 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 	}
 }
 
-/// Helper for sending JSON-RPC responses to the client
-pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_response_size: u32) {
-	let mut writer = BoundedWriter::new(max_response_size as usize);
+/// Sink that is used to send back the result to the server for a specific method.
+#[derive(Clone, Debug)]
+pub struct MethodSink {
+	/// Channel sender
+	tx: mpsc::UnboundedSender<String>,
+	/// Max response size in bytes for a executed call.
+	max_response_size: u32,
+}
 
-	let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
-		Ok(_) => {
-			// Safety - serde_json does not emit invalid UTF-8.
-			unsafe { String::from_utf8_unchecked(writer.into_bytes()) }
+impl MethodSink {
+	/// Create a new `MethodSink` with unlimited response size
+	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {
+		MethodSink {
+			tx,
+			max_response_size: u32::MAX,
 		}
-		Err(err) => {
-			tracing::error!("Error serializing response: {:?}", err);
+	}
 
-			if err.is_io() {
-				let data = to_json_raw_value(&format!("Exceeded max limit {}", max_response_size)).ok();
-				let err = ErrorObject {
-					code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
-					message: OVERSIZED_RESPONSE_MSG,
-					data: data.as_deref(),
-				};
-				return send_error(id, tx, err);
-			} else {
-				return send_error(id, tx, ErrorCode::InternalError.into());
+	/// Create a new `MethodSink` with a limited response size
+	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32) -> Self {
+		MethodSink {
+			tx,
+			max_response_size,
+		}
+	}
+
+	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
+	/// an error will be sent instead.
+	pub fn send_response(&self, id: Id, result: impl Serialize) {
+		let mut writer = BoundedWriter::new(self.max_response_size as usize);
+
+		let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
+			Ok(_) => {
+				// Safety - serde_json does not emit invalid UTF-8.
+				unsafe { String::from_utf8_unchecked(writer.into_bytes()) }
 			}
+			Err(err) => {
+				tracing::error!("Error serializing response: {:?}", err);
+
+				if err.is_io() {
+					let data = to_json_raw_value(&format!("Exceeded max limit {}", self.max_response_size)).ok();
+					let err = ErrorObject {
+						code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
+						message: OVERSIZED_RESPONSE_MSG,
+						data: data.as_deref(),
+					};
+					return self.send_error(id, err);
+				} else {
+					return self.send_error(id, ErrorCode::InternalError.into());
+				}
+			}
+		};
+
+		if let Err(err) = self.tx.unbounded_send(json) {
+			tracing::error!("Error sending response to the client: {:?}", err)
 		}
-	};
-
-	if let Err(err) = tx.unbounded_send(json) {
-		tracing::error!("Error sending response to the client: {:?}", err)
 	}
-}
 
-/// Helper for sending JSON-RPC errors to the client
-pub fn send_error(id: Id, tx: &MethodSink, error: ErrorObject) {
-	let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
-		Ok(json) => json,
-		Err(err) => {
-			tracing::error!("Error serializing error message: {:?}", err);
+	/// Send a JSON-RPC error to the client
+	pub fn send_error(&self, id: Id, error: ErrorObject) {
+		let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
+			Ok(json) => json,
+			Err(err) => {
+				tracing::error!("Error serializing error message: {:?}", err);
 
-			return;
+				return;
+			}
+		};
+
+		if let Err(err) = self.tx.unbounded_send(json) {
+			tracing::error!("Could not send error response to the client: {:?}", err)
 		}
-	};
-
-	if let Err(err) = tx.unbounded_send(json) {
-		tracing::error!("Could not send error response to the client: {:?}", err)
 	}
-}
 
-/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
-pub fn send_call_error(id: Id, tx: &MethodSink, err: Error) {
-	let (code, message, data) = match err {
-		Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
-		Error::Call(CallError::Failed(e)) => (ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None),
-		Error::Call(CallError::Custom { code, message, data }) => (code.into(), message, data),
-		// This should normally not happen because the most common use case is to
-		// return `Error::Call` in `register_async_method`.
-		e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
-	};
+	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
+	pub fn send_call_error(&self, id: Id, err: Error) {
+		let (code, message, data) = match err {
+			Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
+			Error::Call(CallError::Failed(e)) => (ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None),
+			Error::Call(CallError::Custom { code, message, data }) => (code.into(), message, data),
+			// This should normally not happen because the most common use case is to
+			// return `Error::Call` in `register_async_method`.
+			e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
+		};
 
-	let err = ErrorObject { code, message: &message, data: data.as_deref() };
+		let err = ErrorObject { code, message: &message, data: data.as_deref() };
 
-	send_error(id, tx, err)
+		self.send_error(id, err)
+	}
+
+	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
+	/// of the JSON being sent.
+	pub fn send_raw(&self, raw_json: String) -> Result<(), mpsc::TrySendError<String>> {
+		self.tx.unbounded_send(raw_json)
+	}
+
+	/// Close the channel for any further messages.
+	pub fn close(&self) {
+		self.tx.close_channel();
+	}
 }
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
