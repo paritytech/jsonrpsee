@@ -26,9 +26,9 @@
 
 use crate::transport::HttpTransportClient;
 use crate::types::{
-	traits::Client,
+	traits::{Client, SubscriptionClient},
 	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
-	CertificateStore, Error, RequestIdManager, TEN_MB_SIZE_BYTES,
+	CertificateStore, Error, RequestIdManager, Subscription, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
 use fnv::FnvHashMap;
@@ -192,5 +192,29 @@ impl Client for HttpClient {
 			responses[pos] = rp.result
 		}
 		Ok(responses)
+	}
+}
+
+#[async_trait]
+impl SubscriptionClient for HttpClient {
+	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	async fn subscribe<'a, N>(
+		&self,
+		_subscribe_method: &'a str,
+		_params: Option<ParamsSer<'a>>,
+		_unsubscribe_method: &'a str,
+	) -> Result<Subscription<N>, Error>
+	where
+		N: DeserializeOwned,
+	{
+		Err(Error::HttpNotImplemented)
+	}
+
+	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
+	where
+		N: DeserializeOwned,
+	{
+		Err(Error::HttpNotImplemented)
 	}
 }

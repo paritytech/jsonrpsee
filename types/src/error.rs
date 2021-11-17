@@ -160,6 +160,9 @@ pub enum Error {
 	/// Custom error.
 	#[error("Custom error: {0}")]
 	Custom(String),
+	/// Not implemented for HTTP clients.
+	#[error("Not implemented")]
+	HttpNotImplemented,
 }
 
 impl Error {
