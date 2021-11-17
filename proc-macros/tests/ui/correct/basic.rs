@@ -31,6 +31,10 @@ pub trait Rpc {
 
 	#[subscription(name = "echo", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
 	fn sub_with_params(&self, val: u32) -> RpcResult<()>;
+
+	// This will send notifications to the client with `method=subscribe_override`
+	#[subscription(name = "subscribe_method", override_notif_method = "subscribe_override", item = u32)]
+	fn sub_with_override_notif_method(&self) -> RpcResult<()>;
 }
 
 pub struct RpcServerImpl;
@@ -68,6 +72,10 @@ impl RpcServer for RpcServerImpl {
 		sink.send(&val)?;
 		sink.send(&val)
 	}
+
+	fn sub_with_override_notif_method(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+		sink.send(&1)
+	}
 }
 
 pub async fn websocket_server() -> SocketAddr {
@@ -102,4 +110,8 @@ async fn main() {
 	assert_eq!(first_recv, Some("Response_A".to_string()));
 	let second_recv = sub.next().await.unwrap();
 	assert_eq!(second_recv, Some("Response_B".to_string()));
+
+	let mut sub = client.sub_with_override_notif_method().await.unwrap();
+	let recv = sub.next().await.unwrap();
+	assert_eq!(recv, Some(1));
 }

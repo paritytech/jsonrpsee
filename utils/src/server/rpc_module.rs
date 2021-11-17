@@ -546,6 +546,41 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Context: Send + Sync + 'static,
 		F: Fn(Params, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
 	{
+		self.register_subscription_inner(subscribe_method_name, None, unsubscribe_method_name, callback)
+	}
+
+	/// Similar to [`RpcModule::register_subscription`] but allows sending notifications to another method
+	/// than the actual subscription method name.
+	pub fn register_subscription_with_custom_notif<F>(
+		&mut self,
+		subscribe_method_name: &'static str,
+		custom_notif_method_name: &'static str,
+		unsubscribe_method_name: &'static str,
+		callback: F,
+	) -> Result<(), Error>
+	where
+		Context: Send + Sync + 'static,
+		F: Fn(Params, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
+	{
+		self.register_subscription_inner(
+			subscribe_method_name,
+			Some(custom_notif_method_name),
+			unsubscribe_method_name,
+			callback,
+		)
+	}
+
+	fn register_subscription_inner<F>(
+		&mut self,
+		subscribe_method_name: &'static str,
+		custom_notif_method_name: Option<&'static str>,
+		unsubscribe_method_name: &'static str,
+		callback: F,
+	) -> Result<(), Error>
+	where
+		Context: Send + Sync + 'static,
+		F: Fn(Params, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
+	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
@@ -573,9 +608,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					send_response(id.clone(), method_sink, sub_id, max_response_size);
 
+					let method = match custom_notif_method_name {
+						Some(m) => m,
+						None => subscribe_method_name,
+					};
+
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
-						method: subscribe_method_name,
+						method,
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id, sub_id },
 						is_connected: Some(conn_tx),

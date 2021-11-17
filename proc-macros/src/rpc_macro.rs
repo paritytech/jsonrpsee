@@ -95,6 +95,9 @@ impl RpcMethod {
 #[derive(Debug, Clone)]
 pub struct RpcSubscription {
 	pub name: String,
+	/// By default the server will send out subscriptions `method` in `name` above
+	/// but it's possible to override it with another name that this field does.
+	pub override_notif_method: Option<String>,
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
@@ -107,11 +110,15 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, param_kind, unsubscribe_aliases] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_kind, unsubscribe_aliases, override_notif_method] = AttributeMeta::parse(attr)?
+			.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases", "override_notif_method"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let name = name?.string()?;
+		let override_notif_method = match override_notif_method {
+			Ok(arg) => Some(arg.string()?),
+			Err(_) => None,
+		};
 		let item = item?.value()?;
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
@@ -135,7 +142,18 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, param_kind, item, signature: sub, aliases, docs })
+		Ok(Self {
+			name,
+			override_notif_method,
+			unsubscribe,
+			unsubscribe_aliases,
+			params,
+			param_kind,
+			item,
+			signature: sub,
+			aliases,
+			docs,
+		})
 	}
 }
 
@@ -282,6 +300,18 @@ impl RpcDescription {
 			format!("{}_{}", ns, method).into()
 		} else {
 			Cow::Borrowed(method)
+		}
+	}
+
+	/// Based on the namespace, renders the full name of the RPC method/subscription.
+	/// Examples:
+	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
+	/// For no namespace and method `makeSpam` it will be just `makeSpam.
+	pub(crate) fn optional_rpc_identifier<'a>(&self, method: Option<&'a str>) -> Option<Cow<'a, str>> {
+		if let Some(method) = method {
+			Some(self.rpc_identifier(method))
+		} else {
+			None
 		}
 	}
 }
