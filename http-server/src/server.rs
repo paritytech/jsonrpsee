@@ -110,13 +110,12 @@ impl Builder {
 	/// ```rust
 	/// #[tokio::main]
 	/// async fn main() {
-	///   let mut builder = jsonrpsee_http_server::HttpServerBuilder::default();
-	///   // try several addresses
 	///   let addrs: &[std::net::SocketAddr] = &[
-	///       "127.0.0.1:10".parse::<std::net::SocketAddr>().unwrap(),
-	///       "127.0.0.1:0".parse::<std::net::SocketAddr>().unwrap(),
+	///       "127.0.0.1:10".parse().unwrap(),
+	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   let server = builder.build(addrs).unwrap();
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs[0]).await.is_err());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).await.is_ok());
 	/// }
 	/// ```
 	pub fn build(self, addrs: impl ToSocketAddrs) -> Result<Server, Error> {
