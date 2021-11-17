@@ -114,8 +114,8 @@ impl Builder {
 	///       "127.0.0.1:10".parse().unwrap(),
 	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs[0]).await.is_err());
-	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).await.is_ok());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs[0]).is_err());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).is_ok());
 	/// }
 	/// ```
 	pub fn build(self, addrs: impl ToSocketAddrs) -> Result<Server, Error> {
