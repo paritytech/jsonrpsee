@@ -110,11 +110,13 @@ impl Builder {
 	/// ```rust
 	/// #[tokio::main]
 	/// async fn main() {
+	///   let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+	///   let occupied_addr = listener.local_addr().unwrap();
 	///   let addrs: &[std::net::SocketAddr] = &[
-	///       "127.0.0.1:10".parse().unwrap(),
+	///       occupied_addr,
 	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs[0]).is_err());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(occupied_addr).is_err());
 	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).is_ok());
 	/// }
 	/// ```
