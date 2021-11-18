@@ -29,6 +29,8 @@ use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::v2::error::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::{Error, SubscriptionClosedError},
 	traits::ToRpcParams,
@@ -587,7 +589,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							err,
 							id
 						);
-						send_error(id, method_sink, ErrorCode::ServerError(-1).into());
+						send_error(id, method_sink, ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into());
 					}
 				})),
 			);
@@ -605,12 +607,18 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								unsubscribe_method_name,
 								id
 							);
-							send_error(id, tx, ErrorCode::ServerError(-1).into());
+							let err = to_json_raw_value(&"Invalid subscription ID type, must be integer").ok();
+							send_error(id, tx, invalid_subscription_err(err.as_deref()));
 							return;
 						}
 					};
-					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					send_response(id, tx, "Unsubscribed", max_response_size);
+
+					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some() {
+						send_response(id, tx, "Unsubscribed", max_response_size);
+					} else {
+						let err = to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).ok();
+						send_error(id, tx, invalid_subscription_err(err.as_deref()))
+					}
 				})),
 			);
 		}
@@ -698,6 +706,7 @@ impl SubscriptionSink {
 	fn inner_close(&mut self, err: &SubscriptionClosedError) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 			let msg = self.build_message(err).expect("valid json infallible; qed");
 			let _ = sink.unbounded_send(msg);
 		}
