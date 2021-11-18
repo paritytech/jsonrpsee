@@ -174,7 +174,7 @@ impl RpcDescription {
 				let rust_method_name = &sub.signature.sig.ident;
 				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
 				let rpc_sub_name = self.rpc_identifier(&sub.name);
-				//
+				// Custom method name to use when sending notifs on the subscription if configured.
 				let maybe_custom_notif = self.optional_rpc_identifier(sub.override_notif_method.as_deref());
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);

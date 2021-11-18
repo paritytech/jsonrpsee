@@ -592,6 +592,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods.verify_method_name(unsubscribe_method_name)?;
 
 		if let Some(name) = custom_notif_method_name {
+			if name == subscribe_method_name || name == unsubscribe_method_name {
+				return Err(Error::SubscriptionNameConflict(format!(
+					"Custom subscription notification name: `{}` already used",
+					name
+				)));
+			}
+
 			self.notif_overrides.verify_and_insert(name)?;
 			self.methods.verify_method_name(name)?;
 		}
