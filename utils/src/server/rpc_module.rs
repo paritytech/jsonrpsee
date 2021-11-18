@@ -42,7 +42,7 @@ use jsonrpsee_types::{
 };
 
 use parking_lot::Mutex;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::collections::hash_map::Entry;
@@ -406,13 +406,12 @@ impl<Context> DerefMut for RpcModule<Context> {
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
 	methods: Methods,
-	notif_overrides: SubscriptionNotifOverride,
 }
 
 impl<Context> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		Self { ctx: Arc::new(ctx), methods: Default::default(), notif_overrides: SubscriptionNotifOverride::default() }
+		Self { ctx: Arc::new(ctx), methods: Default::default() }
 	}
 }
 
@@ -530,7 +529,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "unsub", |params, mut sink, ctx| {
+	/// ctx.register_subscription("sub", "sub_notif", "unsub", |params, mut sink, ctx| {
 	///     let x: usize = params.one()?;
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
@@ -542,41 +541,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
-		unsubscribe_method_name: &'static str,
-		callback: F,
-	) -> Result<(), Error>
-	where
-		Context: Send + Sync + 'static,
-		F: Fn(Params, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
-	{
-		self.register_subscription_inner(subscribe_method_name, None, unsubscribe_method_name, callback)
-	}
-
-	/// Similar to [`RpcModule::register_subscription`] but allows sending notifications to another method
-	/// than the actual subscription method name.
-	pub fn register_subscription_with_custom_notif<F>(
-		&mut self,
-		subscribe_method_name: &'static str,
-		custom_notif_method_name: &'static str,
-		unsubscribe_method_name: &'static str,
-		callback: F,
-	) -> Result<(), Error>
-	where
-		Context: Send + Sync + 'static,
-		F: Fn(Params, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
-	{
-		self.register_subscription_inner(
-			subscribe_method_name,
-			Some(custom_notif_method_name),
-			unsubscribe_method_name,
-			callback,
-		)
-	}
-
-	fn register_subscription_inner<F>(
-		&mut self,
-		subscribe_method_name: &'static str,
-		custom_notif_method_name: Option<&'static str>,
+		notif_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 		callback: F,
 	) -> Result<(), Error>
@@ -590,18 +555,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.verify_method_name(subscribe_method_name)?;
 		self.methods.verify_method_name(unsubscribe_method_name)?;
-
-		if let Some(name) = custom_notif_method_name {
-			if name == subscribe_method_name || name == unsubscribe_method_name {
-				return Err(Error::SubscriptionNameConflict(format!(
-					"Custom subscription notification name: `{}` already used",
-					name
-				)));
-			}
-
-			self.notif_overrides.verify_and_insert(name)?;
-			self.methods.verify_method_name(name)?;
-		}
 
 		let ctx = self.ctx.clone();
 		let subscribers = Subscribers::default();
@@ -624,14 +577,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					send_response(id.clone(), method_sink, sub_id, max_response_size);
 
-					let method = match custom_notif_method_name {
-						Some(m) => m,
-						None => subscribe_method_name,
-					};
-
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
-						method,
+						method: notif_method_name,
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id, sub_id },
 						is_connected: Some(conn_tx),
@@ -692,21 +640,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods.mut_callbacks().insert(alias, callback);
 
 		Ok(())
-	}
-}
-
-/// Keeps track of registered overrides for subscription method names
-/// Regards duplicates as error.
-#[derive(Default, Debug, Clone)]
-struct SubscriptionNotifOverride(FxHashSet<&'static str>);
-
-impl SubscriptionNotifOverride {
-	fn verify_and_insert(&mut self, notif: &'static str) -> Result<(), Error> {
-		if self.0.insert(notif) {
-			Ok(())
-		} else {
-			Err(Error::MethodAlreadyRegistered(notif.into()))
-		}
 	}
 }
 
@@ -853,7 +786,7 @@ mod tests {
 	fn rpc_context_modules_can_register_subscriptions() {
 		let cx = ();
 		let mut cxmodule = RpcModule::new(cx);
-		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _, _| Ok(()));
+		let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(()));
 
 		assert!(cxmodule.method("hi").is_some());
 		assert!(cxmodule.method("goodbye").is_some());
@@ -991,7 +924,7 @@ mod tests {
 	async fn subscribing_without_server() {
 		let mut module = RpcModule::new(());
 		module
-			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
+			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 				let mut stream_data = vec!['0', '1', '2'];
 				std::thread::spawn(move || loop {
 					tracing::debug!("This is your friendly subscription sending data.");
@@ -1025,7 +958,7 @@ mod tests {
 	async fn close_test_subscribing_without_server() {
 		let mut module = RpcModule::new(());
 		module
-			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
+			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 				std::thread::spawn(move || loop {
 					if let Err(Error::SubscriptionClosed(_)) = sink.send(&"lo") {
 						return;

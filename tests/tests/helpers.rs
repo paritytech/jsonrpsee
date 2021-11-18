@@ -40,7 +40,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
 	module
-		.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
 			std::thread::spawn(move || loop {
 				if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello from subscription") {
 					break;
@@ -52,7 +52,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
+		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
 			std::thread::spawn(move || loop {
 				if let Err(Error::SubscriptionClosed(_)) = sink.send(&1337) {
 					break;
@@ -64,21 +64,26 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_add_one", "unsubscribe_add_one", |params, mut sink, _| {
-			let mut count: usize = params.one()?;
-			std::thread::spawn(move || loop {
-				count = count.wrapping_add(1);
-				if let Err(Error::SubscriptionClosed(_)) = sink.send(&count) {
-					break;
-				}
-				std::thread::sleep(Duration::from_millis(100));
-			});
-			Ok(())
-		})
+		.register_subscription(
+			"subscribe_add_one",
+			"subscribe_add_one",
+			"unsubscribe_add_one",
+			|params, mut sink, _| {
+				let mut count: usize = params.one()?;
+				std::thread::spawn(move || loop {
+					count = count.wrapping_add(1);
+					if let Err(Error::SubscriptionClosed(_)) = sink.send(&count) {
+						break;
+					}
+					std::thread::sleep(Duration::from_millis(100));
+				});
+				Ok(())
+			},
+		)
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
+		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
 				sink.close("Server closed the stream because it was lazy")

@@ -175,7 +175,7 @@ impl RpcDescription {
 				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
 				let rpc_sub_name = self.rpc_identifier(&sub.name);
 				// Custom method name to use when sending notifs on the subscription if configured.
-				let maybe_custom_notif = self.optional_rpc_identifier(sub.override_notif_method.as_deref());
+				let maybe_custom_notif = sub.override_notif_method.as_ref().map(|m| self.rpc_identifier(m));
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 				// `parsing` is the code associated with parsing structure from the
@@ -186,23 +186,20 @@ impl RpcDescription {
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
 
-				let register_sub = if let Some(notif) = &maybe_custom_notif {
-					check_name(notif, rust_method_name.span());
-					quote! {
-						rpc.register_subscription_with_custom_notif(#rpc_sub_name, #maybe_custom_notif, #rpc_unsub_name, |params, sink, context| {
-							#parsing
-							context.as_ref().#rust_method_name(sink, #params_seq)
-						})
+				let notif_name = match maybe_custom_notif {
+					Some(notif) => {
+						check_name(&notif, rust_method_name.span());
+						notif
 					}
-				} else {
-					 quote! {
-						rpc.register_subscription(#rpc_sub_name, #rpc_unsub_name, |params, sink, context| {
-							#parsing
-							context.as_ref().#rust_method_name(sink, #params_seq)
-						})
-					}
+					None => rpc_sub_name.clone(),
 				};
-				handle_register_result(register_sub)
+
+				handle_register_result(quote! {
+					rpc.register_subscription(#rpc_sub_name, #notif_name, #rpc_unsub_name, |params, sink, context| {
+						#parsing
+						context.as_ref().#rust_method_name(sink, #params_seq)
+					})
+				})
 			})
 			.collect::<Vec<_>>();
 

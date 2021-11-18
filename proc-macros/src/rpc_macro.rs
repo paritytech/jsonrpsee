@@ -302,18 +302,6 @@ impl RpcDescription {
 			Cow::Borrowed(method)
 		}
 	}
-
-	/// Based on the namespace, renders the full name of the RPC method/subscription.
-	/// Examples:
-	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
-	/// For no namespace and method `makeSpam` it will be just `makeSpam.
-	pub(crate) fn optional_rpc_identifier<'a>(&self, method: Option<&'a str>) -> Option<Cow<'a, str>> {
-		if let Some(method) = method {
-			Some(self.rpc_identifier(method))
-		} else {
-			None
-		}
-	}
 }
 
 fn parse_aliases(arg: Result<Argument, MissingArgument>) -> syn::Result<Vec<String>> {
