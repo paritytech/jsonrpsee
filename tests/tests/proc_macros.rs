@@ -312,7 +312,7 @@ async fn multiple_blocking_calls_overlap() {
 
 #[tokio::test]
 async fn subscriptions_do_not_work_for_http_servers() {
-	let htserver = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+	let htserver = HttpServerBuilder::default().build("127.0.0.1:0").unwrap();
 	let addr = htserver.local_addr().unwrap();
 	let htserver_url = format!("http://{}", addr);
 	let _handle = htserver.start(RpcServerImpl.into_rpc()).unwrap();

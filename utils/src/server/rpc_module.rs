@@ -42,7 +42,7 @@ use jsonrpsee_types::{
 };
 
 use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::collections::hash_map::Entry;
@@ -406,12 +406,13 @@ impl<Context> DerefMut for RpcModule<Context> {
 pub struct RpcModule<Context> {
 	ctx: Arc<Context>,
 	methods: Methods,
+	notif_overrides: SubscriptionNotifOverride,
 }
 
 impl<Context> RpcModule<Context> {
 	/// Create a new module with a given shared `Context`.
 	pub fn new(ctx: Context) -> Self {
-		Self { ctx: Arc::new(ctx), methods: Default::default() }
+		Self { ctx: Arc::new(ctx), methods: Default::default(), notif_overrides: SubscriptionNotifOverride::default() }
 	}
 }
 
@@ -589,6 +590,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.verify_method_name(subscribe_method_name)?;
 		self.methods.verify_method_name(unsubscribe_method_name)?;
+
+		if let Some(name) = custom_notif_method_name {
+			self.notif_overrides.verify_and_insert(name)?;
+			self.methods.verify_method_name(name)?;
+		}
+
 		let ctx = self.ctx.clone();
 		let subscribers = Subscribers::default();
 
@@ -678,6 +685,21 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		self.methods.mut_callbacks().insert(alias, callback);
 
 		Ok(())
+	}
+}
+
+/// Keeps track of registered overrides for subscription method names
+/// Regards duplicates as error.
+#[derive(Default, Debug, Clone)]
+struct SubscriptionNotifOverride(FxHashSet<&'static str>);
+
+impl SubscriptionNotifOverride {
+	fn verify_and_insert(&mut self, notif: &'static str) -> Result<(), Error> {
+		if self.0.insert(notif) {
+			Ok(())
+		} else {
+			Err(Error::MethodAlreadyRegistered(notif.into()))
+		}
 	}
 }
 
