@@ -27,7 +27,9 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, Resource},
+	attributes::{
+		optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, Resource,
+	},
 	helpers::extract_doc_comments,
 };
 
@@ -110,8 +112,8 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, param_kind, unsubscribe_aliases] = AttributeMeta::parse(attr)?
-			.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_kind, unsubscribe_aliases] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let map = name?.value::<NameMapping>()?;
