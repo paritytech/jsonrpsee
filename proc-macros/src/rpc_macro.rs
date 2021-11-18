@@ -27,7 +27,7 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, ParamKind, Resource},
+	attributes::{optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, Resource},
 	helpers::extract_doc_comments,
 };
 
@@ -110,15 +110,13 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, param_kind, unsubscribe_aliases, override_notif_method] = AttributeMeta::parse(attr)?
-			.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases", "override_notif_method"])?;
+		let [aliases, item, name, param_kind, unsubscribe_aliases] = AttributeMeta::parse(attr)?
+			.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases"])?;
 
 		let aliases = parse_aliases(aliases)?;
-		let name = name?.string()?;
-		let override_notif_method = match override_notif_method {
-			Ok(arg) => Some(arg.string()?),
-			Err(_) => None,
-		};
+		let map = name?.value::<NameMapping>()?;
+		let name = map.name;
+		let override_notif_method = map.mapped;
 		let item = item?.value()?;
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
