@@ -33,7 +33,7 @@ pub trait Rpc {
 	fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 
 	// This will send notifications to the client with `method=subscribe_override`
-	#[subscription(name = "subscribe_method", override_notif_method = "subscribe_override", item = u32)]
+	#[subscription(name = "subscribe_method" => "subscribe_override", item = u32)]
 	fn sub_with_override_notif_method(&self) -> RpcResult<()>;
 }
 

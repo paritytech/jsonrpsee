@@ -28,7 +28,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use std::{fmt, iter};
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
-use syn::{spanned::Spanned, Attribute, Error, Token};
+use syn::{spanned::Spanned, Attribute, Error, Token, LitStr, LitInt};
 
 pub(crate) struct AttributeMeta {
 	pub path: syn::Path,
@@ -48,14 +48,21 @@ pub enum ParamKind {
 
 #[derive(Debug, Clone)]
 pub struct Resource {
-	pub name: syn::LitStr,
+	pub name: LitStr,
 	pub assign: Token![=],
-	pub value: syn::LitInt,
+	pub value: LitInt,
 }
 
-pub struct Aliases {
-	pub list: Punctuated<syn::LitStr, Token![,]>,
+pub struct NameMapping {
+	pub name: String,
+	pub mapped: Option<String>,
 }
+
+pub struct Bracketed<T> {
+	pub list: Punctuated<T, Token![,]>,
+}
+
+pub type Aliases = Bracketed<LitStr>;
 
 impl Parse for Argument {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -91,7 +98,23 @@ impl Parse for Resource {
 	}
 }
 
-impl Parse for Aliases {
+impl Parse for NameMapping {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let name = input.parse::<LitStr>()?.value();
+
+		let mapped = if input.peek(Token![=>]) {
+			input.parse::<Token![=>]>()?;
+
+			Some(input.parse::<LitStr>()?.value())
+		} else {
+			None
+		};
+
+		Ok(NameMapping { name, mapped })
+	}
+}
+
+impl<T: Parse> Parse for Bracketed<T> {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let content;
 
@@ -99,7 +122,7 @@ impl Parse for Aliases {
 
 		let list = content.parse_terminated(Parse::parse)?;
 
-		Ok(Aliases { list })
+		Ok(Bracketed { list })
 	}
 }
 
@@ -201,7 +224,7 @@ impl Argument {
 
 	/// Asserts that the argument is `key = "string"` and gets the value of the string
 	pub fn string(self) -> syn::Result<String> {
-		self.value::<syn::LitStr>().map(|lit| lit.value())
+		self.value::<LitStr>().map(|lit| lit.value())
 	}
 }
 
