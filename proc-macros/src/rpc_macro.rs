@@ -97,7 +97,7 @@ impl RpcMethod {
 #[derive(Debug, Clone)]
 pub struct RpcSubscription {
 	pub name: String,
-	/// By default the server will send out subscriptions `method` in `name` above
+	/// By default the server will send out subscriptions using `method` in `name` above
 	/// but it's possible to override it with another name that this field does.
 	pub override_notif_method: Option<String>,
 	pub docs: TokenStream2,
