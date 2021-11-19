@@ -144,7 +144,7 @@ impl RpcSubscription {
 
 		Ok(Self {
 			name,
-			override_notif_method,
+			payload_name_override,
 			unsubscribe,
 			unsubscribe_aliases,
 			params,
