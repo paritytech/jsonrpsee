@@ -174,7 +174,7 @@ impl RpcDescription {
 				let rust_method_name = &sub.signature.sig.ident;
 				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
 				let rpc_sub_name = self.rpc_identifier(&sub.name);
-				// When subscribing to an RPC, users can override the content of the `method` field in the JSON data sent to subscribers. Each subscription thus has one method name to set up the subscription, one to unsubscribe and, optionally, a third method name used to describe the payload sent back from the server to subscribers. If no override is provided, the subscription method name is used.
+				// Name of `method` in the subscription response.
 				let rpc_sub_name_override = sub.name_override.as_ref().map(|m| self.rpc_identifier(m));
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);

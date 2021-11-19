@@ -97,10 +97,12 @@ impl RpcMethod {
 #[derive(Debug, Clone)]
 pub struct RpcSubscription {
 	pub name: String,
-	/// By default the server will send data to subscribers using the `name` field above as the `method` field in the JSON payload
-	/// but it's possible to override it with another name using this field.
-	///
-	/// The `proc macro` itself ensure that each `name override` is unique on each trait/API.
+	/// When subscribing to an RPC, users can override the content of the `method` field
+	/// in the JSON data sent to subscribers.
+	/// Each subscription thus has one method name to set up the subscription,
+	/// one to unsubscribe and, optionally, a third method name used to describe the
+	/// payload sent back from the server to subscribers.
+	/// If no override is provided, the subscription method name is used.
 	pub name_override: Option<String>,
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
