@@ -186,7 +186,7 @@ impl RpcDescription {
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
 
-				let rpc_notif_name = match rpc_sub_name_override {
+				let rpc_notif_name = match rpc_notif_name_override {
 					Some(notif) => {
 						check_name(&notif, rust_method_name.span());
 						notif
