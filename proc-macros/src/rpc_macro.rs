@@ -101,7 +101,7 @@ pub struct RpcSubscription {
 	/// in the JSON data sent to subscribers.
 	/// Each subscription thus has one method name to set up the subscription,
 	/// one to unsubscribe and, optionally, a third method name used to describe the
-	/// payload sent back from the server to subscribers.
+	/// payload (aka "notification") sent back from the server to subscribers.
 	/// If no override is provided, the subscription method name is used.
 	pub name_override: Option<String>,
 	pub docs: TokenStream2,
