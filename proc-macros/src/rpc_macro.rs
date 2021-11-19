@@ -103,7 +103,7 @@ pub struct RpcSubscription {
 	/// one to unsubscribe and, optionally, a third method name used to describe the
 	/// payload (aka "notification") sent back from the server to subscribers.
 	/// If no override is provided, the subscription method name is used.
-	pub name_override: Option<String>,
+	pub notif_name_override: Option<String>,
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
@@ -122,7 +122,7 @@ impl RpcSubscription {
 		let aliases = parse_aliases(aliases)?;
 		let map = name?.value::<NameMapping>()?;
 		let name = map.name;
-		let name_override = map.mapped;
+		let notif_name_override = map.mapped;
 		let item = item?.value()?;
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
@@ -148,7 +148,7 @@ impl RpcSubscription {
 
 		Ok(Self {
 			name,
-			name_override,
+			notif_name_override,
 			unsubscribe,
 			unsubscribe_aliases,
 			params,
