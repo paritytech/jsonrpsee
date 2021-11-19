@@ -45,7 +45,7 @@ where
 	async fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>, Error>;
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
-	#[subscription(name = "subscribeStorage", item = Vec<Hash>)]
+	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
 	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> Result<(), Error>;
 }
 

@@ -516,9 +516,20 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
-	/// Register a new RPC subscription that invokes callback on every subscription request.
-	/// The callback itself takes three parameters:
-	///     - [`Params`]: JSONRPC parameters in the subscription request.
+	/// Register a new RPC subscription that invokes s callback on every subscription call.
+	///
+	/// This method ensures that the `subscription_method_name` and `unsubscription_method_name` are unique.
+	/// The `notif_method_name` argument sets the content of the `method` field in the JSON document that
+	/// the server sends back to the client. The uniqueness of this value is not machine checked and it's up to
+	/// the user to ensure it is not used in any other [`RpcModule`] used in the server.
+	///
+	/// # Arguments
+	///
+	/// * `subscription_method_name` - name of the method to call to initiate a subscription
+	/// * `notif_method_name` - name of method to be used in the subscription payload (technically a JSON-RPC notification)
+	/// * `unsubscription_method` - name of the method to call to terminate a subscription
+	/// *  `callback` - A callback to invoke on each subscription; it takes three parameters:
+	///     - [`Params`]: JSON-RPC parameters in the subscription call.
 	///     - [`SubscriptionSink`]: A sink to send messages to the subscriber.
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
@@ -529,7 +540,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "unsub", |params, mut sink, ctx| {
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, mut sink, ctx| {
 	///     let x: usize = params.one()?;
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
@@ -541,6 +552,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
+		notif_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 		callback: F,
 	) -> Result<(), Error>
@@ -554,6 +566,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.verify_method_name(subscribe_method_name)?;
 		self.methods.verify_method_name(unsubscribe_method_name)?;
+
 		let ctx = self.ctx.clone();
 		let subscribers = Subscribers::default();
 
@@ -577,7 +590,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
-						method: subscribe_method_name,
+						method: notif_method_name,
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id, sub_id },
 						is_connected: Some(conn_tx),
@@ -784,7 +797,7 @@ mod tests {
 	fn rpc_context_modules_can_register_subscriptions() {
 		let cx = ();
 		let mut cxmodule = RpcModule::new(cx);
-		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _, _| Ok(()));
+		let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(()));
 
 		assert!(cxmodule.method("hi").is_some());
 		assert!(cxmodule.method("goodbye").is_some());
@@ -922,7 +935,7 @@ mod tests {
 	async fn subscribing_without_server() {
 		let mut module = RpcModule::new(());
 		module
-			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
+			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 				let mut stream_data = vec!['0', '1', '2'];
 				std::thread::spawn(move || loop {
 					tracing::debug!("This is your friendly subscription sending data.");
@@ -956,7 +969,7 @@ mod tests {
 	async fn close_test_subscribing_without_server() {
 		let mut module = RpcModule::new(());
 		module
-			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
+			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 				std::thread::spawn(move || loop {
 					if let Err(Error::SubscriptionClosed(_)) = sink.send(&"lo") {
 						return;

@@ -27,7 +27,9 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, ParamKind, Resource},
+	attributes::{
+		optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, Resource,
+	},
 	helpers::extract_doc_comments,
 };
 
@@ -95,6 +97,13 @@ impl RpcMethod {
 #[derive(Debug, Clone)]
 pub struct RpcSubscription {
 	pub name: String,
+	/// When subscribing to an RPC, users can override the content of the `method` field
+	/// in the JSON data sent to subscribers.
+	/// Each subscription thus has one method name to set up the subscription,
+	/// one to unsubscribe and, optionally, a third method name used to describe the
+	/// payload (aka "notification") sent back from the server to subscribers.
+	/// If no override is provided, the subscription method name is used.
+	pub notif_name_override: Option<String>,
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
@@ -111,7 +120,9 @@ impl RpcSubscription {
 			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases"])?;
 
 		let aliases = parse_aliases(aliases)?;
-		let name = name?.string()?;
+		let map = name?.value::<NameMapping>()?;
+		let name = map.name;
+		let notif_name_override = map.mapped;
 		let item = item?.value()?;
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
@@ -135,7 +146,18 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, param_kind, item, signature: sub, aliases, docs })
+		Ok(Self {
+			name,
+			notif_name_override,
+			unsubscribe,
+			unsubscribe_aliases,
+			params,
+			param_kind,
+			item,
+			signature: sub,
+			aliases,
+			docs,
+		})
 	}
 }
 

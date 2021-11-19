@@ -332,7 +332,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
 			tokio::spawn(async move {
 				let close_err = loop {
 					if let Err(Error::SubscriptionClosed(err)) = sink.send(&1) {
