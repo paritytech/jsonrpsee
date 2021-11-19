@@ -175,7 +175,7 @@ impl RpcDescription {
 				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
 				let rpc_sub_name = self.rpc_identifier(&sub.name);
 				// When subscribing to an RPC, users can override the content of the `method` field in the JSON data sent to subscribers. Each subscription thus has one method name to set up the subscription, one to unsubscribe and, optionally, a third method name used to describe the payload sent back from the server to subscribers. If no override is provided, the subscription method name is used.
-				let payload_name = sub.payload_name_override.as_ref().map(|m| self.rpc_identifier(m));
+				let rpc_sub_name_override = sub.name_override.as_ref().map(|m| self.rpc_identifier(m));
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 				// `parsing` is the code associated with parsing structure from the
@@ -186,7 +186,7 @@ impl RpcDescription {
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
 
-				let notif_name = match maybe_custom_notif {
+				let rpc_notif_name = match rpc_sub_name_override {
 					Some(notif) => {
 						check_name(&notif, rust_method_name.span());
 						notif
@@ -195,7 +195,7 @@ impl RpcDescription {
 				};
 
 				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #notif_name, #rpc_unsub_name, |params, sink, context| {
+					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, sink, context| {
 						#parsing
 						context.as_ref().#rust_method_name(sink, #params_seq)
 					})

@@ -32,7 +32,8 @@ pub trait Rpc {
 	#[subscription(name = "echo", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
 	fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 
-	// This will send notifications to the client with `method=subscribe_override`
+	// This will send data to subscribers with the `method` field in the JSON payload set to `foo_subscribe_override`
+	// because it's in the `foo` namespace.
 	#[subscription(name = "subscribe_method" => "subscribe_override", item = u32)]
 	fn sub_with_override_notif_method(&self) -> RpcResult<()>;
 }

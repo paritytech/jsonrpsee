@@ -99,7 +99,9 @@ pub struct RpcSubscription {
 	pub name: String,
 	/// By default the server will send data to subscribers using the `name` field above as the `method` field in the JSON payload
 	/// but it's possible to override it with another name using this field.
-	pub payload_name_override: Option<String>,
+	///
+	/// The `proc macro` itself ensure that each `name override` is unique on each trait/API.
+	pub name_override: Option<String>,
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
@@ -118,7 +120,7 @@ impl RpcSubscription {
 		let aliases = parse_aliases(aliases)?;
 		let map = name?.value::<NameMapping>()?;
 		let name = map.name;
-		let override_notif_method = map.mapped;
+		let name_override = map.mapped;
 		let item = item?.value()?;
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
@@ -144,7 +146,7 @@ impl RpcSubscription {
 
 		Ok(Self {
 			name,
-			payload_name_override,
+			name_override,
 			unsubscribe,
 			unsubscribe_aliases,
 			params,

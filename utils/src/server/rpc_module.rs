@@ -516,9 +516,21 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
-	/// Register a new RPC subscription that invokes callback on every subscription request.
-	/// The callback itself takes three parameters:
-	///     - [`Params`]: JSONRPC parameters in the subscription request.
+	/// Register a new RPC subscription that invokes callback on every subscription call.
+	///
+	/// This method ensures that the `subscription_method_name` and `unsubscription_method_name` are unique
+	/// but does not check that `notif_method_name` is unique.
+	///
+	/// Thus, if you want to use a different method name in the subscription make sure that
+	/// names are unique.
+	///
+	/// # Arguments
+	///
+	/// * `subscription_method_name` - name of the method to call to initiate a subscription
+	/// * `notif_method_name` - name of method to be used in the subscription payload (technically a JSON-RPC notification)
+	/// * `unsubscription_method` - name of the method to call to terminate a subscription
+	/// *  `callback` - A callback to invoke on each subscrption, it takes three parameters
+	///     - [`Params`]: JSON-RPC parameters in the subscription call.
 	///     - [`SubscriptionSink`]: A sink to send messages to the subscriber.
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
