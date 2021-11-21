@@ -44,6 +44,7 @@ pub struct RpcMethod {
 	pub name: String,
 	pub blocking: bool,
 	pub docs: TokenStream2,
+	pub deprecated: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
 	pub param_kind: ParamKind,
 	pub returns: Option<syn::Type>,
@@ -65,6 +66,10 @@ impl RpcMethod {
 
 		let sig = method.sig.clone();
 		let docs = extract_doc_comments(&method.attrs);
+		let deprecated = match find_attr(&method.attrs, "deprecated") {
+			Some(attr) => quote!(#attr),
+			None => quote!(),
+		};
 
 		if blocking && sig.asyncness.is_some() {
 			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
@@ -90,7 +95,18 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, param_kind, returns, signature: method, docs, resources })
+		Ok(Self {
+			aliases,
+			blocking,
+			name,
+			params,
+			param_kind,
+			returns,
+			signature: method,
+			docs,
+			resources,
+			deprecated,
+		})
 	}
 }
 
@@ -298,7 +314,7 @@ impl RpcDescription {
 	/// Based on the namespace, renders the full name of the RPC method/subscription.
 	/// Examples:
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
-	/// For no namespace and method `makeSpam` it will be just `makeSpam.
+	/// For no namespace and method `makeSpam` it will be just `makeSpam`.
 	pub(crate) fn rpc_identifier<'a>(&self, method: &'a str) -> Cow<'a, str> {
 		if let Some(ns) = &self.namespace {
 			format!("{}_{}", ns, method).into()
