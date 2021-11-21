@@ -298,7 +298,7 @@ impl RpcDescription {
 	/// Based on the namespace, renders the full name of the RPC method/subscription.
 	/// Examples:
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
-	/// For no namespace and method `makeSpam` it will be just `makeSpam.
+	/// For no namespace and method `makeSpam` it will be just `makeSpam`.
 	pub(crate) fn rpc_identifier<'a>(&self, method: &'a str) -> Cow<'a, str> {
 		if let Some(ns) = &self.namespace {
 			format!("{}_{}", ns, method).into()
