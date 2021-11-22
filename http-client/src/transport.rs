@@ -8,7 +8,7 @@
 
 use crate::types::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
-use hyper_rustls::HttpsConnector;
+use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use jsonrpsee_types::CertificateStore;
 use jsonrpsee_utils::http_helpers;
 use thiserror::Error;
@@ -36,11 +36,15 @@ impl HttpTransportClient {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.scheme() == "http" || target.scheme() == "https" {
 			let connector = match cert_store {
-				CertificateStore::Native => HttpsConnector::with_native_roots(),
-				CertificateStore::WebPki => HttpsConnector::with_webpki_roots(),
+				CertificateStore::Native => {
+					HttpsConnectorBuilder::new().with_native_roots().https_or_http().enable_http1()
+				}
+				CertificateStore::WebPki => {
+					HttpsConnectorBuilder::new().with_webpki_roots().https_or_http().enable_http1()
+				}
 				_ => return Err(Error::InvalidCertficateStore),
 			};
-			let client = Client::builder().build::<_, hyper::Body>(connector);
+			let client = Client::builder().build::<_, hyper::Body>(connector.build());
 			Ok(HttpTransportClient { target, client, max_request_body_size })
 		} else {
 			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
