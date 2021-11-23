@@ -616,8 +616,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
 							tracing::error!(
-								"unsubscribe call '{}' failed: couldn't parse subscription id, request id={:?}",
+								"unsubscribe call '{}' failed: couldn't parse subscription id={:?} request id={:?}",
 								unsubscribe_method_name,
+								params,
 								id
 							);
 							let err = to_json_raw_value(&"Invalid subscription ID type, must be integer").ok();
