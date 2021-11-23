@@ -19,6 +19,10 @@ name = "http"
 path = "http.rs"
 
 [[example]]
+name = "middleware"
+path = "middleware.rs"
+
+[[example]]
 name = "ws"
 path = "ws.rs"
 
