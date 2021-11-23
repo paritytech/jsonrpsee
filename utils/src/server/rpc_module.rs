@@ -29,6 +29,8 @@ use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::v2::error::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::{Error, SubscriptionClosedError},
 	traits::ToRpcParams,
@@ -535,9 +537,20 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
-	/// Register a new RPC subscription that invokes callback on every subscription request.
-	/// The callback itself takes three parameters:
-	///     - [`Params`]: JSONRPC parameters in the subscription request.
+	/// Register a new RPC subscription that invokes s callback on every subscription call.
+	///
+	/// This method ensures that the `subscription_method_name` and `unsubscription_method_name` are unique.
+	/// The `notif_method_name` argument sets the content of the `method` field in the JSON document that
+	/// the server sends back to the client. The uniqueness of this value is not machine checked and it's up to
+	/// the user to ensure it is not used in any other [`RpcModule`] used in the server.
+	///
+	/// # Arguments
+	///
+	/// * `subscription_method_name` - name of the method to call to initiate a subscription
+	/// * `notif_method_name` - name of method to be used in the subscription payload (technically a JSON-RPC notification)
+	/// * `unsubscription_method` - name of the method to call to terminate a subscription
+	/// *  `callback` - A callback to invoke on each subscription; it takes three parameters:
+	///     - [`Params`]: JSON-RPC parameters in the subscription call.
 	///     - [`SubscriptionSink`]: A sink to send messages to the subscriber.
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
@@ -548,7 +561,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "unsub", |params, mut sink, ctx| {
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, mut sink, ctx| {
 	///     let x: usize = params.one()?;
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
@@ -560,6 +573,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
+		notif_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 		callback: F,
 	) -> Result<(), Error>
@@ -573,6 +587,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.verify_method_name(subscribe_method_name)?;
 		self.methods.verify_method_name(unsubscribe_method_name)?;
+
 		let ctx = self.ctx.clone();
 		let subscribers = Subscribers::default();
 
@@ -596,7 +611,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
-						method: subscribe_method_name,
+						method: notif_method_name,
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id, sub_id },
 						is_connected: Some(conn_tx),
@@ -608,7 +623,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							err,
 							id
 						);
-						method_sink.send_error(id, ErrorCode::ServerError(-1).into());
+						method_sink.send_error(id, ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into());
 						false
 					} else {
 						true
@@ -629,12 +644,17 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								unsubscribe_method_name,
 								id
 							);
-							sink.send_error(id, ErrorCode::ServerError(-1).into());
-							return false;
+							let err = to_json_raw_value(&"Invalid subscription ID type, must be integer").ok();
+							return sink.send_error(id, invalid_subscription_err(err.as_deref()));
 						}
 					};
-					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					sink.send_response(id, "Unsubscribed")
+
+					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some() {
+						sink.send_response(id, "Unsubscribed")
+					} else {
+						let err = to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).ok();
+						sink.send_error(id, invalid_subscription_err(err.as_deref()))
+					}
 				})),
 			);
 		}
@@ -722,6 +742,7 @@ impl SubscriptionSink {
 	fn inner_close(&mut self, err: &SubscriptionClosedError) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 			let msg = self.build_message(err).expect("valid json infallible; qed");
 			let _ = sink.send_raw(msg);
 		}
@@ -754,13 +775,17 @@ impl TestSubscription {
 		self.sub_id
 	}
 
-	/// Get the next element of type T from the underlying stream.
+	/// Returns `Some((val, sub_id))` for the next element of type T from the underlying stream,
+	/// otherwise `None` if the subscruption was closed.
 	///
-	/// Panics if the stream was closed or if the decoding the value as `T`.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> (T, jsonrpsee_types::v2::SubscriptionId) {
-		let raw = self.rx.next().await.expect("subscription not closed");
-		let val: SubscriptionResponse<T> = serde_json::from_str(&raw).expect("valid response");
-		(val.params.result, val.params.subscription)
+	/// # Panics
+	///
+	/// If the decoding the value as `T` fails.
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, jsonrpsee_types::v2::SubscriptionId)> {
+		let raw = self.rx.next().await?;
+		let val: SubscriptionResponse<T> =
+			serde_json::from_str(&raw).expect("valid response in TestSubscription::next()");
+		Some((val.params.result, val.params.subscription))
 	}
 }
 
@@ -795,7 +820,7 @@ mod tests {
 	fn rpc_context_modules_can_register_subscriptions() {
 		let cx = ();
 		let mut cxmodule = RpcModule::new(cx);
-		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _, _| Ok(()));
+		let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(()));
 
 		assert!(cxmodule.method("hi").is_some());
 		assert!(cxmodule.method("goodbye").is_some());
@@ -933,7 +958,7 @@ mod tests {
 	async fn subscribing_without_server() {
 		let mut module = RpcModule::new(());
 		module
-			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
+			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 				let mut stream_data = vec!['0', '1', '2'];
 				std::thread::spawn(move || loop {
 					tracing::debug!("This is your friendly subscription sending data.");
@@ -952,14 +977,39 @@ mod tests {
 
 		let mut my_sub: TestSubscription = module.test_subscription("my_sub", Vec::<()>::new()).await;
 		for i in (0..=2).rev() {
-			let (val, id) = my_sub.next::<char>().await;
+			let (val, id) = my_sub.next::<char>().await.unwrap();
 			assert_eq!(val, std::char::from_digit(i, 10).unwrap());
 			assert_eq!(id, v2::params::SubscriptionId::Num(my_sub.subscription_id()));
 		}
 
-		// The subscription is now closed
-		let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await;
+		// The subscription is now closed by the server.
+		let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await.unwrap();
 		assert_eq!(sub_closed_err.subscription_id(), my_sub.subscription_id());
 		assert_eq!(sub_closed_err.close_reason(), "Closed by the server");
+	}
+
+	#[tokio::test]
+	async fn close_test_subscribing_without_server() {
+		let mut module = RpcModule::new(());
+		module
+			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+				std::thread::spawn(move || loop {
+					if let Err(Error::SubscriptionClosed(_)) = sink.send(&"lo") {
+						return;
+					}
+					std::thread::sleep(std::time::Duration::from_millis(500));
+				});
+				Ok(())
+			})
+			.unwrap();
+
+		let mut my_sub: TestSubscription = module.test_subscription("my_sub", Vec::<()>::new()).await;
+		let (val, id) = my_sub.next::<String>().await.unwrap();
+		assert_eq!(&val, "lo");
+		assert_eq!(id, v2::params::SubscriptionId::Num(my_sub.subscription_id()));
+
+		// close the subscription to ensure it doesn't return any items.
+		my_sub.close();
+		assert_eq!(None, my_sub.next::<String>().await);
 	}
 }

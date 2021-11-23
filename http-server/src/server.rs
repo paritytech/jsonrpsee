@@ -49,7 +49,7 @@ use socket2::{Domain, Socket, Type};
 use std::{
 	cmp,
 	future::Future,
-	net::{SocketAddr, TcpListener},
+	net::{SocketAddr, TcpListener, ToSocketAddrs},
 	pin::Pin,
 	task::{Context, Poll},
 };
@@ -106,7 +106,50 @@ impl Builder {
 	}
 
 	/// Finalizes the configuration of the server.
-	pub fn build(self, addr: SocketAddr) -> Result<Server, Error> {
+	///
+	/// ```rust
+	/// #[tokio::main]
+	/// async fn main() {
+	///   let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+	///   let occupied_addr = listener.local_addr().unwrap();
+	///   let addrs: &[std::net::SocketAddr] = &[
+	///       occupied_addr,
+	///       "127.0.0.1:0".parse().unwrap(),
+	///   ];
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(occupied_addr).is_err());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).is_ok());
+	/// }
+	/// ```
+	pub fn build(self, addrs: impl ToSocketAddrs) -> Result<Server, Error> {
+		let mut err: Option<Error> = None;
+
+		for addr in addrs.to_socket_addrs()? {
+			let (listener, local_addr) = match self.inner_builder(addr) {
+				Ok(res) => res,
+				Err(e) => {
+					err = Some(e);
+					continue;
+				}
+			};
+
+			return Ok(Server {
+				listener,
+				local_addr,
+				access_control: self.access_control,
+				max_request_body_size: self.max_request_body_size,
+				resources: self.resources,
+				tokio_runtime: self.tokio_runtime,
+			});
+		}
+
+		let err = err.unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No address found").into());
+		Err(err)
+	}
+
+	fn inner_builder(
+		&self,
+		addr: SocketAddr,
+	) -> Result<(hyper::server::Builder<hyper::server::conn::AddrIncoming>, Option<SocketAddr>), Error> {
 		let domain = Domain::for_address(addr);
 		let socket = Socket::new(domain, Type::STREAM, None)?;
 		socket.set_nodelay(true)?;
@@ -119,17 +162,8 @@ impl Builder {
 		socket.listen(128)?;
 		let listener: TcpListener = socket.into();
 		let local_addr = listener.local_addr().ok();
-
 		let listener = hyper::Server::from_tcp(listener)?;
-
-		Ok(Server {
-			listener,
-			local_addr,
-			access_control: self.access_control,
-			max_request_body_size: self.max_request_body_size,
-			resources: self.resources,
-			tokio_runtime: self.tokio_runtime,
-		})
+		Ok((listener, local_addr))
 	}
 }
 

@@ -174,6 +174,8 @@ impl RpcDescription {
 				let rust_method_name = &sub.signature.sig.ident;
 				// Name of the RPC method to subscribe to (e.g. `foo_sub`).
 				let rpc_sub_name = self.rpc_identifier(&sub.name);
+				// Name of `method` in the subscription response.
+				let rpc_notif_name_override = sub.notif_name_override.as_ref().map(|m| self.rpc_identifier(m));
 				// Name of the RPC method to unsubscribe (e.g. `foo_sub`).
 				let rpc_unsub_name = self.rpc_identifier(&sub.unsubscribe);
 				// `parsing` is the code associated with parsing structure from the
@@ -184,8 +186,16 @@ impl RpcDescription {
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
 
+				let rpc_notif_name = match rpc_notif_name_override {
+					Some(notif) => {
+						check_name(&notif, rust_method_name.span());
+						notif
+					}
+					None => rpc_sub_name.clone(),
+				};
+
 				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_unsub_name, |params, sink, context| {
+					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, sink, context| {
 						#parsing
 						context.as_ref().#rust_method_name(sink, #params_seq)
 					})

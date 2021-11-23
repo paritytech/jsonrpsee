@@ -44,6 +44,13 @@ pub struct RpcError<'a> {
 	pub id: Id<'a>,
 }
 
+impl<'a> RpcError<'a> {
+	/// Create a new `RpcError`.
+	pub fn new(error: ErrorObject<'a>, id: Id<'a>) -> Self {
+		Self { jsonrpc: TwoPointZero, error, id }
+	}
+}
+
 impl<'a> fmt::Display for RpcError<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
@@ -64,6 +71,13 @@ pub struct ErrorObject<'a> {
 	pub data: Option<&'a RawValue>,
 }
 
+impl<'a> ErrorObject<'a> {
+	/// Create a new `ErrorObject` with optional data.
+	pub fn new(code: ErrorCode, data: Option<&'a RawValue>) -> ErrorObject<'a> {
+		Self { code, message: code.message(), data }
+	}
+}
+
 impl<'a> From<ErrorCode> for ErrorObject<'a> {
 	fn from(code: ErrorCode) -> Self {
 		Self { code, message: code.message(), data: None }
@@ -73,7 +87,7 @@ impl<'a> From<ErrorCode> for ErrorObject<'a> {
 impl<'a> PartialEq for ErrorObject<'a> {
 	fn eq(&self, other: &Self) -> bool {
 		let this_raw = self.data.map(|r| r.get());
-		let other_raw = self.data.map(|r| r.get());
+		let other_raw = other.data.map(|r| r.get());
 		self.code == other.code && self.message == other.message && this_raw == other_raw
 	}
 }
@@ -98,6 +112,8 @@ pub const SERVER_IS_BUSY_CODE: i32 = -32604;
 pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Unknown error.
 pub const UNKNOWN_ERROR_CODE: i32 = -32001;
+/// Invalid subscription error code.
+pub const INVALID_SUBSCRIPTION_CODE: i32 = -32002;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
@@ -210,6 +226,11 @@ impl serde::Serialize for ErrorCode {
 	{
 		serializer.serialize_i32(self.code())
 	}
+}
+
+/// Create a invalid subscription ID error.
+pub fn invalid_subscription_err(data: Option<&RawValue>) -> ErrorObject {
+	ErrorObject::new(ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE), data)
 }
 
 #[cfg(test)]

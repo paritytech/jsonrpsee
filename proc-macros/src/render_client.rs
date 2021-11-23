@@ -98,9 +98,12 @@ impl RpcDescription {
 		let parameters = self.encode_params(&method.params, &method.param_kind, &method.signature);
 		// Doc-comment to be associated with the method.
 		let docs = &method.docs;
+		// Mark the method as deprecated, if previously declared as so.
+		let deprecated = &method.deprecated;
 
 		let method = quote! {
 			#docs
+			#deprecated
 			async fn #rust_method_name(#rust_method_params) -> #returns {
 				self.#called_method(#rpc_method_name, #parameters).await
 			}

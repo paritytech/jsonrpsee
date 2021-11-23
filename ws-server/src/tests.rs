@@ -27,18 +27,27 @@
 #![cfg(test)]
 
 use crate::types::error::{CallError, Error};
+use crate::types::v2::{self, Response, RpcError};
+use crate::types::DeserializeOwned;
 use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::future::join;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::v2::error::invalid_subscription_err;
 use serde_json::Value as JsonValue;
 use std::{fmt, net::SocketAddr, time::Duration};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 fn init_logger() {
 	let _ = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env()).try_init();
+}
+
+fn deser_call<T: DeserializeOwned>(raw: String) -> T {
+	let out: Response<T> = serde_json::from_str(&raw).unwrap();
+	out.result
 }
 
 /// Applications can/should provide their own error.
@@ -105,6 +114,15 @@ async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 			let sleep: Vec<u64> = params.parse()?;
 			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
 			Ok("Yawn!")
+		})
+		.unwrap();
+	module
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
+			std::thread::spawn(move || loop {
+				let _ = sink;
+				std::thread::sleep(std::time::Duration::from_secs(30));
+			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -454,8 +472,12 @@ async fn register_methods_works() {
 	let mut module = RpcModule::new(());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
-	assert!(module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, _, _| Ok(())).is_ok());
-	assert!(module.register_subscription("subscribe_hello_again", "unsubscribe_hello", |_, _, _| Ok(())).is_err());
+	assert!(module
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| Ok(()))
+		.is_ok());
+	assert!(module
+		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| Ok(()))
+		.is_err());
 	assert!(
 		module.register_method("subscribe_hello_again", |_, _| Ok("lo")).is_ok(),
 		"Failed register_subscription should not have side-effects"
@@ -466,7 +488,7 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module.register_subscription("subscribe_hello", "subscribe_hello", |_, _, _| Ok(())),
+		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| Ok(())),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -568,4 +590,39 @@ async fn run_forever() {
 
 	// Send the shutdown request from one handle and await the server on the second one.
 	join(server_handle.clone().stop().unwrap(), server_handle).with_timeout(TIMEOUT).await.unwrap();
+}
+
+#[tokio::test]
+async fn unsubscribe_twice_should_indicate_error() {
+	init_logger();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	let sub_call = call("subscribe_hello", Vec::<()>::new(), Id::Num(0));
+	let sub_id: u64 = deser_call(client.send_request_text(sub_call).await.unwrap());
+
+	let unsub_call = call("unsubscribe_hello", vec![sub_id], Id::Num(1));
+	let unsub_1: String = deser_call(client.send_request_text(unsub_call).await.unwrap());
+	assert_eq!(&unsub_1, "Unsubscribed");
+
+	let unsub_call = call("unsubscribe_hello", vec![sub_id], Id::Num(2));
+	let unsub_2 = client.send_request_text(unsub_call).await.unwrap();
+	let unsub_2_err: RpcError = serde_json::from_str(&unsub_2).unwrap();
+	let sub_id = to_json_raw_value(&sub_id).unwrap();
+
+	let err = Some(to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).unwrap());
+	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(2)));
+}
+
+#[tokio::test]
+async fn unsubscribe_wrong_sub_id_type() {
+	init_logger();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	let unsub =
+		client.send_request_text(call("unsubscribe_hello", vec!["string_is_not_supported"], Id::Num(0))).await.unwrap();
+	let unsub_2_err: RpcError = serde_json::from_str(&unsub).unwrap();
+	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be integer").unwrap());
+	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(0)));
 }

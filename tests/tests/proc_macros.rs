@@ -28,7 +28,11 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
+use jsonrpsee::{
+	http_client::HttpClientBuilder, http_server::HttpServerBuilder, types::Error, ws_client::*,
+	ws_server::WsServerBuilder,
+};
+
 use serde_json::value::RawValue;
 
 mod rpc_impl {
@@ -304,4 +308,19 @@ async fn multiple_blocking_calls_overlap() {
 
 	// Each request takes 50ms, added 10ms margin for scheduling
 	assert!(elapsed < Duration::from_millis(60), "Expected less than 60ms, got {:?}", elapsed);
+}
+
+#[tokio::test]
+async fn subscriptions_do_not_work_for_http_servers() {
+	let htserver = HttpServerBuilder::default().build("127.0.0.1:0").unwrap();
+	let addr = htserver.local_addr().unwrap();
+	let htserver_url = format!("http://{}", addr);
+	let _handle = htserver.start(RpcServerImpl.into_rpc()).unwrap();
+
+	let htclient = HttpClientBuilder::default().build(&htserver_url).unwrap();
+
+	assert_eq!(htclient.sync_method().await.unwrap(), 10);
+	assert!(htclient.sub().await.is_err());
+	assert!(matches!(htclient.sub().await, Err(Error::HttpNotImplemented)));
+	assert_eq!(htclient.sync_method().await.unwrap(), 10);
 }

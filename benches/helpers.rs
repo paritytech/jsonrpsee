@@ -76,7 +76,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 	let server = HttpServerBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.custom_tokio_runtime(handle)
-		.build("127.0.0.1:0".parse().unwrap())
+		.build("127.0.0.1:0")
 		.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
@@ -101,7 +101,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws
 	module.register_method(SYNC_METHOD_NAME, |_, _| Ok("lo")).unwrap();
 	module.register_async_method(ASYNC_METHOD_NAME, |_, _| async { Ok("lo") }).unwrap();
 	module
-		.register_subscription(SUB_METHOD_NAME, UNSUB_METHOD_NAME, |_params, mut sink, _ctx| {
+		.register_subscription(SUB_METHOD_NAME, SUB_METHOD_NAME, UNSUB_METHOD_NAME, |_params, mut sink, _ctx| {
 			let x = "Hello";
 			tokio::spawn(async move { sink.send(&x) });
 			Ok(())
