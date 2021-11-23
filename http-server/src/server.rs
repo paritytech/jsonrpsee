@@ -41,7 +41,7 @@ use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, prepare_error, MethodSink},
 	resource_limiting::Resources,
-	rpc_module::Methods,
+	rpc_module::{MethodResult, Methods},
 };
 
 use serde_json::value::RawValue;
@@ -252,7 +252,9 @@ impl Server {
 						if is_single {
 							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								if let Some(fut) = methods.execute_with_resources(&sink, req, 0, &resources) {
+								if let Some((_, MethodResult::Async(fut))) =
+									methods.execute_with_resources(&sink, req, 0, &resources)
+								{
 									fut.await;
 								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
@@ -265,11 +267,12 @@ impl Server {
 						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							if !batch.is_empty() {
-								join_all(
-									batch
-										.into_iter()
-										.filter_map(|req| methods.execute_with_resources(&sink, req, 0, &resources)),
-								)
+								join_all(batch.into_iter().filter_map(|req| {
+									match methods.execute_with_resources(&sink, req, 0, &resources) {
+										Some((_, MethodResult::Async(fut))) => Some(fut),
+										_ => None,
+									}
+								}))
 								.await;
 							} else {
 								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an

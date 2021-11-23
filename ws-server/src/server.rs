@@ -49,7 +49,7 @@ use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_utils::server::middleware::Middleware;
 use jsonrpsee_utils::server::resource_limiting::Resources;
-use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
+use jsonrpsee_utils::server::rpc_module::{ConnectionId, MethodResult, Methods};
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
@@ -354,19 +354,23 @@ async fn background_task(
 
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
-					if let Some(fut) = methods.execute_with_resources(&sink, req, conn_id, &resources) {
-						let request_start = request_start;
-
-						let fut = async move {
-							fut.await;
-							middleware.on_result("TODO", true, request_start);
+					match methods.execute_with_resources(&sink, req, conn_id, &resources) {
+						Some((name, MethodResult::Sync(success))) => {
+							middleware.on_result(name, success, request_start);
 							middleware.on_response(request_start);
-						};
+						}
+						Some((name, MethodResult::Async(fut))) => {
+							let request_start = request_start;
 
-						method_executors.add(fut.boxed());
-					} else {
-						middleware.on_result("TODO", true, request_start);
-						middleware.on_response(request_start);
+							let fut = async move {
+								let success = fut.await;
+								middleware.on_result(name, success, request_start);
+								middleware.on_response(request_start);
+							};
+
+							method_executors.add(fut.boxed());
+						}
+						None => (),
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
@@ -392,15 +396,16 @@ async fn background_task(
 						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
 							join_all(batch.into_iter().filter_map(move |req| {
-								if let Some(fut) = methods.execute_with_resources(&sink_batch, req, conn_id, resources)
-								{
-									Some(async move {
-										fut.await;
-										middleware.on_result("TODO", true, request_start);
-									})
-								} else {
-									middleware.on_result("TODO", true, request_start);
-									None
+								match methods.execute_with_resources(&sink_batch, req, conn_id, resources) {
+									Some((name, MethodResult::Sync(success))) => {
+										middleware.on_result(name, success, request_start);
+										None
+									}
+									Some((name, MethodResult::Async(fut))) => Some(async move {
+										let success = fut.await;
+										middleware.on_result(name, success, request_start);
+									}),
+									None => None,
 								}
 							}))
 							.await;
@@ -424,7 +429,9 @@ async fn background_task(
 
 				method_executors.add(Box::pin(fut));
 			}
-			_ => sink.send_error(Id::Null, ErrorCode::ParseError.into()),
+			_ => {
+				sink.send_error(Id::Null, ErrorCode::ParseError.into());
+			}
 		}
 	}
 

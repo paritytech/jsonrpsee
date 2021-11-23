@@ -103,7 +103,7 @@ impl MethodSink {
 
 	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
 	/// an error will be sent instead.
-	pub fn send_response(&self, id: Id, result: impl Serialize) {
+	pub fn send_response(&self, id: Id, result: impl Serialize) -> bool {
 		let mut writer = BoundedWriter::new(self.max_response_size as usize);
 
 		let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result })
@@ -130,28 +130,33 @@ impl MethodSink {
 		};
 
 		if let Err(err) = self.tx.unbounded_send(json) {
-			tracing::error!("Error sending response to the client: {:?}", err)
+			tracing::error!("Error sending response to the client: {:?}", err);
+			false
+		} else {
+			true
 		}
 	}
 
 	/// Send a JSON-RPC error to the client
-	pub fn send_error(&self, id: Id, error: ErrorObject) {
+	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
 		let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
 			Ok(json) => json,
 			Err(err) => {
 				tracing::error!("Error serializing error message: {:?}", err);
 
-				return;
+				return false;
 			}
 		};
 
 		if let Err(err) = self.tx.unbounded_send(json) {
 			tracing::error!("Could not send error response to the client: {:?}", err)
 		}
+
+		false
 	}
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
-	pub fn send_call_error(&self, id: Id, err: Error) {
+	pub fn send_call_error(&self, id: Id, err: Error) -> bool {
 		let (code, message, data) = match err {
 			Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
 			Error::Call(CallError::Failed(e)) => {

@@ -44,7 +44,7 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::collections::hash_map::Entry;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -53,10 +53,10 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId) -> bool>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, bool>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -96,6 +96,23 @@ enum MethodResources {
 pub struct MethodCallback {
 	callback: MethodKind,
 	resources: MethodResources,
+}
+
+/// Result of a method, either direct value or a future of one.
+pub enum MethodResult<T> {
+	/// Result by value
+	Sync(T),
+	/// Future of a value
+	Async(BoxFuture<'static, T>),
+}
+
+impl<T: Debug> Debug for MethodResult<T> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			MethodResult::Sync(result) => result.fmt(f),
+			MethodResult::Async(_) => f.write_str("<future>"),
+		}
+	}
 }
 
 /// Builder for configuring resources used by a method.
@@ -140,15 +157,15 @@ impl MethodCallback {
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(
 		&self,
-		tx: &MethodSink,
+		sink: &MethodSink,
 		req: Request<'_>,
 		conn_id: ConnectionId,
 		claimed: Option<ResourceGuard>,
-	) -> Option<BoxFuture<'static, ()>> {
+	) -> MethodResult<bool> {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
 
-		match &self.callback {
+		let result = match &self.callback {
 			MethodKind::Sync(callback) => {
 				tracing::trace!(
 					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
@@ -156,15 +173,16 @@ impl MethodCallback {
 					id,
 					conn_id
 				);
-				(callback)(id, params, tx, conn_id);
+
+				let result = (callback)(id, params, sink, conn_id);
 
 				// Release claimed resources
 				drop(claimed);
 
-				None
+				MethodResult::Sync(result)
 			}
 			MethodKind::Async(callback) => {
-				let tx = tx.clone();
+				let sink = sink.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
 				tracing::trace!(
@@ -174,9 +192,11 @@ impl MethodCallback {
 					conn_id
 				);
 
-				Some((callback)(id, params, tx, claimed))
+				MethodResult::Async((callback)(id, params, sink, claimed))
 			}
-		}
+		};
+
+		result
 	}
 }
 
@@ -280,19 +300,20 @@ impl Methods {
 		self.callbacks.get(method_name)
 	}
 
-	/// TODO
+	/// Returns the method callback along with its name. The returned name is same as the
+	/// `method_name`, but its lifetime bound is `'static`.
 	pub fn method_with_name(&self, method_name: &str) -> Option<(&'static str, &MethodCallback)> {
 		self.callbacks.get_key_value(method_name).map(|(k, v)| (*k, v))
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, sink: &MethodSink, req: Request, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, sink: &MethodSink, req: Request, conn_id: ConnectionId) -> MethodResult<bool> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(sink, req, conn_id, None),
 			None => {
 				sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-				None
+				MethodResult::Sync(false)
 			}
 		}
 	}
@@ -304,15 +325,15 @@ impl Methods {
 		req: Request,
 		conn_id: ConnectionId,
 		resources: &Resources,
-	) -> Option<BoxFuture<'static, ()>> {
+	) -> Option<(&'static str, MethodResult<bool>)> {
 		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
-		match self.callbacks.get(&*req.method) {
-			Some(callback) => match callback.claim(&req.method, resources) {
-				Ok(guard) => callback.execute(sink, req, conn_id, Some(guard)),
+		match self.callbacks.get_key_value(&*req.method) {
+			Some((&name, callback)) => match callback.claim(&req.method, resources) {
+				Ok(guard) => Some((name, callback.execute(sink, req, conn_id, Some(guard)))),
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
 					sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-					None
+					Some((name, MethodResult::Sync(false)))
 				}
 			},
 			None => {
@@ -343,7 +364,7 @@ impl Methods {
 		let (tx, mut rx) = mpsc::unbounded();
 		let sink = MethodSink::new(tx);
 
-		if let Some(fut) = self.execute(&sink, req, 0) {
+		if let MethodResult::Async(fut) = self.execute(&sink, req, 0) {
 			fut.await;
 		}
 
@@ -361,7 +382,7 @@ impl Methods {
 		let (tx, mut rx) = mpsc::unbounded();
 		let sink = MethodSink::new(tx.clone());
 
-		if let Some(fut) = self.execute(&sink, req, 0) {
+		if let MethodResult::Async(fut) = self.execute(&sink, req, 0) {
 			fut.await;
 		}
 		let response = rx.next().await.expect("Could not establish subscription.");
@@ -428,11 +449,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_sync(Arc::new(move |id, params, sink, _| {
-				match callback(params, &*ctx) {
-					Ok(res) => sink.send_response(id, res),
-					Err(err) => sink.send_call_error(id, err),
-				};
+			MethodCallback::new_sync(Arc::new(move |id, params, sink, _| match callback(params, &*ctx) {
+				Ok(res) => sink.send_response(id, res),
+				Err(err) => sink.send_call_error(id, err),
 			})),
 		)?;
 
@@ -456,13 +475,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			MethodCallback::new_async(Arc::new(move |id, params, sink, claimed| {
 				let ctx = ctx.clone();
 				let future = async move {
-					match callback(params, ctx).await {
+					let result = match callback(params, ctx).await {
 						Ok(res) => sink.send_response(id, res),
 						Err(err) => sink.send_call_error(id, err),
 					};
 
 					// Release claimed resources
 					drop(claimed);
+
+					result
 				};
 				future.boxed()
 			})),
@@ -490,16 +511,22 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let ctx = ctx.clone();
 
 				tokio::task::spawn_blocking(move || {
-					match callback(params, ctx) {
+					let result = match callback(params, ctx) {
 						Ok(res) => sink.send_response(id, res),
 						Err(err) => sink.send_call_error(id, err),
 					};
 
 					// Release claimed resources
 					drop(claimed);
+
+					result
 				})
-				.map(|err| {
-					tracing::error!("Join error for blocking RPC method: {:?}", err);
+				.map(|result| match result {
+					Ok(r) => r,
+					Err(err) => {
+						tracing::error!("Join error for blocking RPC method: {:?}", err);
+						false
+					}
 				})
 				.boxed()
 			})),
@@ -582,6 +609,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							id
 						);
 						method_sink.send_error(id, ErrorCode::ServerError(-1).into());
+						false
+					} else {
+						true
 					}
 				})),
 			);
@@ -600,11 +630,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								id
 							);
 							sink.send_error(id, ErrorCode::ServerError(-1).into());
-							return;
+							return false;
 						}
 					};
 					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					sink.send_response(id, "Unsubscribed");
+					sink.send_response(id, "Unsubscribed")
 				})),
 			);
 		}
