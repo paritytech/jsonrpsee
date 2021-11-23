@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.5.0] – 2021-11-23
+
+v0.5 is a breaking release
+
 ## [v0.4.1] – 2021-10-12
 
 The v0.4.1 release is a bug fix.
