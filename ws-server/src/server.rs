@@ -36,9 +36,10 @@ use crate::types::{
 	TEN_MB_SIZE_BYTES,
 };
 use futures_channel::mpsc;
+use futures_util::future::join_all;
 use futures_util::future::FutureExt;
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::{self, StreamExt};
+use futures_util::stream::StreamExt;
 use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
@@ -46,6 +47,7 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use jsonrpsee_utils::server::helpers::{collect_batch_response, prepare_error, MethodSink};
+use jsonrpsee_utils::server::middleware::Middleware;
 use jsonrpsee_utils::server::resource_limiting::Resources;
 use jsonrpsee_utils::server::rpc_module::{ConnectionId, Methods};
 
@@ -54,14 +56,15 @@ const MAX_CONNECTIONS: u64 = 100;
 
 /// A WebSocket JSON RPC server.
 #[derive(Debug)]
-pub struct Server {
+pub struct Server<M = ()> {
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
 	resources: Resources,
+	middleware: M,
 }
 
-impl Server {
+impl<M: Middleware> Server<M> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
@@ -88,6 +91,7 @@ impl Server {
 	async fn start_inner(self, methods: Methods) {
 		let stop_monitor = self.stop_monitor;
 		let resources = self.resources;
+		let middleware = self.middleware;
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
@@ -118,6 +122,7 @@ impl Server {
 							resources: &resources,
 							cfg,
 							stop_monitor: &stop_monitor,
+							middleware: middleware.clone(),
 						},
 					)));
 
@@ -184,7 +189,7 @@ where
 	}
 }
 
-enum HandshakeResponse<'a> {
+enum HandshakeResponse<'a, M> {
 	Reject {
 		status_code: u16,
 	},
@@ -194,10 +199,14 @@ enum HandshakeResponse<'a> {
 		resources: &'a Resources,
 		cfg: &'a Settings,
 		stop_monitor: &'a StopMonitor,
+		middleware: M,
 	},
 }
 
-async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -> Result<(), Error> {
+async fn handshake<M>(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_, M>) -> Result<(), Error>
+where
+	M: Middleware,
+{
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
@@ -214,7 +223,7 @@ async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -
 
 			Ok(())
 		}
-		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor } => {
+		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor, middleware } => {
 			tracing::debug!("Accepting new connection: {}", conn_id);
 			let key = {
 				let req = server.receive_request().await?;
@@ -244,6 +253,7 @@ async fn handshake(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_>) -
 				resources.clone(),
 				cfg.max_request_body_size,
 				stop_monitor.clone(),
+				middleware,
 			))
 			.await;
 
@@ -262,6 +272,7 @@ async fn background_task(
 	resources: Resources,
 	max_request_body_size: u32,
 	stop_server: StopMonitor,
+	middleware: impl Middleware,
 ) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
 	let mut builder = server.into_builder();
@@ -294,6 +305,7 @@ async fn background_task(
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
+	let middleware = &middleware;
 
 	loop {
 		data.clear();
@@ -333,19 +345,33 @@ async fn background_task(
 
 		tracing::debug!("recv {} bytes", data.len());
 
+		let request_start = middleware.on_request();
+
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
+					middleware.on_call(req.method.as_ref());
+
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
-					if let Some(fut) =
-						methods.execute_with_resources(&sink, req, conn_id, &resources)
-					{
-						method_executors.add(fut);
+					if let Some(fut) = methods.execute_with_resources(&sink, req, conn_id, &resources) {
+						let request_start = request_start;
+
+						let fut = async move {
+							fut.await;
+							middleware.on_result("TODO", true, request_start);
+							middleware.on_response(request_start);
+						};
+
+						method_executors.add(fut.boxed());
+					} else {
+						middleware.on_result("TODO", true, request_start);
+						middleware.on_response(request_start);
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
 					sink.send_error(id, code.into());
+					middleware.on_response(request_start);
 				}
 			}
 			Some(b'[') => {
@@ -365,32 +391,34 @@ async fn background_task(
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
-							let methods_stream = stream::iter(batch.into_iter().filter_map(|req| {
-								methods.execute_with_resources(
-									&sink_batch,
-									req,
-									conn_id,
-									resources,
-								)
-							}));
+							join_all(batch.into_iter().filter_map(move |req| {
+								if let Some(fut) = methods.execute_with_resources(&sink_batch, req, conn_id, resources)
+								{
+									Some(async move {
+										fut.await;
+										middleware.on_result("TODO", true, request_start);
+									})
+								} else {
+									middleware.on_result("TODO", true, request_start);
+									None
+								}
+							}))
+							.await;
 
-							let results = methods_stream
-								.for_each_concurrent(None, |item| item)
-								.then(|_| {
-									rx_batch.close();
-									collect_batch_response(rx_batch)
-								})
-								.await;
+							rx_batch.close();
+							let results = collect_batch_response(rx_batch).await;
 
 							if let Err(err) = sink.send_raw(results) {
 								tracing::error!("Error sending batch response to the client: {:?}", err)
 							}
 						} else {
 							sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
+							middleware.on_response(request_start);
 						}
 					} else {
 						let (id, code) = prepare_error(&d);
 						sink.send_error(id, code.into());
+						middleware.on_response(request_start);
 					}
 				};
 
@@ -568,7 +596,7 @@ impl Builder {
 		let listener = TcpListener::bind(addr).await?;
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
-		Ok(Server { listener, cfg: self.settings, stop_monitor, resources })
+		Ok(Server { listener, cfg: self.settings, stop_monitor, resources, middleware: () })
 	}
 }
 

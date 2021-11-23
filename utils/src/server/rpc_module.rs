@@ -55,9 +55,8 @@ use std::sync::Arc;
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
 pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
-pub type AsyncMethod<'a> = Arc<
-	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, ()>,
->;
+pub type AsyncMethod<'a> =
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -281,13 +280,13 @@ impl Methods {
 		self.callbacks.get(method_name)
 	}
 
+	/// TODO
+	pub fn method_with_name(&self, method_name: &str) -> Option<(&'static str, &MethodCallback)> {
+		self.callbacks.get_key_value(method_name).map(|(k, v)| (*k, v))
+	}
+
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(
-		&self,
-		sink: &MethodSink,
-		req: Request,
-		conn_id: ConnectionId,
-	) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, sink: &MethodSink, req: Request, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(sink, req, conn_id, None),

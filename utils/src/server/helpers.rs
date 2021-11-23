@@ -93,18 +93,12 @@ pub struct MethodSink {
 impl MethodSink {
 	/// Create a new `MethodSink` with unlimited response size
 	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {
-		MethodSink {
-			tx,
-			max_response_size: u32::MAX,
-		}
+		MethodSink { tx, max_response_size: u32::MAX }
 	}
 
 	/// Create a new `MethodSink` with a limited response size
 	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32) -> Self {
-		MethodSink {
-			tx,
-			max_response_size,
-		}
+		MethodSink { tx, max_response_size }
 	}
 
 	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
@@ -112,7 +106,8 @@ impl MethodSink {
 	pub fn send_response(&self, id: Id, result: impl Serialize) {
 		let mut writer = BoundedWriter::new(self.max_response_size as usize);
 
-		let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
+		let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result })
+		{
 			Ok(_) => {
 				// Safety - serde_json does not emit invalid UTF-8.
 				unsafe { String::from_utf8_unchecked(writer.into_bytes()) }
@@ -159,7 +154,9 @@ impl MethodSink {
 	pub fn send_call_error(&self, id: Id, err: Error) {
 		let (code, message, data) = match err {
 			Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
-			Error::Call(CallError::Failed(e)) => (ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None),
+			Error::Call(CallError::Failed(e)) => {
+				(ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None)
+			}
 			Error::Call(CallError::Custom { code, message, data }) => (code.into(), message, data),
 			// This should normally not happen because the most common use case is to
 			// return `Error::Call` in `register_async_method`.
