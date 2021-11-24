@@ -515,7 +515,6 @@ impl<M> Builder<M> {
 		Builder { settings: Default::default(), resources: Default::default(), middleware }
 	}
 
-
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
