@@ -31,16 +31,23 @@ use jsonrpsee::{
 	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
+use std::sync::atomic;
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 struct ManInTheMiddle {
-	when: u64,
+	when: atomic::AtomicU64,
+}
+
+impl Clone for ManInTheMiddle {
+	fn clone(&self) -> Self {
+		ManInTheMiddle { when: atomic::AtomicU64::new(self.when.load(atomic::Ordering::SeqCst)) }
+	}
 }
 
 impl middleware::Middleware for ManInTheMiddle {
 	type Instant = u64;
 	fn on_request(&self) -> Self::Instant {
-		self.when + 1
+		self.when.fetch_add(1, atomic::Ordering::SeqCst)
 	}
 
 	fn on_call(&self, name: &str) {
