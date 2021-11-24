@@ -502,12 +502,14 @@ impl Default for Builder<()> {
 	}
 }
 
-impl<M> Builder<M> {
+impl Builder {
 	/// Build a default server.
-	pub fn new() -> Builder<()> {
+	pub fn new() -> Self {
 		Default::default()
 	}
+}
 
+impl<M> Builder<M> {
 	/// Build a server with the specified [`Middleware`].
 	pub fn with_middleware(middleware: M) -> Builder<M> {
 		Builder { settings: Default::default(), resources: Default::default(), middleware }
