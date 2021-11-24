@@ -415,6 +415,8 @@ async fn background_task(
 
 							if let Err(err) = sink.send_raw(results) {
 								tracing::error!("Error sending batch response to the client: {:?}", err)
+							} else {
+								middleware.on_response(request_start);
 							}
 						} else {
 							sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
