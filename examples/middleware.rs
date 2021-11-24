@@ -26,15 +26,15 @@
 
 use jsonrpsee::{
 	types::traits::Client,
+	utils::server::middleware,
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
-	utils::server::middleware,
 };
 use std::net::SocketAddr;
 
 #[derive(Clone, Default)]
 struct ManInTheMiddle {
-	when: u64
+	when: u64,
 }
 
 impl middleware::Middleware for ManInTheMiddle {
@@ -79,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
 	Error: Parse error: invalid type: string "lo", expected unit
 
 	Caused by:
-    	invalid type: string "lo", expected unit
+		invalid type: string "lo", expected unit
 	 */
 	let _ = client.request("say_hello", None).await?;
 

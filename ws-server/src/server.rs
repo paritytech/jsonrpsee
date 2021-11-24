@@ -489,21 +489,16 @@ impl Default for Settings {
 }
 
 /// Builder to configure and create a JSON-RPC Websocket server
-// #[derive(Debug, Default)]
 #[derive(Debug)]
-pub struct Builder<M> {
+pub struct Builder<M = ()> {
 	settings: Settings,
 	resources: Resources,
 	middleware: M,
 }
 
-impl<M: Default> Default for Builder<M> {
+impl Default for Builder<()> {
 	fn default() -> Self {
-		Self {
-			settings: Default::default(),
-			resources: Default::default(),
-			middleware: Default::default(),
-		}
+		Self { settings: Default::default(), resources: Default::default(), middleware: () }
 	}
 }
 
@@ -610,10 +605,9 @@ impl<M> Builder<M> {
 		self
 	}
 
-	/// TODO: (dp)
-	pub fn with_middleware(mut self, m: M) -> Self {
-		self.middleware = m;
-		self
+	/// Add a [`Middleware`] to the server.
+	pub fn with_middleware<MM>(self, middleware: MM) -> Builder<MM> {
+		Builder { settings: self.settings, resources: self.resources, middleware }
 	}
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	///
