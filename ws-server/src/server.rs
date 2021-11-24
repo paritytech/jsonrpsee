@@ -56,7 +56,7 @@ const MAX_CONNECTIONS: u64 = 100;
 
 /// A WebSocket JSON RPC server.
 #[derive(Debug)]
-pub struct Server<M = ()> {
+pub struct Server<M> {
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
@@ -489,13 +489,32 @@ impl Default for Settings {
 }
 
 /// Builder to configure and create a JSON-RPC Websocket server
-#[derive(Debug, Default)]
-pub struct Builder {
+#[derive(Debug)]
+pub struct Builder<M = ()> {
 	settings: Settings,
 	resources: Resources,
+	middleware: M,
+}
+
+impl Default for Builder<()> {
+	fn default() -> Self {
+		Self { settings: Default::default(), resources: Default::default(), middleware: () }
+	}
 }
 
 impl Builder {
+	/// Build a default server.
+	pub fn new() -> Self {
+		Default::default()
+	}
+}
+
+impl<M> Builder<M> {
+	/// Build a server with the specified [`Middleware`].
+	pub fn with_middleware(middleware: M) -> Self {
+		Builder { settings: Default::default(), resources: Default::default(), middleware }
+	}
+
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -614,11 +633,11 @@ impl Builder {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
-		Ok(Server { listener, cfg: self.settings, stop_monitor, resources, middleware: () })
+		Ok(Server { listener, cfg: self.settings, stop_monitor, resources, middleware: self.middleware })
 	}
 }
 
