@@ -503,6 +503,17 @@ impl Default for Builder<()> {
 }
 
 impl<M> Builder<M> {
+	/// Build a default server.
+	pub fn new() -> Builder<()> {
+		Default::default()
+	}
+
+	/// Build a server with the specified [`Middleware`].
+	pub fn with_middleware(middleware: M) -> Builder<M> {
+		Builder { settings: Default::default(), resources: Default::default(), middleware }
+	}
+
+
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -605,10 +616,6 @@ impl<M> Builder<M> {
 		self
 	}
 
-	/// Add a [`Middleware`] to the server.
-	pub fn with_middleware<MM>(self, middleware: MM) -> Builder<MM> {
-		Builder { settings: self.settings, resources: self.resources, middleware }
-	}
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	///
 	/// ```rust

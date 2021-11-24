@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let m = ManInTheMiddle::default();
-	let server = WsServerBuilder::default().with_middleware(m).build("127.0.0.1:0").await?;
+	let server = WsServerBuilder::with_middleware(m).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
