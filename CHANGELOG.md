@@ -41,6 +41,7 @@ v0.5 is a breaking release
 - Periodically wake DriverSelect so we can poll whether or not stop had been called. [#556](https://github.com/paritytech/jsonrpsee/pull/556)
 - Implement SubscriptionClient for HttpClient [#563](https://github.com/paritytech/jsonrpsee/pull/563)
 - fix: better log for failed unsubscription call [#575](https://github.com/paritytech/jsonrpsee/pull/575)
+
 ## [v0.4.1] – 2021-10-12
 
 The v0.4.1 release is a bug fix.
