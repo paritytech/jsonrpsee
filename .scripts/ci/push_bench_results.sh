@@ -19,6 +19,6 @@ while IFS= read -r line
 do
   BENCH_NAME=$(echo $line | cut -f 2 -d ' ')
   BENCH_RESULT=$(echo $line | cut -f 5 -d ' ')
-  curl -d 'benchmark{project="'${CI_PROJECT_NAME}'",metric="'$BENCH_NAME'"} '$BENCH_RESULT'' \
+  curl -d 'parity_benchmark_result_ns{project="'${CI_PROJECT_NAME}'",metric="'$BENCH_NAME'"} '$BENCH_RESULT'' \
     -X POST 'http://vm-longterm.parity-build.parity.io/api/v1/import/prometheus'
 done < "$INPUT"
