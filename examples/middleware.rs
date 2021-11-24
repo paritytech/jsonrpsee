@@ -78,17 +78,7 @@ async fn main() -> anyhow::Result<()> {
 	tracing::info!("response: {:?}", response);
 	// TODO: This prints `They called 'blabla'` but nothing more. I expected the `on_response` callback to be called too?
 	let _response: Result<String, _> = client.request("blabla", None).await;
-	// TODO: Something's odd here. This prints:
-	/*
-	They called 'say_hello'
-	call=say_hello, worked? true, when? 1
-	Response started_at=1
-	Error: Parse error: invalid type: string "lo", expected unit
-
-	Caused by:
-		invalid type: string "lo", expected unit
-	 */
-	let _ = client.request("say_hello", None).await?;
+	let _ = client.request::<String>("say_hello", None).await?;
 
 	Ok(())
 }
