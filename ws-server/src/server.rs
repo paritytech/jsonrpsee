@@ -511,7 +511,7 @@ impl Builder {
 
 impl<M> Builder<M> {
 	/// Build a server with the specified [`Middleware`].
-	pub fn with_middleware(middleware: M) -> Builder<M> {
+	pub fn with_middleware(middleware: M) -> Self {
 		Builder { settings: Default::default(), resources: Default::default(), middleware }
 	}
 
