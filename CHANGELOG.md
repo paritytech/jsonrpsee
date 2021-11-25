@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.5.1] – 2021-11-26
+
+The v0.5.1 release is a bug fix.
+
+### [Fixed]
+
+- rpc error: support escaped strings [#578](https://github.com/paritytech/jsonrpsee/pull/578)
+
 ## [v0.5.0] – 2021-11-23
 
 v0.5 is a breaking release
