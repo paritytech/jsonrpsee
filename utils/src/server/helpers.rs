@@ -98,7 +98,7 @@ pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize, max_respon
 				let data = to_json_raw_value(&format!("Exceeded max limit {}", max_response_size)).ok();
 				let err = ErrorObject {
 					code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
-					message: OVERSIZED_RESPONSE_MSG,
+					message: OVERSIZED_RESPONSE_MSG.into(),
 					data: data.as_deref(),
 				};
 				return send_error(id, tx, err);
@@ -140,7 +140,7 @@ pub fn send_call_error(id: Id, tx: &MethodSink, err: Error) {
 		e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
 	};
 
-	let err = ErrorObject { code, message: &message, data: data.as_deref() };
+	let err = ErrorObject { code, message: message.into(), data: data.as_deref() };
 
 	send_error(id, tx, err)
 }
