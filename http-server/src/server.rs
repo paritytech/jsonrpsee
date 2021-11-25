@@ -67,7 +67,32 @@ pub struct Builder<M = ()> {
 	middleware: M,
 }
 
+impl Default for Builder {
+	fn default() -> Self {
+		Self::with_middleware(())
+	}
+}
+
+impl Builder {
+	/// Create a default server builder.
+	pub fn new() -> Self {
+		Self::with_middleware(())
+	}
+}
+
 impl<M> Builder<M> {
+	/// Create a server builder with the specified [`Middleware`].
+	pub fn with_middleware(middleware: M) -> Self {
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			resources: Resources::default(),
+			access_control: AccessControl::default(),
+			keep_alive: true,
+			tokio_runtime: None,
+			middleware,
+		}
+	}
+
 	/// Sets the maximum size of a request body in bytes (default is 10 MiB).
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
@@ -167,19 +192,6 @@ impl<M> Builder<M> {
 		let local_addr = listener.local_addr().ok();
 		let listener = hyper::Server::from_tcp(listener)?;
 		Ok((listener, local_addr))
-	}
-}
-
-impl Default for Builder {
-	fn default() -> Self {
-		Self {
-			max_request_body_size: TEN_MB_SIZE_BYTES,
-			resources: Resources::default(),
-			access_control: AccessControl::default(),
-			keep_alive: true,
-			tokio_runtime: None,
-			middleware: (),
-		}
 	}
 }
 

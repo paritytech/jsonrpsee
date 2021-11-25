@@ -500,19 +500,19 @@ pub struct Builder<M = ()> {
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self { settings: Default::default(), resources: Default::default(), middleware: () }
+		Self::with_middleware(())
 	}
 }
 
 impl Builder {
-	/// Build a default server.
+	/// Create a default server builder.
 	pub fn new() -> Self {
-		Default::default()
+		Self::with_middleware(())
 	}
 }
 
 impl<M> Builder<M> {
-	/// Build a server with the specified [`Middleware`].
+	/// Create a server builder with the specified [`Middleware`].
 	pub fn with_middleware(middleware: M) -> Self {
 		Builder { settings: Default::default(), resources: Default::default(), middleware }
 	}
