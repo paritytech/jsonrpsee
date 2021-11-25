@@ -498,7 +498,7 @@ pub struct Builder<M = ()> {
 	middleware: M,
 }
 
-impl Default for Builder<()> {
+impl Default for Builder {
 	fn default() -> Self {
 		Self { settings: Default::default(), resources: Default::default(), middleware: () }
 	}
