@@ -39,8 +39,8 @@ use jsonrpsee_types::{
 };
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
-	middleware::Middleware,
 	helpers::{collect_batch_response, prepare_error, MethodSink},
+	middleware::Middleware,
 	resource_limiting::Resources,
 	rpc_module::{MethodResult, Methods},
 };
@@ -302,13 +302,13 @@ impl<M: Middleware> Server<M> {
 									Some((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
 										middleware.on_response(request_start);
-									},
+									}
 									Some((name, MethodResult::Async(fut))) => {
 										let success = fut.await;
 
 										middleware.on_result(name, success, request_start);
 										middleware.on_response(request_start);
-									},
+									}
 									None => (),
 								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
