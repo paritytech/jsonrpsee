@@ -65,6 +65,7 @@ pub struct ErrorObject<'a> {
 	/// Code
 	pub code: ErrorCode,
 	/// Message
+	#[serde(borrow)]
 	pub message: Cow<'a, str>,
 	/// Optional data
 	#[serde(skip_serializing_if = "Option::is_none")]
