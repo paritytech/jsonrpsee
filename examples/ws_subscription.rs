@@ -26,50 +26,76 @@
 
 use jsonrpsee::{
 	rpc_params,
-	types::{traits::SubscriptionClient, Error, Subscription},
-	ws_client::WsClientBuilder,
+	types::{traits::SubscriptionClient, Error, JsonValue, Subscription},
+	ws_client::*,
 	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
 
-const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
 	tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let addr = run_server().await?;
-	let url = format!("ws://{}", addr);
+	let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 
-	let client = WsClientBuilder::default().build(&url).await?;
-	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
+	rt.block_on(async {
+		let addr = run_server().await.unwrap();
+		let ws_addr = format!("ws://{}", addr);
 
-	let mut i = 0;
-	while i <= NUM_SUBSCRIPTION_RESPONSES {
-		let r = subscribe_hello.next().await;
-		tracing::info!("received {:?}", r);
-		i += 1;
-	}
+		run_clients(true, ws_addr.clone()).await;
+		run_clients(false, ws_addr.clone()).await;
+	});
+
+	drop(rt);
 
 	Ok(())
+}
+
+async fn run_clients(graceful_shutdown: bool, addr: String) {
+	let mut tasks = Vec::new();
+
+	for _ in 0..100 {
+		let addr = addr.clone();
+		tasks.push(tokio::spawn(async move {
+			let (sender, receiver) = WsTransportClientBuilder::default().build(&addr).await.unwrap();
+			let client = ClientBuilder::default().build(sender, receiver);
+			let mut sub: Subscription<JsonValue> =
+				client.subscribe("state_subscribeStorage", rpc_params![], "state_unsubscribeStorage").await.unwrap();
+			let n = sub.next().await.unwrap().unwrap();
+			tracing::debug!("{:?}", n);
+
+			if !graceful_shutdown {
+				drop(client);
+			}
+		}));
+	}
+
+	futures::future::join_all(tasks).await;
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, mut sink, _| {
-		std::thread::spawn(move || loop {
-			if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello my friend") {
-				return;
-			}
-			std::thread::sleep(std::time::Duration::from_secs(1));
-		});
-		Ok(())
-	})?;
+	module.register_subscription(
+		"state_subscribeStorage",
+		"s_hello",
+		"state_unsubscribeStorage",
+		|_, mut sink, _| {
+			tokio::spawn(async move {
+				let mut i = 0_u64;
+				loop {
+					if let Err(Error::SubscriptionClosed(_)) = sink.send(&i) {
+						return;
+					}
+					i = i.saturating_add(1);
+					tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+				}
+			});
+			Ok(())
+		},
+	)?;
 	let addr = server.local_addr()?;
 	server.start(module)?;
 	Ok(addr)

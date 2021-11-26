@@ -1,5 +1,5 @@
 [package]
-name = "jsonrpsee-ws-client"
+name = "jsonrpsee-client-transport"
 version = "0.5.1"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
@@ -32,3 +32,6 @@ env_logger = "0.9"
 jsonrpsee-test-utils = { path = "../test-utils" }
 jsonrpsee-utils = { path = "../utils", features = ["client"] }
 tokio = { version = "1", features = ["macros"] }
+
+[features]
+ws = []

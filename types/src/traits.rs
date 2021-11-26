@@ -127,3 +127,34 @@ tuple_impls! {
 	15 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14)
 	16 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14 15 T15)
 }
+
+/// Transport interface to send data asynchronous.
+#[async_trait]
+/// Transport interface for an asyncronous client.
+pub trait TransportSender: Send + Sync + 'static {
+	/// Error.
+	type Error: std::error::Error + Send + Sync;
+
+	/// Send..
+	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
+
+	/// If the transport supports close messages.
+	async fn close(&mut self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+/// Transport interface to receive data asynchronous.
+#[async_trait]
+pub trait TransportReceiver: Send + Sync + 'static {
+	/// Error that occur during send or receiving a message.
+	type Error: std::error::Error + Send + Sync;
+
+	/// Receive.
+	async fn receive(&mut self) -> Result<String, Self::Error>;
+
+	/// If the transport supports close messages.
+	async fn close(&mut self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}

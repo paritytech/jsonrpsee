@@ -24,9 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{stream::EitherStream, types::CertificateStore};
+use crate::stream::EitherStream;
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
+use jsonrpsee_types::traits::{TransportReceiver, TransportSender};
+use jsonrpsee_types::{async_trait, CertificateStore, TEN_MB_SIZE_BYTES};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, Header, ServerResponse};
 use std::convert::TryInto;
@@ -61,10 +63,8 @@ pub struct Receiver {
 pub struct WsTransportClientBuilder<'a> {
 	/// What certificate store to use
 	pub certificate_store: CertificateStore,
-	/// Remote WebSocket target.
-	pub target: Target,
 	/// Timeout for the connection.
-	pub timeout: Duration,
+	pub connection_timeout: Duration,
 	/// Custom headers to pass during the HTTP handshake. If `None`, no
 	/// custom header is passed.
 	pub headers: Vec<Header<'a>>,
@@ -72,6 +72,52 @@ pub struct WsTransportClientBuilder<'a> {
 	pub max_request_body_size: u32,
 	/// Max number of redirections.
 	pub max_redirections: usize,
+}
+
+impl<'a> Default for WsTransportClientBuilder<'a> {
+	fn default() -> Self {
+		Self {
+			certificate_store: CertificateStore::Native,
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			connection_timeout: Duration::from_secs(10),
+			headers: Vec::new(),
+			max_redirections: 5,
+		}
+	}
+}
+
+impl<'a> WsTransportClientBuilder<'a> {
+	/// Set whether to use system certificates
+	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
+		self.certificate_store = certificate_store;
+		self
+	}
+
+	/// Set max request body size.
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.max_request_body_size = size;
+		self
+	}
+
+	/// Set connection timeout for the handshake.
+	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
+		self.connection_timeout = timeout;
+		self
+	}
+
+	/// Set a custom header passed to the server during the handshake.
+	///
+	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
+	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
+		self.headers.push(Header { name, value: value.as_bytes() });
+		self
+	}
+
+	/// Set the max number of redirections to perform until a connection is regarded as failed.
+	pub fn max_redirections(mut self, redirect: usize) -> Self {
+		self.max_redirections = redirect;
+		self
+	}
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -141,10 +187,13 @@ pub enum WsError {
 	ParseError(#[source] serde_json::error::Error),
 }
 
-impl Sender {
+#[async_trait]
+impl TransportSender for Sender {
+	type Error = WsError;
+
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub async fn send(&mut self, body: String) -> Result<(), WsError> {
+	async fn send(&mut self, body: String) -> Result<(), WsError> {
 		tracing::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
@@ -152,24 +201,30 @@ impl Sender {
 	}
 
 	/// Send a close message and close the connection.
-	pub async fn close(&mut self) -> Result<(), WsError> {
+	async fn close(&mut self) -> Result<(), WsError> {
 		self.inner.close().await.map_err(Into::into)
 	}
 }
 
-impl Receiver {
+#[async_trait]
+impl TransportReceiver for Receiver {
+	type Error = WsError;
+
 	/// Returns a `Future` resolving when the server sent us something back.
-	pub async fn next_response(&mut self) -> Result<Vec<u8>, WsError> {
+	async fn receive(&mut self) -> Result<String, WsError> {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
-		Ok(message)
+		let s = String::from_utf8(message).expect("Found invalid UTF-8");
+		Ok(s)
 	}
 }
 
 impl<'a> WsTransportClientBuilder<'a> {
 	/// Try to establish the connection.
-	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let connector = match self.target.mode {
+	pub async fn build(self, url: impl AsRef<str>) -> Result<(Sender, Receiver), WsHandshakeError> {
+		let uri: Uri = url.as_ref().parse().unwrap();
+		let target: Target = uri.try_into().unwrap();
+		let connector = match target.mode {
 			Mode::Tls => {
 				let tls_connector = build_tls_config(&self.certificate_store)?;
 				Some(tls_connector)
@@ -177,14 +232,14 @@ impl<'a> WsTransportClientBuilder<'a> {
 			Mode::Plain => None,
 		};
 
-		self.try_connect(connector).await
+		self.try_connect(connector, target).await
 	}
 
 	async fn try_connect(
 		self,
 		mut tls_connector: Option<TlsConnector>,
+		mut target: Target,
 	) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let mut target = self.target;
 		let mut err = None;
 
 		for _ in 0..self.max_redirections {
@@ -193,7 +248,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
-				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, &tls_connector).await {
+				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, &tls_connector).await {
 					Ok(stream) => stream,
 					Err(e) => {
 						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);

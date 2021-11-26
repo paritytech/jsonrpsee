@@ -48,10 +48,6 @@
 #[cfg(feature = "jsonrpsee-http-client")]
 pub use jsonrpsee_http_client as http_client;
 
-/// JSON-RPC WebSocket client.
-#[cfg(feature = "jsonrpsee-ws-client")]
-pub use jsonrpsee_ws_client as ws_client;
-
 /// JSON-RPC client convenience macro to build params.
 #[cfg(any(feature = "http-client", feature = "ws-client"))]
 pub use jsonrpsee_utils::rpc_params;
@@ -81,3 +77,10 @@ pub use http_server::tracing;
 
 #[cfg(all(feature = "ws-server", not(feature = "http-server")))]
 pub use ws_server::tracing;
+
+/// JSON-RPC WebSocket client.
+#[cfg(feature = "ws-client")]
+pub mod ws_client {
+	pub use jsonrpsee_client_transport::websocket::WsTransportClientBuilder;
+	pub use jsonrpsee_utils::client::{Client, ClientBuilder};
+}

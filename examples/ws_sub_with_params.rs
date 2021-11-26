@@ -27,7 +27,7 @@
 use jsonrpsee::{
 	rpc_params,
 	types::traits::SubscriptionClient,
-	ws_client::WsClientBuilder,
+	ws_client::*,
 	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
@@ -42,7 +42,8 @@ async fn main() -> anyhow::Result<()> {
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
-	let client = WsClientBuilder::default().build(&url).await?;
+	let (sender, receiver) = WsTransportClientBuilder::default().build(&url).await.unwrap();
+	let client = ClientBuilder::default().build(sender, receiver);
 
 	// Subscription with a single parameter
 	let mut sub_params_one =

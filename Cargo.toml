@@ -9,7 +9,6 @@ members = [
 	"tests",
 	"types",
 	"utils",
-	"ws-client",
 	"ws-server",
 	"proc-macros",
 ]

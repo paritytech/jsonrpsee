@@ -24,34 +24,52 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
-use crate::types::{
-	traits::{Client, SubscriptionClient},
-	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
-	BatchMessage, CertificateStore, Error, FrontToBack, RegisterNotificationMessage, RequestIdManager, RequestMessage,
-	Subscription, SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
+//! Shared utilities for `jsonrpsee` clients.
+
+mod helpers;
+mod manager;
+
+use futures_util::SinkExt;
+use jsonrpsee_types::traits::{
+	Client as ClientT, SubscriptionClient as SubscriptionClientT, TransportReceiver, TransportSender,
 };
-use crate::{
-	helpers::{
-		build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response,
-		process_notification, process_single_response, process_subscription_response, stop_subscription,
-	},
-	manager::RequestManager,
+
+use std::time::Duration;
+
+use futures_channel::{mpsc, oneshot};
+use futures_util::{future::Either, StreamExt};
+use helpers::*;
+use jsonrpsee_types::v2::{
+	Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse,
 };
-use async_trait::async_trait;
-use futures::{
-	channel::{mpsc, oneshot},
-	future::Either,
-	prelude::*,
-	sink::SinkExt,
+use jsonrpsee_types::{
+	async_trait, BatchMessage, DeserializeOwned, Error, FrontToBack, RegisterNotificationMessage, RequestIdManager,
+	RequestMessage, Subscription, SubscriptionKind, SubscriptionMessage,
 };
-use http::uri::{InvalidUri, Uri};
+use manager::RequestManager;
 use tokio::sync::Mutex;
 
-use serde::de::DeserializeOwned;
-use std::{convert::TryInto, time::Duration};
+#[doc(hidden)]
+pub mod __reexports {
+	pub use jsonrpsee_types::{to_json_value, v2::ParamsSer};
+}
 
-pub use soketto::handshake::client::Header;
+#[macro_export]
+/// Convert the given values to a [`jsonrpsee_types::v2::ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
+macro_rules! rpc_params {
+	($($param:expr),*) => {
+		{
+			let mut __params = vec![];
+			$(
+				__params.push($crate::client::__reexports::to_json_value($param).expect("json serialization is infallible; qed."));
+			)*
+			Some($crate::client::__reexports::ParamsSer::Array(__params))
+		}
+	};
+	() => {
+		None
+	}
+}
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -83,24 +101,6 @@ impl ErrorFromBack {
 	}
 }
 
-/// WebSocket client that works by maintaining a background task running in parallel.
-///
-/// It's possible that the background thread is terminated and this makes the client unusable.
-/// An error [`Error::RestartNeeded`] is returned if this happens and users has to manually
-/// handle dropping and restarting a new client.
-#[derive(Debug)]
-pub struct WsClient {
-	/// Channel to send requests to the background task.
-	to_back: mpsc::Sender<FrontToBack>,
-	/// If the background thread terminates the error is sent to this channel.
-	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
-	error: Mutex<ErrorFromBack>,
-	/// Request timeout. Defaults to 60sec.
-	request_timeout: Duration,
-	/// Request ID manager.
-	id_manager: RequestIdManager,
-}
-
 /// Builder for [`WsClient`].
 ///
 /// # Examples
@@ -123,62 +123,26 @@ pub struct WsClient {
 ///
 /// ```
 #[derive(Clone, Debug)]
-pub struct WsClientBuilder<'a> {
-	certificate_store: CertificateStore,
-	max_request_body_size: u32,
+pub struct ClientBuilder {
 	request_timeout: Duration,
-	connection_timeout: Duration,
-	headers: Vec<Header<'a>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
-	max_redirections: usize,
 }
 
-impl<'a> Default for WsClientBuilder<'a> {
+impl<'a> Default for ClientBuilder {
 	fn default() -> Self {
 		Self {
-			certificate_store: CertificateStore::Native,
-			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
-			connection_timeout: Duration::from_secs(10),
-			headers: Vec::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
-			max_redirections: 5,
 		}
 	}
 }
 
-impl<'a> WsClientBuilder<'a> {
-	/// Set whether to use system certificates
-	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
-		self.certificate_store = certificate_store;
-		self
-	}
-
-	/// Set max request body size.
-	pub fn max_request_body_size(mut self, size: u32) -> Self {
-		self.max_request_body_size = size;
-		self
-	}
-
+impl ClientBuilder {
 	/// Set request timeout (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
-		self
-	}
-
-	/// Set connection timeout for the handshake.
-	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
-		self.connection_timeout = timeout;
-		self
-	}
-
-	/// Set a custom header passed to the server during the handshake.
-	///
-	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
-	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
-		self.headers.push(Header { name, value: value.as_bytes() });
 		self
 	}
 
@@ -202,52 +166,42 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set the max number of redirections to perform until a connection is regarded as failed.
-	pub fn max_redirections(mut self, redirect: usize) -> Self {
-		self.max_redirections = redirect;
-		self
-	}
-
-	/// Build the client with specified URL to connect to.
-	/// You must provide the port number in the URL.
+	/// Build the client with given transport.
 	///
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build(self, uri: &'a str) -> Result<WsClient, Error> {
-		let certificate_store = self.certificate_store;
-		let max_capacity_per_subscription = self.max_notifs_per_subscription;
-		let max_concurrent_requests = self.max_concurrent_requests;
-		let request_timeout = self.request_timeout;
-		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
+	pub fn build<S: TransportSender, R: TransportReceiver>(self, sender: S, receiver: R) -> Client {
+		let (to_back, from_front) = mpsc::channel(99);
 		let (err_tx, err_rx) = oneshot::channel();
-
-		let uri: Uri = uri.parse().map_err(|e: InvalidUri| Error::Transport(e.into()))?;
-
-		let builder = WsTransportClientBuilder {
-			certificate_store,
-			target: uri.try_into().map_err(|e: WsHandshakeError| Error::Transport(e.into()))?,
-			timeout: self.connection_timeout,
-			headers: self.headers,
-			max_request_body_size: self.max_request_body_size,
-			max_redirections: self.max_redirections,
-		};
-
-		let (sender, receiver) = builder.build().await.map_err(|e| Error::Transport(e.into()))?;
+		let request_timeout = Duration::from_secs(30);
 
 		tokio::spawn(async move {
-			background_task(sender, receiver, from_front, err_tx, max_capacity_per_subscription).await;
+			background_task(sender, receiver, from_front, err_tx, 10).await;
 		});
-		Ok(WsClient {
+		Client {
 			to_back,
 			request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
-			id_manager: RequestIdManager::new(max_concurrent_requests),
-		})
+			id_manager: RequestIdManager::new(10),
+		}
 	}
 }
 
-impl WsClient {
+#[derive(Debug)]
+pub struct Client {
+	/// Channel to send requests to the background task.
+	to_back: mpsc::Sender<FrontToBack>,
+	/// If the background thread terminates the error is sent to this channel.
+	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
+	error: Mutex<ErrorFromBack>,
+	/// Request timeout. Defaults to 60sec.
+	request_timeout: Duration,
+	/// Request ID manager.
+	id_manager: RequestIdManager,
+}
+
+impl Client {
 	/// Checks if the client is connected to the target.
 	pub fn is_connected(&self) -> bool {
 		!self.to_back.is_closed()
@@ -263,14 +217,14 @@ impl WsClient {
 	}
 }
 
-impl Drop for WsClient {
+impl Drop for Client {
 	fn drop(&mut self) {
 		self.to_back.close_channel();
 	}
 }
 
 #[async_trait]
-impl Client for WsClient {
+impl ClientT for Client {
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_manager.next_request_id()?;
@@ -362,7 +316,7 @@ impl Client for WsClient {
 }
 
 #[async_trait]
-impl SubscriptionClient for WsClient {
+impl SubscriptionClientT for Client {
 	/// Send a subscription request to the server.
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
@@ -447,28 +401,28 @@ impl SubscriptionClient for WsClient {
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task(
-	mut sender: WsSender,
-	receiver: WsReceiver,
+async fn background_task<S: TransportSender, R: TransportReceiver>(
+	mut sender: S,
+	receiver: R,
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 ) {
 	let mut manager = RequestManager::new();
 
-	let backend_event = futures::stream::unfold(receiver, |mut receiver| async {
-		let res = receiver.next_response().await;
+	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
+		let res = receiver.receive().await;
 		Some((res, receiver))
 	});
 
-	futures::pin_mut!(backend_event);
+	futures_util::pin_mut!(backend_event);
 
 	loop {
 		let next_frontend = frontend.next();
 		let next_backend = backend_event.next();
-		futures::pin_mut!(next_frontend, next_backend);
+		futures_util::pin_mut!(next_frontend, next_backend);
 
-		match future::select(next_frontend, next_backend).await {
+		match futures_util::future::select(next_frontend, next_backend).await {
 			// User dropped the sender side of the channel.
 			// There is nothing to do just terminate.
 			Either::Left((None, _)) => {
@@ -559,7 +513,7 @@ async fn background_task(
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
-				if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
+				if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
 					tracing::debug!("[backend]: recv method_call {:?}", single);
 					match process_single_response(&mut manager, single, max_notifs_per_subscription) {
 						Ok(Some(unsub)) => {
@@ -573,19 +527,19 @@ async fn background_task(
 					}
 				}
 				// Subscription response.
-				else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(&raw) {
+				else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
 					tracing::debug!("[backend]: recv subscription {:?}", response);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
 				}
 				// Incoming Notification
-				else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(&raw) {
+				else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
 					tracing::debug!("[backend]: recv notification {:?}", notif);
 					let _ = process_notification(&mut manager, notif);
 				}
 				// Batch response.
-				else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(&raw) {
+				else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
 					tracing::debug!("[backend]: recv batch {:?}", batch);
 					if let Err(e) = process_batch_response(&mut manager, batch) {
 						let _ = front_error.send(e);
@@ -593,7 +547,7 @@ async fn background_task(
 					}
 				}
 				// Error response
-				else if let Ok(err) = serde_json::from_slice::<RpcError>(&raw) {
+				else if let Ok(err) = serde_json::from_str::<RpcError>(&raw) {
 					tracing::debug!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);
@@ -604,7 +558,7 @@ async fn background_task(
 				else {
 					tracing::debug!(
 						"[backend]: recv unparseable message: {:?}",
-						serde_json::from_slice::<serde_json::Value>(&raw)
+						serde_json::from_str::<serde_json::Value>(&raw)
 					);
 					let _ = front_error.send(Error::Custom("Unparsable response".into()));
 					break;
@@ -622,7 +576,4 @@ async fn background_task(
 			}
 		}
 	}
-
-	// Send close message to the server.
-	let _ = sender.close().await;
 }
