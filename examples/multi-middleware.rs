@@ -63,6 +63,7 @@ impl middleware::Middleware for Timings {
 /// Example middleware to keep a watch on the number of total threads started in the system.
 #[derive(Clone)]
 struct ThreadWatcher;
+
 impl middleware::Middleware for ThreadWatcher {
 	type Instant = isize;
 
