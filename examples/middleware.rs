@@ -31,23 +31,16 @@ use jsonrpsee::{
 	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
-use std::sync::atomic;
+use std::time::Instant;
 
-#[derive(Default)]
-struct ManInTheMiddle {
-	when: atomic::AtomicU64,
-}
-
-impl Clone for ManInTheMiddle {
-	fn clone(&self) -> Self {
-		ManInTheMiddle { when: atomic::AtomicU64::new(self.when.load(atomic::Ordering::SeqCst)) }
-	}
-}
+#[derive(Default, Clone)]
+struct ManInTheMiddle;
 
 impl middleware::Middleware for ManInTheMiddle {
-	type Instant = u64;
+	type Instant = Instant;
+
 	fn on_request(&self) -> Self::Instant {
-		self.when.fetch_add(1, atomic::Ordering::SeqCst)
+		Instant::now()
 	}
 
 	fn on_call(&self, name: &str) {
@@ -55,11 +48,12 @@ impl middleware::Middleware for ManInTheMiddle {
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("call={}, worked? {}, when? {}", name, succeess, started_at);
+		// println!("call={}, worked? {}, when? {}", name, succeess, started_at);
+		println!("call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
 	}
 
 	fn on_response(&self, started_at: Self::Instant) {
-		println!("Response started_at={}", started_at);
+		println!("Response duration {:?}", started_at.elapsed());
 	}
 }
 
@@ -75,7 +69,7 @@ async fn main() -> anyhow::Result<()> {
 
 	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", None).await?;
-	tracing::info!("response: {:?}", response);
+	println!("response: {:?}", response);
 	// TODO: This prints `They called 'blabla'` but nothing more. I expected the `on_response` callback to be called too?
 	let _response: Result<String, _> = client.request("blabla", None).await;
 	let _ = client.request::<String>("say_hello", None).await?;

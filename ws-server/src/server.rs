@@ -370,7 +370,7 @@ async fn background_task(
 
 							method_executors.add(fut.boxed());
 						}
-						None => (),
+						None => middleware.on_response(request_start),
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
