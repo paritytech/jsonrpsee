@@ -527,22 +527,22 @@ impl<M> Builder<M> {
 	/// use jsonrpsee_ws_server::WsServerBuilder;
 	/// use std::time::Instant;
 	///
+	/// #[derive(Clone)]
 	/// struct MyMiddleware;
 	///
-	/// impl Middelware for MyMiddleware {
+	/// impl Middleware for MyMiddleware {
 	///     type Instant = Instant;
 	///
 	///     fn on_request(&self) -> Instant {
 	///         Instant::now()
 	///     }
 	///
-	///     fn on_result(&self, method: &str, success: bool, started_at: Instant) {
-	///         println!("Call to '{}' took {:?}", started_at.elapsed());
+	///     fn on_result(&self, name: &str, success: bool, started_at: Instant) {
+	///         println!("Call to '{}' took {:?}", name, started_at.elapsed());
 	///     }
 	/// }
 	///
-	/// let builder = WsServerBuilder::with_middleware(());
-	/// builder.set_allowed_origins(["https://example.com"]);
+	/// let builder = WsServerBuilder::with_middleware(MyMiddleware);
 	/// ```
 	pub fn with_middleware(middleware: M) -> Self {
 		Builder { settings: Default::default(), resources: Default::default(), middleware }

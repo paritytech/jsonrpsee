@@ -32,7 +32,7 @@
 /// they need to do.
 ///
 /// See the [`WsServerBuilder::with_middleware`](../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.with_middleware)
-/// or the [`HttpServerBuilder::with_middleware`](../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.with_middleware) method
+/// or the [`HttpServerBuilder::with_middleware`](../../jsonrpsee_http_server/struct.HttpServerBuilder.html#method.with_middleware) method
 /// for examples.
 pub trait Middleware: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware

@@ -81,7 +81,30 @@ impl Builder {
 }
 
 impl<M> Builder<M> {
-	/// Create a server builder with the specified [`Middleware`].
+	/// Create a server builder with the specified [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
+	///
+	/// ```
+	/// use jsonrpsee_types::middleware::Middleware;
+	/// use jsonrpsee_http_server::HttpServerBuilder;
+	/// use std::time::Instant;
+	///
+	/// #[derive(Clone)]
+	/// struct MyMiddleware;
+	///
+	/// impl Middleware for MyMiddleware {
+	///     type Instant = Instant;
+	///
+	///     fn on_request(&self) -> Instant {
+	///         Instant::now()
+	///     }
+	///
+	///     fn on_result(&self, name: &str, success: bool, started_at: Instant) {
+	///         println!("Call to '{}' took {:?}", name, started_at.elapsed());
+	///     }
+	/// }
+	///
+	/// let builder = HttpServerBuilder::with_middleware(MyMiddleware);
+	/// ```
 	pub fn with_middleware(middleware: M) -> Self {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
