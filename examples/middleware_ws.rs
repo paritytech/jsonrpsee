@@ -44,15 +44,15 @@ impl middleware::Middleware for Timings {
 	}
 
 	fn on_call(&self, name: &str) {
-		println!("They called '{}'", name);
+		println!("[Middleware::on_call] '{}'", name);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
+		println!("[Middleware::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
 	}
 
 	fn on_response(&self, started_at: Self::Instant) {
-		println!("Response duration {:?}", started_at.elapsed());
+		println!("[Middleware::on_response] time elapsed {:?}", started_at.elapsed());
 	}
 }
 

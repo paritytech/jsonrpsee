@@ -320,27 +320,28 @@ impl Methods {
 		}
 	}
 
-	/// Attempt to execute a callback while checking that the call does not exhaust the available resources, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute_with_resources(
+	/// Attempt to execute a callback while checking that the call does not exhaust the available resources,
+	// sending the resulting JSON (success or error) to the specified sink.
+	pub fn execute_with_resources<'r>(
 		&self,
 		sink: &MethodSink,
-		req: Request,
+		req: Request<'r>,
 		conn_id: ConnectionId,
 		resources: &Resources,
-	) -> Option<(&'static str, MethodResult<bool>)> {
+	) -> Result<(&'static str, MethodResult<bool>), Cow<'r, str>> {
 		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get_key_value(&*req.method) {
 			Some((&name, callback)) => match callback.claim(&req.method, resources) {
-				Ok(guard) => Some((name, callback.execute(sink, req, conn_id, Some(guard)))),
+				Ok(guard) => Ok((name, callback.execute(sink, req, conn_id, Some(guard)))),
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
 					sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-					Some((name, MethodResult::Sync(false)))
+					Ok((name, MethodResult::Sync(false)))
 				}
 			},
 			None => {
 				sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-				None
+				Err(req.method)
 			}
 		}
 	}

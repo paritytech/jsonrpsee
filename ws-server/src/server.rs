@@ -355,11 +355,11 @@ async fn background_task(
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
 					match methods.execute_with_resources(&sink, req, conn_id, &resources) {
-						Some((name, MethodResult::Sync(success))) => {
+						Ok((name, MethodResult::Sync(success))) => {
 							middleware.on_result(name, success, request_start);
 							middleware.on_response(request_start);
 						}
-						Some((name, MethodResult::Async(fut))) => {
+						Ok((name, MethodResult::Async(fut))) => {
 							let request_start = request_start;
 
 							let fut = async move {
@@ -370,7 +370,10 @@ async fn background_task(
 
 							method_executors.add(fut.boxed());
 						}
-						None => middleware.on_response(request_start),
+						Err(name) => {
+							middleware.on_result(name.as_ref(), false, request_start);
+							middleware.on_response(request_start);
+						}
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
@@ -397,15 +400,18 @@ async fn background_task(
 						if !batch.is_empty() {
 							join_all(batch.into_iter().filter_map(move |req| {
 								match methods.execute_with_resources(&sink_batch, req, conn_id, resources) {
-									Some((name, MethodResult::Sync(success))) => {
+									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
 										None
 									}
-									Some((name, MethodResult::Async(fut))) => Some(async move {
+									Ok((name, MethodResult::Async(fut))) => Some(async move {
 										let success = fut.await;
 										middleware.on_result(name, success, request_start);
 									}),
-									None => None,
+									Err(name) => {
+										middleware.on_result(name.as_ref(), false, request_start);
+										None
+									}
 								}
 							}))
 							.await;

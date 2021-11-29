@@ -311,15 +311,17 @@ impl<M: Middleware> Server<M> {
 
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
 								match methods.execute_with_resources(&sink, req, 0, &resources) {
-									Some((name, MethodResult::Sync(success))) => {
+									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
 									}
-									Some((name, MethodResult::Async(fut))) => {
+									Ok((name, MethodResult::Async(fut))) => {
 										let success = fut.await;
 
 										middleware.on_result(name, success, request_start);
 									}
-									None => (),
+									Err(name) => {
+										middleware.on_result(name.as_ref(), false, request_start);
+									}
 								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
 								return Ok::<_, HyperError>(response::ok_response("".into()));
@@ -335,15 +337,18 @@ impl<M: Middleware> Server<M> {
 
 								join_all(batch.into_iter().filter_map(move |req| {
 									match methods.execute_with_resources(&sink, req, 0, &resources) {
-										Some((name, MethodResult::Sync(success))) => {
+										Ok((name, MethodResult::Sync(success))) => {
 											middleware.on_result(name, success, request_start);
 											None
 										}
-										Some((name, MethodResult::Async(fut))) => Some(async move {
+										Ok((name, MethodResult::Async(fut))) => Some(async move {
 											let success = fut.await;
 											middleware.on_result(name, success, request_start);
 										}),
-										None => None,
+										Err(name) => {
+											middleware.on_result(name.as_ref(), false, request_start);
+											None
+										}
 									}
 								}))
 								.await;
