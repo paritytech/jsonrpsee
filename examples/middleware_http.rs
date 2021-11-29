@@ -25,18 +25,18 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
+	http_client::HttpClientBuilder,
+	http_server::{HttpServerBuilder, HttpServerHandle, RpcModule},
 	types::traits::Client,
 	utils::server::middleware,
-	ws_client::WsClientBuilder,
-	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
 use std::time::Instant;
 
-#[derive(Default, Clone)]
-struct ManInTheMiddle;
+#[derive(Clone)]
+struct Timings;
 
-impl middleware::Middleware for ManInTheMiddle {
+impl middleware::Middleware for Timings {
 	type Instant = Instant;
 
 	fn on_request(&self) -> Self::Instant {
@@ -48,7 +48,6 @@ impl middleware::Middleware for ManInTheMiddle {
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		// println!("call={}, worked? {}, when? {}", name, succeess, started_at);
 		println!("call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
 	}
 
@@ -64,25 +63,23 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let addr = run_server().await?;
-	let url = format!("ws://{}", addr);
+	let (addr, _handle) = run_server().await?;
+	let url = format!("http://{}", addr);
 
-	let client = WsClientBuilder::default().build(&url).await?;
+	let client = HttpClientBuilder::default().build(&url)?;
 	let response: String = client.request("say_hello", None).await?;
 	println!("response: {:?}", response);
-	// TODO: This prints `They called 'blabla'` but nothing more. I expected the `on_response` callback to be called too?
-	let _response: Result<String, _> = client.request("blabla", None).await;
+	let _response: Result<String, _> = client.request("unknown_method", None).await;
 	let _ = client.request::<String>("say_hello", None).await?;
 
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
-	let m = ManInTheMiddle::default();
-	let server = WsServerBuilder::with_middleware(m).build("127.0.0.1:0").await?;
+async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
+	let server = HttpServerBuilder::with_middleware(Timings).build("127.0.0.1:0")?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
-	server.start(module)?;
-	Ok(addr)
+	let server_handle = server.start(module)?;
+	Ok((addr, server_handle))
 }

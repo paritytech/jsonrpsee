@@ -27,7 +27,7 @@
 //! TODO
 
 /// TODO
-pub trait Middleware: Default + Send + Sync + Clone + 'static {
+pub trait Middleware: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware
 	/// measures time, if at all, is entirely up to the implementation.
 	type Instant: Send + Copy;

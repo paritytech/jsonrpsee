@@ -313,13 +313,11 @@ impl<M: Middleware> Server<M> {
 								match methods.execute_with_resources(&sink, req, 0, &resources) {
 									Some((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
-										middleware.on_response(request_start);
 									}
 									Some((name, MethodResult::Async(fut))) => {
 										let success = fut.await;
 
 										middleware.on_result(name, success, request_start);
-										middleware.on_response(request_start);
 									}
 									None => (),
 								}
