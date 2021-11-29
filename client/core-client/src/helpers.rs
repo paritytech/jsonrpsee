@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::client::manager::{RequestManager, RequestStatus};
+use crate::manager::{RequestManager, RequestStatus};
 use futures_channel::{mpsc, oneshot};
 use jsonrpsee_types::traits::TransportSender;
 use jsonrpsee_types::v2::{

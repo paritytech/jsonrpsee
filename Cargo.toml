@@ -2,7 +2,6 @@
 members = [
 	"examples",
 	"benches",
-	"http-client",
 	"http-server",
 	"test-utils",
 	"jsonrpsee",
@@ -10,7 +9,11 @@ members = [
 	"types",
 	"utils",
 	"ws-server",
-	"ws-client",
+	"client/ws-client",
+	"client/http-client",
+	"client/transport",
+	"client/transport",
+	"client/core-client",
 	"proc-macros",
 ]
 resolver = "2"

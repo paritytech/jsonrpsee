@@ -38,7 +38,7 @@ server = [
 	"rand",
 	"tokio",
 ]
-client = ["jsonrpsee-types", "tokio", "futures-util", "rustc-hash"]
+client = ["jsonrpsee-types"]
 
 [dev-dependencies]
 serde_json = "1.0"

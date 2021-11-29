@@ -24,10 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+mod stream;
+
 pub use http::{uri::InvalidUri, Uri};
 pub use soketto::handshake::client::Header;
 
-use crate::stream::EitherStream;
 use futures::io::{BufReader, BufWriter};
 use jsonrpsee_types::traits::{TransportReceiver, TransportSender};
 use jsonrpsee_types::{async_trait, CertificateStore, TEN_MB_SIZE_BYTES};
@@ -42,6 +43,7 @@ use std::{
 	sync::Arc,
 	time::Duration,
 };
+use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio_rustls::{client::TlsStream, rustls, webpki::InvalidDnsNameError, TlsConnector};
@@ -183,10 +185,6 @@ pub enum WsError {
 	/// Error in the WebSocket connection.
 	#[error("WebSocket connection error: {}", 0)]
 	Connection(#[source] soketto::connection::Error),
-
-	/// Failed to parse the message in JSON.
-	#[error("Failed to parse message in JSON: {}", 0)]
-	ParseError(#[source] serde_json::error::Error),
 }
 
 #[async_trait]

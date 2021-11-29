@@ -37,7 +37,7 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 /// Stream to represent either a unencrypted or encrypted socket stream.
 #[pin_project(project = EitherStreamProj)]
 #[derive(Debug, Copy, Clone)]
-pub enum EitherStream<S, T> {
+pub(crate) enum EitherStream<S, T> {
 	/// Unencrypted socket stream.
 	Plain(#[pin] S),
 	/// Encrypted socket stream.

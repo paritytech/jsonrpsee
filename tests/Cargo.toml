@@ -8,7 +8,7 @@ license = "MIT"
 publish = false
 
 [dev-dependencies]
-env_logger = "0.8"
+env_logger = "0.9"
 beef = { version = "0.5.1", features = ["impl_serde"] }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }

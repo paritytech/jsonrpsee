@@ -1,75 +1,26 @@
-// Copyright 2019-2021 Parity Technologies (UK) Ltd.
-//
-// Permission is hereby granted, free of charge, to any
-// person obtaining a copy of this software and associated
-// documentation files (the "Software"), to deal in the
-// Software without restriction, including without
-// limitation the rights to use, copy, modify, merge,
-// publish, distribute, sublicense, and/or sell copies of
-// the Software, and to permit persons to whom the Software
-// is furnished to do so, subject to the following
-// conditions:
-//
-// The above copyright notice and this permission notice
-// shall be included in all copies or substantial portions
-// of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-// DEALINGS IN THE SOFTWARE.
-
-//! Shared utilities for `jsonrpsee` clients.
-
 mod helpers;
 mod manager;
-
-use futures_util::SinkExt;
-use jsonrpsee_types::traits::{
-	Client as ClientT, SubscriptionClient as SubscriptionClientT, TransportReceiver, TransportSender,
-};
 
 use std::time::Duration;
 
 use futures_channel::{mpsc, oneshot};
-use futures_util::{future::Either, StreamExt};
-use helpers::*;
-use jsonrpsee_types::v2::{
-	Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse,
+use futures_util::{future::Either, SinkExt, StreamExt};
+use jsonrpsee_types::traits::{
+	Client as ClientT, SubscriptionClient as SubscriptionClientT, TransportReceiver, TransportSender,
 };
+use jsonrpsee_types::v2::{Id, Notification, NotificationSer, RequestSer, Response, RpcError, SubscriptionResponse};
+use jsonrpsee_types::{async_trait, v2::ParamsSer, Error, FrontToBack, RequestIdManager};
 use jsonrpsee_types::{
-	async_trait, BatchMessage, DeserializeOwned, Error, FrontToBack, RegisterNotificationMessage, RequestIdManager,
-	RequestMessage, Subscription, SubscriptionKind, SubscriptionMessage,
+	BatchMessage, DeserializeOwned, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionKind,
+	SubscriptionMessage,
 };
 use manager::RequestManager;
 use tokio::sync::Mutex;
 
-#[doc(hidden)]
-pub mod __reexports {
-	pub use jsonrpsee_types::{to_json_value, v2::ParamsSer};
-}
-
-#[macro_export]
-/// Convert the given values to a [`jsonrpsee_types::v2::ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
-macro_rules! rpc_params {
-	($($param:expr),*) => {
-		{
-			let mut __params = vec![];
-			$(
-				__params.push($crate::client::__reexports::to_json_value($param).expect("json serialization is infallible; qed."));
-			)*
-			Some($crate::client::__reexports::ParamsSer::Array(__params))
-		}
-	};
-	() => {
-		None
-	}
-}
+use crate::helpers::{
+	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
+	process_single_response, process_subscription_response, stop_subscription,
+};
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.

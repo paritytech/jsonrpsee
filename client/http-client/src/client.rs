@@ -31,7 +31,7 @@ use crate::types::{
 	CertificateStore, Error, RequestIdManager, Subscription, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
-use fnv::FnvHashMap;
+use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 
@@ -158,7 +158,7 @@ impl Client for HttpClient {
 		let mut batch_request = Vec::with_capacity(batch.len());
 		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
 		let mut ordered_requests = Vec::with_capacity(batch.len());
-		let mut request_set = FnvHashMap::with_capacity_and_hasher(batch.len(), Default::default());
+		let mut request_set = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
 		let ids = self.id_manager.next_request_ids(batch.len())?;
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
