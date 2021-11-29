@@ -138,7 +138,7 @@ pub trait TransportSender: Send + Sync + 'static {
 	/// Send..
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
 
-	/// If the transport supports close messages.
+	/// If the transport supports sending customized close messages.
 	async fn close(&mut self) -> Result<(), Self::Error> {
 		Ok(())
 	}
@@ -152,9 +152,4 @@ pub trait TransportReceiver: Send + Sync + 'static {
 
 	/// Receive.
 	async fn receive(&mut self) -> Result<String, Self::Error>;
-
-	/// If the transport supports close messages.
-	async fn close(&mut self) -> Result<(), Self::Error> {
-		Ok(())
-	}
 }

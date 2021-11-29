@@ -101,27 +101,7 @@ impl ErrorFromBack {
 	}
 }
 
-/// Builder for [`WsClient`].
-///
-/// # Examples
-///
-/// ```no_run
-///
-/// use jsonrpsee_ws_client::WsClientBuilder;
-///
-/// #[tokio::main]
-/// async fn main() {
-///     // build client
-///     let client = WsClientBuilder::default()
-///          .add_header("Any-Header-You-Like", "42")
-///          .build("wss://localhost:443")
-///          .await
-///          .unwrap();
-///
-///     // use client....
-/// }
-///
-/// ```
+/// Builder for [`Client`].
 #[derive(Clone, Debug)]
 pub struct ClientBuilder {
 	request_timeout: Duration,
@@ -172,22 +152,23 @@ impl ClientBuilder {
 	///
 	/// Panics if being called outside of `tokio` runtime context.
 	pub fn build<S: TransportSender, R: TransportReceiver>(self, sender: S, receiver: R) -> Client {
-		let (to_back, from_front) = mpsc::channel(99);
+		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
-		let request_timeout = Duration::from_secs(30);
+		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 
 		tokio::spawn(async move {
-			background_task(sender, receiver, from_front, err_tx, 10).await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription).await;
 		});
 		Client {
 			to_back,
-			request_timeout,
+			request_timeout: self.request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
-			id_manager: RequestIdManager::new(10),
+			id_manager: RequestIdManager::new(self.max_concurrent_requests),
 		}
 	}
 }
 
+/// Generic asyncronous client.
 #[derive(Debug)]
 pub struct Client {
 	/// Channel to send requests to the background task.
@@ -214,6 +195,12 @@ impl Client {
 		let (next_state, err) = from_back.read_error().await;
 		*err_lock = next_state;
 		err
+	}
+}
+
+impl<S: TransportSender, R: TransportReceiver> From<(S, R)> for Client {
+	fn from(transport: (S, R)) -> Client {
+		ClientBuilder::default().build(transport.0, transport.1)
 	}
 }
 

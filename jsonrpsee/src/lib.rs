@@ -80,7 +80,4 @@ pub use ws_server::tracing;
 
 /// JSON-RPC WebSocket client.
 #[cfg(feature = "ws-client")]
-pub mod ws_client {
-	pub use jsonrpsee_client_transport::websocket::WsTransportClientBuilder;
-	pub use jsonrpsee_utils::client::{Client, ClientBuilder};
-}
+pub use jsonrpsee_ws_client as ws_client;

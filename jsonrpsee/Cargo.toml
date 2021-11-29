@@ -13,6 +13,7 @@ documentation = "https://docs.rs/jsonrpsee"
 # No support for namespaced features yet so workspace dependencies are prefixed with `jsonrpsee-`.
 # See https://github.com/rust-lang/cargo/issues/5565 for more details.
 jsonrpsee-http-client = { path = "../http-client", version = "0.5.1", package = "jsonrpsee-http-client", optional = true }
+jsonrpsee-ws-client = { path = "../ws-client", version = "0.5.1", package = "jsonrpsee-ws-client", optional = true }
 jsonrpsee-client-transport = { path = "../client-transport", version = "0.5.1", package = "jsonrpsee-client-transport", optional = true }
 jsonrpsee-http-server = { path = "../http-server", version = "0.5.1", package = "jsonrpsee-http-server", optional = true }
 jsonrpsee-ws-server = { path = "../ws-server", version = "0.5.1", package = "jsonrpsee-ws-server", optional = true }
@@ -23,7 +24,7 @@ jsonrpsee-types = { path = "../types", version = "0.5.1", package = "jsonrpsee-t
 [features]
 http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-utils/client"]
 http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-utils"]
-ws-client = ["jsonrpsee-client-transport/ws", "jsonrpsee-types", "jsonrpsee-utils/client"]
+ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types"]
 ws-server = ["jsonrpsee-ws-server", "jsonrpsee-types", "jsonrpsee-utils"]
 macros = ["jsonrpsee-proc-macros", "jsonrpsee-types"]
 

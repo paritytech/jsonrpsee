@@ -10,6 +10,7 @@ members = [
 	"types",
 	"utils",
 	"ws-server",
+	"ws-client",
 	"proc-macros",
 ]
 resolver = "2"

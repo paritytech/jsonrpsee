@@ -24,13 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+pub use http::{uri::InvalidUri, Uri};
+pub use soketto::handshake::client::Header;
+
 use crate::stream::EitherStream;
 use futures::io::{BufReader, BufWriter};
-use http::Uri;
 use jsonrpsee_types::traits::{TransportReceiver, TransportSender};
 use jsonrpsee_types::{async_trait, CertificateStore, TEN_MB_SIZE_BYTES};
 use soketto::connection;
-use soketto::handshake::client::{Client as WsHandshakeClient, Header, ServerResponse};
+use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use std::convert::TryInto;
 use std::{
 	borrow::Cow,
@@ -221,8 +223,7 @@ impl TransportReceiver for Receiver {
 
 impl<'a> WsTransportClientBuilder<'a> {
 	/// Try to establish the connection.
-	pub async fn build(self, url: impl AsRef<str>) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let uri: Uri = url.as_ref().parse().unwrap();
+	pub async fn build(self, uri: Uri) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let target: Target = uri.try_into().unwrap();
 		let connector = match target.mode {
 			Mode::Tls => {
