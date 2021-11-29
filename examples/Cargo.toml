@@ -28,8 +28,8 @@ name = "middleware_http"
 path = "middleware_http.rs"
 
 [[example]]
-name = "multi-middleware"
-path = "multi-middleware.rs"
+name = "multi_middleware"
+path = "multi_middleware.rs"
 
 [[example]]
 name = "ws"
