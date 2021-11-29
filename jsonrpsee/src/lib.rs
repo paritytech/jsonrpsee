@@ -76,7 +76,6 @@ pub use jsonrpsee_types as types;
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
 pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SubscriptionSink};
 
-/// TODO: (dp) any reason not to export this? narrow the scope to `jsonrpsee_utils::server`?
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
 pub use jsonrpsee_utils as utils;
 
