@@ -13,6 +13,7 @@ jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = "0.2"
 tokio = { version = "1", features = ["full"] }
+palaver = "0.2"
 
 [[example]]
 name = "http"
@@ -25,6 +26,10 @@ path = "middleware_ws.rs"
 [[example]]
 name = "middleware_http"
 path = "middleware_http.rs"
+
+[[example]]
+name = "multi_middleware"
+path = "multi_middleware.rs"
 
 [[example]]
 name = "ws"

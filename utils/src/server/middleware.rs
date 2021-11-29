@@ -36,13 +36,13 @@ pub trait Middleware: Send + Sync + Clone + 'static {
 	fn on_request(&self) -> Self::Instant;
 
 	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
-	fn on_call(&self, name: &str);
+	fn on_call(&self, _name: &str) {}
 
 	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple times.
-	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant);
+	fn on_result(&self, _name: &str, _success: bool, _started_at: Self::Instant) {}
 
 	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
-	fn on_response(&self, started_at: Self::Instant);
+	fn on_response(&self, _started_at: Self::Instant) {}
 }
 
 impl Middleware for () {
