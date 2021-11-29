@@ -151,6 +151,7 @@ benchmarks:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
     - mkdir artifacts
     - cp output.txt artifacts/
+    - echo ${CI_RUNNER_DESCRIPTION}
     - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
 
 publish-bench:
@@ -161,5 +162,6 @@ publish-bench:
     - job:                         benchmarks
       artifacts:                   true
   script:
+    - echo $RUNNER_NAME
     - .scripts/ci/push_bench_results.sh artifacts/output.txt
 
