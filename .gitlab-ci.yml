@@ -151,7 +151,7 @@ benchmarks:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
     - mkdir artifacts
     - cp output.txt artifacts/
-    - echo "RUNNER_TAGS=${CI_RUNNER_TAGS}" > runner.env
+    - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
 
 publish-bench:
   stage:                           publish
