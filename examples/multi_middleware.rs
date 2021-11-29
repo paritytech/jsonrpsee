@@ -28,8 +28,7 @@
 
 use jsonrpsee::{
 	rpc_params,
-	types::traits::Client,
-	utils::server::middleware,
+	types::{middleware, traits::Client},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
@@ -79,7 +78,6 @@ impl middleware::Middleware for ThreadWatcher {
 	}
 }
 
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
 	tracing_subscriber::FmtSubscriber::builder()
@@ -107,7 +105,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module.register_method("thready", |params, _| {
 		let thread_count: usize = params.one().unwrap();
 		for _ in 0..thread_count {
-			std::thread::spawn(|| {std::thread::sleep(std::time::Duration::from_secs(1))});
+			std::thread::spawn(|| std::thread::sleep(std::time::Duration::from_secs(1)));
 		}
 		Ok(())
 	})?;

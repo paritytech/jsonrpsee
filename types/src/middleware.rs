@@ -24,9 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! TODO
+//! Middleware for `jsonrpsee` servers.
 
-/// TODO
+/// Defines a middleware with callbacks during the RPC request life-cycle. The primary use case for
+/// this is to collect timings for a larger metrics collection solution but the only constraints on
+/// the associated type is that it be [`Send`] and [`Copy`], giving users some freedom to do what
+/// they need to do.
 pub trait Middleware: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware
 	/// measures time, if at all, is entirely up to the implementation.
