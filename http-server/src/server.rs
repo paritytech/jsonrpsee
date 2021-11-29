@@ -34,13 +34,13 @@ use hyper::{
 };
 use jsonrpsee_types::{
 	error::{Error, GenericTransportError},
+	middleware::Middleware,
 	v2::{ErrorCode, Id, Notification, Request},
 	TEN_MB_SIZE_BYTES,
 };
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
 	helpers::{collect_batch_response, prepare_error, MethodSink},
-	middleware::Middleware,
 	resource_limiting::Resources,
 	rpc_module::{MethodResult, Methods},
 };

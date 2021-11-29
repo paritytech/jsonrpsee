@@ -24,14 +24,18 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! Example showing how to add multiple middlewares to the same server.
+
 use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, HttpServerHandle, RpcModule},
+	rpc_params,
 	types::{middleware, traits::Client},
+	ws_client::WsClientBuilder,
+	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
 use std::time::Instant;
 
+/// Example middleware to measure call execution time.
 #[derive(Clone)]
 struct Timings;
 
@@ -43,15 +47,34 @@ impl middleware::Middleware for Timings {
 	}
 
 	fn on_call(&self, name: &str) {
-		println!("[Middleware::on_call] '{}'", name);
+		println!("[Timings] They called '{}'", name);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("[Middleware::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
+		println!("[Timings] call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
 	}
 
 	fn on_response(&self, started_at: Self::Instant) {
-		println!("[Middleware::on_response] time elapsed {:?}", started_at.elapsed());
+		println!("[Timings] Response duration {:?}", started_at.elapsed());
+	}
+}
+
+/// Example middleware to keep a watch on the number of total threads started in the system.
+#[derive(Clone)]
+struct ThreadWatcher;
+
+impl middleware::Middleware for ThreadWatcher {
+	type Instant = isize;
+
+	fn on_request(&self) -> Self::Instant {
+		let threads = palaver::process::count_threads();
+		println!("[ThreadWatcher] Threads running on the machine at the start of a call: {}", threads);
+		threads as isize
+	}
+
+	fn on_response(&self, started_at: Self::Instant) {
+		let current_nr_threads = palaver::process::count_threads() as isize;
+		println!("[ThreadWatcher] Request started {} threads", current_nr_threads - started_at);
 	}
 }
 
@@ -62,23 +85,31 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let (addr, _handle) = run_server().await?;
-	let url = format!("http://{}", addr);
+	let addr = run_server().await?;
+	let url = format!("ws://{}", addr);
 
-	let client = HttpClientBuilder::default().build(&url)?;
+	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", None).await?;
 	println!("response: {:?}", response);
 	let _response: Result<String, _> = client.request("unknown_method", None).await;
 	let _ = client.request::<String>("say_hello", None).await?;
+	let _ = client.request::<()>("thready", rpc_params![4]).await?;
 
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let server = HttpServerBuilder::with_middleware(Timings).build("127.0.0.1:0")?;
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let server = WsServerBuilder::with_middleware((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
+	module.register_method("thready", |params, _| {
+		let thread_count: usize = params.one().unwrap();
+		for _ in 0..thread_count {
+			std::thread::spawn(|| std::thread::sleep(std::time::Duration::from_secs(1)));
+		}
+		Ok(())
+	})?;
 	let addr = server.local_addr()?;
-	let server_handle = server.start(module)?;
-	Ok((addr, server_handle))
+	server.start(module)?;
+	Ok(addr)
 }

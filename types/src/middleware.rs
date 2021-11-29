@@ -24,9 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! TODO
+//! Middleware for `jsonrpsee` servers.
 
-/// TODO
+/// Defines a middleware with callbacks during the RPC request life-cycle. The primary use case for
+/// this is to collect timings for a larger metrics collection solution but the only constraints on
+/// the associated type is that it be [`Send`] and [`Copy`], giving users some freedom to do what
+/// they need to do.
 pub trait Middleware: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware
 	/// measures time, if at all, is entirely up to the implementation.
@@ -36,13 +39,13 @@ pub trait Middleware: Send + Sync + Clone + 'static {
 	fn on_request(&self) -> Self::Instant;
 
 	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
-	fn on_call(&self, name: &str);
+	fn on_call(&self, _name: &str) {}
 
 	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple times.
-	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant);
+	fn on_result(&self, _name: &str, _success: bool, _started_at: Self::Instant) {}
 
 	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
-	fn on_response(&self, started_at: Self::Instant);
+	fn on_response(&self, _started_at: Self::Instant) {}
 }
 
 impl Middleware for () {

@@ -25,8 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	types::traits::Client,
-	utils::server::middleware,
+	types::{middleware, traits::Client},
 	ws_client::WsClientBuilder,
 	ws_server::{RpcModule, WsServerBuilder},
 };
