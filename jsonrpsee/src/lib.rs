@@ -56,6 +56,9 @@ pub use jsonrpsee_ws_client as ws_client;
 #[cfg(feature = "jsonrpsee-core-client")]
 pub use jsonrpsee_core_client as core_client;
 
+#[cfg(feature = "jsonrpsee-client-transport")]
+pub use jsonrpsee_client_transport as client_transport;
+
 /// JSON-RPC client convenience macro to build params.
 #[cfg(any(feature = "http-client", feature = "ws-client"))]
 pub use jsonrpsee_utils::rpc_params;

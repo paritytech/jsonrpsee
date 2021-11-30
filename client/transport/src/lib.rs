@@ -31,4 +31,4 @@
 
 /// Websocket transport
 #[cfg(feature = "ws")]
-pub mod websocket;
+pub mod ws;

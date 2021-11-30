@@ -15,6 +15,7 @@ documentation = "https://docs.rs/jsonrpsee"
 jsonrpsee-http-client = { path = "../client/http-client", version = "0.5.1", package = "jsonrpsee-http-client", optional = true }
 jsonrpsee-ws-client = { path = "../client/ws-client", version = "0.5.1", package = "jsonrpsee-ws-client", optional = true }
 jsonrpsee-core-client = { path = "../client/core-client", version = "0.5.1", package = "jsonrpsee-core-client", optional = true }
+jsonrpsee-client-transport = { path = "../client/transport", version = "0.5.1", package = "jsonrpsee-client-transport", optional = true }
 jsonrpsee-http-server = { path = "../http-server", version = "0.5.1", package = "jsonrpsee-http-server", optional = true }
 jsonrpsee-ws-server = { path = "../ws-server", version = "0.5.1", package = "jsonrpsee-ws-server", optional = true }
 jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.5.1", package = "jsonrpsee-proc-macros", optional = true }
@@ -29,6 +30,6 @@ ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-utils/client"]
 ws-server = ["jsonrpsee-ws-server", "jsonrpsee-types", "jsonrpsee-utils"]
 macros = ["jsonrpsee-proc-macros", "jsonrpsee-types"]
 
-client = ["http-client", "ws-client", "core-client"]
+client = ["http-client", "ws-client", "core-client", "jsonrpsee-client-transport/ws"]
 server = ["http-server", "ws-server"]
 full = ["client", "server", "macros"]
