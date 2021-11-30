@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.5.1] – 2021-11-26
+
+The v0.5.1 release is a bug fix.
+
+### [Fixed]
+
+- rpc error: support escaped strings [#578](https://github.com/paritytech/jsonrpsee/pull/578)
+
+## [v0.5.0] – 2021-11-23
+
+v0.5 is a breaking release
+
+### [Added]
+
+- Add register_blocking_method [#523](https://github.com/paritytech/jsonrpsee/pull/523)
+- Re-introduce object param parsing [#526](https://github.com/paritytech/jsonrpsee/pull/526)
+- clients: add support for webpki and native certificate stores [#533](https://github.com/paritytech/jsonrpsee/pull/533)
+- feat(ws client): support custom headers. [#535](https://github.com/paritytech/jsonrpsee/pull/535)
+- Proc macro support for map param [#544](https://github.com/paritytech/jsonrpsee/pull/544)
+- feat: make it possible to try several sockaddrs when starting server [#567](https://github.com/paritytech/jsonrpsee/pull/567)
+- feat: make it possible to override method name in subscriptions [#568](https://github.com/paritytech/jsonrpsee/pull/568)
+- proc-macros: Support deprecated methods for rpc client [#570](https://github.com/paritytech/jsonrpsee/pull/570)
+
+### [Change]
+
+- DRY error handling for methods [#515](https://github.com/paritytech/jsonrpsee/pull/515)
+- deps: replace log with tracing [#525](https://github.com/paritytech/jsonrpsee/pull/525)
+- benches: add option to run benchmarks against jsonrpc crate servers [#527](https://github.com/paritytech/jsonrpsee/pull/527)
+- clients: request ID as RAII guard [#543](https://github.com/paritytech/jsonrpsee/pull/543)
+- Allow awaiting on server handles [#550](https://github.com/paritytech/jsonrpsee/pull/550)
+- ws server: reject too big response [#553](https://github.com/paritytech/jsonrpsee/pull/553)
+- Array syntax aliases [#557](https://github.com/paritytech/jsonrpsee/pull/557)
+- rpc module: report error on invalid subscription [#561](https://github.com/paritytech/jsonrpsee/pull/561)
+- [rpc module]: improve TestSubscription to return None when closed [#566](https://github.com/paritytech/jsonrpsee/pull/566)
+
+### [Fixed]
+
+- ws server: respect max limit for received messages [#537](https://github.com/paritytech/jsonrpsee/pull/537)
+- fix(ws server): batch wait until all methods has been executed. [#542](https://github.com/paritytech/jsonrpsee/pull/542)
+- Re-export tracing for macros [#555](https://github.com/paritytech/jsonrpsee/pull/555)
+- Periodically wake DriverSelect so we can poll whether or not stop had been called. [#556](https://github.com/paritytech/jsonrpsee/pull/556)
+- Implement SubscriptionClient for HttpClient [#563](https://github.com/paritytech/jsonrpsee/pull/563)
+- fix: better log for failed unsubscription call [#575](https://github.com/paritytech/jsonrpsee/pull/575)
+
 ## [v0.4.1] – 2021-10-12
 
 The v0.4.1 release is a bug fix.

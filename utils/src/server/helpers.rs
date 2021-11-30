@@ -119,7 +119,7 @@ impl MethodSink {
 					let data = to_json_raw_value(&format!("Exceeded max limit {}", self.max_response_size)).ok();
 					let err = ErrorObject {
 						code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
-						message: OVERSIZED_RESPONSE_MSG,
+						message: OVERSIZED_RESPONSE_MSG.into(),
 						data: data.as_deref(),
 					};
 					return self.send_error(id, err);
@@ -168,7 +168,7 @@ impl MethodSink {
 			e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
 		};
 
-		let err = ErrorObject { code, message: &message, data: data.as_deref() };
+		let err = ErrorObject { code, message: message.into(), data: data.as_deref() };
 
 		self.send_error(id, err)
 	}

@@ -33,7 +33,7 @@ use crate::types::{
 use async_trait::async_trait;
 use fnv::FnvHashMap;
 use serde::de::DeserializeOwned;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 /// Http Client Builder.
 #[derive(Debug)]
@@ -75,7 +75,7 @@ impl HttpClientBuilder {
 			.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
-			id_manager: RequestIdManager::new(self.max_concurrent_requests),
+			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests)),
 			request_timeout: self.request_timeout,
 		})
 	}
@@ -93,14 +93,14 @@ impl Default for HttpClientBuilder {
 }
 
 /// JSON-RPC HTTP Client that provides functionality to perform method calls and notifications.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HttpClient {
 	/// HTTP transport client.
 	transport: HttpTransportClient,
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
-	id_manager: RequestIdManager,
+	id_manager: Arc<RequestIdManager>,
 }
 
 #[async_trait]

@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::v2::params::{Id, TwoPointZero};
+use beef::Cow;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
@@ -64,7 +65,8 @@ pub struct ErrorObject<'a> {
 	/// Code
 	pub code: ErrorCode,
 	/// Message
-	pub message: &'a str,
+	#[serde(borrow)]
+	pub message: Cow<'a, str>,
 	/// Optional data
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[serde(borrow)]
@@ -74,13 +76,13 @@ pub struct ErrorObject<'a> {
 impl<'a> ErrorObject<'a> {
 	/// Create a new `ErrorObject` with optional data.
 	pub fn new(code: ErrorCode, data: Option<&'a RawValue>) -> ErrorObject<'a> {
-		Self { code, message: code.message(), data }
+		Self { code, message: code.message().into(), data }
 	}
 }
 
 impl<'a> From<ErrorCode> for ErrorObject<'a> {
 	fn from(code: ErrorCode) -> Self {
-		Self { code, message: code.message(), data: None }
+		Self { code, message: code.message().into(), data: None }
 	}
 }
 
@@ -242,7 +244,7 @@ mod tests {
 		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
 		let exp = RpcError {
 			jsonrpc: TwoPointZero,
-			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error", data: None },
+			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error".into(), data: None },
 			id: Id::Null,
 		};
 		let err: RpcError = serde_json::from_str(ser).unwrap();
@@ -255,7 +257,7 @@ mod tests {
 		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
 		let exp = RpcError {
 			jsonrpc: TwoPointZero,
-			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error", data: Some(&*data) },
+			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error".into(), data: Some(&*data) },
 			id: Id::Null,
 		};
 		let err: RpcError = serde_json::from_str(ser).unwrap();
@@ -263,11 +265,40 @@ mod tests {
 	}
 
 	#[test]
+	fn deserialized_error_with_quoted_str() {
+		let raw = r#"{
+			"error": {
+				"code": 1002,
+				"message": "desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
+				"data": "\\\"validate_transaction\\\""
+			},
+			"id": 7,
+			"jsonrpc": "2.0"
+		}"#;
+		let err: RpcError = serde_json::from_str(raw).unwrap();
+
+		let data = serde_json::value::to_raw_value(&"\\\"validate_transaction\\\"").unwrap();
+
+		assert_eq!(
+			err,
+			RpcError {
+				error: ErrorObject {
+					code: 1002.into(),
+					message: "desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })".into(),
+					data: Some(&*data),
+				},
+				id: Id::Number(7),
+				jsonrpc: TwoPointZero,
+			}
+		);
+	}
+
+	#[test]
 	fn serialize_works() {
 		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
 		let err = RpcError {
 			jsonrpc: TwoPointZero,
-			error: ErrorObject { code: ErrorCode::InternalError, message: "Internal error", data: None },
+			error: ErrorObject { code: ErrorCode::InternalError, message: "Internal error".into(), data: None },
 			id: Id::Number(1337),
 		};
 		let ser = serde_json::to_string(&err).unwrap();
