@@ -69,19 +69,26 @@ pub struct Builder<M = ()> {
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self::with_middleware(())
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			resources: Resources::default(),
+			access_control: AccessControl::default(),
+			keep_alive: true,
+			tokio_runtime: None,
+			middleware: ()
+		}
 	}
 }
 
 impl Builder {
 	/// Create a default server builder.
 	pub fn new() -> Self {
-		Self::with_middleware(())
+		Self::default()
 	}
 }
 
 impl<M> Builder<M> {
-	/// Create a server builder with the specified [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
+	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
 	///
 	/// ```
 	/// use jsonrpsee_types::middleware::Middleware;
@@ -103,15 +110,15 @@ impl<M> Builder<M> {
 	///     }
 	/// }
 	///
-	/// let builder = HttpServerBuilder::with_middleware(MyMiddleware);
+	/// let builder = HttpServerBuilder::new().set_middleware(MyMiddleware);
 	/// ```
-	pub fn with_middleware(middleware: M) -> Self {
-		Self {
-			max_request_body_size: TEN_MB_SIZE_BYTES,
-			resources: Resources::default(),
-			access_control: AccessControl::default(),
-			keep_alive: true,
-			tokio_runtime: None,
+	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
+		Builder {
+			max_request_body_size: self.max_request_body_size,
+			resources: self.resources,
+			access_control: self.access_control,
+			keep_alive: self.keep_alive,
+			tokio_runtime: self.tokio_runtime,
 			middleware,
 		}
 	}

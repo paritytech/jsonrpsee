@@ -508,46 +508,18 @@ pub struct Builder<M = ()> {
 
 impl Default for Builder {
 	fn default() -> Self {
-		Self::with_middleware(())
+		Builder { settings: Settings::default(), resources: Resources::default(), middleware: () }
 	}
 }
 
 impl Builder {
 	/// Create a default server builder.
 	pub fn new() -> Self {
-		Self::with_middleware(())
+		Self::default()
 	}
 }
 
 impl<M> Builder<M> {
-	/// Create a server builder with the specified [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
-	///
-	/// ```
-	/// use jsonrpsee_types::middleware::Middleware;
-	/// use jsonrpsee_ws_server::WsServerBuilder;
-	/// use std::time::Instant;
-	///
-	/// #[derive(Clone)]
-	/// struct MyMiddleware;
-	///
-	/// impl Middleware for MyMiddleware {
-	///     type Instant = Instant;
-	///
-	///     fn on_request(&self) -> Instant {
-	///         Instant::now()
-	///     }
-	///
-	///     fn on_result(&self, name: &str, success: bool, started_at: Instant) {
-	///         println!("Call to '{}' took {:?}", name, started_at.elapsed());
-	///     }
-	/// }
-	///
-	/// let builder = WsServerBuilder::with_middleware(MyMiddleware);
-	/// ```
-	pub fn with_middleware(middleware: M) -> Self {
-		Builder { settings: Default::default(), resources: Default::default(), middleware }
-	}
-
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -597,6 +569,34 @@ impl<M> Builder<M> {
 		self.settings.allowed_origins = AllowedValue::OneOf(list);
 
 		Ok(self)
+	}
+
+	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
+	///
+	/// ```
+	/// use jsonrpsee_types::middleware::Middleware;
+	/// use jsonrpsee_ws_server::WsServerBuilder;
+	/// use std::time::Instant;
+	///
+	/// #[derive(Clone)]
+	/// struct MyMiddleware;
+	///
+	/// impl Middleware for MyMiddleware {
+	///     type Instant = Instant;
+	///
+	///     fn on_request(&self) -> Instant {
+	///         Instant::now()
+	///     }
+	///
+	///     fn on_result(&self, name: &str, success: bool, started_at: Instant) {
+	///         println!("Call to '{}' took {:?}", name, started_at.elapsed());
+	///     }
+	/// }
+	///
+	/// let builder = WsServerBuilder::new().set_middleware(MyMiddleware);
+	/// ```
+	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
+		Builder { settings: self.settings, resources: self.resources, middleware }
 	}
 
 	/// Restores the default behavior of allowing connections with `Origin` header
