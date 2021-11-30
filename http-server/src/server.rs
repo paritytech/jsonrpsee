@@ -75,7 +75,7 @@ impl Default for Builder {
 			access_control: AccessControl::default(),
 			keep_alive: true,
 			tokio_runtime: None,
-			middleware: ()
+			middleware: (),
 		}
 	}
 }
