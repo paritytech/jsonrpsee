@@ -1,3 +1,11 @@
+default:
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
+      - api_failure
+
 stages:
   - lint
   - test
@@ -51,40 +59,12 @@ variables:                         &default-vars
     - *rust-info-script
     - ./scripts/ci/pre_cache.sh
     - sccache -s
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
   interruptible:                   true
   tags:
     - linux-docker
 
-.docker-benches-env:               &docker-benches-env
-  image:                           "${CI_IMAGE}"
-  before_script:
-    - *rust-info-script
-    - ./scripts/ci/pre_cache.sh
-    - sccache -s
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
-  interruptible:                   true
-  tags:
-    - linux-docker-benches
-
 .kubernetes-env:                   &kubernetes-env
   image:                           "${CI_IMAGE}"
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - unknown_failure
-      - api_failure
   interruptible:                   true
   tags:
     - kubernetes-parity-build
@@ -102,7 +82,7 @@ variables:                         &default-vars
 
 fmt:
   stage:                           lint
-  <<:                              *kubernetes-env
+  <<:                              *docker-env
   <<:                              *common-refs
   script:
     # FIXME: remove after stable fmt added to ci-linux
@@ -144,7 +124,7 @@ test:
 
 benchmarks:
   stage:                           benchmark
-  <<:                              *docker-benches-env
+  <<:                              *docker-env
   <<:                              *collect-artifacts
   <<:                              *schedule-refs
   script:
@@ -153,9 +133,13 @@ benchmarks:
     - cp output.txt artifacts/
     - echo ${CI_RUNNER_DESCRIPTION}
     - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
+  tags:
+    - linux-docker-benches
 
 publish-bench:
   stage:                           publish
+  variables:
+    CI_IMAGE:                      "paritytech/tools:latest"
   <<:                              *kubernetes-env
   <<:                              *schedule-refs
   needs:
