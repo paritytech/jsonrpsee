@@ -39,6 +39,9 @@ pub trait Middleware: Send + Sync + Clone + 'static {
 	/// measures time, if at all, is entirely up to the implementation.
 	type Instant: Send + Copy;
 
+	/// Called when a new client connects (WebSocket only)
+	fn on_connect(&self) {}
+
 	/// Called when a new JSON-RPC comes to the server.
 	fn on_request(&self) -> Self::Instant;
 
@@ -50,18 +53,15 @@ pub trait Middleware: Send + Sync + Clone + 'static {
 
 	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
 	fn on_response(&self, _started_at: Self::Instant) {}
+
+	/// Called when a client disconnects (WebSocket only)
+	fn on_disconnect(&self) {}
 }
 
 impl Middleware for () {
 	type Instant = ();
 
 	fn on_request(&self) -> Self::Instant {}
-
-	fn on_call(&self, _name: &str) {}
-
-	fn on_result(&self, _name: &str, _succeess: bool, _started_at: Self::Instant) {}
-
-	fn on_response(&self, _started_at: Self::Instant) {}
 }
 
 impl<A, B> Middleware for (A, B)

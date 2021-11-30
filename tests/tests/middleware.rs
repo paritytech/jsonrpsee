@@ -47,6 +47,8 @@ struct Counter {
 
 #[derive(Default)]
 struct CounterInner {
+	/// (Number of started connections, number of finished connections)
+	connections: (u32, u32),
 	/// (Number of started requests, number of finished requests)
 	requests: (u32, u32),
 	/// Mapping method names to (number of calls, ids of successfully completed calls)
@@ -56,6 +58,10 @@ struct CounterInner {
 impl Middleware for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
+
+	fn on_connect(&self) {
+		self.inner.lock().unwrap().connections.0 += 1;
+	}
 
 	fn on_request(&self) -> u32 {
 		let mut inner = self.inner.lock().unwrap();
@@ -81,6 +87,10 @@ impl Middleware for Counter {
 
 	fn on_response(&self, _: u32) {
 		self.inner.lock().unwrap().requests.1 += 1;
+	}
+
+	fn on_disconnect(&self) {
+		self.inner.lock().unwrap().connections.1 += 1;
 	}
 }
 
@@ -143,19 +153,24 @@ async fn ws_server_middleware() {
 
 	assert!(client.request::<String>("unknown_method", None).await.is_err());
 
-	let inner = counter.inner.lock().unwrap();
+	{
+		let inner = counter.inner.lock().unwrap();
 
-	assert_eq!(inner.requests, (5, 5));
-	assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
-	assert_eq!(inner.calls["unknown_method"], (2, vec![]));
+		assert_eq!(inner.connections, (1, 0));
+		assert_eq!(inner.requests, (5, 5));
+		assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
+		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
+	}
 
 	server_handle.stop().unwrap().await;
+
+	assert_eq!(counter.inner.lock().unwrap().connections, (1, 1));
 }
 
 #[tokio::test]
 async fn http_server_middleware() {
 	let counter = Counter::default();
-	let (server_addr, _server_handle) = http_server(test_module(), counter.clone()).await.unwrap();
+	let (server_addr, server_handle) = http_server(test_module(), counter.clone()).await.unwrap();
 
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
@@ -174,4 +189,9 @@ async fn http_server_middleware() {
 	assert_eq!(inner.requests, (5, 5));
 	assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
 	assert_eq!(inner.calls["unknown_method"], (2, vec![]));
+
+	server_handle.stop().unwrap().await.unwrap();
+
+	// HTTP server doesn't track connections
+	assert_eq!(inner.connections, (0, 0));
 }

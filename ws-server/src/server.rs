@@ -284,6 +284,8 @@ async fn background_task(
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
 
+	middleware.on_connect();
+
 	// Send results back to the client.
 	tokio::spawn(async move {
 		while !stop_server2.shutdown_requested() {
@@ -309,7 +311,7 @@ async fn background_task(
 	let mut method_executors = FutureDriver::default();
 	let middleware = &middleware;
 
-	loop {
+	let result = loop {
 		data.clear();
 
 		{
@@ -323,7 +325,7 @@ async fn background_task(
 					MonitoredError::Selector(SokettoError::Closed) => {
 						tracing::debug!("WS transport error: remote peer terminated the connection: {}", conn_id);
 						sink.close();
-						return Ok(());
+						break Ok(());
 					}
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
 						tracing::warn!(
@@ -338,9 +340,9 @@ async fn background_task(
 					MonitoredError::Selector(err) => {
 						tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
 						sink.close();
-						return Err(err.into());
+						break Err(err.into());
 					}
-					MonitoredError::Shutdown => break,
+					MonitoredError::Shutdown => break Ok(()),
 				};
 			};
 		};
@@ -443,12 +445,14 @@ async fn background_task(
 				sink.send_error(Id::Null, ErrorCode::ParseError.into());
 			}
 		}
-	}
+	};
+
+	middleware.on_disconnect();
 
 	// Drive all running methods to completion
 	method_executors.await;
 
-	Ok(())
+	result
 }
 
 #[derive(Debug, Clone)]
