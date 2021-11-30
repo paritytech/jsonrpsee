@@ -682,7 +682,7 @@ impl SubscriptionSink {
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
 		serde_json::to_string(&SubscriptionResponse {
 			jsonrpc: TwoPointZero,
-			method: self.method,
+			method: self.method.into(),
 			params: SubscriptionPayload { subscription: RpcSubscriptionId::Num(self.uniq_sub.sub_id), result },
 		})
 		.map_err(Into::into)

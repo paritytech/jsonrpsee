@@ -103,18 +103,18 @@ pub fn process_subscription_response(
 /// Returns Ok() if the response was successfully handled
 /// Returns Err() if there was no handler for the method
 pub fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) -> Result<(), Error> {
-	match manager.as_notification_handler_mut(notif.method.to_owned()) {
+	match manager.as_notification_handler_mut(notif.method.clone().into_owned()) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
-				let _ = manager.remove_notification_handler(notif.method.to_owned());
+				let _ = manager.remove_notification_handler(notif.method.into_owned());
 				Err(Error::Internal(err.into_send_error()))
 			}
 		},
 		None => {
 			tracing::error!("Notification: {:?} not a registered method", notif.method);
-			Err(Error::UnregisteredNotification(notif.method.to_owned()))
+			Err(Error::UnregisteredNotification(notif.method.into_owned()))
 		}
 	}
 }

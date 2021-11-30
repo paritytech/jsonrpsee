@@ -383,17 +383,17 @@ mod test {
 		let s = r#"[1337]"#;
 		assert!(serde_json::from_str::<Id>(s).is_err());
 
-		let s = r#"[null, 0, 2, "3"]"#;
+		let s = r#"[null, 0, 2, "\"3"]"#;
 		let deserialized: Vec<Id> = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized, vec![Id::Null, Id::Number(0), Id::Number(2), Id::Str("3".into())]);
+		assert_eq!(deserialized, vec![Id::Null, Id::Number(0), Id::Number(2), Id::Str("\"3".into())]);
 	}
 
 	#[test]
 	fn id_serialization() {
 		let d =
-			vec![Id::Null, Id::Number(0), Id::Number(2), Id::Number(3), Id::Str("3".into()), Id::Str("test".into())];
+			vec![Id::Null, Id::Number(0), Id::Number(2), Id::Number(3), Id::Str("\"3".into()), Id::Str("test".into())];
 		let serialized = serde_json::to_string(&d).unwrap();
-		assert_eq!(serialized, r#"[null,0,2,3,"3","test"]"#);
+		assert_eq!(serialized, r#"[null,0,2,3,"\"3","test"]"#);
 	}
 
 	#[test]
