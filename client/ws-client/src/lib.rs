@@ -44,7 +44,7 @@ use jsonrpsee_core_client::{Client, ClientBuilder};
 use std::time::Duration;
 use types::{CertificateStore, Error, TEN_MB_SIZE_BYTES};
 
-/// Builder for [`WsClient`].
+/// Builder for [`Client`].
 ///
 /// # Examples
 ///
