@@ -131,7 +131,7 @@ tuple_impls! {
 /// Transport interface to send data asynchronous.
 #[async_trait]
 /// Transport interface for an asyncronous client.
-pub trait TransportSender: Send + Sync + 'static {
+pub trait TransportSender: Send + 'static {
 	/// Error.
 	type Error: std::error::Error + Send + Sync;
 
@@ -146,7 +146,7 @@ pub trait TransportSender: Send + Sync + 'static {
 
 /// Transport interface to receive data asynchronous.
 #[async_trait]
-pub trait TransportReceiver: Send + Sync + 'static {
+pub trait TransportReceiver: Send + 'static {
 	/// Error that occur during send or receiving a message.
 	type Error: std::error::Error + Send + Sync;
 
