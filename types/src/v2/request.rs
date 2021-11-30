@@ -65,7 +65,8 @@ pub struct Notification<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
-	pub method: &'a str,
+	#[serde(borrow)]
+	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	pub params: T,
 }
@@ -78,6 +79,8 @@ pub struct RequestSer<'a> {
 	/// Request ID
 	pub id: Id<'a>,
 	/// Name of the method to be invoked.
+	// NOTE: as this type only implements serialize
+	// `#[serde(borrow)]` and `Cow<'a, str>` is not needed.
 	pub method: &'a str,
 	/// Parameter values of the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -97,6 +100,8 @@ pub struct NotificationSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Name of the method to be invoked.
+	// NOTE: as this type only implements serialize
+	// `#[serde(borrow)]` and `Cow<'a, str>` is not needed.
 	pub method: &'a str,
 	/// Parameter values of the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -124,21 +129,35 @@ mod test {
 
 	/// Checks that we can deserialize the object with or without non-mandatory fields.
 	#[test]
-	fn deserialize_request() {
+	fn deserialize_call() {
 		let method = "subtract";
 		let params = "[42, 23]";
 
 		let test_vector = vec![
 			// With all fields set.
-			(r#"{"jsonrpc":"2.0", "method":"subtract", "params":[42, 23], "id":1}"#, Id::Number(1), Some(params)),
+			(
+				r#"{"jsonrpc":"2.0", "method":"subtract", "params":[42, 23], "id":1}"#,
+				Id::Number(1),
+				Some(params),
+				method,
+			),
 			// Without params field
-			(r#"{"jsonrpc":"2.0", "method":"subtract", "id":null}"#, Id::Null, None),
+			(r#"{"jsonrpc":"2.0", "method":"subtract", "id":null}"#, Id::Null, None, method),
+			// Escaped method name.
+			(r#"{"jsonrpc":"2.0", "method":"\"m", "id":null}"#, Id::Null, None, "\"m"),
 		];
 
-		for (ser, id, params) in test_vector.into_iter() {
+		for (ser, id, params, method) in test_vector.into_iter() {
 			let request = serde_json::from_str(ser).unwrap();
 			assert_request(request, id, method, params);
 		}
+	}
+
+	#[test]
+	fn deserialize_call_escaped_method_name() {
+		let ser = r#"{"jsonrpc":"2.0","id":1,"method":"\"m\""}"#;
+		let req: Request = serde_json::from_str(ser).unwrap();
+		assert_request(req, Id::Number(1), "\"m\"", None);
 	}
 
 	#[test]
@@ -146,6 +165,14 @@ mod test {
 		let ser = r#"{"jsonrpc":"2.0","method":"say_hello","params":[]}"#;
 		let dsr: Notification<&RawValue> = serde_json::from_str(ser).unwrap();
 		assert_eq!(dsr.method, "say_hello");
+		assert_eq!(dsr.jsonrpc, TwoPointZero);
+	}
+
+	#[test]
+	fn deserialize_valid_notif_escaped_method() {
+		let ser = r#"{"jsonrpc":"2.0","method":"\"m\"","params":[]}"#;
+		let dsr: Notification<&RawValue> = serde_json::from_str(ser).unwrap();
+		assert_eq!(dsr.method, "\"m\"");
 		assert_eq!(dsr.jsonrpc, TwoPointZero);
 	}
 
@@ -174,16 +201,19 @@ mod test {
 				r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#,
 				Some(id.clone()),
 				Some(params.clone()),
+				method,
 			),
+			// Escaped method name.
+			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(id.clone()), None, "\"m"),
 			// Without ID field.
-			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, Some(params)),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, Some(params), method),
 			// Without params field
-			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(id), None),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(id), None, method),
 			// Without params and ID.
-			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, None),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, None, method),
 		];
 
-		for (ser, id, params) in test_vector.iter().cloned() {
+		for (ser, id, params, method) in test_vector.iter().cloned() {
 			let request = serde_json::to_string(&RequestSer {
 				jsonrpc: TwoPointZero,
 				method,
@@ -200,6 +230,14 @@ mod test {
 	fn serialize_notif() {
 		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","params":["hello"]}"#;
 		let req = NotificationSer::new("say_hello", Some(vec!["hello".into()].into()));
+		let ser = serde_json::to_string(&req).unwrap();
+		assert_eq!(exp, ser);
+	}
+
+	#[test]
+	fn serialize_notif_escaped_method_name() {
+		let exp = r#"{"jsonrpc":"2.0","method":"\"method\""}"#;
+		let req = NotificationSer::new("\"method\"", None);
 		let ser = serde_json::to_string(&req).unwrap();
 		assert_eq!(exp, ser);
 	}
