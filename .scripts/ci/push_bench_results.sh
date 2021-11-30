@@ -1,7 +1,7 @@
 #!/bin/bash
-#The script takes output.txt, removes every line that doesn't have "test"
-#in it and pushes benchmark result to Victoria Metrics
-#Benchmark name should have underscores in the name instead of spaces (e.g. async/http_concurrent_round_trip/8)
+# The script takes output.txt, removes every line that doesn't have "test"
+# in it and pushes benchmark result to Victoria Metrics
+# Benchmark name should have underscores in the name instead of spaces (e.g. async/http_concurrent_round_trip/8)
 
 RESULT_FILE=$1
 CURRENT_DIR=$(pwd)
