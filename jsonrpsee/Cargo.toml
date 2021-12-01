@@ -1,7 +1,7 @@
 [package]
 name = "jsonrpsee"
 description = "JSON-RPC crate"
-version = "0.5.1"
+version = "0.6.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
 edition = "2018"
@@ -12,13 +12,13 @@ documentation = "https://docs.rs/jsonrpsee"
 [dependencies]
 # No support for namespaced features yet so workspace dependencies are prefixed with `jsonrpsee-`.
 # See https://github.com/rust-lang/cargo/issues/5565 for more details.
-jsonrpsee-http-client = { path = "../http-client", version = "0.5.1", package = "jsonrpsee-http-client", optional = true }
-jsonrpsee-http-server = { path = "../http-server", version = "0.5.1", package = "jsonrpsee-http-server", optional = true }
-jsonrpsee-ws-client = { path = "../ws-client", version = "0.5.1", package = "jsonrpsee-ws-client", optional = true }
-jsonrpsee-ws-server = { path = "../ws-server", version = "0.5.1", package = "jsonrpsee-ws-server", optional = true }
-jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.5.1", package = "jsonrpsee-proc-macros", optional = true }
-jsonrpsee-utils = { path = "../utils", version = "0.5.1", package = "jsonrpsee-utils", optional = true }
-jsonrpsee-types = { path = "../types", version = "0.5.1", package = "jsonrpsee-types", optional = true }
+jsonrpsee-http-client = { path = "../http-client", version = "0.6.0", package = "jsonrpsee-http-client", optional = true }
+jsonrpsee-http-server = { path = "../http-server", version = "0.6.0", package = "jsonrpsee-http-server", optional = true }
+jsonrpsee-ws-client = { path = "../ws-client", version = "0.6.0", package = "jsonrpsee-ws-client", optional = true }
+jsonrpsee-ws-server = { path = "../ws-server", version = "0.6.0", package = "jsonrpsee-ws-server", optional = true }
+jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.6.0", package = "jsonrpsee-proc-macros", optional = true }
+jsonrpsee-utils = { path = "../utils", version = "0.6.0", package = "jsonrpsee-utils", optional = true }
+jsonrpsee-types = { path = "../types", version = "0.6.0", package = "jsonrpsee-types", optional = true }
 
 [features]
 http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-utils/client"]
