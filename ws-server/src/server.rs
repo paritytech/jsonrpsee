@@ -449,7 +449,9 @@ async fn background_task(
 
 	middleware.on_disconnect();
 
-	// Drive all running methods to completion
+	// Drive all running methods to completion.
+	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
+	// proper drop behaviour.
 	method_executors.await;
 
 	result
