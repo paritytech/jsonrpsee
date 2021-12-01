@@ -34,14 +34,15 @@ use hyper::{
 };
 use jsonrpsee_types::{
 	error::{Error, GenericTransportError},
+	middleware::Middleware,
 	v2::{ErrorCode, Id, Notification, Request},
 	TEN_MB_SIZE_BYTES,
 };
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
-	helpers::{collect_batch_response, prepare_error, send_error},
+	helpers::{collect_batch_response, prepare_error, MethodSink},
 	resource_limiting::Resources,
-	rpc_module::Methods,
+	rpc_module::{MethodResult, Methods},
 };
 
 use serde_json::value::RawValue;
@@ -56,16 +57,72 @@ use std::{
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
-pub struct Builder {
+pub struct Builder<M = ()> {
 	access_control: AccessControl,
 	resources: Resources,
 	max_request_body_size: u32,
 	keep_alive: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
+	middleware: M,
+}
+
+impl Default for Builder {
+	fn default() -> Self {
+		Self {
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			resources: Resources::default(),
+			access_control: AccessControl::default(),
+			keep_alive: true,
+			tokio_runtime: None,
+			middleware: (),
+		}
+	}
 }
 
 impl Builder {
+	/// Create a default server builder.
+	pub fn new() -> Self {
+		Self::default()
+	}
+}
+
+impl<M> Builder<M> {
+	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
+	///
+	/// ```
+	/// use jsonrpsee_types::middleware::Middleware;
+	/// use jsonrpsee_http_server::HttpServerBuilder;
+	/// use std::time::Instant;
+	///
+	/// #[derive(Clone)]
+	/// struct MyMiddleware;
+	///
+	/// impl Middleware for MyMiddleware {
+	///     type Instant = Instant;
+	///
+	///     fn on_request(&self) -> Instant {
+	///         Instant::now()
+	///     }
+	///
+	///     fn on_result(&self, name: &str, success: bool, started_at: Instant) {
+	///         println!("Call to '{}' took {:?}", name, started_at.elapsed());
+	///     }
+	/// }
+	///
+	/// let builder = HttpServerBuilder::new().set_middleware(MyMiddleware);
+	/// ```
+	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
+		Builder {
+			max_request_body_size: self.max_request_body_size,
+			resources: self.resources,
+			access_control: self.access_control,
+			keep_alive: self.keep_alive,
+			tokio_runtime: self.tokio_runtime,
+			middleware,
+		}
+	}
+
 	/// Sets the maximum size of a request body in bytes (default is 10 MiB).
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
@@ -120,7 +177,7 @@ impl Builder {
 	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).is_ok());
 	/// }
 	/// ```
-	pub fn build(self, addrs: impl ToSocketAddrs) -> Result<Server, Error> {
+	pub fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
 		let mut err: Option<Error> = None;
 
 		for addr in addrs.to_socket_addrs()? {
@@ -139,6 +196,7 @@ impl Builder {
 				max_request_body_size: self.max_request_body_size,
 				resources: self.resources,
 				tokio_runtime: self.tokio_runtime,
+				middleware: self.middleware,
 			});
 		}
 
@@ -164,18 +222,6 @@ impl Builder {
 		let local_addr = listener.local_addr().ok();
 		let listener = hyper::Server::from_tcp(listener)?;
 		Ok((listener, local_addr))
-	}
-}
-
-impl Default for Builder {
-	fn default() -> Self {
-		Self {
-			max_request_body_size: TEN_MB_SIZE_BYTES,
-			resources: Resources::default(),
-			access_control: AccessControl::default(),
-			keep_alive: true,
-			tokio_runtime: None,
-		}
 	}
 }
 
@@ -212,7 +258,7 @@ impl Future for ServerHandle {
 
 /// An HTTP JSON RPC server.
 #[derive(Debug)]
-pub struct Server {
+pub struct Server<M = ()> {
 	/// Hyper server.
 	listener: HyperBuilder<AddrIncoming>,
 	/// Local address
@@ -225,9 +271,10 @@ pub struct Server {
 	resources: Resources,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
+	middleware: M,
 }
 
-impl Server {
+impl<M: Middleware> Server<M> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
@@ -240,18 +287,21 @@ impl Server {
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
 		let resources = self.resources;
+		let middleware = self.middleware;
 		let methods = methods.into().initialize_resources(&resources)?;
 
 		let make_service = make_service_fn(move |_| {
 			let methods = methods.clone();
 			let access_control = access_control.clone();
 			let resources = resources.clone();
+			let middleware = middleware.clone();
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
 					let access_control = access_control.clone();
 					let resources = resources.clone();
+					let middleware = middleware.clone();
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -276,32 +326,60 @@ impl Server {
 							}
 						};
 
+						let request_start = middleware.on_request();
+
 						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 						let (tx, mut rx) = mpsc::unbounded::<String>();
+						let sink = MethodSink::new_with_limit(tx, max_request_body_size);
 
 						type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
 						// Single request or notification
 						if is_single {
 							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
+								middleware.on_call(req.method.as_ref());
+
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								if let Some(fut) =
-									methods.execute_with_resources(&tx, req, 0, &resources, max_request_body_size)
-								{
-									fut.await;
+								match methods.execute_with_resources(&sink, req, 0, &resources) {
+									Ok((name, MethodResult::Sync(success))) => {
+										middleware.on_result(name, success, request_start);
+									}
+									Ok((name, MethodResult::Async(fut))) => {
+										let success = fut.await;
+
+										middleware.on_result(name, success, request_start);
+									}
+									Err(name) => {
+										middleware.on_result(name.as_ref(), false, request_start);
+									}
 								}
 							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
 								return Ok::<_, HyperError>(response::ok_response("".into()));
 							} else {
 								let (id, code) = prepare_error(&body);
-								send_error(id, &tx, code.into());
+								sink.send_error(id, code.into());
 							}
 
 						// Batch of requests or notifications
 						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 							if !batch.is_empty() {
-								join_all(batch.into_iter().filter_map(|req| {
-									methods.execute_with_resources(&tx, req, 0, &resources, max_request_body_size)
+								let middleware = &middleware;
+
+								join_all(batch.into_iter().filter_map(move |req| {
+									match methods.execute_with_resources(&sink, req, 0, &resources) {
+										Ok((name, MethodResult::Sync(success))) => {
+											middleware.on_result(name, success, request_start);
+											None
+										}
+										Ok((name, MethodResult::Async(fut))) => Some(async move {
+											let success = fut.await;
+											middleware.on_result(name, success, request_start);
+										}),
+										Err(name) => {
+											middleware.on_result(name.as_ref(), false, request_start);
+											None
+										}
+									}
 								}))
 								.await;
 							} else {
@@ -309,7 +387,7 @@ impl Server {
 								// Array with at least one value, the response from the Server MUST be a single
 								// Response object." – The Spec.
 								is_single = true;
-								send_error(Id::Null, &tx, ErrorCode::InvalidRequest.into());
+								sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
 							}
 						} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
 							return Ok::<_, HyperError>(response::ok_response("".into()));
@@ -319,7 +397,7 @@ impl Server {
 							// Response object." – The Spec.
 							is_single = true;
 							let (id, code) = prepare_error(&body);
-							send_error(id, &tx, code.into());
+							sink.send_error(id, code.into());
 						}
 
 						// Closes the receiving half of a channel without dropping it. This prevents any further
@@ -331,6 +409,7 @@ impl Server {
 							collect_batch_response(rx).await
 						};
 						tracing::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
+						middleware.on_response(request_start);
 						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))
