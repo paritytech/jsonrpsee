@@ -19,10 +19,10 @@ jsonrpsee-utils = { path = "../utils", version = "0.5.1", features = ["client", 
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1.8", features = ["time"] }
 tracing = "0.1"
 url = "2.2"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
-tokio = { package = "tokio", version = "1", features = ["net", "rt-multi-thread", "macros"] }
+tokio = { version = "1.8", features = ["net", "rt-multi-thread", "macros"] }
