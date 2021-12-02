@@ -45,6 +45,13 @@ pub struct Response<'a, T> {
 	pub id: Id<'a>,
 }
 
+impl<'a, T> Response<'a, T> {
+	/// Create a new `Response`.
+	pub fn new(result: T, id: Id<'a>) -> Response<'a, T> {
+		Response { jsonrpc: TwoPointZero, result, id }
+	}
+}
+
 /// Return value for subscriptions.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubscriptionPayload<T> {
