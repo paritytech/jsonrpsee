@@ -95,7 +95,7 @@ trait RequestBencher {
 		let rt = TokioRuntime::new().unwrap();
 		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
 		let client = Arc::new(HttpClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url).unwrap());
-		run_round_trip_with_batch(&rt, crit, client, "http batch requests", Self::REQUEST_TYPE);
+		run_round_trip_with_batch(&rt, crit, client, "http_batch_requests", Self::REQUEST_TYPE);
 	}
 
 	fn websocket_requests(crit: &mut Criterion) {
@@ -113,7 +113,7 @@ trait RequestBencher {
 		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
 		let client =
 			Arc::new(rt.block_on(WsClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
-		run_round_trip_with_batch(&rt, crit, client, "ws batch requests", Self::REQUEST_TYPE);
+		run_round_trip_with_batch(&rt, crit, client, "ws_batch_requests", Self::REQUEST_TYPE);
 	}
 
 	fn subscriptions(crit: &mut Criterion) {
@@ -188,7 +188,7 @@ fn run_sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl 
 	});
 }
 
-/// Benchmark http batch requests over batch sizes of 2, 5, 10, 50 and 100 RPCs in each batch.
+/// Benchmark http_batch_requests over batch sizes of 2, 5, 10, 50 and 100 RPCs in each batch.
 fn run_round_trip_with_batch(
 	rt: &TokioRuntime,
 	crit: &mut Criterion,
