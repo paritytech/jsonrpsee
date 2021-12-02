@@ -83,7 +83,7 @@ fmt:
   <<:                              *docker-env
   <<:                              *common-refs
   script:
-    # FIXME: remove after stable fmt added to ci-linux
+    # FIXME: remove component add after https://github.com/paritytech/substrate/issues/10411 is fixed
     - rustup component add rustfmt
     - cargo fmt --all -- --check
 
@@ -92,7 +92,7 @@ clippy:
   <<:                              *docker-env
   <<:                              *common-refs
   script:
-    # FIXME: remove after stable clippy added to ci-linux
+    # FIXME: remove component add after https://github.com/paritytech/substrate/issues/10411 is fixed
     - rustup component add clippy
     - cargo clippy --all-targets
 
