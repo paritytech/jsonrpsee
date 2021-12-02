@@ -1,4 +1,5 @@
 default:
+  interruptible:                   true
   retry:
     max: 2
     when:
@@ -58,13 +59,11 @@ variables:                         &default-vars
   before_script:
     - *rust-info-script
     - sccache -s
-  interruptible:                   true
   tags:
     - linux-docker
 
 .kubernetes-env:                   &kubernetes-env
   image:                           "${CI_IMAGE}"
-  interruptible:                   true
   tags:
     - kubernetes-parity-build
 
