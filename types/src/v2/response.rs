@@ -46,7 +46,7 @@ pub struct Response<'a, T> {
 }
 
 impl<'a, T> Response<'a, T> {
-	/// Create a new `Response`.
+	/// Create a new [`Response`].
 	pub fn new(result: T, id: Id<'a>) -> Response<'a, T> {
 		Response { jsonrpc: TwoPointZero, result, id }
 	}

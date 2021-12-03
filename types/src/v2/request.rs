@@ -50,7 +50,7 @@ pub struct Request<'a> {
 }
 
 impl<'a> Request<'a> {
-	/// Create a new `Request`.
+	/// Create a new [`Request`].
 	pub fn new(method: Cow<'a, str>, params: Option<&'a RawValue>, id: Id<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
 	}
@@ -79,7 +79,7 @@ pub struct Notification<'a, T> {
 }
 
 impl<'a, T> Notification<'a, T> {
-	/// Create a new `Notification`.
+	/// Create a new [`Notification`].
 	pub fn new(method: Cow<'a, str>, params: T) -> Self {
 		Self { jsonrpc: TwoPointZero, method, params }
 	}

@@ -369,7 +369,15 @@ impl Methods {
 		rx.next().await
 	}
 
-	/// Perform a method call and receive further subscriptions.
+	/// Perform a "in memory JSON-RPC method call" and receive further subscriptions.
+	/// This is useful if you want to support both `method calls` and `subscriptions`
+	/// in the same API.
+	///
+	/// There are better variants than this method if you only want
+	/// method calls or subscriptions.
+	///
+	/// See [`RpcModule::test_subscription`] and [`RpcModule::call_with`] for
+	/// for further documentation.
 	///
 	/// Returns a response to actual method call and a stream to process
 	/// futher subscriptions if a subcription was registered on the call.
@@ -386,7 +394,7 @@ impl Methods {
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
-	///     sink.send(&"one answer").unwrap();
+	///         sink.send(&"one answer").unwrap();
 	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.call_and_subscribe("hi", EmptyParams::new()).await.unwrap();
