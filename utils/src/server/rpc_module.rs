@@ -371,8 +371,8 @@ impl Methods {
 
 	/// Perform a method call and receive further subscriptions.
 	///
-	/// Returns a response to actual method call and a stream to process
-	/// futher subscriptions if a subcription was registered on the call.
+	/// Returns a response to the actual method call and a stream to process
+	/// further notifications if a subscription was registered by the call.
 	///
 	/// ```
 	/// #[tokio::main]
