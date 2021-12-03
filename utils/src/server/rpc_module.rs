@@ -376,7 +376,7 @@ impl Methods {
 	/// There are better variants than this method if you only want
 	/// method calls or subscriptions.
 	///
-	/// See [`RpcModule::test_subscription`] and [`RpcModule::call_with`] for
+	/// See [`Methods::test_subscription`] and [`Methods::call_with`] for
 	/// for further documentation.
 	///
 	/// Returns a response to the actual method call and a stream to process
