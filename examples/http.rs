@@ -26,7 +26,7 @@
 
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, HttpStopHandle, RpcModule},
+	http_server::{HttpServerBuilder, HttpServerHandle, RpcModule},
 	rpc_params,
 	types::traits::Client,
 };
@@ -34,9 +34,10 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	// init tracing `FmtSubscriber`.
-	let subscriber = tracing_subscriber::FmtSubscriber::new();
-	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
 
 	let (server_addr, _handle) = run_server().await?;
 	let url = format!("http://{}", server_addr);
@@ -49,12 +50,12 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpStopHandle)> {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse()?)?;
+async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
+	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse::<SocketAddr>()?)?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 
 	let addr = server.local_addr()?;
-	let stop_handle = server.start(module)?;
-	Ok((addr, stop_handle))
+	let server_handle = server.start(module)?;
+	Ok((addr, server_handle))
 }

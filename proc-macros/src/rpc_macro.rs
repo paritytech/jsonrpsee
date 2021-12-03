@@ -27,12 +27,15 @@
 //! Declaration of the JSON RPC generator procedural macros.
 
 use crate::{
-	attributes::{optional, Argument, AttributeMeta, MissingArgument, Resource},
+	attributes::{
+		optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, Resource,
+	},
 	helpers::extract_doc_comments,
 };
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
+use std::borrow::Cow;
 use syn::spanned::Spanned;
 use syn::{punctuated::Punctuated, Attribute, Token};
 
@@ -41,7 +44,9 @@ pub struct RpcMethod {
 	pub name: String,
 	pub blocking: bool,
 	pub docs: TokenStream2,
+	pub deprecated: TokenStream2,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
+	pub param_kind: ParamKind,
 	pub returns: Option<syn::Type>,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
@@ -50,16 +55,21 @@ pub struct RpcMethod {
 
 impl RpcMethod {
 	pub fn from_item(attr: Attribute, mut method: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, blocking, name, resources] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "resources"])?;
+		let [aliases, blocking, name, param_kind, resources] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "blocking", "name", "param_kind", "resources"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let blocking = optional(blocking, Argument::flag)?.is_some();
 		let name = name?.string()?;
+		let param_kind = parse_param_kind(param_kind)?;
 		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = method.sig.clone();
 		let docs = extract_doc_comments(&method.attrs);
+		let deprecated = match find_attr(&method.attrs, "deprecated") {
+			Some(attr) => quote!(#attr),
+			None => quote!(),
+		};
 
 		if blocking && sig.asyncness.is_some() {
 			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
@@ -85,16 +95,35 @@ impl RpcMethod {
 		// We've analyzed attributes and don't need them anymore.
 		method.attrs.clear();
 
-		Ok(Self { aliases, blocking, name, params, returns, signature: method, docs, resources })
+		Ok(Self {
+			aliases,
+			blocking,
+			name,
+			params,
+			param_kind,
+			returns,
+			signature: method,
+			docs,
+			resources,
+			deprecated,
+		})
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct RpcSubscription {
 	pub name: String,
+	/// When subscribing to an RPC, users can override the content of the `method` field
+	/// in the JSON data sent to subscribers.
+	/// Each subscription thus has one method name to set up the subscription,
+	/// one to unsubscribe and, optionally, a third method name used to describe the
+	/// payload (aka "notification") sent back from the server to subscribers.
+	/// If no override is provided, the subscription method name is used.
+	pub notif_name_override: Option<String>,
 	pub docs: TokenStream2,
 	pub unsubscribe: String,
 	pub params: Vec<(syn::PatIdent, syn::Type)>,
+	pub param_kind: ParamKind,
 	pub item: syn::Type,
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
@@ -103,12 +132,15 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, unsubscribe_aliases] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_kind, unsubscribe_aliases] =
+			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases"])?;
 
 		let aliases = parse_aliases(aliases)?;
-		let name = name?.string()?;
+		let map = name?.value::<NameMapping>()?;
+		let name = map.name;
+		let notif_name_override = map.mapped;
 		let item = item?.value()?;
+		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
 
 		let sig = sub.sig.clone();
@@ -130,7 +162,18 @@ impl RpcSubscription {
 		// We've analyzed attributes and don't need them anymore.
 		sub.attrs.clear();
 
-		Ok(Self { name, unsubscribe, unsubscribe_aliases, params, item, signature: sub, aliases, docs })
+		Ok(Self {
+			name,
+			notif_name_override,
+			unsubscribe,
+			unsubscribe_aliases,
+			params,
+			param_kind,
+			item,
+			signature: sub,
+			aliases,
+			docs,
+		})
 	}
 }
 
@@ -271,33 +314,26 @@ impl RpcDescription {
 	/// Based on the namespace, renders the full name of the RPC method/subscription.
 	/// Examples:
 	/// For namespace `foo` and method `makeSpam`, result will be `foo_makeSpam`.
-	/// For no namespace and method `makeSpam` it will be just `makeSpam.
-	pub(crate) fn rpc_identifier(&self, method: &str) -> String {
+	/// For no namespace and method `makeSpam` it will be just `makeSpam`.
+	pub(crate) fn rpc_identifier<'a>(&self, method: &'a str) -> Cow<'a, str> {
 		if let Some(ns) = &self.namespace {
-			format!("{}_{}", ns, method.trim())
+			format!("{}_{}", ns, method).into()
 		} else {
-			method.to_string()
+			Cow::Borrowed(method)
 		}
 	}
 }
 
 fn parse_aliases(arg: Result<Argument, MissingArgument>) -> syn::Result<Vec<String>> {
-	let aliases = optional(arg, Argument::string)?;
+	let aliases = optional(arg, Argument::value::<Aliases>)?;
 
-	Ok(aliases.map(|a| a.split(',').map(Into::into).collect()).unwrap_or_default())
+	Ok(aliases.map(|a| a.list.into_iter().map(|lit| lit.value()).collect()).unwrap_or_default())
 }
 
 fn find_attr<'a>(attrs: &'a [Attribute], ident: &str) -> Option<&'a Attribute> {
 	attrs.iter().find(|a| a.path.is_ident(ident))
 }
 
-fn build_unsubscribe_method(existing_method: &str) -> String {
-	let method = existing_method.trim();
-	let mut new_method = String::from("unsubscribe");
-	if method.starts_with("subscribe") {
-		new_method.extend(method.chars().skip(9));
-	} else {
-		new_method.push_str(method);
-	}
-	new_method
+fn build_unsubscribe_method(method: &str) -> String {
+	format!("unsubscribe{}", method.strip_prefix("subscribe").unwrap_or(method))
 }

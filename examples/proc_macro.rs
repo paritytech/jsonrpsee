@@ -28,7 +28,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	types::{async_trait, error::Error, Subscription},
 	ws_client::WsClientBuilder,
-	ws_server::{SubscriptionSink, WsServerBuilder, WsStopHandle},
+	ws_server::{SubscriptionSink, WsServerBuilder, WsServerHandle},
 };
 use std::net::SocketAddr;
 
@@ -45,7 +45,7 @@ where
 	async fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>, Error>;
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
-	#[subscription(name = "subscribeStorage", item = Vec<Hash>)]
+	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
 	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> Result<(), Error>;
 }
 
@@ -72,9 +72,10 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	// init tracing `FmtSubscriber`.
-	let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
-	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
 
 	let (server_addr, _handle) = run_server().await?;
 	let url = format!("ws://{}", server_addr);
@@ -89,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, WsStopHandle)> {
+async fn run_server() -> anyhow::Result<(SocketAddr, WsServerHandle)> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;

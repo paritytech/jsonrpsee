@@ -28,7 +28,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use std::{fmt, iter};
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
-use syn::{spanned::Spanned, Attribute, Error, Token};
+use syn::{spanned::Spanned, Attribute, Error, LitInt, LitStr, Token};
 
 pub(crate) struct AttributeMeta {
 	pub path: syn::Path,
@@ -41,11 +41,28 @@ pub(crate) struct Argument {
 }
 
 #[derive(Debug, Clone)]
-pub struct Resource {
-	pub name: syn::LitStr,
-	pub assign: Token![=],
-	pub value: syn::LitInt,
+pub enum ParamKind {
+	Array,
+	Map,
 }
+
+#[derive(Debug, Clone)]
+pub struct Resource {
+	pub name: LitStr,
+	pub assign: Token![=],
+	pub value: LitInt,
+}
+
+pub struct NameMapping {
+	pub name: String,
+	pub mapped: Option<String>,
+}
+
+pub struct Bracketed<T> {
+	pub list: Punctuated<T, Token![,]>,
+}
+
+pub type Aliases = Bracketed<LitStr>;
 
 impl Parse for Argument {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -78,6 +95,34 @@ impl Parse for Argument {
 impl Parse for Resource {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		Ok(Resource { name: input.parse()?, assign: input.parse()?, value: input.parse()? })
+	}
+}
+
+impl Parse for NameMapping {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let name = input.parse::<LitStr>()?.value();
+
+		let mapped = if input.peek(Token![=>]) {
+			input.parse::<Token![=>]>()?;
+
+			Some(input.parse::<LitStr>()?.value())
+		} else {
+			None
+		};
+
+		Ok(NameMapping { name, mapped })
+	}
+}
+
+impl<T: Parse> Parse for Bracketed<T> {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let content;
+
+		syn::bracketed!(content in input);
+
+		let list = content.parse_terminated(Parse::parse)?;
+
+		Ok(Bracketed { list })
 	}
 }
 
@@ -179,7 +224,7 @@ impl Argument {
 
 	/// Asserts that the argument is `key = "string"` and gets the value of the string
 	pub fn string(self) -> syn::Result<String> {
-		self.value::<syn::LitStr>().map(|lit| lit.value())
+		self.value::<LitStr>().map(|lit| lit.value())
 	}
 }
 
@@ -188,4 +233,15 @@ where
 	F: Fn(Argument) -> syn::Result<T>,
 {
 	arg.ok().map(transform).transpose()
+}
+
+pub(crate) fn parse_param_kind(arg: Result<Argument, MissingArgument>) -> syn::Result<ParamKind> {
+	let kind: Option<syn::Ident> = optional(arg, Argument::value)?;
+
+	match kind {
+		None => Ok(ParamKind::Array),
+		Some(ident) if ident == "array" => Ok(ParamKind::Array),
+		Some(ident) if ident == "map" => Ok(ParamKind::Map),
+		ident => Err(Error::new(ident.span(), "param_kind must be either `map` or `array`")),
+	}
 }

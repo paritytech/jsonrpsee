@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-ws-client"
-version = "0.4.1"
+version = "0.6.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
 edition = "2018"
@@ -10,29 +10,28 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
-tokio = { version = "1", features = ["net", "time", "rt-multi-thread", "macros"] }
-tokio-rustls = { version = "0.22", optional = true }
-tokio-util = { version = "0.6", features = ["compat"] }
-
 async-trait = "0.1"
 fnv = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 http = "0.2"
-jsonrpsee-types = { path = "../types", version = "0.4.1" }
+jsonrpsee-types = { path = "../types", version = "0.6.0" }
 pin-project = "1"
-rustls-native-certs = "0.5.0"
+rustls-native-certs = "0.6.0"
 serde = "1"
 serde_json = "1"
-soketto = "0.7"
+soketto = "0.7.1"
 thiserror = "1"
+tokio = { version = "1.8", features = ["net", "time", "rt-multi-thread", "macros"] }
+tokio-rustls = { version = "0.23", optional = true }
+tokio-util = { version = "0.6", features = ["compat"] }
 tracing = "0.1"
-webpki-roots = "0.21"
+webpki-roots = "0.22.0"
 
 [dev-dependencies]
 env_logger = "0.9"
 jsonrpsee-test-utils = { path = "../test-utils" }
-jsonrpsee-utils = { path = "../utils" }
-tokio = { version = "1", features = ["macros"] }
+jsonrpsee-utils = { path = "../utils", features = ["client"] }
+tokio = { version = "1.8", features = ["macros"] }
 
 [features]
 default = ["tls"]

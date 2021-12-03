@@ -25,22 +25,22 @@
 // DEALINGS IN THE SOFTWARE.
 
 use jsonrpsee::{
-	http_server::{HttpServerBuilder, HttpStopHandle},
+	http_server::{HttpServerBuilder, HttpServerHandle},
 	types::Error,
-	ws_server::{WsServerBuilder, WsStopHandle},
+	ws_server::{WsServerBuilder, WsServerHandle},
 	RpcModule,
 };
 use std::net::SocketAddr;
 use std::time::Duration;
 
-pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) {
+pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
 	module
-		.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
 			std::thread::spawn(move || loop {
 				if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello from subscription") {
 					break;
@@ -52,7 +52,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) 
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
+		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
 			std::thread::spawn(move || loop {
 				if let Err(Error::SubscriptionClosed(_)) = sink.send(&1337) {
 					break;
@@ -64,39 +64,51 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsStopHandle) 
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_add_one", "unsubscribe_add_one", |params, mut sink, _| {
-			let mut count: usize = params.one()?;
-			std::thread::spawn(move || loop {
-				count = count.wrapping_add(1);
-				if let Err(Error::SubscriptionClosed(_)) = sink.send(&count) {
-					break;
-				}
-				std::thread::sleep(Duration::from_millis(100));
-			});
-			Ok(())
-		})
+		.register_subscription(
+			"subscribe_add_one",
+			"subscribe_add_one",
+			"unsubscribe_add_one",
+			|params, mut sink, _| {
+				let mut count: usize = params.one()?;
+				std::thread::spawn(move || loop {
+					count = count.wrapping_add(1);
+					if let Err(Error::SubscriptionClosed(_)) = sink.send(&count) {
+						break;
+					}
+					std::thread::sleep(Duration::from_millis(100));
+				});
+				Ok(())
+			},
+		)
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
+		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
-				sink.close("Server closed the stream because it was lazy".into())
+				sink.close("Server closed the stream because it was lazy")
 			});
 			Ok(())
 		})
 		.unwrap();
 
 	let addr = server.local_addr().unwrap();
-	let stop_handle = server.start(module).unwrap();
+	let server_handle = server.start(module).unwrap();
 
-	(addr, stop_handle)
+	(addr, server_handle)
 }
 
 pub async fn websocket_server() -> SocketAddr {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+
+	module
+		.register_async_method("slow_hello", |_, _| async {
+			tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+			Ok("hello")
+		})
+		.unwrap();
 
 	let addr = server.local_addr().unwrap();
 
@@ -105,8 +117,8 @@ pub async fn websocket_server() -> SocketAddr {
 	addr
 }
 
-pub async fn http_server() -> (SocketAddr, HttpStopHandle) {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse().unwrap()).unwrap();
+pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
+	let server = HttpServerBuilder::default().build("127.0.0.1:0").unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

@@ -8,6 +8,7 @@
 
 use crate::types::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
+use jsonrpsee_types::CertificateStore;
 use jsonrpsee_utils::http_helpers;
 use thiserror::Error;
 
@@ -45,7 +46,11 @@ pub(crate) struct HttpTransportClient {
 
 impl HttpTransportClient {
 	/// Initializes a new HTTP client.
-	pub(crate) fn new(target: impl AsRef<str>, max_request_body_size: u32) -> Result<Self, Error> {
+	pub(crate) fn new(
+		target: impl AsRef<str>,
+		max_request_body_size: u32,
+		cert_store: CertificateStore,
+	) -> Result<Self, Error> {
 		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		let client = match target.scheme() {
 			"http" => {
@@ -55,8 +60,16 @@ impl HttpTransportClient {
 			}
 			#[cfg(feature = "tls")]
 			"https" => {
-				let connector = hyper_rustls::HttpsConnector::with_native_roots();
-				let client = Client::builder().build::<_, hyper::Body>(connector);
+				let connector = match cert_store {
+					CertificateStore::Native => {
+						hyper_rustls::HttpsConnectorBuilder::new().with_native_roots().https_or_http().enable_http1()
+					}
+					CertificateStore::WebPki => {
+						hyper_rustls::HttpsConnectorBuilder::new().with_webpki_roots().https_or_http().enable_http1()
+					}
+					_ => return Err(Error::InvalidCertficateStore),
+				};
+				let client = Client::builder().build::<_, hyper::Body>(connector.build());
 				HyperClient::Https(client)
 			}
 			_ => {
@@ -131,6 +144,10 @@ pub(crate) enum Error {
 	/// Malformed request.
 	#[error("Malformed request")]
 	Malformed,
+
+	/// Invalid certificate store.
+	#[error("Invalid certificate store")]
+	InvalidCertficateStore,
 }
 
 impl<T> From<GenericTransportError<T>> for Error
@@ -148,18 +165,18 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{Error, HttpTransportClient};
+	use super::{CertificateStore, Error, HttpTransportClient};
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err = HttpTransportClient::new("ws://localhost:9933", 80).unwrap_err();
+		let err = HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native).unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[tokio::test]
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
-		let client = HttpTransportClient::new("http://localhost:9933", 80).unwrap();
+		let client = HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki).unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
 		let body = "a".repeat(81);

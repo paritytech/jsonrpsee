@@ -332,7 +332,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
 			tokio::spawn(async move {
 				let close_err = loop {
 					if let Err(Error::SubscriptionClosed(err)) = sink.send(&1) {
@@ -359,4 +359,19 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	drop(client);
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
 	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError { .. }));
+}
+
+#[tokio::test]
+async fn ws_batch_works() {
+	let server_addr = websocket_server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut batch = Vec::new();
+
+	batch.push(("say_hello", rpc_params![]));
+	batch.push(("slow_hello", rpc_params![]));
+
+	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
+	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 }

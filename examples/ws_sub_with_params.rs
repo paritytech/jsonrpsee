@@ -34,9 +34,10 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	// init tracing `FmtSubscriber`.
-	let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
-	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
 
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
@@ -61,7 +62,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "unsub_one_param", |params, mut sink, _| {
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {
 			let idx: usize = params.one()?;
 			std::thread::spawn(move || loop {
 				let _ = sink.send(&LETTERS.chars().nth(idx));
@@ -71,7 +72,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "unsub_params_two", |params, mut sink, _| {
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, mut sink, _| {
 			let (one, two): (usize, usize) = params.parse()?;
 			std::thread::spawn(move || loop {
 				let _ = sink.send(&LETTERS[one..two].to_string());

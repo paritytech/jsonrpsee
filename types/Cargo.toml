@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-types"
-version = "0.4.1"
+version = "0.6.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Shared types for jsonrpsee"
 edition = "2018"
@@ -19,5 +19,5 @@ tracing = { version = "0.1", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"] }
 serde_json = { version = "1", default-features = false, features = ["alloc", "raw_value", "std"] }
 thiserror = "1.0"
-soketto = "0.7"
+soketto = "0.7.1"
 hyper = "0.14.10"

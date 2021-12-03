@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-http-client"
-version = "0.4.1"
+version = "0.6.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "HTTP client for JSON-RPC"
 edition = "2018"
@@ -11,22 +11,22 @@ documentation = "https://docs.rs/jsonrpsee-http-client"
 
 [dependencies]
 async-trait = "0.1"
-hyper-rustls = { version = "0.22", optional = true }
+fnv = "1"
 hyper = { version = "0.14.10", features = ["client", "http1", "http2", "tcp"] }
-jsonrpsee-types = { path = "../types", version = "0.4.1" }
-jsonrpsee-utils = { path = "../utils", version = "0.4.1", features = ["http-helpers"] }
-tracing = "0.1"
+hyper-rustls = { version = "0.23", optional = true }
+jsonrpsee-types = { path = "../types", version = "0.6.0" }
+jsonrpsee-utils = { path = "../utils", version = "0.6.0", features = ["client", "http-helpers"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1", features = ["time"] }
 thiserror = "1.0"
+tokio = { version = "1.8", features = ["time"] }
+tracing = "0.1"
 url = "2.2"
-fnv = "1"
 
 [dev-dependencies]
 jsonrpsee-test-utils = { path = "../test-utils" }
-tokio = { package = "tokio", version = "1", features = ["net", "rt-multi-thread", "macros"] }
+tokio = { version = "1.8", features = ["net", "rt-multi-thread", "macros"] }
 
 [features]
 default = ["tls"]
-tls = ["hyper-rustls"]
+tls = ["hyper-rustls/webpki-tokio"]

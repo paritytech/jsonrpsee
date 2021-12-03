@@ -36,9 +36,10 @@ const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	// init tracing `FmtSubscriber`.
-	let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
-	tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
 
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
@@ -60,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
+	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, mut sink, _| {
 		std::thread::spawn(move || loop {
 			if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello my friend") {
 				return;

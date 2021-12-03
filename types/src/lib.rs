@@ -46,6 +46,9 @@ mod client;
 /// Traits
 pub mod traits;
 
+/// Middleware trait and implementation.
+pub mod middleware;
+
 pub use async_trait::async_trait;
 pub use beef::Cow;
 pub use client::*;

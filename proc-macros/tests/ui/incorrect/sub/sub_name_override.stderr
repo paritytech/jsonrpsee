@@ -1,0 +1,5 @@
+error: "one" is already defined
+ --> $DIR/sub_name_override.rs:7:5
+  |
+7 |     fn one(&self) -> RpcResult<()>;
+  |        ^^^

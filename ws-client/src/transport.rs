@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::stream::EitherStream;
+use crate::{stream::EitherStream, types::CertificateStore};
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
 use soketto::connection;
@@ -80,16 +80,6 @@ pub enum Mode {
 	Tls,
 }
 
-/// What certificate store to use
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum CertificateStore {
-	/// Use the native system certificate store
-	Native,
-	/// Use webPki's certificate store
-	WebPki,
-}
-
 /// Error that can happen during the WebSocket handshake.
 ///
 /// If multiple IP addresses are attempted, only the last error is returned, similar to how
@@ -115,7 +105,7 @@ pub enum WsHandshakeError {
 	/// Invalid DNS name error for TLS
 	#[cfg(feature = "tls")]
 	#[error("Invalid DNS name: {0}")]
-	InvalidDnsName(#[source] tokio_rustls::webpki::InvalidDNSNameError),
+	InvalidDnsName(#[source] tokio_rustls::webpki::InvalidDnsNameError),
 
 	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {status_code}")]
@@ -292,8 +282,8 @@ async fn connect(
 				Mode::Tls => {
 					// TODO(niklasad1): cache this.
 					let connector = build_tls_config(cert_store)?;
-					let dns_name = tokio_rustls::webpki::DNSNameRef::try_from_ascii_str(host)?;
-					let tls_stream = connector.connect(dns_name, socket).await?;
+					let server_name: tokio_rustls::rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {} {:?}", host, e).into()))?;
+					let tls_stream = connector.connect(server_name, socket).await?;
 					Ok(EitherStream::Tls(tls_stream))
 				}
 			}
@@ -330,8 +320,8 @@ impl From<io::Error> for WsHandshakeError {
 }
 
 #[cfg(feature = "tls")]
-impl From<tokio_rustls::webpki::InvalidDNSNameError> for WsHandshakeError {
-	fn from(err: tokio_rustls::webpki::InvalidDNSNameError) -> WsHandshakeError {
+impl From<tokio_rustls::webpki::InvalidDnsNameError> for WsHandshakeError {
+	fn from(err: tokio_rustls::webpki::InvalidDnsNameError) -> WsHandshakeError {
 		WsHandshakeError::InvalidDnsName(err)
 	}
 }
@@ -385,19 +375,44 @@ impl TryFrom<Uri> for Target {
 	}
 }
 
+// NOTE: this is slow and should be used sparingly.
 #[cfg(feature = "tls")]
 fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsConnector, WsHandshakeError> {
-	let mut client_config = tokio_rustls::rustls::ClientConfig::default();
+	use tokio_rustls::rustls as rustls;
+
+	let mut roots = rustls::RootCertStore::empty();
+
 	match cert_store {
 		CertificateStore::Native => {
-			client_config.root_store =
-				rustls_native_certs::load_native_certs().map_err(|(_, e)| WsHandshakeError::CertificateStore(e))?;
+			let mut first_error = None;
+			let certs = rustls_native_certs::load_native_certs().map_err(WsHandshakeError::CertificateStore)?;
+			for cert in certs {
+				let cert = rustls::Certificate(cert.0);
+				if let Err(err) = roots.add(&cert) {
+					first_error = first_error.or_else(|| Some(io::Error::new(io::ErrorKind::InvalidData, err)));
+				}
+			}
+			if roots.is_empty() {
+				let err = first_error
+					.unwrap_or_else(|| io::Error::new(io::ErrorKind::NotFound, "No valid certificate found"));
+				return Err(WsHandshakeError::CertificateStore(err));
+			}
 		}
 		CertificateStore::WebPki => {
-			client_config.root_store.add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+			roots.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+				rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(ta.subject, ta.spki, ta.name_constraints)
+			}));
+		}
+		_ => {
+			let err = io::Error::new(io::ErrorKind::NotFound, "Invalid certificate store");
+			return Err(WsHandshakeError::CertificateStore(err));
 		}
 	};
-	Ok(Arc::new(client_config).into())
+
+	let config =
+		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(roots).with_no_client_auth();
+
+	Ok(Arc::new(config).into())
 }
 
 #[cfg(test)]

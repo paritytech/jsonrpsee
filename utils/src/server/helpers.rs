@@ -24,62 +24,165 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::rpc_module::MethodSink;
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::v2::error::{OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::v2::{
 	error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
 	ErrorCode, ErrorObject, Id, InvalidRequest, Response, RpcError, TwoPointZero,
 };
 use serde::Serialize;
 
-/// Helper for sending JSON-RPC responses to the client
-pub fn send_response(id: Id, tx: &MethodSink, result: impl Serialize) {
-	let json = match serde_json::to_string(&Response { jsonrpc: TwoPointZero, id: id.clone(), result }) {
-		Ok(json) => json,
-		Err(err) => {
-			tracing::error!("Error serializing response: {:?}", err);
+use std::io;
 
-			return send_error(id, tx, ErrorCode::InternalError.into());
-		}
-	};
+/// Bounded writer that allows writing at most `max_len` bytes.
+///
+/// ```
+///    use jsonrpsee_utils::server::helpers::BoundedWriter;
+///    use std::io::Write;
+///
+///    let mut writer = BoundedWriter::new(10);
+///    (&mut writer).write("hello".as_bytes()).unwrap();
+///    assert_eq!(std::str::from_utf8(&writer.into_bytes()).unwrap(), "hello");
+/// ```
+#[derive(Debug)]
+pub struct BoundedWriter {
+	max_len: usize,
+	buf: Vec<u8>,
+}
 
-	if let Err(err) = tx.unbounded_send(json) {
-		tracing::error!("Error sending response to the client: {:?}", err)
+impl BoundedWriter {
+	/// Create a new bounded writer.
+	pub fn new(max_len: usize) -> Self {
+		Self { max_len, buf: Vec::with_capacity(128) }
+	}
+
+	/// Consume the writer and extract the written bytes.
+	pub fn into_bytes(self) -> Vec<u8> {
+		self.buf
 	}
 }
 
-/// Helper for sending JSON-RPC errors to the client
-pub fn send_error(id: Id, tx: &MethodSink, error: ErrorObject) {
-	let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
-		Ok(json) => json,
-		Err(err) => {
-			tracing::error!("Error serializing error message: {:?}", err);
-
-			return;
+impl<'a> io::Write for &'a mut BoundedWriter {
+	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+		let len = self.buf.len() + buf.len();
+		if self.max_len >= len {
+			self.buf.extend_from_slice(buf);
+			Ok(buf.len())
+		} else {
+			Err(io::Error::new(io::ErrorKind::OutOfMemory, "Memory capacity exceeded"))
 		}
-	};
+	}
 
-	if let Err(err) = tx.unbounded_send(json) {
-		tracing::error!("Could not send error response to the client: {:?}", err)
+	fn flush(&mut self) -> io::Result<()> {
+		Ok(())
 	}
 }
 
-/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
-pub fn send_call_error(id: Id, tx: &MethodSink, err: Error) {
-	let (code, message, data) = match err {
-		Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
-		Error::Call(CallError::Failed(e)) => (ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None),
-		Error::Call(CallError::Custom { code, message, data }) => (code.into(), message, data),
-		// This should normally not happen because the most common use case is to
-		// return `Error::Call` in `register_async_method`.
-		e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
-	};
+/// Sink that is used to send back the result to the server for a specific method.
+#[derive(Clone, Debug)]
+pub struct MethodSink {
+	/// Channel sender
+	tx: mpsc::UnboundedSender<String>,
+	/// Max response size in bytes for a executed call.
+	max_response_size: u32,
+}
 
-	let err = ErrorObject { code, message: &message, data: data.as_deref() };
+impl MethodSink {
+	/// Create a new `MethodSink` with unlimited response size
+	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {
+		MethodSink { tx, max_response_size: u32::MAX }
+	}
 
-	send_error(id, tx, err)
+	/// Create a new `MethodSink` with a limited response size
+	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32) -> Self {
+		MethodSink { tx, max_response_size }
+	}
+
+	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
+	/// an error will be sent instead.
+	pub fn send_response(&self, id: Id, result: impl Serialize) -> bool {
+		let mut writer = BoundedWriter::new(self.max_response_size as usize);
+
+		let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result })
+		{
+			Ok(_) => {
+				// Safety - serde_json does not emit invalid UTF-8.
+				unsafe { String::from_utf8_unchecked(writer.into_bytes()) }
+			}
+			Err(err) => {
+				tracing::error!("Error serializing response: {:?}", err);
+
+				if err.is_io() {
+					let data = to_json_raw_value(&format!("Exceeded max limit {}", self.max_response_size)).ok();
+					let err = ErrorObject {
+						code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
+						message: OVERSIZED_RESPONSE_MSG.into(),
+						data: data.as_deref(),
+					};
+					return self.send_error(id, err);
+				} else {
+					return self.send_error(id, ErrorCode::InternalError.into());
+				}
+			}
+		};
+
+		if let Err(err) = self.tx.unbounded_send(json) {
+			tracing::error!("Error sending response to the client: {:?}", err);
+			false
+		} else {
+			true
+		}
+	}
+
+	/// Send a JSON-RPC error to the client
+	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
+		let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
+			Ok(json) => json,
+			Err(err) => {
+				tracing::error!("Error serializing error message: {:?}", err);
+
+				return false;
+			}
+		};
+
+		if let Err(err) = self.tx.unbounded_send(json) {
+			tracing::error!("Could not send error response to the client: {:?}", err)
+		}
+
+		false
+	}
+
+	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
+	pub fn send_call_error(&self, id: Id, err: Error) -> bool {
+		let (code, message, data) = match err {
+			Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
+			Error::Call(CallError::Failed(e)) => {
+				(ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None)
+			}
+			Error::Call(CallError::Custom { code, message, data }) => (code.into(), message, data),
+			// This should normally not happen because the most common use case is to
+			// return `Error::Call` in `register_async_method`.
+			e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
+		};
+
+		let err = ErrorObject { code, message: message.into(), data: data.as_deref() };
+
+		self.send_error(id, err)
+	}
+
+	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
+	/// of the JSON being sent.
+	pub fn send_raw(&self, raw_json: String) -> Result<(), mpsc::TrySendError<String>> {
+		self.tx.unbounded_send(raw_json)
+	}
+
+	/// Close the channel for any further messages.
+	pub fn close(&self) {
+		self.tx.close_channel();
+	}
 }
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain
@@ -107,4 +210,27 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 	buf.pop();
 	buf.push(']');
 	buf
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{BoundedWriter, Id, Response, TwoPointZero};
+
+	#[test]
+	fn bounded_serializer_work() {
+		let mut writer = BoundedWriter::new(100);
+		let result = "success";
+
+		assert!(
+			serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: Id::Number(1), result }).is_ok()
+		);
+		assert_eq!(String::from_utf8(writer.into_bytes()).unwrap(), r#"{"jsonrpc":"2.0","result":"success","id":1}"#);
+	}
+
+	#[test]
+	fn bounded_serializer_cap_works() {
+		let mut writer = BoundedWriter::new(100);
+		// NOTE: `"` is part of the serialization so 101 characters.
+		assert!(serde_json::to_writer(&mut writer, &"x".repeat(99)).is_err());
+	}
 }

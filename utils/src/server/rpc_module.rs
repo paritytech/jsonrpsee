@@ -24,11 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::helpers::{send_call_error, send_error, send_response};
+use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::v2::error::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::{Error, SubscriptionClosedError},
 	traits::ToRpcParams,
@@ -44,7 +46,7 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::collections::hash_map::Entry;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -53,17 +55,15 @@ use std::sync::Arc;
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId)>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId) -> bool>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, ()>>;
+	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>) -> BoxFuture<'a, bool>>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
 /// Subscription ID.
 pub type SubscriptionId = u64;
-/// Sink that is used to send back the result to the server for a specific method.
-pub type MethodSink = mpsc::UnboundedSender<String>;
 
 type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Receiver<()>)>>>;
 
@@ -98,6 +98,23 @@ enum MethodResources {
 pub struct MethodCallback {
 	callback: MethodKind,
 	resources: MethodResources,
+}
+
+/// Result of a method, either direct value or a future of one.
+pub enum MethodResult<T> {
+	/// Result by value
+	Sync(T),
+	/// Future of a value
+	Async(BoxFuture<'static, T>),
+}
+
+impl<T: Debug> Debug for MethodResult<T> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match self {
+			MethodResult::Sync(result) => result.fmt(f),
+			MethodResult::Async(_) => f.write_str("<future>"),
+		}
+	}
 }
 
 /// Builder for configuring resources used by a method.
@@ -142,15 +159,15 @@ impl MethodCallback {
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(
 		&self,
-		tx: &MethodSink,
+		sink: &MethodSink,
 		req: Request<'_>,
 		conn_id: ConnectionId,
 		claimed: Option<ResourceGuard>,
-	) -> Option<BoxFuture<'static, ()>> {
+	) -> MethodResult<bool> {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
 
-		match &self.callback {
+		let result = match &self.callback {
 			MethodKind::Sync(callback) => {
 				tracing::trace!(
 					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
@@ -158,15 +175,16 @@ impl MethodCallback {
 					id,
 					conn_id
 				);
-				(callback)(id, params, tx, conn_id);
+
+				let result = (callback)(id, params, sink, conn_id);
 
 				// Release claimed resources
 				drop(claimed);
 
-				None
+				MethodResult::Sync(result)
 			}
 			MethodKind::Async(callback) => {
-				let tx = tx.clone();
+				let sink = sink.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
 				tracing::trace!(
@@ -176,9 +194,11 @@ impl MethodCallback {
 					conn_id
 				);
 
-				Some((callback)(id, params, tx, claimed))
+				MethodResult::Async((callback)(id, params, sink, claimed))
 			}
-		}
+		};
+
+		result
 	}
 }
 
@@ -282,39 +302,46 @@ impl Methods {
 		self.callbacks.get(method_name)
 	}
 
+	/// Returns the method callback along with its name. The returned name is same as the
+	/// `method_name`, but its lifetime bound is `'static`.
+	pub fn method_with_name(&self, method_name: &str) -> Option<(&'static str, &MethodCallback)> {
+		self.callbacks.get_key_value(method_name).map(|(k, v)| (*k, v))
+	}
+
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, tx: &MethodSink, req: Request, conn_id: ConnectionId) -> Option<BoxFuture<'static, ()>> {
+	pub fn execute(&self, sink: &MethodSink, req: Request, conn_id: ConnectionId) -> MethodResult<bool> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
-			Some(callback) => callback.execute(tx, req, conn_id, None),
+			Some(callback) => callback.execute(sink, req, conn_id, None),
 			None => {
-				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
-				None
+				sink.send_error(req.id, ErrorCode::MethodNotFound.into());
+				MethodResult::Sync(false)
 			}
 		}
 	}
 
-	/// Attempt to execute a callback while checking that the call does not exhaust the available resources, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute_with_resources(
+	/// Attempt to execute a callback while checking that the call does not exhaust the available resources,
+	// sending the resulting JSON (success or error) to the specified sink.
+	pub fn execute_with_resources<'r>(
 		&self,
-		tx: &MethodSink,
-		req: Request,
+		sink: &MethodSink,
+		req: Request<'r>,
 		conn_id: ConnectionId,
 		resources: &Resources,
-	) -> Option<BoxFuture<'static, ()>> {
+	) -> Result<(&'static str, MethodResult<bool>), Cow<'r, str>> {
 		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
-		match self.callbacks.get(&*req.method) {
-			Some(callback) => match callback.claim(&req.method, resources) {
-				Ok(guard) => callback.execute(tx, req, conn_id, Some(guard)),
+		match self.callbacks.get_key_value(&*req.method) {
+			Some((&name, callback)) => match callback.claim(&req.method, resources) {
+				Ok(guard) => Ok((name, callback.execute(sink, req, conn_id, Some(guard)))),
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					send_error(req.id, tx, ErrorCode::ServerIsBusy.into());
-					None
+					sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+					Ok((name, MethodResult::Sync(false)))
 				}
 			},
 			None => {
-				send_error(req.id, tx, ErrorCode::MethodNotFound.into());
-				None
+				sink.send_error(req.id, ErrorCode::MethodNotFound.into());
+				Err(req.method)
 			}
 		}
 	}
@@ -338,8 +365,9 @@ impl Methods {
 		};
 
 		let (tx, mut rx) = mpsc::unbounded();
+		let sink = MethodSink::new(tx);
 
-		if let Some(fut) = self.execute(&tx, req, 0) {
+		if let MethodResult::Async(fut) = self.execute(&sink, req, 0) {
 			fut.await;
 		}
 
@@ -355,8 +383,9 @@ impl Methods {
 			Request { jsonrpc: TwoPointZero, id: Id::Number(0), method: Cow::borrowed(method), params: Some(&params) };
 
 		let (tx, mut rx) = mpsc::unbounded();
+		let sink = MethodSink::new(tx.clone());
 
-		if let Some(fut) = self.execute(&tx, req, 0) {
+		if let MethodResult::Async(fut) = self.execute(&sink, req, 0) {
 			fut.await;
 		}
 		let response = rx.next().await.expect("Could not establish subscription.");
@@ -423,11 +452,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_sync(Arc::new(move |id, params, tx, _| {
-				match callback(params, &*ctx) {
-					Ok(res) => send_response(id, tx, res),
-					Err(err) => send_call_error(id, tx, err),
-				};
+			MethodCallback::new_sync(Arc::new(move |id, params, sink, _| match callback(params, &*ctx) {
+				Ok(res) => sink.send_response(id, res),
+				Err(err) => sink.send_call_error(id, err),
 			})),
 		)?;
 
@@ -448,16 +475,18 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
+			MethodCallback::new_async(Arc::new(move |id, params, sink, claimed| {
 				let ctx = ctx.clone();
 				let future = async move {
-					match callback(params, ctx).await {
-						Ok(res) => send_response(id, &tx, res),
-						Err(err) => send_call_error(id, &tx, err),
+					let result = match callback(params, ctx).await {
+						Ok(res) => sink.send_response(id, res),
+						Err(err) => sink.send_call_error(id, err),
 					};
 
 					// Release claimed resources
 					drop(claimed);
+
+					result
 				};
 				future.boxed()
 			})),
@@ -481,20 +510,26 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, tx, claimed| {
+			MethodCallback::new_async(Arc::new(move |id, params, sink, claimed| {
 				let ctx = ctx.clone();
 
 				tokio::task::spawn_blocking(move || {
-					match callback(params, ctx) {
-						Ok(res) => send_response(id, &tx, res),
-						Err(err) => send_call_error(id, &tx, err),
+					let result = match callback(params, ctx) {
+						Ok(res) => sink.send_response(id, res),
+						Err(err) => sink.send_call_error(id, err),
 					};
 
 					// Release claimed resources
 					drop(claimed);
+
+					result
 				})
-				.map(|err| {
-					tracing::error!("Join error for blocking RPC method: {:?}", err);
+				.map(|result| match result {
+					Ok(r) => r,
+					Err(err) => {
+						tracing::error!("Join error for blocking RPC method: {:?}", err);
+						false
+					}
 				})
 				.boxed()
 			})),
@@ -503,9 +538,20 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
-	/// Register a new RPC subscription that invokes callback on every subscription request.
-	/// The callback itself takes three parameters:
-	///     - [`Params`]: JSONRPC parameters in the subscription request.
+	/// Register a new RPC subscription that invokes s callback on every subscription call.
+	///
+	/// This method ensures that the `subscription_method_name` and `unsubscription_method_name` are unique.
+	/// The `notif_method_name` argument sets the content of the `method` field in the JSON document that
+	/// the server sends back to the client. The uniqueness of this value is not machine checked and it's up to
+	/// the user to ensure it is not used in any other [`RpcModule`] used in the server.
+	///
+	/// # Arguments
+	///
+	/// * `subscription_method_name` - name of the method to call to initiate a subscription
+	/// * `notif_method_name` - name of method to be used in the subscription payload (technically a JSON-RPC notification)
+	/// * `unsubscription_method` - name of the method to call to terminate a subscription
+	/// *  `callback` - A callback to invoke on each subscription; it takes three parameters:
+	///     - [`Params`]: JSON-RPC parameters in the subscription call.
 	///     - [`SubscriptionSink`]: A sink to send messages to the subscriber.
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
 	///
@@ -516,7 +562,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "unsub", |params, mut sink, ctx| {
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, mut sink, ctx| {
 	///     let x: usize = params.one()?;
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
@@ -528,6 +574,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	pub fn register_subscription<F>(
 		&mut self,
 		subscribe_method_name: &'static str,
+		notif_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 		callback: F,
 	) -> Result<(), Error>
@@ -541,8 +588,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 		self.methods.verify_method_name(subscribe_method_name)?;
 		self.methods.verify_method_name(unsubscribe_method_name)?;
-		let ctx = self.ctx.clone();
 
+		let ctx = self.ctx.clone();
 		let subscribers = Subscribers::default();
 
 		{
@@ -561,11 +608,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						sub_id
 					};
 
-					send_response(id.clone(), method_sink, sub_id);
+					method_sink.send_response(id.clone(), sub_id);
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
-						method: subscribe_method_name,
+						method: notif_method_name,
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id, sub_id },
 						is_connected: Some(conn_tx),
@@ -577,7 +624,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							err,
 							id
 						);
-						send_error(id, method_sink, ErrorCode::ServerError(-1).into());
+						method_sink.send_error(id, ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into())
+					} else {
+						true
 					}
 				})),
 			);
@@ -586,21 +635,27 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, tx, conn_id| {
+				MethodCallback::new_sync(Arc::new(move |id, params, sink, conn_id| {
 					let sub_id = match params.one() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
 							tracing::error!(
-								"unsubscribe call '{}' failed: couldn't parse subscription id, request id={:?}",
+								"unsubscribe call '{}' failed: couldn't parse subscription id={:?} request id={:?}",
 								unsubscribe_method_name,
+								params,
 								id
 							);
-							send_error(id, tx, ErrorCode::ServerError(-1).into());
-							return;
+							let err = to_json_raw_value(&"Invalid subscription ID type, must be integer").ok();
+							return sink.send_error(id, invalid_subscription_err(err.as_deref()));
 						}
 					};
-					subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id });
-					send_response(id, tx, "Unsubscribed");
+
+					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some() {
+						sink.send_response(id, "Unsubscribed")
+					} else {
+						let err = to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).ok();
+						sink.send_error(id, invalid_subscription_err(err.as_deref()))
+					}
 				})),
 			);
 		}
@@ -627,7 +682,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 #[derive(Debug)]
 pub struct SubscriptionSink {
 	/// Sink.
-	inner: mpsc::UnboundedSender<String>,
+	inner: MethodSink,
 	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
@@ -650,7 +705,7 @@ impl SubscriptionSink {
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
 		serde_json::to_string(&SubscriptionResponse {
 			jsonrpc: TwoPointZero,
-			method: self.method,
+			method: self.method.into(),
 			params: SubscriptionPayload { subscription: RpcSubscriptionId::Num(self.uniq_sub.sub_id), result },
 		})
 		.map_err(Into::into)
@@ -660,7 +715,7 @@ impl SubscriptionSink {
 		let res = match self.is_connected.as_ref() {
 			Some(conn) if !conn.is_canceled() => {
 				// unbounded send only fails if the receiver has been dropped.
-				self.inner.unbounded_send(msg).map_err(|_| {
+				self.inner.send_raw(msg).map_err(|_| {
 					Some(SubscriptionClosedError::new("Closed by the client (connection reset)", self.uniq_sub.sub_id))
 				})
 			}
@@ -688,8 +743,9 @@ impl SubscriptionSink {
 	fn inner_close(&mut self, err: &SubscriptionClosedError) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 			let msg = self.build_message(err).expect("valid json infallible; qed");
-			let _ = sink.unbounded_send(msg);
+			let _ = sink.send_raw(msg);
 		}
 	}
 }
@@ -720,13 +776,17 @@ impl TestSubscription {
 		self.sub_id
 	}
 
-	/// Get the next element of type T from the underlying stream.
+	/// Returns `Some((val, sub_id))` for the next element of type T from the underlying stream,
+	/// otherwise `None` if the subscruption was closed.
 	///
-	/// Panics if the stream was closed or if the decoding the value as `T`.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> (T, jsonrpsee_types::v2::SubscriptionId) {
-		let raw = self.rx.next().await.expect("subscription not closed");
-		let val: SubscriptionResponse<T> = serde_json::from_str(&raw).expect("valid response");
-		(val.params.result, val.params.subscription)
+	/// # Panics
+	///
+	/// If the decoding the value as `T` fails.
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, jsonrpsee_types::v2::SubscriptionId)> {
+		let raw = self.rx.next().await?;
+		let val: SubscriptionResponse<T> =
+			serde_json::from_str(&raw).expect("valid response in TestSubscription::next()");
+		Some((val.params.result, val.params.subscription))
 	}
 }
 
@@ -761,7 +821,7 @@ mod tests {
 	fn rpc_context_modules_can_register_subscriptions() {
 		let cx = ();
 		let mut cxmodule = RpcModule::new(cx);
-		let _subscription = cxmodule.register_subscription("hi", "goodbye", |_, _, _| Ok(()));
+		let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(()));
 
 		assert!(cxmodule.method("hi").is_some());
 		assert!(cxmodule.method("goodbye").is_some());
@@ -899,7 +959,7 @@ mod tests {
 	async fn subscribing_without_server() {
 		let mut module = RpcModule::new(());
 		module
-			.register_subscription("my_sub", "my_unsub", |_, mut sink, _| {
+			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 				let mut stream_data = vec!['0', '1', '2'];
 				std::thread::spawn(move || loop {
 					tracing::debug!("This is your friendly subscription sending data.");
@@ -918,14 +978,39 @@ mod tests {
 
 		let mut my_sub: TestSubscription = module.test_subscription("my_sub", Vec::<()>::new()).await;
 		for i in (0..=2).rev() {
-			let (val, id) = my_sub.next::<char>().await;
+			let (val, id) = my_sub.next::<char>().await.unwrap();
 			assert_eq!(val, std::char::from_digit(i, 10).unwrap());
 			assert_eq!(id, v2::params::SubscriptionId::Num(my_sub.subscription_id()));
 		}
 
-		// The subscription is now closed
-		let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await;
+		// The subscription is now closed by the server.
+		let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await.unwrap();
 		assert_eq!(sub_closed_err.subscription_id(), my_sub.subscription_id());
 		assert_eq!(sub_closed_err.close_reason(), "Closed by the server");
+	}
+
+	#[tokio::test]
+	async fn close_test_subscribing_without_server() {
+		let mut module = RpcModule::new(());
+		module
+			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+				std::thread::spawn(move || loop {
+					if let Err(Error::SubscriptionClosed(_)) = sink.send(&"lo") {
+						return;
+					}
+					std::thread::sleep(std::time::Duration::from_millis(500));
+				});
+				Ok(())
+			})
+			.unwrap();
+
+		let mut my_sub: TestSubscription = module.test_subscription("my_sub", Vec::<()>::new()).await;
+		let (val, id) = my_sub.next::<String>().await.unwrap();
+		assert_eq!(&val, "lo");
+		assert_eq!(id, v2::params::SubscriptionId::Num(my_sub.subscription_id()));
+
+		// close the subscription to ensure it doesn't return any items.
+		my_sub.close();
+		assert_eq!(None, my_sub.next::<String>().await);
 	}
 }

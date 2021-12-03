@@ -27,14 +27,28 @@
 #![cfg(test)]
 
 use crate::types::error::{CallError, Error};
-use crate::{future::StopHandle, RpcModule, WsServerBuilder};
+use crate::types::v2::{self, Response, RpcError};
+use crate::types::DeserializeOwned;
+use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
+use futures_util::future::join;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::v2::error::invalid_subscription_err;
 use serde_json::Value as JsonValue;
-use std::fmt;
-use std::net::SocketAddr;
+use std::{fmt, net::SocketAddr, time::Duration};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
+
+fn init_logger() {
+	let _ = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env()).try_init();
+}
+
+fn deser_call<T: DeserializeOwned>(raw: String) -> T {
+	let out: Response<T> = serde_json::from_str(&raw).unwrap();
+	out.result
+}
 
 /// Applications can/should provide their own error.
 #[derive(Debug)]
@@ -58,7 +72,7 @@ async fn server() -> SocketAddr {
 ///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns
 /// 			`CallError::Failed`), `sleep_for` Returns the address together with handles for server future
 ///				and server stop.
-async fn server_with_handles() -> (SocketAddr, StopHandle) {
+async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
 	module
@@ -102,11 +116,20 @@ async fn server_with_handles() -> (SocketAddr, StopHandle) {
 			Ok("Yawn!")
 		})
 		.unwrap();
+	module
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
+			std::thread::spawn(move || loop {
+				let _ = sink;
+				std::thread::sleep(std::time::Duration::from_secs(30));
+			});
+			Ok(())
+		})
+		.unwrap();
 
 	let addr = server.local_addr().unwrap();
 
-	let stop_handle = server.start(module).unwrap();
-	(addr, stop_handle)
+	let server_handle = server.start(module).unwrap();
+	(addr, server_handle)
 }
 
 /// Run server with user provided context.
@@ -154,25 +177,27 @@ async fn server_with_context() -> SocketAddr {
 
 #[tokio::test]
 async fn can_set_the_max_request_body_size() {
+	init_logger();
+
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 10 bytes
-	let server = WsServerBuilder::default().max_request_body_size(10).build(addr).await.unwrap();
+	let server = WsServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
-	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
+	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
 	let addr = server.local_addr().unwrap();
 	let handle = server.start(module).unwrap();
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	// Invalid: too long
-	let req = "any string longer than 10 bytes";
+	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, oversized_request());
 
-	// Still invalid, but not oversized
-	let req = "shorty";
+	// Oversized response.
+	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));
+	assert_eq!(response, oversized_response(Id::Num(1), 100));
 
 	handle.stop().unwrap();
 }
@@ -223,6 +248,7 @@ async fn single_method_calls_works() {
 
 #[tokio::test]
 async fn async_method_calls_works() {
+	init_logger();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -340,7 +366,6 @@ async fn single_method_call_with_params_works() {
 
 #[tokio::test]
 async fn single_method_call_with_faulty_params_returns_err() {
-	let _ = env_logger::try_init();
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: string \"should be a number\", expected u64 at line 1 column 21"},"id":1}"#;
@@ -447,8 +472,12 @@ async fn register_methods_works() {
 	let mut module = RpcModule::new(());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
-	assert!(module.register_subscription("subscribe_hello", "unsubscribe_hello", |_, _, _| Ok(())).is_ok());
-	assert!(module.register_subscription("subscribe_hello_again", "unsubscribe_hello", |_, _, _| Ok(())).is_err());
+	assert!(module
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| Ok(()))
+		.is_ok());
+	assert!(module
+		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| Ok(()))
+		.is_err());
 	assert!(
 		module.register_method("subscribe_hello_again", |_, _| Ok("lo")).is_ok(),
 		"Failed register_subscription should not have side-effects"
@@ -459,7 +488,7 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module.register_subscription("subscribe_hello", "subscribe_hello", |_, _, _| Ok(())),
+		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| Ok(())),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -537,13 +566,63 @@ async fn can_register_modules() {
 
 #[tokio::test]
 async fn stop_works() {
-	let _ = env_logger::try_init();
-	let (_addr, stop_handle) = server_with_handles().with_default_timeout().await.unwrap();
-	stop_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
+	init_logger();
+	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+	server_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
 
 	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(stop_handle.stop(), Err(Error::AlreadyStopped)));
+	assert!(matches!(server_handle.stop(), Err(Error::AlreadyStopped)));
+}
+
+#[tokio::test]
+async fn run_forever() {
+	const TIMEOUT: Duration = Duration::from_millis(200);
+
+	init_logger();
+	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+
+	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
+
+	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
+
+	// Send the shutdown request from one handle and await the server on the second one.
+	join(server_handle.clone().stop().unwrap(), server_handle).with_timeout(TIMEOUT).await.unwrap();
+}
+
+#[tokio::test]
+async fn unsubscribe_twice_should_indicate_error() {
+	init_logger();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	let sub_call = call("subscribe_hello", Vec::<()>::new(), Id::Num(0));
+	let sub_id: u64 = deser_call(client.send_request_text(sub_call).await.unwrap());
+
+	let unsub_call = call("unsubscribe_hello", vec![sub_id], Id::Num(1));
+	let unsub_1: String = deser_call(client.send_request_text(unsub_call).await.unwrap());
+	assert_eq!(&unsub_1, "Unsubscribed");
+
+	let unsub_call = call("unsubscribe_hello", vec![sub_id], Id::Num(2));
+	let unsub_2 = client.send_request_text(unsub_call).await.unwrap();
+	let unsub_2_err: RpcError = serde_json::from_str(&unsub_2).unwrap();
+	let sub_id = to_json_raw_value(&sub_id).unwrap();
+
+	let err = Some(to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).unwrap());
+	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(2)));
+}
+
+#[tokio::test]
+async fn unsubscribe_wrong_sub_id_type() {
+	init_logger();
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	let unsub =
+		client.send_request_text(call("unsubscribe_hello", vec!["string_is_not_supported"], Id::Num(0))).await.unwrap();
+	let unsub_2_err: RpcError = serde_json::from_str(&unsub).unwrap();
+	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be integer").unwrap());
+	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(0)));
 }
