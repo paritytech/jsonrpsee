@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::types::{
-	traits::Client,
 	error::{Error, ErrorCode, ErrorObject, RpcError},
+	traits::Client,
 	JsonValue, ParamsSer,
 };
 use crate::HttpClientBuilder;

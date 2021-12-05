@@ -33,5 +33,5 @@ mod error;
 /// JSON-RPC error related types.
 pub mod rpc;
 
+pub use error::{CallError, Error, GenericTransportError, SubscriptionClosedError};
 pub use rpc::{ErrorCode, ErrorObject, RpcError};
-pub use error::{Error, CallError, SubscriptionClosedError, GenericTransportError};

@@ -27,9 +27,8 @@
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
 use crate::types::{
 	traits::{Client, SubscriptionClient},
-	RpcError,
 	BatchMessage, CertificateStore, Error, FrontToBack, Id, Notification, NotificationSer, ParamsSer,
-	RegisterNotificationMessage, RequestIdManager, RequestMessage, RequestSer, Response, Subscription,
+	RegisterNotificationMessage, RequestIdManager, RequestMessage, RequestSer, Response, RpcError, Subscription,
 	SubscriptionKind, SubscriptionMessage, SubscriptionResponse, TEN_MB_SIZE_BYTES,
 };
 use crate::{
