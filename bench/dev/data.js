@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1638577623415,
+  "lastUpdate": 1638663960561,
   "repoUrl": "https://github.com/paritytech/jsonrpsee",
   "entries": {
     "Benchmark": [
@@ -17239,6 +17239,466 @@ window.BENCHMARK_DATA = {
             "name": "subscriptions/unsub",
             "value": 1720,
             "range": "± 937",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Alexander Samusev",
+            "username": "alvicsam",
+            "email": "41779041+alvicsam@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "66aa6c49175da7195d4ced15543d4a90a69cd015",
+          "message": "Create gitlab pipeline  (#534)\n\n* add badge to readme\r\n\r\n* first version of pipeline\r\n\r\n* Update .gitlab-ci.yml\r\n\r\nCo-authored-by: Niklas Adolfsson <niklasadolfsson1@gmail.com>\r\n\r\n* add pre-cache script\r\n\r\n* fmt and clippy stable\r\n\r\n* add check and test\r\n\r\n* remove output text file from bench\r\n\r\n* Update scripts/ci/pre_cache.sh\r\n\r\nCo-authored-by: David <dvdplm@gmail.com>\r\n\r\n* Update .gitlab-ci.yml\r\n\r\nCo-authored-by: Niklas Adolfsson <niklasadolfsson1@gmail.com>\r\n\r\n* small fix\r\n\r\n* fix test and schedule\r\n\r\n* CI: verbose is a surplus\r\n\r\n* CI: separately check rustdoc linx\r\n\r\n* fix refs\r\n\r\n* add bench to gh-pages\r\n\r\n* fix refs\r\n\r\n* fix benchmarks\r\n\r\n* added vault to ci\r\n\r\n* fix vars\r\n\r\n* comment bench\r\n\r\n* fix benches name\r\n\r\n* added script to push benchmark results to VM\r\n\r\n* make script executable\r\n\r\n* change bench psuh executor\r\n\r\n* changed benchmark task to run on a dedicated node pool\r\n\r\n* change prometheus metric name for benchmarks\r\n\r\n* send 2 metrics with benchmark results\r\n\r\n* disable non-schedule jobs from schedule run\r\n\r\n* empty commit for benchmark test\r\n\r\n* change metric name\r\n\r\n* empty commit for benchmark test\r\n\r\n* empty commit for benchmark test\r\n\r\n* add cirunner label to vm metric\r\n\r\n* split vm metric to 2 metrics\r\n\r\n* change runner description to runner tag in ci scripts\r\n\r\n* add pass runner tags from benchmark to publish job\r\n\r\n* change runner tag to runner description\r\n\r\n* add debug message\r\n\r\n* empty commit for test\r\n\r\n* empty commit for test\r\n\r\n* Update .scripts/ci/push_bench_results.sh\r\n\r\nCo-authored-by: Denis Pisarev <17856421+TriplEight@users.noreply.github.com>\r\n\r\n* add defaults, remove dups, change ci image for publish-bench\r\n\r\n* remove pre_cache.sh\r\n\r\n* move interruptible to defaults\r\n\r\n* add issue to fixme comment\r\n\r\nCo-authored-by: Niklas Adolfsson <niklasadolfsson1@gmail.com>\r\nCo-authored-by: David <dvdplm@gmail.com>\r\nCo-authored-by: Denis P <denis.pisarev@parity.io>\r\nCo-authored-by: Denis Pisarev <17856421+TriplEight@users.noreply.github.com>",
+          "timestamp": "2021-12-02T15:33:52Z",
+          "url": "https://github.com/paritytech/jsonrpsee/commit/66aa6c49175da7195d4ced15543d4a90a69cd015"
+        },
+        "date": 1638663958699,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "jsonrpsee_types_v2_array_ref",
+            "value": 154,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "jsonrpsee_types_v2_vec",
+            "value": 176,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_round_trip",
+            "value": 135456,
+            "range": "± 3578",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/0",
+            "value": 86,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/1",
+            "value": 113807,
+            "range": "± 4807",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/2",
+            "value": 103376,
+            "range": "± 4517",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/4",
+            "value": 164994,
+            "range": "± 4209",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_round_trip/8",
+            "value": 286255,
+            "range": "± 4952",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/2",
+            "value": 1387481,
+            "range": "± 12238",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/4",
+            "value": 2640355,
+            "range": "± 18546",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/8",
+            "value": 5107075,
+            "range": "± 51634",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/16",
+            "value": 10063092,
+            "range": "± 105957",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/32",
+            "value": 19859191,
+            "range": "± 222064",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_concurrent_connections/64",
+            "value": 39457164,
+            "range": "± 939294",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/2",
+            "value": 142419,
+            "range": "± 3960",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/5",
+            "value": 151536,
+            "range": "± 2742",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/10",
+            "value": 166636,
+            "range": "± 2646",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/50",
+            "value": 259350,
+            "range": "± 7252",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/http_batch_requests/100",
+            "value": 379254,
+            "range": "± 43402",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_round_trip",
+            "value": 66232,
+            "range": "± 2062",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/0",
+            "value": 86,
+            "range": "± 3",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/1",
+            "value": 85642,
+            "range": "± 1869",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/2",
+            "value": 95989,
+            "range": "± 2634",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/4",
+            "value": 116144,
+            "range": "± 2183",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_round_trip/8",
+            "value": 167627,
+            "range": "± 2834",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/2",
+            "value": 131579,
+            "range": "± 3098",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/4",
+            "value": 222021,
+            "range": "± 3312",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/8",
+            "value": 392663,
+            "range": "± 9624",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/16",
+            "value": 831091,
+            "range": "± 38341",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/32",
+            "value": 1602322,
+            "range": "± 51238",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_concurrent_connections/64",
+            "value": 3007074,
+            "range": "± 238559",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/2",
+            "value": 84371,
+            "range": "± 3810",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/5",
+            "value": 95515,
+            "range": "± 14849",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/10",
+            "value": 113781,
+            "range": "± 3300",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/50",
+            "value": 233276,
+            "range": "± 59855",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "sync/ws_batch_requests/100",
+            "value": 375114,
+            "range": "± 22136",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_round_trip",
+            "value": 135540,
+            "range": "± 4236",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/0",
+            "value": 86,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/1",
+            "value": 116336,
+            "range": "± 5680",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/2",
+            "value": 106955,
+            "range": "± 6245",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/4",
+            "value": 164199,
+            "range": "± 3641",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_round_trip/8",
+            "value": 284905,
+            "range": "± 4173",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/2",
+            "value": 1386780,
+            "range": "± 44573",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/4",
+            "value": 2631337,
+            "range": "± 19552",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/8",
+            "value": 5088056,
+            "range": "± 73943",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/16",
+            "value": 10033651,
+            "range": "± 103827",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/32",
+            "value": 19935528,
+            "range": "± 184880",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_concurrent_connections/64",
+            "value": 39500820,
+            "range": "± 1203068",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/2",
+            "value": 142844,
+            "range": "± 3551",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/5",
+            "value": 154450,
+            "range": "± 3102",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/10",
+            "value": 170135,
+            "range": "± 3450",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/50",
+            "value": 283547,
+            "range": "± 5492",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/http_batch_requests/100",
+            "value": 418838,
+            "range": "± 16894",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_round_trip",
+            "value": 67466,
+            "range": "± 2312",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/0",
+            "value": 86,
+            "range": "± 0",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/1",
+            "value": 86792,
+            "range": "± 1785",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/2",
+            "value": 96903,
+            "range": "± 2308",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/4",
+            "value": 115630,
+            "range": "± 1521",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_round_trip/8",
+            "value": 167380,
+            "range": "± 3107",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/2",
+            "value": 131853,
+            "range": "± 4116",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/4",
+            "value": 223365,
+            "range": "± 9683",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/8",
+            "value": 395849,
+            "range": "± 16954",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/16",
+            "value": 826216,
+            "range": "± 16430",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/32",
+            "value": 1610883,
+            "range": "± 72315",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_concurrent_connections/64",
+            "value": 3088921,
+            "range": "± 209058",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/2",
+            "value": 85938,
+            "range": "± 2349",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/5",
+            "value": 96229,
+            "range": "± 2358",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/10",
+            "value": 116021,
+            "range": "± 3254",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/50",
+            "value": 245509,
+            "range": "± 3242",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "async/ws_batch_requests/100",
+            "value": 407807,
+            "range": "± 18072",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe",
+            "value": 93639,
+            "range": "± 3038",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/subscribe_response",
+            "value": 15995,
+            "range": "± 1129",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "subscriptions/unsub",
+            "value": 1064,
+            "range": "± 281",
             "unit": "ns/iter"
           }
         ]
