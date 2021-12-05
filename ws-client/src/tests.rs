@@ -27,8 +27,8 @@
 #![cfg(test)]
 use crate::types::{
 	traits::{Client, SubscriptionClient},
-	v2::{ErrorCode, ErrorObject, ParamsSer, RpcError},
-	Error, Subscription,
+	error::{Error, ErrorCode, ErrorObject, RpcError},
+	ParamsSer, Subscription,
 };
 use crate::WsClientBuilder;
 use jsonrpsee_test_utils::helpers::*;

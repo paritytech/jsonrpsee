@@ -33,10 +33,9 @@ use hyper::{
 	Error as HyperError,
 };
 use jsonrpsee_types::{
-	error::{Error, GenericTransportError},
+	error::{Error, ErrorCode, GenericTransportError},
 	middleware::Middleware,
-	v2::{ErrorCode, Id, Notification, Request},
-	TEN_MB_SIZE_BYTES,
+	Id, Notification, Request, TEN_MB_SIZE_BYTES,
 };
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{

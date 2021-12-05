@@ -34,9 +34,6 @@ extern crate alloc;
 /// Ten megabytes.
 pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 
-/// JSON-RPC v2.0 specification related types.
-pub mod v2;
-
 /// Error type.
 pub mod error;
 
@@ -49,10 +46,20 @@ pub mod traits;
 /// Middleware trait and implementation.
 pub mod middleware;
 
+/// JSON_RPC params related types.
+pub mod params;
+
+/// JSON-RPC request object related types
+pub mod request;
+
+/// JSON-RPC response object related types.
+pub mod response;
+
 pub use async_trait::async_trait;
 pub use beef::Cow;
 pub use client::*;
-pub use error::{CallError, Error};
+pub use error::{CallError, Error, RpcError};
+pub use params::{Id, Params, ParamsSequence, ParamsSer, SubscriptionId, TwoPointZero};
 pub use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json::{
 	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
@@ -70,3 +77,6 @@ pub mod __reexports {
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, Error>;
+
+pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
+pub use response::{Response, SubscriptionPayload, SubscriptionResponse};

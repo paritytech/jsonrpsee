@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::v2::ParamsSer;
+use crate::ParamsSer;
 use crate::{Error, Subscription};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;

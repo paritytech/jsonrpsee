@@ -27,8 +27,9 @@
 use crate::transport::HttpTransportClient;
 use crate::types::{
 	traits::{Client, SubscriptionClient},
-	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
-	CertificateStore, Error, RequestIdManager, Subscription, TEN_MB_SIZE_BYTES,
+	RpcError,
+	CertificateStore, Error, Id, NotificationSer, ParamsSer, RequestIdManager, RequestSer, Response, Subscription,
+	TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
 use fnv::FnvHashMap;

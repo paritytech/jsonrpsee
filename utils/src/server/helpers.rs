@@ -26,13 +26,11 @@
 
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::error::{CallError, Error};
-use jsonrpsee_types::to_json_raw_value;
-use jsonrpsee_types::v2::error::{OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
-use jsonrpsee_types::v2::{
-	error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
-	ErrorCode, ErrorObject, Id, InvalidRequest, Response, RpcError, TwoPointZero,
-};
+use jsonrpsee_types::error::{CallError, Error, ErrorCode, ErrorObject, RpcError};
+use jsonrpsee_types::error::rpc::{OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
+use jsonrpsee_types::error::rpc::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE};
+use jsonrpsee_types::{to_json_raw_value, Id, TwoPointZero};
+use jsonrpsee_types::{InvalidRequest, Response};
 use serde::Serialize;
 
 use std::io;

@@ -27,7 +27,7 @@
 //! Types to handle JSON-RPC requests according to the [spec](https://www.jsonrpc.org/specification#request-object).
 //! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
 
-use crate::v2::params::{Id, ParamsSer, TwoPointZero};
+use crate::params::{Id, ParamsSer, TwoPointZero};
 use beef::Cow;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;

@@ -28,7 +28,7 @@
 
 #[doc(hidden)]
 pub mod __reexports {
-	pub use jsonrpsee_types::{to_json_value, v2::ParamsSer};
+	pub use jsonrpsee_types::{to_json_value, ParamsSer};
 }
 
 #[macro_export]

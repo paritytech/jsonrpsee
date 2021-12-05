@@ -26,10 +26,9 @@
 
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
-use crate::types::v2::{
-	Id, Notification, ParamsSer, RequestSer, Response, RpcError, SubscriptionId, SubscriptionResponse,
-};
-use crate::types::{Error, RequestMessage};
+use crate::types::{Error, RequestMessage, RpcError};
+use crate::types::{Id, ParamsSer, SubscriptionId};
+use crate::types::{Notification, RequestSer, Response, SubscriptionResponse};
 use futures::channel::{mpsc, oneshot};
 use serde_json::Value as JsonValue;
 use std::time::Duration;

@@ -25,17 +25,13 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Types to handle in- and outgoing JSON-RPC requests and subscriptions according to the [spec](https://www.jsonrpc.org/specification).
+/// Error type.
+
+/// Main `Error` type.
+mod error;
 
 /// JSON-RPC error related types.
-pub mod error;
-/// JSON_RPC params related types.
-pub mod params;
-/// JSON-RPC request object related types
-pub mod request;
-/// JSON-RPC response object related types.
-pub mod response;
+pub mod rpc;
 
-pub use error::{ErrorCode, ErrorObject, RpcError};
-pub use params::{Id, Params, ParamsSequence, ParamsSer, SubscriptionId, TwoPointZero};
-pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
-pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
+pub use rpc::{ErrorCode, ErrorObject, RpcError};
+pub use error::{Error, CallError, SubscriptionClosedError, GenericTransportError};

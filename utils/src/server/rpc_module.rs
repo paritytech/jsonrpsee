@@ -30,15 +30,12 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::to_json_raw_value;
-use jsonrpsee_types::v2::error::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee_types::error::rpc::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
-	error::{Error, SubscriptionClosedError},
+	error::{Error, SubscriptionClosedError, ErrorCode},
 	traits::ToRpcParams,
-	v2::{
-		ErrorCode, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
-		SubscriptionResponse, TwoPointZero,
-	},
-	DeserializeOwned,
+	DeserializeOwned, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
+	SubscriptionResponse, TwoPointZero,
 };
 
 use parking_lot::Mutex;
@@ -782,7 +779,7 @@ impl TestSubscription {
 	/// # Panics
 	///
 	/// If the decoding the value as `T` fails.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, jsonrpsee_types::v2::SubscriptionId)> {
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, RpcSubscriptionId)> {
 		let raw = self.rx.next().await?;
 		let val: SubscriptionResponse<T> =
 			serde_json::from_str(&raw).expect("valid response in TestSubscription::next()");
@@ -799,7 +796,6 @@ impl Drop for TestSubscription {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use jsonrpsee_types::v2;
 	use serde::Deserialize;
 	use std::collections::HashMap;
 
@@ -980,7 +976,7 @@ mod tests {
 		for i in (0..=2).rev() {
 			let (val, id) = my_sub.next::<char>().await.unwrap();
 			assert_eq!(val, std::char::from_digit(i, 10).unwrap());
-			assert_eq!(id, v2::params::SubscriptionId::Num(my_sub.subscription_id()));
+			assert_eq!(id, RpcSubscriptionId::Num(my_sub.subscription_id()));
 		}
 
 		// The subscription is now closed by the server.
@@ -1007,7 +1003,7 @@ mod tests {
 		let mut my_sub: TestSubscription = module.test_subscription("my_sub", Vec::<()>::new()).await;
 		let (val, id) = my_sub.next::<String>().await.unwrap();
 		assert_eq!(&val, "lo");
-		assert_eq!(id, v2::params::SubscriptionId::Num(my_sub.subscription_id()));
+		assert_eq!(id, RpcSubscriptionId::Num(my_sub.subscription_id()));
 
 		// close the subscription to ensure it doesn't return any items.
 		my_sub.close();

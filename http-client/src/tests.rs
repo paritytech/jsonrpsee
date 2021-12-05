@@ -26,8 +26,8 @@
 
 use crate::types::{
 	traits::Client,
-	v2::{ErrorCode, ErrorObject, ParamsSer, RpcError},
-	Error, JsonValue,
+	error::{Error, ErrorCode, ErrorObject, RpcError},
+	JsonValue, ParamsSer,
 };
 use crate::HttpClientBuilder;
 use jsonrpsee_test_utils::helpers::*;

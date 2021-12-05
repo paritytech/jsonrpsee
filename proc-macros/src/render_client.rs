@@ -165,12 +165,12 @@ impl RpcDescription {
 						quote! { (#param, #value) }
 					});
 					quote! {
-						Some(types::v2::ParamsSer::Map(
-								std::collections::BTreeMap::<&str, #serde_json::Value>::from(
-									[#(#params),*]
-									)
+						Some(types::ParamsSer::Map(
+							std::collections::BTreeMap::<&str, #serde_json::Value>::from(
+								[#(#params),*]
 								)
 							)
+						)
 					}
 				}
 				ParamKind::Array => {

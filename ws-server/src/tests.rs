@@ -27,8 +27,8 @@
 #![cfg(test)]
 
 use crate::types::error::{CallError, Error};
-use crate::types::v2::{self, Response, RpcError};
 use crate::types::DeserializeOwned;
+use crate::types::{self, Response, RpcError};
 use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::future::join;
@@ -36,7 +36,7 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::to_json_raw_value;
-use jsonrpsee_types::v2::error::invalid_subscription_err;
+use jsonrpsee_types::error::rpc::invalid_subscription_err;
 use serde_json::Value as JsonValue;
 use std::{fmt, net::SocketAddr, time::Duration};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
@@ -611,7 +611,7 @@ async fn unsubscribe_twice_should_indicate_error() {
 	let sub_id = to_json_raw_value(&sub_id).unwrap();
 
 	let err = Some(to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).unwrap());
-	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(2)));
+	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), types::Id::Number(2)));
 }
 
 #[tokio::test]
@@ -624,5 +624,5 @@ async fn unsubscribe_wrong_sub_id_type() {
 		client.send_request_text(call("unsubscribe_hello", vec!["string_is_not_supported"], Id::Num(0))).await.unwrap();
 	let unsub_2_err: RpcError = serde_json::from_str(&unsub).unwrap();
 	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be integer").unwrap());
-	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(0)));
+	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), types::Id::Number(0)));
 }

@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::v2::params::{Id, TwoPointZero};
+use crate::params::{Id, TwoPointZero};
 use beef::Cow;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
