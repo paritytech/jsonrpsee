@@ -35,25 +35,21 @@ use std::{
 	convert::TryFrom,
 	io,
 	net::{SocketAddr, ToSocketAddrs},
-	sync::Arc,
 	time::Duration,
 };
 use thiserror::Error;
 use tokio::net::TcpStream;
-use tokio_rustls::{client::TlsStream, rustls, webpki::InvalidDnsNameError, TlsConnector};
-
-type TlsOrPlain = EitherStream<TcpStream, TlsStream<TcpStream>>;
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
 pub struct Sender {
-	inner: connection::Sender<BufReader<BufWriter<TlsOrPlain>>>,
+	inner: connection::Sender<BufReader<BufWriter<EitherStream>>>,
 }
 
 /// Receiving end of WebSocket transport.
 #[derive(Debug)]
 pub struct Receiver {
-	inner: connection::Receiver<BufReader<BufWriter<TlsOrPlain>>>,
+	inner: connection::Receiver<BufReader<BufWriter<EitherStream>>>,
 }
 
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
@@ -106,8 +102,9 @@ pub enum WsHandshakeError {
 	Transport(#[source] soketto::handshake::Error),
 
 	/// Invalid DNS name error for TLS
+	#[cfg(feature = "tls")]
 	#[error("Invalid DNS name: {0}")]
-	InvalidDnsName(#[source] InvalidDnsNameError),
+	InvalidDnsName(#[source] tokio_rustls::webpki::InvalidDnsNameError),
 
 	/// Server rejected the handshake.
 	#[error("Connection rejected with status code: {status_code}")]
@@ -169,23 +166,19 @@ impl Receiver {
 impl<'a> WsTransportClientBuilder<'a> {
 	/// Try to establish the connection.
 	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let connector = match self.target.mode {
-			Mode::Tls => {
-				let tls_connector = build_tls_config(&self.certificate_store)?;
-				Some(tls_connector)
-			}
-			Mode::Plain => None,
-		};
-
-		self.try_connect(connector).await
+		self.try_connect().await
 	}
 
-	async fn try_connect(
-		self,
-		mut tls_connector: Option<TlsConnector>,
-	) -> Result<(Sender, Receiver), WsHandshakeError> {
+	async fn try_connect(self) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut target = self.target;
 		let mut err = None;
+
+		// Only build TLS connector if `wss` in URL.
+		#[cfg(feature = "tls")]
+		let mut connector = match target.mode {
+			Mode::Tls => Some(build_tls_config(&self.certificate_store)?),
+			Mode::Plain => None,
+		};
 
 		for _ in 0..self.max_redirections {
 			tracing::debug!("Connecting to target: {:?}", target);
@@ -193,7 +186,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 			// The sockaddrs might get reused if the server replies with a relative URI.
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
-				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, &tls_connector).await {
+				#[cfg(feature = "tls")]
+				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, connector.as_ref()).await {
 					Ok(stream) => stream,
 					Err(e) => {
 						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
@@ -201,6 +195,17 @@ impl<'a> WsTransportClientBuilder<'a> {
 						continue;
 					}
 				};
+
+				#[cfg(not(feature = "tls"))]
+				let tcp_stream = match connect(*sockaddr, self.timeout).await {
+					Ok(stream) => stream,
+					Err(e) => {
+						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
+						err = Some(Err(e));
+						continue;
+					}
+				};
+
 				let mut client = WsHandshakeClient::new(
 					BufReader::new(BufWriter::new(tcp_stream)),
 					&target.host_header,
@@ -231,13 +236,17 @@ impl<'a> WsTransportClientBuilder<'a> {
 								// Absolute URI.
 								if uri.scheme().is_some() {
 									target = uri.try_into()?;
+
+									// Only build TLS connector if `wss` in redirection URL.
+									#[cfg(feature = "tls")]
 									match target.mode {
-										Mode::Tls if tls_connector.is_none() => {
-											tls_connector = Some(build_tls_config(&self.certificate_store)?);
+										Mode::Tls if connector.is_none() => {
+											connector = Some(build_tls_config(&self.certificate_store)?);
 										}
 										Mode::Tls => (),
+										// Drop connector if it was configured previously.
 										Mode::Plain => {
-											tls_connector = None;
+											connector = None;
 										}
 									};
 								}
@@ -282,12 +291,13 @@ impl<'a> WsTransportClientBuilder<'a> {
 	}
 }
 
+#[cfg(feature = "tls")]
 async fn connect(
 	sockaddr: SocketAddr,
 	timeout_dur: Duration,
 	host: &str,
-	tls_connector: &Option<TlsConnector>,
-) -> Result<EitherStream<TcpStream, TlsStream<TcpStream>>, WsHandshakeError> {
+	tls_connector: Option<&tokio_rustls::TlsConnector>,
+) -> Result<EitherStream, WsHandshakeError> {
 	let socket = TcpStream::connect(sockaddr);
 	let timeout = tokio::time::sleep(timeout_dur);
 	tokio::select! {
@@ -297,13 +307,29 @@ async fn connect(
 				tracing::warn!("set nodelay failed: {:?}", err);
 			}
 			match tls_connector {
-				None => Ok(TlsOrPlain::Plain(socket)),
+				None => Ok(EitherStream::Plain(socket)),
 				Some(connector) => {
-					let server_name: rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {} {:?}", host, e).into()))?;
+					let server_name: tokio_rustls::rustls::ServerName = host.try_into().map_err(|e| WsHandshakeError::Url(format!("Invalid host: {} {:?}", host, e).into()))?;
 					let tls_stream = connector.connect(server_name, socket).await?;
-					Ok(TlsOrPlain::Tls(tls_stream))
+					Ok(EitherStream::Tls(tls_stream))
 				}
 			}
+		}
+		_ = timeout => Err(WsHandshakeError::Timeout(timeout_dur))
+	}
+}
+
+#[cfg(not(feature = "tls"))]
+async fn connect(sockaddr: SocketAddr, timeout_dur: Duration) -> Result<EitherStream, WsHandshakeError> {
+	let socket = TcpStream::connect(sockaddr);
+	let timeout = tokio::time::sleep(timeout_dur);
+	tokio::select! {
+		socket = socket => {
+			let socket = socket?;
+			if let Err(err) = socket.set_nodelay(true) {
+				tracing::warn!("set nodelay failed: {:?}", err);
+			}
+			Ok(EitherStream::Plain(socket))
 		}
 		_ = timeout => Err(WsHandshakeError::Timeout(timeout_dur))
 	}
@@ -315,8 +341,9 @@ impl From<io::Error> for WsHandshakeError {
 	}
 }
 
-impl From<InvalidDnsNameError> for WsHandshakeError {
-	fn from(err: InvalidDnsNameError) -> WsHandshakeError {
+#[cfg(feature = "tls")]
+impl From<tokio_rustls::webpki::InvalidDnsNameError> for WsHandshakeError {
+	fn from(err: tokio_rustls::webpki::InvalidDnsNameError) -> WsHandshakeError {
 		WsHandshakeError::InvalidDnsName(err)
 	}
 }
@@ -354,8 +381,15 @@ impl TryFrom<Uri> for Target {
 	fn try_from(uri: Uri) -> Result<Self, Self::Error> {
 		let mode = match uri.scheme_str() {
 			Some("ws") => Mode::Plain,
+			#[cfg(feature = "tls")]
 			Some("wss") => Mode::Tls,
-			_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
+			_ => {
+				#[cfg(feature = "tls")]
+				let err = "URL scheme not supported, expects 'ws' or 'wss'";
+				#[cfg(not(feature = "tls"))]
+				let err = "URL scheme not supported, expects 'ws'";
+				return Err(WsHandshakeError::Url(err.into()));
+			}
 		};
 		let host = uri.host().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
 		let port = uri
@@ -370,8 +404,11 @@ impl TryFrom<Uri> for Target {
 }
 
 // NOTE: this is slow and should be used sparingly.
-fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHandshakeError> {
-	let mut roots = tokio_rustls::rustls::RootCertStore::empty();
+#[cfg(feature = "tls")]
+fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsConnector, WsHandshakeError> {
+	use tokio_rustls::rustls;
+
+	let mut roots = rustls::RootCertStore::empty();
 
 	match cert_store {
 		CertificateStore::Native => {
@@ -403,7 +440,7 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<TlsConnector, WsHan
 	let config =
 		rustls::ClientConfig::builder().with_safe_defaults().with_root_certificates(roots).with_no_client_auth();
 
-	Ok(Arc::new(config).into())
+	Ok(std::sync::Arc::new(config).into())
 }
 
 #[cfg(test)]
@@ -429,10 +466,18 @@ mod tests {
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
 	}
 
+	#[cfg(feature = "tls")]
 	#[test]
 	fn wss_works() {
 		let target = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap();
 		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:443", Mode::Tls, "/");
+	}
+
+	#[cfg(not(feature = "tls"))]
+	#[test]
+	fn wss_fails_with_tls_feature() {
+		let err = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap_err();
+		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
 	#[test]
@@ -451,19 +496,19 @@ mod tests {
 
 	#[test]
 	fn url_with_path_works() {
-		let target = parse_target("wss://127.0.0.1:443/my-special-path").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my-special-path");
+		let target = parse_target("ws://127.0.0.1:443/my-special-path").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
-		let target = parse_target("wss://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my?name1=value1&name2=value2");
+		let target = parse_target("ws://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
-		let target = parse_target("wss://127.0.0.1:443/my.htm#ignore").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my.htm");
+		let target = parse_target("ws://127.0.0.1:443/my.htm#ignore").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my.htm");
 	}
 }
