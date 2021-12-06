@@ -365,7 +365,6 @@ impl Methods {
 	/// This is useful if you want to support both `method calls` and `subscriptions`
 	/// in the same API.
 	/// 
-	/// You can use this to support method calls and subscriptions
 	///
 	/// There are better variants than this method if you only want
 	/// method calls or only subscriptions.
