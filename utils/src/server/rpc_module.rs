@@ -380,7 +380,7 @@ impl Methods {
 	/// for further documentation.
 	///
 	/// Returns a response to the actual method call and a stream to process
-	/// further notifications if a subscription was registered by the call.
+	/// for further notifications if a subscription was registered by the call.
 	///
 	/// ```
 	/// #[tokio::main]
