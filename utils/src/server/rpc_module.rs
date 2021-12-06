@@ -361,7 +361,7 @@ impl Methods {
 		Err(resp)
 	}
 
-	/// Perform a raw "in memory JSON-RPC method call".
+	/// Perform one or more raw "in memory JSON-RPC method calls".
 	/// 
 	/// You can use this to support method calls and subscriptions
 	///
