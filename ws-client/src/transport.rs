@@ -383,7 +383,13 @@ impl TryFrom<Uri> for Target {
 			Some("ws") => Mode::Plain,
 			#[cfg(feature = "tls")]
 			Some("wss") => Mode::Tls,
-			_ => return Err(WsHandshakeError::Url("URL scheme not supported, expects 'ws' or 'wss'".into())),
+			_ => {
+				#[cfg(feature = "tls")]
+				let err = "URL scheme not supported, expects 'ws' or 'wss'";
+				#[cfg(not(feature = "tls"))]
+				let err = "URL scheme not supported, expects 'ws'";
+				return Err(WsHandshakeError::Url(err.into()));
+			}
 		};
 		let host = uri.host().map(ToOwned::to_owned).ok_or_else(|| WsHandshakeError::Url("No host in URL".into()))?;
 		let port = uri
@@ -460,10 +466,18 @@ mod tests {
 		assert_ws_target(target, "127.0.0.1", "127.0.0.1:9933", Mode::Plain, "/");
 	}
 
+	#[cfg(feature = "tls")]
 	#[test]
 	fn wss_works() {
 		let target = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap();
 		assert_ws_target(target, "kusama-rpc.polkadot.io", "kusama-rpc.polkadot.io:443", Mode::Tls, "/");
+	}
+
+	#[cfg(not(feature = "tls"))]
+	#[test]
+	fn wss_fails_with_tls_feature() {
+		let err = parse_target("wss://kusama-rpc.polkadot.io:443").unwrap_err();
+		assert!(matches!(err, WsHandshakeError::Url(_)));
 	}
 
 	#[test]
@@ -482,19 +496,19 @@ mod tests {
 
 	#[test]
 	fn url_with_path_works() {
-		let target = parse_target("wss://127.0.0.1:443/my-special-path").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my-special-path");
+		let target = parse_target("ws://127.0.0.1:443/my-special-path").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my-special-path");
 	}
 
 	#[test]
 	fn url_with_query_works() {
-		let target = parse_target("wss://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my?name1=value1&name2=value2");
+		let target = parse_target("ws://127.0.0.1:443/my?name1=value1&name2=value2").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my?name1=value1&name2=value2");
 	}
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
-		let target = parse_target("wss://127.0.0.1:443/my.htm#ignore").unwrap();
-		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Tls, "/my.htm");
+		let target = parse_target("ws://127.0.0.1:443/my.htm#ignore").unwrap();
+		assert_ws_target(target, "127.0.0.1", "127.0.0.1:443", Mode::Plain, "/my.htm");
 	}
 }
