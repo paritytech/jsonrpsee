@@ -374,7 +374,7 @@ impl Methods {
 	/// in the same API.
 	///
 	/// There are better variants than this method if you only want
-	/// method calls or subscriptions.
+	/// method calls or only subscriptions.
 	///
 	/// See [`Methods::test_subscription`] and [`Methods::call_with`] for
 	/// for further documentation.
