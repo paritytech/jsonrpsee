@@ -49,6 +49,13 @@ pub struct Request<'a> {
 	pub params: Option<&'a RawValue>,
 }
 
+impl<'a> Request<'a> {
+	/// Create a new [`Request`].
+	pub fn new(method: Cow<'a, str>, params: Option<&'a RawValue>, id: Id<'a>) -> Self {
+		Self { jsonrpc: TwoPointZero, id, method, params }
+	}
+}
+
 /// JSON-RPC Invalid request as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct InvalidRequest<'a> {
@@ -69,6 +76,13 @@ pub struct Notification<'a, T> {
 	pub method: Cow<'a, str>,
 	/// Parameter values of the request.
 	pub params: T,
+}
+
+impl<'a, T> Notification<'a, T> {
+	/// Create a new [`Notification`].
+	pub fn new(method: Cow<'a, str>, params: T) -> Self {
+		Self { jsonrpc: TwoPointZero, method, params }
+	}
 }
 
 /// Serializable [JSON-RPC object](https://www.jsonrpc.org/specification#request-object).

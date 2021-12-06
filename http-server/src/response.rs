@@ -26,19 +26,15 @@
 
 //! Contains common builders for hyper responses.
 
-use crate::types::v2::{ErrorCode, Id, RpcError, TwoPointZero};
+use crate::types::v2::{ErrorCode, Id, RpcError};
 
 const JSON: &str = "application/json; charset=utf-8";
 const TEXT: &str = "text/plain";
 
 /// Create a response for json internal error.
 pub fn internal_error() -> hyper::Response<hyper::Body> {
-	let error = serde_json::to_string(&RpcError {
-		jsonrpc: TwoPointZero,
-		error: ErrorCode::InternalError.into(),
-		id: Id::Null,
-	})
-	.expect("built from known-good data; qed");
+	let error = serde_json::to_string(&RpcError::new(ErrorCode::InternalError.into(), Id::Null))
+		.expect("built from known-good data; qed");
 
 	from_template(hyper::StatusCode::INTERNAL_SERVER_ERROR, error, JSON)
 }
@@ -77,21 +73,16 @@ pub fn invalid_allow_headers() -> hyper::Response<hyper::Body> {
 
 /// Create a json response for oversized requests (413)
 pub fn too_large() -> hyper::Response<hyper::Body> {
-	let error = serde_json::to_string(&RpcError {
-		jsonrpc: TwoPointZero,
-		error: ErrorCode::OversizedRequest.into(),
-		id: Id::Null,
-	})
-	.expect("built from known-good data; qed");
+	let error = serde_json::to_string(&RpcError::new(ErrorCode::OversizedRequest.into(), Id::Null))
+		.expect("built from known-good data; qed");
 
 	from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, error, JSON)
 }
 
 /// Create a json response for empty or malformed requests (400)
 pub fn malformed() -> hyper::Response<hyper::Body> {
-	let error =
-		serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error: ErrorCode::ParseError.into(), id: Id::Null })
-			.expect("built from known-good data; qed");
+	let error = serde_json::to_string(&RpcError::new(ErrorCode::ParseError.into(), Id::Null))
+		.expect("built from known-good data; qed");
 
 	from_template(hyper::StatusCode::BAD_REQUEST, error, JSON)
 }

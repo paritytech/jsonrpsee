@@ -70,3 +70,6 @@ pub mod __reexports {
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, Error>;
+
+/// Empty `RpcParams` type;
+pub type EmptyParams = Vec<()>;
