@@ -361,7 +361,9 @@ impl Methods {
 		Err(resp)
 	}
 
-	/// Perform one or more raw "in memory JSON-RPC method calls".
+	/// Perform a "in memory JSON-RPC method call" and receive further subscriptions.
+	/// This is useful if you want to support both `method calls` and `subscriptions`
+	/// in the same API.
 	/// 
 	/// You can use this to support method calls and subscriptions
 	///
