@@ -258,8 +258,7 @@ async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
 
 #[tokio::test]
 async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
-	let client = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂").unwrap();
-	let err: Result<(), Error> = client.request("system_chain", None).await;
+	let err = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂");
 	assert!(matches!(err, Err(Error::Transport(_))));
 }
 

@@ -95,8 +95,8 @@ impl HttpTransportClient {
 			return Err(Error::RequestTooLarge);
 		}
 
-		// TODO(niklasad1): this annoying we could just take `&str` here but more user-friendly to check
-		// that the uri is well-formed in the constructor.
+		// NOTE(niklasad1): this annoying we could just take `&str` here but more user-friendly to check
+		// that the URI is well-formed in the constructor.
 		let req = hyper::Request::post(self.target.clone())
 			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
 			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
