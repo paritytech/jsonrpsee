@@ -11,7 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-http-client"
 
 [dependencies]
 async-trait = "0.1"
-fnv = "1"
+rustc-hash = "1"
 hyper = { version = "0.14.10", features = ["client", "http1", "http2", "tcp"] }
 hyper-rustls = { version = "0.23", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.6.0" }
