@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.6.1] – 2021-12-07
+
+### [Added]
+
+- rpc module: add call_and_subscribe [#588](https://github.com/paritytech/jsonrpsee/pull/588)
+
 ## [v0.6.0] – 2021-12-01
 
 v0.6 is a breaking release

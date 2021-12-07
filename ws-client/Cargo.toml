@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-ws-client"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
 edition = "2018"
@@ -14,7 +14,7 @@ async-trait = "0.1"
 fnv = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 http = "0.2"
-jsonrpsee-types = { path = "../types", version = "0.6.0" }
+jsonrpsee-types = { path = "../types", version = "0.6.1" }
 pin-project = "1"
 rustls-native-certs = "0.6.0"
 serde = "1"
