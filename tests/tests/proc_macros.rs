@@ -33,7 +33,7 @@ use jsonrpsee::{
 	ws_server::WsServerBuilder,
 };
 
-use serde_json::{value::RawValue, json};
+use serde_json::json;
 
 mod rpc_impl {
 	use jsonrpsee::{
@@ -250,9 +250,11 @@ async fn macro_optional_param_parsing() {
 	assert_eq!(&res, "Called with: 42, None, Some(70)");
 
 	// Named params using a map
-	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).unwrap();
-	let (result, _, _) = module.raw_call("foo_optional_params", params).await;
-	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
+	let (resp, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_optional_params","params":{"a":22,"c":50},"id":0}"#)
+		.await
+		.unwrap();
+	assert_eq!(resp, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
 }
 
 #[tokio::test]
@@ -268,16 +270,19 @@ async fn macro_lifetimes_parsing() {
 async fn macro_zero_copy_cow() {
 	let module = RpcServerImpl.into_rpc();
 
-	let params = RawValue::from_string(r#"["foo", "bar"]"#.into()).unwrap();
-	let (result, _, _) = module.raw_call("foo_zero_copy_cow", params).await;
+	let (result, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo", "bar"],"id":0}"#)
+		.await
+		.unwrap();
 
 	// std::borrow::Cow<str> always deserialized to owned variant here
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, true","id":0}"#);
 
 	// serde_json will have to allocate a new string to replace `\t` with byte 0x09 (tab)
-	let params = RawValue::from_string(r#"["\tfoo", "\tbar"]"#.into()).unwrap();
-	let (result, _, _) = module.raw_call("foo_zero_copy_cow", params).await;
-
+	let (result, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo", "\tbar"],"id":0}"#)
+		.await
+		.unwrap();
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
 }
 
@@ -285,8 +290,8 @@ async fn macro_zero_copy_cow() {
 #[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
-	use std::time::{Duration, Instant};
 	use jsonrpsee::types::EmptyParams;
+	use std::time::{Duration, Instant};
 
 	let module = RpcServerImpl.into_rpc();
 
