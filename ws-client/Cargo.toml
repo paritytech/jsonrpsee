@@ -11,6 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 async-trait = "0.1"
+beef = "0.5.1"
 rustc-hash = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 http = "0.2"
