@@ -352,6 +352,21 @@ impl Methods {
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
 	/// Returns the decoded value of the `result field` in JSON-RPC response if succesful.
+	///
+	/// ```
+	/// #[tokio::main]
+	/// async fn main() {
+	///     use jsonrpsee::RpcModule;
+	///
+	///     let mut module = RpcModule::new(());
+	///     module.register_method("echo_call", |params, _| {
+	/// 		params.one::<u64>().map_err(Into::into)
+	///     }).unwrap();
+	///
+	///     let echo: u64 = module.call("echo_call", [1_u64]).await.unwrap();
+	///     assert_eq!(echo, 1);
+	/// }
+	/// ```
 	pub async fn call<Params: ToRpcParams, T: DeserializeOwned>(
 		&self,
 		method: &str,
@@ -370,13 +385,35 @@ impl Methods {
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
 	///
 	/// Returns the raw JSON response to the call and a stream to receive notifications if the call was a subscription.
+	///
+	/// ```
+	/// #[tokio::main]
+	/// async fn main() {
+	///     use jsonrpsee::{RpcModule, types::v2::Response};
+	///     use futures_util::StreamExt;
+	///
+	///     let mut module = RpcModule::new(());
+	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
+	///         sink.send(&"one answer").unwrap();
+	///         Ok(())
+	///     }).unwrap();
+	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#).await.unwrap();
+	///     let resp = serde_json::from_str::<Response<u64>>(&resp).unwrap();
+	///     let sub_resp = stream.next().await.unwrap();
+	///     assert_eq!(
+	///         format!(r#"{{"jsonrpc":"2.0","method":"hi","params":{{"subscription":{},"result":"one answer"}}}}"#, resp.result),
+	///         sub_resp
+	///     );
+	/// }
+	/// ```
 	pub async fn raw_json_request(&self, call: &str) -> Result<(String, mpsc::UnboundedReceiver<String>), Error> {
+		tracing::trace!("[Methods::raw_json_request] {:?}", call);
 		let req: Request = serde_json::from_str(call)?;
 		let (resp, rx, _) = self.inner_call(req).await;
 		Ok((resp, rx))
 	}
 
-	/// Wrapper over [`Method::execute`] to execute a callback.
+	/// Wrapper over [`Methods::execute`] to execute a callback.
 	async fn inner_call(&self, req: Request<'_>) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::unbounded();
 		let sink = MethodSink::new(tx.clone());
@@ -394,6 +431,24 @@ impl Methods {
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
 	/// Returns [`Subscription`] on succes which can used to get results from the subscriptions.
+	///
+	/// ```
+	/// #[tokio::main]
+	/// async fn main() {
+	///     use jsonrpsee::{RpcModule, types::EmptyParams};
+	///
+	///     let mut module = RpcModule::new(());
+	///    	module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
+	///         sink.send(&"one answer").unwrap();
+	///         Ok(())
+	///     }).unwrap();
+	///
+	///     let mut sub = module.subscribe("hi", EmptyParams::new()).await.unwrap();
+	///     // In this case we ignore the subscription ID,
+	/// 	let (sub_resp, _sub_id) = sub.next::<String>().await.unwrap().unwrap();
+	///     assert_eq!(&sub_resp, "one answer");
+	/// }
+	/// ```
 	pub async fn subscribe(&self, sub_method: &str, params: impl ToRpcParams) -> Result<Subscription, Error> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), Some(&params), Id::Number(0));
