@@ -369,7 +369,7 @@ impl Methods {
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
 	///
-	/// Returns the raw JSON response to the call and a stream to receive notitications if was a subscription.
+	/// Returns the raw JSON response to the call and a stream to receive notifications if the call was a subscription.
 	pub async fn raw_json_request(&self, call: &str) -> Result<(String, mpsc::UnboundedReceiver<String>), Error> {
 		let req: Request = serde_json::from_str(call)?;
 		let (resp, rx, _) = self.inner_call(req).await;
