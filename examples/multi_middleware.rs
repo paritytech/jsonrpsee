@@ -33,8 +33,8 @@ use jsonrpsee::{
 	ws_server::{RpcModule, WsServerBuilder},
 };
 use std::net::SocketAddr;
-use std::time::Instant;
 use std::process::Command;
+use std::time::Instant;
 
 /// Example middleware to measure call execution time.
 #[derive(Clone)]
@@ -69,23 +69,13 @@ impl ThreadWatcher {
 	// Cribbed from the `palaver` crate.
 	fn count_threads() -> usize {
 		let out = if cfg!(any(target_os = "linux", target_os = "android")) {
-			Command::new("ps")
-				.arg("-eL")
-				.output()
-				.expect("failed to execute process")
+			Command::new("ps").arg("-eL").output().expect("failed to execute process")
 		} else if cfg!(any(target_os = "macos", target_os = "ios")) {
-			Command::new("ps")
-				.arg("-eM")
-				.output()
-				.expect("failed to execute process")
+			Command::new("ps").arg("-eM").output().expect("failed to execute process")
 		} else {
 			unimplemented!()
 		};
-		out.stdout
-			.split(|&x| x == b'\n')
-			.skip(1)
-			.filter(|x| !x.is_empty())
-			.count()
+		out.stdout.split(|&x| x == b'\n').skip(1).filter(|x| !x.is_empty()).count()
 	}
 }
 
