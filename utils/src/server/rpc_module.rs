@@ -360,7 +360,7 @@ impl Methods {
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_method("echo_call", |params, _| {
-	/// 		params.one::<u64>().map_err(Into::into)
+	///         params.one::<u64>().map_err(Into::into)
 	///     }).unwrap();
 	///
 	///     let echo: u64 = module.call("echo_call", [1_u64]).await.unwrap();
@@ -445,7 +445,7 @@ impl Methods {
 	///
 	///     let mut sub = module.subscribe("hi", EmptyParams::new()).await.unwrap();
 	///     // In this case we ignore the subscription ID,
-	/// 	let (sub_resp, _sub_id) = sub.next::<String>().await.unwrap().unwrap();
+	///     let (sub_resp, _sub_id) = sub.next::<String>().await.unwrap().unwrap();
 	///     assert_eq!(&sub_resp, "one answer");
 	/// }
 	/// ```
