@@ -80,3 +80,6 @@ pub type RpcResult<T> = std::result::Result<T, Error>;
 
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
+
+/// Empty `RpcParams` type;
+pub type EmptyParams = Vec<()>;

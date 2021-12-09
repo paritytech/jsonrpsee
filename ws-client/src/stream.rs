@@ -32,23 +32,21 @@ use futures::{
 };
 use pin_project::pin_project;
 use std::{io::Error as IoError, pin::Pin, task::Context, task::Poll};
+use tokio::net::TcpStream;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 /// Stream to represent either a unencrypted or encrypted socket stream.
 #[pin_project(project = EitherStreamProj)]
-#[derive(Debug, Copy, Clone)]
-pub enum EitherStream<S, T> {
+#[derive(Debug)]
+pub enum EitherStream {
 	/// Unencrypted socket stream.
-	Plain(#[pin] S),
+	Plain(#[pin] TcpStream),
 	/// Encrypted socket stream.
-	Tls(#[pin] T),
+	#[cfg(feature = "tls")]
+	Tls(#[pin] tokio_rustls::client::TlsStream<TcpStream>),
 }
 
-impl<S, T> AsyncRead for EitherStream<S, T>
-where
-	S: TokioAsyncReadCompatExt,
-	T: TokioAsyncReadCompatExt,
-{
+impl AsyncRead for EitherStream {
 	fn poll_read(self: Pin<&mut Self>, cx: &mut Context, buf: &mut [u8]) -> Poll<Result<usize, IoError>> {
 		match self.project() {
 			EitherStreamProj::Plain(s) => {
@@ -56,6 +54,7 @@ where
 				futures::pin_mut!(compat);
 				AsyncRead::poll_read(compat, cx, buf)
 			}
+			#[cfg(feature = "tls")]
 			EitherStreamProj::Tls(t) => {
 				let compat = t.compat();
 				futures::pin_mut!(compat);
@@ -75,6 +74,7 @@ where
 				futures::pin_mut!(compat);
 				AsyncRead::poll_read_vectored(compat, cx, bufs)
 			}
+			#[cfg(feature = "tls")]
 			EitherStreamProj::Tls(t) => {
 				let compat = t.compat();
 				futures::pin_mut!(compat);
@@ -84,11 +84,7 @@ where
 	}
 }
 
-impl<S, T> AsyncWrite for EitherStream<S, T>
-where
-	S: TokioAsyncWriteCompatExt,
-	T: TokioAsyncWriteCompatExt,
-{
+impl AsyncWrite for EitherStream {
 	fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<Result<usize, IoError>> {
 		match self.project() {
 			EitherStreamProj::Plain(s) => {
@@ -96,6 +92,7 @@ where
 				futures::pin_mut!(compat);
 				AsyncWrite::poll_write(compat, cx, buf)
 			}
+			#[cfg(feature = "tls")]
 			EitherStreamProj::Tls(t) => {
 				let compat = t.compat_write();
 				futures::pin_mut!(compat);
@@ -111,6 +108,7 @@ where
 				futures::pin_mut!(compat);
 				AsyncWrite::poll_write_vectored(compat, cx, bufs)
 			}
+			#[cfg(feature = "tls")]
 			EitherStreamProj::Tls(t) => {
 				let compat = t.compat_write();
 				futures::pin_mut!(compat);
@@ -126,6 +124,7 @@ where
 				futures::pin_mut!(compat);
 				AsyncWrite::poll_flush(compat, cx)
 			}
+			#[cfg(feature = "tls")]
 			EitherStreamProj::Tls(t) => {
 				let compat = t.compat_write();
 				futures::pin_mut!(compat);
@@ -141,6 +140,7 @@ where
 				futures::pin_mut!(compat);
 				AsyncWrite::poll_close(compat, cx)
 			}
+			#[cfg(feature = "tls")]
 			EitherStreamProj::Tls(t) => {
 				let compat = t.compat_write();
 				futures::pin_mut!(compat);

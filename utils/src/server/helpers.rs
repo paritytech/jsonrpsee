@@ -31,7 +31,7 @@ use jsonrpsee_types::{
 		rpc::{CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE},
 		CallError, Error, ErrorCode, ErrorObject, RpcError,
 	},
-	to_json_raw_value, Id, InvalidRequest, Response, TwoPointZero,
+	to_json_raw_value, Id, InvalidRequest, Response,
 };
 use serde::Serialize;
 
@@ -106,8 +106,7 @@ impl MethodSink {
 	pub fn send_response(&self, id: Id, result: impl Serialize) -> bool {
 		let mut writer = BoundedWriter::new(self.max_response_size as usize);
 
-		let json = match serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: id.clone(), result })
-		{
+		let json = match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
 			Ok(_) => {
 				// Safety - serde_json does not emit invalid UTF-8.
 				unsafe { String::from_utf8_unchecked(writer.into_bytes()) }
@@ -139,7 +138,7 @@ impl MethodSink {
 
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
-		let json = match serde_json::to_string(&RpcError { jsonrpc: TwoPointZero, error, id }) {
+		let json = match serde_json::to_string(&RpcError::new(error, id)) {
 			Ok(json) => json,
 			Err(err) => {
 				tracing::error!("Error serializing error message: {:?}", err);
@@ -214,16 +213,14 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 
 #[cfg(test)]
 mod tests {
-	use super::{BoundedWriter, Id, Response, TwoPointZero};
+	use super::{BoundedWriter, Id, Response};
 
 	#[test]
 	fn bounded_serializer_work() {
 		let mut writer = BoundedWriter::new(100);
 		let result = "success";
 
-		assert!(
-			serde_json::to_writer(&mut writer, &Response { jsonrpc: TwoPointZero, id: Id::Number(1), result }).is_ok()
-		);
+		assert!(serde_json::to_writer(&mut writer, &Response::new(result, Id::Number(1))).is_ok());
 		assert_eq!(String::from_utf8(writer.into_bytes()).unwrap(), r#"{"jsonrpc":"2.0","result":"success","id":1}"#);
 	}
 

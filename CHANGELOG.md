@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.6.0] – 2021-12-01
+
+v0.6 is a breaking release
+
+### [Added]
+
+- Servers: Middleware for metrics [#576](https://github.com/paritytech/jsonrpsee/pull/576)
+- http client: impl Clone [#583](https://github.com/paritytech/jsonrpsee/pull/583)
+
+### [Fixed]
+- types: use Cow for deserializing str [#584](https://github.com/paritytech/jsonrpsee/pull/584)
+- deps: require tokio ^1.8  [#586](https://github.com/paritytech/jsonrpsee/pull/586)
+
+
 ## [v0.5.1] – 2021-11-26
 
 The v0.5.1 release is a bug fix.

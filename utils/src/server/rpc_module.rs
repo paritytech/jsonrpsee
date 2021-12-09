@@ -37,7 +37,7 @@ use jsonrpsee_types::{
 	to_json_raw_value,
 	traits::ToRpcParams,
 	DeserializeOwned, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
-	SubscriptionResponse, TwoPointZero,
+	SubscriptionResponse,
 };
 
 use parking_lot::Mutex;
@@ -356,12 +356,7 @@ impl Methods {
 	/// Helper alternative to `execute`, useful for writing unit tests without having to spin
 	/// a server up.
 	pub async fn call(&self, method: &str, params: Option<Box<RawValue>>) -> Option<String> {
-		let req = Request {
-			jsonrpc: TwoPointZero,
-			id: Id::Number(0),
-			method: Cow::borrowed(method),
-			params: params.as_deref(),
-		};
+		let req = Request::new(method.into(), params.as_deref(), Id::Number(0));
 
 		let (tx, mut rx) = mpsc::unbounded();
 		let sink = MethodSink::new(tx);
@@ -373,13 +368,61 @@ impl Methods {
 		rx.next().await
 	}
 
+	/// Perform a "in memory JSON-RPC method call" and receive further subscriptions.
+	/// This is useful if you want to support both `method calls` and `subscriptions`
+	/// in the same API.
+	///
+	/// There are better variants than this method if you only want
+	/// method calls or only subscriptions.
+	///
+	/// See [`Methods::test_subscription`] and [`Methods::call_with`] for
+	/// for further documentation.
+	///
+	/// Returns a response to the actual method call and a stream to process
+	/// for further notifications if a subscription was registered by the call.
+	///
+	/// ```
+	/// #[tokio::main]
+	/// async fn main() {
+	///     use jsonrpsee::RpcModule;
+	///     use jsonrpsee::types::{EmptyParams, Response, SubscriptionResponse};
+	///     use futures_util::StreamExt;
+	///
+	///     let mut module = RpcModule::new(());
+	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
+	///         sink.send(&"one answer").unwrap();
+	///         Ok(())
+	///     }).unwrap();
+	///     let (resp, mut stream) = module.call_and_subscribe("hi", EmptyParams::new()).await.unwrap();
+	///     assert!(serde_json::from_str::<Response<u64>>(&resp).is_ok());
+	///     let raw_sub_resp = stream.next().await.unwrap();
+	///     let sub_resp: SubscriptionResponse<String> = serde_json::from_str(&raw_sub_resp).unwrap();
+	///     assert_eq!(&sub_resp.params.result, "one answer");
+	/// }
+	/// ```
+	pub async fn call_and_subscribe<Params: ToRpcParams>(
+		&self,
+		method: &str,
+		params: Params,
+	) -> Option<(String, mpsc::UnboundedReceiver<String>)> {
+		let (tx, mut rx) = mpsc::unbounded();
+		let params = params.to_rpc_params().ok();
+		let req = Request::new(method.into(), params.as_deref(), Id::Number(0));
+		let sink = MethodSink::new(tx);
+
+		if let MethodResult::Async(fut) = self.execute(&sink, req, 0) {
+			fut.await;
+		}
+
+		rx.next().await.map(|r| (r, rx))
+	}
+
 	/// Test helper that sets up a subscription using the given `method`. Returns a tuple of the
 	/// [`SubscriptionId`] and a channel on which subscription JSON payloads can be received.
 	pub async fn test_subscription(&self, method: &str, params: impl ToRpcParams) -> TestSubscription {
 		let params = params.to_rpc_params().expect("valid JSON-RPC params");
 		tracing::trace!("[Methods::test_subscription] Calling subscription method: {:?}, params: {:?}", method, params);
-		let req =
-			Request { jsonrpc: TwoPointZero, id: Id::Number(0), method: Cow::borrowed(method), params: Some(&params) };
+		let req = Request::new(method.into(), Some(&params), Id::Number(0));
 
 		let (tx, mut rx) = mpsc::unbounded();
 		let sink = MethodSink::new(tx.clone());
@@ -702,11 +745,10 @@ impl SubscriptionSink {
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
-		serde_json::to_string(&SubscriptionResponse {
-			jsonrpc: TwoPointZero,
-			method: self.method.into(),
-			params: SubscriptionPayload { subscription: RpcSubscriptionId::Num(self.uniq_sub.sub_id), result },
-		})
+		serde_json::to_string(&SubscriptionResponse::new(
+			self.method.into(),
+			SubscriptionPayload { subscription: RpcSubscriptionId::Num(self.uniq_sub.sub_id), result },
+		))
 		.map_err(Into::into)
 	}
 
