@@ -32,7 +32,7 @@ pub mod __reexports {
 }
 
 #[macro_export]
-/// Convert the given values to a [`jsonrpsee_types::v2::ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
+/// Convert the given values to a [`jsonrpsee_types::ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
 macro_rules! rpc_params {
 	($($param:expr),*) => {
 		{
