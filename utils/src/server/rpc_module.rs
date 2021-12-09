@@ -438,7 +438,7 @@ impl Methods {
 	///     use jsonrpsee::{RpcModule, types::EmptyParams};
 	///
 	///     let mut module = RpcModule::new(());
-	///    	module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
+	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
 	///         sink.send(&"one answer").unwrap();
 	///         Ok(())
 	///     }).unwrap();
