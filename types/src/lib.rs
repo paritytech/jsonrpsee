@@ -46,7 +46,7 @@ pub mod traits;
 /// Middleware trait and implementation.
 pub mod middleware;
 
-/// JSON_RPC params related types.
+/// JSON-RPC params related types.
 pub mod params;
 
 /// JSON-RPC request object related types
