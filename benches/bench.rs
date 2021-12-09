@@ -3,10 +3,9 @@ use futures_util::future::join_all;
 use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::{
 	http_client::HttpClientBuilder,
-	types::traits::SubscriptionClient,
 	types::{
-		traits::Client,
-		v2::{Id, ParamsSer, RequestSer},
+		traits::{Client, SubscriptionClient},
+		Id, ParamsSer, RequestSer,
 	},
 	ws_client::WsClientBuilder,
 };
