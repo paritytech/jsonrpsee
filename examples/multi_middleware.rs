@@ -34,6 +34,7 @@ use jsonrpsee::{
 };
 use std::net::SocketAddr;
 use std::time::Instant;
+use std::process::Command;
 
 /// Example middleware to measure call execution time.
 #[derive(Clone)]
@@ -63,17 +64,42 @@ impl middleware::Middleware for Timings {
 #[derive(Clone)]
 struct ThreadWatcher;
 
+impl ThreadWatcher {
+	// Count the number of threads visible to this process. Counts the lines of `ps -eL` and equivalent minus one (the header).
+	// Cribbed from the `palaver` crate.
+	fn count_threads() -> usize {
+		let out = if cfg!(any(target_os = "linux", target_os = "android")) {
+			Command::new("ps")
+				.arg("-eL")
+				.output()
+				.expect("failed to execute process")
+		} else if cfg!(any(target_os = "macos", target_os = "ios")) {
+			Command::new("ps")
+				.arg("-eM")
+				.output()
+				.expect("failed to execute process")
+		} else {
+			unimplemented!()
+		};
+		out.stdout
+			.split(|&x| x == b'\n')
+			.skip(1)
+			.filter(|x| !x.is_empty())
+			.count()
+	}
+}
+
 impl middleware::Middleware for ThreadWatcher {
 	type Instant = isize;
 
 	fn on_request(&self) -> Self::Instant {
-		let threads = palaver::process::count_threads();
+		let threads = Self::count_threads();
 		println!("[ThreadWatcher] Threads running on the machine at the start of a call: {}", threads);
 		threads as isize
 	}
 
 	fn on_response(&self, started_at: Self::Instant) {
-		let current_nr_threads = palaver::process::count_threads() as isize;
+		let current_nr_threads = Self::count_threads() as isize;
 		println!("[ThreadWatcher] Request started {} threads", current_nr_threads - started_at);
 	}
 }
