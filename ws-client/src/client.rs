@@ -24,6 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::TryInto;
+use std::time::Duration;
+
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
 use crate::types::traits::{Client, SubscriptionClient};
 use crate::types::{
@@ -44,8 +47,6 @@ use futures::sink::SinkExt;
 use http::uri::{InvalidUri, Uri};
 use tokio::sync::Mutex;
 use serde::de::DeserializeOwned;
-
-use std::{convert::TryInto, time::Duration};
 
 pub use soketto::handshake::client::Header;
 

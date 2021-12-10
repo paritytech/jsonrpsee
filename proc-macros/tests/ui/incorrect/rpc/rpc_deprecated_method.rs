@@ -3,11 +3,12 @@
 // Treat warnings as errors to fail the build.
 #![deny(warnings)]
 
+use std::net::SocketAddr;
+
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::{async_trait, RpcResult};
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::WsServerBuilder;
-use std::net::SocketAddr;
 
 #[rpc(client, server)]
 pub trait Deprecated {

@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashSet;
+
 use syn::visit::{self, Visit};
 use syn::Ident;
 

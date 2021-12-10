@@ -24,14 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+
 use crate::{error::SubscriptionClosedError, Error, SubscriptionId};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 /// Subscription kind
 #[derive(Debug)]

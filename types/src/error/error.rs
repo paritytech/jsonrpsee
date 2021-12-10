@@ -24,9 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::fmt;
 
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]

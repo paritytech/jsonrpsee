@@ -1,11 +1,12 @@
 //! Example of using proc macro to generate working client and server.
 
+use std::net::SocketAddr;
+
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::{async_trait, traits::Client, RpcResult};
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
-use std::net::SocketAddr;
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {

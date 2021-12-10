@@ -24,6 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::TryInto;
+use std::time::Duration;
+
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::{
@@ -32,9 +35,6 @@ use crate::types::{
 };
 use futures::channel::{mpsc, oneshot};
 use serde_json::Value as JsonValue;
-
-use std::convert::TryInto;
-use std::time::Duration;
 
 /// Attempts to process a batch response.
 ///

@@ -573,9 +573,10 @@ impl<M> Builder<M> {
 	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
 	///
 	/// ```
+	/// use std::time::Instant;
+	///
 	/// use jsonrpsee_types::middleware::Middleware;
 	/// use jsonrpsee_ws_server::WsServerBuilder;
-	/// use std::time::Instant;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware;

@@ -24,18 +24,19 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::io;
+use std::net::SocketAddr;
+use std::time::Duration;
+
 use futures_channel::mpsc::{self, Receiver, Sender};
 use futures_channel::oneshot;
-use futures_util::{
-	future::FutureExt,
-	io::{BufReader, BufWriter},
-	pin_mut, select,
-	sink::SinkExt,
-	stream::{self, StreamExt},
-};
+use futures_util::future::FutureExt;
+use futures_util::io::{BufReader, BufWriter};
+use futures_util::{pin_mut, select};
+use futures_util::sink::SinkExt;
+use futures_util::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
 use soketto::handshake::{self, http::is_upgrade_request, server::Response, Error as SokettoError, Server};
-use std::{io, net::SocketAddr, time::Duration};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 

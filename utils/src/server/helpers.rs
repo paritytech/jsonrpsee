@@ -24,24 +24,21 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::io;
+
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::{
-	error::{
-		rpc::{CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE},
-		CallError, Error, ErrorCode, ErrorObject, RpcError,
-	},
-	to_json_raw_value, Id, InvalidRequest, Response,
-};
+use jsonrpsee_types::error::rpc::{CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE};
+use jsonrpsee_types::error::{CallError, Error, ErrorCode, ErrorObject, RpcError};
+use jsonrpsee_types::{to_json_raw_value, Id, InvalidRequest, Response};
 use serde::Serialize;
-
-use std::io;
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
 /// ```
-///    use jsonrpsee_utils::server::helpers::BoundedWriter;
 ///    use std::io::Write;
+///
+///    use jsonrpsee_utils::server::helpers::BoundedWriter;
 ///
 ///    let mut writer = BoundedWriter::new(10);
 ///    (&mut writer).write("hello".as_bytes()).unwrap();

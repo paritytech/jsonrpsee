@@ -24,13 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::net::SocketAddr;
+use std::time::Duration;
+
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::types::Error;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
-
-use std::net::SocketAddr;
-use std::time::Duration;
 
 pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();

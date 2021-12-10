@@ -24,6 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use crate::transport::HttpTransportClient;
 use crate::types::traits::{Client, SubscriptionClient};
 use crate::types::{
@@ -34,7 +37,6 @@ use async_trait::async_trait;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
-use std::{sync::Arc, time::Duration};
 
 /// Http Client Builder.
 #[derive(Debug)]

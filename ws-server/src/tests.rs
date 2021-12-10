@@ -25,6 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
+use std::fmt;
+use std::net::SocketAddr;
+use std::time::Duration;
 
 use crate::types::error::{CallError, Error};
 use crate::types::DeserializeOwned;
@@ -38,7 +41,6 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::rpc::invalid_subscription_err;
 use jsonrpsee_types::to_json_raw_value;
 use serde_json::Value as JsonValue;
-use std::{fmt, net::SocketAddr, time::Duration};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 fn init_logger() {

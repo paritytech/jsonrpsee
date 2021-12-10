@@ -27,7 +27,8 @@
 #![cfg(test)]
 #![allow(clippy::blacklisted_name)]
 
-mod helpers;
+use std::sync::Arc;
+use std::time::Duration;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -37,8 +38,7 @@ use jsonrpsee::types::traits::{Client, SubscriptionClient};
 use jsonrpsee::types::{Error, JsonValue, Subscription};
 use jsonrpsee::ws_client::WsClientBuilder;
 
-use std::sync::Arc;
-use std::time::Duration;
+mod helpers;
 
 #[tokio::test]
 async fn ws_subscription_works() {

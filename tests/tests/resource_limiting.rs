@@ -24,6 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::net::SocketAddr;
+use std::time::Duration;
+
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
@@ -32,9 +35,6 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
 use tokio::time::sleep;
-
-use std::net::SocketAddr;
-use std::time::Duration;
 
 fn module_manual() -> Result<RpcModule<()>, Error> {
 	let mut module = RpcModule::new(());

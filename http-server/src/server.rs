@@ -24,6 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::cmp;
+use std::future::Future;
+use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
@@ -39,12 +45,6 @@ use jsonrpsee_utils::server::resource_limiting::Resources;
 use jsonrpsee_utils::server::rpc_module::{MethodResult, Methods};
 use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
-
-use std::cmp;
-use std::future::Future;
-use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
@@ -82,9 +82,10 @@ impl<M> Builder<M> {
 	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
 	///
 	/// ```
+	/// use std::time::Instant;
+	///
 	/// use jsonrpsee_types::middleware::Middleware;
 	/// use jsonrpsee_http_server::HttpServerBuilder;
-	/// use std::time::Instant;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware;

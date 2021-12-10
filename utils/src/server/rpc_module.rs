@@ -24,31 +24,30 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::collections::hash_map::Entry;
+use std::fmt::{self, Debug};
+use std::future::Future;
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
+
 use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
-use jsonrpsee_types::error::{
-	rpc::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE},
-	Error, ErrorCode, SubscriptionClosedError,
-};
+use jsonrpsee_types::error::rpc::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee_types::error::{Error, ErrorCode, SubscriptionClosedError};
 use jsonrpsee_types::to_json_raw_value;
 use jsonrpsee_types::traits::ToRpcParams;
 use jsonrpsee_types::{
 	DeserializeOwned, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
 	SubscriptionResponse,
 };
-
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
-use std::collections::hash_map::Entry;
-use std::fmt::{self, Debug};
-use std::future::Future;
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
+
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -839,9 +838,10 @@ impl Drop for TestSubscription {
 
 #[cfg(test)]
 mod tests {
+	use std::collections::HashMap;
+
 	use super::*;
 	use serde::Deserialize;
-	use std::collections::HashMap;
 
 	#[test]
 	fn rpc_modules_with_different_contexts_can_be_merged() {

@@ -1,15 +1,12 @@
+use std::sync::Arc;
+
 use criterion::*;
 use futures_util::future::join_all;
 use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
-use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	types::{
-		traits::{Client, SubscriptionClient},
-		Id, ParamsSer, RequestSer,
-	},
-	ws_client::WsClientBuilder,
-};
-use std::sync::Arc;
+use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::types::traits::{Client, SubscriptionClient};
+use jsonrpsee::types::{Id, ParamsSer, RequestSer};
+use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;

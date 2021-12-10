@@ -24,11 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::collections::HashSet;
+
 use crate::visitor::{FindAllParams, FindSubscriptionParams};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use std::collections::HashSet;
 use syn::{parse_quote, punctuated::Punctuated, visit::Visit, Token};
 
 /// Search for client-side `jsonrpsee` in `Cargo.toml`.
