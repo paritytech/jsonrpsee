@@ -1004,7 +1004,7 @@ mod tests {
 
 		// Call sync method with no params
 		let res: bool = module.call("rebel_without_cause", EmptyParams::new()).await.unwrap();
-		assert_eq!(res, false);
+		assert!(!res);
 
 		// Call sync method with params
 		let res: String = module.call("rebel", (Gun { shoots: true }, HashMap::<u8, u8>::default())).await.unwrap();
