@@ -37,7 +37,6 @@ use async_trait::async_trait;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
-
 /// Http Client Builder.
 #[derive(Debug)]
 pub struct HttpClientBuilder {

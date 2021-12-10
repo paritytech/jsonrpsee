@@ -48,7 +48,6 @@ use rustc_hash::FxHashMap;
 use serde::Serialize;
 use serde_json::value::RawValue;
 
-
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
