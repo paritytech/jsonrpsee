@@ -167,8 +167,8 @@ where
 	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream.
-	/// This may return `None` if the subscription has been terminated.
-	/// This may happen if the channel becomes full or is dropped.
+	/// This may return `None` if the subscription has been terminated,
+	/// which may happen if the channel becomes full or is dropped.
 	pub async fn next(&mut self) -> Option<Result<Notif, Error>> {
 		StreamExt::next(self).await
 	}
