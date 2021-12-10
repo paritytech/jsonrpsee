@@ -85,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
 	let mut sub: Subscription<Vec<ExampleHash>> =
 		RpcClient::<ExampleHash, ExampleStorageKey>::subscribe_storage(&client, None).await.unwrap();
-	assert_eq!(Some(vec![[0; 32]]), sub.next().await.unwrap());
+	assert_eq!(Some(vec![[0; 32]]), sub.next().await.transpose().unwrap());
 
 	Ok(())
 }

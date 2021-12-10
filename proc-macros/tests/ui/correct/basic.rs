@@ -107,12 +107,12 @@ async fn main() {
 	assert_eq!(client.request::<bool>("foo_optional_param", rpc_params![1]).await.unwrap(), true);
 
 	let mut sub = client.sub().await.unwrap();
-	let first_recv = sub.next().await.unwrap();
+	let first_recv = sub.next().await.transpose().unwrap();
 	assert_eq!(first_recv, Some("Response_A".to_string()));
-	let second_recv = sub.next().await.unwrap();
+	let second_recv = sub.next().await.transpose().unwrap();
 	assert_eq!(second_recv, Some("Response_B".to_string()));
 
 	let mut sub = client.sub_with_override_notif_method().await.unwrap();
-	let recv = sub.next().await.unwrap();
+	let recv = sub.next().await.transpose().unwrap();
 	assert_eq!(recv, Some(1));
 }
