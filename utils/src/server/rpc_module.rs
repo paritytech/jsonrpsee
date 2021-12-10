@@ -827,11 +827,11 @@ impl TestSubscription {
 	/// # Panics
 	///
 	/// If the decoding the value as `T` fails.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, jsonrpsee_types::v2::SubscriptionId)> {
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, jsonrpsee_types::v2::SubscriptionId<'static>)> {
 		let raw = self.rx.next().await?;
 		let val: SubscriptionResponse<T> =
 			serde_json::from_str(&raw).expect("valid response in TestSubscription::next()");
-		Some((val.params.result, val.params.subscription))
+		Some((val.params.result, val.params.subscription.into_owned()))
 	}
 }
 

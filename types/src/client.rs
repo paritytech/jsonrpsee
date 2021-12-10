@@ -38,7 +38,7 @@ use std::sync::Arc;
 #[non_exhaustive]
 pub enum SubscriptionKind {
 	/// Get notifications based on Subscription ID.
-	Subscription(SubscriptionId),
+	Subscription(SubscriptionId<'static>),
 	/// Get notifications based on method name.
 	Method(String),
 }
@@ -115,7 +115,7 @@ pub struct SubscriptionMessage {
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
+	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>,
 }
 
 /// RegisterNotification message.
@@ -149,7 +149,7 @@ pub enum FrontToBack {
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
 	// Such operations will be blocked until a response is received or the background
 	// thread has been terminated.
-	SubscriptionClosed(SubscriptionId),
+	SubscriptionClosed(SubscriptionId<'static>),
 }
 
 impl<Notif> Subscription<Notif>

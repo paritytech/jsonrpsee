@@ -25,13 +25,13 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::{stream::EitherStream, types::CertificateStore};
+use beef::Cow;
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, Header, ServerResponse};
 use std::convert::TryInto;
 use std::{
-	borrow::Cow,
 	convert::TryFrom,
 	io,
 	net::{SocketAddr, ToSocketAddrs},
