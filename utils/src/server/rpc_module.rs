@@ -353,6 +353,8 @@ impl Methods {
 	///
 	/// Returns the decoded value of the `result field` in JSON-RPC response if succesful.
 	///
+	/// # Examples
+	///
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
@@ -385,6 +387,8 @@ impl Methods {
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
 	///
 	/// Returns the raw JSON response to the call and a stream to receive notifications if the call was a subscription.
+	///
+	/// # Examples
 	///
 	/// ```
 	/// #[tokio::main]
@@ -431,6 +435,8 @@ impl Methods {
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
 	/// Returns [`Subscription`] on succes which can used to get results from the subscriptions.
+	///
+	/// # Examples
 	///
 	/// ```
 	/// #[tokio::main]
