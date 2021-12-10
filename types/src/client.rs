@@ -27,11 +27,13 @@
 use crate::{error::SubscriptionClosedError, v2::SubscriptionId, Error};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
+use futures_util::{future::FutureExt, sink::SinkExt, stream::{Stream, StreamExt}};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::task;
+use std::pin::Pin;
 
 /// Subscription kind
 #[derive(Debug)]
@@ -67,6 +69,10 @@ pub struct Subscription<Notif> {
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
 }
+
+// `Subscription` does not automatically implement this due to `PhantomData<Notif>`,
+// but type type has no need to be pinned.
+impl <Notif> std::marker::Unpin for Subscription<Notif> {}
 
 impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
@@ -157,18 +163,27 @@ where
 	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream.
-	/// This may return `Ok(None)` if the subscription has been terminated,
-	/// may happen if the channel becomes full or is dropped.
-	pub async fn next(&mut self) -> Result<Option<Notif>, Error> {
-		match self.notifs_rx.next().await {
-			Some(n) => match serde_json::from_value::<NotifResponse<Notif>>(n) {
-				Ok(NotifResponse::Ok(parsed)) => Ok(Some(parsed)),
-				Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(e)),
-				Err(e) => Err(Error::ParseError(e)),
-			},
-			None => Ok(None),
-		}
+	/// This may return `None` if the subscription has been terminated.
+	/// This may happen if the channel becomes full or is dropped.
+	pub async fn next(&mut self) -> Option<Result<Notif, Error>> {
+		StreamExt::next(self).await
 	}
+}
+
+impl<Notif> Stream for Subscription<Notif>
+where
+	Notif: DeserializeOwned,
+{
+    type Item = Result<Notif, Error>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
+        let n = futures_util::ready!(self.notifs_rx.poll_next_unpin(cx));
+		let res = n.and_then(|n| match serde_json::from_value::<NotifResponse<Notif>>(n) {
+			Ok(NotifResponse::Ok(parsed)) => Some(Ok(parsed)),
+			Ok(NotifResponse::Err(e)) => Some(Err(Error::SubscriptionClosed(e))),
+			Err(e) => Some(Err(Error::ParseError(e))),
+		});
+		task::Poll::Ready(res)
+    }
 }
 
 impl<Notif> Drop for Subscription<Notif> {
