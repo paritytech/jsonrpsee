@@ -33,7 +33,7 @@ use jsonrpsee::{
 	ws_server::WsServerBuilder,
 };
 
-use serde_json::value::RawValue;
+use serde_json::json;
 
 mod rpc_impl {
 	use jsonrpsee::{
@@ -231,10 +231,9 @@ async fn proc_macros_generic_ws_client_api() {
 async fn macro_param_parsing() {
 	let module = RpcServerImpl.into_rpc();
 
-	let params = RawValue::from_string(r#"[42, "Hello"]"#.into()).ok();
-	let result = module.call("foo_params", params).await.unwrap();
+	let res: String = module.call("foo_params", [json!(42_u64), json!("Hello")]).await.unwrap();
 
-	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, Hello","id":0}"#);
+	assert_eq!(&res, "Called with: 42, Hello");
 }
 
 #[tokio::test]
@@ -242,47 +241,48 @@ async fn macro_optional_param_parsing() {
 	let module = RpcServerImpl.into_rpc();
 
 	// Optional param omitted at tail
-	let params = RawValue::from_string(r#"[42, 70]"#.into()).ok();
-	let result = module.call("foo_optional_params", params).await.unwrap();
-
-	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, Some(70), None","id":0}"#);
+	let res: String = module.call("foo_optional_params", [42_u64, 70]).await.unwrap();
+	assert_eq!(&res, "Called with: 42, Some(70), None");
 
 	// Optional param using `null`
-	let params = RawValue::from_string(r#"[42, null, 70]"#.into()).ok();
-	let result = module.call("foo_optional_params", params).await.unwrap();
+	let res: String = module.call("foo_optional_params", [json!(42_u64), json!(null), json!(70_u64)]).await.unwrap();
 
-	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 42, None, Some(70)","id":0}"#);
+	assert_eq!(&res, "Called with: 42, None, Some(70)");
 
 	// Named params using a map
-	let params = RawValue::from_string(r#"{"a": 22, "c": 50}"#.into()).ok();
-	let result = module.call("foo_optional_params", params).await.unwrap();
-	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
+	let (resp, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_optional_params","params":{"a":22,"c":50},"id":0}"#)
+		.await
+		.unwrap();
+	assert_eq!(resp, r#"{"jsonrpc":"2.0","result":"Called with: 22, None, Some(50)","id":0}"#);
 }
 
 #[tokio::test]
 async fn macro_lifetimes_parsing() {
 	let module = RpcServerImpl.into_rpc();
 
-	let params = RawValue::from_string(r#"["foo", "bar", "baz", "qux"]"#.into()).ok();
-	let result = module.call("foo_lifetimes", params).await.unwrap();
+	let res: String = module.call("foo_lifetimes", ["foo", "bar", "baz", "qux"]).await.unwrap();
 
-	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Called with: foo, bar, baz, Some(\"qux\")","id":0}"#);
+	assert_eq!(&res, "Called with: foo, bar, baz, Some(\"qux\")");
 }
 
 #[tokio::test]
 async fn macro_zero_copy_cow() {
 	let module = RpcServerImpl.into_rpc();
 
-	let params = RawValue::from_string(r#"["foo", "bar"]"#.into()).ok();
-	let result = module.call("foo_zero_copy_cow", params).await.unwrap();
+	let (result, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["foo", "bar"],"id":0}"#)
+		.await
+		.unwrap();
 
 	// std::borrow::Cow<str> always deserialized to owned variant here
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, true","id":0}"#);
 
 	// serde_json will have to allocate a new string to replace `\t` with byte 0x09 (tab)
-	let params = RawValue::from_string(r#"["\tfoo", "\tbar"]"#.into()).ok();
-	let result = module.call("foo_zero_copy_cow", params).await.unwrap();
-
+	let (result, _) = module
+		.raw_json_request(r#"{"jsonrpc":"2.0","method":"foo_zero_copy_cow","params":["\tfoo", "\tbar"],"id":0}"#)
+		.await
+		.unwrap();
 	assert_eq!(result, r#"{"jsonrpc":"2.0","result":"Zero copy params: false, false","id":0}"#);
 }
 
@@ -290,20 +290,18 @@ async fn macro_zero_copy_cow() {
 #[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
+	use jsonrpsee::types::EmptyParams;
 	use std::time::{Duration, Instant};
 
 	let module = RpcServerImpl.into_rpc();
 
-	let params = RawValue::from_string("[]".into()).ok();
-
-	let futures = std::iter::repeat_with(|| module.call("foo_blocking_call", params.clone())).take(4);
+	let futures = std::iter::repeat_with(|| module.call::<_, u64>("foo_blocking_call", EmptyParams::new())).take(4);
 	let now = Instant::now();
 	let results = futures::future::join_all(futures).await;
 	let elapsed = now.elapsed();
 
 	for result in results {
-		let result = serde_json::from_str::<serde_json::Value>(&result.unwrap()).unwrap();
-		assert_eq!(result["result"], 42);
+		assert_eq!(result.unwrap(), 42);
 	}
 
 	// Each request takes 50ms, added 10ms margin for scheduling
