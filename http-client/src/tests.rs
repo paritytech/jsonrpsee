@@ -24,11 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::{
-	error::{Error, ErrorCode, ErrorObject, RpcError},
-	traits::Client,
-	JsonValue, ParamsSer,
-};
+use crate::types::error::{Error, ErrorCode, ErrorObject, RpcError};
+use crate::types::traits::Client;
+use crate::types::{JsonValue, ParamsSer};
 use crate::HttpClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;

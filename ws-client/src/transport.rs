@@ -24,19 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::{TryInto, TryFrom};
+use std::io;
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::time::Duration;
+
 use crate::{stream::EitherStream, types::CertificateStore};
+use beef::Cow;
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, Header, ServerResponse};
-use std::convert::TryInto;
-use std::{
-	borrow::Cow,
-	convert::TryFrom,
-	io,
-	net::{SocketAddr, ToSocketAddrs},
-	time::Duration,
-};
 use thiserror::Error;
 use tokio::net::TcpStream;
 

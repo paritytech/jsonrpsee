@@ -26,16 +26,15 @@
 
 //! Utilities for handling async code.
 
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Weak};
+use std::task::{Context, Poll};
+
 use crate::types::error::Error;
 use futures_util::future::FutureExt;
 use futures_util::task::AtomicWaker;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::{
-	atomic::{AtomicBool, Ordering},
-	Arc, Weak,
-};
-use std::task::{Context, Poll};
 use tokio::time::{self, Duration, Interval};
 
 /// Polling for server stop monitor interval in milliseconds.

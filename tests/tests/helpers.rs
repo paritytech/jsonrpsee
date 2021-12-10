@@ -24,12 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	http_server::{HttpServerBuilder, HttpServerHandle},
-	types::Error,
-	ws_server::{WsServerBuilder, WsServerHandle},
-	RpcModule,
-};
+use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::types::Error;
+use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
+use jsonrpsee::RpcModule;
+
 use std::net::SocketAddr;
 use std::time::Duration;
 

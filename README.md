@@ -39,7 +39,7 @@ The library is still under development; do not use in production.
 
 ## Roadmap
 
-See [tracking issue for next stable release (0.5)](https://github.com/paritytech/jsonrpsee/issues/492)
+See [tracking issue for next stable release (0.7)](https://github.com/paritytech/jsonrpsee/issues/573)
 
 ## Users
 
@@ -47,9 +47,3 @@ If your project uses `jsonrpsee` we would like to know. Please open a pull reque
 - [substrate-subxt](https://github.com/paritytech/substrate-subxt)
 - [parity bridges common](https://github.com/paritytech/parity-bridges-common)
 - [remote externalities](https://github.com/paritytech/substrate/tree/master/utils/frame/remote-externalities)
-
-## Benchmarks
-
-- Daily benchmarks are published at https://paritytech.github.io/jsonrpsee/bench/dev/
-- Benchmarks per release is published at https://paritytech.github.io/jsonrpsee/bench/release/
-- Benchmarks compared to [jsonrpc crate](https://github.com/paritytech/jsonrpc/) are published at https://paritytech.github.io/jsonrpsee/bench/jsonrpc/ (jsonrpsee is the left column)

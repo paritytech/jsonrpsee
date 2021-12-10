@@ -32,6 +32,8 @@ use crate::types::{
 };
 use futures::channel::{mpsc, oneshot};
 use serde_json::Value as JsonValue;
+
+use std::convert::TryInto;
 use std::time::Duration;
 
 /// Attempts to process a batch response.
@@ -75,7 +77,7 @@ pub fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
-	let sub_id = response.params.subscription;
+	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => return Err(None),
@@ -144,8 +146,9 @@ pub fn process_single_response(
 			let (unsub_id, send_back_oneshot, unsubscribe_method) =
 				manager.complete_pending_subscription(response_id).ok_or(Error::InvalidRequestId)?;
 
-			let sub_id: SubscriptionId = match serde_json::from_value(response.result) {
-				Ok(sub_id) => sub_id,
+			let sub_id: Result<SubscriptionId, _> = response.result.try_into();
+			let sub_id = match sub_id {
+				Ok(sub_id) => sub_id.into_owned(),
 				Err(_) => {
 					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
 					return Ok(None);
@@ -185,7 +188,7 @@ pub async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManag
 pub fn build_unsubscribe_message(
 	manager: &mut RequestManager,
 	sub_req_id: u64,
-	sub_id: SubscriptionId,
+	sub_id: SubscriptionId<'static>,
 ) -> Option<RequestMessage> {
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];

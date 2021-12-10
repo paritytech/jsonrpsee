@@ -30,16 +30,13 @@
 mod helpers;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
-use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	rpc_params,
-	types::{
-		error::SubscriptionClosedError,
-		traits::{Client, SubscriptionClient},
-		Error, JsonValue, Subscription,
-	},
-	ws_client::WsClientBuilder,
-};
+use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::rpc_params;
+use jsonrpsee::types::error::SubscriptionClosedError;
+use jsonrpsee::types::traits::{Client, SubscriptionClient};
+use jsonrpsee::types::{Error, JsonValue, Subscription};
+use jsonrpsee::ws_client::WsClientBuilder;
+
 use std::sync::Arc;
 use std::time::Duration;
 

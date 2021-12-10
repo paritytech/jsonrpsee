@@ -25,11 +25,9 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
-use crate::types::{
-	error::{Error, ErrorCode, ErrorObject, RpcError},
-	traits::{Client, SubscriptionClient},
-	ParamsSer, Subscription,
-};
+use crate::types::error::{Error, ErrorCode, ErrorObject, RpcError};
+use crate::types::traits::{Client, SubscriptionClient};
+use crate::types::{ParamsSer, Subscription};
 use crate::WsClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};

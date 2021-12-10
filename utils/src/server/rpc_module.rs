@@ -29,13 +29,13 @@ use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use jsonrpsee_types::error::{
+	rpc::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE},
+	Error, ErrorCode, SubscriptionClosedError,
+};
+use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::traits::ToRpcParams;
 use jsonrpsee_types::{
-	error::{
-		rpc::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE},
-		Error, ErrorCode, SubscriptionClosedError,
-	},
-	to_json_raw_value,
-	traits::ToRpcParams,
 	DeserializeOwned, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
 	SubscriptionResponse,
 };
@@ -823,11 +823,11 @@ impl TestSubscription {
 	/// # Panics
 	///
 	/// If the decoding the value as `T` fails.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, RpcSubscriptionId)> {
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<(T, RpcSubscriptionId<'static>)> {
 		let raw = self.rx.next().await?;
 		let val: SubscriptionResponse<T> =
 			serde_json::from_str(&raw).expect("valid response in TestSubscription::next()");
-		Some((val.params.result, val.params.subscription))
+		Some((val.params.result, val.params.subscription.into_owned()))
 	}
 }
 

@@ -25,30 +25,26 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
+use crate::types::traits::{Client, SubscriptionClient};
 use crate::types::{
-	traits::{Client, SubscriptionClient},
 	BatchMessage, CertificateStore, Error, FrontToBack, Id, Notification, NotificationSer, ParamsSer,
 	RegisterNotificationMessage, RequestIdManager, RequestMessage, RequestSer, Response, RpcError, Subscription,
 	SubscriptionKind, SubscriptionMessage, SubscriptionResponse, TEN_MB_SIZE_BYTES,
 };
-use crate::{
-	helpers::{
-		build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response,
-		process_notification, process_single_response, process_subscription_response, stop_subscription,
-	},
-	manager::RequestManager,
+use crate::helpers::{
+	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response,
+	process_notification, process_single_response, process_subscription_response, stop_subscription,
 };
+use crate::manager::RequestManager;
 use async_trait::async_trait;
-use futures::{
-	channel::{mpsc, oneshot},
-	future::Either,
-	prelude::*,
-	sink::SinkExt,
-};
+use futures::channel::{mpsc, oneshot};
+use futures::future::Either;
+use futures::prelude::*;
+use futures::sink::SinkExt;
 use http::uri::{InvalidUri, Uri};
 use tokio::sync::Mutex;
-
 use serde::de::DeserializeOwned;
+
 use std::{convert::TryInto, time::Duration};
 
 pub use soketto::handshake::client::Header;

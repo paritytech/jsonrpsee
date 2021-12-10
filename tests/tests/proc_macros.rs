@@ -28,19 +28,17 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::{
-	http_client::HttpClientBuilder, http_server::HttpServerBuilder, types::Error, ws_client::*,
-	ws_server::WsServerBuilder,
-};
-
+use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_server::HttpServerBuilder;
+use jsonrpsee::types::Error;
+use jsonrpsee::ws_client::*;
+use jsonrpsee::ws_server::WsServerBuilder;
 use serde_json::value::RawValue;
 
 mod rpc_impl {
-	use jsonrpsee::{
-		proc_macros::rpc,
-		types::{async_trait, RpcResult},
-		ws_server::SubscriptionSink,
-	};
+	use jsonrpsee::proc_macros::rpc;
+	use jsonrpsee::types::{async_trait, RpcResult};
+	use jsonrpsee::ws_server::SubscriptionSink;
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {

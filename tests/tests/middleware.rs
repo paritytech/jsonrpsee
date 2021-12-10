@@ -24,15 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, HttpServerHandle},
-	proc_macros::rpc,
-	types::{middleware::Middleware, traits::Client, Error},
-	ws_client::WsClientBuilder,
-	ws_server::{WsServerBuilder, WsServerHandle},
-	RpcModule,
-};
+use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::types::{middleware::Middleware, traits::Client, Error};
+use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
+use jsonrpsee::RpcModule;
 use tokio::time::sleep;
 
 use std::collections::HashMap;
