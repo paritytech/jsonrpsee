@@ -211,6 +211,7 @@ impl<'a> ParamsSequence<'a> {
 	/// assert_eq!(b, 10);
 	/// assert_eq!(c, "foo");
 	/// ```
+	#[allow(clippy::should_implement_trait)]
 	pub fn next<T>(&mut self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
