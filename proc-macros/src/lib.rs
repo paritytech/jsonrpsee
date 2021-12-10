@@ -285,9 +285,9 @@ pub(crate) mod visitor;
 ///
 ///     // Subscribe and receive messages from the subscription.
 ///     let mut sub = client.sub().await.unwrap();
-///     let first_recv = sub.next().await.unwrap();
+///     let first_recv = sub.next().await.transpose().unwrap();
 ///     assert_eq!(first_recv, Some("Response_A".to_string()));
-///     let second_recv = sub.next().await.unwrap();
+///     let second_recv = sub.next().await.transpose().unwrap();
 ///     assert_eq!(second_recv, Some("Response_B".to_string()));
 /// }
 /// ```
