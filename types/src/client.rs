@@ -169,6 +169,11 @@ where
 	/// Returns the next notification from the stream.
 	/// This may return `None` if the subscription has been terminated,
 	/// which may happen if the channel becomes full or is dropped.
+	///
+	/// **Note:** This has an identical signature to the [`StreamExt::next`]
+	/// method (and delegates to that). Import [`StreamExt`] if you'd like
+	/// access to other stream combinator methods.
+	#[allow(clippy::should_implement_trait)]
 	pub async fn next(&mut self) -> Option<Result<Notif, Error>> {
 		StreamExt::next(self).await
 	}
@@ -181,10 +186,10 @@ where
 	type Item = Result<Notif, Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let n = futures_util::ready!(self.notifs_rx.poll_next_unpin(cx));
-		let res = n.and_then(|n| match serde_json::from_value::<NotifResponse<Notif>>(n) {
-			Ok(NotifResponse::Ok(parsed)) => Some(Ok(parsed)),
-			Ok(NotifResponse::Err(e)) => Some(Err(Error::SubscriptionClosed(e))),
-			Err(e) => Some(Err(Error::ParseError(e))),
+		let res = n.map(|n| match serde_json::from_value::<NotifResponse<Notif>>(n) {
+			Ok(NotifResponse::Ok(parsed)) => Ok(parsed),
+			Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(e)),
+			Err(e) => Err(Error::ParseError(e)),
 		});
 		task::Poll::Ready(res)
 	}
