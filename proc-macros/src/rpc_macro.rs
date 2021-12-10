@@ -26,12 +26,10 @@
 
 //! Declaration of the JSON RPC generator procedural macros.
 
-use crate::{
-	attributes::{
-		optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, Resource,
-	},
-	helpers::extract_doc_comments,
+use crate::attributes::{
+	optional, parse_param_kind, Aliases, Argument, AttributeMeta, MissingArgument, NameMapping, ParamKind, Resource,
 };
+use crate::helpers::extract_doc_comments;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
