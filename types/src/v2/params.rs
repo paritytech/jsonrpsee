@@ -35,7 +35,7 @@ use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use std::fmt;
+use std::{convert::TryFrom, fmt};
 
 /// JSON-RPC v2 marker type.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -211,6 +211,7 @@ impl<'a> ParamsSequence<'a> {
 	/// assert_eq!(b, 10);
 	/// assert_eq!(c, "foo");
 	/// ```
+	#[allow(clippy::should_implement_trait)]
 	pub fn next<T>(&mut self) -> Result<T, CallError>
 	where
 		T: Deserialize<'a>,
@@ -288,18 +289,49 @@ impl<'a> From<&'a [JsonValue]> for ParamsSer<'a> {
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
-pub enum SubscriptionId {
+pub enum SubscriptionId<'a> {
 	/// Numeric id
 	Num(u64),
 	/// String id
-	Str(String),
+	#[serde(borrow)]
+	Str(Cow<'a, str>),
 }
 
-impl From<SubscriptionId> for JsonValue {
+impl<'a> From<SubscriptionId<'a>> for JsonValue {
 	fn from(sub_id: SubscriptionId) -> Self {
 		match sub_id {
 			SubscriptionId::Num(n) => n.into(),
-			SubscriptionId::Str(s) => s.into(),
+			SubscriptionId::Str(s) => s.into_owned().into(),
+		}
+	}
+}
+
+impl<'a> TryFrom<JsonValue> for SubscriptionId<'a> {
+	type Error = ();
+
+	fn try_from(json: JsonValue) -> Result<SubscriptionId<'a>, ()> {
+		match json {
+			JsonValue::String(s) => Ok(SubscriptionId::Str(s.into())),
+			JsonValue::Number(n) => {
+				if let Some(n) = n.as_u64() {
+					Ok(SubscriptionId::Num(n))
+				} else {
+					Err(())
+				}
+			}
+			_ => Err(()),
+		}
+	}
+}
+
+impl<'a> SubscriptionId<'a> {
+	/// Convert `SubscriptionId<'a>` to `SubscriptionId<'static>` so that it can be moved across threads.
+	///
+	/// This can cause an allocation if the id is a string.
+	pub fn into_owned(self) -> SubscriptionId<'static> {
+		match self {
+			SubscriptionId::Num(num) => SubscriptionId::Num(num),
+			SubscriptionId::Str(s) => SubscriptionId::Str(Cow::owned(s.into_owned())),
 		}
 	}
 }

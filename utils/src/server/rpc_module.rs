@@ -853,13 +853,12 @@ impl Subscription {
 	/// If the decoding the value as `T` fails.
 	pub async fn next<T: DeserializeOwned>(
 		&mut self,
-	) -> Result<Option<(T, jsonrpsee_types::v2::SubscriptionId)>, Error> {
-		let raw = match self.rx.next().await {
-			Some(resp) => resp,
-			_ => return Ok(None),
-		};
-		let val: SubscriptionResponse<T> = serde_json::from_str(&raw)?;
-		Ok(Some((val.params.result, val.params.subscription)))
+	) -> Option<Result<(T, jsonrpsee_types::v2::SubscriptionId<'static>), Error>> {
+		let raw = self.rx.next().await?;
+		let res = serde_json::from_str::<SubscriptionResponse<T>>(&raw)
+			.map(|v| (v.params.result, v.params.subscription.into_owned()))
+			.map_err(Into::into);
+		Some(res)
 	}
 }
 
@@ -1079,6 +1078,6 @@ mod tests {
 
 		// close the subscription to ensure it doesn't return any items.
 		my_sub.close();
-		assert!(matches!(my_sub.next::<String>().await, Ok(None)));
+		assert!(matches!(my_sub.next::<String>().await, None));
 	}
 }

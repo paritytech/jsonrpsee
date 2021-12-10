@@ -27,18 +27,24 @@
 use crate::{error::SubscriptionClosedError, v2::SubscriptionId, Error};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{future::FutureExt, sink::SinkExt, stream::StreamExt};
+use futures_util::{
+	future::FutureExt,
+	sink::SinkExt,
+	stream::{Stream, StreamExt},
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::task;
 
 /// Subscription kind
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum SubscriptionKind {
 	/// Get notifications based on Subscription ID.
-	Subscription(SubscriptionId),
+	Subscription(SubscriptionId<'static>),
 	/// Get notifications based on method name.
 	Method(String),
 }
@@ -67,6 +73,10 @@ pub struct Subscription<Notif> {
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
 }
+
+// `Subscription` does not automatically implement this due to `PhantomData<Notif>`,
+// but type type has no need to be pinned.
+impl<Notif> std::marker::Unpin for Subscription<Notif> {}
 
 impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
@@ -115,7 +125,7 @@ pub struct SubscriptionMessage {
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
+	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>,
 }
 
 /// RegisterNotification message.
@@ -149,7 +159,7 @@ pub enum FrontToBack {
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
 	// Such operations will be blocked until a response is received or the background
 	// thread has been terminated.
-	SubscriptionClosed(SubscriptionId),
+	SubscriptionClosed(SubscriptionId<'static>),
 }
 
 impl<Notif> Subscription<Notif>
@@ -157,17 +167,31 @@ where
 	Notif: DeserializeOwned,
 {
 	/// Returns the next notification from the stream.
-	/// This may return `Ok(None)` if the subscription has been terminated,
-	/// may happen if the channel becomes full or is dropped.
-	pub async fn next(&mut self) -> Result<Option<Notif>, Error> {
-		match self.notifs_rx.next().await {
-			Some(n) => match serde_json::from_value::<NotifResponse<Notif>>(n) {
-				Ok(NotifResponse::Ok(parsed)) => Ok(Some(parsed)),
-				Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(e)),
-				Err(e) => Err(Error::ParseError(e)),
-			},
-			None => Ok(None),
-		}
+	/// This may return `None` if the subscription has been terminated,
+	/// which may happen if the channel becomes full or is dropped.
+	///
+	/// **Note:** This has an identical signature to the [`StreamExt::next`]
+	/// method (and delegates to that). Import [`StreamExt`] if you'd like
+	/// access to other stream combinator methods.
+	#[allow(clippy::should_implement_trait)]
+	pub async fn next(&mut self) -> Option<Result<Notif, Error>> {
+		StreamExt::next(self).await
+	}
+}
+
+impl<Notif> Stream for Subscription<Notif>
+where
+	Notif: DeserializeOwned,
+{
+	type Item = Result<Notif, Error>;
+	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
+		let n = futures_util::ready!(self.notifs_rx.poll_next_unpin(cx));
+		let res = n.map(|n| match serde_json::from_value::<NotifResponse<Notif>>(n) {
+			Ok(NotifResponse::Ok(parsed)) => Ok(parsed),
+			Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(e)),
+			Err(e) => Err(Error::ParseError(e)),
+		});
+		task::Poll::Ready(res)
 	}
 }
 
