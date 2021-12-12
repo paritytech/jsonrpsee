@@ -37,8 +37,9 @@ use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocke
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::to_json_raw_value;
 use jsonrpsee_types::v2::error::invalid_subscription_err;
+use jsonrpsee_types::v2::SubscriptionId;
 use serde_json::Value as JsonValue;
-use std::{fmt, net::SocketAddr, time::Duration};
+use std::{fmt, net::SocketAddr, sync::Arc, time::Duration};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 fn init_logger() {
@@ -628,4 +629,35 @@ async fn unsubscribe_wrong_sub_id_type() {
 	let unsub_2_err: RpcError = serde_json::from_str(&unsub).unwrap();
 	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be integer").unwrap());
 	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(0)));
+}
+
+#[tokio::test]
+async fn custom_subscription_id_works() {
+	init_logger();
+	let server = WsServerBuilder::default()
+		.set_id_generator(Arc::new(|| SubscriptionId::Str("0xdeadbeef".into())))
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
+			std::thread::spawn(move || loop {
+				let _ = sink;
+				std::thread::sleep(std::time::Duration::from_secs(30));
+			});
+			Ok(())
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	let sub = client.send_request_text(call("subscribe_hello", Vec::<()>::new(), Id::Num(0))).await.unwrap();
+	assert_eq!(&sub, r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":0}"#);
+	let unsub = client.send_request_text(call("unsubscribe_hello", vec!["0xdeadbeef"], Id::Num(1))).await.unwrap();
+	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","result":"Unsubscribed","id":1}"#);
 }

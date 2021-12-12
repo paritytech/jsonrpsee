@@ -25,3 +25,4 @@ anyhow = "1"
 jsonrpsee-test-utils = { path = "../test-utils" }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 tracing-subscriber = "0.2.25"
+rand = "0.8"

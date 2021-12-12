@@ -28,6 +28,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::fmt;
 
+use crate::v2::SubscriptionId;
+
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
@@ -183,12 +185,12 @@ impl Error {
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct SubscriptionClosedError {
 	subscription_closed: String,
-	id: u64,
+	id: SubscriptionId,
 }
 
 impl SubscriptionClosedError {
 	/// Create a new subscription closed error.
-	pub fn new(reason: impl Into<String>, id: u64) -> Self {
+	pub fn new(reason: impl Into<String>, id: SubscriptionId) -> Self {
 		Self { subscription_closed: reason.into(), id }
 	}
 
@@ -198,8 +200,8 @@ impl SubscriptionClosedError {
 	}
 
 	/// Get the subscription ID.
-	pub fn subscription_id(&self) -> u64 {
-		self.id
+	pub fn subscription_id(&self) -> &SubscriptionId {
+		&self.id
 	}
 }
 

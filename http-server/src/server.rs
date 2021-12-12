@@ -35,7 +35,7 @@ use hyper::{
 use jsonrpsee_types::{
 	error::{Error, GenericTransportError},
 	middleware::Middleware,
-	v2::{ErrorCode, Id, Notification, Request},
+	v2::{ErrorCode, Id, Notification, Request, SubscriptionId},
 	TEN_MB_SIZE_BYTES,
 };
 use jsonrpsee_utils::http_helpers::read_body;
@@ -52,6 +52,7 @@ use std::{
 	future::Future,
 	net::{SocketAddr, TcpListener, ToSocketAddrs},
 	pin::Pin,
+	sync::Arc,
 	task::{Context, Poll},
 };
 
@@ -340,7 +341,14 @@ impl<M: Middleware> Server<M> {
 								middleware.on_call(req.method.as_ref());
 
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								match methods.execute_with_resources(&sink, req, 0, &resources) {
+								match methods.execute_with_resources(
+									&sink,
+									req,
+									0,
+									&resources,
+									// TODO: unused...
+									Arc::new(|| SubscriptionId::Num(0)),
+								) {
 									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
 									}
@@ -365,8 +373,14 @@ impl<M: Middleware> Server<M> {
 							if !batch.is_empty() {
 								let middleware = &middleware;
 
-								join_all(batch.into_iter().filter_map(move |req| {
-									match methods.execute_with_resources(&sink, req, 0, &resources) {
+								join_all(batch.into_iter().filter_map(
+									move |req| match methods.execute_with_resources(
+										&sink,
+										req,
+										0,
+										&resources,
+										Arc::new(|| SubscriptionId::Num(0)),
+									) {
 										Ok((name, MethodResult::Sync(success))) => {
 											middleware.on_result(name, success, request_start);
 											None
@@ -379,8 +393,8 @@ impl<M: Middleware> Server<M> {
 											middleware.on_result(name.as_ref(), false, request_start);
 											None
 										}
-									}
-								}))
+									},
+								))
 								.await;
 							} else {
 								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an

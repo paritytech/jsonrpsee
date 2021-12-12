@@ -44,7 +44,7 @@ use std::task;
 #[non_exhaustive]
 pub enum SubscriptionKind {
 	/// Get notifications based on Subscription ID.
-	Subscription(SubscriptionId<'static>),
+	Subscription(SubscriptionId),
 	/// Get notifications based on method name.
 	Method(String),
 }
@@ -125,7 +125,7 @@ pub struct SubscriptionMessage {
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
 	/// When we get a response from the server about that subscription, we send the result over
 	/// this channel.
-	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>,
+	pub send_back: oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>,
 }
 
 /// RegisterNotification message.
@@ -159,7 +159,7 @@ pub enum FrontToBack {
 	// NOTE: It is not possible to cancel pending subscriptions or pending requests.
 	// Such operations will be blocked until a response is received or the background
 	// thread has been terminated.
-	SubscriptionClosed(SubscriptionId<'static>),
+	SubscriptionClosed(SubscriptionId),
 }
 
 impl<Notif> Subscription<Notif>

@@ -289,27 +289,26 @@ impl<'a> From<&'a [JsonValue]> for ParamsSer<'a> {
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
-pub enum SubscriptionId<'a> {
+pub enum SubscriptionId {
 	/// Numeric id
 	Num(u64),
 	/// String id
-	#[serde(borrow)]
-	Str(Cow<'a, str>),
+	Str(String),
 }
 
-impl<'a> From<SubscriptionId<'a>> for JsonValue {
+impl From<SubscriptionId> for JsonValue {
 	fn from(sub_id: SubscriptionId) -> Self {
 		match sub_id {
 			SubscriptionId::Num(n) => n.into(),
-			SubscriptionId::Str(s) => s.into_owned().into(),
+			SubscriptionId::Str(s) => s.into(),
 		}
 	}
 }
 
-impl<'a> TryFrom<JsonValue> for SubscriptionId<'a> {
+impl TryFrom<JsonValue> for SubscriptionId {
 	type Error = ();
 
-	fn try_from(json: JsonValue) -> Result<SubscriptionId<'a>, ()> {
+	fn try_from(json: JsonValue) -> Result<SubscriptionId, ()> {
 		match json {
 			JsonValue::String(s) => Ok(SubscriptionId::Str(s.into())),
 			JsonValue::Number(n) => {
@@ -324,7 +323,7 @@ impl<'a> TryFrom<JsonValue> for SubscriptionId<'a> {
 	}
 }
 
-impl<'a> SubscriptionId<'a> {
+/*impl<'a> SubscriptionId<'a> {
 	/// Convert `SubscriptionId<'a>` to `SubscriptionId<'static>` so that it can be moved across threads.
 	///
 	/// This can cause an allocation if the id is a string.
@@ -334,7 +333,7 @@ impl<'a> SubscriptionId<'a> {
 			SubscriptionId::Str(s) => SubscriptionId::Str(Cow::owned(s.into_owned())),
 		}
 	}
-}
+}*/
 
 /// Request Id
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
