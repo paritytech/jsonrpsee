@@ -25,8 +25,8 @@ variables:                         &default-vars
 
 .vault-secrets:                    &vault-secrets
   secrets:
-    GITHUB_TOKEN:
-      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
+    GITHUB_SSH_PRIV_KEY:
+      vault:                       cicd/gitlab/parity/${CI_PROJECT_NAME}/GITHUB_SSH_PRIV_KEY@kv
       file:                        false
     GITHUB_USER:
       vault:                       cicd/gitlab/parity/GITHUB_USER@kv
@@ -133,6 +133,39 @@ benchmarks:
     - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
   tags:
     - linux-docker-benches
+
+publish-ghpages:
+  stage:                           publish
+  variables:
+    CI_IMAGE:                      "paritytech/tools:latest"
+  <<:                              *kubernetes-env
+  <<:                              *schedule-refs
+  <<:                              *vault-secrets
+  needs:
+    - job:                         benchmarks
+      artifacts:                   true
+  script:
+    - mv artifacts/output.txt /tmp/output.txt
+    # setup ssh
+    - eval $(ssh-agent)
+    - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
+    - mkdir ~/.ssh && touch ~/.ssh/known_hosts
+    - ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
+    # Set git config
+    - rm -rf .git/config
+    - git config user.email "devops-team@parity.io"
+    - git config user.name "${GITHUB_USER}"
+    - git config remote.origin.url "git@github.com:/paritytech/${CI_PROJECT_NAME}.git"
+    - git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    - git fetch origin gh-pages
+    # Push result to github
+    - git checkout gh-pages
+    - mkdir bench/$(date +%d-%m-%Y) || echo "Directory exists"
+    - mv /tmp/output.txt bench/$(date +%d-%m-%Y)/
+    - git add --all
+    - git commit -m "Add output.txt with benchmark results for ${CI_COMMIT_REF_NAME}"
+    - git push origin gh-pages
+  allow_failure:                   true
 
 publish-bench:
   stage:                           publish
