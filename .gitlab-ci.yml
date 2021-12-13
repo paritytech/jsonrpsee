@@ -160,11 +160,11 @@ publish-ghpages:
     - git fetch origin gh-pages
     # Push result to github
     - git checkout gh-pages
-    - mkdir bench/$(date +%d-%m-%Y)
+    - mkdir bench/$(date +%d-%m-%Y) || echo "Directory exists"
     - mv /tmp/output.txt bench/$(date +%d-%m-%Y)/
-    - git add --all --force
+    - git add --all
     - git commit -m "Add output.txt with benchmark results for ${CI_COMMIT_REF_NAME}"
-    - git push origin gh-pages --force
+    - git push origin gh-pages
   allow_failure:                   true
 
 publish-bench:
