@@ -50,10 +50,10 @@ async fn ws_subscription_works() {
 	let mut foo_sub: Subscription<u64> = client.subscribe("subscribe_foo", None, "unsubscribe_foo").await.unwrap();
 
 	for _ in 0..10 {
-		let hello = hello_sub.next().await.unwrap();
-		let foo = foo_sub.next().await.unwrap();
-		assert_eq!(hello, Some("hello from subscription".into()));
-		assert_eq!(foo, Some(1337));
+		let hello = hello_sub.next().await.unwrap().unwrap();
+		let foo = foo_sub.next().await.unwrap().unwrap();
+		assert_eq!(hello, "hello from subscription".to_string());
+		assert_eq!(foo, 1337);
 	}
 }
 
@@ -178,11 +178,11 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 
 	// Capacity is `num_sender` + `capacity`
 	for _ in 0..5 {
-		assert!(hello_sub.next().await.unwrap().is_some());
+		assert!(hello_sub.next().await.unwrap().is_ok());
 	}
 
 	// NOTE: this is now unuseable and unregistered.
-	assert!(hello_sub.next().await.unwrap().is_none());
+	assert!(hello_sub.next().await.is_none());
 
 	// The client should still be useable => make sure it still works.
 	let _hello_req: JsonValue = client.request("say_hello", None).await.unwrap();
@@ -191,7 +191,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	let mut other_sub: Subscription<JsonValue> =
 		client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 
-	other_sub.next().await.unwrap();
+	other_sub.next().await.unwrap().unwrap();
 }
 
 #[tokio::test]
@@ -282,7 +282,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 	let res = sub.next().await;
 
-	assert!(matches!(res, Err(Error::SubscriptionClosed(_))));
+	assert!(matches!(res, Some(Err(Error::SubscriptionClosed(_)))));
 }
 
 #[tokio::test]
@@ -294,7 +294,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	let mut sub: Subscription<String> = c1.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 
-	assert!(matches!(sub.next().await, Ok(Some(_))));
+	assert!(matches!(sub.next().await, Some(Ok(_))));
 
 	handle.stop().unwrap().await;
 
@@ -307,7 +307,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 	for _ in 0..2 {
 		match sub.next().await {
 			// All good, exit test
-			Ok(None) => return,
+			None => return,
 			// Try again
 			_ => continue,
 		}
@@ -349,9 +349,9 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 	let mut sub: Subscription<usize> = client.subscribe("subscribe_hello", None, "unsubscribe_hello").await.unwrap();
 
-	let res = sub.next().await.unwrap();
+	let res = sub.next().await.unwrap().unwrap();
 
-	assert_eq!(res.as_ref(), Some(&1));
+	assert_eq!(res, 1);
 	drop(client);
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
 	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError { .. }));

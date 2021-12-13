@@ -71,9 +71,12 @@ async fn server() -> SocketAddr {
 /// It has the following methods:
 ///     sync methods: `say_hello` and `add`
 ///     async: `say_hello_async` and `add_sync`
-///     other: `invalid_params` (always returns `CallError::InvalidParams`), `call_fail` (always returns
-/// 			`CallError::Failed`), `sleep_for` Returns the address together with handles for server future
-///				and server stop.
+///     other: `invalid_params` (always returns `CallError::InvalidParams`),
+///            `call_fail` (always returns `CallError::Failed`),
+///            `sleep_for`
+///            `subscribe_hello` (starts a subscription that doesn't send anything)
+///
+/// Returns the address together with handle for the server.
 async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
 	let mut module = RpcModule::new(());
