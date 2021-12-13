@@ -59,7 +59,7 @@ pub enum RequestStatus {
 
 type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
 type PendingBatchOneshot = oneshot::Sender<Result<Vec<JsonValue>, Error>>;
-type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>;
+type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>;
 type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
 type RequestId = u64;
@@ -82,7 +82,7 @@ pub struct RequestManager {
 	requests: FxHashMap<RequestId, Kind>,
 	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all
 	/// requests.
-	subscriptions: HashMap<SubscriptionId, RequestId>,
+	subscriptions: HashMap<SubscriptionId<'static>, RequestId>,
 	/// Pending batch requests
 	batches: FxHashMap<Vec<RequestId>, BatchState>,
 	/// Registered Methods for incoming notifications
@@ -161,7 +161,7 @@ impl RequestManager {
 		&mut self,
 		sub_req_id: RequestId,
 		unsub_req_id: RequestId,
-		subscription_id: SubscriptionId,
+		subscription_id: SubscriptionId<'static>,
 		send_back: SubscriptionSink,
 		unsubscribe_method: UnsubscribeMethod,
 	) -> Result<(), SubscriptionSink> {
@@ -251,7 +251,7 @@ impl RequestManager {
 	pub fn remove_subscription(
 		&mut self,
 		request_id: RequestId,
-		subscription_id: SubscriptionId,
+		subscription_id: SubscriptionId<'static>,
 	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId)> {
 		match (self.requests.entry(request_id), self.subscriptions.entry(subscription_id)) {
 			(Entry::Occupied(request), Entry::Occupied(subscription))

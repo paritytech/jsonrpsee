@@ -76,7 +76,7 @@ pub fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
-	let sub_id = response.params.subscription;
+	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => return Err(None),
@@ -187,7 +187,7 @@ pub async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManag
 pub fn build_unsubscribe_message(
 	manager: &mut RequestManager,
 	sub_req_id: u64,
-	sub_id: SubscriptionId,
+	sub_id: SubscriptionId<'static>,
 ) -> Option<RequestMessage> {
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];

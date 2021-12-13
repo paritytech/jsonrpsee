@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::fmt;
 
-use crate::v2::SubscriptionId;
+use crate::{JsonValue, v2::SubscriptionId};
 
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
@@ -185,13 +185,14 @@ impl Error {
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct SubscriptionClosedError {
 	subscription_closed: String,
-	id: SubscriptionId,
+	// TODO: #[serde(borrow)]..
+	id: JsonValue,
 }
 
 impl SubscriptionClosedError {
 	/// Create a new subscription closed error.
 	pub fn new(reason: impl Into<String>, id: SubscriptionId) -> Self {
-		Self { subscription_closed: reason.into(), id }
+		Self { subscription_closed: reason.into(), id: id.into() }
 	}
 
 	/// Get the reason why the subscription was closed.
@@ -200,9 +201,16 @@ impl SubscriptionClosedError {
 	}
 
 	/// Get the subscription ID.
-	pub fn subscription_id(&self) -> &SubscriptionId {
+	pub fn subscription_id(&self) -> &JsonValue {
 		&self.id
 	}
+
+	/*/// Convert `SubscriptionId<'a>` to `SubscriptionId<'static>` so that it can be moved across threads.
+	///
+	/// This can cause an allocation if the id is a string.
+	pub fn into_owned(self) -> SubscriptionClosedError<'static> {
+		SubscriptionClosedError { subscription_closed: self.subscription_closed, id: self.id.into_owned() }
+	}*/
 }
 
 /// Generic transport error.

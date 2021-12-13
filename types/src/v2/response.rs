@@ -54,15 +54,16 @@ impl<'a, T> Response<'a, T> {
 
 /// Return value for subscriptions.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SubscriptionPayload<T> {
+pub struct SubscriptionPayload<'a, T> {
 	/// Subscription ID
-	pub subscription: SubscriptionId,
+	#[serde(borrow)]
+	pub subscription: SubscriptionId<'a>,
 	/// Result.
 	pub result: T,
 }
 
 /// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member.
-pub type SubscriptionResponse<'a, T> = Notification<'a, SubscriptionPayload<T>>;
+pub type SubscriptionResponse<'a, T> = Notification<'a, SubscriptionPayload<'a, T>>;
 
 #[cfg(test)]
 mod tests {
