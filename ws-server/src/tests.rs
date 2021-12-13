@@ -36,10 +36,11 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::traits::IdProvider;
 use jsonrpsee_types::v2::error::invalid_subscription_err;
 use jsonrpsee_types::v2::SubscriptionId;
 use serde_json::Value as JsonValue;
-use std::{fmt, net::SocketAddr, sync::Arc, time::Duration};
+use std::{fmt, net::SocketAddr, time::Duration};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 fn init_logger() {
@@ -633,9 +634,17 @@ async fn unsubscribe_wrong_sub_id_type() {
 
 #[tokio::test]
 async fn custom_subscription_id_works() {
+	struct HardcodedSubscriptionId;
+
+	impl IdProvider for HardcodedSubscriptionId {
+		fn next_id(&self) -> SubscriptionId {
+			"0xdeadbeef".to_string().into()
+		}
+	}
+
 	init_logger();
 	let server = WsServerBuilder::default()
-		.set_id_generator(Arc::new(|| SubscriptionId::Str("0xdeadbeef".into())))
+		.set_id_provider(HardcodedSubscriptionId)
 		.build("127.0.0.1:0")
 		.with_default_timeout()
 		.await

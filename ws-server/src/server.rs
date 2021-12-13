@@ -42,8 +42,7 @@ use futures_util::future::join_all;
 use futures_util::future::FutureExt;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use jsonrpsee_utils::server::helpers::generate_random_numeric_id;
-use jsonrpsee_utils::server::rpc_module::IdGen;
+use jsonrpsee_types::traits::{IdProvider, RandomIntegerIdProvider};
 use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
@@ -67,7 +66,17 @@ pub struct Server<M> {
 	stop_monitor: StopMonitor,
 	resources: Resources,
 	middleware: M,
-	id_gen: IdGen,
+	id_provider: Arc<dyn IdProvider>,
+}
+
+impl<M> std::fmt::Debug for Server<M> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Server")
+			.field("listener", &self.listener)
+			.field("cfg", &self.cfg)
+			.field("stop_monitor", &self.stop_monitor)
+			.finish()
+	}
 }
 
 impl<M: Middleware> Server<M> {
@@ -119,7 +128,7 @@ impl<M: Middleware> Server<M> {
 
 					let methods = &methods;
 					let cfg = &self.cfg;
-					let id_gen = &self.id_gen;
+					let id_provider = self.id_provider.clone();
 
 					connections.add(Box::pin(handshake(
 						socket,
@@ -130,7 +139,7 @@ impl<M: Middleware> Server<M> {
 							cfg,
 							stop_monitor: &stop_monitor,
 							middleware: middleware.clone(),
-							id_gen,
+							id_provider,
 						},
 					)));
 
@@ -208,7 +217,7 @@ enum HandshakeResponse<'a, M> {
 		cfg: &'a Settings,
 		stop_monitor: &'a StopMonitor,
 		middleware: M,
-		id_gen: &'a IdGen,
+		id_provider: Arc<dyn IdProvider>,
 	},
 }
 
@@ -232,7 +241,7 @@ where
 
 			Ok(())
 		}
-		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor, middleware, id_gen } => {
+		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor, middleware, id_provider } => {
 			tracing::debug!("Accepting new connection: {}", conn_id);
 			let key = {
 				let req = server.receive_request().await?;
@@ -263,7 +272,7 @@ where
 				cfg.max_request_body_size,
 				stop_monitor.clone(),
 				middleware,
-				id_gen.clone(),
+				id_provider,
 			))
 			.await;
 
@@ -283,7 +292,7 @@ async fn background_task(
 	max_request_body_size: u32,
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
-	id_gen: IdGen,
+	id_provider: Arc<dyn IdProvider>,
 ) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
 	let mut builder = server.into_builder();
@@ -367,7 +376,7 @@ async fn background_task(
 
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
-					match methods.execute_with_resources(&sink, req, conn_id, &resources, id_gen.clone()) {
+					match methods.execute_with_resources(&sink, req, conn_id, &resources, &*id_provider) {
 						Ok((name, MethodResult::Sync(success))) => {
 							middleware.on_result(name, success, request_start);
 							middleware.on_response(request_start);
@@ -400,7 +409,7 @@ async fn background_task(
 				let resources = &resources;
 				let methods = &methods;
 				let sink = sink.clone();
-				let id_gen = id_gen.clone();
+				let id_provider = id_provider.clone();
 
 				let fut = async move {
 					// Batch responses must be sent back as a single message so we read the results from each
@@ -418,7 +427,7 @@ async fn background_task(
 									req,
 									conn_id,
 									resources,
-									id_gen.clone(),
+									&*id_provider,
 								) {
 									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
@@ -520,12 +529,19 @@ impl Default for Settings {
 	}
 }
 
+//#[derive(Debug)]
 /// Builder to configure and create a JSON-RPC Websocket server
 pub struct Builder<M = ()> {
 	settings: Settings,
 	resources: Resources,
 	middleware: M,
-	id_gen: IdGen,
+	id_provider: Arc<dyn IdProvider>,
+}
+
+impl<M> std::fmt::Debug for Builder<M> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Builder").field("settings", &self.settings).field("resources", &self.resources).finish()
+	}
 }
 
 impl Default for Builder {
@@ -534,7 +550,7 @@ impl Default for Builder {
 			settings: Settings::default(),
 			resources: Resources::default(),
 			middleware: (),
-			id_gen: Arc::new(|| generate_random_numeric_id()),
+			id_provider: Arc::new(RandomIntegerIdProvider),
 		}
 	}
 }
@@ -623,7 +639,7 @@ impl<M> Builder<M> {
 	/// let builder = WsServerBuilder::new().set_middleware(MyMiddleware);
 	/// ```
 	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
-		Builder { settings: self.settings, resources: self.resources, middleware, id_gen: self.id_gen }
+		Builder { settings: self.settings, resources: self.resources, middleware, id_provider: self.id_provider }
 	}
 
 	/// Restores the default behavior of allowing connections with `Origin` header
@@ -685,20 +701,14 @@ impl<M> Builder<M> {
 	///
 	/// ```rust
 	/// use jsonrpsee_ws_server::WsServerBuilder;
-	/// use jsonrpsee_ws_server::types::v2::params::SubscriptionId;
-	/// use std::sync::Arc;
-	/// use rand::distributions::Alphanumeric;
-	/// use rand::{thread_rng, Rng};
+	/// use jsonrpsee_ws_server::types::traits::{IdProvider, RandomStringIdProvider};
 	///
-	/// let builder = WsServerBuilder::default().set_id_generator(Arc::new(|| {
-	///     let mut rng = thread_rng();
-	///     let s: String = (&mut rng).sample_iter(Alphanumeric).take(16).map(char::from).collect();
-	///     SubscriptionId::Str(s)
-	/// }));
+	///
+	/// let builder = WsServerBuilder::default().set_subid_providererator(RandomStringIdProvider::new(16));
 	///
 	/// ```
-	pub fn set_id_generator(mut self, id_gen: IdGen) -> Self {
-		self.id_gen = id_gen;
+	pub fn set_id_provider(mut self, id_provider: impl IdProvider + 'static) -> Self {
+		self.id_provider = Arc::new(id_provider);
 		self
 	}
 
@@ -728,7 +738,7 @@ impl<M> Builder<M> {
 			stop_monitor,
 			resources,
 			middleware: self.middleware,
-			id_gen: self.id_gen,
+			id_provider: self.id_provider,
 		})
 	}
 }

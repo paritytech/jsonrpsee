@@ -30,6 +30,7 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::to_json_raw_value;
+use jsonrpsee_types::traits::{IdProvider, RandomIntegerIdProvider};
 use jsonrpsee_types::v2::error::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::{Error, SubscriptionClosedError},
@@ -47,19 +48,15 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use super::helpers::generate_random_numeric_id;
-
-/// Subscription ID generator.
-pub type IdGen = Arc<dyn Send + Sync + Fn() -> SubscriptionId>;
-
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId, IdGen) -> bool>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId, &dyn IdProvider) -> bool>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
-pub type AsyncMethod<'a> =
-	Arc<dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>, IdGen) -> BoxFuture<'a, bool>>;
+pub type AsyncMethod<'a> = Arc<
+	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>, &dyn IdProvider) -> BoxFuture<'a, bool>,
+>;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -164,7 +161,7 @@ impl MethodCallback {
 		req: Request<'_>,
 		conn_id: ConnectionId,
 		claimed: Option<ResourceGuard>,
-		id_gen: IdGen,
+		id_gen: &dyn IdProvider,
 	) -> MethodResult<bool> {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
@@ -311,7 +308,13 @@ impl Methods {
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, sink: &MethodSink, req: Request, conn_id: ConnectionId, id_gen: IdGen) -> MethodResult<bool> {
+	pub fn execute(
+		&self,
+		sink: &MethodSink,
+		req: Request,
+		conn_id: ConnectionId,
+		id_gen: &dyn IdProvider,
+	) -> MethodResult<bool> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(sink, req, conn_id, None, id_gen),
@@ -330,7 +333,7 @@ impl Methods {
 		req: Request<'r>,
 		conn_id: ConnectionId,
 		resources: &Resources,
-		id_gen: IdGen,
+		id_gen: &dyn IdProvider,
 	) -> Result<(&'static str, MethodResult<bool>), Cow<'r, str>> {
 		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get_key_value(&*req.method) {
@@ -424,7 +427,7 @@ impl Methods {
 		let (tx, mut rx) = mpsc::unbounded();
 		let sink = MethodSink::new(tx.clone());
 
-		if let MethodResult::Async(fut) = self.execute(&sink, req, 0, Arc::new(|| generate_random_numeric_id())) {
+		if let MethodResult::Async(fut) = self.execute(&sink, req, 0, &RandomIntegerIdProvider) {
 			fut.await;
 		}
 
@@ -668,11 +671,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn_id, id_gen| {
+				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn_id, id_provider| {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 
 					let sub_id = {
-						let sub_id = id_gen();
+						let sub_id: SubscriptionId = id_provider.next_id().into();
 						let uniq_sub = SubscriptionKey { conn_id, sub_id: sub_id.clone() };
 
 						subscribers.lock().insert(uniq_sub, (method_sink.clone(), conn_rx));

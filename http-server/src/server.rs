@@ -35,8 +35,8 @@ use hyper::{
 use jsonrpsee_types::{
 	error::{Error, GenericTransportError},
 	middleware::Middleware,
-	v2::{ErrorCode, Id, Notification, Request, SubscriptionId},
-	TEN_MB_SIZE_BYTES,
+	v2::{ErrorCode, Id, Notification, Request},
+	TEN_MB_SIZE_BYTES, traits::NoopIdProvider,
 };
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
@@ -52,7 +52,6 @@ use std::{
 	future::Future,
 	net::{SocketAddr, TcpListener, ToSocketAddrs},
 	pin::Pin,
-	sync::Arc,
 	task::{Context, Poll},
 };
 
@@ -346,8 +345,7 @@ impl<M: Middleware> Server<M> {
 									req,
 									0,
 									&resources,
-									// TODO: unused...
-									Arc::new(|| SubscriptionId::Num(0)),
+									&NoopIdProvider,
 								) {
 									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
@@ -374,13 +372,7 @@ impl<M: Middleware> Server<M> {
 								let middleware = &middleware;
 
 								join_all(batch.into_iter().filter_map(
-									move |req| match methods.execute_with_resources(
-										&sink,
-										req,
-										0,
-										&resources,
-										Arc::new(|| SubscriptionId::Num(0)),
-									) {
+									move |req| match methods.execute_with_resources(&sink, req, 0, &resources, &NoopIdProvider) {
 										Ok((name, MethodResult::Sync(success))) => {
 											middleware.on_result(name, success, request_start);
 											None

@@ -29,7 +29,6 @@ use futures_util::stream::StreamExt;
 use jsonrpsee_types::error::{CallError, Error};
 use jsonrpsee_types::to_json_raw_value;
 use jsonrpsee_types::v2::error::{OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
-use jsonrpsee_types::v2::SubscriptionId;
 use jsonrpsee_types::v2::{
 	error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
 	ErrorCode, ErrorObject, Id, InvalidRequest, Response, RpcError,
@@ -210,12 +209,6 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 	buf.pop();
 	buf.push(']');
 	buf
-}
-
-/// ...
-pub fn generate_random_numeric_id() -> SubscriptionId {
-	const JS_NUM_MASK: u64 = !0 >> 11;
-	SubscriptionId::Num(rand::random::<u64>() & JS_NUM_MASK)
 }
 
 #[cfg(test)]

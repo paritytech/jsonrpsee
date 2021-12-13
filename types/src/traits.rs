@@ -24,9 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::v2::ParamsSer;
+use crate::v2::{ParamsSer, SubscriptionId};
 use crate::{Error, Subscription};
 use async_trait::async_trait;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::value::RawValue;
@@ -126,4 +128,51 @@ tuple_impls! {
 	14 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13)
 	15 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14)
 	16 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14 15 T15)
+}
+
+/// Trait used to provide unique subscription IDs.
+pub trait IdProvider: Send + Sync {
+	/// Returns the next ID for the subscription.
+	fn next_id(&self) -> SubscriptionId;
+}
+
+/// Generates random integers as subscription ID.
+#[derive(Debug)]
+pub struct RandomIntegerIdProvider;
+
+impl IdProvider for RandomIntegerIdProvider {
+	fn next_id(&self) -> SubscriptionId {
+		const JS_NUM_MASK: u64 = !0 >> 11;
+		(rand::random::<u64>() & JS_NUM_MASK).into()
+	}
+}
+
+/// Generates random strings of length `len` as subscription ID.
+#[derive(Debug)]
+pub struct RandomStringIdProvider {
+	len: usize,
+}
+
+impl RandomStringIdProvider {
+	/// Create a new random string provider.
+	pub fn new(len: usize) -> Self {
+		Self { len }
+	}
+}
+
+impl IdProvider for RandomStringIdProvider {
+	fn next_id(&self) -> SubscriptionId {
+		let mut rng = rand::thread_rng();
+		(&mut rng).sample_iter(Alphanumeric).take(self.len).map(char::from).collect::<String>().into()
+	}
+}
+
+/// No-op implementation to be used for servers that doesn't support subscriptions.
+#[derive(Debug)]
+pub struct NoopIdProvider;
+
+impl IdProvider for NoopIdProvider {
+	fn next_id(&self) -> SubscriptionId {
+		0.into()
+	}
 }

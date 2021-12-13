@@ -305,6 +305,18 @@ impl From<SubscriptionId> for JsonValue {
 	}
 }
 
+impl From<u64> for SubscriptionId {
+	fn from(sub_id: u64) -> Self {
+		Self::Num(sub_id)
+	}
+}
+
+impl From<String> for SubscriptionId {
+	fn from(sub_id: String) -> Self {
+		Self::Str(sub_id)
+	}
+}
+
 impl TryFrom<JsonValue> for SubscriptionId {
 	type Error = ();
 
