@@ -129,7 +129,7 @@ pub enum Error {
 	SubscriptionNameConflict(String),
 	/// Subscription got closed.
 	#[error("Subscription closed: {0:?}")]
-	SubscriptionClosed(SubscriptionClosedError),
+	SubscriptionClosed(SubscriptionClosed),
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,
@@ -177,30 +177,42 @@ impl Error {
 	}
 }
 
-/// Error type with a special `subscription_closed` field to detect that
+/// A type with a special `subscription_closed` field to detect that
 /// a subscription has been closed to distinguish valid items produced
 /// by the server on the subscription stream from an error.
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
-pub struct SubscriptionClosedError {
-	subscription_closed: String,
-	id: u64,
+pub struct SubscriptionClosed {
+	subscription_closed: SubscriptionClosedReason,
 }
 
-impl SubscriptionClosedError {
-	/// Create a new subscription closed error.
-	pub fn new(reason: impl Into<String>, id: u64) -> Self {
-		Self { subscription_closed: reason.into(), id }
+impl From<SubscriptionClosedReason> for SubscriptionClosed {
+	fn from(kind: SubscriptionClosedReason) -> Self {
+		Self::new(kind)
+	}
+}
+
+impl SubscriptionClosed {
+	/// Create a new subscription message.
+	pub fn new(kind: SubscriptionClosedReason) -> Self {
+		Self { subscription_closed: kind }
 	}
 
-	/// Get the reason why the subscription was closed.
-	pub fn close_reason(&self) -> &str {
+	/// Get the close reason.
+	pub fn close_reason(&self) -> &SubscriptionClosedReason {
 		&self.subscription_closed
 	}
+}
 
-	/// Get the subscription ID.
-	pub fn subscription_id(&self) -> u64 {
-		self.id
-	}
+/// A type to represent when a subscription gets closed
+/// by either the server or client side.
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub enum SubscriptionClosedReason {
+	/// The subscription was closed by calling the unsubscribe method.
+	Unsubscribed,
+	/// The client closed the connection.
+	ConnectionReset,
+	/// The server closed the subscription.
+	Server(String),
 }
 
 /// Generic transport error.
@@ -238,5 +250,26 @@ impl From<soketto::connection::Error> for Error {
 impl From<hyper::Error> for Error {
 	fn from(hyper_err: hyper::Error) -> Error {
 		Error::Transport(hyper_err.into())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{SubscriptionClosed, SubscriptionClosedReason};
+
+	#[test]
+	fn subscription_closed_ser_deser_works() {
+		let items: Vec<(&str, SubscriptionClosed)> = vec![
+			(r#"{"subscription_closed":"Unsubscribed"}"#, SubscriptionClosedReason::Unsubscribed.into()),
+			(r#"{"subscription_closed":"ConnectionReset"}"#, SubscriptionClosedReason::ConnectionReset.into()),
+			(r#"{"subscription_closed":{"Server":"hoho"}}"#, SubscriptionClosedReason::Server("hoho".into()).into()),
+		];
+
+		for (s, d) in items {
+			let dsr: SubscriptionClosed = serde_json::from_str(s).unwrap();
+			assert_eq!(dsr, d);
+			let ser = serde_json::to_string(&d).unwrap();
+			assert_eq!(ser, s);
+		}
 	}
 }

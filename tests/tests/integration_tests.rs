@@ -34,7 +34,7 @@ use jsonrpsee::{
 	http_client::HttpClientBuilder,
 	rpc_params,
 	types::{
-		error::SubscriptionClosedError,
+		error::{SubscriptionClosedReason},
 		traits::{Client, SubscriptionClient},
 		Error, JsonValue, Subscription,
 	},
@@ -356,8 +356,10 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 	assert_eq!(res, 1);
 	drop(client);
+	let close_err = rx.next().await.unwrap();
+
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError { .. }));
+	assert!(matches!(close_err.close_reason(), &SubscriptionClosedReason::ConnectionReset));
 }
 
 #[tokio::test]
