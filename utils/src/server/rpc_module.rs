@@ -30,7 +30,7 @@ use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{SubscriptionClosed, SubscriptionClosedReason};
-use jsonrpsee_types::{to_json_raw_value};
+use jsonrpsee_types::to_json_raw_value;
 use jsonrpsee_types::v2::error::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	error::Error,
@@ -868,12 +868,10 @@ impl Subscription {
 		let raw = self.rx.next().await?;
 		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
 			Ok(r) => Ok((r.params.result, r.params.subscription.into_owned())),
-			Err(_) => {
-				match serde_json::from_str::<SubscriptionResponse<SubscriptionClosed>>(&raw) {
-					Ok(e) => Err(Error::SubscriptionClosed(e.params.result)),
-					Err(e) => Err(e.into())
-				}
-			}
+			Err(_) => match serde_json::from_str::<SubscriptionResponse<SubscriptionClosed>>(&raw) {
+				Ok(e) => Err(Error::SubscriptionClosed(e.params.result)),
+				Err(e) => Err(e.into()),
+			},
 		};
 		Some(res)
 	}
@@ -1045,12 +1043,14 @@ mod tests {
 		module
 			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 				let mut stream_data = vec!['0', '1', '2'];
-				std::thread::spawn(move || while let Some(letter) = stream_data.pop() {
-					tracing::debug!("This is your friendly subscription sending data.");
-					if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
-						return;
+				std::thread::spawn(move || {
+					while let Some(letter) = stream_data.pop() {
+						tracing::debug!("This is your friendly subscription sending data.");
+						if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
+							return;
+						}
+						std::thread::sleep(std::time::Duration::from_millis(500));
 					}
-					std::thread::sleep(std::time::Duration::from_millis(500));
 				});
 				Ok(())
 			})

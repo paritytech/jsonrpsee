@@ -34,7 +34,7 @@ use jsonrpsee::{
 	http_client::HttpClientBuilder,
 	rpc_params,
 	types::{
-		error::{SubscriptionClosedReason},
+		error::SubscriptionClosedReason,
 		traits::{Client, SubscriptionClient},
 		Error, JsonValue, Subscription,
 	},
