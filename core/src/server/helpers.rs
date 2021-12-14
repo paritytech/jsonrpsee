@@ -40,7 +40,7 @@ use serde::Serialize;
 /// ```
 ///    use std::io::Write;
 ///
-///    use jsonrpsee_utils::server::helpers::BoundedWriter;
+///    use jsonrpsee_core::server::helpers::BoundedWriter;
 ///
 ///    let mut writer = BoundedWriter::new(10);
 ///    (&mut writer).write("hello".as_bytes()).unwrap();

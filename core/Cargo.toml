@@ -1,5 +1,5 @@
 [package]
-name = "jsonrpsee-utils"
+name = "jsonrpsee-core"
 version = "0.6.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for jsonrpsee"

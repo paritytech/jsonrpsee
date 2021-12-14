@@ -32,7 +32,7 @@ use crate::WsClientBuilder;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_utils::rpc_params;
+use jsonrpsee_core::rpc_params;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]

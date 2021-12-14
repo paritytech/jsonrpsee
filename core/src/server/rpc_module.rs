@@ -627,7 +627,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///
 	/// ```no_run
 	///
-	/// use jsonrpsee_utils::server::rpc_module::RpcModule;
+	/// use jsonrpsee_core::server::rpc_module::RpcModule;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
 	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, mut sink, ctx| {
