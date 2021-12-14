@@ -93,7 +93,7 @@ impl RpcMethod {
 					))),
 				},
 			})
-			.collect::<Result<Vec<_>, _>>()?;
+			.collect::<Result<_, _>>()?;
 
 		let returns = match sig.output {
 			syn::ReturnType::Default => None,
