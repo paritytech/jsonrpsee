@@ -71,9 +71,8 @@ impl RpcMethod {
 			None => quote!(),
 		};
 
-		let span = sig.span();
 		if blocking && sig.asyncness.is_some() {
-			return Err(syn::Error::new(span, "Blocking method must be synchronous"));
+			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
 		}
 
 		let params: Vec<_> = sig
@@ -88,7 +87,7 @@ impl RpcMethod {
 						"Method argument names must be valid Rust identifiers; got `_` instead",
 					))),
 					_ => Some(Err(syn::Error::new(
-						span,
+						arg.span(),
 						format!("Unexpected method signature input; got {:?} ", *arg.pat),
 					))),
 				},
