@@ -35,7 +35,9 @@
 //! [`async-std`](https://docs.rs/async-std/), [`smol`](https://docs.rs/smol) and similar.
 
 mod client;
-mod transport;
+
+/// HTTP transport.
+pub mod transport;
 
 #[cfg(test)]
 mod tests;
