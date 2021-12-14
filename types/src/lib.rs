@@ -37,9 +37,6 @@ pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
 /// Error type.
 pub mod error;
 
-/// Client types.
-mod client;
-
 /// JSON-RPC params related types.
 pub mod params;
 
@@ -54,7 +51,6 @@ pub mod error_response;
 
 // pub use async_trait::async_trait;
 pub use beef::Cow;
-pub use client::*;
 pub use error::{CallError, Error};
 pub use params::{Id, Params, ParamsSequence, ParamsSer, SubscriptionId, TwoPointZero};
 pub use serde::{de::DeserializeOwned, Serialize};

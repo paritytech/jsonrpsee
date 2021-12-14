@@ -24,9 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use crate::client::Subscription;
 use async_trait::async_trait;
+use jsonrpsee_types::Error;
 use jsonrpsee_types::ParamsSer;
-use jsonrpsee_types::{Error, Subscription};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::value::RawValue;

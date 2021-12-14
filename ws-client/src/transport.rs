@@ -29,10 +29,11 @@ use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-use crate::{stream::EitherStream, types::CertificateStore};
+use crate::stream::EitherStream;
 use beef::Cow;
 use futures::io::{BufReader, BufWriter};
 use http::Uri;
+use jsonrpsee_core::client::CertificateStore;
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, Header, ServerResponse};
 use thiserror::Error;

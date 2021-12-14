@@ -125,7 +125,7 @@ impl RpcDescription {
 
 		// `returns` represent the return type of the *rust method*, which is wrapped
 		// into the `Subscription` object.
-		let sub_type = self.jrps_client_item(quote! { types::Subscription });
+		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
 		let item = &sub.item;
 		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
 

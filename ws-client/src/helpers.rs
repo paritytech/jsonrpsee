@@ -30,10 +30,10 @@ use std::time::Duration;
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::{
-	Error, ErrorResponse, Id, Notification, ParamsSer, RequestMessage, RequestSer, Response, SubscriptionId,
-	SubscriptionResponse,
+	Error, ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
 };
 use futures::channel::{mpsc, oneshot};
+use jsonrpsee_core::client::RequestMessage;
 use serde_json::Value as JsonValue;
 
 /// Attempts to process a batch response.
