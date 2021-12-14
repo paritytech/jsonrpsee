@@ -37,7 +37,8 @@ use serde_json::json;
 
 mod rpc_impl {
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::types::{async_trait, RpcResult};
+	use jsonrpsee::types::RpcResult;
+	use jsonrpsee::core::async_trait;
 	use jsonrpsee::ws_server::SubscriptionSink;
 
 	#[rpc(client, server, namespace = "foo")]

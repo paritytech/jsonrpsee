@@ -4,7 +4,7 @@ use criterion::*;
 use futures_util::future::join_all;
 use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::types::traits::{Client, SubscriptionClient};
+use jsonrpsee::core::traits::{Client, SubscriptionClient};
 use jsonrpsee::types::{Id, ParamsSer, RequestSer};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::runtime::Runtime as TokioRuntime;

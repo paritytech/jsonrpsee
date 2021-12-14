@@ -41,16 +41,16 @@ impl RpcDescription {
 		let (impl_generics, type_generics, _) = self.trait_def.generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {
-			quote! { #jsonrpsee::types::traits::Client }
+			quote! { #jsonrpsee::core::traits::Client }
 		} else {
-			quote! { #jsonrpsee::types::traits::SubscriptionClient }
+			quote! { #jsonrpsee::core::traits::SubscriptionClient }
 		};
 
 		let method_impls =
 			self.methods.iter().map(|method| self.render_method(method)).collect::<Result<Vec<_>, _>>()?;
 		let sub_impls = self.subscriptions.iter().map(|sub| self.render_sub(sub)).collect::<Result<Vec<_>, _>>()?;
 
-		let async_trait = self.jrps_client_item(quote! { types::__reexports::async_trait });
+		let async_trait = self.jrps_client_item(quote! { core::__reexports::async_trait });
 
 		// Doc-comment to be associated with the client.
 		let doc_comment = format!("Client implementation for the `{}` RPC API.", &self.trait_def.ident);
@@ -150,7 +150,7 @@ impl RpcDescription {
 		signature: &syn::TraitItemMethod,
 	) -> TokenStream2 {
 		if !params.is_empty() {
-			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
+			let serde_json = self.jrps_client_item(quote! { core::__reexports::serde_json });
 			let params = params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});

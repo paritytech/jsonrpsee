@@ -38,7 +38,7 @@ use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::rpc::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::error::{Error, ErrorCode, SubscriptionClosedError};
 use jsonrpsee_types::to_json_raw_value;
-use jsonrpsee_types::traits::ToRpcParams;
+use crate::traits::ToRpcParams;
 use jsonrpsee_types::{
 	DeserializeOwned, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
 	SubscriptionResponse,
@@ -952,7 +952,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn calling_method_without_server_using_proc_macro() {
-		use jsonrpsee::{proc_macros::rpc, types::async_trait};
+		use jsonrpsee::{proc_macros::rpc, core::async_trait};
 		// Setup
 		#[derive(Debug, Deserialize, Serialize)]
 		#[allow(unreachable_pub)]

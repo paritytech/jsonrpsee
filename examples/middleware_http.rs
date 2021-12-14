@@ -29,7 +29,7 @@ use std::time::Instant;
 
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
-use jsonrpsee::types::{middleware, traits::Client};
+use jsonrpsee::core::{middleware, traits::Client};
 
 #[derive(Clone)]
 struct Timings;

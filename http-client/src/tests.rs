@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::types::error::{Error, ErrorCode, ErrorObject, RpcError};
-use crate::types::traits::Client;
+use jsonrpsee_core::traits::Client;
 use crate::types::{JsonValue, ParamsSer};
 use crate::HttpClientBuilder;
 use jsonrpsee_test_utils::helpers::*;

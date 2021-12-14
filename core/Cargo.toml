@@ -8,6 +8,7 @@ license = "MIT"
 
 [dependencies]
 arrayvec = "0.7.1"
+async-trait = "0.1"
 beef = { version = "0.5.1", features = ["impl_serde"] }
 thiserror = { version = "1", optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }

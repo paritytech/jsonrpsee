@@ -27,7 +27,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::rpc_params;
-use jsonrpsee::types::traits::SubscriptionClient;
+use jsonrpsee::core::traits::SubscriptionClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 

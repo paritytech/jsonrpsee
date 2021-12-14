@@ -28,6 +28,12 @@
 
 #![warn(missing_docs, missing_debug_implementations, unreachable_pub)]
 
+/// Middleware trait and implementation.
+pub mod middleware;
+
+/// Traits
+pub mod traits;
+
 /// Shared hyper helpers.
 #[cfg(feature = "http-helpers")]
 pub mod http_helpers;
@@ -39,3 +45,14 @@ pub mod server;
 /// Shared code for JSON-RPC clients.
 #[cfg(feature = "client")]
 pub mod client;
+
+pub use async_trait::async_trait;
+
+/// Re-exports for proc-macro library to not require any additional
+/// dependencies to be explicitly added on the client side.
+#[doc(hidden)]
+pub mod __reexports {
+	pub use async_trait::async_trait;
+	pub use serde;
+	pub use serde_json;
+}

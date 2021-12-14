@@ -37,9 +37,9 @@ use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Error as HyperError;
 use jsonrpsee_types::error::{Error, ErrorCode, GenericTransportError};
-use jsonrpsee_types::middleware::Middleware;
 use jsonrpsee_types::{Id, Notification, Request, TEN_MB_SIZE_BYTES};
 use jsonrpsee_core::http_helpers::read_body;
+use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodResult, Methods};
@@ -84,7 +84,7 @@ impl<M> Builder<M> {
 	/// ```
 	/// use std::time::Instant;
 	///
-	/// use jsonrpsee_types::middleware::Middleware;
+	/// use jsonrpsee_core::middleware::Middleware;
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]

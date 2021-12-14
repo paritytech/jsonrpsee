@@ -33,7 +33,7 @@ use crate::helpers::{
 };
 use crate::manager::RequestManager;
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
-use crate::types::traits::{Client, SubscriptionClient};
+use jsonrpsee_core::traits::{Client, SubscriptionClient};
 use crate::types::{
 	BatchMessage, CertificateStore, Error, FrontToBack, Id, Notification, NotificationSer, ParamsSer,
 	RegisterNotificationMessage, RequestIdManager, RequestMessage, RequestSer, Response, RpcError, Subscription,

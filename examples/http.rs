@@ -29,7 +29,7 @@ use std::net::SocketAddr;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 use jsonrpsee::rpc_params;
-use jsonrpsee::types::traits::Client;
+use jsonrpsee::core::traits::Client;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

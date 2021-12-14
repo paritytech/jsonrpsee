@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::HttpTransportClient;
-use crate::types::traits::{Client, SubscriptionClient};
+use jsonrpsee_core::traits::{Client, SubscriptionClient};
 use crate::types::{
 	CertificateStore, Error, Id, NotificationSer, ParamsSer, RequestIdManager, RequestSer, Response, RpcError,
 	Subscription, TEN_MB_SIZE_BYTES,

@@ -40,7 +40,7 @@ impl RpcDescription {
 
 		let method_impls = self.render_methods()?;
 		let into_rpc_impl = self.render_into_rpc()?;
-		let async_trait = self.jrps_server_item(quote! { types::__reexports::async_trait });
+		let async_trait = self.jrps_server_item(quote! { core::__reexports::async_trait });
 
 		// Doc-comment to be associated with the server.
 		let doc_comment = format!("Server trait implementation for the `{}` RPC API.", &self.trait_def.ident);
@@ -332,7 +332,7 @@ impl RpcDescription {
 		let decode_map = {
 			let generics = (0..params.len()).map(|n| quote::format_ident!("G{}", n));
 
-			let serde = self.jrps_server_item(quote! { types::__reexports::serde });
+			let serde = self.jrps_server_item(quote! { core::__reexports::serde });
 			let serde_crate = serde.to_string();
 			let fields = params.iter().zip(generics.clone()).map(|((name, _), ty)| {
 				quote! { #name: #ty, }

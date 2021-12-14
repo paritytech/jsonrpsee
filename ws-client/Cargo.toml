@@ -16,6 +16,7 @@ rustc-hash = "1"
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 http = "0.2"
 jsonrpsee-types = { path = "../types", version = "0.6.0" }
+jsonrpsee-core = { path = "../core", features = ["client"] }
 pin-project = "1"
 rustls-native-certs = "0.6.0"
 serde = "1"
@@ -31,7 +32,6 @@ webpki-roots = "0.22.0"
 [dev-dependencies]
 env_logger = "0.9.0"
 jsonrpsee-test-utils = { path = "../test-utils" }
-jsonrpsee-core = { path = "../core", features = ["client"] }
 tokio = { version = "1.8", features = ["macros"] }
 
 [features]

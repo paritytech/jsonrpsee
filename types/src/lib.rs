@@ -40,12 +40,6 @@ pub mod error;
 /// Client types.
 mod client;
 
-/// Traits
-pub mod traits;
-
-/// Middleware trait and implementation.
-pub mod middleware;
-
 /// JSON-RPC params related types.
 pub mod params;
 
@@ -55,7 +49,7 @@ pub mod request;
 /// JSON-RPC response object related types.
 pub mod response;
 
-pub use async_trait::async_trait;
+// pub use async_trait::async_trait;
 pub use beef::Cow;
 pub use client::*;
 pub use error::{CallError, Error, RpcError};
@@ -65,15 +59,6 @@ pub use serde_json::{
 	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
 	Value as JsonValue,
 };
-
-/// Re-exports for proc-macro library to not require any additional
-/// dependencies to be explicitly added on the client side.
-#[doc(hidden)]
-pub mod __reexports {
-	pub use async_trait::async_trait;
-	pub use serde;
-	pub use serde_json;
-}
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, Error>;

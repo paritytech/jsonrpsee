@@ -34,7 +34,7 @@ use helpers::{http_server, websocket_server, websocket_server_with_subscription}
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::SubscriptionClosedError;
-use jsonrpsee::types::traits::{Client, SubscriptionClient};
+use jsonrpsee::core::traits::{Client, SubscriptionClient};
 use jsonrpsee::types::{Error, JsonValue, Subscription};
 use jsonrpsee::ws_client::WsClientBuilder;
 
