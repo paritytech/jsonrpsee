@@ -41,8 +41,8 @@ pub use access_control::{
 	hosts::{AllowHosts, DomainsValidation, Host},
 	AccessControl, AccessControlBuilder,
 };
-pub use jsonrpsee_types as types;
 pub use jsonrpsee_core::server::rpc_module::RpcModule;
+pub use jsonrpsee_types as types;
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer, ServerHandle as HttpServerHandle};
 pub use tracing;
 

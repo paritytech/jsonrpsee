@@ -9,8 +9,8 @@
 use crate::types::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
 use hyper::Uri;
-use jsonrpsee_types::CertificateStore;
 use jsonrpsee_core::http_helpers;
+use jsonrpsee_types::CertificateStore;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";

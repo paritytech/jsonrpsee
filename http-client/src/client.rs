@@ -28,12 +28,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::HttpTransportClient;
-use jsonrpsee_core::traits::{Client, SubscriptionClient};
 use crate::types::{
-	CertificateStore, Error, Id, NotificationSer, ParamsSer, RequestIdManager, RequestSer, Response, RpcError,
+	CertificateStore, Error, ErrorResponse, Id, NotificationSer, ParamsSer, RequestIdManager, RequestSer, Response,
 	Subscription, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
+use jsonrpsee_core::traits::{Client, SubscriptionClient};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
@@ -139,7 +139,7 @@ impl Client for HttpClient {
 		let response: Response<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: RpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 				return Err(Error::Request(err.to_string()));
 			}
 		};
@@ -178,7 +178,7 @@ impl Client for HttpClient {
 		};
 
 		let rps: Vec<Response<_>> =
-			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<RpcError>(&body) {
+			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
 				Ok(e) => Error::Request(e.to_string()),
 				Err(e) => Error::ParseError(e),
 			})?;

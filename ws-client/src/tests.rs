@@ -25,14 +25,15 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
-use crate::types::error::{Error, ErrorCode, ErrorObject, RpcError};
-use jsonrpsee_core::traits::{Client, SubscriptionClient};
+use crate::types::error::Error;
+use crate::types::error_response::{ErrorCode, ErrorObject, ErrorResponse};
 use crate::types::{ParamsSer, Subscription};
 use crate::WsClientBuilder;
+use jsonrpsee_core::rpc_params;
+use jsonrpsee_core::traits::{Client, SubscriptionClient};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_core::rpc_params;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]
@@ -248,7 +249,7 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 fn assert_error_response(err: Error, exp: ErrorObject) {
 	match &err {
 		Error::Request(e) => {
-			let this: RpcError = serde_json::from_str(e).unwrap();
+			let this: ErrorResponse = serde_json::from_str(e).unwrap();
 			assert_eq!(this.error, exp);
 		}
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),

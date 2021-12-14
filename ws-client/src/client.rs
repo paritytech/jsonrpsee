@@ -33,10 +33,9 @@ use crate::helpers::{
 };
 use crate::manager::RequestManager;
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
-use jsonrpsee_core::traits::{Client, SubscriptionClient};
 use crate::types::{
-	BatchMessage, CertificateStore, Error, FrontToBack, Id, Notification, NotificationSer, ParamsSer,
-	RegisterNotificationMessage, RequestIdManager, RequestMessage, RequestSer, Response, RpcError, Subscription,
+	BatchMessage, CertificateStore, Error, ErrorResponse, FrontToBack, Id, Notification, NotificationSer, ParamsSer,
+	RegisterNotificationMessage, RequestIdManager, RequestMessage, RequestSer, Response, Subscription,
 	SubscriptionKind, SubscriptionMessage, SubscriptionResponse, TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
@@ -45,6 +44,7 @@ use futures::future::Either;
 use futures::prelude::*;
 use futures::sink::SinkExt;
 use http::uri::{InvalidUri, Uri};
+use jsonrpsee_core::traits::{Client, SubscriptionClient};
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 
@@ -590,7 +590,7 @@ async fn background_task(
 					}
 				}
 				// Error response
-				else if let Ok(err) = serde_json::from_slice::<RpcError>(&raw) {
+				else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(&raw) {
 					tracing::debug!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);

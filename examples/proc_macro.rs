@@ -26,8 +26,8 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::core::async_trait;
+use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::{error::Error, Subscription};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder, WsServerHandle};

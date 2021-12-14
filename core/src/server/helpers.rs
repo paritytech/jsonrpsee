@@ -28,10 +28,11 @@ use std::io;
 
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::error::rpc::{
-	CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE,
+use jsonrpsee_types::error::{CallError, Error};
+use jsonrpsee_types::error_response::{
+	ErrorCode, ErrorObject, ErrorResponse, CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG,
+	UNKNOWN_ERROR_CODE,
 };
-use jsonrpsee_types::error::{CallError, Error, ErrorCode, ErrorObject, RpcError};
 use jsonrpsee_types::{to_json_raw_value, Id, InvalidRequest, Response};
 use serde::Serialize;
 
@@ -137,7 +138,7 @@ impl MethodSink {
 
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
-		let json = match serde_json::to_string(&RpcError::new(error, id)) {
+		let json = match serde_json::to_string(&ErrorResponse::new(error, id)) {
 			Ok(json) => json,
 			Err(err) => {
 				tracing::error!("Error serializing error message: {:?}", err);

@@ -24,14 +24,15 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::error::{Error, ErrorCode, ErrorObject, RpcError};
-use jsonrpsee_core::traits::Client;
+use crate::types::error::Error;
+use crate::types::error_response::{ErrorCode, ErrorObject, ErrorResponse};
 use crate::types::{JsonValue, ParamsSer};
 use crate::HttpClientBuilder;
+use jsonrpsee_core::rpc_params;
+use jsonrpsee_core::traits::Client;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_core::rpc_params;
 
 #[tokio::test]
 async fn method_call_works() {
@@ -147,7 +148,7 @@ async fn run_request_with_response(response: String) -> Result<JsonValue, Error>
 fn assert_jsonrpc_error_response(err: Error, exp: ErrorObject) {
 	match &err {
 		Error::Request(e) => {
-			let this: RpcError = serde_json::from_str(e).unwrap();
+			let this: ErrorResponse = serde_json::from_str(e).unwrap();
 			assert_eq!(this.error, exp);
 		}
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),

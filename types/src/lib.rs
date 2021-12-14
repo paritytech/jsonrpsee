@@ -49,10 +49,13 @@ pub mod request;
 /// JSON-RPC response object related types.
 pub mod response;
 
+/// JSON-RPC response error object related types.
+pub mod error_response;
+
 // pub use async_trait::async_trait;
 pub use beef::Cow;
 pub use client::*;
-pub use error::{CallError, Error, RpcError};
+pub use error::{CallError, Error};
 pub use params::{Id, Params, ParamsSequence, ParamsSer, SubscriptionId, TwoPointZero};
 pub use serde::{de::DeserializeOwned, Serialize};
 pub use serde_json::{
@@ -63,6 +66,7 @@ pub use serde_json::{
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, Error>;
 
+pub use error_response::ErrorResponse;
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
 

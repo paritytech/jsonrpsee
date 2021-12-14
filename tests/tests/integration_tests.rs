@@ -31,10 +31,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
+use jsonrpsee::core::traits::{Client, SubscriptionClient};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::SubscriptionClosedError;
-use jsonrpsee::core::traits::{Client, SubscriptionClient};
 use jsonrpsee::types::{Error, JsonValue, Subscription};
 use jsonrpsee::ws_client::WsClientBuilder;
 

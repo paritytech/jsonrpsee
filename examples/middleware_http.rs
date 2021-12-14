@@ -27,9 +27,9 @@
 use std::net::SocketAddr;
 use std::time::Instant;
 
+use jsonrpsee::core::{middleware, traits::Client};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
-use jsonrpsee::core::{middleware, traits::Client};
 
 #[derive(Clone)]
 struct Timings;

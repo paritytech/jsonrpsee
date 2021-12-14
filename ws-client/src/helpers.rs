@@ -30,7 +30,7 @@ use std::time::Duration;
 use crate::manager::{RequestManager, RequestStatus};
 use crate::transport::Sender as WsSender;
 use crate::types::{
-	Error, Id, Notification, ParamsSer, RequestMessage, RequestSer, Response, RpcError, SubscriptionId,
+	Error, ErrorResponse, Id, Notification, ParamsSer, RequestMessage, RequestSer, Response, SubscriptionId,
 	SubscriptionResponse,
 };
 use futures::channel::{mpsc, oneshot};
@@ -202,7 +202,7 @@ pub fn build_unsubscribe_message(
 ///
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
-pub fn process_error_response(manager: &mut RequestManager, err: RpcError) -> Result<(), Error> {
+pub fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) -> Result<(), Error> {
 	let id = err.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {

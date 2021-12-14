@@ -27,10 +27,10 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use jsonrpsee::core::traits::Client;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::core::traits::Client;
 use jsonrpsee::types::Error;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};

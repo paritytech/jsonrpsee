@@ -30,7 +30,8 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
-use crate::types::error::{Error, ErrorCode};
+use crate::types::error::Error;
+use crate::types::error_response::ErrorCode;
 use crate::types::{Id, Request, TEN_MB_SIZE_BYTES};
 use futures_channel::mpsc;
 use futures_util::future::{join_all, FutureExt};

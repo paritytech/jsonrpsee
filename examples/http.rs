@@ -26,10 +26,10 @@
 
 use std::net::SocketAddr;
 
+use jsonrpsee::core::traits::Client;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 use jsonrpsee::rpc_params;
-use jsonrpsee::core::traits::Client;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

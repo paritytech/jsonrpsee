@@ -32,13 +32,13 @@ use std::sync::Arc;
 
 use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
+use crate::traits::ToRpcParams;
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
-use jsonrpsee_types::error::rpc::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
-use jsonrpsee_types::error::{Error, ErrorCode, SubscriptionClosedError};
+use jsonrpsee_types::error::{Error, SubscriptionClosedError};
+use jsonrpsee_types::error_response::{invalid_subscription_err, ErrorCode, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::to_json_raw_value;
-use crate::traits::ToRpcParams;
 use jsonrpsee_types::{
 	DeserializeOwned, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
 	SubscriptionResponse,
@@ -952,7 +952,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn calling_method_without_server_using_proc_macro() {
-		use jsonrpsee::{proc_macros::rpc, core::async_trait};
+		use jsonrpsee::{core::async_trait, proc_macros::rpc};
 		// Setup
 		#[derive(Debug, Deserialize, Serialize)]
 		#[allow(unreachable_pub)]
