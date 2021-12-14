@@ -145,7 +145,6 @@ publish-ghpages:
     - job:                         benchmarks
       artifacts:                   true
   script:
-    - mv artifacts/output.txt /tmp/output.txt
     # setup ssh
     - eval $(ssh-agent)
     - ssh-add - <<< ${GITHUB_SSH_PRIV_KEY}
@@ -161,8 +160,8 @@ publish-ghpages:
     # Push result to github
     - git checkout gh-pages
     - mkdir bench/$(date +%d-%m-%Y) || echo "Directory exists"
-    - mv /tmp/output.txt bench/$(date +%d-%m-%Y)/
-    - git add --all
+    - cp artifacts/output.txt bench/$(date +%d-%m-%Y)/
+    - git add bench/$(date +%d-%m-%Y)/output.txt
     - git commit -m "Add output.txt with benchmark results for ${CI_COMMIT_REF_NAME}"
     - git push origin gh-pages
   allow_failure:                   true
