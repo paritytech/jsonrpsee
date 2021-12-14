@@ -84,7 +84,7 @@ impl RpcMethod {
 				syn::FnArg::Typed(arg) => match *arg.pat {
 					syn::Pat::Ident(name) => Some(Ok((name, *arg.ty))),
 					syn::Pat::Wild(_) => Some(Err(syn::Error::new(
-						span,
+						arg.span(),
 						"Method argument names must be valid Rust identifiers; got `_` instead",
 					))),
 					_ => Some(Err(syn::Error::new(
