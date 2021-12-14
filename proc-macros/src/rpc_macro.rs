@@ -85,7 +85,7 @@ impl RpcMethod {
 					syn::Pat::Ident(name) => Some(Ok((name, *arg.ty))),
 					syn::Pat::Wild(_) => Some(Err(syn::Error::new(
 						span,
-						"Method argument names must be a valid Rust identifiers; got `_` instead",
+						"Method argument names must be valid Rust identifiers; got `_` instead",
 					))),
 					_ => Some(Err(syn::Error::new(
 						span,
