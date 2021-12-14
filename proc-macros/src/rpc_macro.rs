@@ -71,8 +71,9 @@ impl RpcMethod {
 			None => quote!(),
 		};
 
+		let span = sig.span();
 		if blocking && sig.asyncness.is_some() {
-			return Err(syn::Error::new(sig.span(), "Blocking method must be synchronous"));
+			return Err(syn::Error::new(span, "Blocking method must be synchronous"));
 		}
 
 		let params: Vec<_> = sig
@@ -81,11 +82,18 @@ impl RpcMethod {
 			.filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(arg) => match *arg.pat {
-					syn::Pat::Ident(name) => Some((name, *arg.ty)),
-					_ => panic!("Identifier in signature must be an ident"),
+					syn::Pat::Ident(name) => Some(Ok((name, *arg.ty))),
+					syn::Pat::Wild(_) => Some(Err(syn::Error::new(
+						span,
+						"Method argument names must be a valid Rust identifiers; got `_` instead",
+					))),
+					_ => Some(Err(syn::Error::new(
+						span,
+						format!("Unexpected method signature input; got {:?} ", *arg.pat),
+					))),
 				},
 			})
-			.collect();
+			.collect::<Result<Vec<_>, _>>()?;
 
 		let returns = match sig.output {
 			syn::ReturnType::Default => None,
