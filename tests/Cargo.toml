@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-integration-tests"
-version = "0.5.1"
+version = "0.6.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Integration tests for jsonrpsee"
 edition = "2018"
@@ -12,6 +12,6 @@ env_logger = "0.9"
 beef = { version = "0.5.1", features = ["impl_serde"] }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.8", features = ["full"] }
 tracing = "0.1"
 serde_json = "1"

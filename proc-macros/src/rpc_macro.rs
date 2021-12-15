@@ -81,11 +81,18 @@ impl RpcMethod {
 			.filter_map(|arg| match arg {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(arg) => match *arg.pat {
-					syn::Pat::Ident(name) => Some((name, *arg.ty)),
-					_ => panic!("Identifier in signature must be an ident"),
+					syn::Pat::Ident(name) => Some(Ok((name, *arg.ty))),
+					syn::Pat::Wild(wild) => Some(Err(syn::Error::new(
+						wild.underscore_token.span(),
+						"Method argument names must be valid Rust identifiers; got `_` instead",
+					))),
+					_ => Some(Err(syn::Error::new(
+						arg.span(),
+						format!("Unexpected method signature input; got {:?} ", *arg.pat),
+					))),
 				},
 			})
-			.collect();
+			.collect::<Result<_, _>>()?;
 
 		let returns = match sig.output {
 			syn::ReturnType::Default => None,

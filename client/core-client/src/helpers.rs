@@ -32,6 +32,7 @@ use jsonrpsee_types::v2::{
 };
 use jsonrpsee_types::{Error, RequestMessage};
 use serde_json::Value as JsonValue;
+use std::convert::TryInto;
 use std::time::Duration;
 
 /// Attempts to process a batch response.
@@ -75,7 +76,7 @@ pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
-	let sub_id = response.params.subscription;
+	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => return Err(None),
@@ -102,19 +103,19 @@ pub(crate) fn process_subscription_response(
 ///
 /// Returns Ok() if the response was successfully handled
 /// Returns Err() if there was no handler for the method
-pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) -> Result<(), Error> {
-	match manager.as_notification_handler_mut(notif.method.to_owned()) {
+pub fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) -> Result<(), Error> {
+	match manager.as_notification_handler_mut(notif.method.to_string()) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
-				let _ = manager.remove_notification_handler(notif.method.to_owned());
+				let _ = manager.remove_notification_handler(notif.method.into_owned());
 				Err(Error::Internal(err.into_send_error()))
 			}
 		},
 		None => {
 			tracing::error!("Notification: {:?} not a registered method", notif.method);
-			Err(Error::UnregisteredNotification(notif.method.to_owned()))
+			Err(Error::UnregisteredNotification(notif.method.into_owned()))
 		}
 	}
 }
@@ -144,8 +145,9 @@ pub(crate) fn process_single_response(
 			let (unsub_id, send_back_oneshot, unsubscribe_method) =
 				manager.complete_pending_subscription(response_id).ok_or(Error::InvalidRequestId)?;
 
-			let sub_id: SubscriptionId = match serde_json::from_value(response.result) {
-				Ok(sub_id) => sub_id,
+			let sub_id: Result<SubscriptionId, _> = response.result.try_into();
+			let sub_id = match sub_id {
+				Ok(sub_id) => sub_id.into_owned(),
 				Err(_) => {
 					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
 					return Ok(None);
@@ -189,7 +191,7 @@ pub(crate) async fn stop_subscription(
 pub(crate) fn build_unsubscribe_message(
 	manager: &mut RequestManager,
 	sub_req_id: u64,
-	sub_id: SubscriptionId,
+	sub_id: SubscriptionId<'static>,
 ) -> Option<RequestMessage> {
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];

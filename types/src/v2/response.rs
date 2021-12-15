@@ -45,17 +45,25 @@ pub struct Response<'a, T> {
 	pub id: Id<'a>,
 }
 
+impl<'a, T> Response<'a, T> {
+	/// Create a new [`Response`].
+	pub fn new(result: T, id: Id<'a>) -> Response<'a, T> {
+		Response { jsonrpc: TwoPointZero, result, id }
+	}
+}
+
 /// Return value for subscriptions.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct SubscriptionPayload<T> {
+pub struct SubscriptionPayload<'a, T> {
 	/// Subscription ID
-	pub subscription: SubscriptionId,
+	#[serde(borrow)]
+	pub subscription: SubscriptionId<'a>,
 	/// Result.
 	pub result: T,
 }
 
 /// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member.
-pub type SubscriptionResponse<'a, T> = Notification<'a, SubscriptionPayload<T>>;
+pub type SubscriptionResponse<'a, T> = Notification<'a, SubscriptionPayload<'a, T>>;
 
 #[cfg(test)]
 mod tests {

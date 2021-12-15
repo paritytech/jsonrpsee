@@ -38,7 +38,7 @@
 //! and then defining your units such that the limits (`capacity`) can be adjusted for different hardware configurations.
 //!
 //! Up to 8 resources can be defined using the [`WsServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource)
-//! or [`HttpServerBuilder::register_resource`](../../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.register_resource) method
+//! or [`HttpServerBuilder::register_resource`](../../../jsonrpsee_http_server/struct.HttpServerBuilder.html#method.register_resource) method
 //! for the WebSocket and HTTP server respectively.
 //!
 //! Each method will claim the specified number of units (or the default) for the duration of its execution.

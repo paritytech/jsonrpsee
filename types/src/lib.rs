@@ -46,6 +46,9 @@ mod client;
 /// Traits
 pub mod traits;
 
+/// Middleware trait and implementation.
+pub mod middleware;
+
 pub use async_trait::async_trait;
 pub use beef::Cow;
 pub use client::*;
@@ -67,3 +70,6 @@ pub mod __reexports {
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, Error>;
+
+/// Empty `RpcParams` type;
+pub type EmptyParams = Vec<()>;

@@ -8,20 +8,39 @@
 
 use crate::types::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
-use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
+use hyper::Uri;
 use jsonrpsee_types::CertificateStore;
 use jsonrpsee_utils::http_helpers;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
 
+#[derive(Debug, Clone)]
+enum HyperClient {
+	/// Hyper client with https connector.
+	#[cfg(feature = "tls")]
+	Https(Client<hyper_rustls::HttpsConnector<HttpConnector>>),
+	/// Hyper client with http connector.
+	Http(Client<HttpConnector>),
+}
+
+impl HyperClient {
+	fn request(&self, req: hyper::Request<hyper::Body>) -> hyper::client::ResponseFuture {
+		match self {
+			Self::Http(client) => client.request(req),
+			#[cfg(feature = "tls")]
+			Self::Https(client) => client.request(req),
+		}
+	}
+}
+
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
-pub(crate) struct HttpTransportClient {
+pub struct HttpTransportClient {
 	/// Target to connect to.
-	target: url::Url,
+	target: Uri,
 	/// HTTP client
-	client: Client<HttpsConnector<HttpConnector>>,
+	client: HyperClient,
 	/// Configurable max request body size
 	max_request_body_size: u32,
 }
@@ -33,22 +52,40 @@ impl HttpTransportClient {
 		max_request_body_size: u32,
 		cert_store: CertificateStore,
 	) -> Result<Self, Error> {
-		let target = url::Url::parse(target.as_ref()).map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
-		if target.scheme() == "http" || target.scheme() == "https" {
-			let connector = match cert_store {
-				CertificateStore::Native => {
-					HttpsConnectorBuilder::new().with_native_roots().https_or_http().enable_http1()
-				}
-				CertificateStore::WebPki => {
-					HttpsConnectorBuilder::new().with_webpki_roots().https_or_http().enable_http1()
-				}
-				_ => return Err(Error::InvalidCertficateStore),
-			};
-			let client = Client::builder().build::<_, hyper::Body>(connector.build());
-			Ok(HttpTransportClient { target, client, max_request_body_size })
-		} else {
-			Err(Error::Url("URL scheme not supported, expects 'http' or 'https'".into()))
+		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
+		if target.port_u16().is_none() {
+			return Err(Error::Url("Port number is missing in the URL".into()));
 		}
+
+		let client = match target.scheme_str() {
+			Some("http") => {
+				let connector = HttpConnector::new();
+				let client = Client::builder().build::<_, hyper::Body>(connector);
+				HyperClient::Http(client)
+			}
+			#[cfg(feature = "tls")]
+			Some("https") => {
+				let connector = match cert_store {
+					CertificateStore::Native => {
+						hyper_rustls::HttpsConnectorBuilder::new().with_native_roots().https_or_http().enable_http1()
+					}
+					CertificateStore::WebPki => {
+						hyper_rustls::HttpsConnectorBuilder::new().with_webpki_roots().https_or_http().enable_http1()
+					}
+					_ => return Err(Error::InvalidCertficateStore),
+				};
+				let client = Client::builder().build::<_, hyper::Body>(connector.build());
+				HyperClient::Https(client)
+			}
+			_ => {
+				#[cfg(feature = "tls")]
+				let err = "URL scheme not supported, expects 'http' or 'https'";
+				#[cfg(not(feature = "tls"))]
+				let err = "URL scheme not supported, expects 'http'";
+				return Err(Error::Url(err.into()));
+			}
+		};
+		Ok(Self { target, client, max_request_body_size })
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
@@ -58,7 +95,9 @@ impl HttpTransportClient {
 			return Err(Error::RequestTooLarge);
 		}
 
-		let req = hyper::Request::post(self.target.as_str())
+		// NOTE(niklasad1): this annoying we could just take `&str` here but more user-friendly to check
+		// that the URI is well-formed in the constructor.
+		let req = hyper::Request::post(self.target.clone())
 			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
 			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
 			.body(From::from(body))
@@ -89,7 +128,7 @@ impl HttpTransportClient {
 
 /// Error that can happen during a request.
 #[derive(Debug, Error)]
-pub(crate) enum Error {
+pub enum Error {
 	/// Invalid URL.
 	#[error("Invalid Url: {0}")]
 	Url(String),
@@ -135,10 +174,72 @@ where
 mod tests {
 	use super::{CertificateStore, Error, HttpTransportClient};
 
+	fn assert_target(
+		client: &HttpTransportClient,
+		host: &str,
+		scheme: &str,
+		path_and_query: &str,
+		port: u16,
+		max_request_size: u32,
+	) {
+		assert_eq!(client.target.scheme_str(), Some(scheme));
+		assert_eq!(client.target.path_and_query().map(|pq| pq.as_str()), Some(path_and_query));
+		assert_eq!(client.target.host(), Some(host));
+		assert_eq!(client.target.port_u16(), Some(port));
+		assert_eq!(client.max_request_body_size, max_request_size);
+	}
+
 	#[test]
 	fn invalid_http_url_rejected() {
 		let err = HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native).unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
+	}
+
+	#[cfg(feature = "tls")]
+	#[test]
+	fn https_works() {
+		let client = HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native).unwrap();
+		assert_target(&client, "localhost", "https", "/", 9933, 80);
+	}
+
+	#[cfg(not(feature = "tls"))]
+	#[test]
+	fn https_fails_without_tls_feature() {
+		let err = HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native).unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+	}
+
+	#[test]
+	fn faulty_port() {
+		let err = HttpTransportClient::new("http://localhost:-43", 80, CertificateStore::Native).unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+		let err = HttpTransportClient::new("http://localhost:-99999", 80, CertificateStore::Native).unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+	}
+
+	#[test]
+	fn url_with_path_works() {
+		let client =
+			HttpTransportClient::new("http://localhost:9944/my-special-path", 1337, CertificateStore::Native).unwrap();
+		assert_target(&client, "localhost", "http", "/my-special-path", 9944, 1337);
+	}
+
+	#[test]
+	fn url_with_query_works() {
+		let client = HttpTransportClient::new(
+			"http://127.0.0.1:9999/my?name1=value1&name2=value2",
+			u32::MAX,
+			CertificateStore::WebPki,
+		)
+		.unwrap();
+		assert_target(&client, "127.0.0.1", "http", "/my?name1=value1&name2=value2", 9999, u32::MAX);
+	}
+
+	#[test]
+	fn url_with_fragment_is_ignored() {
+		let client =
+			HttpTransportClient::new("http://127.0.0.1:9944/my.htm#ignore", 999, CertificateStore::Native).unwrap();
+		assert_target(&client, "127.0.0.1", "http", "/my.htm", 9944, 999);
 	}
 
 	#[tokio::test]

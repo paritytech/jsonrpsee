@@ -59,7 +59,7 @@ pub(crate) enum RequestStatus {
 
 type PendingCallOneshot = Option<oneshot::Sender<Result<JsonValue, Error>>>;
 type PendingBatchOneshot = oneshot::Sender<Result<Vec<JsonValue>, Error>>;
-type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>;
+type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>;
 type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
 type RequestId = u64;
@@ -82,7 +82,7 @@ pub(crate) struct RequestManager {
 	requests: FxHashMap<RequestId, Kind>,
 	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all
 	/// requests.
-	subscriptions: HashMap<SubscriptionId, RequestId>,
+	subscriptions: HashMap<SubscriptionId<'static>, RequestId>,
 	/// Pending batch requests
 	batches: FxHashMap<Vec<RequestId>, BatchState>,
 	/// Registered Methods for incoming notifications
@@ -161,7 +161,7 @@ impl RequestManager {
 		&mut self,
 		sub_req_id: RequestId,
 		unsub_req_id: RequestId,
-		subscription_id: SubscriptionId,
+		subscription_id: SubscriptionId<'static>,
 		send_back: SubscriptionSink,
 		unsubscribe_method: UnsubscribeMethod,
 	) -> Result<(), SubscriptionSink> {
@@ -255,7 +255,7 @@ impl RequestManager {
 	pub(crate) fn remove_subscription(
 		&mut self,
 		request_id: RequestId,
-		subscription_id: SubscriptionId,
+		subscription_id: SubscriptionId<'static>,
 	) -> Option<(RequestId, SubscriptionSink, UnsubscribeMethod, SubscriptionId)> {
 		match (self.requests.entry(request_id), self.subscriptions.entry(subscription_id)) {
 			(Entry::Occupied(request), Entry::Occupied(subscription))
@@ -333,17 +333,11 @@ mod tests {
 		let (unsub_req_id, _send_back_oneshot, unsubscribe_method) = manager.complete_pending_subscription(1).unwrap();
 		assert_eq!(unsub_req_id, 2);
 		assert!(manager
-			.insert_subscription(
-				1,
-				2,
-				SubscriptionId::Str("uniq_id_from_server".to_string()),
-				sub_tx,
-				unsubscribe_method
-			)
+			.insert_subscription(1, 2, SubscriptionId::Str("uniq_id_from_server".into()), sub_tx, unsubscribe_method)
 			.is_ok());
 
 		assert!(manager.as_subscription_mut(&1).is_some());
-		assert!(manager.remove_subscription(1, SubscriptionId::Str("uniq_id_from_server".to_string())).is_some());
+		assert!(manager.remove_subscription(1, SubscriptionId::Str("uniq_id_from_server".into())).is_some());
 	}
 
 	#[test]
