@@ -691,9 +691,10 @@ impl<M> Builder<M> {
 		self
 	}
 
-	/// Configure custom `subscription ID` generator for the server.
+	/// Configure custom `subscription ID` provider for the server to use
+	/// to when getting new subscription calls.
 	///
-	/// Default: u64
+	/// Default: [`RandomIntegerIdProvider`](jsonrpsee_types::traits::RandomIntegerIdProvider).
 	///
 	/// # Examples
 	///
@@ -701,9 +702,7 @@ impl<M> Builder<M> {
 	/// use jsonrpsee_ws_server::WsServerBuilder;
 	/// use jsonrpsee_ws_server::types::traits::{IdProvider, RandomStringIdProvider};
 	///
-	///
-	/// let builder = WsServerBuilder::default().set_subid_providererator(RandomStringIdProvider::new(16));
-	///
+	/// let builder = WsServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
 	/// ```
 	pub fn set_id_provider(mut self, id_provider: impl IdProvider + 'static) -> Self {
 		self.id_provider = Arc::new(id_provider);

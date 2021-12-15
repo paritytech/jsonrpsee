@@ -636,7 +636,7 @@ async fn custom_subscription_id_works() {
 	struct HardcodedSubscriptionId;
 
 	impl IdProvider for HardcodedSubscriptionId {
-		fn next_id(&self) -> SubscriptionId {
+		fn next_id(&self) -> SubscriptionId<'static> {
 			"0xdeadbeef".to_string().into()
 		}
 	}
