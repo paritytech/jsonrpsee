@@ -12,7 +12,6 @@ members = [
 	"client/ws-client",
 	"client/http-client",
 	"client/transport",
-	"client/transport",
 	"client/core-client",
 	"proc-macros",
 ]

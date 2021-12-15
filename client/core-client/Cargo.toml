@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-core-client"
-version = "0.5.1"
+version = "0.6.1"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "JSON-RPC async core client "
 edition = "2018"
@@ -10,8 +10,8 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
-jsonrpsee-types = { path = "../../types", version = "0.5.1" }
-jsonrpsee-client-transport = { path = "../transport", version = "0.5.1", features = ["ws"] }
+jsonrpsee-types = { path = "../../types", version = "0.6.1" }
+jsonrpsee-client-transport = { path = "../transport", version = "0.6.1", features = ["ws"] }
 futures-channel = { version = "0.3.14", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.14", default-features = false }
 tokio = { version = "1", features = ["rt", "sync"] }

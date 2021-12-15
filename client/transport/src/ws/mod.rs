@@ -31,7 +31,7 @@ pub use soketto::handshake::client::Header;
 
 use futures::io::{BufReader, BufWriter};
 use jsonrpsee_types::traits::{TransportReceiver, TransportSender};
-use jsonrpsee_types::{async_trait, CertificateStore, TEN_MB_SIZE_BYTES};
+use jsonrpsee_types::{async_trait, CertificateStore, TEN_MB_SIZE_BYTES, Cow};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use std::convert::TryInto;
@@ -217,12 +217,12 @@ impl TransportReceiver for Receiver {
 
 impl<'a> WsTransportClientBuilder<'a> {
 	/// Try to establish the connection.
-	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		self.try_connect().await
+	pub async fn build(self, uri: Uri) -> Result<(Sender, Receiver), WsHandshakeError> {
+		let target: Target = uri.try_into().unwrap();
+		self.try_connect(target).await
 	}
 
-	async fn try_connect(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let mut target = self.target;
+	async fn try_connect(self, mut target: Target) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut err = None;
 
 		// Only build TLS connector if `wss` in URL.
@@ -239,7 +239,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
 				#[cfg(feature = "tls")]
-				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, connector.as_ref()).await {
+				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref()).await {
 					Ok(stream) => stream,
 					Err(e) => {
 						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
@@ -249,7 +249,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 				};
 
 				#[cfg(not(feature = "tls"))]
-				let tcp_stream = match connect(*sockaddr, self.timeout).await {
+				let tcp_stream = match connect(*sockaddr, self.connection_timeout).await {
 					Ok(stream) => stream,
 					Err(e) => {
 						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
