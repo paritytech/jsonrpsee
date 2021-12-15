@@ -514,4 +514,6 @@ async fn background_task<S: TransportSender, R: TransportReceiver>(
 			}
 		}
 	}
+	// Send close message to the server.
+	let _ = sender.close().await;
 }
