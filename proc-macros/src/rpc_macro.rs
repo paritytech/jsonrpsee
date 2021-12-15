@@ -82,8 +82,8 @@ impl RpcMethod {
 				syn::FnArg::Receiver(_) => None,
 				syn::FnArg::Typed(arg) => match *arg.pat {
 					syn::Pat::Ident(name) => Some(Ok((name, *arg.ty))),
-					syn::Pat::Wild(_) => Some(Err(syn::Error::new(
-						arg.span(),
+					syn::Pat::Wild(wild) => Some(Err(syn::Error::new(
+						wild.underscore_token.span(),
 						"Method argument names must be valid Rust identifiers; got `_` instead",
 					))),
 					_ => Some(Err(syn::Error::new(
