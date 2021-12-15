@@ -185,24 +185,24 @@ impl Error {
 /// when an error is reported by the server.
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct SubscriptionClosed {
-	subscription_closed: SubscriptionClosedReason,
+	reason: SubscriptionClosedReason,
 }
 
 impl From<SubscriptionClosedReason> for SubscriptionClosed {
-	fn from(kind: SubscriptionClosedReason) -> Self {
-		Self::new(kind)
+	fn from(reason: SubscriptionClosedReason) -> Self {
+		Self::new(reason)
 	}
 }
 
 impl SubscriptionClosed {
 	/// Create a new [`SubscriptionClosed`].
 	pub fn new(reason: SubscriptionClosedReason) -> Self {
-		Self { subscription_closed: reason }
+		Self { reason }
 	}
 
 	/// Get the close reason.
 	pub fn close_reason(&self) -> &SubscriptionClosedReason {
-		&self.subscription_closed
+		&self.reason
 	}
 }
 
@@ -263,9 +263,9 @@ mod tests {
 	#[test]
 	fn subscription_closed_ser_deser_works() {
 		let items: Vec<(&str, SubscriptionClosed)> = vec![
-			(r#"{"subscription_closed":"Unsubscribed"}"#, SubscriptionClosedReason::Unsubscribed.into()),
-			(r#"{"subscription_closed":"ConnectionReset"}"#, SubscriptionClosedReason::ConnectionReset.into()),
-			(r#"{"subscription_closed":{"Server":"hoho"}}"#, SubscriptionClosedReason::Server("hoho".into()).into()),
+			(r#"{"reason":"Unsubscribed"}"#, SubscriptionClosedReason::Unsubscribed.into()),
+			(r#"{"reason":"ConnectionReset"}"#, SubscriptionClosedReason::ConnectionReset.into()),
+			(r#"{"reason":{"Server":"hoho"}}"#, SubscriptionClosedReason::Server("hoho".into()).into()),
 		];
 
 		for (s, d) in items {
