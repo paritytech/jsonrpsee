@@ -869,6 +869,7 @@ mod tests {
 
 	use super::*;
 	use jsonrpsee_types::EmptyParams;
+	// use jsonrpsee::core::Error;
 	use serde::Deserialize;
 
 	#[test]

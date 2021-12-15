@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#[cfg(feature = "client")]
 use crate::client::Subscription;
 use crate::Error;
 use async_trait::async_trait;
@@ -55,6 +56,7 @@ pub trait Client {
 }
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
+#[cfg(feature = "client")]
 #[async_trait]
 pub trait SubscriptionClient: Client {
 	/// Initiate a subscription by performing a JSON-RPC method call where the server responds with
