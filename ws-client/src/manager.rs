@@ -34,9 +34,11 @@
 
 use std::collections::hash_map::{Entry, HashMap};
 
-use crate::types::{Error, JsonValue, SubscriptionId};
+use crate::types::SubscriptionId;
 use futures::channel::{mpsc, oneshot};
+use jsonrpsee_core::Error;
 use rustc_hash::FxHashMap;
+use serde_json::value::Value as JsonValue;
 
 #[derive(Debug)]
 enum Kind {

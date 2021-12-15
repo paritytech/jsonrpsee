@@ -32,9 +32,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::task::{Context, Poll};
 
-use crate::types::error::Error;
 use futures_util::future::FutureExt;
 use futures_util::task::AtomicWaker;
+use jsonrpsee_core::Error;
 use tokio::time::{self, Duration, Interval};
 
 /// Polling for server stop monitor interval in milliseconds.

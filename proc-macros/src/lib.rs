@@ -101,7 +101,7 @@ pub(crate) mod visitor;
 ///     // Note that `subscription_sink` was added automatically.
 ///     fn sub(&self, subscription_sink: SubscriptionSink);
 ///
-///     fn into_rpc(self) -> Result<Self, jsonrpsee::types::Error> {
+///     fn into_rpc(self) -> Result<Self, jsonrpsee::core::Error> {
 ///         // Actual implementation stripped, but inside we will create
 ///         // a module with one method and one subscription
 ///     }

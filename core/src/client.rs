@@ -30,20 +30,20 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
+use crate::error::{Error, SubscriptionClosedError};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{
-	future::FutureExt,
-	sink::SinkExt,
-	stream::{Stream, StreamExt},
-};
-use jsonrpsee_types::{error::SubscriptionClosedError, Error, SubscriptionId};
+use futures_util::future::FutureExt;
+use futures_util::sink::SinkExt;
+use futures_util::stream::{Stream, StreamExt};
+use jsonrpsee_types::SubscriptionId;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 #[doc(hidden)]
 pub mod __reexports {
-	pub use jsonrpsee_types::{to_json_value, ParamsSer};
+	pub use crate::to_json_value;
+	pub use jsonrpsee_types::ParamsSer;
 }
 
 #[macro_export]

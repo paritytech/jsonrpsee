@@ -25,13 +25,13 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
-use crate::types::error::Error;
-use crate::types::error_response::{ErrorCode, ErrorObject, ErrorResponse};
+use crate::types::error::{ErrorCode, ErrorObject, ErrorResponse};
 use crate::types::ParamsSer;
 use crate::WsClientBuilder;
 use jsonrpsee_core::client::Subscription;
 use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::traits::{Client, SubscriptionClient};
+use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;

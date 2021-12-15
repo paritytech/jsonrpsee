@@ -104,17 +104,17 @@ pub(crate) fn generate_where_clause(
 
 			if is_client {
 				if visitor.input_params.contains(&ty.ident) {
-					bounds.push(parse_quote!(jsonrpsee::types::Serialize))
+					bounds.push(parse_quote!(jsonrpsee::core::Serialize))
 				}
 				if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
-					bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
+					bounds.push(parse_quote!(jsonrpsee::core::DeserializeOwned))
 				}
 			} else {
 				if visitor.input_params.contains(&ty.ident) {
-					bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
+					bounds.push(parse_quote!(jsonrpsee::core::DeserializeOwned))
 				}
 				if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
-					bounds.push(parse_quote!(jsonrpsee::types::Serialize))
+					bounds.push(parse_quote!(jsonrpsee::core::Serialize))
 				}
 			}
 

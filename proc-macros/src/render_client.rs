@@ -71,7 +71,7 @@ impl RpcDescription {
 
 	fn render_method(&self, method: &RpcMethod) -> Result<TokenStream2, syn::Error> {
 		// `jsonrpsee::Error`
-		let jrps_error = self.jrps_client_item(quote! { types::Error });
+		let jrps_error = self.jrps_client_item(quote! { core::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &method.signature.sig.ident;
 		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).
@@ -81,7 +81,7 @@ impl RpcDescription {
 		let rpc_method_name = self.rpc_identifier(&method.name);
 
 		// Called method is either `request` or `notification`.
-		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::Error`).
+		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::core::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
 			let returns = quote! { #returns };
@@ -112,8 +112,8 @@ impl RpcDescription {
 	}
 
 	fn render_sub(&self, sub: &RpcSubscription) -> Result<TokenStream2, syn::Error> {
-		// `jsonrpsee::Error`
-		let jrps_error = self.jrps_client_item(quote! { types::Error });
+		// `jsonrpsee::core::Error`
+		let jrps_error = self.jrps_client_item(quote! { core::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &sub.signature.sig.ident;
 		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).

@@ -28,17 +28,16 @@
 
 use std::net::SocketAddr;
 
+use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::HttpServerBuilder;
-use jsonrpsee::types::Error;
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::WsServerBuilder;
 use serde_json::json;
 
 mod rpc_impl {
-	use jsonrpsee::core::async_trait;
+	use jsonrpsee::core::{async_trait, RpcResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::types::RpcResult;
 	use jsonrpsee::ws_server::SubscriptionSink;
 
 	#[rpc(client, server, namespace = "foo")]

@@ -7,10 +7,11 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
+anyhow = "1"
 arrayvec = "0.7.1"
 async-trait = "0.1"
 beef = { version = "0.5.1", features = ["impl_serde"] }
-thiserror = { version = "1", optional = true }
+thiserror = "1"
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
@@ -20,6 +21,7 @@ rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"], optional = true }
 serde_json = { version = "1", features = ["raw_value"], optional = true }
+soketto = "0.7.1"
 parking_lot = { version = "0.11", optional = true }
 tokio = { version = "1.8", features = ["rt"], optional = true }
 
@@ -27,7 +29,6 @@ tokio = { version = "1.8", features = ["rt"], optional = true }
 default = []
 http-helpers = ["hyper", "futures-util", "jsonrpsee-types"]
 server = [
-	"thiserror",
 	"futures-channel",
 	"futures-util",
 	"jsonrpsee-types",

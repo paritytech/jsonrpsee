@@ -26,8 +26,8 @@
 
 //! Utility methods relying on hyper
 
+use crate::error::GenericTransportError;
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::error::GenericTransportError;
 
 /// Read a data from a [`hyper::Body`] and return the data if it is valid and within the allowed size range.
 ///

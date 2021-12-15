@@ -24,15 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::types::error::Error;
-use crate::types::error_response::{ErrorCode, ErrorObject, ErrorResponse};
-use crate::types::{JsonValue, ParamsSer};
+use crate::types::error::{ErrorCode, ErrorObject, ErrorResponse};
+use crate::types::ParamsSer;
 use crate::HttpClientBuilder;
 use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::traits::Client;
+use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use serde_json::value::Value as JsonValue;
 
 #[tokio::test]
 async fn method_call_works() {

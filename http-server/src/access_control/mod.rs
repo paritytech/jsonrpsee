@@ -30,12 +30,10 @@ pub(crate) mod cors;
 pub(crate) mod hosts;
 mod matcher;
 
-use crate::types::Error;
-
 use cors::{AccessControlAllowHeaders, AccessControlAllowOrigin};
 use hosts::{AllowHosts, Host};
 use hyper::header;
-use jsonrpsee_core::http_helpers;
+use jsonrpsee_core::{http_helpers, Error};
 
 /// Define access on control on HTTP layer.
 #[derive(Clone, Debug)]

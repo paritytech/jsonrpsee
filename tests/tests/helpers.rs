@@ -27,8 +27,8 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use jsonrpsee::core::Error;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
-use jsonrpsee::types::Error;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
 

@@ -34,7 +34,7 @@ use crate::helpers::{
 use crate::manager::RequestManager;
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
 use crate::types::{
-	Error, ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, SubscriptionResponse,
+	ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, SubscriptionResponse,
 	TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
@@ -48,6 +48,7 @@ use jsonrpsee_core::client::{
 	Subscription, SubscriptionKind, SubscriptionMessage,
 };
 use jsonrpsee_core::traits::{Client, SubscriptionClient};
+use jsonrpsee_core::Error;
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 

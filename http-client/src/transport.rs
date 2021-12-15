@@ -6,10 +6,10 @@
 // that we need to be guaranteed that hyper doesn't re-use an existing connection if we ever reset
 // the JSON-RPC request id to a value that might have already been used.
 
-use crate::types::error::GenericTransportError;
 use hyper::client::{Client, HttpConnector};
 use hyper::Uri;
 use jsonrpsee_core::client::CertificateStore;
+use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
 use thiserror::Error;
 

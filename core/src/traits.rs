@@ -25,8 +25,8 @@
 // DEALINGS IN THE SOFTWARE.
 
 use crate::client::Subscription;
+use crate::Error;
 use async_trait::async_trait;
-use jsonrpsee_types::Error;
 use jsonrpsee_types::ParamsSer;
 use serde::de::DeserializeOwned;
 use serde::Serialize;

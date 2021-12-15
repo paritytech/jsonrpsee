@@ -26,21 +26,208 @@
 
 use std::fmt;
 
+use crate::params::{Id, TwoPointZero};
+use beef::Cow;
+use serde::de::Deserializer;
+use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
+use thiserror::Error;
 
-/// Convenience type for displaying errors.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Mismatch<T> {
-	/// Expected value.
-	pub expected: T,
-	/// Actual value.
-	pub got: T,
+/// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub struct ErrorResponse<'a> {
+	/// JSON-RPC version.
+	pub jsonrpc: TwoPointZero,
+	/// Error.
+	#[serde(borrow)]
+	pub error: ErrorObject<'a>,
+	/// Request ID
+	pub id: Id<'a>,
 }
 
-impl<T: fmt::Display> fmt::Display for Mismatch<T> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.write_fmt(format_args!("Expected: {}, Got: {}", self.expected, self.got))
+impl<'a> ErrorResponse<'a> {
+	/// Create a new `ErrorResponse`.
+	pub fn new(error: ErrorObject<'a>, id: Id<'a>) -> Self {
+		Self { jsonrpc: TwoPointZero, error, id }
+	}
+}
+
+impl<'a> fmt::Display for ErrorResponse<'a> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
+	}
+}
+
+/// JSON-RPC error object.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ErrorObject<'a> {
+	/// Code
+	pub code: ErrorCode,
+	/// Message
+	#[serde(borrow)]
+	pub message: Cow<'a, str>,
+	/// Optional data
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[serde(borrow)]
+	pub data: Option<&'a RawValue>,
+}
+
+impl<'a> ErrorObject<'a> {
+	/// Create a new `ErrorObject` with optional data.
+	pub fn new(code: ErrorCode, data: Option<&'a RawValue>) -> ErrorObject<'a> {
+		Self { code, message: code.message().into(), data }
+	}
+}
+
+impl<'a> From<ErrorCode> for ErrorObject<'a> {
+	fn from(code: ErrorCode) -> Self {
+		Self { code, message: code.message().into(), data: None }
+	}
+}
+
+impl<'a> PartialEq for ErrorObject<'a> {
+	fn eq(&self, other: &Self) -> bool {
+		let this_raw = self.data.map(|r| r.get());
+		let other_raw = other.data.map(|r| r.get());
+		self.code == other.code && self.message == other.message && this_raw == other_raw
+	}
+}
+
+/// Parse error code.
+pub const PARSE_ERROR_CODE: i32 = -32700;
+/// Oversized request error code.
+pub const OVERSIZED_REQUEST_CODE: i32 = -32701;
+/// Oversized response error code.
+pub const OVERSIZED_RESPONSE_CODE: i32 = -32702;
+/// Internal error code.
+pub const INTERNAL_ERROR_CODE: i32 = -32603;
+/// Invalid params error code.
+pub const INVALID_PARAMS_CODE: i32 = -32602;
+/// Invalid request error code.
+pub const INVALID_REQUEST_CODE: i32 = -32600;
+/// Method not found error code.
+pub const METHOD_NOT_FOUND_CODE: i32 = -32601;
+/// Server is busy error code.
+pub const SERVER_IS_BUSY_CODE: i32 = -32604;
+/// Custom server error when a call failed.
+pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
+/// Unknown error.
+pub const UNKNOWN_ERROR_CODE: i32 = -32001;
+/// Invalid subscription error code.
+pub const INVALID_SUBSCRIPTION_CODE: i32 = -32002;
+
+/// Parse error message
+pub const PARSE_ERROR_MSG: &str = "Parse error";
+/// Oversized request message
+pub const OVERSIZED_REQUEST_MSG: &str = "Request is too big";
+/// Oversized response message
+pub const OVERSIZED_RESPONSE_MSG: &str = "Response is too big";
+/// Internal error message.
+pub const INTERNAL_ERROR_MSG: &str = "Internal error";
+/// Invalid params error message.
+pub const INVALID_PARAMS_MSG: &str = "Invalid params";
+/// Invalid request error message.
+pub const INVALID_REQUEST_MSG: &str = "Invalid request";
+/// Method not found error message.
+pub const METHOD_NOT_FOUND_MSG: &str = "Method not found";
+/// Server is busy error message.
+pub const SERVER_IS_BUSY_MSG: &str = "Server is busy, try again later";
+/// Reserved for implementation-defined server-errors.
+pub const SERVER_ERROR_MSG: &str = "Server error";
+
+/// JSONRPC error code
+#[derive(Error, Debug, PartialEq, Copy, Clone)]
+pub enum ErrorCode {
+	/// Invalid JSON was received by the server.
+	/// An error occurred on the server while parsing the JSON text.
+	ParseError,
+	/// The request was too big.
+	OversizedRequest,
+	/// The JSON sent is not a valid Request object.
+	InvalidRequest,
+	/// The method does not exist / is not available.
+	MethodNotFound,
+	/// Server is busy / resources are at capacity.
+	ServerIsBusy,
+	/// Invalid method parameter(s).
+	InvalidParams,
+	/// Internal JSON-RPC error.
+	InternalError,
+	/// Reserved for implementation-defined server-errors.
+	ServerError(i32),
+}
+
+impl ErrorCode {
+	/// Returns integer code value
+	pub const fn code(&self) -> i32 {
+		use ErrorCode::*;
+		match *self {
+			ParseError => PARSE_ERROR_CODE,
+			OversizedRequest => OVERSIZED_REQUEST_CODE,
+			InvalidRequest => INVALID_REQUEST_CODE,
+			MethodNotFound => METHOD_NOT_FOUND_CODE,
+			ServerIsBusy => SERVER_IS_BUSY_CODE,
+			InvalidParams => INVALID_PARAMS_CODE,
+			InternalError => INTERNAL_ERROR_CODE,
+			ServerError(code) => code,
+		}
+	}
+
+	/// Returns the message for the given error code.
+	pub const fn message(&self) -> &'static str {
+		use ErrorCode::*;
+		match self {
+			ParseError => PARSE_ERROR_MSG,
+			OversizedRequest => OVERSIZED_REQUEST_MSG,
+			InvalidRequest => INVALID_REQUEST_MSG,
+			MethodNotFound => METHOD_NOT_FOUND_MSG,
+			ServerIsBusy => SERVER_IS_BUSY_MSG,
+			InvalidParams => INVALID_PARAMS_MSG,
+			InternalError => INTERNAL_ERROR_MSG,
+			ServerError(_) => SERVER_ERROR_MSG,
+		}
+	}
+}
+
+impl fmt::Display for ErrorCode {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}: {}", self.code(), self.message())
+	}
+}
+
+impl From<i32> for ErrorCode {
+	fn from(code: i32) -> Self {
+		use ErrorCode::*;
+		match code {
+			PARSE_ERROR_CODE => ParseError,
+			OVERSIZED_REQUEST_CODE => OversizedRequest,
+			INVALID_REQUEST_CODE => InvalidRequest,
+			METHOD_NOT_FOUND_CODE => MethodNotFound,
+			INVALID_PARAMS_CODE => InvalidParams,
+			INTERNAL_ERROR_CODE => InternalError,
+			code => ServerError(code),
+		}
+	}
+}
+
+impl<'a> serde::Deserialize<'a> for ErrorCode {
+	fn deserialize<D>(deserializer: D) -> Result<ErrorCode, D::Error>
+	where
+		D: Deserializer<'a>,
+	{
+		let code: i32 = Deserialize::deserialize(deserializer)?;
+		Ok(ErrorCode::from(code))
+	}
+}
+
+impl serde::Serialize for ErrorCode {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		serializer.serialize_i32(self.code())
 	}
 }
 
@@ -75,169 +262,78 @@ impl CallError {
 	}
 }
 
-// NOTE(niklasad1): this `From` impl is a bit opinionated to regard all generic errors as `CallError`.
-// In practice this should be the most common use case for users of this library.
-impl From<anyhow::Error> for Error {
-	fn from(err: anyhow::Error) -> Self {
-		Error::Call(CallError::Failed(err))
-	}
+/// Create a invalid subscription ID error.
+pub fn invalid_subscription_err(data: Option<&RawValue>) -> ErrorObject {
+	ErrorObject::new(ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE), data)
 }
 
-/// Error type.
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-	/// Error that occurs when a call failed.
-	#[error("Server call failed: {0}")]
-	Call(#[from] CallError),
-	/// Networking error or error on the low-level protocol layer.
-	#[error("Networking or low-level protocol error: {0}")]
-	Transport(#[source] anyhow::Error),
-	/// JSON-RPC request error.
-	#[error("JSON-RPC request error: {0:?}")]
-	Request(String),
-	/// Frontend/backend channel error.
-	#[error("Frontend/backend channel error: {0}")]
-	Internal(#[from] futures_channel::mpsc::SendError),
-	/// Invalid response,
-	#[error("Invalid response: {0}")]
-	InvalidResponse(Mismatch<String>),
-	/// The background task has been terminated.
-	#[error("The background task been terminated because: {0}; restart required")]
-	RestartNeeded(String),
-	/// Failed to parse the data.
-	#[error("Parse error: {0}")]
-	ParseError(#[from] serde_json::Error),
-	/// Invalid subscription ID.
-	#[error("Invalid subscription ID")]
-	InvalidSubscriptionId,
-	/// Invalid request ID.
-	#[error("Invalid request ID")]
-	InvalidRequestId,
-	/// Client received a notification with an unregistered method
-	#[error("Unregistered notification method")]
-	UnregisteredNotification(String),
-	/// A request with the same request ID has already been registered.
-	#[error("A request with the same request ID has already been registered")]
-	DuplicateRequestId,
-	/// Method was already registered.
-	#[error("Method: {0} was already registered")]
-	MethodAlreadyRegistered(String),
-	/// Method with that name has not yet been registered.
-	#[error("Method: {0} has not yet been registered")]
-	MethodNotFound(String),
-	/// Subscribe and unsubscribe method names are the same.
-	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
-	SubscriptionNameConflict(String),
-	/// Subscription got closed.
-	#[error("Subscription closed: {0:?}")]
-	SubscriptionClosed(SubscriptionClosedError),
-	/// Request timeout
-	#[error("Request timeout")]
-	RequestTimeout,
-	/// Configured max number of request slots exceeded.
-	#[error("Configured max number of request slots exceeded")]
-	MaxSlotsExceeded,
-	/// Attempted to stop server that is already stopped.
-	#[error("Attempted to stop server that is already stopped")]
-	AlreadyStopped,
-	/// List passed into `set_allowed_origins` was empty
-	#[error("Must set at least one allowed value for the {0} header")]
-	EmptyAllowList(&'static str),
-	/// Failed to execute a method because a resource was already at capacity
-	#[error("Resource at capacity: {0}")]
-	ResourceAtCapacity(&'static str),
-	/// Failed to register a resource due to a name conflict
-	#[error("Resource name already taken: {0}")]
-	ResourceNameAlreadyTaken(&'static str),
-	/// Failed to initialize resources for a method at startup
-	#[error("Resource name `{0}` not found for method `{1}`")]
-	ResourceNameNotFoundForMethod(&'static str, &'static str),
-	/// Trying to claim resources for a method execution, but the method resources have not been initialized
-	#[error("Method `{0}` has uninitialized resources")]
-	UninitializedMethod(Box<str>),
-	/// Failed to register a resource due to a maximum number of resources already registered
-	#[error("Maximum number of resources reached")]
-	MaxResourcesReached,
-	/// Custom error.
-	#[error("Custom error: {0}")]
-	Custom(String),
-	/// Not implemented for HTTP clients.
-	#[error("Not implemented")]
-	HttpNotImplemented,
-}
+#[cfg(test)]
+mod tests {
+	use super::{ErrorCode, ErrorObject, ErrorResponse, Id, TwoPointZero};
 
-impl Error {
-	/// Create `Error::CallError` from a generic error.
-	/// Useful if you don't care about specific JSON-RPC error code and
-	/// just wants to return your custom error type.
-	pub fn to_call_error<E>(err: E) -> Self
-	where
-		E: std::error::Error + Send + Sync + 'static,
-	{
-		Error::Call(CallError::from_std_error(err))
-	}
-}
-
-/// Error type with a special `subscription_closed` field to detect that
-/// a subscription has been closed to distinguish valid items produced
-/// by the server on the subscription stream from an error.
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
-pub struct SubscriptionClosedError {
-	subscription_closed: String,
-	id: u64,
-}
-
-impl SubscriptionClosedError {
-	/// Create a new subscription closed error.
-	pub fn new(reason: impl Into<String>, id: u64) -> Self {
-		Self { subscription_closed: reason.into(), id }
+	#[test]
+	fn deserialize_works() {
+		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
+		let exp = ErrorResponse {
+			jsonrpc: TwoPointZero,
+			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error".into(), data: None },
+			id: Id::Null,
+		};
+		let err: ErrorResponse = serde_json::from_str(ser).unwrap();
+		assert_eq!(exp, err);
 	}
 
-	/// Get the reason why the subscription was closed.
-	pub fn close_reason(&self) -> &str {
-		&self.subscription_closed
+	#[test]
+	fn deserialize_with_optional_data() {
+		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
+		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
+		let exp = ErrorResponse {
+			jsonrpc: TwoPointZero,
+			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error".into(), data: Some(&*data) },
+			id: Id::Null,
+		};
+		let err: ErrorResponse = serde_json::from_str(ser).unwrap();
+		assert_eq!(exp, err);
 	}
 
-	/// Get the subscription ID.
-	pub fn subscription_id(&self) -> u64 {
-		self.id
+	#[test]
+	fn deserialized_error_with_quoted_str() {
+		let raw = r#"{
+			"error": {
+				"code": 1002,
+				"message": "desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
+				"data": "\\\"validate_transaction\\\""
+			},
+			"id": 7,
+			"jsonrpc": "2.0"
+		}"#;
+		let err: ErrorResponse = serde_json::from_str(raw).unwrap();
+
+		let data = serde_json::value::to_raw_value(&"\\\"validate_transaction\\\"").unwrap();
+
+		assert_eq!(
+			err,
+			ErrorResponse {
+				error: ErrorObject {
+					code: 1002.into(),
+					message: "desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })".into(),
+					data: Some(&*data),
+				},
+				id: Id::Number(7),
+				jsonrpc: TwoPointZero,
+			}
+		);
 	}
-}
 
-/// Generic transport error.
-#[derive(Debug, thiserror::Error)]
-pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
-	/// Request was too large.
-	#[error("The request was too big")]
-	TooLarge,
-	/// Malformed request
-	#[error("Malformed request")]
-	Malformed,
-	/// Concrete transport error.
-	#[error("Transport error: {0}")]
-	Inner(T),
-}
-
-impl From<std::io::Error> for Error {
-	fn from(io_err: std::io::Error) -> Error {
-		Error::Transport(io_err.into())
-	}
-}
-
-impl From<soketto::handshake::Error> for Error {
-	fn from(handshake_err: soketto::handshake::Error) -> Error {
-		Error::Transport(handshake_err.into())
-	}
-}
-
-impl From<soketto::connection::Error> for Error {
-	fn from(conn_err: soketto::connection::Error) -> Error {
-		Error::Transport(conn_err.into())
-	}
-}
-
-impl From<hyper::Error> for Error {
-	fn from(hyper_err: hyper::Error) -> Error {
-		Error::Transport(hyper_err.into())
+	#[test]
+	fn serialize_works() {
+		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
+		let err = ErrorResponse {
+			jsonrpc: TwoPointZero,
+			error: ErrorObject { code: ErrorCode::InternalError, message: "Internal error".into(), data: None },
+			id: Id::Number(1337),
+		};
+		let ser = serde_json::to_string(&err).unwrap();
+		assert_eq!(exp, ser);
 	}
 }

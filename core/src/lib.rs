@@ -28,11 +28,14 @@
 
 #![warn(missing_docs, missing_debug_implementations, unreachable_pub)]
 
-/// Middleware trait and implementation.
-pub mod middleware;
+/// Error type.
+pub mod error;
 
 /// Traits
 pub mod traits;
+
+/// Middleware trait and implementation.
+pub mod middleware;
 
 /// Shared hyper helpers.
 #[cfg(feature = "http-helpers")]
@@ -47,6 +50,10 @@ pub mod server;
 pub mod client;
 
 pub use async_trait::async_trait;
+pub use error::Error;
+
+/// JSON-RPC result.
+pub type RpcResult<T> = std::result::Result<T, Error>;
 
 /// Re-exports for proc-macro library to not require any additional
 /// dependencies to be explicitly added on the client side.
@@ -56,3 +63,10 @@ pub mod __reexports {
 	pub use serde;
 	pub use serde_json;
 }
+
+pub use beef::Cow;
+pub use serde::{de::DeserializeOwned, Serialize};
+pub use serde_json::{
+	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
+	Value as JsonValue,
+};

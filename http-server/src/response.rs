@@ -26,7 +26,7 @@
 
 //! Contains common builders for hyper responses.
 
-use crate::types::error_response::{ErrorCode, ErrorResponse};
+use crate::types::error::{ErrorCode, ErrorResponse};
 use crate::types::Id;
 
 const JSON: &str = "application/json; charset=utf-8";
