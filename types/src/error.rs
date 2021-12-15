@@ -180,6 +180,9 @@ impl Error {
 /// A type with a special `subscription_closed` field to detect that
 /// a subscription has been closed to distinguish valid items produced
 /// by the server on the subscription stream from an error.
+///
+/// This is included in the `result field` of the SubscriptionResponse
+/// when an error is reported by the server.
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct SubscriptionClosed {
 	subscription_closed: SubscriptionClosedReason,
@@ -192,9 +195,9 @@ impl From<SubscriptionClosedReason> for SubscriptionClosed {
 }
 
 impl SubscriptionClosed {
-	/// Create a new subscription message.
-	pub fn new(kind: SubscriptionClosedReason) -> Self {
-		Self { subscription_closed: kind }
+	/// Create a new [`SubscriptionClosed`].
+	pub fn new(reason: SubscriptionClosedReason) -> Self {
+		Self { subscription_closed: reason }
 	}
 
 	/// Get the close reason.
