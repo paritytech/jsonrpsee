@@ -211,7 +211,7 @@ pub enum SubscriptionClosedReason {
 	Unsubscribed,
 	/// The client closed the connection.
 	ConnectionReset,
-	/// The server closed the subscription.
+	/// The server closed the subscription, providing a description of the reason as a `String`.
 	Server(String),
 }
 
