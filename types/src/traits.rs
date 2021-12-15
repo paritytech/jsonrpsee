@@ -133,7 +133,7 @@ tuple_impls! {
 /// Trait used to provide unique subscription IDs.
 pub trait IdProvider: Send + Sync {
 	/// Returns the next ID for the subscription.
-	fn next_id(&self) -> SubscriptionId;
+	fn next_id(&self) -> SubscriptionId<'static>;
 }
 
 /// Generates random integers as subscription ID.
@@ -141,7 +141,7 @@ pub trait IdProvider: Send + Sync {
 pub struct RandomIntegerIdProvider;
 
 impl IdProvider for RandomIntegerIdProvider {
-	fn next_id(&self) -> SubscriptionId {
+	fn next_id(&self) -> SubscriptionId<'static> {
 		const JS_NUM_MASK: u64 = !0 >> 11;
 		(rand::random::<u64>() & JS_NUM_MASK).into()
 	}
@@ -161,7 +161,7 @@ impl RandomStringIdProvider {
 }
 
 impl IdProvider for RandomStringIdProvider {
-	fn next_id(&self) -> SubscriptionId {
+	fn next_id(&self) -> SubscriptionId<'static> {
 		let mut rng = rand::thread_rng();
 		(&mut rng).sample_iter(Alphanumeric).take(self.len).map(char::from).collect::<String>().into()
 	}
@@ -172,7 +172,7 @@ impl IdProvider for RandomStringIdProvider {
 pub struct NoopIdProvider;
 
 impl IdProvider for NoopIdProvider {
-	fn next_id(&self) -> SubscriptionId {
+	fn next_id(&self) -> SubscriptionId<'static> {
 		0.into()
 	}
 }
