@@ -625,8 +625,7 @@ async fn unsubscribe_wrong_sub_id_type() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-	let unsub =
-		client.send_request_text(call("unsubscribe_hello", vec![13.99_f64], Id::Num(0))).await.unwrap();
+	let unsub = client.send_request_text(call("unsubscribe_hello", vec![13.99_f64], Id::Num(0))).await.unwrap();
 	let unsub_2_err: RpcError = serde_json::from_str(&unsub).unwrap();
 	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be Integer or String").unwrap());
 	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(0)));

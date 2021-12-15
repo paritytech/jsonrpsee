@@ -721,7 +721,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								params,
 								id
 							);
-							let err = to_json_raw_value(&"Invalid subscription ID type, must be Integer or String").ok();
+							let err =
+								to_json_raw_value(&"Invalid subscription ID type, must be Integer or String").ok();
 							return sink.send_error(id, invalid_subscription_err(err.as_deref()));
 						}
 					};
@@ -730,7 +731,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id: sub_id.clone() }).is_some() {
 						sink.send_response(id, "Unsubscribed")
 					} else {
-						let err = to_json_raw_value(&format!("Invalid subscription ID={}", serde_json::to_string(&sub_id).expect("valid JSON; qed"))).ok();
+						let err = to_json_raw_value(&format!(
+							"Invalid subscription ID={}",
+							serde_json::to_string(&sub_id).expect("valid JSON; qed")
+						))
+						.ok();
 						sink.send_error(id, invalid_subscription_err(err.as_deref()))
 					}
 				})),
