@@ -529,7 +529,6 @@ impl Default for Settings {
 	}
 }
 
-//#[derive(Debug)]
 /// Builder to configure and create a JSON-RPC Websocket server
 pub struct Builder<M = ()> {
 	settings: Settings,
