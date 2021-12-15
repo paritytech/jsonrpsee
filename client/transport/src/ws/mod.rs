@@ -31,7 +31,7 @@ pub use soketto::handshake::client::Header;
 
 use futures::io::{BufReader, BufWriter};
 use jsonrpsee_types::traits::{TransportReceiver, TransportSender};
-use jsonrpsee_types::{async_trait, CertificateStore, TEN_MB_SIZE_BYTES, Cow};
+use jsonrpsee_types::{async_trait, CertificateStore, Cow, TEN_MB_SIZE_BYTES};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use std::convert::TryInto;
@@ -218,7 +218,7 @@ impl TransportReceiver for Receiver {
 impl<'a> WsTransportClientBuilder<'a> {
 	/// Try to establish the connection.
 	pub async fn build(self, uri: Uri) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let target: Target = uri.try_into().unwrap();
+		let target: Target = uri.try_into()?;
 		self.try_connect(target).await
 	}
 
