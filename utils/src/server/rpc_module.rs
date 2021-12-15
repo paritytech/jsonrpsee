@@ -676,7 +676,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 
 					let sub_id = {
-						let sub_id: SubscriptionId = id_provider.next_id().into_owned().into();
+						let sub_id: SubscriptionId = id_provider.next_id().into_owned();
 						let uniq_sub = SubscriptionKey { conn_id, sub_id: sub_id.clone() };
 
 						subscribers.lock().insert(uniq_sub, (method_sink.clone(), conn_rx));
@@ -684,7 +684,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						sub_id
 					};
 
-					method_sink.send_response(id.clone(), sub_id.clone());
+					method_sink.send_response(id.clone(), &sub_id);
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
@@ -721,7 +721,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								params,
 								id
 							);
-							let err = to_json_raw_value(&"Invalid subscription ID type, must be integer").ok();
+							let err = to_json_raw_value(&"Invalid subscription ID type, must be Integer or String").ok();
 							return sink.send_error(id, invalid_subscription_err(err.as_deref()));
 						}
 					};
@@ -730,7 +730,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id: sub_id.clone() }).is_some() {
 						sink.send_response(id, "Unsubscribed")
 					} else {
-						let err = to_json_raw_value(&format!("Invalid subscription ID={:?}", sub_id)).ok();
+						let err = to_json_raw_value(&format!("Invalid subscription ID={}", serde_json::to_string(&sub_id).expect("valid JSON; qed"))).ok();
 						sink.send_error(id, invalid_subscription_err(err.as_deref()))
 					}
 				})),

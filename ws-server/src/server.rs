@@ -59,7 +59,6 @@ use jsonrpsee_utils::server::{
 const MAX_CONNECTIONS: u64 = 100;
 
 /// A WebSocket JSON RPC server.
-//#[derive(Debug)]
 pub struct Server<M> {
 	listener: TcpListener,
 	cfg: Settings,
