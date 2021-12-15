@@ -184,6 +184,7 @@ impl Error {
 /// This is included in the `result field` of the SubscriptionResponse
 /// when an error is reported by the server.
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct SubscriptionClosed {
 	reason: SubscriptionClosedReason,
 }
@@ -274,5 +275,11 @@ mod tests {
 			let ser = serde_json::to_string(&d).unwrap();
 			assert_eq!(ser, s);
 		}
+	}
+
+	#[test]
+	fn subscription_closed_deny_unknown_field() {
+		let ser = r#"{"reason":"Unsubscribed","deny":1}"#;
+		assert!(serde_json::from_str::<SubscriptionClosed>(ser).is_err());
 	}
 }
