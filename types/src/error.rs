@@ -28,8 +28,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use std::fmt;
 
-use crate::{JsonValue, v2::SubscriptionId};
-
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mismatch<T> {
@@ -131,7 +129,7 @@ pub enum Error {
 	SubscriptionNameConflict(String),
 	/// Subscription got closed.
 	#[error("Subscription closed: {0:?}")]
-	SubscriptionClosed(SubscriptionClosedError),
+	SubscriptionClosed(SubscriptionClosed),
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,
@@ -179,38 +177,46 @@ impl Error {
 	}
 }
 
-/// Error type with a special `subscription_closed` field to detect that
+/// A type with a special `subscription_closed` field to detect that
 /// a subscription has been closed to distinguish valid items produced
 /// by the server on the subscription stream from an error.
+///
+/// This is included in the `result field` of the SubscriptionResponse
+/// when an error is reported by the server.
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
-pub struct SubscriptionClosedError {
-	subscription_closed: String,
-	// TODO: #[serde(borrow)]..
-	id: JsonValue,
+#[serde(deny_unknown_fields)]
+pub struct SubscriptionClosed {
+	reason: SubscriptionClosedReason,
 }
 
-impl SubscriptionClosedError {
-	/// Create a new subscription closed error.
-	pub fn new(reason: impl Into<String>, id: SubscriptionId) -> Self {
-		Self { subscription_closed: reason.into(), id: id.into() }
+impl From<SubscriptionClosedReason> for SubscriptionClosed {
+	fn from(reason: SubscriptionClosedReason) -> Self {
+		Self::new(reason)
+	}
+}
+
+impl SubscriptionClosed {
+	/// Create a new [`SubscriptionClosed`].
+	pub fn new(reason: SubscriptionClosedReason) -> Self {
+		Self { reason }
 	}
 
-	/// Get the reason why the subscription was closed.
-	pub fn close_reason(&self) -> &str {
-		&self.subscription_closed
+	/// Get the close reason.
+	pub fn close_reason(&self) -> &SubscriptionClosedReason {
+		&self.reason
 	}
+}
 
-	/// Get the subscription ID.
-	pub fn subscription_id(&self) -> &JsonValue {
-		&self.id
-	}
-
-	/*/// Convert `SubscriptionId<'a>` to `SubscriptionId<'static>` so that it can be moved across threads.
-	///
-	/// This can cause an allocation if the id is a string.
-	pub fn into_owned(self) -> SubscriptionClosedError<'static> {
-		SubscriptionClosedError { subscription_closed: self.subscription_closed, id: self.id.into_owned() }
-	}*/
+/// A type to represent when a subscription gets closed
+/// by either the server or client side.
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+pub enum SubscriptionClosedReason {
+	/// The subscription was closed by calling the unsubscribe method.
+	Unsubscribed,
+	/// The client closed the connection.
+	ConnectionReset,
+	/// The server closed the subscription, providing a description of the reason as a `String`.
+	Server(String),
 }
 
 /// Generic transport error.
@@ -248,5 +254,32 @@ impl From<soketto::connection::Error> for Error {
 impl From<hyper::Error> for Error {
 	fn from(hyper_err: hyper::Error) -> Error {
 		Error::Transport(hyper_err.into())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{SubscriptionClosed, SubscriptionClosedReason};
+
+	#[test]
+	fn subscription_closed_ser_deser_works() {
+		let items: Vec<(&str, SubscriptionClosed)> = vec![
+			(r#"{"reason":"Unsubscribed"}"#, SubscriptionClosedReason::Unsubscribed.into()),
+			(r#"{"reason":"ConnectionReset"}"#, SubscriptionClosedReason::ConnectionReset.into()),
+			(r#"{"reason":{"Server":"hoho"}}"#, SubscriptionClosedReason::Server("hoho".into()).into()),
+		];
+
+		for (s, d) in items {
+			let dsr: SubscriptionClosed = serde_json::from_str(s).unwrap();
+			assert_eq!(dsr, d);
+			let ser = serde_json::to_string(&d).unwrap();
+			assert_eq!(ser, s);
+		}
+	}
+
+	#[test]
+	fn subscription_closed_deny_unknown_field() {
+		let ser = r#"{"reason":"Unsubscribed","deny":1}"#;
+		assert!(serde_json::from_str::<SubscriptionClosed>(ser).is_err());
 	}
 }

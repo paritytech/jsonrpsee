@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::{error::SubscriptionClosedError, v2::SubscriptionId, Error};
+use crate::{error::SubscriptionClosed, v2::SubscriptionId, Error};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{
@@ -53,10 +53,11 @@ pub enum SubscriptionKind {
 /// the server was a valid notification or should be treated as an error.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-enum NotifResponse<Notif> {
+pub enum NotifResponse<Notif> {
+	/// Successful response.
 	Ok(Notif),
-	// TODO: lifetime + #[serde(borrow)]..
-	Err(SubscriptionClosedError),
+	/// Subscription was closed.
+	Err(SubscriptionClosed),
 }
 
 /// Active subscription on the client.

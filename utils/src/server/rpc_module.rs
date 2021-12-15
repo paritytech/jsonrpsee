@@ -29,11 +29,12 @@ use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use jsonrpsee_types::error::{SubscriptionClosed, SubscriptionClosedReason};
 use jsonrpsee_types::to_json_raw_value;
 use jsonrpsee_types::traits::{IdProvider, RandomIntegerIdProvider};
 use jsonrpsee_types::v2::error::{invalid_subscription_err, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
-	error::{Error, SubscriptionClosedError},
+	error::Error,
 	traits::ToRpcParams,
 	v2::{ErrorCode, Id, Params, Request, Response, SubscriptionId, SubscriptionPayload, SubscriptionResponse},
 	DeserializeOwned,
@@ -774,8 +775,16 @@ pub struct SubscriptionSink {
 impl SubscriptionSink {
 	/// Send a message back to subscribers.
 	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), Error> {
+		if self.is_closed() {
+			return Err(Error::SubscriptionClosed(SubscriptionClosedReason::ConnectionReset.into()));
+		}
 		let msg = self.build_message(result)?;
 		self.inner_send(msg).map_err(Into::into)
+	}
+
+	/// Returns whether this channel is closed without needing a context.
+	pub fn is_closed(&self) -> bool {
+		self.inner.is_closed()
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
@@ -790,51 +799,47 @@ impl SubscriptionSink {
 		let res = match self.is_connected.as_ref() {
 			Some(conn) if !conn.is_canceled() => {
 				// unbounded send only fails if the receiver has been dropped.
-				self.inner.send_raw(msg).map_err(|_| {
-					Some(SubscriptionClosedError::new(
-						"Closed by the client (connection reset)",
-						self.uniq_sub.sub_id.clone(),
-					))
-				})
+				self.inner.send_raw(msg).map_err(|_| Some(SubscriptionClosedReason::ConnectionReset))
 			}
-			Some(_) => {
-				Err(Some(SubscriptionClosedError::new("Closed by unsubscribe call", self.uniq_sub.sub_id.clone())))
-			}
+			Some(_) => Err(Some(SubscriptionClosedReason::Unsubscribed)),
 			// NOTE(niklasad1): this should be unreachble, after the first error is detected the subscription is closed.
 			None => Err(None),
 		};
 
-		if let Err(Some(e)) = &res {
-			self.inner_close(e);
+		// The subscription was already closed by the client
+		// Close down the subscription but don't send a message to the client.
+		if res.is_err() {
+			self.inner_close(None);
 		}
 
 		res.map_err(|e| {
-			let err =
-				e.unwrap_or_else(|| SubscriptionClosedError::new("Close reason unknown", self.uniq_sub.sub_id.clone()));
-			Error::SubscriptionClosed(err)
+			let err = e.unwrap_or_else(|| SubscriptionClosedReason::Server("Close reason unknown".to_string()));
+			Error::SubscriptionClosed(err.into())
 		})
 	}
 
 	/// Close the subscription sink with a customized error message.
 	pub fn close(&mut self, msg: &str) {
-		let err = SubscriptionClosedError::new(msg, self.uniq_sub.sub_id.clone());
-		self.inner_close(&err);
+		let close_reason = SubscriptionClosedReason::Server(msg.to_string()).into();
+		self.inner_close(Some(&close_reason));
 	}
 
-	fn inner_close(&mut self, err: &SubscriptionClosedError) {
+	fn inner_close(&mut self, close_reason: Option<&SubscriptionClosed>) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
-			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
-			let msg = self.build_message(err).expect("valid json infallible; qed");
-			let _ = sink.send_raw(msg);
+			tracing::debug!("Closing subscription: {:?} reason: {:?}", self.uniq_sub.sub_id, close_reason);
+			if let Some(close_reason) = close_reason {
+				let msg = self.build_message(close_reason).expect("valid json infallible; qed");
+				let _ = sink.send_raw(msg);
+			}
 		}
 	}
 }
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		let err = SubscriptionClosedError::new("Closed by the server", self.uniq_sub.sub_id.clone());
-		self.inner_close(&err);
+		let err = SubscriptionClosedReason::Server("No close reason provided".into()).into();
+		self.inner_close(Some(&err));
 	}
 }
 
@@ -867,9 +872,13 @@ impl Subscription {
 		&mut self,
 	) -> Option<Result<(T, jsonrpsee_types::v2::SubscriptionId<'static>), Error>> {
 		let raw = self.rx.next().await?;
-		let res = serde_json::from_str::<SubscriptionResponse<T>>(&raw)
-			.map(|v| (v.params.result, v.params.subscription.into_owned()))
-			.map_err(Into::into);
+		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
+			Ok(r) => Ok((r.params.result, r.params.subscription.into_owned())),
+			Err(_) => match serde_json::from_str::<SubscriptionResponse<SubscriptionClosed>>(&raw) {
+				Ok(e) => Err(Error::SubscriptionClosed(e.params.result)),
+				Err(e) => Err(e.into()),
+			},
+		};
 		Some(res)
 	}
 }
@@ -1040,16 +1049,14 @@ mod tests {
 		module
 			.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 				let mut stream_data = vec!['0', '1', '2'];
-				std::thread::spawn(move || loop {
-					tracing::debug!("This is your friendly subscription sending data.");
-					if let Some(letter) = stream_data.pop() {
+				std::thread::spawn(move || {
+					while let Some(letter) = stream_data.pop() {
+						tracing::debug!("This is your friendly subscription sending data.");
 						if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
 							return;
 						}
-					} else {
-						return;
+						std::thread::sleep(std::time::Duration::from_millis(500));
 					}
-					std::thread::sleep(std::time::Duration::from_millis(500));
 				});
 				Ok(())
 			})
@@ -1062,10 +1069,10 @@ mod tests {
 			assert_eq!(&id, my_sub.subscription_id());
 		}
 
+		let sub_err = my_sub.next::<char>().await.unwrap().unwrap_err();
+
 		// The subscription is now closed by the server.
-		let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await.unwrap().unwrap();
-		//assert_eq!(sub_closed_err.subscription_id(), my_sub.subscription_id());
-		assert_eq!(sub_closed_err.close_reason(), "Closed by the server");
+		assert!(matches!(sub_err, Error::SubscriptionClosed(_)));
 	}
 
 	#[tokio::test]

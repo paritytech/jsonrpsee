@@ -35,8 +35,9 @@ use hyper::{
 use jsonrpsee_types::{
 	error::{Error, GenericTransportError},
 	middleware::Middleware,
+	traits::NoopIdProvider,
 	v2::{ErrorCode, Id, Notification, Request},
-	TEN_MB_SIZE_BYTES, traits::NoopIdProvider,
+	TEN_MB_SIZE_BYTES,
 };
 use jsonrpsee_utils::http_helpers::read_body;
 use jsonrpsee_utils::server::{
@@ -340,13 +341,7 @@ impl<M: Middleware> Server<M> {
 								middleware.on_call(req.method.as_ref());
 
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								match methods.execute_with_resources(
-									&sink,
-									req,
-									0,
-									&resources,
-									&NoopIdProvider,
-								) {
+								match methods.execute_with_resources(&sink, req, 0, &resources, &NoopIdProvider) {
 									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
 									}
@@ -372,7 +367,13 @@ impl<M: Middleware> Server<M> {
 								let middleware = &middleware;
 
 								join_all(batch.into_iter().filter_map(
-									move |req| match methods.execute_with_resources(&sink, req, 0, &resources, &NoopIdProvider) {
+									move |req| match methods.execute_with_resources(
+										&sink,
+										req,
+										0,
+										&resources,
+										&NoopIdProvider,
+									) {
 										Ok((name, MethodResult::Sync(success))) => {
 											middleware.on_result(name, success, request_start);
 											None
