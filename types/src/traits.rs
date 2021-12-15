@@ -135,7 +135,7 @@ pub trait TransportSender: Send + 'static {
 	/// Error.
 	type Error: std::error::Error + Send + Sync;
 
-	/// Send..
+	/// Send.
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
 
 	/// If the transport supports sending customized close messages.
