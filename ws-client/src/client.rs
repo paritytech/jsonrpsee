@@ -193,7 +193,7 @@ impl<'a> WsClientBuilder<'a> {
 	/// will be dropped.
 	///
 	/// You can also prevent the subscription being dropped by calling
-	/// [`Subscription::next()`](crate::types::Subscription) frequently enough such that the buffer capacity doesn't
+	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) frequently enough such that the buffer capacity doesn't
 	/// exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`

@@ -571,7 +571,7 @@ impl<M> Builder<M> {
 		Ok(self)
 	}
 
-	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
+	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
 	///
 	/// ```
 	/// use std::time::Instant;
