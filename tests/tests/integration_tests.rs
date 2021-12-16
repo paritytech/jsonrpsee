@@ -32,7 +32,7 @@ use std::time::Duration;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::Subscription;
-use jsonrpsee::core::error::SubscriptionClosedError;
+use jsonrpsee::core::error::SubscriptionClosedReason;
 use jsonrpsee::core::traits::{Client, SubscriptionClient};
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -354,8 +354,10 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 	assert_eq!(res, 1);
 	drop(client);
+	let close_err = rx.next().await.unwrap();
+
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert!(matches!(rx.next().await.unwrap(), SubscriptionClosedError { .. }));
+	assert!(matches!(close_err.close_reason(), &SubscriptionClosedReason::ConnectionReset));
 }
 
 #[tokio::test]

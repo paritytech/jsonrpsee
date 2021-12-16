@@ -1,6 +1,6 @@
 use jsonrpsee::{proc_macros::rpc, core::RpcResult};
 
-// Associated items are forbidden.
+// Names must be unique.
 #[rpc(client, server)]
 pub trait MethodNameConflict {
 	#[method(name = "foo")]

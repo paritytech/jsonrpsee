@@ -36,7 +36,7 @@ impl HyperClient {
 
 /// HTTP Transport Client.
 #[derive(Debug, Clone)]
-pub(crate) struct HttpTransportClient {
+pub struct HttpTransportClient {
 	/// Target to connect to.
 	target: Uri,
 	/// HTTP client
@@ -128,7 +128,7 @@ impl HttpTransportClient {
 
 /// Error that can happen during a request.
 #[derive(Debug, Error)]
-pub(crate) enum Error {
+pub enum Error {
 	/// Invalid URL.
 	#[error("Invalid Url: {0}")]
 	Url(String),

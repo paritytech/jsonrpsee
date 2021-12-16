@@ -101,6 +101,11 @@ impl MethodSink {
 		MethodSink { tx, max_response_size }
 	}
 
+	/// Returns whether this channel is closed without needing a context.
+	pub fn is_closed(&self) -> bool {
+		self.tx.is_closed()
+	}
+
 	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
 	/// an error will be sent instead.
 	pub fn send_response(&self, id: Id, result: impl Serialize) -> bool {

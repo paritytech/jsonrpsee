@@ -30,7 +30,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
-use crate::error::{Error, SubscriptionClosedError};
+use crate::error::{Error, SubscriptionClosed};
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
@@ -77,9 +77,11 @@ pub enum SubscriptionKind {
 /// the server was a valid notification or should be treated as an error.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-enum NotifResponse<Notif> {
+pub enum NotifResponse<Notif> {
+	/// Successful response
 	Ok(Notif),
-	Err(SubscriptionClosedError),
+	/// Subscription was closed.
+	Err(SubscriptionClosed),
 }
 
 /// Active subscription on the client.

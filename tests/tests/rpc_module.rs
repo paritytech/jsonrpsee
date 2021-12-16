@@ -26,8 +26,8 @@
 
 use std::collections::HashMap;
 
-use jsonrpsee::core::error::{Error, SubscriptionClosedError};
 use jsonrpsee::core::server::rpc_module::*;
+use jsonrpsee::core::Error;
 use jsonrpsee::types::{EmptyParams, Params, SubscriptionId as RpcSubscriptionId};
 use serde::{Deserialize, Serialize};
 
@@ -184,16 +184,14 @@ async fn subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 			let mut stream_data = vec!['0', '1', '2'];
-			std::thread::spawn(move || loop {
-				tracing::debug!("This is your friendly subscription sending data.");
-				if let Some(letter) = stream_data.pop() {
+			std::thread::spawn(move || {
+				while let Some(letter) = stream_data.pop() {
+					tracing::debug!("This is your friendly subscription sending data.");
 					if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
 						return;
 					}
-				} else {
-					return;
+					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
-				std::thread::sleep(std::time::Duration::from_millis(500));
 			});
 			Ok(())
 		})
@@ -206,10 +204,10 @@ async fn subscribing_without_server() {
 		assert_eq!(id, RpcSubscriptionId::Num(my_sub.subscription_id()));
 	}
 
+	let sub_err = my_sub.next::<char>().await.unwrap().unwrap_err();
+
 	// The subscription is now closed by the server.
-	let (sub_closed_err, _) = my_sub.next::<SubscriptionClosedError>().await.unwrap().unwrap();
-	assert_eq!(sub_closed_err.subscription_id(), my_sub.subscription_id());
-	assert_eq!(sub_closed_err.close_reason(), "Closed by the server");
+	assert!(matches!(sub_err, Error::SubscriptionClosed(_)));
 }
 
 #[tokio::test]
