@@ -67,7 +67,7 @@
 //! Alternatively, you can use the `resource` method when creating a module manually without the help of the macro:
 //!
 //! ```
-//! # use jsonrpsee::{RpcModule, types::RpcResult};
+//! # use jsonrpsee::{RpcModule, core::RpcResult};
 //! #
 //! # fn main() -> RpcResult<()> {
 //! #

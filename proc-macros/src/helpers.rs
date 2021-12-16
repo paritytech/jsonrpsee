@@ -71,7 +71,7 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 /// ### Example
 ///
 /// ```
-///  use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+///  use jsonrpsee::{proc_macros::rpc, core::RpcResult};
 ///
 ///  #[rpc(client, server)]
 ///  pub trait RpcTrait<A, B, C> {
