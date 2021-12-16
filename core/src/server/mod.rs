@@ -26,8 +26,6 @@
 
 //! Shared modules for the JSON-RPC servers.
 
-/// Client types.
-// mod client;
 
 /// Helpers.
 pub mod helpers;
