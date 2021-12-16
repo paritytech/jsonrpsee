@@ -36,7 +36,7 @@ server = [
 	"rand",
 	"tokio",
 ]
-client = []
+client = ["futures-util"]
 
 [dev-dependencies]
 serde_json = "1.0"
