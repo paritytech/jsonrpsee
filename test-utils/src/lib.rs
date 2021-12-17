@@ -28,7 +28,9 @@
 
 #![recursion_limit = "256"]
 
-use std::{future::Future, time::Duration};
+use std::future::Future;
+use std::time::Duration;
+
 use tokio::time::{timeout, Timeout};
 
 pub mod helpers;

@@ -101,7 +101,7 @@ pub(crate) mod visitor;
 ///     // Note that `subscription_sink` was added automatically.
 ///     fn sub(&self, subscription_sink: SubscriptionSink);
 ///
-///     fn into_rpc(self) -> Result<Self, jsonrpsee::types::Error> {
+///     fn into_rpc(self) -> Result<Self, jsonrpsee::core::Error> {
 ///         // Actual implementation stripped, but inside we will create
 ///         // a module with one method and one subscription
 ///     }
@@ -206,7 +206,7 @@ pub(crate) mod visitor;
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc, types::{async_trait, RpcResult}, ws_server::SubscriptionSink};
+///     use jsonrpsee::{proc_macros::rpc, core::async_trait, core::RpcResult, ws_server::SubscriptionSink};
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
 ///     #[rpc(client, server, namespace = "foo")]

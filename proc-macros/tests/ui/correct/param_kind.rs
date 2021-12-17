@@ -1,11 +1,9 @@
-use jsonrpsee::{
-	proc_macros::rpc,
-	types::{async_trait, RpcResult},
-	ws_client::*,
-	ws_server::WsServerBuilder,
-};
-
 use std::net::SocketAddr;
+
+use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::core::{async_trait, RpcResult};
+use jsonrpsee::ws_client::*;
+use jsonrpsee::ws_server::WsServerBuilder;
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {

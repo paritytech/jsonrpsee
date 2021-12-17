@@ -24,13 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::Infallible;
+use std::net::SocketAddr;
+
 use crate::mocks::{Body, HttpResponse, Id, Uri};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Request, Response, Server};
 use serde::Serialize;
 use serde_json::Value;
-use std::convert::Infallible;
-use std::net::SocketAddr;
 
 pub const PARSE_ERROR: &str = "Parse error";
 pub const INTERNAL_ERROR: &str = "Internal error";

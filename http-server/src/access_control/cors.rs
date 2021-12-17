@@ -26,11 +26,12 @@
 
 //! CORS handling utility functions
 
+use std::collections::HashSet;
+use std::{fmt, ops};
+
 use crate::access_control::hosts::{Host, Port};
 use crate::access_control::matcher::{Matcher, Pattern};
 use lazy_static::lazy_static;
-use std::collections::HashSet;
-use std::{fmt, ops};
 use unicase::Ascii;
 
 /// Origin Protocol
@@ -322,9 +323,10 @@ lazy_static! {
 
 #[cfg(test)]
 mod tests {
+	use std::iter;
+
 	use super::*;
 	use crate::access_control::hosts::Host;
-	use std::iter;
 
 	#[test]
 	fn should_parse_origin() {

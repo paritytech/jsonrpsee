@@ -24,13 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	http_server::{HttpServerBuilder, HttpServerHandle, RpcModule},
-	rpc_params,
-	types::traits::Client,
-};
 use std::net::SocketAddr;
+
+use jsonrpsee::core::client::Client;
+use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::rpc_params;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -26,15 +26,14 @@
 
 //! Example showing how to add multiple middlewares to the same server.
 
-use jsonrpsee::{
-	rpc_params,
-	types::{middleware, traits::Client},
-	ws_client::WsClientBuilder,
-	ws_server::{RpcModule, WsServerBuilder},
-};
 use std::net::SocketAddr;
 use std::process::Command;
 use std::time::Instant;
+
+use jsonrpsee::core::{client::Client, middleware};
+use jsonrpsee::rpc_params;
+use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 /// Example middleware to measure call execution time.
 #[derive(Clone)]

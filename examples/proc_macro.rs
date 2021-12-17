@@ -24,13 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	proc_macros::rpc,
-	types::{async_trait, error::Error, Subscription},
-	ws_client::WsClientBuilder,
-	ws_server::{SubscriptionSink, WsServerBuilder, WsServerHandle},
-};
 use std::net::SocketAddr;
+
+use jsonrpsee::core::{async_trait, client::Subscription, Error};
+use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder, WsServerHandle};
 
 type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;

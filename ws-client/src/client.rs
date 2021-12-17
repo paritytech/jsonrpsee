@@ -24,32 +24,32 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::convert::TryInto;
+use std::time::Duration;
+
+use crate::helpers::{
+	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
+	process_single_response, process_subscription_response, stop_subscription,
+};
+use crate::manager::RequestManager;
 use crate::transport::{Receiver as WsReceiver, Sender as WsSender, WsHandshakeError, WsTransportClientBuilder};
 use crate::types::{
-	traits::{Client, SubscriptionClient},
-	v2::{Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, RpcError, SubscriptionResponse},
-	BatchMessage, CertificateStore, Error, FrontToBack, RegisterNotificationMessage, RequestIdManager, RequestMessage,
-	Subscription, SubscriptionKind, SubscriptionMessage, TEN_MB_SIZE_BYTES,
-};
-use crate::{
-	helpers::{
-		build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response,
-		process_notification, process_single_response, process_subscription_response, stop_subscription,
-	},
-	manager::RequestManager,
+	ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, SubscriptionResponse,
+	TEN_MB_SIZE_BYTES,
 };
 use async_trait::async_trait;
-use futures::{
-	channel::{mpsc, oneshot},
-	future::Either,
-	prelude::*,
-	sink::SinkExt,
-};
+use futures::channel::{mpsc, oneshot};
+use futures::future::Either;
+use futures::prelude::*;
+use futures::sink::SinkExt;
 use http::uri::{InvalidUri, Uri};
-use tokio::sync::Mutex;
-
+use jsonrpsee_core::client::{
+	BatchMessage, CertificateStore, Client, FrontToBack, RegisterNotificationMessage, RequestIdManager, RequestMessage,
+	Subscription, SubscriptionClient, SubscriptionKind, SubscriptionMessage,
+};
+use jsonrpsee_core::Error;
 use serde::de::DeserializeOwned;
-use std::{convert::TryInto, time::Duration};
+use tokio::sync::Mutex;
 
 pub use soketto::handshake::client::Header;
 
@@ -192,7 +192,7 @@ impl<'a> WsClientBuilder<'a> {
 	/// will be dropped.
 	///
 	/// You can also prevent the subscription being dropped by calling
-	/// [`Subscription::next()`](crate::types::Subscription) frequently enough such that the buffer capacity doesn't
+	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) frequently enough such that the buffer capacity doesn't
 	/// exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
@@ -593,7 +593,7 @@ async fn background_task(
 					}
 				}
 				// Error response
-				else if let Ok(err) = serde_json::from_slice::<RpcError>(&raw) {
+				else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(&raw) {
 					tracing::debug!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);

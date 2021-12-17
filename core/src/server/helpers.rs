@@ -24,24 +24,24 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::io;
+
+use crate::{to_json_raw_value, Error};
 use futures_channel::mpsc;
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::error::{CallError, Error};
-use jsonrpsee_types::to_json_raw_value;
-use jsonrpsee_types::v2::error::{OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
-use jsonrpsee_types::v2::{
-	error::{CALL_EXECUTION_FAILED_CODE, UNKNOWN_ERROR_CODE},
-	ErrorCode, ErrorObject, Id, InvalidRequest, Response, RpcError,
+use jsonrpsee_types::error::{
+	CallError, ErrorCode, ErrorObject, ErrorResponse, CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE,
+	OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE,
 };
+use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
-
-use std::io;
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
 /// ```
-///    use jsonrpsee_utils::server::helpers::BoundedWriter;
 ///    use std::io::Write;
+///
+///    use jsonrpsee_core::server::helpers::BoundedWriter;
 ///
 ///    let mut writer = BoundedWriter::new(10);
 ///    (&mut writer).write("hello".as_bytes()).unwrap();
@@ -143,7 +143,7 @@ impl MethodSink {
 
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
-		let json = match serde_json::to_string(&RpcError::new(error, id)) {
+		let json = match serde_json::to_string(&ErrorResponse::new(error, id)) {
 			Ok(json) => json,
 			Err(err) => {
 				tracing::error!("Error serializing error message: {:?}", err);

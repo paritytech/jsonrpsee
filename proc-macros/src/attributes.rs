@@ -24,8 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use std::{fmt, iter};
+
+use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use syn::parse::{Parse, ParseStream, Parser};
 use syn::punctuated::Punctuated;
 use syn::{spanned::Spanned, Attribute, Error, LitInt, LitStr, Token};
