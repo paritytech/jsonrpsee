@@ -26,14 +26,19 @@
 
 #[cfg(feature = "client")]
 use crate::client::Subscription;
+#[cfg(feature = "client")]
 use crate::Error;
+#[cfg(feature = "client")]
 use async_trait::async_trait;
+#[cfg(feature = "client")]
 use jsonrpsee_types::ParamsSer;
+#[cfg(feature = "client")]
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::value::RawValue;
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
+#[cfg(feature = "client")]
 #[async_trait]
 pub trait Client {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
