@@ -29,7 +29,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use jsonrpsee::core::{middleware::Middleware, traits::Client, Error};
+use jsonrpsee::core::{client::Client, middleware::Middleware, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;

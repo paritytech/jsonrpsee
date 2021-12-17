@@ -31,12 +31,13 @@ use std::sync::Arc;
 use std::task;
 
 use crate::error::{Error, SubscriptionClosed};
+use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::SubscriptionId;
+use jsonrpsee_types::{ParamsSer, SubscriptionId};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
@@ -44,6 +45,61 @@ use serde_json::Value as JsonValue;
 pub mod __reexports {
 	pub use crate::to_json_value;
 	pub use jsonrpsee_types::ParamsSer;
+}
+
+/// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
+#[async_trait]
+pub trait Client {
+	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
+	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error>;
+
+	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
+	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
+	where
+		R: DeserializeOwned;
+
+	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
+	///
+	/// The response to batch are returned in the same order as it was inserted in the batch.
+	///
+	/// Returns `Ok` if all requests in the batch were answered successfully.
+	/// Returns `Error` if any of the requests in batch fails.
+	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
+	where
+		R: DeserializeOwned + Default + Clone;
+}
+
+/// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
+#[async_trait]
+pub trait SubscriptionClient: Client {
+	/// Initiate a subscription by performing a JSON-RPC method call where the server responds with
+	/// a `Subscription ID` that is used to fetch messages on that subscription,
+	///
+	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
+	/// server.
+	///
+	/// The params may be used as input for the subscription for the server to process.
+	///
+	/// The `unsubscribe_method` is used to close the subscription
+	///
+	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
+	/// documentation.
+	async fn subscribe<'a, Notif>(
+		&self,
+		subscribe_method: &'a str,
+		params: Option<ParamsSer<'a>>,
+		unsubscribe_method: &'a str,
+	) -> Result<Subscription<Notif>, Error>
+	where
+		Notif: DeserializeOwned;
+
+	/// Register a method subscription, this is used to filter only server notifications that a user is interested in.
+	///
+	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
+	/// documentation.
+	async fn subscribe_to_method<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
+	where
+		Notif: DeserializeOwned;
 }
 
 #[macro_export]

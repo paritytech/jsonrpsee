@@ -27,8 +27,8 @@
 use crate::types::error::{ErrorCode, ErrorObject, ErrorResponse};
 use crate::types::ParamsSer;
 use crate::HttpClientBuilder;
+use jsonrpsee_core::client::Client;
 use jsonrpsee_core::rpc_params;
-use jsonrpsee_core::traits::Client;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;

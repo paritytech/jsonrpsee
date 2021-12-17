@@ -3,7 +3,7 @@ use std::sync::Arc;
 use criterion::*;
 use futures_util::future::join_all;
 use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
-use jsonrpsee::core::traits::{Client, SubscriptionClient};
+use jsonrpsee::core::client::{Client, SubscriptionClient};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::types::{Id, ParamsSer, RequestSer};
 use jsonrpsee::ws_client::WsClientBuilder;

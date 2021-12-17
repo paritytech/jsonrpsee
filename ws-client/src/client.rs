@@ -44,10 +44,9 @@ use futures::prelude::*;
 use futures::sink::SinkExt;
 use http::uri::{InvalidUri, Uri};
 use jsonrpsee_core::client::{
-	BatchMessage, CertificateStore, FrontToBack, RegisterNotificationMessage, RequestIdManager, RequestMessage,
-	Subscription, SubscriptionKind, SubscriptionMessage,
+	BatchMessage, CertificateStore, Client, FrontToBack, RegisterNotificationMessage, RequestIdManager, RequestMessage,
+	Subscription, SubscriptionClient, SubscriptionKind, SubscriptionMessage,
 };
-use jsonrpsee_core::traits::{Client, SubscriptionClient};
 use jsonrpsee_core::Error;
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
