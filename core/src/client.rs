@@ -102,7 +102,6 @@ pub trait SubscriptionClient: Client {
 		Notif: DeserializeOwned;
 }
 
-
 /// Transport interface to send data asynchronous.
 #[async_trait]
 /// Transport interface for an asyncronous client.
@@ -383,7 +382,6 @@ impl<T> RequestIdGuard<T> {
 	}
 }
 
-
 /// What certificate store to use
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
@@ -393,7 +391,6 @@ pub enum CertificateStore {
 	/// Use WebPKI's certificate store
 	WebPki,
 }
-
 
 #[cfg(test)]
 mod tests {

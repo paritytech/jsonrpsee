@@ -42,9 +42,8 @@ pub use jsonrpsee_types as types;
 use std::time::Duration;
 
 use jsonrpsee_client_transport::ws::{Header, InvalidUri, Uri, WsTransportClientBuilder};
-use jsonrpsee_core_client::{Client, ClientBuilder};
 use jsonrpsee_core::{client::CertificateStore, Error, TEN_MB_SIZE_BYTES};
-
+use jsonrpsee_core_client::{Client, ClientBuilder};
 
 /// Builder for [`Client`].
 ///
