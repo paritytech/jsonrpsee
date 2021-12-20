@@ -383,6 +383,18 @@ impl<T> RequestIdGuard<T> {
 	}
 }
 
+
+/// What certificate store to use
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CertificateStore {
+	/// Use the native system certificate store
+	Native,
+	/// Use WebPKI's certificate store
+	WebPki,
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::RequestIdManager;
@@ -400,14 +412,4 @@ mod tests {
 
 		assert!(manager.next_request_id().is_ok());
 	}
-}
-
-/// What certificate store to use
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum CertificateStore {
-	/// Use the native system certificate store
-	Native,
-	/// Use WebPKI's certificate store
-	WebPki,
 }

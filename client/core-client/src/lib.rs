@@ -59,7 +59,7 @@ pub struct ClientBuilder {
 	max_notifs_per_subscription: usize,
 }
 
-impl<'a> Default for ClientBuilder {
+impl Default for ClientBuilder {
 	fn default() -> Self {
 		Self {
 			request_timeout: Duration::from_secs(60),

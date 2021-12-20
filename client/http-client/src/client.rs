@@ -28,10 +28,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::HttpTransportClient;
-use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response, TEN_MB_SIZE_BYTES};
+use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response};
 use async_trait::async_trait;
 use jsonrpsee_core::client::{CertificateStore, Client, RequestIdManager, Subscription, SubscriptionClient};
-use jsonrpsee_core::Error;
+use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 

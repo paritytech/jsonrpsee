@@ -31,7 +31,7 @@ use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-use jsonrpsee_types::TEN_MB_SIZE_BYTES;
+use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use stream::EitherStream;
 use futures::io::{BufReader, BufWriter};
 use jsonrpsee_core::client::{CertificateStore, TransportSender, TransportReceiver};
