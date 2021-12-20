@@ -227,7 +227,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 		// Only build TLS connector if `wss` in URL.
 		#[cfg(feature = "tls")]
-		let mut connector = match target.mode {
+		let mut connector = match target._mode {
 			Mode::Tls => Some(build_tls_config(&self.certificate_store)?),
 			Mode::Plain => None,
 		};
@@ -291,7 +291,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 									// Only build TLS connector if `wss` in redirection URL.
 									#[cfg(feature = "tls")]
-									match target.mode {
+									match target._mode {
 										Mode::Tls if connector.is_none() => {
 											connector = Some(build_tls_config(&self.certificate_store)?);
 										}
