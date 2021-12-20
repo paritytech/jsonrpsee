@@ -27,7 +27,7 @@
 use std::net::SocketAddr;
 use std::time::Instant;
 
-use jsonrpsee::core::{client::Client, middleware};
+use jsonrpsee::core::{client::ClientT, middleware};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 

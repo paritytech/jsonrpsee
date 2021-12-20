@@ -3,25 +3,29 @@ mod manager;
 
 use std::time::Duration;
 
-use crate::helpers::{
+use crate::client::{
+	BatchMessage, ClientT, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT,
+	SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
+};
+use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
+use manager::RequestManager;
+
+use crate::error::Error;
+use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{future::Either, SinkExt, StreamExt};
-use jsonrpsee_core::client::{
-	BatchMessage, Client as ClientT, FrontToBack, RegisterNotificationMessage, RequestIdManager, RequestMessage,
-	Subscription, SubscriptionClient as SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiver,
-	TransportSender,
-};
-use jsonrpsee_core::{async_trait, DeserializeOwned, Error};
+use futures_util::future::Either;
+use futures_util::sink::SinkExt;
+use futures_util::stream::StreamExt;
 use jsonrpsee_types::{
 	ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, SubscriptionResponse,
 };
-use manager::RequestManager;
+use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 
-pub use jsonrpsee_types as types;
+use super::{FrontToBack, RequestIdManager};
 
 /// Wrapper over a [`oneshot::Receiver`](futures_channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -78,18 +82,18 @@ impl ClientBuilder {
 		self
 	}
 
-	/// Set max concurrent requests.
+	/// Set max concurrent requests (default is 256).
 	pub fn max_concurrent_requests(mut self, max: usize) -> Self {
 		self.max_concurrent_requests = max;
 		self
 	}
 
 	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription
-	/// will be dropped.
+	/// will be dropped (default is 1024).
 	///
-	/// You can also prevent the subscription being dropped by calling
-	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) frequently enough such that the buffer capacity doesn't
-	/// exceeds.
+	/// You may prevent the subscription being dropped by polling often enough
+	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) such that
+	/// it can keep with the rate as server produces new items on the subscription.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
 	/// because it is passed to [`futures::channel::mpsc::channel`].
@@ -103,7 +107,7 @@ impl ClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub fn build<S: TransportSender, R: TransportReceiver>(self, sender: S, receiver: R) -> Client {
+	pub fn build<S: TransportSenderT, R: TransportReceiverT>(self, sender: S, receiver: R) -> Client {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
@@ -150,7 +154,7 @@ impl Client {
 	}
 }
 
-impl<S: TransportSender, R: TransportReceiver> From<(S, R)> for Client {
+impl<S: TransportSenderT, R: TransportReceiverT> From<(S, R)> for Client {
 	fn from(transport: (S, R)) -> Client {
 		ClientBuilder::default().build(transport.0, transport.1)
 	}
@@ -340,7 +344,7 @@ impl SubscriptionClientT for Client {
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task<S: TransportSender, R: TransportReceiver>(
+async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
 	mut sender: S,
 	receiver: R,
 	mut frontend: mpsc::Receiver<FrontToBack>,

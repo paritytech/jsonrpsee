@@ -29,7 +29,7 @@ use crate::types::error::{ErrorCode, ErrorObject, ErrorResponse};
 use crate::types::ParamsSer;
 use crate::WsClientBuilder;
 use jsonrpsee_core::client::Subscription;
-use jsonrpsee_core::client::{Client, SubscriptionClient};
+use jsonrpsee_core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;

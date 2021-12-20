@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use helpers::{http_server, websocket_server, websocket_server_with_subscription};
-use jsonrpsee::core::client::{Client, Subscription, SubscriptionClient};
+use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosedReason;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;

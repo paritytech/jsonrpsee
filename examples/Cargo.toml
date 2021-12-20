@@ -46,3 +46,7 @@ path = "ws_sub_with_params.rs"
 [[example]]
 name = "proc_macro"
 path = "proc_macro.rs"
+
+[[example]]
+name = "core_client"
+path = "core_client.rs"

@@ -34,9 +34,9 @@
 
 use std::collections::{hash_map::Entry, HashMap};
 
-use crate::types::SubscriptionId;
+use crate::Error;
 use futures_channel::{mpsc, oneshot};
-use jsonrpsee_core::Error;
+use jsonrpsee_types::SubscriptionId;
 use rustc_hash::FxHashMap;
 use serde_json::value::Value as JsonValue;
 

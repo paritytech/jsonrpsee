@@ -32,7 +32,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
 use futures::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{CertificateStore, TransportReceiver, TransportSender};
+use jsonrpsee_core::client::{CertificateStore, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
 use soketto::connection;
@@ -183,7 +183,7 @@ pub enum WsError {
 }
 
 #[async_trait]
-impl TransportSender for Sender {
+impl TransportSenderT for Sender {
 	type Error = WsError;
 
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
@@ -202,7 +202,7 @@ impl TransportSender for Sender {
 }
 
 #[async_trait]
-impl TransportReceiver for Receiver {
+impl TransportReceiverT for Receiver {
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
@@ -421,7 +421,7 @@ pub struct Target {
 	/// The Host request header specifies the host and port number of the server to which the request is being sent.
 	host_header: String,
 	/// WebSocket stream mode, see [`Mode`] for further documentation.
-	mode: Mode,
+	_mode: Mode,
 	/// The path and query parts from an URL.
 	path_and_query: String,
 }
@@ -430,7 +430,7 @@ impl TryFrom<Uri> for Target {
 	type Error = WsHandshakeError;
 
 	fn try_from(uri: Uri) -> Result<Self, Self::Error> {
-		let mode = match uri.scheme_str() {
+		let _mode = match uri.scheme_str() {
 			Some("ws") => Mode::Plain,
 			#[cfg(feature = "tls")]
 			Some("wss") => Mode::Tls,
@@ -450,7 +450,13 @@ impl TryFrom<Uri> for Target {
 		let parts = uri.into_parts();
 		let path_and_query = parts.path_and_query.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
 		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self { sockaddrs: sockaddrs.collect(), host, host_header, mode, path_and_query: path_and_query.to_string() })
+		Ok(Self {
+			sockaddrs: sockaddrs.collect(),
+			host,
+			host_header,
+			_mode,
+			path_and_query: path_and_query.to_string(),
+		})
 	}
 }
 
@@ -503,7 +509,7 @@ mod tests {
 	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
 		assert_eq!(&target.host, host);
 		assert_eq!(&target.host_header, host_header);
-		assert_eq!(target.mode, mode);
+		assert_eq!(target._mode, mode);
 		assert_eq!(&target.path_and_query, path_and_query);
 	}
 

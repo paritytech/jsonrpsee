@@ -12,8 +12,7 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 [dependencies]
 jsonrpsee-types = { path = "../../types", version = "0.6.1" }
 jsonrpsee-client-transport = { path = "../transport", version = "0.6.1", features = ["ws"] }
-jsonrpsee-core = { path = "../../core", version = "0.6.1", features = ["client"] }
-jsonrpsee-core-client = { path = "../core-client", version = "0.6.1" }
+jsonrpsee-core = { path = "../../core", version = "0.6.1", features = ["async-client"] }
 
 [dev-dependencies]
 env_logger = "0.9"

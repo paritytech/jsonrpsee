@@ -27,13 +27,14 @@
 use std::convert::TryInto;
 use std::time::Duration;
 
-use crate::manager::{RequestManager, RequestStatus};
-use crate::types::{
+use crate::client::async_client::manager::{RequestManager, RequestStatus};
+use crate::client::{RequestMessage, TransportSenderT};
+use crate::Error;
+
+use futures_channel::{mpsc, oneshot};
+use jsonrpsee_types::{
 	ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
 };
-use futures_channel::{mpsc, oneshot};
-use jsonrpsee_core::client::{RequestMessage, TransportSender};
-use jsonrpsee_core::Error;
 use serde_json::Value as JsonValue;
 
 /// Attempts to process a batch response.
@@ -178,7 +179,7 @@ pub(crate) fn process_single_response(
 //
 // NOTE: we don't count this a concurrent request as it's part of a subscription.
 pub(crate) async fn stop_subscription(
-	sender: &mut impl TransportSender,
+	sender: &mut impl TransportSenderT,
 	manager: &mut RequestManager,
 	unsub: RequestMessage,
 ) {

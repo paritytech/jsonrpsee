@@ -37,6 +37,14 @@ server = [
 	"tokio",
 ]
 client = ["futures-util"]
+async-client = [
+	"client",
+	"rustc-hash",
+	"tokio/sync", 
+	"tokio/macros", 
+	"tokio/time", 
+	"tracing"
+]
 
 [dev-dependencies]
 serde_json = "1.0"
