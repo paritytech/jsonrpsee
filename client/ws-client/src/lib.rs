@@ -30,7 +30,7 @@
 //!
 //! `jsonrpsee-ws-client` is a [JSON RPC](https://www.jsonrpc.org/specification) WebSocket client library that's is built for `async/await`.
 //!
-//! ## Runtime support
+//! ## Async runtime support
 //!
 //! This library uses `tokio` as the runtime and does not support other runtimes.
 
@@ -94,59 +94,49 @@ impl<'a> Default for WsClientBuilder<'a> {
 }
 
 impl<'a> WsClientBuilder<'a> {
-	/// Set whether to use system certificates
+	/// See documentation [`WsTransportClientBuilder::certificate_store`] (default is native).
 	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
 		self.certificate_store = certificate_store;
 		self
 	}
 
-	/// Set max request body size.
+	/// See documentation [`WsTransportClientBuilder::max_request_body_size`] (default is 10 MB).
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
 		self
 	}
 
-	/// Set request timeout (default is 60 seconds).
+	/// See documentation [`ClientBuilder::request_timeout`] (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
 		self
 	}
 
-	/// Set connection timeout for the handshake.
+	/// See documentation [`WsTransportClientBuilder::connection_timeout`] (default is 10 seconds).
 	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
 		self.connection_timeout = timeout;
 		self
 	}
 
-	/// Set a custom header passed to the server during the handshake.
-	///
-	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
+	/// See documentation [`WsTransportClientBuilder::add_header`] (default is none).
 	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
 		self.headers.push(Header { name, value: value.as_bytes() });
 		self
 	}
 
-	/// Set max concurrent requests.
+	/// See documentation [`ClientBuilder::max_concurrent_requests`] (default is 256).
 	pub fn max_concurrent_requests(mut self, max: usize) -> Self {
 		self.max_concurrent_requests = max;
 		self
 	}
 
-	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription
-	/// will be dropped.
-	///
-	/// You can also prevent the subscription being dropped by calling
-	/// [`Subscription::next()`](crate::types::Subscription) frequently enough such that the buffer capacity doesn't
-	/// exceeds.
-	///
-	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
-	/// because it is passed to [`futures::channel::mpsc::channel`].
+	/// See documentation [`ClientBuilder::max_notifs_per_subscription`] (default is 1024).
 	pub fn max_notifs_per_subscription(mut self, max: usize) -> Self {
 		self.max_notifs_per_subscription = max;
 		self
 	}
 
-	/// Set the max number of redirects to follow during the WS handshake until a connection is considered failed.
+	/// See documentation [`WsTransportClientBuilder::max_redirections`] (default is 5).
 	pub fn max_redirections(mut self, redirect: usize) -> Self {
 		self.max_redirections = redirect;
 		self

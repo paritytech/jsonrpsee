@@ -91,12 +91,12 @@ impl ClientBuilder {
 	/// Set max concurrent notification capacity for each subscription; when the capacity is exceeded the subscription
 	/// will be dropped (default is 1024).
 	///
-	/// You may prevent the subscription being dropped by polling often enough
+	/// You may prevent the subscription from being dropped by polling often enough
 	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) such that
 	/// it can keep with the rate as server produces new items on the subscription.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
-	/// because it is passed to [`futures::channel::mpsc::channel`].
+	/// because it is passed to [`futures_channel::mpsc::channel`].
 	pub fn max_notifs_per_subscription(mut self, max: usize) -> Self {
 		self.max_notifs_per_subscription = max;
 		self

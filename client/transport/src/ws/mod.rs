@@ -85,25 +85,25 @@ impl<'a> Default for WsTransportClientBuilder<'a> {
 }
 
 impl<'a> WsTransportClientBuilder<'a> {
-	/// Set whether to use system certificates
+	/// Set whether to use system certificates (default is native).
 	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
 		self.certificate_store = certificate_store;
 		self
 	}
 
-	/// Set max request body size.
+	/// Set max request body size (default is 10 MB).
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
 		self
 	}
 
-	/// Set connection timeout for the handshake.
+	/// Set connection timeout for the handshake (default is 10 seconds).
 	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
 		self.connection_timeout = timeout;
 		self
 	}
 
-	/// Set a custom header passed to the server during the handshake.
+	/// Set a custom header passed to the server during the handshake (default is none).
 	///
 	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
 	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
@@ -112,6 +112,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 	}
 
 	/// Set the max number of redirections to perform until a connection is regarded as failed.
+	/// (default is 5).
 	pub fn max_redirections(mut self, redirect: usize) -> Self {
 		self.max_redirections = redirect;
 		self
