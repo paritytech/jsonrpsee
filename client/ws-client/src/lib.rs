@@ -147,7 +147,7 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// Set the max number of redirections to perform until a connection is regarded as failed.
+	/// Set the max number of redirects to follow during the WS handshake until a connection is considered failed.
 	pub fn max_redirections(mut self, redirect: usize) -> Self {
 		self.max_redirections = redirect;
 		self
