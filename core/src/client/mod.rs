@@ -47,9 +47,16 @@ pub mod __reexports {
 	pub use jsonrpsee_types::ParamsSer;
 }
 
+/// Async client abstraction that brings additional deps.
+#[cfg(feature = "async-client")]
+mod async_client;
+
+#[cfg(feature = "async-client")]
+pub use async_client::{Client, ClientBuilder};
+
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
 #[async_trait]
-pub trait Client {
+pub trait ClientT {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error>;
 
@@ -71,7 +78,7 @@ pub trait Client {
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests, notifications and subscriptions.
 #[async_trait]
-pub trait SubscriptionClient: Client {
+pub trait SubscriptionClientT: ClientT {
 	/// Initiate a subscription by performing a JSON-RPC method call where the server responds with
 	/// a `Subscription ID` that is used to fetch messages on that subscription,
 	///
@@ -100,6 +107,32 @@ pub trait SubscriptionClient: Client {
 	async fn subscribe_to_method<'a, Notif>(&self, method: &'a str) -> Result<Subscription<Notif>, Error>
 	where
 		Notif: DeserializeOwned;
+}
+
+/// Transport interface to send data asynchronous.
+#[async_trait]
+/// Transport interface for an asyncronous client.
+pub trait TransportSenderT: Send + 'static {
+	/// Error.
+	type Error: std::error::Error + Send + Sync;
+
+	/// Send.
+	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
+
+	/// If the transport supports sending customized close messages.
+	async fn close(&mut self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+/// Transport interface to receive data asynchronous.
+#[async_trait]
+pub trait TransportReceiverT: Send + 'static {
+	/// Error that occur during send or receiving a message.
+	type Error: std::error::Error + Send + Sync;
+
+	/// Receive.
+	async fn receive(&mut self) -> Result<String, Self::Error>;
 }
 
 #[macro_export]
@@ -356,6 +389,16 @@ impl<T> RequestIdGuard<T> {
 	}
 }
 
+/// What certificate store to use
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum CertificateStore {
+	/// Use the native system certificate store
+	Native,
+	/// Use WebPKI's certificate store
+	WebPki,
+}
+
 #[cfg(test)]
 mod tests {
 	use super::RequestIdManager;
@@ -373,14 +416,4 @@ mod tests {
 
 		assert!(manager.next_request_id().is_ok());
 	}
-}
-
-/// What certificate store to use
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[non_exhaustive]
-pub enum CertificateStore {
-	/// Use the native system certificate store
-	Native,
-	/// Use WebPKI's certificate store
-	WebPki,
 }

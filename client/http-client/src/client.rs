@@ -28,10 +28,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::HttpTransportClient;
-use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response, TEN_MB_SIZE_BYTES};
+use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response};
 use async_trait::async_trait;
-use jsonrpsee_core::client::{CertificateStore, Client, RequestIdManager, Subscription, SubscriptionClient};
-use jsonrpsee_core::Error;
+use jsonrpsee_core::client::{CertificateStore, ClientT, RequestIdManager, Subscription, SubscriptionClientT};
+use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
@@ -104,7 +104,7 @@ pub struct HttpClient {
 }
 
 #[async_trait]
-impl Client for HttpClient {
+impl ClientT for HttpClient {
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
 		let notif = NotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?);
@@ -196,7 +196,7 @@ impl Client for HttpClient {
 }
 
 #[async_trait]
-impl SubscriptionClient for HttpClient {
+impl SubscriptionClientT for HttpClient {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
 	async fn subscribe<'a, N>(
 		&self,

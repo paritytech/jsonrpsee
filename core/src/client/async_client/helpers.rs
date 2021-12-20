@@ -27,19 +27,20 @@
 use std::convert::TryInto;
 use std::time::Duration;
 
-use crate::manager::{RequestManager, RequestStatus};
-use crate::transport::Sender as WsSender;
-use crate::types::{
+use crate::client::async_client::manager::{RequestManager, RequestStatus};
+use crate::client::{RequestMessage, TransportSenderT};
+use crate::Error;
+
+use futures_channel::{mpsc, oneshot};
+use jsonrpsee_types::{
 	ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
 };
-use futures::channel::{mpsc, oneshot};
-use jsonrpsee_core::{client::RequestMessage, Error};
 use serde_json::Value as JsonValue;
 
 /// Attempts to process a batch response.
 ///
 /// On success the result is sent to the frontend.
-pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<JsonValue>>) -> Result<(), Error> {
+pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<JsonValue>>) -> Result<(), Error> {
 	let mut digest = Vec::with_capacity(rps.len());
 	let mut ordered_responses = vec![JsonValue::Null; rps.len()];
 	let mut rps_unordered: Vec<_> = Vec::with_capacity(rps.len());
@@ -73,7 +74,7 @@ pub fn process_batch_response(manager: &mut RequestManager, rps: Vec<Response<Js
 /// Returns `Ok()` if the response was successfully sent to the frontend.
 /// Return `Err(None)` if the subscription was not found.
 /// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
-pub fn process_subscription_response(
+pub(crate) fn process_subscription_response(
 	manager: &mut RequestManager,
 	response: SubscriptionResponse<JsonValue>,
 ) -> Result<(), Option<RequestMessage>> {
@@ -104,7 +105,7 @@ pub fn process_subscription_response(
 ///
 /// Returns Ok() if the response was successfully handled
 /// Returns Err() if there was no handler for the method
-pub fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) -> Result<(), Error> {
+pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notification<JsonValue>) -> Result<(), Error> {
 	match manager.as_notification_handler_mut(notif.method.to_string()) {
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
@@ -126,7 +127,7 @@ pub fn process_notification(manager: &mut RequestManager, notif: Notification<Js
 /// Returns `Ok(None)` if the response was successfully sent.
 /// Returns `Ok(Some(_))` if the response got an error but could be handled.
 /// Returns `Err(_)` if the response couldn't be handled.
-pub fn process_single_response(
+pub(crate) fn process_single_response(
 	manager: &mut RequestManager,
 	response: Response<JsonValue>,
 	max_capacity_per_subscription: usize,
@@ -177,7 +178,11 @@ pub fn process_single_response(
 /// that the client is not interested in the subscription anymore.
 //
 // NOTE: we don't count this a concurrent request as it's part of a subscription.
-pub async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManager, unsub: RequestMessage) {
+pub(crate) async fn stop_subscription(
+	sender: &mut impl TransportSenderT,
+	manager: &mut RequestManager,
+	unsub: RequestMessage,
+) {
 	if let Err(e) = sender.send(unsub.raw).await {
 		tracing::error!("Send unsubscribe request failed: {:?}", e);
 		let _ = manager.complete_pending_call(unsub.id);
@@ -185,7 +190,7 @@ pub async fn stop_subscription(sender: &mut WsSender, manager: &mut RequestManag
 }
 
 /// Builds an unsubscription message.
-pub fn build_unsubscribe_message(
+pub(crate) fn build_unsubscribe_message(
 	manager: &mut RequestManager,
 	sub_req_id: u64,
 	sub_id: SubscriptionId<'static>,
@@ -202,7 +207,7 @@ pub fn build_unsubscribe_message(
 ///
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
-pub fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) -> Result<(), Error> {
+pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) -> Result<(), Error> {
 	let id = err.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
@@ -220,7 +225,7 @@ pub fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) 
 }
 
 /// Wait for a stream to complete within the given timeout.
-pub async fn call_with_timeout<T>(
+pub(crate) async fn call_with_timeout<T>(
 	timeout: Duration,
 	rx: oneshot::Receiver<Result<T, Error>>,
 ) -> Result<Result<T, Error>, oneshot::Canceled> {

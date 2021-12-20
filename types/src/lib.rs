@@ -31,9 +31,6 @@
 
 extern crate alloc;
 
-/// Ten megabytes.
-pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
-
 /// JSON-RPC params related types.
 pub mod params;
 

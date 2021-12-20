@@ -31,7 +31,7 @@ use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::error::ErrorCode;
-use crate::types::{Id, Request, TEN_MB_SIZE_BYTES};
+use crate::types::{Id, Request};
 use futures_channel::mpsc;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
@@ -40,7 +40,7 @@ use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnectionId, MethodResult, Methods};
-use jsonrpsee_core::Error;
+use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;

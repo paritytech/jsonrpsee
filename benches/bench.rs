@@ -3,7 +3,7 @@ use std::sync::Arc;
 use criterion::*;
 use futures_util::future::join_all;
 use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
-use jsonrpsee::core::client::{Client, SubscriptionClient};
+use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::types::{Id, ParamsSer, RequestSer};
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -132,7 +132,13 @@ impl RequestBencher for AsyncBencher {
 	const REQUEST_TYPE: RequestType = RequestType::Async;
 }
 
-fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Client>, name: &str, request: RequestType) {
+fn run_round_trip(
+	rt: &TokioRuntime,
+	crit: &mut Criterion,
+	client: Arc<impl ClientT>,
+	name: &str,
+	request: RequestType,
+) {
 	crit.bench_function(&request.group_name(name), |b| {
 		b.to_async(rt).iter(|| async {
 			black_box(client.request::<String>(request.method_name(), None).await.unwrap());
@@ -140,7 +146,7 @@ fn run_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Clie
 	});
 }
 
-fn run_sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl SubscriptionClient>, name: &str) {
+fn run_sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl SubscriptionClientT>, name: &str) {
 	let mut group = crit.benchmark_group(name);
 	group.bench_function("subscribe", |b| {
 		b.to_async(rt).iter_with_large_drop(|| async {
@@ -188,7 +194,7 @@ fn run_sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl 
 fn run_round_trip_with_batch(
 	rt: &TokioRuntime,
 	crit: &mut Criterion,
-	client: Arc<impl Client>,
+	client: Arc<impl ClientT>,
 	name: &str,
 	request: RequestType,
 ) {
@@ -203,7 +209,7 @@ fn run_round_trip_with_batch(
 	group.finish();
 }
 
-fn run_concurrent_round_trip<C: 'static + Client + Send + Sync>(
+fn run_concurrent_round_trip<C: 'static + ClientT + Send + Sync>(
 	rt: &TokioRuntime,
 	crit: &mut Criterion,
 	client: Arc<C>,

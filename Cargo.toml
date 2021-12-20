@@ -2,15 +2,16 @@
 members = [
 	"examples",
 	"benches",
-	"http-client",
 	"http-server",
 	"test-utils",
 	"jsonrpsee",
 	"tests",
 	"types",
 	"core",
-	"ws-client",
 	"ws-server",
+	"client/ws-client",
+	"client/http-client",
+	"client/transport",
 	"proc-macros",
 ]
 resolver = "2"

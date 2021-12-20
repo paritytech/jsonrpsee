@@ -41,9 +41,9 @@ impl RpcDescription {
 		let (impl_generics, type_generics, _) = self.trait_def.generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {
-			quote! { #jsonrpsee::core::client::Client }
+			quote! { #jsonrpsee::core::client::ClientT }
 		} else {
-			quote! { #jsonrpsee::core::client::SubscriptionClient }
+			quote! { #jsonrpsee::core::client::SubscriptionClientT }
 		};
 
 		let method_impls =

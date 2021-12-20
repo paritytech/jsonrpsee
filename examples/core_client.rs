@@ -26,13 +26,9 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::Error;
-use jsonrpsee::rpc_params;
-use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
+use jsonrpsee::core::client::{Client, ClientT};
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
-
-const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -42,18 +38,11 @@ async fn main() -> anyhow::Result<()> {
 		.expect("setting default subscriber failed");
 
 	let addr = run_server().await?;
-	let url = format!("ws://{}", addr);
+	let uri: Uri = format!("ws://{}", addr).parse()?;
 
-	let client = WsClientBuilder::default().build(&url).await?;
-	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
-
-	let mut i = 0;
-	while i <= NUM_SUBSCRIPTION_RESPONSES {
-		let r = subscribe_hello.next().await;
-		tracing::info!("received {:?}", r);
-		i += 1;
-	}
+	let client: Client = WsTransportClientBuilder::default().build(uri).await?.into();
+	let response: String = client.request("say_hello", None).await?;
+	tracing::info!("response: {:?}", response);
 
 	Ok(())
 }
@@ -61,15 +50,7 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, mut sink, _| {
-		std::thread::spawn(move || loop {
-			if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello my friend") {
-				return;
-			}
-			std::thread::sleep(std::time::Duration::from_secs(1));
-		});
-		Ok(())
-	})?;
+	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
 	server.start(module)?;
 	Ok(addr)

@@ -24,20 +24,25 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+mod stream;
+
 use std::convert::{TryFrom, TryInto};
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-use crate::stream::EitherStream;
-use beef::Cow;
 use futures::io::{BufReader, BufWriter};
-use http::Uri;
-use jsonrpsee_core::client::CertificateStore;
+use jsonrpsee_core::client::{CertificateStore, TransportReceiverT, TransportSenderT};
+use jsonrpsee_core::TEN_MB_SIZE_BYTES;
+use jsonrpsee_core::{async_trait, Cow};
 use soketto::connection;
-use soketto::handshake::client::{Client as WsHandshakeClient, Header, ServerResponse};
+use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
+use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
+
+pub use http::{uri::InvalidUri, Uri};
+pub use soketto::handshake::client::Header;
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]
@@ -56,10 +61,8 @@ pub struct Receiver {
 pub struct WsTransportClientBuilder<'a> {
 	/// What certificate store to use
 	pub certificate_store: CertificateStore,
-	/// Remote WebSocket target.
-	pub target: Target,
 	/// Timeout for the connection.
-	pub timeout: Duration,
+	pub connection_timeout: Duration,
 	/// Custom headers to pass during the HTTP handshake. If `None`, no
 	/// custom header is passed.
 	pub headers: Vec<Header<'a>>,
@@ -67,6 +70,53 @@ pub struct WsTransportClientBuilder<'a> {
 	pub max_request_body_size: u32,
 	/// Max number of redirections.
 	pub max_redirections: usize,
+}
+
+impl<'a> Default for WsTransportClientBuilder<'a> {
+	fn default() -> Self {
+		Self {
+			certificate_store: CertificateStore::Native,
+			max_request_body_size: TEN_MB_SIZE_BYTES,
+			connection_timeout: Duration::from_secs(10),
+			headers: Vec::new(),
+			max_redirections: 5,
+		}
+	}
+}
+
+impl<'a> WsTransportClientBuilder<'a> {
+	/// Set whether to use system certificates (default is native).
+	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
+		self.certificate_store = certificate_store;
+		self
+	}
+
+	/// Set max request body size (default is 10 MB).
+	pub fn max_request_body_size(mut self, size: u32) -> Self {
+		self.max_request_body_size = size;
+		self
+	}
+
+	/// Set connection timeout for the handshake (default is 10 seconds).
+	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
+		self.connection_timeout = timeout;
+		self
+	}
+
+	/// Set a custom header passed to the server during the handshake (default is none).
+	///
+	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
+	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
+		self.headers.push(Header { name, value: value.as_bytes() });
+		self
+	}
+
+	/// Set the max number of redirections to perform until a connection is regarded as failed.
+	/// (default is 5).
+	pub fn max_redirections(mut self, redirect: usize) -> Self {
+		self.max_redirections = redirect;
+		self
+	}
 }
 
 /// Stream mode, either plain TCP or TLS.
@@ -131,16 +181,15 @@ pub enum WsError {
 	/// Error in the WebSocket connection.
 	#[error("WebSocket connection error: {}", 0)]
 	Connection(#[source] soketto::connection::Error),
-
-	/// Failed to parse the message in JSON.
-	#[error("Failed to parse message in JSON: {}", 0)]
-	ParseError(#[source] serde_json::error::Error),
 }
 
-impl Sender {
+#[async_trait]
+impl TransportSenderT for Sender {
+	type Error = WsError;
+
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	pub async fn send(&mut self, body: String) -> Result<(), WsError> {
+	async fn send(&mut self, body: String) -> Result<(), WsError> {
 		tracing::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
@@ -148,33 +197,37 @@ impl Sender {
 	}
 
 	/// Send a close message and close the connection.
-	pub async fn close(&mut self) -> Result<(), WsError> {
+	async fn close(&mut self) -> Result<(), WsError> {
 		self.inner.close().await.map_err(Into::into)
 	}
 }
 
-impl Receiver {
+#[async_trait]
+impl TransportReceiverT for Receiver {
+	type Error = WsError;
+
 	/// Returns a `Future` resolving when the server sent us something back.
-	pub async fn next_response(&mut self) -> Result<Vec<u8>, WsError> {
+	async fn receive(&mut self) -> Result<String, WsError> {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
-		Ok(message)
+		let s = String::from_utf8(message).expect("Found invalid UTF-8");
+		Ok(s)
 	}
 }
 
 impl<'a> WsTransportClientBuilder<'a> {
 	/// Try to establish the connection.
-	pub async fn build(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		self.try_connect().await
+	pub async fn build(self, uri: Uri) -> Result<(Sender, Receiver), WsHandshakeError> {
+		let target: Target = uri.try_into()?;
+		self.try_connect(target).await
 	}
 
-	async fn try_connect(self) -> Result<(Sender, Receiver), WsHandshakeError> {
-		let mut target = self.target;
+	async fn try_connect(self, mut target: Target) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let mut err = None;
 
 		// Only build TLS connector if `wss` in URL.
 		#[cfg(feature = "tls")]
-		let mut connector = match target.mode {
+		let mut connector = match target._mode {
 			Mode::Tls => Some(build_tls_config(&self.certificate_store)?),
 			Mode::Plain => None,
 		};
@@ -186,7 +239,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 			let sockaddrs = std::mem::take(&mut target.sockaddrs);
 			for sockaddr in &sockaddrs {
 				#[cfg(feature = "tls")]
-				let tcp_stream = match connect(*sockaddr, self.timeout, &target.host, connector.as_ref()).await {
+				let tcp_stream = match connect(*sockaddr, self.connection_timeout, &target.host, connector.as_ref()).await {
 					Ok(stream) => stream,
 					Err(e) => {
 						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
@@ -196,7 +249,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 				};
 
 				#[cfg(not(feature = "tls"))]
-				let tcp_stream = match connect(*sockaddr, self.timeout).await {
+				let tcp_stream = match connect(*sockaddr, self.connection_timeout).await {
 					Ok(stream) => stream,
 					Err(e) => {
 						tracing::debug!("Failed to connect to sockaddr: {:?}", sockaddr);
@@ -238,7 +291,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 
 									// Only build TLS connector if `wss` in redirection URL.
 									#[cfg(feature = "tls")]
-									match target.mode {
+									match target._mode {
 										Mode::Tls if connector.is_none() => {
 											connector = Some(build_tls_config(&self.certificate_store)?);
 										}
@@ -369,7 +422,7 @@ pub struct Target {
 	/// The Host request header specifies the host and port number of the server to which the request is being sent.
 	host_header: String,
 	/// WebSocket stream mode, see [`Mode`] for further documentation.
-	mode: Mode,
+	_mode: Mode,
 	/// The path and query parts from an URL.
 	path_and_query: String,
 }
@@ -378,7 +431,7 @@ impl TryFrom<Uri> for Target {
 	type Error = WsHandshakeError;
 
 	fn try_from(uri: Uri) -> Result<Self, Self::Error> {
-		let mode = match uri.scheme_str() {
+		let _mode = match uri.scheme_str() {
 			Some("ws") => Mode::Plain,
 			#[cfg(feature = "tls")]
 			Some("wss") => Mode::Tls,
@@ -398,7 +451,13 @@ impl TryFrom<Uri> for Target {
 		let parts = uri.into_parts();
 		let path_and_query = parts.path_and_query.ok_or_else(|| WsHandshakeError::Url("No path in URL".into()))?;
 		let sockaddrs = host_header.to_socket_addrs().map_err(WsHandshakeError::ResolutionFailed)?;
-		Ok(Self { sockaddrs: sockaddrs.collect(), host, host_header, mode, path_and_query: path_and_query.to_string() })
+		Ok(Self {
+			sockaddrs: sockaddrs.collect(),
+			host,
+			host_header,
+			_mode,
+			path_and_query: path_and_query.to_string(),
+		})
 	}
 }
 
@@ -451,7 +510,7 @@ mod tests {
 	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
 		assert_eq!(&target.host, host);
 		assert_eq!(&target.host_header, host_header);
-		assert_eq!(target.mode, mode);
+		assert_eq!(target._mode, mode);
 		assert_eq!(&target.path_and_query, path_and_query);
 	}
 
