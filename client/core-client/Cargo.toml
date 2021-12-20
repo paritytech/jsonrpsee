@@ -7,7 +7,7 @@ edition = "2018"
 license = "MIT"
 repository = "https://github.com/paritytech/jsonrpsee"
 homepage = "https://github.com/paritytech/jsonrpsee"
-documentation = "https://docs.rs/jsonrpsee-ws-client"
+documentation = "https://docs.rs/jsonrpsee-core-client"
 
 [dependencies]
 jsonrpsee-types = { path = "../../types", version = "0.6.1" }
