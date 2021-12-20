@@ -26,12 +26,14 @@
 
 //! Convenience wrapper for a stream (AsyncRead + AsyncWrite) which can either be plain TCP or TLS.
 
-use futures::{
-	io::{IoSlice, IoSliceMut},
-	prelude::*,
-};
+use std::io::Error as IoError;
+use std::pin::Pin;
+use std::task::Context;
+use std::task::Poll;
+
+use futures::io::{IoSlice, IoSliceMut};
+use futures::prelude::*;
 use pin_project::pin_project;
-use std::{io::Error as IoError, pin::Pin, task::Context, task::Poll};
 use tokio::net::TcpStream;
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 

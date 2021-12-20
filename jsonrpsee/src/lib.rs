@@ -61,7 +61,7 @@ pub use jsonrpsee_client_transport as client_transport;
 
 /// JSON-RPC client convenience macro to build params.
 #[cfg(any(feature = "http-client", feature = "ws-client"))]
-pub use jsonrpsee_utils::rpc_params;
+pub use jsonrpsee_core::rpc_params;
 
 /// JSON-RPC HTTP server.
 #[cfg(feature = "jsonrpsee-http-server")]
@@ -81,10 +81,10 @@ pub use jsonrpsee_types as types;
 
 /// Set of RPC methods that can be mounted to the server.
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
-pub use jsonrpsee_utils::server::rpc_module::{RpcModule, SubscriptionSink};
+pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
 
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
-pub use jsonrpsee_utils as utils;
+pub use jsonrpsee_core as core;
 
 #[cfg(feature = "http-server")]
 pub use http_server::tracing;

@@ -24,13 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	rpc_params,
-	types::{traits::SubscriptionClient, Error, Subscription},
-	ws_client::WsClientBuilder,
-	ws_server::{RpcModule, WsServerBuilder},
-};
 use std::net::SocketAddr;
+
+use jsonrpsee::core::client::{Subscription, SubscriptionClient};
+use jsonrpsee::core::Error;
+use jsonrpsee::rpc_params;
+use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 

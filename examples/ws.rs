@@ -24,12 +24,11 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use jsonrpsee::{
-	types::traits::Client,
-	ws_client::WsClientBuilder,
-	ws_server::{RpcModule, WsServerBuilder},
-};
 use std::net::SocketAddr;
+
+use jsonrpsee::core::client::Client;
+use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -24,16 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::manager::{RequestManager, RequestStatus};
-use futures_channel::{mpsc, oneshot};
-use jsonrpsee_types::traits::TransportSender;
-use jsonrpsee_types::v2::{
-	Id, Notification, ParamsSer, RequestSer, Response, RpcError, SubscriptionId, SubscriptionResponse,
-};
-use jsonrpsee_types::{Error, RequestMessage};
-use serde_json::Value as JsonValue;
 use std::convert::TryInto;
 use std::time::Duration;
+
+use crate::manager::{RequestManager, RequestStatus};
+use crate::types::{
+	ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
+};
+use futures_channel::{mpsc, oneshot};
+use jsonrpsee_core::client::{RequestMessage, TransportSender};
+use jsonrpsee_core::Error;
+use serde_json::Value as JsonValue;
 
 /// Attempts to process a batch response.
 ///
@@ -205,7 +206,7 @@ pub(crate) fn build_unsubscribe_message(
 ///
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
-pub(crate) fn process_error_response(manager: &mut RequestManager, err: RpcError) -> Result<(), Error> {
+pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) -> Result<(), Error> {
 	let id = err.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {

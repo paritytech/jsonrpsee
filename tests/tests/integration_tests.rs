@@ -27,21 +27,18 @@
 #![cfg(test)]
 #![allow(clippy::blacklisted_name)]
 
-mod helpers;
-
-use helpers::{http_server, websocket_server, websocket_server_with_subscription};
-use jsonrpsee::{
-	http_client::HttpClientBuilder,
-	rpc_params,
-	types::{
-		error::SubscriptionClosedReason,
-		traits::{Client, SubscriptionClient},
-		Error, JsonValue, Subscription,
-	},
-	ws_client::WsClientBuilder,
-};
 use std::sync::Arc;
 use std::time::Duration;
+
+use helpers::{http_server, websocket_server, websocket_server_with_subscription};
+use jsonrpsee::core::client::{Client, Subscription, SubscriptionClient};
+use jsonrpsee::core::error::SubscriptionClosedReason;
+use jsonrpsee::core::{Error, JsonValue};
+use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::rpc_params;
+use jsonrpsee::ws_client::WsClientBuilder;
+
+mod helpers;
 
 #[tokio::test]
 async fn ws_subscription_works() {

@@ -26,24 +26,23 @@
 
 mod stream;
 
-pub use http::{uri::InvalidUri, Uri};
-pub use soketto::handshake::client::Header;
+use std::convert::{TryFrom, TryInto};
+use std::io;
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::time::Duration;
 
+use jsonrpsee_types::TEN_MB_SIZE_BYTES;
+use stream::EitherStream;
 use futures::io::{BufReader, BufWriter};
-use jsonrpsee_types::traits::{TransportReceiver, TransportSender};
-use jsonrpsee_types::{async_trait, CertificateStore, Cow, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::client::{CertificateStore, TransportSender, TransportReceiver};
+use jsonrpsee_core::{Cow, async_trait};
 use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use std::convert::TryInto;
-use std::{
-	convert::TryFrom,
-	io,
-	net::{SocketAddr, ToSocketAddrs},
-	time::Duration,
-};
-use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
+
+pub use http::{uri::InvalidUri, Uri};
+pub use soketto::handshake::client::Header;
 
 /// Sending end of WebSocket transport.
 #[derive(Debug)]

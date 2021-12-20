@@ -5,22 +5,21 @@ use std::time::Duration;
 
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::Either, SinkExt, StreamExt};
-use jsonrpsee_types::traits::{
-	Client as ClientT, SubscriptionClient as SubscriptionClientT, TransportReceiver, TransportSender,
+use jsonrpsee_core::{async_trait, Error, DeserializeOwned};
+use jsonrpsee_core::client::{
+	BatchMessage, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionKind,
+	SubscriptionMessage, RequestIdManager, Client as ClientT, SubscriptionClient as SubscriptionClientT, TransportReceiver, TransportSender,
+	FrontToBack
 };
-use jsonrpsee_types::v2::{Id, Notification, NotificationSer, RequestSer, Response, RpcError, SubscriptionResponse};
-use jsonrpsee_types::{async_trait, v2::ParamsSer, Error, FrontToBack, RequestIdManager};
-use jsonrpsee_types::{
-	BatchMessage, DeserializeOwned, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionKind,
-	SubscriptionMessage,
-};
+use jsonrpsee_types::{Id, Notification, NotificationSer, RequestSer, Response, SubscriptionResponse, ParamsSer, ErrorResponse};
 use manager::RequestManager;
 use tokio::sync::Mutex;
-
 use crate::helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
 };
+
+pub use jsonrpsee_types as types;
 
 /// Wrapper over a [`oneshot::Receiver`](futures::channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -87,7 +86,7 @@ impl ClientBuilder {
 	/// will be dropped.
 	///
 	/// You can also prevent the subscription being dropped by calling
-	/// [`Subscription::next()`](crate::types::Subscription) frequently enough such that the buffer capacity doesn't
+	/// [`Subscription::next()`](../../jsonrpsee_core/client/struct.Subscription.html#method.next) frequently enough such that the buffer capacity doesn't
 	/// exceeds.
 	///
 	/// **Note**: The actual capacity is `num_senders + max_subscription_capacity`
@@ -485,7 +484,7 @@ async fn background_task<S: TransportSender, R: TransportReceiver>(
 					}
 				}
 				// Error response
-				else if let Ok(err) = serde_json::from_str::<RpcError>(&raw) {
+				else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
 					tracing::debug!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);

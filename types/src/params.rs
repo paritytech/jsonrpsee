@@ -27,6 +27,9 @@
 //! Types to handle JSON-RPC request parameters according to the [spec](https://www.jsonrpc.org/specification#parameter_structures).
 //! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
 
+use std::convert::TryFrom;
+use std::fmt;
+
 use crate::error::CallError;
 use alloc::collections::BTreeMap;
 use anyhow::anyhow;
@@ -35,7 +38,6 @@ use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use std::{convert::TryFrom, fmt};
 
 /// JSON-RPC v2 marker type.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -199,7 +201,7 @@ impl<'a> ParamsSequence<'a> {
 	/// Parse the next parameter to type `T`
 	///
 	/// ```
-	/// # use jsonrpsee_types::v2::params::Params;
+	/// # use jsonrpsee_types::params::Params;
 	/// let params = Params::new(Some(r#"[true, 10, "foo"]"#));
 	/// let mut seq = params.sequence();
 	///
@@ -227,7 +229,7 @@ impl<'a> ParamsSequence<'a> {
 	/// The result will be `None` for `null`, and for missing values in the supplied JSON array.
 	///
 	/// ```
-	/// # use jsonrpsee_types::v2::params::Params;
+	/// # use jsonrpsee_types::params::Params;
 	/// let params = Params::new(Some(r#"[1, 2, null]"#));
 	/// let mut seq = params.sequence();
 	///
@@ -390,7 +392,7 @@ impl<'a> Id<'a> {
 #[cfg(test)]
 mod test {
 	use super::{Cow, Id, JsonValue, Params, ParamsSer, SubscriptionId, TwoPointZero};
-	use crate::v2::response::SubscriptionPayload;
+	use crate::response::SubscriptionPayload;
 
 	#[test]
 	fn id_deserialization() {

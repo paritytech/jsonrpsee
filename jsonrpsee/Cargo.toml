@@ -19,15 +19,15 @@ jsonrpsee-client-transport = { path = "../client/transport", version = "0.6.1", 
 jsonrpsee-http-server = { path = "../http-server", version = "0.6.1", package = "jsonrpsee-http-server", optional = true }
 jsonrpsee-ws-server = { path = "../ws-server", version = "0.6.1", package = "jsonrpsee-ws-server", optional = true }
 jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.6.1", package = "jsonrpsee-proc-macros", optional = true }
-jsonrpsee-utils = { path = "../utils", version = "0.6.1", package = "jsonrpsee-utils", optional = true }
+jsonrpsee-core = { path = "../core", version = "0.6.0", package = "jsonrpsee-core", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.6.1", package = "jsonrpsee-types", optional = true }
 
 [features]
-http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-utils/client"]
-http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-utils"]
-core-client = ["jsonrpsee-core-client", "jsonrpsee-types"]
-ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-utils/client"]
-ws-server = ["jsonrpsee-ws-server", "jsonrpsee-types", "jsonrpsee-utils"]
+core-client = ["jsonrpsee-core-client"]
+http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-core"]
+http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-core"]
+ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-core/client"]
+ws-server = ["jsonrpsee-ws-server", "jsonrpsee-types", "jsonrpsee-core"]
 macros = ["jsonrpsee-proc-macros", "jsonrpsee-types"]
 
 client = ["http-client", "ws-client", "core-client", "jsonrpsee-client-transport/ws"]

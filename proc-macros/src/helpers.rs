@@ -24,11 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::collections::HashSet;
+
 use crate::visitor::{FindAllParams, FindSubscriptionParams};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use std::collections::HashSet;
 use syn::{parse_quote, punctuated::Punctuated, visit::Visit, Token};
 
 /// Search for client-side `jsonrpsee` in `Cargo.toml`.
@@ -70,7 +71,7 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 /// ### Example
 ///
 /// ```
-///  use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+///  use jsonrpsee::{proc_macros::rpc, core::RpcResult};
 ///
 ///  #[rpc(client, server)]
 ///  pub trait RpcTrait<A, B, C> {
@@ -103,17 +104,17 @@ pub(crate) fn generate_where_clause(
 
 			if is_client {
 				if visitor.input_params.contains(&ty.ident) {
-					bounds.push(parse_quote!(jsonrpsee::types::Serialize))
+					bounds.push(parse_quote!(jsonrpsee::core::Serialize))
 				}
 				if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
-					bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
+					bounds.push(parse_quote!(jsonrpsee::core::DeserializeOwned))
 				}
 			} else {
 				if visitor.input_params.contains(&ty.ident) {
-					bounds.push(parse_quote!(jsonrpsee::types::DeserializeOwned))
+					bounds.push(parse_quote!(jsonrpsee::core::DeserializeOwned))
 				}
 				if visitor.ret_params.contains(&ty.ident) || visitor.sub_params.contains(&ty.ident) {
-					bounds.push(parse_quote!(jsonrpsee::types::Serialize))
+					bounds.push(parse_quote!(jsonrpsee::core::Serialize))
 				}
 			}
 

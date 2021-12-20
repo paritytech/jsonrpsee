@@ -11,6 +11,7 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
 jsonrpsee-types = { path = "../../types", version = "0.6.1" }
+jsonrpsee-core = { path = "../../core", version = "0.6.1" }
 jsonrpsee-client-transport = { path = "../transport", version = "0.6.1", features = ["ws"] }
 futures-channel = { version = "0.3.14", default-features = false, features = ["std"] }
 futures-util = { version = "0.3.14", default-features = false }

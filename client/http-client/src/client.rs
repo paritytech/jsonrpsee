@@ -24,16 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use crate::transport::HttpTransportClient;
-use crate::types::{
-	traits::{Client, SubscriptionClient},
-	v2::{Id, NotificationSer, ParamsSer, RequestSer, Response, RpcError},
-	CertificateStore, Error, RequestIdManager, Subscription, TEN_MB_SIZE_BYTES,
-};
+use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response, TEN_MB_SIZE_BYTES};
 use async_trait::async_trait;
+use jsonrpsee_core::client::{CertificateStore, Client, RequestIdManager, Subscription, SubscriptionClient};
+use jsonrpsee_core::Error;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
-use std::{sync::Arc, time::Duration};
 
 /// Http Client Builder.
 #[derive(Debug)]
@@ -137,7 +137,7 @@ impl Client for HttpClient {
 		let response: Response<_> = match serde_json::from_slice(&body) {
 			Ok(response) => response,
 			Err(_) => {
-				let err: RpcError = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
 				return Err(Error::Request(err.to_string()));
 			}
 		};
@@ -176,7 +176,7 @@ impl Client for HttpClient {
 		};
 
 		let rps: Vec<Response<_>> =
-			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<RpcError>(&body) {
+			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
 				Ok(e) => Error::Request(e.to_string()),
 				Err(e) => Error::ParseError(e),
 			})?;

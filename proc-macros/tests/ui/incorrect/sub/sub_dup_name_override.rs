@@ -1,4 +1,4 @@
-use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+use jsonrpsee::{proc_macros::rpc, core::RpcResult};
 
 // Subscription method must not use the same override name.
 #[rpc(client, server)]

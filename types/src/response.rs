@@ -26,10 +26,8 @@
 
 //! Types pertaining to JSON-RPC responses.
 
-use crate::v2::{
-	params::{Id, SubscriptionId, TwoPointZero},
-	request::Notification,
-};
+use crate::params::{Id, SubscriptionId, TwoPointZero};
+use crate::request::Notification;
 use serde::{Deserialize, Serialize};
 
 /// JSON-RPC successful response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).

@@ -7,7 +7,7 @@ members = [
 	"jsonrpsee",
 	"tests",
 	"types",
-	"utils",
+	"core",
 	"ws-server",
 	"client/ws-client",
 	"client/http-client",

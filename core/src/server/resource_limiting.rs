@@ -52,7 +52,7 @@
 //! `#[method]` attribute:
 //!
 //! ```
-//! # use jsonrpsee::{types::RpcResult, proc_macros::rpc};
+//! # use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 //! #
 //! #[rpc(server)]
 //! pub trait Rpc {
@@ -67,7 +67,7 @@
 //! Alternatively, you can use the `resource` method when creating a module manually without the help of the macro:
 //!
 //! ```
-//! # use jsonrpsee::{RpcModule, types::RpcResult};
+//! # use jsonrpsee::{RpcModule, core::RpcResult};
 //! #
 //! # fn main() -> RpcResult<()> {
 //! #
@@ -91,8 +91,8 @@
 
 use std::sync::Arc;
 
+use crate::Error;
 use arrayvec::ArrayVec;
-use jsonrpsee_types::error::Error;
 use parking_lot::Mutex;
 
 // The number of kinds of resources that can be used for limiting.
