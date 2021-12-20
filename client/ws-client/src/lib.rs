@@ -32,7 +32,7 @@
 //!
 //! ## Runtime support
 //!
-//! This library uses `tokio` as the runtime and does not support other kinds of runtimes.
+//! This library uses `tokio` as the runtime and does not support other runtimes.
 
 #[cfg(test)]
 mod tests;
