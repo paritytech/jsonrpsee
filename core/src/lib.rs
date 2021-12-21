@@ -28,10 +28,6 @@
 
 #![warn(missing_docs, missing_debug_implementations, unreachable_pub)]
 
-use jsonrpsee_types::SubscriptionId;
-use rand::{distributions::Alphanumeric, Rng};
-use traits::IdProvider;
-
 /// Error type.
 pub mod error;
 
@@ -44,6 +40,9 @@ pub mod middleware;
 /// Shared hyper helpers.
 #[cfg(feature = "http-helpers")]
 pub mod http_helpers;
+
+/// Different ways of setting the "id" in JSON-RPC responses and results.
+pub mod id_providers;
 
 /// Shared code for JSON-RPC servers.
 #[cfg(feature = "server")]
@@ -77,44 +76,3 @@ pub use serde_json::{
 
 /// Ten megabytes.
 pub const TEN_MB_SIZE_BYTES: u32 = 10 * 1024 * 1024;
-
-/// Generates random integers as subscription ID.
-#[derive(Debug)]
-pub struct RandomIntegerIdProvider;
-
-impl IdProvider for RandomIntegerIdProvider {
-	fn next_id(&self) -> SubscriptionId<'static> {
-		const JS_NUM_MASK: u64 = !0 >> 11;
-		(rand::random::<u64>() & JS_NUM_MASK).into()
-	}
-}
-
-/// Generates random strings of length `len` as subscription ID.
-#[derive(Debug)]
-pub struct RandomStringIdProvider {
-	len: usize,
-}
-
-impl RandomStringIdProvider {
-	/// Create a new random string provider.
-	pub fn new(len: usize) -> Self {
-		Self { len }
-	}
-}
-
-impl IdProvider for RandomStringIdProvider {
-	fn next_id(&self) -> SubscriptionId<'static> {
-		let mut rng = rand::thread_rng();
-		(&mut rng).sample_iter(Alphanumeric).take(self.len).map(char::from).collect::<String>().into()
-	}
-}
-
-/// No-op implementation to be used for servers that doesn't support subscriptions.
-#[derive(Debug)]
-pub struct NoopIdProvider;
-
-impl IdProvider for NoopIdProvider {
-	fn next_id(&self) -> SubscriptionId<'static> {
-		0.into()
-	}
-}
