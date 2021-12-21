@@ -123,7 +123,7 @@ async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
 			std::thread::spawn(move || loop {
-				let _ = sink;
+				let _ = &sink;
 				std::thread::sleep(std::time::Duration::from_secs(30));
 			});
 			Ok(())
@@ -653,7 +653,7 @@ async fn custom_subscription_id_works() {
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
 			std::thread::spawn(move || loop {
-				let _ = sink;
+				let _ = &sink;
 				std::thread::sleep(std::time::Duration::from_secs(30));
 			});
 			Ok(())

@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::convert::TryInto;
 use std::time::Duration;
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};

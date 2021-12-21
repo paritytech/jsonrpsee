@@ -3,7 +3,7 @@ name = "jsonrpsee-integration-tests"
 version = "0.6.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Integration tests for jsonrpsee"
-edition = "2018"
+edition = "2021"
 license = "MIT"
 publish = false
 
