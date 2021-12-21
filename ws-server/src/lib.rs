@@ -40,6 +40,7 @@ mod tests;
 
 pub use future::{ServerHandle as WsServerHandle, ShutdownWaiter as WsShutdownWaiter};
 pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
+pub use jsonrpsee_core::{traits::IdProvider, RandomIntegerIdProvider, RandomStringIdProvider};
 pub use jsonrpsee_types as types;
 pub use server::{Builder as WsServerBuilder, Server as WsServer};
 pub use tracing;

@@ -41,8 +41,8 @@ use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnectionId, MethodResult, Methods};
-use jsonrpsee_core::traits::{IdProvider, RandomIntegerIdProvider};
-use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::traits::IdProvider;
+use jsonrpsee_core::{Error, RandomIntegerIdProvider, TEN_MB_SIZE_BYTES};
 use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
@@ -694,8 +694,7 @@ impl<M> Builder<M> {
 	/// # Examples
 	///
 	/// ```rust
-	/// use jsonrpsee_ws_server::WsServerBuilder;
-	/// use jsonrpsee_core::traits::{IdProvider, RandomStringIdProvider};
+	/// use jsonrpsee_ws_server::{WsServerBuilder, RandomStringIdProvider, IdProvider};
 	///
 	/// let builder = WsServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
 	/// ```
