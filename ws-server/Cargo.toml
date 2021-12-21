@@ -24,4 +24,5 @@ tokio-util = { version = "0.6", features = ["compat"] }
 anyhow = "1"
 jsonrpsee-test-utils = { path = "../test-utils" }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
+rand = "0.8"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

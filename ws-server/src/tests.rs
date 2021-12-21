@@ -30,11 +30,11 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use crate::types::error::CallError;
-use crate::types::{self, ErrorResponse, Response};
+use crate::types::{self, ErrorResponse, Response, SubscriptionId};
 use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::future::join;
-use jsonrpsee_core::{to_json_raw_value, DeserializeOwned, Error};
+use jsonrpsee_core::{to_json_raw_value, traits::IdProvider, DeserializeOwned, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -624,9 +624,47 @@ async fn unsubscribe_wrong_sub_id_type() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-	let unsub =
-		client.send_request_text(call("unsubscribe_hello", vec!["string_is_not_supported"], Id::Num(0))).await.unwrap();
+	let unsub = client.send_request_text(call("unsubscribe_hello", vec![13.99_f64], Id::Num(0))).await.unwrap();
 	let unsub_2_err: ErrorResponse = serde_json::from_str(&unsub).unwrap();
-	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be integer").unwrap());
+	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be Integer or String").unwrap());
 	assert_eq!(unsub_2_err, ErrorResponse::new(invalid_subscription_err(err.as_deref()), types::Id::Number(0)));
+}
+
+#[tokio::test]
+async fn custom_subscription_id_works() {
+	struct HardcodedSubscriptionId;
+
+	impl IdProvider for HardcodedSubscriptionId {
+		fn next_id(&self) -> SubscriptionId<'static> {
+			"0xdeadbeef".to_string().into()
+		}
+	}
+
+	init_logger();
+	let server = WsServerBuilder::default()
+		.set_id_provider(HardcodedSubscriptionId)
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	let addr = server.local_addr().unwrap();
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
+			std::thread::spawn(move || loop {
+				let _ = sink;
+				std::thread::sleep(std::time::Duration::from_secs(30));
+			});
+			Ok(())
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	let sub = client.send_request_text(call("subscribe_hello", Vec::<()>::new(), Id::Num(0))).await.unwrap();
+	assert_eq!(&sub, r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":0}"#);
+	let unsub = client.send_request_text(call("unsubscribe_hello", vec!["0xdeadbeef"], Id::Num(1))).await.unwrap();
+	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","result":"Unsubscribed","id":1}"#);
 }

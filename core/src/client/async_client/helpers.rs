@@ -149,7 +149,7 @@ pub(crate) fn process_single_response(
 
 			let sub_id: Result<SubscriptionId, _> = response.result.try_into();
 			let sub_id = match sub_id {
-				Ok(sub_id) => sub_id.into_owned(),
+				Ok(sub_id) => sub_id,
 				Err(_) => {
 					let _ = send_back_oneshot.send(Err(Error::InvalidSubscriptionId));
 					return Ok(None);

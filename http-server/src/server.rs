@@ -38,6 +38,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::Error as HyperError;
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::read_body;
+use jsonrpsee_core::id_providers::NoopIdProvider;
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
@@ -334,7 +335,7 @@ impl<M: Middleware> Server<M> {
 								middleware.on_call(req.method.as_ref());
 
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								match methods.execute_with_resources(&sink, req, 0, &resources) {
+								match methods.execute_with_resources(&sink, req, 0, &resources, &NoopIdProvider) {
 									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
 									}
@@ -359,8 +360,14 @@ impl<M: Middleware> Server<M> {
 							if !batch.is_empty() {
 								let middleware = &middleware;
 
-								join_all(batch.into_iter().filter_map(move |req| {
-									match methods.execute_with_resources(&sink, req, 0, &resources) {
+								join_all(batch.into_iter().filter_map(
+									move |req| match methods.execute_with_resources(
+										&sink,
+										req,
+										0,
+										&resources,
+										&NoopIdProvider,
+									) {
 										Ok((name, MethodResult::Sync(success))) => {
 											middleware.on_result(name, success, request_start);
 											None
@@ -373,8 +380,8 @@ impl<M: Middleware> Server<M> {
 											middleware.on_result(name.as_ref(), false, request_start);
 											None
 										}
-									}
-								}))
+									},
+								))
 								.await;
 							} else {
 								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an

@@ -167,7 +167,7 @@ pub enum SubscriptionKind {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum NotifResponse<Notif> {
-	/// Successful response
+	/// Successful response.
 	Ok(Notif),
 	/// Subscription was closed.
 	Err(SubscriptionClosed),

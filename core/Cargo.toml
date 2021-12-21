@@ -40,9 +40,9 @@ client = ["futures-util"]
 async-client = [
 	"client",
 	"rustc-hash",
-	"tokio/sync", 
-	"tokio/macros", 
-	"tokio/time", 
+	"tokio/sync",
+	"tokio/macros",
+	"tokio/time",
 	"tracing"
 ]
 

@@ -24,23 +24,49 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 
-//! # jsonrpsee-ws-server
-//!
-//! `jsonrpsee-ws-server` is a [JSON RPC](https://www.jsonrpc.org/specification) WebSocket server library that's is built for `async/await`.
+use crate::traits::IdProvider;
+use jsonrpsee_types::SubscriptionId;
 
-extern crate alloc;
+/// Generates random integers as subscription ID.
+#[derive(Debug)]
+pub struct RandomIntegerIdProvider;
 
-mod future;
-mod server;
+impl IdProvider for RandomIntegerIdProvider {
+	fn next_id(&self) -> SubscriptionId<'static> {
+		const JS_NUM_MASK: u64 = !0 >> 11;
+		(rand::random::<u64>() & JS_NUM_MASK).into()
+	}
+}
 
-#[cfg(test)]
-mod tests;
+/// Generates random strings of length `len` as subscription ID.
+#[derive(Debug)]
+pub struct RandomStringIdProvider {
+	len: usize,
+}
 
-pub use future::{ServerHandle as WsServerHandle, ShutdownWaiter as WsShutdownWaiter};
-pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
-pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
-pub use jsonrpsee_types as types;
-pub use server::{Builder as WsServerBuilder, Server as WsServer};
-pub use tracing;
+impl RandomStringIdProvider {
+	/// Create a new random string provider.
+	pub fn new(len: usize) -> Self {
+		Self { len }
+	}
+}
+
+impl IdProvider for RandomStringIdProvider {
+	fn next_id(&self) -> SubscriptionId<'static> {
+		let mut rng = rand::thread_rng();
+		(&mut rng).sample_iter(Alphanumeric).take(self.len).map(char::from).collect::<String>().into()
+	}
+}
+
+/// No-op implementation to be used for servers that don't support subscriptions.
+#[derive(Debug)]
+pub struct NoopIdProvider;
+
+impl IdProvider for NoopIdProvider {
+	fn next_id(&self) -> SubscriptionId<'static> {
+		0.into()
+	}
+}
