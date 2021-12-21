@@ -31,10 +31,11 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use crate::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
+use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::to_json_raw_value;
-use crate::traits::{IdProvider, RandomIntegerIdProvider, ToRpcParams};
+use crate::traits::{IdProvider, ToRpcParams};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};

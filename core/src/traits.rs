@@ -24,8 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use rand::distributions::Alphanumeric;
-use rand::Rng;
 use serde::Serialize;
 use serde_json::value::RawValue;
 
@@ -77,45 +75,4 @@ tuple_impls! {
 pub trait IdProvider: Send + Sync {
 	/// Returns the next ID for the subscription.
 	fn next_id(&self) -> SubscriptionId<'static>;
-}
-
-/// Generates random integers as subscription ID.
-#[derive(Debug)]
-pub struct RandomIntegerIdProvider;
-
-impl IdProvider for RandomIntegerIdProvider {
-	fn next_id(&self) -> SubscriptionId<'static> {
-		const JS_NUM_MASK: u64 = !0 >> 11;
-		(rand::random::<u64>() & JS_NUM_MASK).into()
-	}
-}
-
-/// Generates random strings of length `len` as subscription ID.
-#[derive(Debug)]
-pub struct RandomStringIdProvider {
-	len: usize,
-}
-
-impl RandomStringIdProvider {
-	/// Create a new random string provider.
-	pub fn new(len: usize) -> Self {
-		Self { len }
-	}
-}
-
-impl IdProvider for RandomStringIdProvider {
-	fn next_id(&self) -> SubscriptionId<'static> {
-		let mut rng = rand::thread_rng();
-		(&mut rng).sample_iter(Alphanumeric).take(self.len).map(char::from).collect::<String>().into()
-	}
-}
-
-/// No-op implementation to be used for servers that doesn't support subscriptions.
-#[derive(Debug)]
-pub struct NoopIdProvider;
-
-impl IdProvider for NoopIdProvider {
-	fn next_id(&self) -> SubscriptionId<'static> {
-		0.into()
-	}
 }

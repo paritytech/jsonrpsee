@@ -41,6 +41,9 @@ pub mod middleware;
 #[cfg(feature = "http-helpers")]
 pub mod http_helpers;
 
+/// Different ways of setting the "id" in JSON-RPC responses and results.
+pub mod id_providers;
+
 /// Shared code for JSON-RPC servers.
 #[cfg(feature = "server")]
 pub mod server;
