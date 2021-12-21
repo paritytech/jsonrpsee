@@ -30,7 +30,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use crate::types::error::CallError;
-use crate::types::{self, ErrorResponse, Response};
+use crate::types::{self, ErrorResponse, Response, SubscriptionId};
 use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::future::join;
@@ -625,9 +625,9 @@ async fn unsubscribe_wrong_sub_id_type() {
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
 	let unsub = client.send_request_text(call("unsubscribe_hello", vec![13.99_f64], Id::Num(0))).await.unwrap();
-	let unsub_2_err: RpcError = serde_json::from_str(&unsub).unwrap();
+	let unsub_2_err: ErrorResponse = serde_json::from_str(&unsub).unwrap();
 	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be Integer or String").unwrap());
-	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(0)));
+	assert_eq!(unsub_2_err, ErrorResponse::new(invalid_subscription_err(err.as_deref()), types::Id::Number(0)));
 }
 
 #[tokio::test]
