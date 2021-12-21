@@ -689,13 +689,13 @@ impl<M> Builder<M> {
 	/// Configure custom `subscription ID` provider for the server to use
 	/// to when getting new subscription calls.
 	///
-	/// Default: [`RandomIntegerIdProvider`](jsonrpsee_types::traits::RandomIntegerIdProvider).
+	/// Default: [`RandomIntegerIdProvider`](jsonrpsee_core::traits::RandomIntegerIdProvider).
 	///
 	/// # Examples
 	///
 	/// ```rust
 	/// use jsonrpsee_ws_server::WsServerBuilder;
-	/// use jsonrpsee_ws_server::types::traits::{IdProvider, RandomStringIdProvider};
+	/// use jsonrpsee_core::traits::{IdProvider, RandomStringIdProvider};
 	///
 	/// let builder = WsServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
 	/// ```
