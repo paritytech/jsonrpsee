@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::core::Error;
-use jsonrpsee::types::{EmptyParams, Params, SubscriptionId as RpcSubscriptionId};
+use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
 #[test]
