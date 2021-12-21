@@ -1,0 +1,192 @@
+Gnuplot not found, using plotters backend
+test jsonrpsee_types_v2_array_ref ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/jsonrpsee_types_v2_array_ref/base/sample.json": No such file or directory (os error 2)
+bench:         263 ns/iter (+/- 8)
+
+test jsonrpsee_types_v2_vec ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/jsonrpsee_types_v2_vec/base/sample.json": No such file or directory (os error 2)
+bench:         292 ns/iter (+/- 1)
+
+test sync/http_round_trip ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_round_trip/base/sample.json": No such file or directory (os error 2)
+bench:      158642 ns/iter (+/- 578)
+
+test sync/http_concurrent_round_trip/14 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_round_trip/14/base/sample.json": No such file or directory (os error 2)
+bench:      365614 ns/iter (+/- 8827)
+test sync/http_concurrent_round_trip/28 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_round_trip/28/base/sample.json": No such file or directory (os error 2)
+bench:      543564 ns/iter (+/- 19965)
+test sync/http_concurrent_round_trip/56 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_round_trip/56/base/sample.json": No such file or directory (os error 2)
+bench:      905167 ns/iter (+/- 20159)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 8.1s, enable flat sampling, or reduce sample count to 50.
+test sync/http_concurrent_round_trip/112 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_round_trip/112/base/sample.json": No such file or directory (os error 2)
+bench:     1570232 ns/iter (+/- 20227)
+test sync/http_concurrent_round_trip/224 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_round_trip/224/base/sample.json": No such file or directory (os error 2)
+bench:     2759706 ns/iter (+/- 39709)
+
+test sync/http_concurrent_connections/2 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_connections/2/base/sample.json": No such file or directory (os error 2)
+bench:      341839 ns/iter (+/- 20060)
+test sync/http_concurrent_connections/4 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_connections/4/base/sample.json": No such file or directory (os error 2)
+bench:      297809 ns/iter (+/- 22606)
+test sync/http_concurrent_connections/8 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_connections/8/base/sample.json": No such file or directory (os error 2)
+bench:      336785 ns/iter (+/- 586177)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.0s, enable flat sampling, or reduce sample count to 70.
+test sync/http_concurrent_connections/16 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_connections/16/base/sample.json": No such file or directory (os error 2)
+bench:      660931 ns/iter (+/- 1106725)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 9.1s, enable flat sampling, or reduce sample count to 50.
+test sync/http_concurrent_connections/32 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_connections/32/base/sample.json": No such file or directory (os error 2)
+bench:     1219411 ns/iter (+/- 1204398)
+test sync/http_concurrent_connections/64 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_concurrent_connections/64/base/sample.json": No such file or directory (os error 2)
+bench:     2316474 ns/iter (+/- 1956649)
+
+test sync/http_batch_requests/2 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_batch_requests/2/base/sample.json": No such file or directory (os error 2)
+bench:      184380 ns/iter (+/- 8920)
+test sync/http_batch_requests/5 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_batch_requests/5/base/sample.json": No such file or directory (os error 2)
+bench:      213273 ns/iter (+/- 2062)
+test sync/http_batch_requests/10 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_batch_requests/10/base/sample.json": No such file or directory (os error 2)
+bench:      287812 ns/iter (+/- 14524)
+test sync/http_batch_requests/50 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_batch_requests/50/base/sample.json": No such file or directory (os error 2)
+bench:      645197 ns/iter (+/- 24103)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.6s, enable flat sampling, or reduce sample count to 60.
+test sync/http_batch_requests/100 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_http_batch_requests/100/base/sample.json": No such file or directory (os error 2)
+bench:     1134965 ns/iter (+/- 31471)
+
+test sync/ws_round_trip ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_round_trip/base/sample.json": No such file or directory (os error 2)
+bench:       89190 ns/iter (+/- 10306)
+
+test sync/ws_concurrent_round_trip/14 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_round_trip/14/base/sample.json": No such file or directory (os error 2)
+bench:      416944 ns/iter (+/- 11174)
+test sync/ws_concurrent_round_trip/28 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_round_trip/28/base/sample.json": No such file or directory (os error 2)
+bench:      766113 ns/iter (+/- 20489)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 7.0s, enable flat sampling, or reduce sample count to 50.
+test sync/ws_concurrent_round_trip/56 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_round_trip/56/base/sample.json": No such file or directory (os error 2)
+bench:     1421465 ns/iter (+/- 49547)
+test sync/ws_concurrent_round_trip/112 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_round_trip/112/base/sample.json": No such file or directory (os error 2)
+bench:     2749134 ns/iter (+/- 60071)
+test sync/ws_concurrent_round_trip/224 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_round_trip/224/base/sample.json": No such file or directory (os error 2)
+bench:     5206471 ns/iter (+/- 158173)
+
+test sync/ws_concurrent_connections/2 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_connections/2/base/sample.json": No such file or directory (os error 2)
+bench:      157145 ns/iter (+/- 3881)
+test sync/ws_concurrent_connections/4 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_connections/4/base/sample.json": No such file or directory (os error 2)
+bench:      185175 ns/iter (+/- 13417)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 7.8s, enable flat sampling, or reduce sample count to 50.
+test sync/ws_concurrent_connections/8 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_connections/8/base/sample.json": No such file or directory (os error 2)
+bench:      304500 ns/iter (+/- 10116)
+test sync/ws_concurrent_connections/16 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_connections/16/base/sample.json": No such file or directory (os error 2)
+bench:      487269 ns/iter (+/- 14491)
+test sync/ws_concurrent_connections/32 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_connections/32/base/sample.json": No such file or directory (os error 2)
+bench:     1053767 ns/iter (+/- 40903)
+test sync/ws_concurrent_connections/64 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_concurrent_connections/64/base/sample.json": No such file or directory (os error 2)
+bench:     2266653 ns/iter (+/- 55572)
+
+test sync/ws_batch_requests/2 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_batch_requests/2/base/sample.json": No such file or directory (os error 2)
+bench:      114176 ns/iter (+/- 12089)
+test sync/ws_batch_requests/5 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_batch_requests/5/base/sample.json": No such file or directory (os error 2)
+bench:      152078 ns/iter (+/- 12060)
+test sync/ws_batch_requests/10 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_batch_requests/10/base/sample.json": No such file or directory (os error 2)
+bench:      197406 ns/iter (+/- 12884)
+test sync/ws_batch_requests/50 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_batch_requests/50/base/sample.json": No such file or directory (os error 2)
+bench:      629558 ns/iter (+/- 15757)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.6s, enable flat sampling, or reduce sample count to 60.
+test sync/ws_batch_requests/100 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/sync_ws_batch_requests/100/base/sample.json": No such file or directory (os error 2)
+bench:     1124279 ns/iter (+/- 19892)
+
+test async/http_round_trip ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_round_trip/base/sample.json": No such file or directory (os error 2)
+bench:      160652 ns/iter (+/- 3998)
+
+test async/http_concurrent_round_trip/14 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_round_trip/14/base/sample.json": No such file or directory (os error 2)
+bench:      367011 ns/iter (+/- 4645)
+test async/http_concurrent_round_trip/28 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_round_trip/28/base/sample.json": No such file or directory (os error 2)
+bench:      544272 ns/iter (+/- 14917)
+test async/http_concurrent_round_trip/56 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_round_trip/56/base/sample.json": No such file or directory (os error 2)
+bench:      891601 ns/iter (+/- 17899)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 7.7s, enable flat sampling, or reduce sample count to 50.
+test async/http_concurrent_round_trip/112 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_round_trip/112/base/sample.json": No such file or directory (os error 2)
+bench:     1543415 ns/iter (+/- 34819)
+test async/http_concurrent_round_trip/224 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_round_trip/224/base/sample.json": No such file or directory (os error 2)
+bench:     2647573 ns/iter (+/- 39232)
+
+test async/http_concurrent_connections/2 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_connections/2/base/sample.json": No such file or directory (os error 2)
+bench:      360320 ns/iter (+/- 20001)
+test async/http_concurrent_connections/4 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_connections/4/base/sample.json": No such file or directory (os error 2)
+bench:      320396 ns/iter (+/- 26199)
+test async/http_concurrent_connections/8 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_connections/8/base/sample.json": No such file or directory (os error 2)
+bench:      340851 ns/iter (+/- 566277)
+test async/http_concurrent_connections/16 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_connections/16/base/sample.json": No such file or directory (os error 2)
+bench:      669405 ns/iter (+/- 1050138)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 9.0s, enable flat sampling, or reduce sample count to 50.
+test async/http_concurrent_connections/32 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_connections/32/base/sample.json": No such file or directory (os error 2)
+bench:     1217448 ns/iter (+/- 1192252)
+test async/http_concurrent_connections/64 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_concurrent_connections/64/base/sample.json": No such file or directory (os error 2)
+bench:     2325389 ns/iter (+/- 1976810)
+
+test async/http_batch_requests/2 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_batch_requests/2/base/sample.json": No such file or directory (os error 2)
+bench:      200681 ns/iter (+/- 9904)
+test async/http_batch_requests/5 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_batch_requests/5/base/sample.json": No such file or directory (os error 2)
+bench:      224685 ns/iter (+/- 4446)
+test async/http_batch_requests/10 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_batch_requests/10/base/sample.json": No such file or directory (os error 2)
+bench:      271441 ns/iter (+/- 14455)
+test async/http_batch_requests/50 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_batch_requests/50/base/sample.json": No such file or directory (os error 2)
+bench:      697362 ns/iter (+/- 12760)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.1s, enable flat sampling, or reduce sample count to 60.
+test async/http_batch_requests/100 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_http_batch_requests/100/base/sample.json": No such file or directory (os error 2)
+bench:     1212017 ns/iter (+/- 9363)
+
+test async/ws_round_trip ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_round_trip/base/sample.json": No such file or directory (os error 2)
+bench:       81701 ns/iter (+/- 15137)
+
+test async/ws_concurrent_round_trip/14 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_round_trip/14/base/sample.json": No such file or directory (os error 2)
+bench:      441862 ns/iter (+/- 10266)
+test async/ws_concurrent_round_trip/28 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_round_trip/28/base/sample.json": No such file or directory (os error 2)
+bench:      776909 ns/iter (+/- 21738)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 7.2s, enable flat sampling, or reduce sample count to 50.
+test async/ws_concurrent_round_trip/56 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_round_trip/56/base/sample.json": No such file or directory (os error 2)
+bench:     1461131 ns/iter (+/- 37329)
+test async/ws_concurrent_round_trip/112 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_round_trip/112/base/sample.json": No such file or directory (os error 2)
+bench:     2722685 ns/iter (+/- 44124)
+test async/ws_concurrent_round_trip/224 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_round_trip/224/base/sample.json": No such file or directory (os error 2)
+bench:     5213174 ns/iter (+/- 182684)
+
+test async/ws_concurrent_connections/2 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_connections/2/base/sample.json": No such file or directory (os error 2)
+bench:      152334 ns/iter (+/- 4050)
+test async/ws_concurrent_connections/4 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_connections/4/base/sample.json": No such file or directory (os error 2)
+bench:      200647 ns/iter (+/- 10980)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 7.8s, enable flat sampling, or reduce sample count to 50.
+test async/ws_concurrent_connections/8 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_connections/8/base/sample.json": No such file or directory (os error 2)
+bench:      307516 ns/iter (+/- 9794)
+test async/ws_concurrent_connections/16 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_connections/16/base/sample.json": No such file or directory (os error 2)
+bench:      489536 ns/iter (+/- 13868)
+test async/ws_concurrent_connections/32 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_connections/32/base/sample.json": No such file or directory (os error 2)
+bench:     1084448 ns/iter (+/- 40543)
+test async/ws_concurrent_connections/64 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_concurrent_connections/64/base/sample.json": No such file or directory (os error 2)
+bench:     2256359 ns/iter (+/- 85234)
+
+test async/ws_batch_requests/2 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_batch_requests/2/base/sample.json": No such file or directory (os error 2)
+bench:      118021 ns/iter (+/- 9958)
+test async/ws_batch_requests/5 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_batch_requests/5/base/sample.json": No such file or directory (os error 2)
+bench:      157342 ns/iter (+/- 11505)
+test async/ws_batch_requests/10 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_batch_requests/10/base/sample.json": No such file or directory (os error 2)
+bench:      214431 ns/iter (+/- 21464)
+test async/ws_batch_requests/50 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_batch_requests/50/base/sample.json": No such file or directory (os error 2)
+bench:      674881 ns/iter (+/- 29620)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.1s, enable flat sampling, or reduce sample count to 60.
+test async/ws_batch_requests/100 ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/async_ws_batch_requests/100/base/sample.json": No such file or directory (os error 2)
+bench:     1217070 ns/iter (+/- 11332)
+
+test subscriptions/subscribe ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/subscriptions/subscribe/base/sample.json": No such file or directory (os error 2)
+bench:      184565 ns/iter (+/- 7130)
+test subscriptions/subscribe_response ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/subscriptions/subscribe_response/base/sample.json": No such file or directory (os error 2)
+bench:       16016 ns/iter (+/- 3042)
+test subscriptions/unsub ... Criterion.rs ERROR: error: Failed to access file "/ci-cache/jsonrpsee/targets/master/benchmarks/criterion/subscriptions/unsub/base/sample.json": No such file or directory (os error 2)
+bench:        1534 ns/iter (+/- 357)
+
