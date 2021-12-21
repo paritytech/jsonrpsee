@@ -64,7 +64,7 @@ pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, mpsc::Unboun
 
 type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Receiver<()>)>>>;
 
-/// Represent a unique subscription entry based on [`SubscriptionId`] and [`ConnectionId`].
+/// Represent a unique subscription entry based on [`RpcSubscriptionId`] and [`ConnectionId`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct SubscriptionKey {
 	conn_id: ConnectionId,

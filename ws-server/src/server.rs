@@ -690,7 +690,7 @@ impl<M> Builder<M> {
 	/// Configure custom `subscription ID` provider for the server to use
 	/// to when getting new subscription calls.
 	///
-	/// Default: [`RandomIntegerIdProvider`](jsonrpsee_core::traits::RandomIntegerIdProvider).
+	/// Default: [`RandomIntegerIdProvider`].
 	///
 	/// # Examples
 	///
