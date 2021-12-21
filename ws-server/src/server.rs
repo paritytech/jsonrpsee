@@ -695,7 +695,7 @@ impl<M> Builder<M> {
 	///
 	/// ```rust
 	/// use jsonrpsee_ws_server::WsServerBuilder;
-	/// use jsonrpsee_ws_server::types::traits::{IdProvider, RandomStringIdProvider};
+	/// use jsonrpsee_core::traits::{IdProvider, RandomStringIdProvider};
 	///
 	/// let builder = WsServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
 	/// ```

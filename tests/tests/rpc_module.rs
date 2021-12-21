@@ -201,7 +201,7 @@ async fn subscribing_without_server() {
 	for i in (0..=2).rev() {
 		let (val, id) = my_sub.next::<char>().await.unwrap().unwrap();
 		assert_eq!(val, std::char::from_digit(i, 10).unwrap());
-		assert_eq!(id, RpcSubscriptionId::Num(my_sub.subscription_id()));
+		assert_eq!(&id, my_sub.subscription_id());
 	}
 
 	let sub_err = my_sub.next::<char>().await.unwrap().unwrap_err();
@@ -228,7 +228,7 @@ async fn close_test_subscribing_without_server() {
 	let mut my_sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap();
 	let (val, id) = my_sub.next::<String>().await.unwrap().unwrap();
 	assert_eq!(&val, "lo");
-	assert_eq!(id, RpcSubscriptionId::Num(my_sub.subscription_id()));
+	assert_eq!(&id, my_sub.subscription_id());
 
 	// close the subscription to ensure it doesn't return any items.
 	my_sub.close();
