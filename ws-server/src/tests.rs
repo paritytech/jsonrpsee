@@ -34,7 +34,7 @@ use crate::types::{self, ErrorResponse, Response};
 use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::future::join;
-use jsonrpsee_core::{to_json_raw_value, DeserializeOwned, Error, traits::IdProvider};
+use jsonrpsee_core::{to_json_raw_value, traits::IdProvider, DeserializeOwned, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;

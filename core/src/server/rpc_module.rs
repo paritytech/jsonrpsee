@@ -34,7 +34,7 @@ use crate::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
 use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::to_json_raw_value;
-use crate::traits::{IdProvider, ToRpcParams, RandomIntegerIdProvider};
+use crate::traits::{IdProvider, RandomIntegerIdProvider, ToRpcParams};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
