@@ -1,0 +1,21 @@
+[package]
+name = "jsonrpsee-ws-client"
+version = "0.6.1"
+authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
+description = "WebSocket client for JSON-RPC"
+edition = "2018"
+license = "MIT"
+repository = "https://github.com/paritytech/jsonrpsee"
+homepage = "https://github.com/paritytech/jsonrpsee"
+documentation = "https://docs.rs/jsonrpsee-ws-client"
+
+[dependencies]
+jsonrpsee-types = { path = "../../types", version = "0.6.1" }
+jsonrpsee-client-transport = { path = "../transport", version = "0.6.1", features = ["ws"] }
+jsonrpsee-core = { path = "../../core", version = "0.6.1", features = ["async-client"] }
+
+[dev-dependencies]
+env_logger = "0.9"
+jsonrpsee-test-utils = { path = "../../test-utils" }
+tokio = { version = "1", features = ["macros"] }
+serde_json = "1"

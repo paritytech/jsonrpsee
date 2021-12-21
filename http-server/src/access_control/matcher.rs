@@ -24,8 +24,9 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use globset::{GlobBuilder, GlobMatcher};
 use std::{fmt, hash};
+
+use globset::{GlobBuilder, GlobMatcher};
 use tracing::warn;
 
 /// Pattern that can be matched to string.

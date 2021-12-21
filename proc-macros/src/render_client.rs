@@ -41,16 +41,16 @@ impl RpcDescription {
 		let (impl_generics, type_generics, _) = self.trait_def.generics.split_for_impl();
 
 		let super_trait = if self.subscriptions.is_empty() {
-			quote! { #jsonrpsee::types::traits::Client }
+			quote! { #jsonrpsee::core::client::ClientT }
 		} else {
-			quote! { #jsonrpsee::types::traits::SubscriptionClient }
+			quote! { #jsonrpsee::core::client::SubscriptionClientT }
 		};
 
 		let method_impls =
 			self.methods.iter().map(|method| self.render_method(method)).collect::<Result<Vec<_>, _>>()?;
 		let sub_impls = self.subscriptions.iter().map(|sub| self.render_sub(sub)).collect::<Result<Vec<_>, _>>()?;
 
-		let async_trait = self.jrps_client_item(quote! { types::__reexports::async_trait });
+		let async_trait = self.jrps_client_item(quote! { core::__reexports::async_trait });
 
 		// Doc-comment to be associated with the client.
 		let doc_comment = format!("Client implementation for the `{}` RPC API.", &self.trait_def.ident);
@@ -71,7 +71,7 @@ impl RpcDescription {
 
 	fn render_method(&self, method: &RpcMethod) -> Result<TokenStream2, syn::Error> {
 		// `jsonrpsee::Error`
-		let jrps_error = self.jrps_client_item(quote! { types::Error });
+		let jrps_error = self.jrps_client_item(quote! { core::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &method.signature.sig.ident;
 		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).
@@ -81,7 +81,7 @@ impl RpcDescription {
 		let rpc_method_name = self.rpc_identifier(&method.name);
 
 		// Called method is either `request` or `notification`.
-		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::Error`).
+		// `returns` represent the return type of the *rust method* (`Result< <..>, jsonrpsee::core::Error`).
 		let (called_method, returns) = if let Some(returns) = &method.returns {
 			let called_method = quote::format_ident!("request");
 			let returns = quote! { #returns };
@@ -112,8 +112,8 @@ impl RpcDescription {
 	}
 
 	fn render_sub(&self, sub: &RpcSubscription) -> Result<TokenStream2, syn::Error> {
-		// `jsonrpsee::Error`
-		let jrps_error = self.jrps_client_item(quote! { types::Error });
+		// `jsonrpsee::core::Error`
+		let jrps_error = self.jrps_client_item(quote! { core::Error });
 		// Rust method to invoke (e.g. `self.<foo>(...)`).
 		let rust_method_name = &sub.signature.sig.ident;
 		// List of inputs to put into `Params` (e.g. `self.foo(<12, "baz">)`).
@@ -125,7 +125,7 @@ impl RpcDescription {
 
 		// `returns` represent the return type of the *rust method*, which is wrapped
 		// into the `Subscription` object.
-		let sub_type = self.jrps_client_item(quote! { types::Subscription });
+		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
 		let item = &sub.item;
 		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
 
@@ -150,7 +150,7 @@ impl RpcDescription {
 		signature: &syn::TraitItemMethod,
 	) -> TokenStream2 {
 		if !params.is_empty() {
-			let serde_json = self.jrps_client_item(quote! { types::__reexports::serde_json });
+			let serde_json = self.jrps_client_item(quote! { core::__reexports::serde_json });
 			let params = params.iter().map(|(param, _param_type)| {
 				quote! { #serde_json::to_value(&#param)? }
 			});
@@ -165,12 +165,12 @@ impl RpcDescription {
 						quote! { (#param, #value) }
 					});
 					quote! {
-						Some(types::v2::ParamsSer::Map(
-								std::collections::BTreeMap::<&str, #serde_json::Value>::from(
-									[#(#params),*]
-									)
+						Some(types::ParamsSer::Map(
+							std::collections::BTreeMap::<&str, #serde_json::Value>::from(
+								[#(#params),*]
 								)
 							)
+						)
 					}
 				}
 				ParamKind::Array => {

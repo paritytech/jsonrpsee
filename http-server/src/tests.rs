@@ -29,9 +29,9 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use crate::types::error::{CallError, Error};
+use crate::types::error::CallError;
 use crate::{server::ServerHandle, HttpServerBuilder, RpcModule};
-
+use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;

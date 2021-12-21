@@ -24,37 +24,30 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::cmp;
+use std::future::Future;
+use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
-use hyper::{
-	server::{conn::AddrIncoming, Builder as HyperBuilder},
-	service::{make_service_fn, service_fn},
-	Error as HyperError,
-};
-use jsonrpsee_types::{
-	error::{Error, GenericTransportError},
-	middleware::Middleware,
-	traits::NoopIdProvider,
-	v2::{ErrorCode, Id, Notification, Request},
-	TEN_MB_SIZE_BYTES,
-};
-use jsonrpsee_utils::http_helpers::read_body;
-use jsonrpsee_utils::server::{
-	helpers::{collect_batch_response, prepare_error, MethodSink},
-	resource_limiting::Resources,
-	rpc_module::{MethodResult, Methods},
-};
-
+use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
+use hyper::service::{make_service_fn, service_fn};
+use hyper::Error as HyperError;
+use jsonrpsee_core::error::{Error, GenericTransportError};
+use jsonrpsee_core::http_helpers::read_body;
+use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
+use jsonrpsee_core::server::resource_limiting::Resources;
+use jsonrpsee_core::server::rpc_module::{MethodResult, Methods};
+use jsonrpsee_core::traits::NoopIdProvider;
+use jsonrpsee_core::TEN_MB_SIZE_BYTES;
+use jsonrpsee_types::error::ErrorCode;
+use jsonrpsee_types::{Id, Notification, Request};
 use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
-use std::{
-	cmp,
-	future::Future,
-	net::{SocketAddr, TcpListener, ToSocketAddrs},
-	pin::Pin,
-	task::{Context, Poll},
-};
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
@@ -89,12 +82,13 @@ impl Builder {
 }
 
 impl<M> Builder<M> {
-	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
+	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
 	///
 	/// ```
-	/// use jsonrpsee_types::middleware::Middleware;
-	/// use jsonrpsee_http_server::HttpServerBuilder;
 	/// use std::time::Instant;
+	///
+	/// use jsonrpsee_core::middleware::Middleware;
+	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware;

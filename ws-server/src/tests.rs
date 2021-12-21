@@ -25,22 +25,21 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
+use std::fmt;
+use std::net::SocketAddr;
+use std::time::Duration;
 
-use crate::types::error::{CallError, Error};
-use crate::types::v2::{self, Response, RpcError};
-use crate::types::DeserializeOwned;
+use crate::types::error::CallError;
+use crate::types::{self, ErrorResponse, Response};
 use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::future::join;
+use jsonrpsee_core::{to_json_raw_value, DeserializeOwned, Error, traits::IdProvider};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::to_json_raw_value;
-use jsonrpsee_types::traits::IdProvider;
-use jsonrpsee_types::v2::error::invalid_subscription_err;
-use jsonrpsee_types::v2::SubscriptionId;
+use jsonrpsee_types::error::invalid_subscription_err;
 use serde_json::Value as JsonValue;
-use std::{fmt, net::SocketAddr, time::Duration};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 fn init_logger() {
@@ -612,11 +611,11 @@ async fn unsubscribe_twice_should_indicate_error() {
 
 	let unsub_call = call("unsubscribe_hello", vec![sub_id], Id::Num(2));
 	let unsub_2 = client.send_request_text(unsub_call).await.unwrap();
-	let unsub_2_err: RpcError = serde_json::from_str(&unsub_2).unwrap();
+	let unsub_2_err: ErrorResponse = serde_json::from_str(&unsub_2).unwrap();
 	let sub_id = to_json_raw_value(&sub_id).unwrap();
 
 	let err = Some(to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).unwrap());
-	assert_eq!(unsub_2_err, RpcError::new(invalid_subscription_err(err.as_deref()), v2::Id::Number(2)));
+	assert_eq!(unsub_2_err, ErrorResponse::new(invalid_subscription_err(err.as_deref()), types::Id::Number(2)));
 }
 
 #[tokio::test]

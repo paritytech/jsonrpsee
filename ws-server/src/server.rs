@@ -21,7 +21,7 @@
 // SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 // CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-// IN background_task WITH THE SOFTWARE OR THE USE OR OTHER
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
 use std::future::Future;
@@ -31,29 +31,23 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
-use crate::types::{
-	error::Error,
-	middleware::Middleware,
-	v2::{ErrorCode, Id, Request},
-	TEN_MB_SIZE_BYTES,
-};
+use crate::types::error::ErrorCode;
+use crate::types::{Id, Request};
 use futures_channel::mpsc;
-use futures_util::future::join_all;
-use futures_util::future::FutureExt;
+use futures_util::future::{join_all, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use jsonrpsee_types::traits::{IdProvider, RandomIntegerIdProvider};
+use jsonrpsee_core::traits::{IdProvider, RandomIntegerIdProvider};
+use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
+use jsonrpsee_core::server::resource_limiting::Resources;
+use jsonrpsee_core::server::rpc_module::{ConnectionId, MethodResult, Methods};
+use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
-
-use jsonrpsee_utils::server::{
-	helpers::{collect_batch_response, prepare_error, MethodSink},
-	resource_limiting::Resources,
-	rpc_module::{ConnectionId, MethodResult, Methods},
-};
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
@@ -612,12 +606,13 @@ impl<M> Builder<M> {
 		Ok(self)
 	}
 
-	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_types/middleware/trait.Middleware.html).
+	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
 	///
 	/// ```
-	/// use jsonrpsee_types::middleware::Middleware;
-	/// use jsonrpsee_ws_server::WsServerBuilder;
 	/// use std::time::Instant;
+	///
+	/// use jsonrpsee_core::middleware::Middleware;
+	/// use jsonrpsee_ws_server::WsServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware;

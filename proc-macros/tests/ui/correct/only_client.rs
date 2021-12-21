@@ -1,6 +1,6 @@
 //! Example of using proc macro to generate working client and server.
 
-use jsonrpsee::{proc_macros::rpc, types::RpcResult};
+use jsonrpsee::{proc_macros::rpc, core::RpcResult};
 
 #[rpc(client)]
 pub trait Rpc {
