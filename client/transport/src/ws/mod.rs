@@ -26,7 +26,6 @@
 
 mod stream;
 
-use std::convert::{TryFrom, TryInto};
 use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
@@ -505,7 +504,6 @@ fn build_tls_config(cert_store: &CertificateStore) -> Result<tokio_rustls::TlsCo
 mod tests {
 	use super::{Mode, Target, Uri, WsHandshakeError};
 	use http::uri::InvalidUri;
-	use std::convert::TryInto;
 
 	fn assert_ws_target(target: Target, host: &str, host_header: &str, mode: Mode, path_and_query: &str) {
 		assert_eq!(&target.host, host);
