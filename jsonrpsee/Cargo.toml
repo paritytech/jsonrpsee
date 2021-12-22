@@ -24,7 +24,7 @@ jsonrpsee-types = { path = "../types", version = "0.6.1", package = "jsonrpsee-t
 [features]
 client-ws-transport = ["jsonrpsee-client-transport/ws", "jsonrpsee-client-transport/tls"]
 client-ws-transport-no-tls = ["jsonrpsee-client-transport/ws"]
-core-client = ["jsonrpsee-core/client"]
+core-client = ["jsonrpsee-core/async-client"]
 http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-core"]
 http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-core"]
 ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-core/client"]
