@@ -43,6 +43,9 @@
 //! - **`client`** - Enables `http-client` and `ws-client` features.
 //! - **`server`** - Enables `http-server` and `ws-server` features.
 //! - **`full`** - Enables `client`, `server` and `macros` features.
+//! - **`core-client`** - Enables the core client without any transport.
+//! - **`client-ws-transport`** - Enables `ws` transport with TLS.
+//! - **`client-ws-transport-no-tls`** - Enables `ws` transport without TLS.
 
 /// JSON-RPC HTTP client.
 #[cfg(feature = "jsonrpsee-http-client")]
@@ -79,7 +82,7 @@ pub use jsonrpsee_types as types;
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
 pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
 
-#[cfg(any(feature = "http-server", feature = "ws-server", feature = "core-client"))]
+#[cfg(any(feature = "http-server", feature = "ws-server", feature = "core-client", feature = "http-client", feature = "ws-client"))]
 pub use jsonrpsee_core as core;
 
 #[cfg(feature = "http-server")]
