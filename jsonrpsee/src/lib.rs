@@ -79,7 +79,14 @@ pub use jsonrpsee_types as types;
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
 pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
 
-#[cfg(any(feature = "http-server", feature = "ws-server", feature = "core-client"))]
+#[cfg(any(
+	feature = "http-server",
+	feature = "ws-server",
+	feature = "client",
+	feature = "core-client",
+	feature = "http-client",
+	feature = "ws-client"
+))]
 pub use jsonrpsee_core as core;
 
 #[cfg(feature = "http-server")]
