@@ -22,6 +22,7 @@ distintion between the two.
 - ci: Create gitlab pipeline  [#534](https://github.com/paritytech/jsonrpsee/pull/534)
 
 ### [Changed]
+- chore: migrate to rust 2021 [#618](https://github.com/paritytech/jsonrpsee/pull/618)
 - extract async client abstraction. [#580](https://github.com/paritytech/jsonrpsee/pull/580)
 - Crate restructuring [#590](https://github.com/paritytech/jsonrpsee/pull/590)
 - servers: refactor `SubscriptionClosed` [#612](https://github.com/paritytech/jsonrpsee/pull/612)
@@ -34,6 +35,10 @@ distintion between the two.
 - clients: feature gate `tls` [#545](https://github.com/paritytech/jsonrpsee/pull/545)
 
 ### [Fixed]
+- benches: fix image in check-bench job [#621](https://github.com/paritytech/jsonrpsee/pull/621)
+- benches: update publish script [#619](https://github.com/paritytech/jsonrpsee/pull/619)
+- chore(http client): remove needless clone [#620](https://github.com/paritytech/jsonrpsee/pull/620)
+- jsonrpsee wrapper: make ws tls configurable [#616](https://github.com/paritytech/jsonrpsee/pull/616)
 - deps: Upgrade `tracing-subscriber` [#615](https://github.com/paritytech/jsonrpsee/pull/615)
 - proc macros: Fix span for underscore_token for tests to be equivalent on stable and nightly [#614](https://github.com/paritytech/jsonrpsee/pull/614)
 - proc macros: Better error messages for method arguments ignored with a `_` [#611](https://github.com/paritytech/jsonrpsee/pull/611)
