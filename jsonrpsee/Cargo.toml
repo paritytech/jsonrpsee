@@ -4,7 +4,7 @@ description = "JSON-RPC crate"
 version = "0.7.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 license = "MIT"
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/paritytech/jsonrpsee"
 homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee"
@@ -22,7 +22,8 @@ jsonrpsee-core = { path = "../core", version = "0.7.0", package = "jsonrpsee-cor
 jsonrpsee-types = { path = "../types", version = "0.7.0", package = "jsonrpsee-types", optional = true }
 
 [features]
-client-ws-transport = ["jsonrpsee-client-transport/ws"]
+client-ws-transport = ["jsonrpsee-client-transport/ws", "jsonrpsee-client-transport/tls"]
+client-ws-transport-no-tls = ["jsonrpsee-client-transport/ws"]
 core-client = ["jsonrpsee-core/client"]
 http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-core"]
 http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-core"]

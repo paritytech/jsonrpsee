@@ -11,6 +11,7 @@ stages:
   - lint
   - test
   - benchmark
+  - check_benchmark
   - publish
 
 variables:                         &default-vars
@@ -27,6 +28,9 @@ variables:                         &default-vars
   secrets:
     GITHUB_SSH_PRIV_KEY:
       vault:                       cicd/gitlab/parity/${CI_PROJECT_NAME}/GITHUB_SSH_PRIV_KEY@kv
+      file:                        false
+    GITHUB_TOKEN:
+      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
       file:                        false
     GITHUB_USER:
       vault:                       cicd/gitlab/parity/GITHUB_USER@kv
@@ -83,8 +87,6 @@ fmt:
   <<:                              *docker-env
   <<:                              *common-refs
   script:
-    # FIXME: remove component add after https://github.com/paritytech/substrate/issues/10411 is fixed
-    - rustup component add rustfmt
     - cargo fmt --all -- --check
 
 clippy:
@@ -92,8 +94,6 @@ clippy:
   <<:                              *docker-env
   <<:                              *common-refs
   script:
-    # FIXME: remove component add after https://github.com/paritytech/substrate/issues/10411 is fixed
-    - rustup component add clippy
     - cargo clippy --all-targets
 
 check-rustdoc-links:
@@ -134,6 +134,18 @@ benchmarks:
   tags:
     - linux-docker-benches
 
+check_bench:
+  stage:                           check_benchmark
+  variables:
+    PROMETHEUS_URL:                "http://vm-longterm.parity-build.parity.io"
+    TRESHOLD:                      20
+    CI_IMAGE:                      "paritytech/benchmarks:latest"
+  <<:                              *kubernetes-env
+  <<:                              *schedule-refs
+  <<:                              *vault-secrets
+  script:
+    - check_bench_result artifacts/output.txt
+
 publish-ghpages:
   stage:                           publish
   variables:
@@ -141,9 +153,6 @@ publish-ghpages:
   <<:                              *kubernetes-env
   <<:                              *schedule-refs
   <<:                              *vault-secrets
-  needs:
-    - job:                         benchmarks
-      artifacts:                   true
   script:
     # setup ssh
     - eval $(ssh-agent)
@@ -172,9 +181,6 @@ publish-bench:
     CI_IMAGE:                      "paritytech/tools:latest"
   <<:                              *kubernetes-env
   <<:                              *schedule-refs
-  needs:
-    - job:                         benchmarks
-      artifacts:                   true
   script:
     - echo $RUNNER_NAME
     - .scripts/ci/push_bench_results.sh artifacts/output.txt
