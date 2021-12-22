@@ -8,33 +8,34 @@ The format is based on [Keep a Changelog].
 
 ## [v0.7.0] - 2022-12-22
 
-v0.7.0 is a breaking release which contains a big refactoring
-on the crate structure `types` and `utils` where
-splitted up to `core` and `types` to make a clear
-distintion between the two.
+v0.7.0 is a breaking release that contains a big refactoring of the crate structure. The `types` and
+`utils` crates are split up as `types` and `core` to clarify the difference between the two.
 
-`core`: includes common types used in various places. <br>
+`core`: common types used in various places.
 `types`: includes JSON-RPC specification related types.
 
 ### [Added]
+
 - servers: configurable subscriptionID [#604](https://github.com/paritytech/jsonrpsee/pull/604)
-- client: impl Stream on Subscription and tweak built-in next() method to align [#601](https://github.com/paritytech/jsonrpsee/pull/601)
+- client: impl Stream on Subscription and tweak built-in next() method [#601](https://github.com/paritytech/jsonrpsee/pull/601)
 - ci: Create gitlab pipeline  [#534](https://github.com/paritytech/jsonrpsee/pull/534)
 
 ### [Changed]
+
 - chore: migrate to rust 2021 [#618](https://github.com/paritytech/jsonrpsee/pull/618)
 - extract async client abstraction. [#580](https://github.com/paritytech/jsonrpsee/pull/580)
 - Crate restructuring [#590](https://github.com/paritytech/jsonrpsee/pull/590)
 - servers: refactor `SubscriptionClosed` [#612](https://github.com/paritytech/jsonrpsee/pull/612)
-- ci: Add job to publish benchmark results to gh-pages [#603](https://github.com/paritytech/jsonrpsee/pull/603)
+- ci: Add job to publish benchmark results to github pages [#603](https://github.com/paritytech/jsonrpsee/pull/603)
 - rpc module: refactor calls/subs without a server [#591](https://github.com/paritytech/jsonrpsee/pull/591)
-- types: make subscription ID String Cow. [#594](https://github.com/paritytech/jsonrpsee/pull/594)
+- types: make subscription ID a CoW String. [#594](https://github.com/paritytech/jsonrpsee/pull/594)
 - ci: remove GHA daily benchmark [#598](https://github.com/paritytech/jsonrpsee/pull/598)
 - examples: Remove usage of the `palaver` crate in an example [#597](https://github.com/paritytech/jsonrpsee/pull/597)
 - clients: use `FxHashMap` instead `FnvHashMap` [#592](https://github.com/paritytech/jsonrpsee/pull/592)
 - clients: feature gate `tls` [#545](https://github.com/paritytech/jsonrpsee/pull/545)
 
 ### [Fixed]
+
 - benches: fix image in check-bench job [#621](https://github.com/paritytech/jsonrpsee/pull/621)
 - benches: update publish script [#619](https://github.com/paritytech/jsonrpsee/pull/619)
 - chore(http client): remove needless clone [#620](https://github.com/paritytech/jsonrpsee/pull/620)
@@ -46,7 +47,6 @@ distintion between the two.
 - benches: Fix job to publish benchmark results to gh-pages [#608](https://github.com/paritytech/jsonrpsee/pull/608)
 - benches: make jsonrpc crates optional [#596](https://github.com/paritytech/jsonrpsee/pull/596)
 - deps: duplicate env logger deps [#595](https://github.com/paritytech/jsonrpsee/pull/595)
-
 
 ## [v0.6.1] – 2021-12-07
 
