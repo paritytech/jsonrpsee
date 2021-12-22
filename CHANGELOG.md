@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.7.0] - 2022-12-22
 
-v0.7 is a breaking release which contains a big refactoring
+v0.7.0 is a breaking release which contains a big refactoring
 on the crate structure `types` and `utils` where
 splitted up to `core` and `types` to make a clear
 distintion between the two.
