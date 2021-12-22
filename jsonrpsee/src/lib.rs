@@ -85,6 +85,7 @@ pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
 #[cfg(any(
 	feature = "http-server",
 	feature = "ws-server",
+	feature = "client",
 	feature = "async-client",
 	feature = "http-client",
 	feature = "ws-client"
