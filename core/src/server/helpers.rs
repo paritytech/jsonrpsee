@@ -25,12 +25,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::io;
-use std::pin::Pin;
 
 use crate::{to_json_raw_value, Error};
 use futures_channel::mpsc;
-use futures_util::task::{Context, Poll};
-use futures_util::{Sink, StreamExt};
+use futures_util::stream::StreamExt;
 use jsonrpsee_types::error::{
 	CallError, ErrorCode, ErrorObject, ErrorResponse, CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE,
 	OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE,
@@ -188,26 +186,6 @@ impl MethodSink {
 	/// Close the channel for any further messages.
 	pub fn close(&self) {
 		self.tx.close_channel();
-	}
-}
-
-impl Sink<String> for MethodSink {
-	type Error = Error;
-
-	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Pin::new(&mut self.tx).poll_ready(cx).map_err(Into::into)
-	}
-
-	fn start_send(mut self: Pin<&mut Self>, item: String) -> Result<(), Self::Error> {
-		Pin::new(&mut self.tx).start_send(item).map_err(Into::into)
-	}
-
-	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Pin::new(&mut self.tx).poll_flush(cx).map_err(Into::into)
-	}
-
-	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Pin::new(&mut self.tx).poll_close(cx).map_err(Into::into)
 	}
 }
 

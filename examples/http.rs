@@ -39,20 +39,18 @@ async fn main() -> anyhow::Result<()> {
 		.expect("setting default subscriber failed");
 
 	let (server_addr, _handle) = run_server().await?;
-	// let url = format!("http://{}", server_addr);
-	//
-	// let client = HttpClientBuilder::default().build(url)?;
-	// let params = rpc_params!(1_u64, 2, 3);
-	// let response: Result<String, _> = client.request("say_hello", params).await;
-	// tracing::info!("r: {:?}", response);
+	let url = format!("http://{}", server_addr);
 
-	loop {}
+	let client = HttpClientBuilder::default().build(url)?;
+	let params = rpc_params!(1_u64, 2, 3);
+	let response: Result<String, _> = client.request("say_hello", params).await;
+	tracing::info!("r: {:?}", response);
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let server = HttpServerBuilder::default().build("127.0.0.1:9933".parse::<SocketAddr>()?)?;
+	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse::<SocketAddr>()?)?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 

@@ -38,7 +38,7 @@ use crate::to_json_raw_value;
 use crate::traits::{IdProvider, ToRpcParams};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{future::BoxFuture, FutureExt, Sink, StreamExt};
+use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use jsonrpsee_types::error::{invalid_subscription_err, ErrorCode, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload, SubscriptionResponse,
@@ -784,15 +784,6 @@ impl SubscriptionSink {
 		}
 		let msg = self.build_message(result)?;
 		self.inner_send(msg).map_err(Into::into)
-	}
-
-	pub async fn add_fut<F, Fut>(self, f: F)
-	where
-		Fut: Future<Output = ()> + Send + 'static,
-		F: FnOnce() -> Fut,
-	{
-		let future = f();
-		future.await
 	}
 
 	/// Returns whether this channel is closed without needing a context.
