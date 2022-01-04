@@ -301,8 +301,7 @@ impl<M: Middleware> Server<M> {
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
-						
-						// Only `POST` and `OPTIONS` methods are allowed. 
+						// Only `POST` and `OPTIONS` methods are allowed.
 						match *request.method() {
 							Method::POST if content_type_is_json(&request) => (),
 							Method::POST => return Ok::<_, HyperError>(response::unsupported_content_type()),
