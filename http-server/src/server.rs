@@ -35,7 +35,7 @@ use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
-use hyper::Error as HyperError;
+use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::id_providers::NoopIdProvider;
@@ -301,11 +301,16 @@ impl<M: Middleware> Server<M> {
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
-						if let Err(e) = access_control_is_valid(&access_control, &request) {
-							return Ok::<_, HyperError>(e);
-						}
+						
+						// Only `POST` and `OPTIONS` methods are allowed. 
+						match *request.method() {
+							Method::POST if content_type_is_json(&request) => (),
+							Method::POST => return Ok::<_, HyperError>(response::unsupported_content_type()),
+							Method::OPTIONS => return Ok::<_, HyperError>(response::ok_response("".into())),
+							_ => return Ok::<_, HyperError>(response::method_not_allowed()),
+						};
 
-						if let Err(e) = content_type_is_valid(&request) {
+						if let Err(e) = access_control_is_valid(&access_control, &request) {
 							return Ok::<_, HyperError>(e);
 						}
 
@@ -449,11 +454,8 @@ fn access_control_is_valid(
 }
 
 /// Checks that content type of received request is valid for JSON-RPC.
-fn content_type_is_valid(request: &hyper::Request<hyper::Body>) -> Result<(), hyper::Response<hyper::Body>> {
-	match *request.method() {
-		hyper::Method::POST if is_json(request.headers().get("content-type")) => Ok(()),
-		_ => Err(response::method_not_allowed()),
-	}
+fn content_type_is_json(request: &hyper::Request<hyper::Body>) -> bool {
+	is_json(request.headers().get("content-type"))
 }
 
 /// Returns true if the `content_type` header indicates a valid JSON message.
