@@ -108,7 +108,6 @@ pub fn ok_response(body: String) -> hyper::Response<hyper::Body> {
 	from_template(hyper::StatusCode::OK, body, JSON)
 }
 
-
 /// Create a response for unsupported content type.
 pub fn unsupported_content_type() -> hyper::Response<hyper::Body> {
 	from_template(
