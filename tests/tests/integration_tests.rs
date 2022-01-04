@@ -30,7 +30,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use helpers::{http_server, websocket_server, websocket_server_with_subscription};
+use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosedReason;
 use jsonrpsee::core::{Error, JsonValue};
@@ -372,4 +372,138 @@ async fn ws_batch_works() {
 
 	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
+}
+
+#[tokio::test]
+async fn http_unsupported_methods_dont_work() {
+	use hyper::{Body, Client, Method, Request};
+
+	let (server_addr, _handle) = http_server().await;
+
+	let http_client = Client::new();
+	let uri = format!("http://{}", server_addr);
+
+	let req_is_client_error = |method| async {
+		let req = Request::builder()
+			.method(method)
+			.uri(&uri)
+			.header("content-type", "application/json")
+			.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+			.expect("request builder");
+
+		let res = http_client.request(req).await.unwrap();
+		res.status().is_client_error()
+	};
+
+	for verb in [Method::GET, Method::PUT, Method::PATCH, Method::DELETE] {
+		assert!(req_is_client_error(verb).await);
+	}
+	for verb in [Method::POST, Method::OPTIONS] {
+		assert!(!req_is_client_error(verb).await);
+	}
+}
+
+#[tokio::test]
+async fn http_correct_content_type_required() {
+	use hyper::{Body, Client, Method, Request};
+
+	let (server_addr, _handle) = http_server().await;
+
+	let http_client = Client::new();
+	let uri = format!("http://{}", server_addr);
+
+	// We don't set content-type at all
+	let req = Request::builder()
+		.method(Method::POST)
+		.uri(&uri)
+		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+		.expect("request builder");
+
+	let res = http_client.request(req).await.unwrap();
+	assert!(res.status().is_client_error());
+
+	// We use the wrong content-type
+	let req = Request::builder()
+		.method(Method::POST)
+		.uri(&uri)
+		.header("content-type", "application/text")
+		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+		.expect("request builder");
+
+	let res = http_client.request(req).await.unwrap();
+	assert!(res.status().is_client_error());
+
+	// We use the correct content-type
+	let req = Request::builder()
+		.method(Method::POST)
+		.uri(&uri)
+		.header("content-type", "application/json")
+		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+		.expect("request builder");
+
+	let res = http_client.request(req).await.unwrap();
+	assert!(res.status().is_success());
+}
+
+#[tokio::test]
+async fn http_cors_preflight_works() {
+	use hyper::{Body, Client, Method, Request};
+	use jsonrpsee::http_server::AccessControlBuilder;
+
+	let acl = AccessControlBuilder::new().set_allowed_hosts(vec!["https://foo.com"]).unwrap().build();
+
+	let (server_addr, _handle) = http_server_with_access_control(acl).await;
+
+	let http_client = Client::new();
+	let uri = format!("http://{}", server_addr);
+
+	// First, make a preflight request.
+	// See https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#preflighted_requests for examples.
+	// See https://fetch.spec.whatwg.org/#http-cors-protocol for the spec.
+	let preflight_req = Request::builder()
+		.method(Method::OPTIONS)
+		.uri(&uri)
+		.header("origin", "https://foo.com")
+		.header("access-control-request-method", "POST")
+		.header("access-control-request-headers", "content-type")
+		.body(Body::empty())
+		.expect("preflight request builder");
+
+	let has = |v: &[String], s| v.iter().any(|v| v == s);
+
+	let preflight_res = http_client.request(preflight_req).await.unwrap();
+	let preflight_headers = preflight_res.headers();
+
+	let allow_origins = comma_separated_header_values(&preflight_headers, "access-control-allow-origin");
+	let allow_methods = comma_separated_header_values(&preflight_headers, "access-control-allow-methods");
+	let allow_headers = comma_separated_header_values(&preflight_headers, "access-control-allow-headers");
+
+	// We expect the preflight response to tell us that our origin, methods and headers are all OK to use.
+	// If they aren't, the browser will not make the actual request.
+	assert!(preflight_res.status().is_success());
+	assert!(has(&allow_origins, "https://foo.com") || has(&allow_origins, "*"));
+	assert!(has(&allow_methods, "post") || has(&allow_methods, "*"));
+	assert!(has(&allow_headers, "content-type") || has(&allow_headers, "*"));
+
+	// Let's assume that that was successful. Next, we make the actual request from the same origin.
+	// This should also succeed.
+	let req = Request::builder()
+		.method(Method::POST)
+		.uri(&uri)
+		.header("origin", "https://foo.com")
+		.header("content-type", "application/json")
+		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+		.expect("actual request builder");
+
+	let res = http_client.request(req).await.unwrap();
+	assert!(res.status().is_success());
+}
+
+fn comma_separated_header_values(headers: &hyper::HeaderMap, header: &str) -> Vec<String> {
+	headers
+		.get_all(header)
+		.into_iter()
+		.flat_map(|value| value.to_str().unwrap().split(",").map(|val| val.trim()))
+		.map(|header| header.to_ascii_lowercase())
+		.collect()
 }
