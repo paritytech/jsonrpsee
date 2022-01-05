@@ -388,7 +388,7 @@ async fn http_unsupported_methods_dont_work() {
 			.method(method)
 			.uri(&uri)
 			.header("content-type", "application/json")
-			.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+			.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 			.expect("request builder");
 
 		let res = http_client.request(req).await.unwrap();
@@ -416,7 +416,7 @@ async fn http_correct_content_type_required() {
 	let req = Request::builder()
 		.method(Method::POST)
 		.uri(&uri)
-		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -427,7 +427,7 @@ async fn http_correct_content_type_required() {
 		.method(Method::POST)
 		.uri(&uri)
 		.header("content-type", "application/text")
-		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -438,7 +438,7 @@ async fn http_correct_content_type_required() {
 		.method(Method::POST)
 		.uri(&uri)
 		.header("content-type", "application/json")
-		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("request builder");
 
 	let res = http_client.request(req).await.unwrap();
@@ -494,7 +494,7 @@ async fn http_cors_preflight_works() {
 		.header("host", "bar.com")
 		.header("origin", "https://foo.com")
 		.header("content-type", "application/json")
-		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
+		.body(Body::from(r#"{ "jsonrpc": "2.0", method: "say_hello", "id": 1 }"#))
 		.expect("actual request builder");
 
 	let res = http_client.request(req).await.unwrap();
