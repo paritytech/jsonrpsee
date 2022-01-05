@@ -398,7 +398,7 @@ async fn http_unsupported_methods_dont_work() {
 	for verb in [Method::GET, Method::PUT, Method::PATCH, Method::DELETE] {
 		assert!(req_is_client_error(verb).await);
 	}
-	for verb in [Method::POST, Method::OPTIONS] {
+	for verb in [Method::POST] {
 		assert!(!req_is_client_error(verb).await);
 	}
 }
