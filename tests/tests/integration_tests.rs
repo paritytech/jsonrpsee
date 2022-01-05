@@ -505,7 +505,7 @@ fn comma_separated_header_values(headers: &hyper::HeaderMap, header: &str) -> Ve
 	headers
 		.get_all(header)
 		.into_iter()
-		.flat_map(|value| value.to_str().unwrap().split(",").map(|val| val.trim()))
+		.flat_map(|value| value.to_str().unwrap().split(',').map(|val| val.trim()))
 		.map(|header| header.to_ascii_lowercase())
 		.collect()
 }
