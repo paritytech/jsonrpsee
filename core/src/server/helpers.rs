@@ -92,26 +92,6 @@ pub struct MethodSink {
 	max_response_size: u32,
 }
 
-impl Sink<String> for MethodSink {
-	type Error = Error;
-
-	fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Pin::new(&mut self.tx).poll_ready(cx).map_err(Into::into)
-	}
-
-	fn start_send(mut self: Pin<&mut Self>, item: String) -> Result<(), Self::Error> {
-		Pin::new(&mut self.tx).start_send(item).map_err(Into::into)
-	}
-
-	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Pin::new(&mut self.tx).poll_flush(cx).map_err(Into::into)
-	}
-
-	fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		Pin::new(&mut self.tx).poll_close(cx).map_err(Into::into)
-	}
-}
-
 impl MethodSink {
 	/// Create a new `MethodSink` with unlimited response size
 	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {

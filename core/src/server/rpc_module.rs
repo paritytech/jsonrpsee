@@ -821,8 +821,15 @@ impl SubscriptionSink {
 						break;
 					}
 				},
-				// "close" only returns None when connection closed.
-				_ = rx.next() => break,
+				v = rx.next() => {
+					if let Some(_) = v {
+						// No messages should be sent over this channel.
+						()
+					} else {
+						// Channel dropped by the server.
+						break;
+					}
+				},
 				else => break,
 			}
 		}
