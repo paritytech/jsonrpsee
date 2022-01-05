@@ -28,15 +28,13 @@ use std::io;
 
 use crate::{to_json_raw_value, Error};
 use futures_channel::mpsc;
-use futures_util::task::{Context, Poll};
-use futures_util::{Sink, StreamExt};
+use futures_util::StreamExt;
 use jsonrpsee_types::error::{
 	CallError, ErrorCode, ErrorObject, ErrorResponse, CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE,
 	OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE,
 };
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
-use std::pin::Pin;
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
