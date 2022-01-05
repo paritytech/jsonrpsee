@@ -335,7 +335,7 @@ impl<M: Middleware> Server<M> {
 								middleware.on_call(req.method.as_ref());
 
 								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								match methods.execute_with_resources(&sink, req, 0, &resources, &NoopIdProvider) {
+								match methods.execute_with_resources(&sink, None, req, 0, &resources, &NoopIdProvider) {
 									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
 									}
@@ -363,6 +363,7 @@ impl<M: Middleware> Server<M> {
 								join_all(batch.into_iter().filter_map(
 									move |req| match methods.execute_with_resources(
 										&sink,
+										None,
 										req,
 										0,
 										&resources,

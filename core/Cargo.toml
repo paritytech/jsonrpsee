@@ -11,6 +11,7 @@ anyhow = "1"
 arrayvec = "0.7.1"
 async-trait = "0.1"
 beef = { version = "0.5.1", features = ["impl_serde"] }
+async-channel = { version = "1.6", optional = true }
 thiserror = "1"
 futures-channel = { version = "0.3.14", default-features = false }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
@@ -29,6 +30,7 @@ tokio = { version = "1.8", features = ["rt"], optional = true }
 default = []
 http-helpers = ["futures-util"]
 server = [
+	"async-channel",
 	"futures-util",
 	"rustc-hash",
 	"tracing",

@@ -38,7 +38,7 @@ use crate::to_json_raw_value;
 use crate::traits::{IdProvider, ToRpcParams};
 use beef::Cow;
 use futures_channel::{mpsc, oneshot};
-use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use jsonrpsee_types::error::{invalid_subscription_err, ErrorCode, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload, SubscriptionResponse,
@@ -51,16 +51,29 @@ use serde::{de::DeserializeOwned, Serialize};
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId, &dyn IdProvider) -> bool>;
+pub type SyncMethod =
+	Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionState, ConnectionId, &dyn IdProvider) -> bool>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> = Arc<
-	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, Option<ResourceGuard>, &dyn IdProvider) -> BoxFuture<'a, bool>,
+	dyn Send
+		+ Sync
+		+ Fn(
+			Id<'a>,
+			Params<'a>,
+			MethodSink,
+			ConnectionState,
+			Option<ResourceGuard>,
+			&dyn IdProvider,
+		) -> BoxFuture<'a, bool>,
 >;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
 /// Raw RPC response.
 pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, mpsc::UnboundedSender<String>);
+/// Connection state for stateful protocols such as WebSocket
+/// This is used to keep track whether the connection has been closed.
+pub type ConnectionState = Option<async_channel::Receiver<()>>;
 
 type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Receiver<()>)>>>;
 
@@ -157,6 +170,7 @@ impl MethodCallback {
 	pub fn execute(
 		&self,
 		sink: &MethodSink,
+		conn: ConnectionState,
 		req: Request<'_>,
 		conn_id: ConnectionId,
 		claimed: Option<ResourceGuard>,
@@ -174,7 +188,7 @@ impl MethodCallback {
 					conn_id
 				);
 
-				let result = (callback)(id, params, sink, conn_id, id_gen);
+				let result = (callback)(id, params, sink, conn, conn_id, id_gen);
 
 				// Release claimed resources
 				drop(claimed);
@@ -192,7 +206,7 @@ impl MethodCallback {
 					conn_id
 				);
 
-				MethodResult::Async((callback)(id, params, sink, claimed, id_gen))
+				MethodResult::Async((callback)(id, params, sink, conn, claimed, id_gen))
 			}
 		};
 
@@ -310,13 +324,14 @@ impl Methods {
 	pub fn execute(
 		&self,
 		sink: &MethodSink,
+		conn: ConnectionState,
 		req: Request,
 		conn_id: ConnectionId,
 		id_gen: &dyn IdProvider,
 	) -> MethodResult<bool> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
-			Some(callback) => callback.execute(sink, req, conn_id, None, id_gen),
+			Some(callback) => callback.execute(sink, conn, req, conn_id, None, id_gen),
 			None => {
 				sink.send_error(req.id, ErrorCode::MethodNotFound.into());
 				MethodResult::Sync(false)
@@ -329,6 +344,7 @@ impl Methods {
 	pub fn execute_with_resources<'r>(
 		&self,
 		sink: &MethodSink,
+		rx: ConnectionState,
 		req: Request<'r>,
 		conn_id: ConnectionId,
 		resources: &Resources,
@@ -337,7 +353,7 @@ impl Methods {
 		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get_key_value(&*req.method) {
 			Some((&name, callback)) => match callback.claim(&req.method, resources) {
-				Ok(guard) => Ok((name, callback.execute(sink, req, conn_id, Some(guard), id_gen))),
+				Ok(guard) => Ok((name, callback.execute(sink, rx, req, conn_id, Some(guard), id_gen))),
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
 					sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
@@ -426,8 +442,9 @@ impl Methods {
 	async fn inner_call(&self, req: Request<'_>) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::unbounded();
 		let sink = MethodSink::new(tx.clone());
+		let (_tx, rx_2) = async_channel::unbounded();
 
-		if let MethodResult::Async(fut) = self.execute(&sink, req, 0, &RandomIntegerIdProvider) {
+		if let MethodResult::Async(fut) = self.execute(&sink, Some(rx_2), req, 0, &RandomIntegerIdProvider) {
 			fut.await;
 		}
 
@@ -527,7 +544,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_sync(Arc::new(move |id, params, sink, _, _| match callback(params, &*ctx) {
+			MethodCallback::new_sync(Arc::new(move |id, params, sink, _, _, _| match callback(params, &*ctx) {
 				Ok(res) => sink.send_response(id, res),
 				Err(err) => sink.send_call_error(id, err),
 			})),
@@ -550,7 +567,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, sink, claimed, _| {
+			MethodCallback::new_async(Arc::new(move |id, params, sink, _, claimed, _| {
 				let ctx = ctx.clone();
 				let future = async move {
 					let result = match callback(params, ctx).await {
@@ -585,7 +602,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, sink, claimed, _| {
+			MethodCallback::new_async(Arc::new(move |id, params, sink, _, claimed, _| {
 				let ctx = ctx.clone();
 
 				tokio::task::spawn_blocking(move || {
@@ -671,7 +688,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn_id, id_provider| {
+				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn, conn_id, id_provider| {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
 
 					let sub_id = {
@@ -687,6 +704,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
+						close: conn,
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id, sub_id },
@@ -710,7 +728,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, sink, conn_id, _| {
+				MethodCallback::new_sync(Arc::new(move |id, params, sink, _, conn_id, _| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -764,6 +782,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 pub struct SubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
+	/// Close
+	close: ConnectionState,
 	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
@@ -786,6 +806,28 @@ impl SubscriptionSink {
 		self.inner_send(msg).map_err(Into::into)
 	}
 
+	/// Consume the sink by passing a stream to be sent via the sink.
+	pub async fn add_stream<S, T>(mut self, mut stream: S)
+	where
+		S: Stream<Item = T> + Unpin,
+		T: Serialize,
+	{
+		let mut rx = self.close.take().expect("close must be Some; please file an issue");
+
+		loop {
+			tokio::select! {
+				Some(item) = stream.next() => {
+					if let Err(Error::SubscriptionClosed(_)) = self.send(&item) {
+						break;
+					}
+				},
+				// "close" only returns None when connection closed.
+				_ = rx.next() => break,
+				else => break,
+			}
+		}
+	}
+
 	/// Returns whether this channel is closed without needing a context.
 	pub fn is_closed(&self) -> bool {
 		self.inner.is_closed()
@@ -806,7 +848,7 @@ impl SubscriptionSink {
 				self.inner.send_raw(msg).map_err(|_| Some(SubscriptionClosedReason::ConnectionReset))
 			}
 			Some(_) => Err(Some(SubscriptionClosedReason::Unsubscribed)),
-			// NOTE(niklasad1): this should be unreachble, after the first error is detected the subscription is closed.
+			// NOTE(niklasad1): this should be unreachable, after the first error is detected the subscription is closed.
 			None => Err(None),
 		};
 

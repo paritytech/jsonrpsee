@@ -137,6 +137,8 @@ impl<M: Middleware> Server<M> {
 						},
 					)));
 
+					tracing::info!("Accepting new connection, {}/{}", connections.count(), self.cfg.max_connections);
+
 					id = id.wrapping_add(1);
 				}
 				Err(MonitoredError::Selector(err)) => {
@@ -293,6 +295,8 @@ async fn background_task(
 	builder.set_max_message_size(max_request_body_size as usize);
 	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let (conn_tx, conn_rx) = async_channel::unbounded();
+
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
 
@@ -301,21 +305,21 @@ async fn background_task(
 	// Send results back to the client.
 	tokio::spawn(async move {
 		while !stop_server2.shutdown_requested() {
-			match rx.next().await {
-				Some(response) => {
-					// If websocket message send fail then terminate the connection.
-					if let Err(err) = send_ws_message(&mut sender, response).await {
-						tracing::error!("WS transport error: {:?}; terminate connection", err);
-						break;
-					}
+			if let Some(response) = rx.next().await {
+				// If websocket message send fail then terminate the connection.
+				if let Err(err) = send_ws_message(&mut sender, response).await {
+					tracing::error!("WS transport error: {:?}; terminate connection", err);
+					break;
 				}
-				None => break,
-			};
+			} else {
+				break;
+			}
 		}
 		// terminate connection.
 		let _ = sender.close().await;
 		// NOTE(niklasad1): when the receiver is dropped no further requests or subscriptions
 		// will be possible.
+		drop(conn_tx);
 	});
 
 	// Buffer for incoming data.
@@ -370,7 +374,15 @@ async fn background_task(
 
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
-					match methods.execute_with_resources(&sink, req, conn_id, &resources, &*id_provider) {
+
+					match methods.execute_with_resources(
+						&sink,
+						Some(conn_rx.clone()),
+						req,
+						conn_id,
+						&resources,
+						&*id_provider,
+					) {
 						Ok((name, MethodResult::Sync(success))) => {
 							middleware.on_result(name, success, request_start);
 							middleware.on_response(request_start);
@@ -405,6 +417,7 @@ async fn background_task(
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
 
+				let conn_rx2 = conn_rx.clone();
 				let fut = async move {
 					// Batch responses must be sent back as a single message so we read the results from each
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
@@ -418,6 +431,7 @@ async fn background_task(
 							join_all(batch.into_iter().filter_map(move |req| {
 								match methods.execute_with_resources(
 									&sink_batch,
+									Some(conn_rx2.clone()),
 									req,
 									conn_id,
 									resources,

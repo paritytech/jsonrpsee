@@ -10,6 +10,7 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-server"
 
 [dependencies]
+async-channel = "1.6.1"
 futures-channel = "0.3.14"
 futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
 jsonrpsee-types = { path = "../types", version = "0.7.0" }
