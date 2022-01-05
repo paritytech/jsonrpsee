@@ -174,12 +174,8 @@ impl AccessControlAllowHeaders {
 	/// Return an appropriate value for the CORS header "Access-Control-Allow-Headers".
 	pub fn to_cors_header_value(&self) -> Cow<'_, str> {
 		match self {
-			AccessControlAllowHeaders::Any => {
-				"*".into()
-			},
-			AccessControlAllowHeaders::Only(headers) => {
-				headers.join(", ").into()
-			}
+			AccessControlAllowHeaders::Any => "*".into(),
+			AccessControlAllowHeaders::Only(headers) => headers.join(", ").into(),
 		}
 	}
 }
