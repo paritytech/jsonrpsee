@@ -475,7 +475,7 @@ async fn http_cors_preflight_works() {
 	let preflight_headers = preflight_res.headers();
 
 	let allow_origins = comma_separated_header_values(&preflight_headers, "access-control-allow-origin");
-	let allow_methods = comma_separated_header_values(&preflight_headers, "access-control-allow-methods");
+	let allow_methods = comma_separated_header_values(preflight_headers, "access-control-allow-methods");
 	let allow_headers = comma_separated_header_values(preflight_headers, "access-control-allow-headers");
 
 	// We expect the preflight response to tell us that our origin, methods and headers are all OK to use.
