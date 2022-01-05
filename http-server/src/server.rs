@@ -34,7 +34,7 @@ use crate::response::{internal_error, malformed};
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
-use hyper::header::{HeaderMap,HeaderValue};
+use hyper::header::{HeaderMap, HeaderValue};
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
@@ -304,7 +304,7 @@ impl<M: Middleware> Server<M> {
 					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
 						if let Err(e) = access_control_is_valid(&access_control, &request) {
-							return Ok::<_,HyperError>(e);
+							return Ok::<_, HyperError>(e);
 						}
 
 						// Only `POST` and `OPTIONS` methods are allowed.
@@ -342,7 +342,8 @@ impl<M: Middleware> Server<M> {
 									methods,
 									resources,
 									max_request_body_size,
-								).await?;
+								)
+								.await?;
 
 								if let Some(origin) = origin {
 									res.headers_mut().insert("access-control-allow-origin", origin);
@@ -374,9 +375,7 @@ impl<M: Middleware> Server<M> {
 
 // Checks the origin and host headers. If they both exist, return the origin if it does not match the host.
 // If one of them doesn't exist (origin most probably), or they are identical, return None.
-fn return_origin_if_different_from_host(
-	headers: &HeaderMap
-) -> Option<&HeaderValue> {
+fn return_origin_if_different_from_host(headers: &HeaderMap) -> Option<&HeaderValue> {
 	if let (Some(origin), Some(host)) = (headers.get("origin"), headers.get("host")) {
 		if origin != host {
 			Some(origin)
