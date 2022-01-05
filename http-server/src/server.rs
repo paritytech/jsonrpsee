@@ -30,6 +30,7 @@ use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use crate::response::{malformed,internal_error};
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
@@ -37,7 +38,7 @@ use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
-use jsonrpsee_core::http_helpers::read_body;
+use jsonrpsee_core::http_helpers::{read_body, self};
 use jsonrpsee_core::id_providers::NoopIdProvider;
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
@@ -317,8 +318,30 @@ impl<M: Middleware> Server<M> {
 								)
 								.await
 							}
+							// Handle CORS preflight request. We've done our access check
+							// above so we just need to tell the browser that the request is OK.
+							Method::OPTIONS => {
+								let origin = match http_helpers::read_header_value(request.headers(), "origin") {
+									Some(origin) => origin,
+									None => return Ok(malformed())
+								};
+								let allowed_headers = access_control.allowed_headers().to_cors_header_value();
+								let allowed_header_bytes = allowed_headers.as_bytes();
+
+								let res = hyper::Response::builder()
+									.header("access-control-allow-origin", origin)
+									.header("access-control-allow-methods", "POST")
+									.header("access-control-allow-headers", allowed_header_bytes)
+									.body(hyper::Body::empty())
+									.unwrap_or_else(|e| {
+										tracing::error!("Error forming preflight response: {}", e);
+										internal_error()
+									});
+
+								Ok(res)
+							},
+							// Error scenarios:
 							Method::POST => Ok(response::unsupported_content_type()),
-							Method::OPTIONS => Ok(response::ok_response("".into())),
 							_ => Ok(response::method_not_allowed()),
 						}
 					}

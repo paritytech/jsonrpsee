@@ -31,6 +31,7 @@ use std::{fmt, ops};
 
 use crate::access_control::hosts::{Host, Port};
 use crate::access_control::matcher::{Matcher, Pattern};
+use jsonrpsee_core::Cow;
 use lazy_static::lazy_static;
 use unicase::Ascii;
 
@@ -167,6 +168,20 @@ pub enum AccessControlAllowHeaders {
 	Only(Vec<String>),
 	/// Any header
 	Any,
+}
+
+impl AccessControlAllowHeaders {
+	/// Return an appropriate value for the CORS header "Access-Control-Allow-Headers".
+	pub fn to_cors_header_value(&self) -> Cow<'_, str> {
+		match self {
+			AccessControlAllowHeaders::Any => {
+				"*".into()
+			},
+			AccessControlAllowHeaders::Only(headers) => {
+				headers.join(", ").into()
+			}
+		}
+	}
 }
 
 /// CORS response headers
