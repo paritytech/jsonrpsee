@@ -450,8 +450,7 @@ async fn http_cors_preflight_works() {
 	use hyper::{Body, Client, Method, Request};
 	use jsonrpsee::http_server::AccessControlBuilder;
 
-	let acl = AccessControlBuilder::new().set_allowed_hosts(vec!["https://foo.com"]).unwrap().build();
-
+	let acl = AccessControlBuilder::new().set_allowed_origins(vec!["https://foo.com"]).unwrap().build();
 	let (server_addr, _handle) = http_server_with_access_control(acl).await;
 
 	let http_client = Client::new();
@@ -463,7 +462,8 @@ async fn http_cors_preflight_works() {
 	let preflight_req = Request::builder()
 		.method(Method::OPTIONS)
 		.uri(&uri)
-		.header("origin", "https://foo.com")
+		.header("host", "bar.com") // <- host that request is being sent _to_
+		.header("origin", "https://foo.com") // <- where request is being sent _from_
 		.header("access-control-request-method", "POST")
 		.header("access-control-request-headers", "content-type")
 		.body(Body::empty())
@@ -479,17 +479,19 @@ async fn http_cors_preflight_works() {
 	let allow_headers = comma_separated_header_values(&preflight_headers, "access-control-allow-headers");
 
 	// We expect the preflight response to tell us that our origin, methods and headers are all OK to use.
-	// If they aren't, the browser will not make the actual request.
+	// If they aren't, the browser will not make the actual request. Note that if these `access-control-*`
+	// headers aren't return, the default is that the origin/method/headers are not allowed, I think.
 	assert!(preflight_res.status().is_success());
 	assert!(has(&allow_origins, "https://foo.com") || has(&allow_origins, "*"));
 	assert!(has(&allow_methods, "post") || has(&allow_methods, "*"));
 	assert!(has(&allow_headers, "content-type") || has(&allow_headers, "*"));
 
-	// Let's assume that that was successful. Next, we make the actual request from the same origin.
-	// This should also succeed.
+	// Assuming that that was successful, we now make the actual request. No CORS headers are needed here
+	// as the browser checked their validity in the preflight request.
 	let req = Request::builder()
 		.method(Method::POST)
 		.uri(&uri)
+		.header("host", "bar.com")
 		.header("origin", "https://foo.com")
 		.header("content-type", "application/json")
 		.body(Body::from(r#"{ "jsonrpsee": "2.0", method: "say_hello", "id": 1 }"#))
