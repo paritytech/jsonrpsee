@@ -34,6 +34,7 @@ use crate::response::{internal_error, malformed};
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
+use hyper::header::{HeaderMap,HeaderValue};
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
@@ -303,22 +304,12 @@ impl<M: Middleware> Server<M> {
 					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
 						if let Err(e) = access_control_is_valid(&access_control, &request) {
-							return Ok(e);
+							return Ok::<_,HyperError>(e);
 						}
 
 						// Only `POST` and `OPTIONS` methods are allowed.
 						match *request.method() {
-							Method::POST if content_type_is_json(&request) => {
-								process_validated_request(
-									request,
-									middleware,
-									methods,
-									resources,
-									max_request_body_size,
-								)
-								.await
-							}
-							// Handle CORS preflight request. We've done our access check
+							// An OPTIONS request is a CORS preflight request. We've done our access check
 							// above so we just need to tell the browser that the request is OK.
 							Method::OPTIONS => {
 								let origin = match http_helpers::read_header_value(request.headers(), "origin") {
@@ -338,6 +329,24 @@ impl<M: Middleware> Server<M> {
 										internal_error()
 									});
 
+								Ok(res)
+							}
+							// The actual request. If it's a CORS request we need to remember to add
+							// the access-control-allow-origin header (despite preflight) to allow it
+							// to be read in a browser.
+							Method::POST if content_type_is_json(&request) => {
+								let origin = return_origin_if_different_from_host(request.headers()).cloned();
+								let mut res = process_validated_request(
+									request,
+									middleware,
+									methods,
+									resources,
+									max_request_body_size,
+								).await?;
+
+								if let Some(origin) = origin {
+									res.headers_mut().insert("access-control-allow-origin", origin);
+								}
 								Ok(res)
 							}
 							// Error scenarios:
@@ -360,6 +369,22 @@ impl<M: Middleware> Server<M> {
 		});
 
 		Ok(ServerHandle { handle: Some(handle), stop_sender: tx })
+	}
+}
+
+// Checks the origin and host headers. If they both exist, return the origin if it does not match the host.
+// If one of them doesn't exist (origin most probably), or they are identical, return None.
+fn return_origin_if_different_from_host(
+	headers: &HeaderMap
+) -> Option<&HeaderValue> {
+	if let (Some(origin), Some(host)) = (headers.get("origin"), headers.get("host")) {
+		if origin != host {
+			Some(origin)
+		} else {
+			None
+		}
+	} else {
+		None
 	}
 }
 

@@ -499,6 +499,7 @@ async fn http_cors_preflight_works() {
 
 	let res = http_client.request(req).await.unwrap();
 	assert!(res.status().is_success());
+	assert!(has(&allow_origins, "https://foo.com") || has(&allow_origins, "*"));
 }
 
 fn comma_separated_header_values(headers: &hyper::HeaderMap, header: &str) -> Vec<String> {
