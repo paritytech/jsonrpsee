@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
 	println!(
 		r#"
         fetch("http://{}", {{
-            method:  'POST',
+            method: 'POST',
             mode: 'cors',
             headers: {{ 'Content-Type': 'application/json' }},
             body: JSON.stringify({{
