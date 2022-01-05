@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use jsonrpsee::core::Error;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::http_server::{AccessControl, HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
 
@@ -117,7 +117,11 @@ pub async fn websocket_server() -> SocketAddr {
 }
 
 pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0").unwrap();
+	http_server_with_access_control(AccessControl::default()).await
+}
+
+pub async fn http_server_with_access_control(acl: AccessControl) -> (SocketAddr, HttpServerHandle) {
+	let server = HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

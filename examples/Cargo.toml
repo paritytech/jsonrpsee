@@ -50,3 +50,7 @@ path = "proc_macro.rs"
 [[example]]
 name = "core_client"
 path = "core_client.rs"
+
+[[example]]
+name = "cors_server"
+path = "cors_server.rs"

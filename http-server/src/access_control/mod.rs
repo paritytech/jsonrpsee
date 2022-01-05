@@ -83,6 +83,11 @@ impl AccessControl {
 		});
 		header == cors::AllowCors::Invalid && !self.continue_on_invalid_cors
 	}
+
+	/// Return the allowed headers we've set
+	pub(crate) fn allowed_headers(&self) -> &AccessControlAllowHeaders {
+		&self.allowed_headers
+	}
 }
 
 impl Default for AccessControl {

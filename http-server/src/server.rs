@@ -30,14 +30,16 @@ use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use crate::response::{internal_error, malformed};
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
+use hyper::header::{HeaderMap, HeaderValue};
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
-use hyper::Error as HyperError;
+use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
-use jsonrpsee_core::http_helpers::read_body;
+use jsonrpsee_core::http_helpers::{self, read_body};
 use jsonrpsee_core::id_providers::NoopIdProvider;
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
@@ -305,113 +307,53 @@ impl<M: Middleware> Server<M> {
 							return Ok::<_, HyperError>(e);
 						}
 
-						if let Err(e) = content_type_is_valid(&request) {
-							return Ok::<_, HyperError>(e);
-						}
+						// Only `POST` and `OPTIONS` methods are allowed.
+						match *request.method() {
+							// An OPTIONS request is a CORS preflight request. We've done our access check
+							// above so we just need to tell the browser that the request is OK.
+							Method::OPTIONS => {
+								let origin = match http_helpers::read_header_value(request.headers(), "origin") {
+									Some(origin) => origin,
+									None => return Ok(malformed()),
+								};
+								let allowed_headers = access_control.allowed_headers().to_cors_header_value();
+								let allowed_header_bytes = allowed_headers.as_bytes();
 
-						let (parts, body) = request.into_parts();
+								let res = hyper::Response::builder()
+									.header("access-control-allow-origin", origin)
+									.header("access-control-allow-methods", "POST")
+									.header("access-control-allow-headers", allowed_header_bytes)
+									.body(hyper::Body::empty())
+									.unwrap_or_else(|e| {
+										tracing::error!("Error forming preflight response: {}", e);
+										internal_error()
+									});
 
-						let (body, mut is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
-							Ok(r) => r,
-							Err(GenericTransportError::TooLarge) => return Ok::<_, HyperError>(response::too_large()),
-							Err(GenericTransportError::Malformed) => return Ok::<_, HyperError>(response::malformed()),
-							Err(GenericTransportError::Inner(e)) => {
-								tracing::error!("Internal error reading request body: {}", e);
-								return Ok::<_, HyperError>(response::internal_error());
+								Ok(res)
 							}
-						};
+							// The actual request. If it's a CORS request we need to remember to add
+							// the access-control-allow-origin header (despite preflight) to allow it
+							// to be read in a browser.
+							Method::POST if content_type_is_json(&request) => {
+								let origin = return_origin_if_different_from_host(request.headers()).cloned();
+								let mut res = process_validated_request(
+									request,
+									middleware,
+									methods,
+									resources,
+									max_request_body_size,
+								)
+								.await?;
 
-						let request_start = middleware.on_request();
-
-						// NOTE(niklasad1): it's a channel because it's needed for batch requests.
-						let (tx, mut rx) = mpsc::unbounded::<String>();
-						let sink = MethodSink::new_with_limit(tx, max_request_body_size);
-
-						type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
-
-						// Single request or notification
-						if is_single {
-							if let Ok(req) = serde_json::from_slice::<Request>(&body) {
-								middleware.on_call(req.method.as_ref());
-
-								// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-								match methods.execute_with_resources(&sink, req, 0, &resources, &NoopIdProvider) {
-									Ok((name, MethodResult::Sync(success))) => {
-										middleware.on_result(name, success, request_start);
-									}
-									Ok((name, MethodResult::Async(fut))) => {
-										let success = fut.await;
-
-										middleware.on_result(name, success, request_start);
-									}
-									Err(name) => {
-										middleware.on_result(name.as_ref(), false, request_start);
-									}
+								if let Some(origin) = origin {
+									res.headers_mut().insert("access-control-allow-origin", origin);
 								}
-							} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
-								return Ok::<_, HyperError>(response::ok_response("".into()));
-							} else {
-								let (id, code) = prepare_error(&body);
-								sink.send_error(id, code.into());
+								Ok(res)
 							}
-
-						// Batch of requests or notifications
-						} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
-							if !batch.is_empty() {
-								let middleware = &middleware;
-
-								join_all(batch.into_iter().filter_map(
-									move |req| match methods.execute_with_resources(
-										&sink,
-										req,
-										0,
-										&resources,
-										&NoopIdProvider,
-									) {
-										Ok((name, MethodResult::Sync(success))) => {
-											middleware.on_result(name, success, request_start);
-											None
-										}
-										Ok((name, MethodResult::Async(fut))) => Some(async move {
-											let success = fut.await;
-											middleware.on_result(name, success, request_start);
-										}),
-										Err(name) => {
-											middleware.on_result(name.as_ref(), false, request_start);
-											None
-										}
-									},
-								))
-								.await;
-							} else {
-								// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
-								// Array with at least one value, the response from the Server MUST be a single
-								// Response object." – The Spec.
-								is_single = true;
-								sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
-							}
-						} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
-							return Ok::<_, HyperError>(response::ok_response("".into()));
-						} else {
-							// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
-							// Array with at least one value, the response from the Server MUST be a single
-							// Response object." – The Spec.
-							is_single = true;
-							let (id, code) = prepare_error(&body);
-							sink.send_error(id, code.into());
+							// Error scenarios:
+							Method::POST => Ok(response::unsupported_content_type()),
+							_ => Ok(response::method_not_allowed()),
 						}
-
-						// Closes the receiving half of a channel without dropping it. This prevents any further
-						// messages from being sent on the channel.
-						rx.close();
-						let response = if is_single {
-							rx.next().await.expect("Sender is still alive managed by us above; qed")
-						} else {
-							collect_batch_response(rx).await
-						};
-						tracing::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
-						middleware.on_response(request_start);
-						Ok::<_, HyperError>(response::ok_response(response))
 					}
 				}))
 			}
@@ -428,6 +370,20 @@ impl<M: Middleware> Server<M> {
 		});
 
 		Ok(ServerHandle { handle: Some(handle), stop_sender: tx })
+	}
+}
+
+// Checks the origin and host headers. If they both exist, return the origin if it does not match the host.
+// If one of them doesn't exist (origin most probably), or they are identical, return None.
+fn return_origin_if_different_from_host(headers: &HeaderMap) -> Option<&HeaderValue> {
+	if let (Some(origin), Some(host)) = (headers.get("origin"), headers.get("host")) {
+		if origin != host {
+			Some(origin)
+		} else {
+			None
+		}
+	} else {
+		None
 	}
 }
 
@@ -449,11 +405,8 @@ fn access_control_is_valid(
 }
 
 /// Checks that content type of received request is valid for JSON-RPC.
-fn content_type_is_valid(request: &hyper::Request<hyper::Body>) -> Result<(), hyper::Response<hyper::Body>> {
-	match *request.method() {
-		hyper::Method::POST if is_json(request.headers().get("content-type")) => Ok(()),
-		_ => Err(response::method_not_allowed()),
-	}
+fn content_type_is_json(request: &hyper::Request<hyper::Body>) -> bool {
+	is_json(request.headers().get("content-type"))
 }
 
 /// Returns true if the `content_type` header indicates a valid JSON message.
@@ -468,4 +421,111 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 		}
 		_ => false,
 	}
+}
+
+/// Process a verified request, it implies a POST request with content type JSON.
+async fn process_validated_request(
+	request: hyper::Request<hyper::Body>,
+	middleware: impl Middleware,
+	methods: Methods,
+	resources: Resources,
+	max_request_body_size: u32,
+) -> Result<hyper::Response<hyper::Body>, HyperError> {
+	let (parts, body) = request.into_parts();
+
+	let (body, mut is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
+		Ok(r) => r,
+		Err(GenericTransportError::TooLarge) => return Ok(response::too_large()),
+		Err(GenericTransportError::Malformed) => return Ok(response::malformed()),
+		Err(GenericTransportError::Inner(e)) => {
+			tracing::error!("Internal error reading request body: {}", e);
+			return Ok(response::internal_error());
+		}
+	};
+
+	let request_start = middleware.on_request();
+
+	// NOTE(niklasad1): it's a channel because it's needed for batch requests.
+	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
+
+	type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
+
+	// Single request or notification
+	if is_single {
+		if let Ok(req) = serde_json::from_slice::<Request>(&body) {
+			middleware.on_call(req.method.as_ref());
+
+			// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
+			match methods.execute_with_resources(&sink, req, 0, &resources, &NoopIdProvider) {
+				Ok((name, MethodResult::Sync(success))) => {
+					middleware.on_result(name, success, request_start);
+				}
+				Ok((name, MethodResult::Async(fut))) => {
+					let success = fut.await;
+
+					middleware.on_result(name, success, request_start);
+				}
+				Err(name) => {
+					middleware.on_result(name.as_ref(), false, request_start);
+				}
+			}
+		} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
+			return Ok::<_, HyperError>(response::ok_response("".into()));
+		} else {
+			let (id, code) = prepare_error(&body);
+			sink.send_error(id, code.into());
+		}
+
+	// Batch of requests or notifications
+	} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
+		if !batch.is_empty() {
+			let middleware = &middleware;
+
+			join_all(batch.into_iter().filter_map(move |req| {
+				match methods.execute_with_resources(&sink, req, 0, &resources, &NoopIdProvider) {
+					Ok((name, MethodResult::Sync(success))) => {
+						middleware.on_result(name, success, request_start);
+						None
+					}
+					Ok((name, MethodResult::Async(fut))) => Some(async move {
+						let success = fut.await;
+						middleware.on_result(name, success, request_start);
+					}),
+					Err(name) => {
+						middleware.on_result(name.as_ref(), false, request_start);
+						None
+					}
+				}
+			}))
+			.await;
+		} else {
+			// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+			// Array with at least one value, the response from the Server MUST be a single
+			// Response object." – The Spec.
+			is_single = true;
+			sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
+		}
+	} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
+		return Ok(response::ok_response("".into()));
+	} else {
+		// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+		// Array with at least one value, the response from the Server MUST be a single
+		// Response object." – The Spec.
+		is_single = true;
+		let (id, code) = prepare_error(&body);
+		sink.send_error(id, code.into());
+	}
+
+	// Closes the receiving half of a channel without dropping it. This prevents any further
+	// messages from being sent on the channel.
+	rx.close();
+	let response = if is_single {
+		rx.next().await.expect("Sender is still alive managed by us above; qed")
+	} else {
+		collect_batch_response(rx).await
+	};
+	tracing::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
+	middleware.on_response(request_start);
+	Ok(response::ok_response(response))
 }
