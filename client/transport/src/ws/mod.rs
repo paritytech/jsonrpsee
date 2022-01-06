@@ -438,10 +438,11 @@ impl TryFrom<Uri> for Target {
 			#[cfg(feature = "tls")]
 			Some("wss") => Mode::Tls,
 			invalid_scheme => {
+				let scheme = invalid_scheme.unwrap_or("no scheme");
 				#[cfg(feature = "tls")]
-				let err = format!("{:?} not supported, expects 'ws' or 'wss'", invalid_scheme);
+				let err = format!("`{}` not supported, expects 'ws' or 'wss'", scheme);
 				#[cfg(not(feature = "tls"))]
-				let err = format!("{:?} not supported, expects 'ws' ('wss' requires the tls feature)", invalid_scheme);
+				let err = format!("`{}` not supported, expects 'ws' ('wss' requires the tls feature)", scheme);
 				return Err(WsHandshakeError::Url(err.into()));
 			}
 		};
