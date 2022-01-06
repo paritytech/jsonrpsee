@@ -286,7 +286,7 @@ impl<'a> WsTransportClientBuilder<'a> {
 							Ok(uri) => {
 								// Absolute URI.
 								if uri.scheme().is_some() {
-									let uri: Target = uri.try_into().map_err(|e| {
+									let target: Target = uri.try_into().map_err(|e| {
 										tracing::error!("Redirection failed: {:?}", e);
 										e
 									})?;
