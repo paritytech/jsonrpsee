@@ -286,7 +286,10 @@ impl<'a> WsTransportClientBuilder<'a> {
 							Ok(uri) => {
 								// Absolute URI.
 								if uri.scheme().is_some() {
-									target = uri.try_into()?;
+									target = uri.try_into().map_err(|e| {
+										tracing::error!("Redirection failed: {:?}", e);
+										e
+									})?;
 
 									// Only build TLS connector if `wss` in redirection URL.
 									#[cfg(feature = "tls")]
@@ -434,11 +437,12 @@ impl TryFrom<Uri> for Target {
 			Some("ws") => Mode::Plain,
 			#[cfg(feature = "tls")]
 			Some("wss") => Mode::Tls,
-			_ => {
+			invalid_scheme => {
+				let scheme = invalid_scheme.unwrap_or("no scheme");
 				#[cfg(feature = "tls")]
-				let err = "URL scheme not supported, expects 'ws' or 'wss'";
+				let err = format!("`{}` not supported, expects 'ws' or 'wss'", scheme);
 				#[cfg(not(feature = "tls"))]
-				let err = "URL scheme not supported, expects 'ws'";
+				let err = format!("`{}` not supported, expects 'ws' ('wss' requires the tls feature)", scheme);
 				return Err(WsHandshakeError::Url(err.into()));
 			}
 		};
