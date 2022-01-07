@@ -30,7 +30,7 @@ use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-use futures::io::{BufReader, BufWriter};
+use futures_util::io::{BufReader, BufWriter};
 use jsonrpsee_core::client::{CertificateStore, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};

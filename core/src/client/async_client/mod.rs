@@ -107,7 +107,13 @@ impl ClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub fn build<S: TransportSenderT, R: TransportReceiverT>(self, sender: S, receiver: R) -> Client {
+	pub fn build<S, R>(self, sender: S, receiver: R) -> Client
+	where
+		S: TransportSenderT,
+		<S as TransportSenderT>::Error: std::error::Error,
+		R: TransportReceiverT,
+		<R as TransportReceiverT>::Error: std::error::Error,
+	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
@@ -154,7 +160,14 @@ impl Client {
 	}
 }
 
-impl<S: TransportSenderT, R: TransportReceiverT> From<(S, R)> for Client {
+impl<S, R> From<(S, R)> for Client
+// TODO(niklasad1): remove trait bounds on `std::error::Error`.
+where
+	S: TransportSenderT,
+	<S as TransportSenderT>::Error: std::error::Error,
+	R: TransportReceiverT,
+	<R as TransportReceiverT>::Error: std::error::Error,
+{
 	fn from(transport: (S, R)) -> Client {
 		ClientBuilder::default().build(transport.0, transport.1)
 	}
@@ -344,13 +357,18 @@ impl SubscriptionClientT for Client {
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
+async fn background_task<S, R>(
 	mut sender: S,
 	receiver: R,
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
-) {
+) where
+	S: TransportSenderT,
+	<S as TransportSenderT>::Error: std::error::Error,
+	R: TransportReceiverT,
+	<R as TransportReceiverT>::Error: std::error::Error,
+{
 	let mut manager = RequestManager::new();
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
@@ -509,7 +527,8 @@ async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				tracing::error!("Error: {:?} terminating client", e);
-				let _ = front_error.send(Error::Transport(e.into()));
+				// TODO(niklasad1): tmp because StdError is removed from traits.
+				//let _ = front_error.send(Error::Transport(e.into()));
 				break;
 			}
 			Either::Right((None, _)) => {
