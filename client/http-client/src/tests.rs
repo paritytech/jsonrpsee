@@ -59,8 +59,28 @@ async fn notification_works() {
 }
 
 #[tokio::test]
+async fn response_with_string_id_works() {
+	let result = run_request_with_response(ok_response("hello".into(), Id::Str("0".to_string())))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(JsonValue::String("hello".into()), result);
+}
+
+#[tokio::test]
 async fn response_with_wrong_id() {
 	let err = run_request_with_response(ok_response("hello".into(), Id::Num(99)))
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap_err();
+	assert!(matches!(err, Error::InvalidRequestId));
+}
+
+#[tokio::test]
+async fn response_with_wrong_string_id() {
+	let err = run_request_with_response(ok_response("hello".into(), Id::Str("1".to_string())))
 		.with_default_timeout()
 		.await
 		.unwrap()

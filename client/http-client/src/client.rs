@@ -142,10 +142,18 @@ impl ClientT for HttpClient {
 			}
 		};
 
-		let response_id = response.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
-
-		if response_id == *id.inner() {
-			Ok(response.result)
+		if let Some(response_id) = response.id.as_number().copied() {
+			if response_id == *id.inner() {
+				Ok(response.result)
+			} else {
+				Err(Error::InvalidRequestId)
+			}
+		} else if let Some(response_id) = response.id.as_str() {
+			if response_id == id.inner().to_string() {
+				Ok(response.result)
+			} else {
+				Err(Error::InvalidRequestId)
+			}
 		} else {
 			Err(Error::InvalidRequestId)
 		}
