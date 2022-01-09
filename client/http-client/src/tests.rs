@@ -133,7 +133,7 @@ async fn subscription_response_to_request() {
 async fn batch_request_works() {
 	let batch_request =
 		vec![("say_hello", rpc_params![]), ("say_goodbye", rpc_params![0_u64, 1, 2]), ("get_swag", None)];
-	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
+	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":"1"}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);

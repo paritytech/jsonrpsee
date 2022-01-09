@@ -192,12 +192,26 @@ impl ClientT for HttpClient {
 		// NOTE: `R::default` is placeholder and will be replaced in loop below.
 		let mut responses = vec![R::default(); ordered_requests.len()];
 		for rp in rps {
-			let response_id = rp.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
-			let pos = match request_set.get(&response_id) {
-				Some(pos) => *pos,
-				None => return Err(Error::InvalidRequestId),
+			match rp.id.as_number().copied() {
+				Some(id) => {
+					let pos = match request_set.get(&id) {
+						Some(pos) => *pos,
+						None => return Err(Error::InvalidRequestId),
+					};
+					responses[pos] = rp.result
+				}
+				None => match rp.id.as_str() {
+					Some(s) => {
+						let id: u64 = s.trim().parse().map_err(|_| Error::InvalidRequestId)?;
+						let pos = match request_set.get(&id) {
+							Some(pos) => *pos,
+							None => return Err(Error::InvalidRequestId),
+						};
+						responses[pos] = rp.result
+					}
+					None => return Err(Error::InvalidRequestId),
+				},
 			};
-			responses[pos] = rp.result
 		}
 		Ok(responses)
 	}
