@@ -37,15 +37,16 @@
 #[cfg(test)]
 mod tests;
 
+pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
 
 use std::time::Duration;
 
 use jsonrpsee_client_transport::ws::{Header, InvalidUri, Uri, WsTransportClientBuilder};
-use jsonrpsee_core::client::{CertificateStore, Client, ClientBuilder};
+use jsonrpsee_core::client::{CertificateStore, ClientBuilder};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
-/// Builder for [`Client`].
+/// Builder for [`WsClient`].
 ///
 /// # Examples
 ///
@@ -148,7 +149,7 @@ impl<'a> WsClientBuilder<'a> {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	pub async fn build(self, url: impl AsRef<str>) -> Result<Client, Error> {
+	pub async fn build(self, url: impl AsRef<str>) -> Result<WsClient, Error> {
 		let transport_builder = WsTransportClientBuilder {
 			certificate_store: self.certificate_store,
 			connection_timeout: self.connection_timeout,
