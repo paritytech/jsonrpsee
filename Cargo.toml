@@ -6,6 +6,7 @@ members = [
 	"test-utils",
 	"jsonrpsee",
 	"tests",
+	"wasm-tests",
 	"types",
 	"core",
 	"ws-server",

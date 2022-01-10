@@ -107,6 +107,7 @@ impl ClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
+	#[cfg(not(feature = "async-wasm-client"))]
 	pub fn build<S, R>(self, sender: S, receiver: R) -> Client
 	where
 		S: TransportSenderT,
@@ -114,6 +115,28 @@ impl ClientBuilder {
 		R: TransportReceiverT,
 		<R as TransportReceiverT>::Error: std::error::Error,
 	{
+		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
+		let (err_tx, err_rx) = oneshot::channel();
+		let max_notifs_per_subscription = self.max_notifs_per_subscription;
+
+		tokio::spawn(async move {
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription).await;
+		});
+		Client {
+			to_back,
+			request_timeout: self.request_timeout,
+			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
+			id_manager: RequestIdManager::new(self.max_concurrent_requests),
+		}
+	}
+
+	/// Build the client with given transport.
+	///
+	/// ## Panics
+	///
+	/// Panics if being called outside of `tokio` runtime context.
+	#[cfg(feature = "async-wasm-client")]
+	pub fn build<S, R>(self, sender: S, receiver: R) -> Client {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
@@ -527,8 +550,7 @@ async fn background_task<S, R>(
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				tracing::error!("Error: {:?} terminating client", e);
-				// TODO(niklasad1): tmp because StdError is removed from traits.
-				//let _ = front_error.send(Error::Transport(e.into()));
+				let _ = front_error.send(Error::Transport(e.into()));
 				break;
 			}
 			Either::Right((None, _)) => {

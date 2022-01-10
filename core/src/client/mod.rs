@@ -48,10 +48,10 @@ pub mod __reexports {
 }
 
 /// Async client abstraction that brings additional deps.
-#[cfg(feature = "async-client")]
+#[cfg(any(feature = "async-client", feature = "async-client-wasm"))]
 mod async_client;
 
-#[cfg(feature = "async-client")]
+#[cfg(any(feature = "async-client", feature = "async-client-wasm"))]
 pub use async_client::{Client, ClientBuilder};
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
