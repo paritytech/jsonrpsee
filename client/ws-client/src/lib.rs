@@ -37,8 +37,8 @@
 #[cfg(test)]
 mod tests;
 
+pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
-pub use jsonrpsee_core::Client as WsClient;
 
 use std::time::Duration;
 
