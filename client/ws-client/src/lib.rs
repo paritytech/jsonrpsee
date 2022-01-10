@@ -46,7 +46,7 @@ use jsonrpsee_client_transport::ws::{Header, InvalidUri, Uri, WsTransportClientB
 use jsonrpsee_core::client::{CertificateStore, ClientBuilder};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
-/// Builder for [`Client`].
+/// Builder for [`WsClient`].
 ///
 /// # Examples
 ///
