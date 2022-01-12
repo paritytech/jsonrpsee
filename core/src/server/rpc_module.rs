@@ -62,7 +62,6 @@ pub type ConnectionId = usize;
 /// Raw RPC response.
 pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, mpsc::UnboundedSender<String>);
 /// Connection state for stateful protocols such as WebSocket
-/// This is used to keep track whether the connection has been closed.
 pub type MaybeConnState<'a> = Option<ConnState<'a>>;
 
 /// Data for stateful connections.
