@@ -40,7 +40,6 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
-use jsonrpsee_core::id_providers::NoopIdProvider;
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
@@ -457,7 +456,7 @@ async fn process_validated_request(
 			middleware.on_call(req.method.as_ref());
 
 			// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-			match methods.execute_with_resources(&sink, None, req, 0, &resources, &NoopIdProvider) {
+			match methods.execute_with_resources(&sink, None, req, &resources) {
 				Ok((name, MethodResult::Sync(success))) => {
 					middleware.on_result(name, success, request_start);
 				}
@@ -483,7 +482,7 @@ async fn process_validated_request(
 			let middleware = &middleware;
 
 			join_all(batch.into_iter().filter_map(move |req| {
-				match methods.execute_with_resources(&sink, None, req, 0, &resources, &NoopIdProvider) {
+				match methods.execute_with_resources(&sink, None, req, &resources) {
 					Ok((name, MethodResult::Sync(success))) => {
 						middleware.on_result(name, success, request_start);
 						None

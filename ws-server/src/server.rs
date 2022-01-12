@@ -41,7 +41,7 @@ use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
-use jsonrpsee_core::server::rpc_module::{ConnectionId, MethodResult, Methods};
+use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodResult, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use soketto::connection::Error as SokettoError;
@@ -375,14 +375,9 @@ async fn background_task(
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
 
-					match methods.execute_with_resources(
-						&sink,
-						Some(conn_rx.clone()),
-						req,
-						conn_id,
-						&resources,
-						&*id_provider,
-					) {
+					let conn_state = Some(ConnState { conn_id, close: conn_rx.clone(), id_provider: &*id_provider });
+
+					match methods.execute_with_resources(&sink, conn_state, req, &resources) {
 						Ok((name, MethodResult::Sync(success))) => {
 							middleware.on_result(name, success, request_start);
 							middleware.on_response(request_start);
@@ -429,14 +424,10 @@ async fn background_task(
 						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
 							join_all(batch.into_iter().filter_map(move |req| {
-								match methods.execute_with_resources(
-									&sink_batch,
-									Some(conn_rx2.clone()),
-									req,
-									conn_id,
-									resources,
-									&*id_provider,
-								) {
+								let conn_state =
+									Some(ConnState { conn_id, close: conn_rx2.clone(), id_provider: &*id_provider });
+
+								match methods.execute_with_resources(&sink_batch, conn_state, req, resources) {
 									Ok((name, MethodResult::Sync(success))) => {
 										middleware.on_result(name, success, request_start);
 										None

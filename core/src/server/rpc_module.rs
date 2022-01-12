@@ -51,20 +51,10 @@ use serde::{de::DeserializeOwned, Serialize};
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod =
-	Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionState, ConnectionId, &dyn IdProvider) -> bool>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, MaybeConnState) -> bool>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> = Arc<
-	dyn Send
-		+ Sync
-		+ Fn(
-			Id<'a>,
-			Params<'a>,
-			MethodSink,
-			ConnectionState,
-			Option<ResourceGuard>,
-			&dyn IdProvider,
-		) -> BoxFuture<'a, bool>,
+	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, bool>,
 >;
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -73,7 +63,23 @@ pub type ConnectionId = usize;
 pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, mpsc::UnboundedSender<String>);
 /// Connection state for stateful protocols such as WebSocket
 /// This is used to keep track whether the connection has been closed.
-pub type ConnectionState = Option<async_channel::Receiver<()>>;
+pub type MaybeConnState<'a> = Option<ConnState<'a>>;
+
+/// Data for stateful connections.
+pub struct ConnState<'a> {
+	/// Connection ID
+	pub conn_id: ConnectionId,
+	/// Channel to know whether the connection is closed or not.
+	pub close: async_channel::Receiver<()>,
+	/// ID provider.
+	pub id_provider: &'a dyn IdProvider,
+}
+
+impl<'a> std::fmt::Debug for ConnState<'a> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Server").field("conn_id", &self.conn_id).field("close", &self.close).finish()
+	}
+}
 
 type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Receiver<()>)>>>;
 
@@ -170,11 +176,9 @@ impl MethodCallback {
 	pub fn execute(
 		&self,
 		sink: &MethodSink,
-		conn: ConnectionState,
+		conn_state: MaybeConnState<'_>,
 		req: Request<'_>,
-		conn_id: ConnectionId,
 		claimed: Option<ResourceGuard>,
-		id_gen: &dyn IdProvider,
 	) -> MethodResult<bool> {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
@@ -182,13 +186,13 @@ impl MethodCallback {
 		let result = match &self.callback {
 			MethodKind::Sync(callback) => {
 				tracing::trace!(
-					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_id={:?}",
+					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_state={:?}",
 					params,
 					id,
-					conn_id
+					conn_state
 				);
 
-				let result = (callback)(id, params, sink, conn, conn_id, id_gen);
+				let result = (callback)(id, params, sink, conn_state);
 
 				// Release claimed resources
 				drop(claimed);
@@ -199,14 +203,15 @@ impl MethodCallback {
 				let sink = sink.clone();
 				let params = params.into_owned();
 				let id = id.into_owned();
+				let conn_id = conn_state.map(|s| s.conn_id).unwrap_or(0);
 				tracing::trace!(
-					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_id={:?}",
+					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_state={:?}",
 					params,
 					id,
-					conn_id
+					conn_id,
 				);
 
-				MethodResult::Async((callback)(id, params, sink, conn, claimed, id_gen))
+				MethodResult::Async((callback)(id, params, sink, conn_id, claimed))
 			}
 		};
 
@@ -321,17 +326,10 @@ impl Methods {
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(
-		&self,
-		sink: &MethodSink,
-		conn: ConnectionState,
-		req: Request,
-		conn_id: ConnectionId,
-		id_gen: &dyn IdProvider,
-	) -> MethodResult<bool> {
+	pub fn execute(&self, sink: &MethodSink, conn_state: MaybeConnState, req: Request) -> MethodResult<bool> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
-			Some(callback) => callback.execute(sink, conn, req, conn_id, None, id_gen),
+			Some(callback) => callback.execute(sink, conn_state, req, None),
 			None => {
 				sink.send_error(req.id, ErrorCode::MethodNotFound.into());
 				MethodResult::Sync(false)
@@ -344,16 +342,14 @@ impl Methods {
 	pub fn execute_with_resources<'r>(
 		&self,
 		sink: &MethodSink,
-		rx: ConnectionState,
+		conn_state: MaybeConnState<'r>,
 		req: Request<'r>,
-		conn_id: ConnectionId,
 		resources: &Resources,
-		id_gen: &dyn IdProvider,
 	) -> Result<(&'static str, MethodResult<bool>), Cow<'r, str>> {
 		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
 		match self.callbacks.get_key_value(&*req.method) {
 			Some((&name, callback)) => match callback.claim(&req.method, resources) {
-				Ok(guard) => Ok((name, callback.execute(sink, rx, req, conn_id, Some(guard), id_gen))),
+				Ok(guard) => Ok((name, callback.execute(sink, conn_state, req, Some(guard)))),
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
 					sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
@@ -444,7 +440,9 @@ impl Methods {
 		let sink = MethodSink::new(tx.clone());
 		let (_tx, rx_2) = async_channel::unbounded();
 
-		if let MethodResult::Async(fut) = self.execute(&sink, Some(rx_2), req, 0, &RandomIntegerIdProvider) {
+		let conn_state = Some(ConnState { conn_id: 0, close: rx_2, id_provider: &RandomIntegerIdProvider });
+
+		if let MethodResult::Async(fut) = self.execute(&sink, conn_state, req) {
 			fut.await;
 		}
 
@@ -544,7 +542,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_sync(Arc::new(move |id, params, sink, _, _, _| match callback(params, &*ctx) {
+			MethodCallback::new_sync(Arc::new(move |id, params, sink, _| match callback(params, &*ctx) {
 				Ok(res) => sink.send_response(id, res),
 				Err(err) => sink.send_call_error(id, err),
 			})),
@@ -567,7 +565,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, sink, _, claimed, _| {
+			MethodCallback::new_async(Arc::new(move |id, params, sink, _, claimed| {
 				let ctx = ctx.clone();
 				let future = async move {
 					let result = match callback(params, ctx).await {
@@ -602,7 +600,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, sink, _, claimed, _| {
+			MethodCallback::new_async(Arc::new(move |id, params, sink, _, claimed| {
 				let ctx = ctx.clone();
 
 				tokio::task::spawn_blocking(move || {
@@ -688,12 +686,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn, conn_id, id_provider| {
+				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn| {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
+					let c = conn.expect("conn must be Some; this is bug");
 
 					let sub_id = {
-						let sub_id: RpcSubscriptionId = id_provider.next_id().into_owned();
-						let uniq_sub = SubscriptionKey { conn_id, sub_id: sub_id.clone() };
+						let sub_id: RpcSubscriptionId = c.id_provider.next_id().into_owned();
+						let uniq_sub = SubscriptionKey { conn_id: c.conn_id, sub_id: sub_id.clone() };
 
 						subscribers.lock().insert(uniq_sub, (method_sink.clone(), conn_rx));
 
@@ -704,10 +703,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
-						close: conn,
+						close: c.close,
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
-						uniq_sub: SubscriptionKey { conn_id, sub_id },
+						uniq_sub: SubscriptionKey { conn_id: c.conn_id, sub_id },
 						is_connected: Some(conn_tx),
 					};
 					if let Err(err) = callback(params, sink, ctx.clone()) {
@@ -728,7 +727,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, sink, _, conn_id, _| {
+				MethodCallback::new_sync(Arc::new(move |id, params, sink, conn_state| {
+					let conn = conn_state.expect("conn must be Some; this is bug");
+
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -745,7 +746,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					let sub_id = sub_id.into_owned();
 
-					if subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id: sub_id.clone() }).is_some() {
+					if subscribers
+						.lock()
+						.remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() })
+						.is_some()
+					{
 						sink.send_response(id, "Unsubscribed")
 					} else {
 						let err = to_json_raw_value(&format!(
@@ -783,7 +788,7 @@ pub struct SubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
 	/// Close
-	close: ConnectionState,
+	close: async_channel::Receiver<()>,
 	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
@@ -812,8 +817,6 @@ impl SubscriptionSink {
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
 	{
-		let mut rx = self.close.take().expect("close must be Some; please file an issue");
-
 		loop {
 			tokio::select! {
 				Some(item) = stream.next() => {
@@ -821,15 +824,9 @@ impl SubscriptionSink {
 						break;
 					}
 				},
-				v = rx.next() => {
-					if let Some(_) = v {
-						// No messages should be sent over this channel.
-						()
-					} else {
-						// Channel dropped by the server.
-						break;
-					}
-				},
+				// No messages should be sent over this channel (just ignore and continue)
+				Some(_) = self.close.next() => {},
+				// Stream or connection was dropped => close stream.
 				else => break,
 			}
 		}
