@@ -51,7 +51,7 @@ use serde::{de::DeserializeOwned, Serialize};
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, MaybeConnState) -> bool>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, Option<ConnState>) -> bool>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> = Arc<
 	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, bool>,
@@ -61,8 +61,6 @@ pub type AsyncMethod<'a> = Arc<
 pub type ConnectionId = usize;
 /// Raw RPC response.
 pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, mpsc::UnboundedSender<String>);
-/// Connection state for stateful protocols such as WebSocket
-pub type MaybeConnState<'a> = Option<ConnState<'a>>;
 
 /// Data for stateful connections.
 pub struct ConnState<'a> {
@@ -76,7 +74,7 @@ pub struct ConnState<'a> {
 
 impl<'a> std::fmt::Debug for ConnState<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Server").field("conn_id", &self.conn_id).field("close", &self.close).finish()
+		f.debug_struct("ConnState").field("conn_id", &self.conn_id).field("close", &self.close).finish()
 	}
 }
 
@@ -175,7 +173,7 @@ impl MethodCallback {
 	pub fn execute(
 		&self,
 		sink: &MethodSink,
-		conn_state: MaybeConnState<'_>,
+		conn_state: Option<ConnState>,
 		req: Request<'_>,
 		claimed: Option<ResourceGuard>,
 	) -> MethodResult<bool> {
@@ -325,7 +323,7 @@ impl Methods {
 	}
 
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, sink: &MethodSink, conn_state: MaybeConnState, req: Request) -> MethodResult<bool> {
+	pub fn execute(&self, sink: &MethodSink, conn_state: Option<ConnState>, req: Request) -> MethodResult<bool> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
 		match self.callbacks.get(&*req.method) {
 			Some(callback) => callback.execute(sink, conn_state, req, None),
@@ -341,7 +339,7 @@ impl Methods {
 	pub fn execute_with_resources<'r>(
 		&self,
 		sink: &MethodSink,
-		conn_state: MaybeConnState<'r>,
+		conn_state: Option<ConnState<'r>>,
 		req: Request<'r>,
 		resources: &Resources,
 	) -> Result<(&'static str, MethodResult<bool>), Cow<'r, str>> {
@@ -727,7 +725,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
 				MethodCallback::new_sync(Arc::new(move |id, params, sink, conn_state| {
-					let conn = conn_state.expect("conn must be Some; this is bug");
+					let c = conn_state.expect("conn must be Some; this is bug");
 
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
@@ -747,7 +745,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					if subscribers
 						.lock()
-						.remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() })
+						.remove(&SubscriptionKey { conn_id: c.conn_id, sub_id: sub_id.clone() })
 						.is_some()
 					{
 						sink.send_response(id, "Unsubscribed")
