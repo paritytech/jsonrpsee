@@ -360,7 +360,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 }
 
 #[tokio::test]
-async fn ws_server_cancel_stream_after_reset_conn() {
+async fn ws_server_cancels_stream_after_reset_conn() {
 	use futures::{channel::mpsc, SinkExt, StreamExt};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
