@@ -215,11 +215,12 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
-			std::thread::spawn(move || loop {
-				if let Err(Error::SubscriptionClosed(_)) = sink.send(&"lo") {
-					return;
+			std::thread::spawn(move || {
+				// make sure to only send one item
+				sink.send(&"lo").unwrap();
+				while !sink.is_closed() {
+					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
-				std::thread::sleep(std::time::Duration::from_millis(500));
 			});
 			Ok(())
 		})
@@ -232,5 +233,5 @@ async fn close_test_subscribing_without_server() {
 
 	// close the subscription to ensure it doesn't return any items.
 	my_sub.close();
-	assert!(matches!(my_sub.next::<String>().await, None));
+	assert!(matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(_)))));
 }

@@ -60,7 +60,7 @@ pub type AsyncMethod<'a> = Arc<
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
 /// Raw RPC response.
-pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, mpsc::UnboundedSender<String>);
+pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, async_channel::Sender<()>);
 
 /// Data for stateful connections.
 pub struct ConnState<'a> {
@@ -434,17 +434,17 @@ impl Methods {
 	/// Wrapper over [`Methods::execute`] to execute a callback.
 	async fn inner_call(&self, req: Request<'_>) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::unbounded();
-		let sink = MethodSink::new(tx.clone());
-		let (_tx, rx_2) = async_channel::unbounded();
+		let sink = MethodSink::new(tx);
+		let (close_tx, close_rx) = async_channel::unbounded();
 
-		let conn_state = Some(ConnState { conn_id: 0, close: rx_2, id_provider: &RandomIntegerIdProvider });
+		let conn_state = Some(ConnState { conn_id: 0, close: close_rx, id_provider: &RandomIntegerIdProvider });
 
 		if let MethodResult::Async(fut) = self.execute(&sink, conn_state, req) {
 			fut.await;
 		}
 
 		let resp = rx.next().await.expect("tx and rx still alive; qed");
-		(resp, rx, tx)
+		(resp, rx, close_tx)
 	}
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
@@ -831,7 +831,7 @@ impl SubscriptionSink {
 
 	/// Returns whether this channel is closed without needing a context.
 	pub fn is_closed(&self) -> bool {
-		self.inner.is_closed()
+		self.inner.is_closed() || self.close.is_closed()
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
@@ -893,7 +893,7 @@ impl Drop for SubscriptionSink {
 /// Wrapper struct that maintains a subscription "mainly" for testing.
 #[derive(Debug)]
 pub struct Subscription {
-	tx: mpsc::UnboundedSender<String>,
+	tx: async_channel::Sender<()>,
 	rx: mpsc::UnboundedReceiver<String>,
 	sub_id: RpcSubscriptionId<'static>,
 }
@@ -901,7 +901,7 @@ pub struct Subscription {
 impl Subscription {
 	/// Close the subscription channel.
 	pub fn close(&mut self) {
-		self.tx.close_channel();
+		self.tx.close();
 	}
 
 	/// Get the subscription ID
