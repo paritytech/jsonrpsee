@@ -36,7 +36,6 @@ use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::to_json_raw_value;
 use crate::traits::{IdProvider, ToRpcParams};
-use beef::Cow;
 use futures_channel::{mpsc, oneshot};
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use jsonrpsee_types::error::{invalid_subscription_err, ErrorCode, CALL_EXECUTION_FAILED_CODE};
@@ -51,11 +50,14 @@ use serde::{de::DeserializeOwned, Serialize};
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, Option<ConnState>) -> bool>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink) -> bool>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> = Arc<
 	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, bool>,
 >;
+/// Method callback for subscriptions.
+pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnState) -> bool>;
+
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -89,11 +91,13 @@ struct SubscriptionKey {
 
 /// Callback wrapper that can be either sync or async.
 #[derive(Clone)]
-enum MethodKind {
+pub enum MethodKind {
 	/// Synchronous method handler.
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
+	/// Subscription handler,
+	Subscription(SubscriptionMethod),
 }
 
 /// Information about resources the method uses during its execution. Initialized when the the server starts.
@@ -109,7 +113,8 @@ enum MethodResources {
 /// plus a table with resources it needs to claim to run
 #[derive(Clone, Debug)]
 pub struct MethodCallback {
-	callback: MethodKind,
+	/// TODO: Deref impl...
+	pub callback: MethodKind,
 	resources: MethodResources,
 }
 
@@ -160,6 +165,13 @@ impl MethodCallback {
 		MethodCallback { callback: MethodKind::Async(callback), resources: MethodResources::Uninitialized([].into()) }
 	}
 
+	fn new_subscription(callback: SubscriptionMethod) -> Self {
+		MethodCallback {
+			callback: MethodKind::Subscription(callback),
+			resources: MethodResources::Uninitialized([].into()),
+		}
+	}
+
 	/// Attempt to claim resources prior to executing a method. On success returns a guard that releases
 	/// claimed resources when dropped.
 	pub fn claim(&self, name: &str, resources: &Resources) -> Result<ResourceGuard, Error> {
@@ -169,6 +181,7 @@ impl MethodCallback {
 		}
 	}
 
+	/*
 	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(
 		&self,
@@ -213,7 +226,7 @@ impl MethodCallback {
 		};
 
 		result
-	}
+	}*/
 }
 
 impl Debug for MethodKind {
@@ -221,6 +234,7 @@ impl Debug for MethodKind {
 		match self {
 			Self::Async(_) => write!(f, "Async"),
 			Self::Sync(_) => write!(f, "Sync"),
+			Self::Subscription(_) => write!(f, "Subscription"),
 		}
 	}
 }
@@ -322,6 +336,13 @@ impl Methods {
 		self.callbacks.get_key_value(method_name).map(|(k, v)| (*k, v))
 	}
 
+	/// Returns callback handle for a method name
+	///
+	pub fn as_callback(&self, method: &str) -> Option<&MethodCallback> {
+		self.callbacks.get(method)
+	}
+
+	/*
 	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute(&self, sink: &MethodSink, conn_state: Option<ConnState>, req: Request) -> MethodResult<bool> {
 		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
@@ -332,8 +353,9 @@ impl Methods {
 				MethodResult::Sync(false)
 			}
 		}
-	}
+	}*/
 
+	/*
 	/// Attempt to execute a callback while checking that the call does not exhaust the available resources,
 	// sending the resulting JSON (success or error) to the specified sink.
 	pub fn execute_with_resources<'r>(
@@ -358,7 +380,7 @@ impl Methods {
 				Err(req.method)
 			}
 		}
-	}
+	}*/
 
 	/// Helper to call a method on the `RPC module` without having to spin up a server.
 	///
@@ -437,11 +459,18 @@ impl Methods {
 		let sink = MethodSink::new(tx);
 		let (close_tx, close_rx) = async_channel::unbounded();
 
-		let conn_state = Some(ConnState { conn_id: 0, close: close_rx, id_provider: &RandomIntegerIdProvider });
+		let id = req.id.clone();
+		let params = Params::new(req.params.map(|params| params.get()));
 
-		if let MethodResult::Async(fut) = self.execute(&sink, conn_state, req) {
-			fut.await;
-		}
+		let _result = match self.as_callback(&req.method).map(|c| &c.callback) {
+			None => todo!(),
+			Some(MethodKind::Sync(cb)) => (cb)(id, params, &sink),
+			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
+			Some(MethodKind::Subscription(cb)) => {
+				let conn_state = ConnState { conn_id: 0, close: close_rx, id_provider: &RandomIntegerIdProvider };
+				(cb)(id, params, &sink, conn_state)
+			}
+		};
 
 		let resp = rx.next().await.expect("tx and rx still alive; qed");
 		(resp, rx, close_tx)
@@ -539,7 +568,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_sync(Arc::new(move |id, params, sink, _| match callback(params, &*ctx) {
+			MethodCallback::new_sync(Arc::new(move |id, params, sink| match callback(params, &*ctx) {
 				Ok(res) => sink.send_response(id, res),
 				Err(err) => sink.send_call_error(id, err),
 			})),
@@ -683,13 +712,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			let subscribers = subscribers.clone();
 			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, method_sink, conn| {
+				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn| {
 					let (conn_tx, conn_rx) = oneshot::channel::<()>();
-					let c = conn.expect("conn must be Some; this is bug");
 
 					let sub_id = {
-						let sub_id: RpcSubscriptionId = c.id_provider.next_id().into_owned();
-						let uniq_sub = SubscriptionKey { conn_id: c.conn_id, sub_id: sub_id.clone() };
+						let sub_id: RpcSubscriptionId = conn.id_provider.next_id().into_owned();
+						let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() };
 
 						subscribers.lock().insert(uniq_sub, (method_sink.clone(), conn_rx));
 
@@ -700,10 +728,10 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
-						close: c.close,
+						close: conn.close,
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
-						uniq_sub: SubscriptionKey { conn_id: c.conn_id, sub_id },
+						uniq_sub: SubscriptionKey { conn_id: conn.conn_id, sub_id },
 						is_connected: Some(conn_tx),
 					};
 					if let Err(err) = callback(params, sink, ctx.clone()) {
@@ -724,9 +752,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_sync(Arc::new(move |id, params, sink, conn_state| {
-					let c = conn_state.expect("conn must be Some; this is bug");
-
+				MethodCallback::new_subscription(Arc::new(move |id, params, sink, conn| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -745,7 +771,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					if subscribers
 						.lock()
-						.remove(&SubscriptionKey { conn_id: c.conn_id, sub_id: sub_id.clone() })
+						.remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() })
 						.is_some()
 					{
 						sink.send_response(id, "Unsubscribed")

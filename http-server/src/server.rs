@@ -43,10 +43,10 @@ use jsonrpsee_core::http_helpers::{self, read_body};
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
-use jsonrpsee_core::server::rpc_module::{MethodResult, Methods};
+use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::ErrorCode;
-use jsonrpsee_types::{Id, Notification, Request};
+use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
 
@@ -453,22 +453,52 @@ async fn process_validated_request(
 	// Single request or notification
 	if is_single {
 		if let Ok(req) = serde_json::from_slice::<Request>(&body) {
+			let method = req.method.as_ref();
 			middleware.on_call(req.method.as_ref());
 
-			// NOTE: we don't need to track connection id on HTTP, so using hardcoded 0 here.
-			match methods.execute_with_resources(&sink, None, req, &resources) {
-				Ok((name, MethodResult::Sync(success))) => {
-					middleware.on_result(name, success, request_start);
-				}
-				Ok((name, MethodResult::Async(fut))) => {
-					let success = fut.await;
+			let id = req.id.clone();
+			let params = Params::new(req.params.map(|params| params.get()));
 
-					middleware.on_result(name, success, request_start);
+			let result = match methods.as_callback(method) {
+				None => {
+					sink.send_error(req.id, ErrorCode::MethodNotFound.into());
+					false
 				}
-				Err(name) => {
-					middleware.on_result(name.as_ref(), false, request_start);
-				}
-			}
+				Some(method) => match &method.callback {
+					MethodKind::Sync(callback) => match method.claim(&req.method, &resources) {
+						Ok(guard) => {
+							let result = (callback)(id, params, &sink);
+							drop(guard);
+							result
+						}
+						Err(err) => {
+							tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+							sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+							false
+						}
+					},
+					MethodKind::Async(callback) => match method.claim(&req.method, &resources) {
+						Ok(guard) => {
+							let result =
+								(callback)(id.into_owned(), params.into_owned(), sink.clone(), 0, Some(guard)).await;
+							result
+						}
+						Err(err) => {
+							tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+							sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+							false
+						}
+					},
+					MethodKind::Subscription(_) => {
+						tracing::error!("Subscriptions not supported on HTTP");
+						sink.send_error(req.id, ErrorCode::InternalError.into());
+						false
+					}
+				},
+			};
+			middleware.on_result(&req.method, result, request_start);
+		// TODO: shouldn't `on_response` be called here?!
+		//middleware.on_response(request_start);
 		} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
 			return Ok::<_, HyperError>(response::ok_response("".into()));
 		} else {
@@ -482,19 +512,61 @@ async fn process_validated_request(
 			let middleware = &middleware;
 
 			join_all(batch.into_iter().filter_map(move |req| {
-				match methods.execute_with_resources(&sink, None, req, &resources) {
-					Ok((name, MethodResult::Sync(success))) => {
-						middleware.on_result(name, success, request_start);
+				let id = req.id.clone();
+				let params = Params::new(req.params.map(|params| params.get()));
+
+				match methods.as_callback(&req.method) {
+					None => {
+						sink.send_error(req.id, ErrorCode::MethodNotFound.into());
 						None
 					}
-					Ok((name, MethodResult::Async(fut))) => Some(async move {
-						let success = fut.await;
-						middleware.on_result(name, success, request_start);
-					}),
-					Err(name) => {
-						middleware.on_result(name.as_ref(), false, request_start);
-						None
-					}
+					Some(method) => match &method.callback {
+						MethodKind::Sync(callback) => match method.claim(&req.method, &resources) {
+							Ok(guard) => {
+								let result = (callback)(id, params, &sink);
+								middleware.on_result(&req.method, result, request_start);
+								drop(guard);
+								None
+							}
+							Err(err) => {
+								tracing::error!(
+									"[Methods::execute_with_resources] failed to lock resources: {:?}",
+									err
+								);
+								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+								middleware.on_result(&req.method, false, request_start);
+								None
+							}
+						},
+						MethodKind::Async(callback) => match method.claim(&req.method, &resources) {
+							Ok(guard) => {
+								let sink = sink.clone();
+								let id = id.into_owned();
+								let params = params.into_owned();
+								let callback = callback.clone();
+
+								Some(async move {
+									let result = (callback)(id, params, sink, 0, Some(guard)).await;
+									middleware.on_result(&req.method, result, request_start);
+								})
+							}
+							Err(err) => {
+								tracing::error!(
+									"[Methods::execute_with_resources] failed to lock resources: {:?}",
+									err
+								);
+								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+								middleware.on_result(&req.method, false, request_start);
+								None
+							}
+						},
+						MethodKind::Subscription(_) => {
+							tracing::error!("Subscriptions not supported on HTTP");
+							sink.send_error(req.id, ErrorCode::InternalError.into());
+							middleware.on_result(&req.method, false, request_start);
+							None
+						}
+					},
 				}
 			}))
 			.await;
