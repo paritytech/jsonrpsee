@@ -96,7 +96,7 @@ pub enum MethodKind {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
-	/// Subscription handler,
+	/// Subscription method handler
 	Subscription(SubscriptionMethod),
 }
 
@@ -113,8 +113,7 @@ enum MethodResources {
 /// plus a table with resources it needs to claim to run
 #[derive(Clone, Debug)]
 pub struct MethodCallback {
-	/// TODO: Deref impl...
-	pub callback: MethodKind,
+	callback: MethodKind,
 	resources: MethodResources,
 }
 
@@ -181,52 +180,10 @@ impl MethodCallback {
 		}
 	}
 
-	/*
-	/// Execute the callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(
-		&self,
-		sink: &MethodSink,
-		conn_state: Option<ConnState>,
-		req: Request<'_>,
-		claimed: Option<ResourceGuard>,
-	) -> MethodResult<bool> {
-		let id = req.id.clone();
-		let params = Params::new(req.params.map(|params| params.get()));
-
-		let result = match &self.callback {
-			MethodKind::Sync(callback) => {
-				tracing::trace!(
-					"[MethodCallback::execute] Executing sync callback, params={:?}, req.id={:?}, conn_state={:?}",
-					params,
-					id,
-					conn_state
-				);
-
-				let result = (callback)(id, params, sink, conn_state);
-
-				// Release claimed resources
-				drop(claimed);
-
-				MethodResult::Sync(result)
-			}
-			MethodKind::Async(callback) => {
-				let sink = sink.clone();
-				let params = params.into_owned();
-				let id = id.into_owned();
-				let conn_id = conn_state.map(|s| s.conn_id).unwrap_or(0);
-				tracing::trace!(
-					"[MethodCallback::execute] Executing async callback, params={:?}, req.id={:?}, conn_state={:?}",
-					params,
-					id,
-					conn_id,
-				);
-
-				MethodResult::Async((callback)(id, params, sink, conn_id, claimed))
-			}
-		};
-
-		result
-	}*/
+	/// Get handle to the callback.
+	pub fn inner(&self) -> &MethodKind {
+		&self.callback
+	}
 }
 
 impl Debug for MethodKind {
@@ -336,52 +293,6 @@ impl Methods {
 		self.callbacks.get_key_value(method_name).map(|(k, v)| (*k, v))
 	}
 
-	/// Returns callback handle for a method name
-	///
-	pub fn as_callback(&self, method: &str) -> Option<&MethodCallback> {
-		self.callbacks.get(method)
-	}
-
-	/*
-	/// Attempt to execute a callback, sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute(&self, sink: &MethodSink, conn_state: Option<ConnState>, req: Request) -> MethodResult<bool> {
-		tracing::trace!("[Methods::execute] Executing request: {:?}", req);
-		match self.callbacks.get(&*req.method) {
-			Some(callback) => callback.execute(sink, conn_state, req, None),
-			None => {
-				sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-				MethodResult::Sync(false)
-			}
-		}
-	}*/
-
-	/*
-	/// Attempt to execute a callback while checking that the call does not exhaust the available resources,
-	// sending the resulting JSON (success or error) to the specified sink.
-	pub fn execute_with_resources<'r>(
-		&self,
-		sink: &MethodSink,
-		conn_state: Option<ConnState<'r>>,
-		req: Request<'r>,
-		resources: &Resources,
-	) -> Result<(&'static str, MethodResult<bool>), Cow<'r, str>> {
-		tracing::trace!("[Methods::execute_with_resources] Executing request: {:?}", req);
-		match self.callbacks.get_key_value(&*req.method) {
-			Some((&name, callback)) => match callback.claim(&req.method, resources) {
-				Ok(guard) => Ok((name, callback.execute(sink, conn_state, req, Some(guard)))),
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-					Ok((name, MethodResult::Sync(false)))
-				}
-			},
-			None => {
-				sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-				Err(req.method)
-			}
-		}
-	}*/
-
 	/// Helper to call a method on the `RPC module` without having to spin up a server.
 	///
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
@@ -462,7 +373,7 @@ impl Methods {
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
 
-		let _result = match self.as_callback(&req.method).map(|c| &c.callback) {
+		let _result = match self.method(&req.method).map(|c| &c.callback) {
 			None => todo!(),
 			Some(MethodKind::Sync(cb)) => (cb)(id, params, &sink),
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,

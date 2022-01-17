@@ -374,85 +374,80 @@ async fn background_task(
 					tracing::debug!("recv method call={}", req.method);
 					tracing::trace!("recv: req={:?}", req);
 
-					let name = &req.method;
 					let id = req.id.clone();
 					let params = Params::new(req.params.map(|params| params.get()));
 
-					middleware.on_call(name);
+					middleware.on_call(&req.method);
 
-					match methods.as_callback(&name) {
+					match methods.method_with_name(&req.method) {
 						None => {
 							sink.send_error(req.id, ErrorCode::MethodNotFound.into());
 							middleware.on_response(request_start);
 						}
-						Some(method) => {
-							match &method.callback {
-								MethodKind::Sync(callback) => match method.claim(name, &resources) {
-									Ok(guard) => {
-										let result = (callback)(id, params, &sink);
+						Some((name, method)) => match &method.inner() {
+							MethodKind::Sync(callback) => match method.claim(name, &resources) {
+								Ok(guard) => {
+									let result = (callback)(id, params, &sink);
 
+									middleware.on_result(name, result, request_start);
+									middleware.on_response(request_start);
+									drop(guard);
+								}
+								Err(err) => {
+									tracing::error!(
+										"[Methods::execute_with_resources] failed to lock resources: {:?}",
+										err
+									);
+									sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+									middleware.on_result(name, false, request_start);
+									middleware.on_response(request_start);
+								}
+							},
+							MethodKind::Async(callback) => match method.claim(name, &resources) {
+								Ok(guard) => {
+									let sink = sink.clone();
+									let id = id.into_owned();
+									let params = params.into_owned();
+
+									let fut = async move {
+										let result = (callback)(id, params, sink, conn_id, Some(guard)).await;
 										middleware.on_result(&name, result, request_start);
 										middleware.on_response(request_start);
-										drop(guard);
-									}
-									Err(err) => {
-										tracing::error!(
-											"[Methods::execute_with_resources] failed to lock resources: {:?}",
-											err
-										);
-										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-										middleware.on_result(&name, false, request_start);
-										middleware.on_response(request_start);
-									}
-								},
-								MethodKind::Async(callback) => match method.claim(&req.method, &resources) {
-									Ok(guard) => {
-										let sink = sink.clone();
-										let id = id.into_owned();
-										let params = params.into_owned();
-										// TODO: return name from the callback handle to avoid `to_string`.
-										let name = name.to_string();
+									};
 
-										let fut = async move {
-											let result = (callback)(id, params, sink, conn_id, Some(guard)).await;
-											middleware.on_result(&name, result, request_start);
-											middleware.on_response(request_start);
-										};
+									method_executors.add(fut.boxed());
+								}
+								Err(err) => {
+									tracing::error!(
+										"[Methods::execute_with_resources] failed to lock resources: {:?}",
+										err
+									);
+									sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+									middleware.on_result(name, false, request_start);
+									middleware.on_response(request_start);
+								}
+							},
+							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
+								Ok(guard) => {
+									let conn_state =
+										ConnState { conn_id, close: conn_rx.clone(), id_provider: &*id_provider };
 
-										method_executors.add(fut.boxed());
-									}
-									Err(err) => {
-										tracing::error!(
-											"[Methods::execute_with_resources] failed to lock resources: {:?}",
-											err
-										);
-										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-										middleware.on_result(&name, false, request_start);
-										middleware.on_response(request_start);
-									}
-								},
-								MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
-									Ok(guard) => {
-										let conn_state =
-											ConnState { conn_id, close: conn_rx.clone(), id_provider: &*id_provider };
-
-										let result = callback(id, params, &sink, conn_state);
-										middleware.on_result(&name, result, request_start);
-										middleware.on_response(request_start);
-										drop(guard);
-									}
-									Err(err) => {
-										tracing::error!(
-											"[Methods::execute_with_resources] failed to lock resources: {:?}",
-											err
-										);
-										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-										middleware.on_result(&name, false, request_start);
-										middleware.on_response(request_start);
-									}
-								},
-							}
-						}
+									let result = callback(id, params, &sink, conn_state);
+									middleware.on_result(name, result, request_start);
+									middleware.on_response(request_start);
+									drop(guard);
+								}
+								Err(err) => {
+									tracing::error!(
+										"[Methods::execute_with_resources] failed to lock resources: {:?}",
+										err
+									);
+									sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+									middleware.on_result(name, false, request_start);
+									middleware.on_response(request_start);
+								}
+							},
+						},
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
@@ -484,16 +479,16 @@ async fn background_task(
 								let params = Params::new(req.params.map(|params| params.get()));
 								let name = &req.method;
 
-								match methods.as_callback(name) {
+								match methods.method_with_name(name) {
 									None => {
 										sink_batch.send_error(req.id, ErrorCode::MethodNotFound.into());
 										None
 									}
-									Some(method) => match &method.callback {
-										MethodKind::Sync(callback) => match method.claim(name, &resources) {
+									Some((name, method_callback)) => match &method_callback.inner() {
+										MethodKind::Sync(callback) => match method_callback.claim(name, resources) {
 											Ok(guard) => {
 												let result = (callback)(id, params, &sink_batch);
-												middleware.on_result(&req.method, result, request_start);
+												middleware.on_result(name, result, request_start);
 												drop(guard);
 												None
 											}
@@ -507,7 +502,9 @@ async fn background_task(
 												None
 											}
 										},
-										MethodKind::Async(callback) => match method.claim(&req.method, &resources) {
+										MethodKind::Async(callback) => match method_callback
+											.claim(&req.method, resources)
+										{
 											Ok(guard) => {
 												let sink_batch = sink_batch.clone();
 												let id = id.into_owned();
@@ -530,7 +527,7 @@ async fn background_task(
 											}
 										},
 										MethodKind::Subscription(callback) => {
-											match method.claim(&req.method, &resources) {
+											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
 													let conn_state = ConnState {
 														conn_id,

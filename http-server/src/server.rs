@@ -454,18 +454,18 @@ async fn process_validated_request(
 	if is_single {
 		if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 			let method = req.method.as_ref();
-			middleware.on_call(req.method.as_ref());
+			middleware.on_call(method);
 
 			let id = req.id.clone();
 			let params = Params::new(req.params.map(|params| params.get()));
 
-			let result = match methods.as_callback(method) {
+			let result = match methods.method_with_name(method) {
 				None => {
 					sink.send_error(req.id, ErrorCode::MethodNotFound.into());
 					false
 				}
-				Some(method) => match &method.callback {
-					MethodKind::Sync(callback) => match method.claim(&req.method, &resources) {
+				Some((name, method_callback)) => match method_callback.inner() {
+					MethodKind::Sync(callback) => match method_callback.claim(&req.method, &resources) {
 						Ok(guard) => {
 							let result = (callback)(id, params, &sink);
 							drop(guard);
@@ -477,7 +477,7 @@ async fn process_validated_request(
 							false
 						}
 					},
-					MethodKind::Async(callback) => match method.claim(&req.method, &resources) {
+					MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
 						Ok(guard) => {
 							let result =
 								(callback)(id.into_owned(), params.into_owned(), sink.clone(), 0, Some(guard)).await;
@@ -498,7 +498,7 @@ async fn process_validated_request(
 			};
 			middleware.on_result(&req.method, result, request_start);
 		// TODO: shouldn't `on_response` be called here?!
-		//middleware.on_response(request_start);
+		// middleware.on_response(request_start);
 		} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
 			return Ok::<_, HyperError>(response::ok_response("".into()));
 		} else {
@@ -515,16 +515,16 @@ async fn process_validated_request(
 				let id = req.id.clone();
 				let params = Params::new(req.params.map(|params| params.get()));
 
-				match methods.as_callback(&req.method) {
+				match methods.method_with_name(&req.method) {
 					None => {
 						sink.send_error(req.id, ErrorCode::MethodNotFound.into());
 						None
 					}
-					Some(method) => match &method.callback {
-						MethodKind::Sync(callback) => match method.claim(&req.method, &resources) {
+					Some((name, method_callback)) => match method_callback.inner() {
+						MethodKind::Sync(callback) => match method_callback.claim(name, &resources) {
 							Ok(guard) => {
 								let result = (callback)(id, params, &sink);
-								middleware.on_result(&req.method, result, request_start);
+								middleware.on_result(name, result, request_start);
 								drop(guard);
 								None
 							}
@@ -534,11 +534,11 @@ async fn process_validated_request(
 									err
 								);
 								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-								middleware.on_result(&req.method, false, request_start);
+								middleware.on_result(name, false, request_start);
 								None
 							}
 						},
-						MethodKind::Async(callback) => match method.claim(&req.method, &resources) {
+						MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
 							Ok(guard) => {
 								let sink = sink.clone();
 								let id = id.into_owned();
@@ -547,7 +547,7 @@ async fn process_validated_request(
 
 								Some(async move {
 									let result = (callback)(id, params, sink, 0, Some(guard)).await;
-									middleware.on_result(&req.method, result, request_start);
+									middleware.on_result(name, result, request_start);
 								})
 							}
 							Err(err) => {
@@ -556,7 +556,7 @@ async fn process_validated_request(
 									err
 								);
 								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-								middleware.on_result(&req.method, false, request_start);
+								middleware.on_result(name, false, request_start);
 								None
 							}
 						},
