@@ -316,11 +316,13 @@ async fn background_task(
 				break;
 			}
 		}
-		// terminate connection.
+
+		// Terminate connection and send close message.
 		let _ = sender.close().await;
-		// NOTE(niklasad1): when the receiver is dropped no further requests or subscriptions
-		// will be possible.
-		drop(conn_tx);
+
+		// Force `conn_tx` to this async block and close it down
+		// when the connection closes to be on safe side.
+		conn_tx.close();
 	});
 
 	// Buffer for incoming data.

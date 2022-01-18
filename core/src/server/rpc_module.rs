@@ -37,6 +37,7 @@ use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec
 use crate::to_json_raw_value;
 use crate::traits::{IdProvider, ToRpcParams};
 use futures_channel::{mpsc, oneshot};
+use futures_util::future::Either;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use jsonrpsee_types::error::{invalid_subscription_err, ErrorCode, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
@@ -751,17 +752,27 @@ impl SubscriptionSink {
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
 	{
+		let mut close_stream = self.close.clone();
+		let mut item = stream.next();
+		let mut close = close_stream.next();
+
 		loop {
-			tokio::select! {
-				Some(item) = stream.next() => {
-					if let Err(Error::SubscriptionClosed(_)) = self.send(&item) {
+			match futures_util::future::select(item, close).await {
+				Either::Left((Some(i), c)) => {
+					if let Err(Error::SubscriptionClosed(_)) = self.send(&i) {
 						break;
 					}
-				},
-				// No messages should be sent over this channel (just ignore and continue)
-				Some(_) = self.close.next() => {},
-				// Stream or connection was dropped => close stream.
-				else => break,
+					close = c;
+					item = stream.next();
+				}
+				// No messages should be sent over this channel
+				// if that's occur just continue.
+				Either::Right((Some(_), i)) => {
+					item = i;
+					close = close_stream.next();
+				}
+				// Stream or connection has been terminated.
+				Either::Right((None, _)) | Either::Left((None, _)) => break,
 			}
 		}
 	}
