@@ -364,7 +364,7 @@ impl Methods {
 		Ok((resp, rx))
 	}
 
-	/// Wrapper over [`Methods::execute`] to execute a callback.
+	/// Execute a callback.
 	async fn inner_call(&self, req: Request<'_>) -> RawRpcResponse {
 		let (tx, mut rx) = mpsc::unbounded();
 		let sink = MethodSink::new(tx);
@@ -374,7 +374,7 @@ impl Methods {
 		let params = Params::new(req.params.map(|params| params.get()));
 
 		let _result = match self.method(&req.method).map(|c| &c.callback) {
-			None => todo!(),
+			None => sink.send_error(req.id, ErrorCode::MethodNotFound.into()),
 			Some(MethodKind::Sync(cb)) => (cb)(id, params, &sink),
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
 			Some(MethodKind::Subscription(cb)) => {

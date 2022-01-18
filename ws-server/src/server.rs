@@ -411,7 +411,7 @@ async fn background_task(
 
 									let fut = async move {
 										let result = (callback)(id, params, sink, conn_id, Some(guard)).await;
-										middleware.on_result(&name, result, request_start);
+										middleware.on_result(name, result, request_start);
 										middleware.on_response(request_start);
 									};
 
