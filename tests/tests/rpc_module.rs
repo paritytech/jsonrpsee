@@ -68,7 +68,7 @@ fn rpc_modules_with_different_contexts_can_be_merged() {
 fn flatten_rpc_modules() {
 	let mod1 = RpcModule::new(String::new());
 	assert_type!(RpcModule<String>, &mod1, "Expected an RpcModule with String context.");
-	let unit_mod = mod1.decontextualize().unwrap();
+	let unit_mod = mod1.decontextualize();
 	assert_type!(RpcModule<()>, &unit_mod, "Expected an RpcModule with unit context.");
 }
 
