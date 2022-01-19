@@ -764,9 +764,9 @@ impl SubscriptionSink {
 			match futures_util::future::select(item, close).await {
 				Either::Left((Some(i), c)) => {
 					match self.send(&i) {
-						Ok => (),
-						Err(Error::SubscriptionClosed(_)) => return Ok(()),
-						err => return err,
+						Ok(_) => (),
+						Err(Error::SubscriptionClosed(_)) => break Ok(()),
+						Err(err) => break Err(err),
 					};
 					close = c;
 					item = stream.next();
@@ -778,7 +778,7 @@ impl SubscriptionSink {
 					close = close_stream.next();
 				}
 				// Stream or connection has been terminated.
-				Either::Right((None, _)) | Either::Left((None, _)) => return Ok(()),
+				Either::Right((None, _)) | Either::Left((None, _)) => break Ok(()),
 			}
 		}
 	}

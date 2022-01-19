@@ -375,7 +375,7 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 			// create stream that doesn't produce items.
 			let stream = futures::stream::empty::<usize>();
 			tokio::spawn(async move {
-				sink.add_stream(stream).await;
+				sink.read_stream_and_send(stream).await.unwrap();
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed(()).await.unwrap();
 			});
