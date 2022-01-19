@@ -772,7 +772,7 @@ impl SubscriptionSink {
 					item = stream.next();
 				}
 				// No messages should be sent over this channel
-				// if that's occur just continue.
+				// if that occurred just ignore and continue.
 				Either::Right((Some(_), i)) => {
 					item = i;
 					close = close_stream.next();
