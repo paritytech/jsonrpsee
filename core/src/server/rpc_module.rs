@@ -504,6 +504,13 @@ impl<Context> RpcModule<Context> {
 	pub fn new(ctx: Context) -> Self {
 		Self { ctx: Arc::new(ctx), methods: Default::default() }
 	}
+
+	/// Transform a module into an `RpcModule<()>` (unit context).
+	pub fn decontextualize(self) -> Result<RpcModule<()>, Error> {
+		let mut module = RpcModule::new(());
+		module.merge(self)?;
+		Ok(module)
+	}
 }
 
 impl<Context> From<RpcModule<Context>> for Methods {

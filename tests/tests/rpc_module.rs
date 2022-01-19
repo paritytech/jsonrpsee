@@ -31,6 +31,25 @@ use jsonrpsee::core::Error;
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
+
+fn assert_type<T: 'static, Expected: 'static>(_expected: &Expected, explain: Option<&'static str>) {
+	use core::any::TypeId;
+	match explain {
+		None => assert_eq!(TypeId::of::<T>(), TypeId::of::<Expected>()),
+		Some(explain) => assert_eq!(TypeId::of::<T>(), TypeId::of::<Expected>(), "{}", explain),
+	}
+
+}
+// Helper macro to assert that a binding is of a specific type.
+macro_rules! assert_type {
+    ( $ty:ty, $expected:expr $(,)?) => {{
+        assert_type::<$ty, _>($expected, None)
+    }};
+    ( $ty:ty, $expected:expr, $($arg:tt)+ ) => {{
+        assert_type::<$ty, _>($expected, Some($($arg)+))
+    }};
+}
+
 #[test]
 fn rpc_modules_with_different_contexts_can_be_merged() {
 	let cx = Vec::<u8>::new();
@@ -43,6 +62,14 @@ fn rpc_modules_with_different_contexts_can_be_merged() {
 
 	assert!(mod1.method("bla with Vec context").is_some());
 	assert!(mod1.method("bla with String context").is_some());
+}
+
+#[test]
+fn flatten_rpc_modules() {
+	let mod1 = RpcModule::new(String::new());
+	assert_type!(RpcModule<String>, &mod1, "Expected an RpcModule with String context.");
+	let unit_mod = mod1.decontextualize().unwrap();
+	assert_type!(RpcModule<()>, &unit_mod, "Expected an RpcModule with unit context.");
 }
 
 #[test]
