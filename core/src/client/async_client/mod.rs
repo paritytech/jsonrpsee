@@ -104,7 +104,7 @@ impl ClientBuilder {
 		self
 	}
 
-	/// Configure the format of the request object id.
+	/// Configure the data type of the request object ID (default is number).
 	pub fn id_format(mut self, id_kind: IdKind) -> Self {
 		self.id_kind = id_kind;
 		self
@@ -127,8 +127,7 @@ impl ClientBuilder {
 			to_back,
 			request_timeout: self.request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
-			id_manager: RequestIdManager::new(self.max_concurrent_requests),
-			id_kind: self.id_kind,
+			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 		}
 	}
 }
@@ -145,8 +144,6 @@ pub struct Client {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: RequestIdManager,
-	/// Configure the format of the request object id.
-	id_kind: IdKind,
 }
 
 impl Client {
@@ -208,11 +205,7 @@ impl ClientT for Client {
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let guard = self.id_manager.next_request_id()?;
-
-		let id = match self.id_kind {
-			IdKind::Number => Id::Number(*guard.inner()),
-			IdKind::String => Id::Str(format!("{}", guard.inner()).into()),
-		};
+		let id = guard.inner();
 
 		let raw = serde_json::to_string(&RequestSer::new(id.clone(), method, params)).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
@@ -241,14 +234,7 @@ impl ClientT for Client {
 		R: DeserializeOwned + Default + Clone,
 	{
 		let guard = self.id_manager.next_request_ids(batch.len())?;
-		let batch_ids: Vec<Id> = guard
-			.inner()
-			.into_iter()
-			.map(|&id| match self.id_kind {
-				IdKind::Number => Id::Number(id),
-				IdKind::String => Id::Str(format!("{}", id).into()),
-			})
-			.collect();
+		let batch_ids: Vec<Id> = guard.inner();
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
@@ -305,14 +291,8 @@ impl SubscriptionClientT for Client {
 
 		let guard = self.id_manager.next_request_ids(2)?;
 
-		let ids: Vec<Id> = guard
-			.inner()
-			.into_iter()
-			.map(|&id| match self.id_kind {
-				IdKind::Number => Id::Number(id),
-				IdKind::String => Id::Str(format!("{}", id).into()),
-			})
-			.collect();
+		let ids: Vec<Id> = guard.inner();
+
 		let raw = serde_json::to_string(&RequestSer::new(ids[0].clone(), subscribe_method, params))
 			.map_err(Error::ParseError)?;
 

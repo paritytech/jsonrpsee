@@ -82,9 +82,8 @@ impl HttpClientBuilder {
 			.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
-			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests)),
+			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests, self.id_kind)),
 			request_timeout: self.request_timeout,
-			id_kind: self.id_kind,
 		})
 	}
 }
@@ -110,8 +109,6 @@ pub struct HttpClient {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
-	/// Configure the format of the request object id.
-	id_kind: IdKind,
 }
 
 #[async_trait]
@@ -132,13 +129,7 @@ impl ClientT for HttpClient {
 		R: DeserializeOwned,
 	{
 		let guard = self.id_manager.next_request_id()?;
-		let id = *guard.inner();
-
-		let id = match self.id_kind {
-			IdKind::Number => Id::Number(id),
-			IdKind::String => Id::Str(format!("{}", id).into()),
-		};
-
+		let id = guard.inner();
 		let request = RequestSer::new(id.clone(), method, params);
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
@@ -177,15 +168,7 @@ impl ClientT for HttpClient {
 		let mut request_set = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
 		let guard = self.id_manager.next_request_ids(batch.len())?;
-
-		let ids: Vec<Id> = guard
-			.inner()
-			.into_iter()
-			.map(|&id| match self.id_kind {
-				IdKind::Number => Id::Number(id),
-				IdKind::String => Id::Str(format!("{}", id).into()),
-			})
-			.collect();
+		let ids: Vec<Id> = guard.inner();
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			batch_request.push(RequestSer::new(ids[pos].clone(), method, params));

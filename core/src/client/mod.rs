@@ -335,12 +335,14 @@ pub struct RequestIdManager {
 	max_concurrent_requests: usize,
 	/// Get the next request ID.
 	current_id: AtomicU64,
+	/// Request ID type.
+	id_kind: IdKind,
 }
 
 impl RequestIdManager {
 	/// Create a new `RequestIdGuard` with the provided concurrency limit.
-	pub fn new(limit: usize) -> Self {
-		Self { current_pending: Arc::new(()), max_concurrent_requests: limit, current_id: AtomicU64::new(0) }
+	pub fn new(limit: usize, id_kind: IdKind) -> Self {
+		Self { current_pending: Arc::new(()), max_concurrent_requests: limit, current_id: AtomicU64::new(0), id_kind }
 	}
 
 	fn get_slot(&self) -> Result<Arc<()>, Error> {
@@ -355,20 +357,21 @@ impl RequestIdManager {
 	/// Attempts to get the next request ID.
 	///
 	/// Fails if request limit has been exceeded.
-	pub fn next_request_id(&self) -> Result<RequestIdGuard<u64>, Error> {
+	pub fn next_request_id(&self) -> Result<RequestIdGuard<Id<'static>>, Error> {
 		let rc = self.get_slot()?;
-		let id = self.current_id.fetch_add(1, Ordering::SeqCst);
+		let id = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
 		Ok(RequestIdGuard { _rc: rc, id })
 	}
 
 	/// Attempts to get the `n` number next IDs that only counts as one request.
 	///
 	/// Fails if request limit has been exceeded.
-	pub fn next_request_ids(&self, len: usize) -> Result<RequestIdGuard<Vec<u64>>, Error> {
+	pub fn next_request_ids(&self, len: usize) -> Result<RequestIdGuard<Vec<Id<'static>>>, Error> {
 		let rc = self.get_slot()?;
 		let mut ids = Vec::with_capacity(len);
 		for _ in 0..len {
-			ids.push(self.current_id.fetch_add(1, Ordering::SeqCst));
+			let id = self.id_kind.into_id(self.current_id.fetch_add(1, Ordering::SeqCst));
+			ids.push(id);
 		}
 		Ok(RequestIdGuard { _rc: rc, id: ids })
 	}
@@ -376,16 +379,16 @@ impl RequestIdManager {
 
 /// Reference counted request ID.
 #[derive(Debug)]
-pub struct RequestIdGuard<T> {
+pub struct RequestIdGuard<T: Clone> {
 	id: T,
 	/// Reference count decreased when dropped.
 	_rc: Arc<()>,
 }
 
-impl<T> RequestIdGuard<T> {
-	/// Get the actual ID.
-	pub fn inner(&self) -> &T {
-		&self.id
+impl<T: Clone> RequestIdGuard<T> {
+	/// Get the actual ID or IDs.
+	pub fn inner(&self) -> T {
+		self.id.clone()
 	}
 }
 
@@ -399,7 +402,7 @@ pub enum CertificateStore {
 	WebPki,
 }
 
-/// JSON-RPC request object id format.
+/// JSON-RPC request object id data type.
 #[derive(Debug, Copy, Clone)]
 pub enum IdKind {
 	/// String.
@@ -408,13 +411,22 @@ pub enum IdKind {
 	Number,
 }
 
+impl IdKind {
+	fn into_id(self, id: u64) -> Id<'static> {
+		match self {
+			IdKind::Number => Id::Number(id),
+			IdKind::String => Id::Str(format!("{}", id).into()),
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
-	use super::RequestIdManager;
+	use super::{IdKind, RequestIdManager};
 
 	#[test]
 	fn request_id_guard_works() {
-		let manager = RequestIdManager::new(2);
+		let manager = RequestIdManager::new(2, IdKind::Number);
 		let _first = manager.next_request_id().unwrap();
 
 		{

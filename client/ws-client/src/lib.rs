@@ -145,7 +145,7 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// See documentation [`ClientBuilder::id_format`] (default is Number).
+	/// See documentation for [`ClientBuilder::id_format`] (default is Number).
 	pub fn id_format(mut self, kind: IdKind) -> Self {
 		self.id_kind = kind;
 		self
