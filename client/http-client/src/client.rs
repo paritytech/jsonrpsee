@@ -70,7 +70,7 @@ impl HttpClientBuilder {
 		self
 	}
 
-	/// Configure the format of the request object id.
+	/// Configure the data type of the request object ID (default is number).
 	pub fn id_format(mut self, id_kind: IdKind) -> Self {
 		self.id_kind = id_kind;
 		self
