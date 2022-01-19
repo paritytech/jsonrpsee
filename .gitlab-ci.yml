@@ -132,7 +132,7 @@ benchmarks:
     - echo ${CI_RUNNER_DESCRIPTION}
     - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
   tags:
-    - linux-docker-benches
+    - ci5
 
 check_bench:
   stage:                           check_benchmark
