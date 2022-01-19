@@ -28,8 +28,8 @@
 use crate::types::error::{ErrorCode, ErrorObject, ErrorResponse};
 use crate::types::ParamsSer;
 use crate::WsClientBuilder;
-use jsonrpsee_core::client::Subscription;
 use jsonrpsee_core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee_core::client::{IdKind, Subscription};
 use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
@@ -44,7 +44,42 @@ async fn method_call_works() {
 		.await
 		.unwrap()
 		.unwrap();
-	assert_eq!(JsonValue::String("hello".into()), result);
+	assert_eq!("hello", &result);
+}
+
+#[tokio::test]
+async fn method_call_with_wrong_id() {
+	let exp = "id as string";
+	let server = WebSocketTestServer::with_hardcoded_response(
+		"127.0.0.1:0".parse().unwrap(),
+		ok_response(exp.into(), Id::Num(0)),
+	)
+	.with_default_timeout()
+	.await
+	.unwrap();
+	let uri = format!("ws://{}", server.local_addr());
+	let client =
+		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
+
+	let err = client.request::<String>("o", None).with_default_timeout().await.unwrap();
+	assert!(matches!(err, Err(Error::RestartNeeded(e)) if e == "Invalid request ID"));
+}
+
+#[tokio::test]
+async fn method_call_with_id_str() {
+	let exp = "id as string";
+	let server = WebSocketTestServer::with_hardcoded_response(
+		"127.0.0.1:0".parse().unwrap(),
+		ok_response(exp.into(), Id::Str("0".into())),
+	)
+	.with_default_timeout()
+	.await
+	.unwrap();
+	let uri = format!("ws://{}", server.local_addr());
+	let client =
+		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
+	let response: String = client.request::<String>("o", None).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(&response, exp);
 }
 
 #[tokio::test]
@@ -237,7 +272,7 @@ async fn run_batch_request_with_response<'a>(
 	client.batch_request(batch).with_default_timeout().await.unwrap()
 }
 
-async fn run_request_with_response(response: String) -> Result<JsonValue, Error> {
+async fn run_request_with_response(response: String) -> Result<String, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
 		.with_default_timeout()
 		.await

@@ -43,7 +43,7 @@ pub use jsonrpsee_types as types;
 use std::time::Duration;
 
 use jsonrpsee_client_transport::ws::{Header, InvalidUri, Uri, WsTransportClientBuilder};
-use jsonrpsee_core::client::{CertificateStore, ClientBuilder};
+use jsonrpsee_core::client::{CertificateStore, ClientBuilder, IdKind};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
 /// Builder for [`WsClient`].
@@ -77,6 +77,7 @@ pub struct WsClientBuilder<'a> {
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
+	id_kind: IdKind,
 }
 
 impl<'a> Default for WsClientBuilder<'a> {
@@ -90,6 +91,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,
+			id_kind: IdKind::Number,
 		}
 	}
 }
@@ -143,6 +145,12 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
+	/// See documentation [`ClientBuilder::id_format`] (default is Number).
+	pub fn id_format(mut self, kind: IdKind) -> Self {
+		self.id_kind = kind;
+		self
+	}
+
 	/// Build the client with specified URL to connect to.
 	/// You must provide the port number in the URL.
 	///
@@ -165,6 +173,7 @@ impl<'a> WsClientBuilder<'a> {
 			.max_notifs_per_subscription(self.max_notifs_per_subscription)
 			.request_timeout(self.request_timeout)
 			.max_concurrent_requests(self.max_concurrent_requests)
+			.id_format(self.id_kind)
 			.build(sender, receiver))
 	}
 }

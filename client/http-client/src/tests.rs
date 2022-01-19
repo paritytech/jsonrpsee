@@ -27,13 +27,12 @@
 use crate::types::error::{ErrorCode, ErrorObject, ErrorResponse};
 use crate::types::ParamsSer;
 use crate::HttpClientBuilder;
-use jsonrpsee_core::client::ClientT;
+use jsonrpsee_core::client::{ClientT, IdKind};
 use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use serde_json::value::Value as JsonValue;
 
 #[tokio::test]
 async fn method_call_works() {
@@ -42,7 +41,33 @@ async fn method_call_works() {
 		.await
 		.unwrap()
 		.unwrap();
-	assert_eq!(JsonValue::String("hello".into()), result);
+	assert_eq!("hello", &result);
+}
+
+#[tokio::test]
+async fn method_call_with_wrong_id() {
+	let exp = "id as string";
+	let server_addr =
+		http_server_with_hardcoded_response(ok_response(exp.into(), Id::Num(0))).with_default_timeout().await.unwrap();
+	let uri = format!("http://{}", server_addr);
+	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
+	assert!(matches!(
+		client.request::<String>("o", None).with_default_timeout().await.unwrap(),
+		Err(Error::InvalidRequestId)
+	));
+}
+
+#[tokio::test]
+async fn method_call_with_id_str() {
+	let exp = "id as string";
+	let server_addr = http_server_with_hardcoded_response(ok_response(exp.into(), Id::Str("0".into())))
+		.with_default_timeout()
+		.await
+		.unwrap();
+	let uri = format!("http://{}", server_addr);
+	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
+	let response: String = client.request::<String>("o", None).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(&response, exp);
 }
 
 #[tokio::test]
@@ -139,7 +164,7 @@ async fn run_batch_request_with_response<'a>(
 	client.batch_request(batch).with_default_timeout().await.unwrap()
 }
 
-async fn run_request_with_response(response: String) -> Result<JsonValue, Error> {
+async fn run_request_with_response(response: String) -> Result<String, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();

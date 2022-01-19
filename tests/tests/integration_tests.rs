@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
-use jsonrpsee::core::client::{ClientT, Subscription, SubscriptionClientT};
+use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosedReason;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -81,10 +81,28 @@ async fn ws_method_call_works() {
 }
 
 #[tokio::test]
+async fn ws_method_call_str_id_works() {
+	let server_addr = websocket_server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().id_format(IdKind::String).build(&server_url).await.unwrap();
+	let response: String = client.request("say_hello", None).await.unwrap();
+	assert_eq!(&response, "hello");
+}
+
+#[tokio::test]
 async fn http_method_call_works() {
 	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
+	let response: String = client.request("say_hello", None).await.unwrap();
+	assert_eq!(&response, "hello");
+}
+
+#[tokio::test]
+async fn http_method_call_str_id_works() {
+	let (server_addr, _handle) = http_server().await;
+	let uri = format!("http://{}", server_addr);
+	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
 	let response: String = client.request("say_hello", None).await.unwrap();
 	assert_eq!(&response, "hello");
 }
