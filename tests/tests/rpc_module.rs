@@ -26,8 +26,8 @@
 
 use std::collections::HashMap;
 
+use jsonrpsee::core::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::core::Error;
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
@@ -205,9 +205,10 @@ async fn subscribing_without_server() {
 	}
 
 	let sub_err = my_sub.next::<char>().await.unwrap().unwrap_err();
+	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server("No close reason provided".to_string()));
 
 	// The subscription is now closed by the server.
-	assert!(matches!(sub_err, Error::SubscriptionClosed(_)));
+	assert!(matches!(sub_err, Error::SubscriptionClosed(close_reason) if close_reason == exp));
 }
 
 #[tokio::test]
@@ -221,6 +222,10 @@ async fn close_test_subscribing_without_server() {
 				while !sink.is_closed() {
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
+				// Get the close reason.
+				if let Error::SubscriptionClosed(close_reason) = sink.send(&"lo").unwrap_err() {
+					sink.close(&close_reason);
+				}
 			});
 			Ok(())
 		})
@@ -233,5 +238,11 @@ async fn close_test_subscribing_without_server() {
 
 	// close the subscription to ensure it doesn't return any items.
 	my_sub.close();
-	assert!(matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(_)))));
+
+	// in this case, the unsubscribe method was not called and will be treated as the
+	// connetion was closed.
+	let exp = SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset);
+	assert!(
+		matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
+	);
 }

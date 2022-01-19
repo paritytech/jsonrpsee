@@ -765,7 +765,10 @@ impl SubscriptionSink {
 				Either::Left((Some(i), c)) => {
 					match self.send(&i) {
 						Ok(_) => (),
-						Err(Error::SubscriptionClosed(_)) => break Ok(()),
+						Err(Error::SubscriptionClosed(close_reason)) => {
+							self.close(&close_reason);
+							break Ok(());
+						}
 						Err(err) => break Err(err),
 					};
 					close = c;
@@ -777,8 +780,13 @@ impl SubscriptionSink {
 					item = i;
 					close = close_stream.next();
 				}
-				// Stream or connection has been terminated.
-				Either::Right((None, _)) | Either::Left((None, _)) => break Ok(()),
+				// Connection terminated.
+				Either::Right((None, _)) => {
+					self.close(&SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset));
+					break Ok(());
+				}
+				// Stream terminated.
+				Either::Left((None, _)) => break Ok(()),
 			}
 		}
 	}
@@ -820,9 +828,14 @@ impl SubscriptionSink {
 	}
 
 	/// Close the subscription sink with a customized error message.
-	pub fn close(&mut self, msg: &str) {
+	pub fn close_with_custom_message(&mut self, msg: &str) {
 		let close_reason = SubscriptionClosedReason::Server(msg.to_string()).into();
 		self.inner_close(Some(&close_reason));
+	}
+
+	/// Provide close from `SubscriptionClosed`.
+	pub fn close(&mut self, close_reason: &SubscriptionClosed) {
+		self.inner_close(Some(close_reason));
 	}
 
 	fn inner_close(&mut self, close_reason: Option<&SubscriptionClosed>) {
