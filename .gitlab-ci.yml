@@ -124,8 +124,7 @@ benchmarks:
   stage:                           benchmark
   <<:                              *docker-env
   <<:                              *collect-artifacts
-  # <<:                              *schedule-refs
-  <<:                              *common-refs
+  <<:                              *schedule-refs
   script:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
     - mkdir artifacts
