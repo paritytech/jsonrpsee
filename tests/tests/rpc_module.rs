@@ -31,14 +31,12 @@ use jsonrpsee::core::Error;
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
-
 fn assert_type<T: 'static, Expected: 'static>(_expected: &Expected, explain: Option<&'static str>) {
 	use core::any::TypeId;
 	match explain {
 		None => assert_eq!(TypeId::of::<T>(), TypeId::of::<Expected>()),
 		Some(explain) => assert_eq!(TypeId::of::<T>(), TypeId::of::<Expected>(), "{}", explain),
 	}
-
 }
 // Helper macro to assert that a binding is of a specific type.
 macro_rules! assert_type {
