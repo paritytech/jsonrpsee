@@ -25,7 +25,7 @@ use jsonrpsee_types::{
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 
-use super::{FrontToBack, RequestIdManager};
+use super::{FrontToBack, IdKind, RequestIdManager};
 
 /// Wrapper over a [`oneshot::Receiver`](futures_channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -63,6 +63,7 @@ pub struct ClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
+	id_kind: IdKind,
 }
 
 impl Default for ClientBuilder {
@@ -71,6 +72,7 @@ impl Default for ClientBuilder {
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
+			id_kind: IdKind::Number,
 		}
 	}
 }
@@ -102,6 +104,12 @@ impl ClientBuilder {
 		self
 	}
 
+	/// Configure the format of the request object id.
+	pub fn id_format(mut self, id_kind: IdKind) -> Self {
+		self.id_kind = id_kind;
+		self
+	}
+
 	/// Build the client with given transport.
 	///
 	/// ## Panics
@@ -120,6 +128,7 @@ impl ClientBuilder {
 			request_timeout: self.request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests),
+			id_kind: self.id_kind,
 		}
 	}
 }
@@ -136,6 +145,8 @@ pub struct Client {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: RequestIdManager,
+	/// Configure the format of the request object id.
+	id_kind: IdKind,
 }
 
 impl Client {
@@ -196,9 +207,14 @@ impl ClientT for Client {
 		R: DeserializeOwned,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let req_id = self.id_manager.next_request_id()?;
-		let id = *req_id.inner();
-		let raw = serde_json::to_string(&RequestSer::new(Id::Number(id), method, params)).map_err(Error::ParseError)?;
+		let guard = self.id_manager.next_request_id()?;
+
+		let id = match self.id_kind {
+			IdKind::Number => Id::Number(*guard.inner()),
+			IdKind::String => Id::Str(format!("{}", guard.inner()).into()),
+		};
+
+		let raw = serde_json::to_string(&RequestSer::new(id.clone(), method, params)).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
@@ -224,11 +240,19 @@ impl ClientT for Client {
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
-		let batch_ids = self.id_manager.next_request_ids(batch.len())?;
+		let guard = self.id_manager.next_request_ids(batch.len())?;
+		let batch_ids: Vec<Id> = guard
+			.inner()
+			.into_iter()
+			.map(|&id| match self.id_kind {
+				IdKind::Number => Id::Number(id),
+				IdKind::String => Id::Str(format!("{}", id).into()),
+			})
+			.collect();
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(RequestSer::new(Id::Number(batch_ids.inner()[idx]), method, params));
+			batches.push(RequestSer::new(batch_ids[idx].clone(), method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -238,7 +262,7 @@ impl ClientT for Client {
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids.inner().clone(), send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
@@ -279,8 +303,17 @@ impl SubscriptionClientT for Client {
 			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
 		}
 
-		let ids = self.id_manager.next_request_ids(2)?;
-		let raw = serde_json::to_string(&RequestSer::new(Id::Number(ids.inner()[0]), subscribe_method, params))
+		let guard = self.id_manager.next_request_ids(2)?;
+
+		let ids: Vec<Id> = guard
+			.inner()
+			.into_iter()
+			.map(|&id| match self.id_kind {
+				IdKind::Number => Id::Number(id),
+				IdKind::String => Id::Str(format!("{}", id).into()),
+			})
+			.collect();
+		let raw = serde_json::to_string(&RequestSer::new(ids[0].clone(), subscribe_method, params))
 			.map_err(Error::ParseError)?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -289,8 +322,8 @@ impl SubscriptionClientT for Client {
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				raw,
-				subscribe_id: ids.inner()[0],
-				unsubscribe_id: ids.inner()[1],
+				subscribe_id: ids[0].clone(),
+				unsubscribe_id: ids[1].clone(),
 				unsubscribe_method: unsubscribe_method.to_owned(),
 				send_back: send_back_tx,
 			}))

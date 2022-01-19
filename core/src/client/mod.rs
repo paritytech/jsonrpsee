@@ -37,7 +37,7 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{ParamsSer, SubscriptionId};
+use jsonrpsee_types::{Id, ParamsSer, SubscriptionId};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
@@ -210,7 +210,7 @@ pub struct BatchMessage {
 	/// Serialized batch request.
 	pub raw: String,
 	/// Request IDs.
-	pub ids: Vec<u64>,
+	pub ids: Vec<Id<'static>>,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: oneshot::Sender<Result<Vec<JsonValue>, Error>>,
 }
@@ -221,7 +221,7 @@ pub struct RequestMessage {
 	/// Serialized message.
 	pub raw: String,
 	/// Request ID.
-	pub id: u64,
+	pub id: Id<'static>,
 	/// One-shot channel over which we send back the result of this request.
 	pub send_back: Option<oneshot::Sender<Result<JsonValue, Error>>>,
 }
@@ -232,9 +232,9 @@ pub struct SubscriptionMessage {
 	/// Serialized message.
 	pub raw: String,
 	/// Request ID of the subscribe message.
-	pub subscribe_id: u64,
+	pub subscribe_id: Id<'static>,
 	/// Request ID of the unsubscribe message.
-	pub unsubscribe_id: u64,
+	pub unsubscribe_id: Id<'static>,
 	/// Method to use to unsubscribe later. Used if the channel unexpectedly closes.
 	pub unsubscribe_method: String,
 	/// If the subscription succeeds, we return a [`mpsc::Receiver`] that will receive notifications.
@@ -397,6 +397,15 @@ pub enum CertificateStore {
 	Native,
 	/// Use WebPKI's certificate store
 	WebPki,
+}
+
+/// JSON-RPC request object id format.
+#[derive(Debug, Copy, Clone)]
+pub enum IdKind {
+	/// String.
+	String,
+	/// Number.
+	Number,
 }
 
 #[cfg(test)]

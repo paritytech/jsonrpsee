@@ -30,7 +30,7 @@ use std::time::Duration;
 use crate::transport::HttpTransportClient;
 use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response};
 use async_trait::async_trait;
-use jsonrpsee_core::client::{CertificateStore, ClientT, RequestIdManager, Subscription, SubscriptionClientT};
+use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
@@ -42,6 +42,7 @@ pub struct HttpClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
 	certificate_store: CertificateStore,
+	id_kind: IdKind,
 }
 
 impl HttpClientBuilder {
@@ -69,6 +70,12 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Configure the format of the request object id.
+	pub fn id_format(mut self, id_kind: IdKind) -> Self {
+		self.id_kind = id_kind;
+		self
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
 		let transport = HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store)
@@ -77,6 +84,7 @@ impl HttpClientBuilder {
 			transport,
 			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests)),
 			request_timeout: self.request_timeout,
+			id_kind: self.id_kind,
 		})
 	}
 }
@@ -88,6 +96,7 @@ impl Default for HttpClientBuilder {
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
 			certificate_store: CertificateStore::Native,
+			id_kind: IdKind::Number,
 		}
 	}
 }
@@ -101,6 +110,8 @@ pub struct HttpClient {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: Arc<RequestIdManager>,
+	/// Configure the format of the request object id.
+	id_kind: IdKind,
 }
 
 #[async_trait]
@@ -120,8 +131,15 @@ impl ClientT for HttpClient {
 	where
 		R: DeserializeOwned,
 	{
-		let id = self.id_manager.next_request_id()?;
-		let request = RequestSer::new(Id::Number(*id.inner()), method, params);
+		let guard = self.id_manager.next_request_id()?;
+		let id = *guard.inner();
+
+		let id = match self.id_kind {
+			IdKind::Number => Id::Number(id),
+			IdKind::String => Id::Str(format!("{}", id).into()),
+		};
+
+		let request = RequestSer::new(id.clone(), method, params);
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
@@ -142,9 +160,7 @@ impl ClientT for HttpClient {
 			}
 		};
 
-		let response_id = response.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
-
-		if response_id == *id.inner() {
+		if response.id == id {
 			Ok(response.result)
 		} else {
 			Err(Error::InvalidRequestId)
@@ -160,11 +176,21 @@ impl ClientT for HttpClient {
 		let mut ordered_requests = Vec::with_capacity(batch.len());
 		let mut request_set = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
-		let ids = self.id_manager.next_request_ids(batch.len())?;
+		let guard = self.id_manager.next_request_ids(batch.len())?;
+
+		let ids: Vec<Id> = guard
+			.inner()
+			.into_iter()
+			.map(|&id| match self.id_kind {
+				IdKind::Number => Id::Number(id),
+				IdKind::String => Id::Str(format!("{}", id).into()),
+			})
+			.collect();
+
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
-			batch_request.push(RequestSer::new(Id::Number(ids.inner()[pos]), method, params));
-			ordered_requests.push(ids.inner()[pos]);
-			request_set.insert(ids.inner()[pos], pos);
+			batch_request.push(RequestSer::new(ids[pos].clone(), method, params));
+			ordered_requests.push(ids[pos].clone());
+			request_set.insert(ids[pos].clone(), pos);
 		}
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
@@ -184,8 +210,7 @@ impl ClientT for HttpClient {
 		// NOTE: `R::default` is placeholder and will be replaced in loop below.
 		let mut responses = vec![R::default(); ordered_requests.len()];
 		for rp in rps {
-			let response_id = rp.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
-			let pos = match request_set.get(&response_id) {
+			let pos = match request_set.get(&rp.id) {
 				Some(pos) => *pos,
 				None => return Err(Error::InvalidRequestId),
 			};
