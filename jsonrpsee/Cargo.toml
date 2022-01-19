@@ -29,7 +29,7 @@ http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-core"]
 http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-core"]
 ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-core/async-client"]
 ws-server = ["jsonrpsee-ws-server", "jsonrpsee-types", "jsonrpsee-core"]
-macros = ["jsonrpsee-proc-macros", "jsonrpsee-types"]
+macros = ["jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-core/client"]
 
 client = ["http-client", "ws-client"]
 server = ["http-server", "ws-server"]
