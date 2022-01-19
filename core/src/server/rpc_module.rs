@@ -746,8 +746,12 @@ impl SubscriptionSink {
 		self.inner_send(msg).map_err(Into::into)
 	}
 
-	/// Consume the sink by passing a stream to be sent via the sink.
-	pub async fn add_stream<S, T>(mut self, mut stream: S)
+	/// Read data from the stream and send back data on the subscription when items gets produced by the stream.
+	///
+	/// Returns `Ok(())` if the stream or connection was terminated.
+	/// Returns `Err(_)` if one of the items couldn't be serialized.
+	///
+	pub async fn read_stream_and_send<S, T>(mut self, mut stream: S) -> Result<(), Error>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
@@ -759,9 +763,11 @@ impl SubscriptionSink {
 		loop {
 			match futures_util::future::select(item, close).await {
 				Either::Left((Some(i), c)) => {
-					if let Err(Error::SubscriptionClosed(_)) = self.send(&i) {
-						break;
-					}
+					match self.send(&i) {
+						Ok => (),
+						Err(Error::SubscriptionClosed(_)) => return Ok(()),
+						err => return err,
+					};
 					close = c;
 					item = stream.next();
 				}
@@ -772,7 +778,7 @@ impl SubscriptionSink {
 					close = close_stream.next();
 				}
 				// Stream or connection has been terminated.
-				Either::Right((None, _)) | Either::Left((None, _)) => break,
+				Either::Right((None, _)) | Either::Left((None, _)) => return Ok(()),
 			}
 		}
 	}
