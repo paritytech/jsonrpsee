@@ -751,7 +751,7 @@ impl SubscriptionSink {
 	/// Returns `Ok(())` if the stream or connection was terminated.
 	/// Returns `Err(_)` if one of the items couldn't be serialized.
 	///
-	pub async fn read_stream_and_send<S, T>(mut self, mut stream: S) -> Result<(), Error>
+	pub async fn streamify<S, T>(mut self, mut stream: S) -> Result<(), Error>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
