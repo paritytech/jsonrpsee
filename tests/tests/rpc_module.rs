@@ -239,8 +239,8 @@ async fn close_test_subscribing_without_server() {
 	// close the subscription to ensure it doesn't return any items.
 	my_sub.close();
 
-	// in this case, the unsubscribe method was not called and will be treated as the
-	// connetion was closed.
+	// In this case, the unsubscribe method was not called and
+	// it will be treated as the connection was closed.
 	let exp = SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset);
 	assert!(
 		matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
