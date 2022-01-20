@@ -785,7 +785,7 @@ impl SubscriptionSink {
 						}
 						Err(err) => {
 							tracing::warn!("Subscription got error: {:?} terminating task", err);
-							break Err(err)
+							break Err(err);
 						}
 					};
 					close = c;
