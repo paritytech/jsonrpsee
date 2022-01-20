@@ -776,15 +776,15 @@ impl SubscriptionSink {
 
 		loop {
 			match futures_util::future::select(item, close).await {
-				Either::Left((Some(i), c)) => {
-					match self.send(&i) {
+				Either::Left((Some(result), c)) => {
+					match self.send(&result) {
 						Ok(_) => (),
 						Err(Error::SubscriptionClosed(close_reason)) => {
 							self.close(&close_reason);
 							break Ok(());
 						}
 						Err(err) => {
-							tracing::warn!("Subscription got error: {:?} terminating task", err);
+							tracing::error!("subscription `{}` failed to send item got error: {:?}", self.method, err);
 							break Err(err);
 						}
 					};
