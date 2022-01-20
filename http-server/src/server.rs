@@ -497,15 +497,12 @@ async fn process_validated_request(
 				},
 			};
 			middleware.on_result(&req.method, result, request_start);
-		// TODO: shouldn't `on_response` be called here?!
-		// middleware.on_response(request_start);
 		} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
 			return Ok::<_, HyperError>(response::ok_response("".into()));
 		} else {
 			let (id, code) = prepare_error(&body);
 			sink.send_error(id, code.into());
 		}
-
 	// Batch of requests or notifications
 	} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 		if !batch.is_empty() {

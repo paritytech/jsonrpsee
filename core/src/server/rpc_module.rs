@@ -746,12 +746,26 @@ impl SubscriptionSink {
 		self.inner_send(msg).map_err(Into::into)
 	}
 
-	/// Read data from the stream and send back data on the subscription when items gets produced by the stream.
+	/// Consumes the `SubscriptionSink` and reads data from the `stream` and sends back data on the subscription
+	/// when items gets produced by the stream.
 	///
 	/// Returns `Ok(())` if the stream or connection was terminated.
 	/// Returns `Err(_)` if one of the items couldn't be serialized.
 	///
-	pub async fn streamify<S, T>(mut self, mut stream: S) -> Result<(), Error>
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_core::server::rpc_module::RpcModule;
+	///
+	/// let mut m = RpcModule::new(());
+	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
+	///     let stream = futures_util::stream::iter(vec![1_u32, 2, 3]);
+	///     tokio::spawn(sink.consume_and_streamify(stream));
+	///     Ok(())
+	/// });
+	/// ```
+	pub async fn consume_and_streamify<S, T>(mut self, mut stream: S) -> Result<(), Error>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
@@ -769,7 +783,10 @@ impl SubscriptionSink {
 							self.close(&close_reason);
 							break Ok(());
 						}
-						Err(err) => break Err(err),
+						Err(err) => {
+							tracing::warn!("Subscription got error: {:?} terminating task", err);
+							break Err(err)
+						}
 					};
 					close = c;
 					item = stream.next();
