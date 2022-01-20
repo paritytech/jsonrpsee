@@ -162,18 +162,18 @@ impl ClientT for HttpClient {
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
+		let guard = self.id_manager.next_request_ids(batch.len())?;
+		let ids: Vec<Id> = guard.inner();
+
 		let mut batch_request = Vec::with_capacity(batch.len());
 		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
 		let mut ordered_requests = Vec::with_capacity(batch.len());
 		let mut request_set = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
-		let guard = self.id_manager.next_request_ids(batch.len())?;
-		let ids: Vec<Id> = guard.inner();
-
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
 			batch_request.push(RequestSer::new(&ids[pos], method, params));
-			ordered_requests.push(ids[pos].clone());
-			request_set.insert(ids[pos].clone(), pos);
+			ordered_requests.push(&ids[pos]);
+			request_set.insert(&ids[pos], pos);
 		}
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);

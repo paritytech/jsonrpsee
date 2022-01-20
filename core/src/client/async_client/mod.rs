@@ -291,7 +291,7 @@ impl SubscriptionClientT for Client {
 
 		let guard = self.id_manager.next_request_ids(2)?;
 
-		let ids: Vec<Id> = guard.inner();
+		let mut ids: Vec<Id> = guard.inner();
 
 		let raw =
 			serde_json::to_string(&RequestSer::new(&ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
@@ -302,8 +302,8 @@ impl SubscriptionClientT for Client {
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				raw,
-				subscribe_id: ids[0].clone(),
-				unsubscribe_id: ids[1].clone(),
+				subscribe_id: ids.swap_remove(0),
+				unsubscribe_id: ids.swap_remove(0),
 				unsubscribe_method: unsubscribe_method.to_owned(),
 				send_back: send_back_tx,
 			}))
