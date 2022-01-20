@@ -91,7 +91,7 @@ pub struct RequestSer<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
 	/// Request ID
-	pub id: Id<'a>,
+	pub id: &'a Id<'a>,
 	/// Name of the method to be invoked.
 	// NOTE: as this type only implements serialize
 	// `#[serde(borrow)]` and `Cow<'a, str>` is not needed.
@@ -103,7 +103,7 @@ pub struct RequestSer<'a> {
 
 impl<'a> RequestSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(id: Id<'a>, method: &'a str, params: Option<ParamsSer<'a>>) -> Self {
+	pub fn new(id: &'a Id<'a>, method: &'a str, params: Option<ParamsSer<'a>>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
 	}
 }
@@ -213,16 +213,16 @@ mod test {
 			// With all fields set.
 			(
 				r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#,
-				Some(id.clone()),
+				Some(&id),
 				Some(params.clone()),
 				method,
 			),
 			// Escaped method name.
-			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(id.clone()), None, "\"m"),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(&id), None, "\"m"),
 			// Without ID field.
 			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, Some(params), method),
 			// Without params field
-			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(id), None, method),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(&id), None, method),
 			// Without params and ID.
 			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, None, method),
 		];
@@ -231,7 +231,7 @@ mod test {
 			let request = serde_json::to_string(&RequestSer {
 				jsonrpc: TwoPointZero,
 				method,
-				id: id.unwrap_or(Id::Null),
+				id: id.unwrap_or(&Id::Null),
 				params,
 			})
 			.unwrap();

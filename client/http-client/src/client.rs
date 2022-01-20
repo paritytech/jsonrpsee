@@ -130,7 +130,7 @@ impl ClientT for HttpClient {
 	{
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
-		let request = RequestSer::new(id.clone(), method, params);
+		let request = RequestSer::new(&id, method, params);
 
 		let fut = self.transport.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?);
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
@@ -171,7 +171,7 @@ impl ClientT for HttpClient {
 		let ids: Vec<Id> = guard.inner();
 
 		for (pos, (method, params)) in batch.into_iter().enumerate() {
-			batch_request.push(RequestSer::new(ids[pos].clone(), method, params));
+			batch_request.push(RequestSer::new(&ids[pos], method, params));
 			ordered_requests.push(ids[pos].clone());
 			request_set.insert(ids[pos].clone(), pos);
 		}

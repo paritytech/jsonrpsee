@@ -207,7 +207,7 @@ impl ClientT for Client {
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
 
-		let raw = serde_json::to_string(&RequestSer::new(id.clone(), method, params)).map_err(Error::ParseError)?;
+		let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
@@ -238,7 +238,7 @@ impl ClientT for Client {
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(RequestSer::new(batch_ids[idx].clone(), method, params));
+			batches.push(RequestSer::new(&batch_ids[idx], method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -293,8 +293,8 @@ impl SubscriptionClientT for Client {
 
 		let ids: Vec<Id> = guard.inner();
 
-		let raw = serde_json::to_string(&RequestSer::new(ids[0].clone(), subscribe_method, params))
-			.map_err(Error::ParseError)?;
+		let raw =
+			serde_json::to_string(&RequestSer::new(&ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self

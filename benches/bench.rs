@@ -61,7 +61,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 		b.iter(|| {
 			let params = &[1_u64.into(), 2_u32.into()];
 			let params = ParamsSer::ArrayRef(params);
-			let request = RequestSer::new(Id::Number(0), "say_hello", Some(params));
+			let request = RequestSer::new(&Id::Number(0), "say_hello", Some(params));
 			v2_serialize(request);
 		})
 	});
@@ -69,7 +69,7 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 	crit.bench_function("jsonrpsee_types_v2_vec", |b| {
 		b.iter(|| {
 			let params = ParamsSer::Array(vec![1_u64.into(), 2_u32.into()]);
-			let request = RequestSer::new(Id::Number(0), "say_hello", Some(params));
+			let request = RequestSer::new(&Id::Number(0), "say_hello", Some(params));
 			v2_serialize(request);
 		})
 	});
