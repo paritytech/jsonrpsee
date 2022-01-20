@@ -761,11 +761,11 @@ impl SubscriptionSink {
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
 	///     let stream = futures_util::stream::iter(vec![1_u32, 2, 3]);
-	///     tokio::spawn(sink.consume_and_streamify(stream));
+	///     tokio::spawn(sink.pipe_from_stream(stream));
 	///     Ok(())
 	/// });
 	/// ```
-	pub async fn consume_and_streamify<S, T>(mut self, mut stream: S) -> Result<(), Error>
+	pub async fn pipe_from_stream<S, T>(mut self, mut stream: S) -> Result<(), Error>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
