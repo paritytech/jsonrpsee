@@ -14,9 +14,6 @@ v0.8.0 is a breaking release for the way subscription closing is handled, along 
 
 - feat(client): support request id as Strings. [#659](https://github.com/paritytech/jsonrpsee/pull/659)
 - feat(rpc module) Add a method to RpcModule that transforms the module into a RpcModule<()>, i.e. removes the context. [#660](https://github.com/paritytech/jsonrpsee/pull/660)
-
-### [Changed]
-
 - feat(rpc module): stream API for SubscriptionSink [#639](https://github.com/paritytech/jsonrpsee/pull/639)
 
 ### [Fixed]
