@@ -25,7 +25,7 @@ use jsonrpsee_types::{
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
 
-use super::{FrontToBack, RequestIdManager};
+use super::{FrontToBack, IdKind, RequestIdManager};
 
 /// Wrapper over a [`oneshot::Receiver`](futures_channel::oneshot::Receiver) that reads
 /// the underlying channel once and then stores the result in String.
@@ -63,6 +63,7 @@ pub struct ClientBuilder {
 	request_timeout: Duration,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
+	id_kind: IdKind,
 }
 
 impl Default for ClientBuilder {
@@ -71,6 +72,7 @@ impl Default for ClientBuilder {
 			request_timeout: Duration::from_secs(60),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
+			id_kind: IdKind::Number,
 		}
 	}
 }
@@ -102,6 +104,12 @@ impl ClientBuilder {
 		self
 	}
 
+	/// Configure the data type of the request object ID (default is number).
+	pub fn id_format(mut self, id_kind: IdKind) -> Self {
+		self.id_kind = id_kind;
+		self
+	}
+
 	/// Build the client with given transport.
 	///
 	/// ## Panics
@@ -119,7 +127,7 @@ impl ClientBuilder {
 			to_back,
 			request_timeout: self.request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
-			id_manager: RequestIdManager::new(self.max_concurrent_requests),
+			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 		}
 	}
 }
@@ -196,9 +204,10 @@ impl ClientT for Client {
 		R: DeserializeOwned,
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
-		let req_id = self.id_manager.next_request_id()?;
-		let id = *req_id.inner();
-		let raw = serde_json::to_string(&RequestSer::new(Id::Number(id), method, params)).map_err(Error::ParseError)?;
+		let guard = self.id_manager.next_request_id()?;
+		let id = guard.inner();
+
+		let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
 		tracing::trace!("[frontend]: send request: {:?}", raw);
 
 		if self
@@ -224,11 +233,12 @@ impl ClientT for Client {
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
-		let batch_ids = self.id_manager.next_request_ids(batch.len())?;
+		let guard = self.id_manager.next_request_ids(batch.len())?;
+		let batch_ids: Vec<Id> = guard.inner();
 		let mut batches = Vec::with_capacity(batch.len());
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
-			batches.push(RequestSer::new(Id::Number(batch_ids.inner()[idx]), method, params));
+			batches.push(RequestSer::new(&batch_ids[idx], method, params));
 		}
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
@@ -238,7 +248,7 @@ impl ClientT for Client {
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids.inner().clone(), send_back: send_back_tx }))
+			.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
 			.await
 			.is_err()
 		{
@@ -279,9 +289,12 @@ impl SubscriptionClientT for Client {
 			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
 		}
 
-		let ids = self.id_manager.next_request_ids(2)?;
-		let raw = serde_json::to_string(&RequestSer::new(Id::Number(ids.inner()[0]), subscribe_method, params))
-			.map_err(Error::ParseError)?;
+		let guard = self.id_manager.next_request_ids(2)?;
+
+		let mut ids: Vec<Id> = guard.inner();
+
+		let raw =
+			serde_json::to_string(&RequestSer::new(&ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -289,8 +302,8 @@ impl SubscriptionClientT for Client {
 			.clone()
 			.send(FrontToBack::Subscribe(SubscriptionMessage {
 				raw,
-				subscribe_id: ids.inner()[0],
-				unsubscribe_id: ids.inner()[1],
+				subscribe_id: ids.swap_remove(0),
+				unsubscribe_id: ids.swap_remove(0),
 				unsubscribe_method: unsubscribe_method.to_owned(),
 				send_back: send_back_tx,
 			}))
