@@ -48,7 +48,7 @@ async fn method_call_works() {
 }
 
 #[tokio::test]
-async fn method_call_with_wrong_id() {
+async fn method_call_with_wrong_id_kind() {
 	let exp = "id as string";
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),

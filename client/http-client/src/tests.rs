@@ -45,7 +45,7 @@ async fn method_call_works() {
 }
 
 #[tokio::test]
-async fn method_call_with_wrong_id() {
+async fn method_call_with_wrong_id_kind() {
 	let exp = "id as string";
 	let server_addr =
 		http_server_with_hardcoded_response(ok_response(exp.into(), Id::Num(0))).with_default_timeout().await.unwrap();
