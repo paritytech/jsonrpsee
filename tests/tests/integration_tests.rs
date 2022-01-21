@@ -360,6 +360,44 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 }
 
 #[tokio::test]
+async fn ws_server_cancels_stream_after_reset_conn() {
+	use futures::{channel::mpsc, SinkExt, StreamExt};
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let (tx, mut rx) = mpsc::channel(1);
+	let mut module = RpcModule::new(tx);
+
+	module
+		.register_subscription("subscribe_never_produce", "n", "unsubscribe_never_produce", |_, sink, mut tx| {
+			// create stream that doesn't produce items.
+			let stream = futures::stream::empty::<usize>();
+			tokio::spawn(async move {
+				sink.pipe_from_stream(stream).await.unwrap();
+				let send_back = Arc::make_mut(&mut tx);
+				send_back.feed(()).await.unwrap();
+			});
+			Ok(())
+		})
+		.unwrap();
+
+	server.start(module).unwrap();
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let _sub1: Subscription<usize> =
+		client.subscribe("subscribe_never_produce", None, "unsubscribe_never_produce").await.unwrap();
+	let _sub2: Subscription<usize> =
+		client.subscribe("subscribe_never_produce", None, "unsubscribe_never_produce").await.unwrap();
+
+	// terminate connection.
+	drop(client);
+	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+}
+
+#[tokio::test]
 async fn ws_batch_works() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
