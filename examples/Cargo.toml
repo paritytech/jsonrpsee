@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-examples"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Examples for jsonrpsee"
 edition = "2021"
