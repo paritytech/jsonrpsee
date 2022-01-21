@@ -178,7 +178,7 @@ pub enum WsHandshakeError {
 #[derive(Debug, Error)]
 pub enum WsError {
 	/// Error in the WebSocket connection.
-	#[error("WebSocket connection error: {}", 0)]
+	#[error("WebSocket connection error: {0}")]
 	Connection(#[source] soketto::connection::Error),
 }
 
