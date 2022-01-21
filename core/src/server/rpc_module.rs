@@ -508,7 +508,7 @@ impl<Context> RpcModule<Context> {
 	/// Transform a module into an `RpcModule<()>` (unit context).
 	pub fn remove_context(self) -> RpcModule<()> {
 		let mut module = RpcModule::new(());
-		module.merge(self).expect("Merging with an empty module can never have conflicting method names.");
+		module.methods = self.methods;
 		module
 	}
 }
