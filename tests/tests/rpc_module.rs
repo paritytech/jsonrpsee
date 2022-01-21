@@ -31,6 +31,14 @@ use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
+// Helper macro to assert that a binding is of a specific type.
+macro_rules! assert_type {
+	( $ty:ty, $expected:expr $(,)?) => {{
+		fn assert_type<Expected>(_expected: &Expected) {}
+		assert_type::<$ty>($expected)
+	}};
+}
+
 #[test]
 fn rpc_modules_with_different_contexts_can_be_merged() {
 	let cx = Vec::<u8>::new();
@@ -43,6 +51,14 @@ fn rpc_modules_with_different_contexts_can_be_merged() {
 
 	assert!(mod1.method("bla with Vec context").is_some());
 	assert!(mod1.method("bla with String context").is_some());
+}
+
+#[test]
+fn flatten_rpc_modules() {
+	let mod1 = RpcModule::new(String::new());
+	assert_type!(RpcModule<String>, &mod1);
+	let unit_mod = mod1.remove_context();
+	assert_type!(RpcModule<()>, &unit_mod);
 }
 
 #[test]
