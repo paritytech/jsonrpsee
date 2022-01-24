@@ -8,10 +8,6 @@ Designed to be the successor to [ParityTech's JSONRPC crate](https://github.com/
 
 Support `WebSocket` and `HTTP` transports for both client and server.
 
-## Under development
-
-The library is still under development; do not use in production.
-
 ## Sub-projects
 - [jsonrpsee-http-client](./http-client) [![crates.io][http-client-image]][http-client-url]
 - [jsonrpsee-http-server](./http-server) [![crates.io][http-server-image]][http-server-url]
@@ -36,10 +32,13 @@ The library is still under development; do not use in production.
 - [WebSocket](./examples/ws.rs)
 - [WebSocket pubsub](./examples/ws_subscription.rs)
 - [API generation with proc macro](./examples/proc_macro.rs)
+- [Middleware](./examples/multi_middleware.rs)
+- [CORS server](./examples/cors_server.rs)
+- [Core client](.examples/core_client.rs)
 
 ## Roadmap
 
-See [tracking issue for next stable release (0.7)](https://github.com/paritytech/jsonrpsee/issues/573)
+See [tracking issue for next stable release (0.9)](https://github.com/paritytech/jsonrpsee/issues/670)
 
 ## Users
 
