@@ -82,21 +82,21 @@ variables:                         &default-vars
       dotenv: runner.env
 #### stage:                        lint
 
-fmt:
+.fmt:
   stage:                           lint
   <<:                              *docker-env
   <<:                              *common-refs
   script:
     - cargo fmt --all -- --check
 
-clippy:
+.clippy:
   stage:                           lint
   <<:                              *docker-env
   <<:                              *common-refs
   script:
     - cargo clippy --all-targets
 
-check-rustdoc-links:
+.check-rustdoc-links:
   stage:                           lint
   <<:                              *docker-env
   <<:                              *common-refs
@@ -105,7 +105,7 @@ check-rustdoc-links:
 
 #### stage:                       test
 
-check-code:
+.check-code:
   stage:                           test
   <<:                              *docker-env
   <<:                              *common-refs
@@ -113,7 +113,7 @@ check-code:
     - cargo install cargo-hack
     - cargo hack check --workspace --each-feature
 
-test:
+.test:
   stage:                           test
   <<:                              *docker-env
   <<:                              *common-refs
