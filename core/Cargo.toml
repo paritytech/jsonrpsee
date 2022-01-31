@@ -23,7 +23,7 @@ rand = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 soketto = "0.7.1"
-parking_lot = { version = "0.11", optional = true }
+parking_lot = { version = "0.12", optional = true }
 tokio = { version = "1.8", features = ["rt"], optional = true }
 
 [features]
