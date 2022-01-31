@@ -1,0 +1,121 @@
+Gnuplot not found, using plotters backend
+test jsonrpsee_types_v2_array_ref ... bench:         272 ns/iter (+/- 0)
+
+test jsonrpsee_types_v2_vec ... bench:         303 ns/iter (+/- 1)
+
+test sync/http_round_trip ... bench:      214384 ns/iter (+/- 7384)
+
+test sync/http_concurrent_round_trip/14 ... bench:      433197 ns/iter (+/- 16163)
+test sync/http_concurrent_round_trip/28 ... bench:      635535 ns/iter (+/- 32294)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.7s, enable flat sampling, or reduce sample count to 60.
+test sync/http_concurrent_round_trip/56 ... bench:     1132905 ns/iter (+/- 21848)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.7s, enable flat sampling, or reduce sample count to 60.
+test sync/http_concurrent_round_trip/112 ... bench:     1285062 ns/iter (+/- 105822)
+test sync/http_concurrent_round_trip/224 ... bench:     2551032 ns/iter (+/- 103101)
+
+test sync/http_concurrent_connections/2 ... bench:      485833 ns/iter (+/- 7695)
+test sync/http_concurrent_connections/4 ... bench:      520249 ns/iter (+/- 17041)
+test sync/http_concurrent_connections/8 ... bench:      613488 ns/iter (+/- 38721)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.6s, enable flat sampling, or reduce sample count to 60.
+test sync/http_concurrent_connections/16 ... bench:     1092297 ns/iter (+/- 227950)
+test sync/http_concurrent_connections/32 ... bench:     1895815 ns/iter (+/- 915266)
+test sync/http_concurrent_connections/64 ... bench:     3393174 ns/iter (+/- 1277230)
+
+test sync/http_batch_requests/2 ... bench:      238525 ns/iter (+/- 10355)
+test sync/http_batch_requests/5 ... bench:      268047 ns/iter (+/- 11521)
+test sync/http_batch_requests/10 ... bench:      339180 ns/iter (+/- 13747)
+test sync/http_batch_requests/50 ... bench:      712212 ns/iter (+/- 14724)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.9s, enable flat sampling, or reduce sample count to 60.
+test sync/http_batch_requests/100 ... bench:     1186002 ns/iter (+/- 16149)
+
+test sync/ws_round_trip ... bench:      140710 ns/iter (+/- 683)
+
+test sync/ws_concurrent_round_trip/14 ... bench:      635291 ns/iter (+/- 13335)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.2s, enable flat sampling, or reduce sample count to 60.
+test sync/ws_concurrent_round_trip/28 ... bench:     1219180 ns/iter (+/- 25983)
+test sync/ws_concurrent_round_trip/56 ... bench:     2306732 ns/iter (+/- 55819)
+test sync/ws_concurrent_round_trip/112 ... bench:     4392355 ns/iter (+/- 193182)
+test sync/ws_concurrent_round_trip/224 ... bench:     8102997 ns/iter (+/- 343259)
+
+test sync/ws_concurrent_connections/2 ... bench:      207255 ns/iter (+/- 15582)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.7s, enable flat sampling, or reduce sample count to 60.
+test sync/ws_concurrent_connections/4 ... bench:      253262 ns/iter (+/- 10076)
+test sync/ws_concurrent_connections/8 ... bench:      359613 ns/iter (+/- 14513)
+test sync/ws_concurrent_connections/16 ... bench:      611098 ns/iter (+/- 20683)
+test sync/ws_concurrent_connections/32 ... bench:     1243211 ns/iter (+/- 45169)
+test sync/ws_concurrent_connections/64 ... bench:     2540336 ns/iter (+/- 63153)
+
+test sync/ws_batch_requests/2 ... bench:      167796 ns/iter (+/- 12873)
+test sync/ws_batch_requests/5 ... bench:      197406 ns/iter (+/- 8009)
+test sync/ws_batch_requests/10 ... bench:      249086 ns/iter (+/- 5495)
+test sync/ws_batch_requests/50 ... bench:      646647 ns/iter (+/- 7138)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.7s, enable flat sampling, or reduce sample count to 60.
+test sync/ws_batch_requests/100 ... bench:     1129293 ns/iter (+/- 6329)
+
+test async/http_round_trip ... bench:      215102 ns/iter (+/- 9747)
+
+test async/http_concurrent_round_trip/14 ... bench:      440944 ns/iter (+/- 10706)
+test async/http_concurrent_round_trip/28 ... bench:      641596 ns/iter (+/- 12069)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.7s, enable flat sampling, or reduce sample count to 60.
+test async/http_concurrent_round_trip/56 ... bench:     1136238 ns/iter (+/- 23271)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.6s, enable flat sampling, or reduce sample count to 60.
+test async/http_concurrent_round_trip/112 ... bench:     1281822 ns/iter (+/- 50704)
+test async/http_concurrent_round_trip/224 ... bench:     2545914 ns/iter (+/- 77640)
+
+test async/http_concurrent_connections/2 ... bench:      486392 ns/iter (+/- 9687)
+test async/http_concurrent_connections/4 ... bench:      522793 ns/iter (+/- 22116)
+test async/http_concurrent_connections/8 ... bench:      598424 ns/iter (+/- 34643)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 5.6s, enable flat sampling, or reduce sample count to 60.
+test async/http_concurrent_connections/16 ... bench:     1108697 ns/iter (+/- 251378)
+test async/http_concurrent_connections/32 ... bench:     1877165 ns/iter (+/- 835637)
+test async/http_concurrent_connections/64 ... bench:     3415527 ns/iter (+/- 1390882)
+
+test async/http_batch_requests/2 ... bench:      238487 ns/iter (+/- 6297)
+test async/http_batch_requests/5 ... bench:      285156 ns/iter (+/- 21665)
+test async/http_batch_requests/10 ... bench:      342105 ns/iter (+/- 4469)
+test async/http_batch_requests/50 ... bench:      765278 ns/iter (+/- 17354)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.4s, enable flat sampling, or reduce sample count to 60.
+test async/http_batch_requests/100 ... bench:     1289779 ns/iter (+/- 157809)
+
+test async/ws_round_trip ... bench:      142157 ns/iter (+/- 1521)
+
+test async/ws_concurrent_round_trip/14 ... bench:      693558 ns/iter (+/- 14646)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.3s, enable flat sampling, or reduce sample count to 60.
+test async/ws_concurrent_round_trip/28 ... bench:     1213643 ns/iter (+/- 42261)
+test async/ws_concurrent_round_trip/56 ... bench:     2366922 ns/iter (+/- 43385)
+test async/ws_concurrent_round_trip/112 ... bench:     4455238 ns/iter (+/- 116189)
+test async/ws_concurrent_round_trip/224 ... bench:     8280749 ns/iter (+/- 325176)
+
+test async/ws_concurrent_connections/2 ... bench:      202859 ns/iter (+/- 4398)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.5s, enable flat sampling, or reduce sample count to 60.
+test async/ws_concurrent_connections/4 ... bench:      260157 ns/iter (+/- 12248)
+test async/ws_concurrent_connections/8 ... bench:      343359 ns/iter (+/- 15119)
+test async/ws_concurrent_connections/16 ... bench:      590956 ns/iter (+/- 17556)
+test async/ws_concurrent_connections/32 ... bench:     1242851 ns/iter (+/- 43965)
+test async/ws_concurrent_connections/64 ... bench:     2463687 ns/iter (+/- 68729)
+
+test async/ws_batch_requests/2 ... bench:      170992 ns/iter (+/- 2948)
+test async/ws_batch_requests/5 ... bench:      212120 ns/iter (+/- 11194)
+test async/ws_batch_requests/10 ... bench:      258899 ns/iter (+/- 7428)
+test async/ws_batch_requests/50 ... bench:      726957 ns/iter (+/- 15551)
+
+Warning: Unable to complete 100 samples in 5.0s. You may wish to increase target time to 6.2s, enable flat sampling, or reduce sample count to 60.
+test async/ws_batch_requests/100 ... bench:     1236786 ns/iter (+/- 17131)
+
+test subscriptions/subscribe ... bench:      161108 ns/iter (+/- 26127)
+test subscriptions/subscribe_response ... bench:        3239 ns/iter (+/- 3581)
+test subscriptions/unsub ... bench:        2785 ns/iter (+/- 465)
+
