@@ -76,7 +76,7 @@ pub trait IdProvider: Send + Sync + std::fmt::Debug {
 	fn next_id(&self) -> SubscriptionId<'static>;
 }
 
-impl<T: IdProvider> IdProvider for Box<T> {
+impl<T: IdProvider + ?Sized> IdProvider for Box<T> {
 	fn next_id(&self) -> SubscriptionId<'static> {
 		(**self).next_id()
 	}
