@@ -631,7 +631,7 @@ async fn unsubscribe_wrong_sub_id_type() {
 }
 
 #[tokio::test]
-async fn custom_boxed_subscription_id_works() {
+async fn custom_subscription_id_works() {
 	#[derive(Debug, Clone)]
 	struct HardcodedSubscriptionId;
 
@@ -643,7 +643,7 @@ async fn custom_boxed_subscription_id_works() {
 
 	init_logger();
 	let server = WsServerBuilder::default()
-		.set_id_provider(Box::new(HardcodedSubscriptionId))
+		.set_id_provider(HardcodedSubscriptionId)
 		.build("127.0.0.1:0")
 		.with_default_timeout()
 		.await
