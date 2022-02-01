@@ -27,6 +27,7 @@
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
@@ -60,7 +61,7 @@ pub struct Server<M> {
 	stop_monitor: StopMonitor,
 	resources: Resources,
 	middleware: M,
-	id_provider: Box<dyn IdProvider>,
+	id_provider: Arc<dyn IdProvider>,
 }
 
 impl<M> std::fmt::Debug for Server<M> {
@@ -213,7 +214,7 @@ enum HandshakeResponse<'a, M> {
 		cfg: &'a Settings,
 		stop_monitor: &'a StopMonitor,
 		middleware: M,
-		id_provider: Box<dyn IdProvider>,
+		id_provider: Arc<dyn IdProvider>,
 	},
 }
 
@@ -288,7 +289,7 @@ async fn background_task(
 	max_request_body_size: u32,
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
-	id_provider: Box<dyn IdProvider>,
+	id_provider: Arc<dyn IdProvider>,
 ) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
 	let mut builder = server.into_builder();
@@ -647,7 +648,7 @@ pub struct Builder<M = ()> {
 	settings: Settings,
 	resources: Resources,
 	middleware: M,
-	id_provider: Box<dyn IdProvider>,
+	id_provider: Arc<dyn IdProvider>,
 }
 
 impl<M> std::fmt::Debug for Builder<M> {
@@ -662,7 +663,7 @@ impl Default for Builder {
 			settings: Settings::default(),
 			resources: Resources::default(),
 			middleware: (),
-			id_provider: Box::new(RandomIntegerIdProvider),
+			id_provider: Arc::new(RandomIntegerIdProvider),
 		}
 	}
 }
@@ -818,8 +819,8 @@ impl<M> Builder<M> {
 	///
 	/// let builder = WsServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
 	/// ```
-	pub fn set_id_provider(mut self, id_provider: Box<dyn IdProvider>) -> Self {
-		self.id_provider = id_provider;
+	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
+		self.id_provider = Arc::new(id_provider);
 		self
 	}
 
