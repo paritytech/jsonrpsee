@@ -71,7 +71,8 @@ tuple_impls! {
 }
 
 /// Trait to generate subscription IDs.
-pub trait IdProvider: Send + Sync {
+#[dyn_clonable::clonable]
+pub trait IdProvider: Send + Sync + Clone + std::fmt::Debug {
 	/// Returns the next ID for the subscription.
 	fn next_id(&self) -> SubscriptionId<'static>;
 }
