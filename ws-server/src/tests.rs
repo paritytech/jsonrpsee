@@ -631,7 +631,7 @@ async fn unsubscribe_wrong_sub_id_type() {
 }
 
 #[tokio::test]
-async fn custom_subscription_boxed_id_works() {
+async fn custom_boxed_subscription_id_works() {
 	#[derive(Debug, Clone)]
 	struct HardcodedSubscriptionId;
 
