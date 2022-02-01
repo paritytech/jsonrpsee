@@ -70,6 +70,8 @@ impl<M> std::fmt::Debug for Server<M> {
 			.field("listener", &self.listener)
 			.field("cfg", &self.cfg)
 			.field("stop_monitor", &self.stop_monitor)
+			.field("id_provider", &self.id_provider)
+			.field("resources", &self.resources)
 			.finish()
 	}
 }
@@ -644,17 +646,12 @@ impl Default for Settings {
 }
 
 /// Builder to configure and create a JSON-RPC Websocket server
+#[derive(Debug)]
 pub struct Builder<M = ()> {
 	settings: Settings,
 	resources: Resources,
 	middleware: M,
 	id_provider: Arc<dyn IdProvider>,
-}
-
-impl<M> std::fmt::Debug for Builder<M> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Builder").field("settings", &self.settings).field("resources", &self.resources).finish()
-	}
 }
 
 impl Default for Builder {
@@ -810,6 +807,9 @@ impl<M> Builder<M> {
 	/// Configure custom `subscription ID` provider for the server to use
 	/// to when getting new subscription calls.
 	///
+	/// You may choose static dispatch or dynamic dispatch because
+	/// `IdProvider` is implemented for `Box<T>`.
+	///
 	/// Default: [`RandomIntegerIdProvider`].
 	///
 	/// # Examples
@@ -817,9 +817,14 @@ impl<M> Builder<M> {
 	/// ```rust
 	/// use jsonrpsee_ws_server::{WsServerBuilder, RandomStringIdProvider, IdProvider};
 	///
-	/// let builder = WsServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
+	/// // static dispatch
+	/// let builder1 = WsServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
+	///
+	/// // or dynamic dispatch
+	/// let builder2 = WsServerBuilder::default().set_id_provider(Box::new(RandomStringIdProvider::new(16)));
 	/// ```
-	pub fn set_id_provider(mut self, id_provider: impl IdProvider + 'static) -> Self {
+	///
+	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
 		self.id_provider = Arc::new(id_provider);
 		self
 	}

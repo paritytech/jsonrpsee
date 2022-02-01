@@ -10,8 +10,8 @@ license = "MIT"
 anyhow = "1"
 arrayvec = "0.7.1"
 async-trait = "0.1"
-beef = { version = "0.5.1", features = ["impl_serde"] }
 async-channel = { version = "1.6", optional = true }
+beef = { version = "0.5.1", features = ["impl_serde"] }
 thiserror = "1"
 futures-channel = { version = "0.3.14", default-features = false }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
