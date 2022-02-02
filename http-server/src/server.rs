@@ -210,6 +210,7 @@ impl<M> Builder<M> {
 		socket.set_reuse_address(true)?;
 		socket.set_nonblocking(true)?;
 		socket.set_keepalive(self.keep_alive)?;
+		socket.set_reuse_port(true)?;
 		let address = addr.into();
 		socket.bind(&address)?;
 
