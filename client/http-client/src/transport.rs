@@ -59,7 +59,11 @@ impl HttpTransportClient {
 
 		let client = match target.scheme_str() {
 			Some("http") => {
-				let connector = HttpConnector::new();
+				let mut connector = HttpConnector::new();
+
+				connector.set_reuse_address(true);
+				connector.set_nodelay(true);
+
 				let client = Client::builder().build::<_, hyper::Body>(connector);
 				HyperClient::Http(client)
 			}
@@ -132,7 +136,7 @@ pub enum Error {
 	Url(String),
 
 	/// Error during the HTTP request, including networking errors and HTTP protocol errors.
-	#[error("Error while performing the HTTP request")]
+	#[error("HTTP error: {0}")]
 	Http(Box<dyn std::error::Error + Send + Sync>),
 
 	/// Server returned a non-success status code.
