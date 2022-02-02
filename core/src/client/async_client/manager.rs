@@ -36,7 +36,7 @@ use std::collections::{hash_map::Entry, HashMap};
 
 use crate::Error;
 use futures_channel::{mpsc, oneshot};
-use jsonrpsee_types::SubscriptionId;
+use jsonrpsee_types::{Id, SubscriptionId};
 use rustc_hash::FxHashMap;
 use serde_json::value::Value as JsonValue;
 
@@ -65,7 +65,7 @@ type PendingBatchOneshot = oneshot::Sender<Result<Vec<JsonValue>, Error>>;
 type PendingSubscriptionOneshot = oneshot::Sender<Result<(mpsc::Receiver<JsonValue>, SubscriptionId<'static>), Error>>;
 type SubscriptionSink = mpsc::Sender<JsonValue>;
 type UnsubscribeMethod = String;
-type RequestId = u64;
+type RequestId = Id<'static>;
 
 #[derive(Debug)]
 /// Batch state.
@@ -124,7 +124,7 @@ impl RequestManager {
 	) -> Result<(), PendingBatchOneshot> {
 		let mut order = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 		for (idx, batch_id) in batch.iter().enumerate() {
-			order.insert(*batch_id, idx);
+			order.insert(batch_id.clone(), idx);
 		}
 		batch.sort_unstable();
 		if let Entry::Vacant(v) = self.batches.entry(batch) {
@@ -149,7 +149,8 @@ impl RequestManager {
 			&& !self.requests.contains_key(&unsub_req_id)
 			&& sub_req_id != unsub_req_id
 		{
-			self.requests.insert(sub_req_id, Kind::PendingSubscription((unsub_req_id, send_back, unsubscribe_method)));
+			self.requests
+				.insert(sub_req_id, Kind::PendingSubscription((unsub_req_id.clone(), send_back, unsubscribe_method)));
 			self.requests.insert(unsub_req_id, Kind::PendingMethodCall(None));
 			Ok(())
 		} else {
@@ -169,7 +170,7 @@ impl RequestManager {
 		unsubscribe_method: UnsubscribeMethod,
 	) -> Result<(), SubscriptionSink> {
 		if let (Entry::Vacant(request), Entry::Vacant(subscription)) =
-			(self.requests.entry(sub_req_id), self.subscriptions.entry(subscription_id))
+			(self.requests.entry(sub_req_id.clone()), self.subscriptions.entry(subscription_id))
 		{
 			request.insert(Kind::Subscription((unsub_req_id, send_back, unsubscribe_method)));
 			subscription.insert(sub_req_id);
@@ -307,7 +308,7 @@ impl RequestManager {
 	///
 	/// Returns `Some` if the subscription ID was registered as a subscription otherwise `None`.
 	pub(crate) fn get_request_id_by_subscription_id(&self, sub_id: &SubscriptionId) -> Option<RequestId> {
-		self.subscriptions.get(sub_id).copied()
+		self.subscriptions.get(sub_id).map(|id| id.clone().into_owned())
 	}
 }
 
@@ -315,7 +316,7 @@ impl RequestManager {
 mod tests {
 	use super::{Error, RequestManager};
 	use futures_channel::{mpsc, oneshot};
-	use jsonrpsee_types::SubscriptionId;
+	use jsonrpsee_types::{Id, SubscriptionId};
 	use serde_json::Value as JsonValue;
 
 	#[test]
@@ -323,8 +324,8 @@ mod tests {
 		let (request_tx, _) = oneshot::channel::<Result<JsonValue, Error>>();
 
 		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_call(0, Some(request_tx)).is_ok());
-		assert!(manager.complete_pending_call(0).is_some());
+		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx)).is_ok());
+		assert!(manager.complete_pending_call(Id::Number(0)).is_some());
 	}
 
 	#[test]
@@ -332,15 +333,26 @@ mod tests {
 		let (pending_sub_tx, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
 		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_subscription(1, 2, pending_sub_tx, "unsubscribe_method".into()).is_ok());
-		let (unsub_req_id, _send_back_oneshot, unsubscribe_method) = manager.complete_pending_subscription(1).unwrap();
-		assert_eq!(unsub_req_id, 2);
 		assert!(manager
-			.insert_subscription(1, 2, SubscriptionId::Str("uniq_id_from_server".into()), sub_tx, unsubscribe_method)
+			.insert_pending_subscription(Id::Number(1), Id::Number(2), pending_sub_tx, "unsubscribe_method".into())
+			.is_ok());
+		let (unsub_req_id, _send_back_oneshot, unsubscribe_method) =
+			manager.complete_pending_subscription(Id::Number(1)).unwrap();
+		assert_eq!(unsub_req_id, Id::Number(2));
+		assert!(manager
+			.insert_subscription(
+				Id::Number(1),
+				Id::Number(2),
+				SubscriptionId::Str("uniq_id_from_server".into()),
+				sub_tx,
+				unsubscribe_method
+			)
 			.is_ok());
 
-		assert!(manager.as_subscription_mut(&1).is_some());
-		assert!(manager.remove_subscription(1, SubscriptionId::Str("uniq_id_from_server".into())).is_some());
+		assert!(manager.as_subscription_mut(&Id::Number(1)).is_some());
+		assert!(manager
+			.remove_subscription(Id::Number(1), SubscriptionId::Str("uniq_id_from_server".into()))
+			.is_some());
 	}
 
 	#[test]
@@ -350,14 +362,32 @@ mod tests {
 		let (tx3, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let (tx4, _) = oneshot::channel::<Result<(mpsc::Receiver<JsonValue>, SubscriptionId), Error>>();
 		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_subscription(1, 1, tx1, "unsubscribe_method".into()).is_err());
-		assert!(manager.insert_pending_subscription(0, 1, tx2, "unsubscribe_method".into()).is_ok());
+		assert!(manager
+			.insert_pending_subscription(Id::Str("1".into()), Id::Str("1".into()), tx1, "unsubscribe_method".into())
+			.is_err());
+		assert!(manager
+			.insert_pending_subscription(Id::Str("0".into()), Id::Str("1".into()), tx2, "unsubscribe_method".into())
+			.is_ok());
 		assert!(
-			manager.insert_pending_subscription(99, 0, tx3, "unsubscribe_method".into()).is_err(),
+			manager
+				.insert_pending_subscription(
+					Id::Str("99".into()),
+					Id::Str("0".into()),
+					tx3,
+					"unsubscribe_method".into()
+				)
+				.is_err(),
 			"unsub request ID already occupied"
 		);
 		assert!(
-			manager.insert_pending_subscription(99, 1, tx4, "unsubscribe_method".into()).is_err(),
+			manager
+				.insert_pending_subscription(
+					Id::Str("99".into()),
+					Id::Str("1".into()),
+					tx4,
+					"unsubscribe_method".into()
+				)
+				.is_err(),
 			"sub request ID already occupied"
 		);
 	}
@@ -370,14 +400,24 @@ mod tests {
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
 
 		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_call(0, Some(request_tx1)).is_ok());
-		assert!(manager.insert_pending_call(0, Some(request_tx2)).is_err());
-		assert!(manager.insert_pending_subscription(0, 1, pending_sub_tx, "beef".to_string()).is_err());
-		assert!(manager.insert_subscription(0, 99, SubscriptionId::Num(137), sub_tx, "bibimbap".to_string()).is_err());
+		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx1)).is_ok());
+		assert!(manager.insert_pending_call(Id::Number(0), Some(request_tx2)).is_err());
+		assert!(manager
+			.insert_pending_subscription(Id::Number(0), Id::Number(1), pending_sub_tx, "beef".to_string())
+			.is_err());
+		assert!(manager
+			.insert_subscription(
+				Id::Number(0),
+				Id::Number(99),
+				SubscriptionId::Num(137),
+				sub_tx,
+				"bibimbap".to_string()
+			)
+			.is_err());
 
-		assert!(manager.remove_subscription(0, SubscriptionId::Num(137)).is_none());
-		assert!(manager.complete_pending_subscription(0).is_none());
-		assert!(manager.complete_pending_call(0).is_some());
+		assert!(manager.remove_subscription(Id::Number(0), SubscriptionId::Num(137)).is_none());
+		assert!(manager.complete_pending_subscription(Id::Number(0)).is_none());
+		assert!(manager.complete_pending_call(Id::Number(0)).is_some());
 	}
 
 	#[test]
@@ -388,15 +428,27 @@ mod tests {
 		let (sub_tx, _) = mpsc::channel::<JsonValue>(1);
 
 		let mut manager = RequestManager::new();
-		assert!(manager.insert_pending_subscription(99, 100, pending_sub_tx1, "beef".to_string()).is_ok());
-		assert!(manager.insert_pending_call(99, Some(request_tx)).is_err());
-		assert!(manager.insert_pending_subscription(99, 1337, pending_sub_tx2, "vegan".to_string()).is_err());
+		assert!(manager
+			.insert_pending_subscription(Id::Number(99), Id::Number(100), pending_sub_tx1, "beef".to_string())
+			.is_ok());
+		assert!(manager.insert_pending_call(Id::Number(99), Some(request_tx)).is_err());
+		assert!(manager
+			.insert_pending_subscription(Id::Number(99), Id::Number(1337), pending_sub_tx2, "vegan".to_string())
+			.is_err());
 
-		assert!(manager.insert_subscription(99, 100, SubscriptionId::Num(0), sub_tx, "bibimbap".to_string()).is_err());
+		assert!(manager
+			.insert_subscription(
+				Id::Number(99),
+				Id::Number(100),
+				SubscriptionId::Num(0),
+				sub_tx,
+				"bibimbap".to_string()
+			)
+			.is_err());
 
-		assert!(manager.remove_subscription(99, SubscriptionId::Num(0)).is_none());
-		assert!(manager.complete_pending_call(99).is_none());
-		assert!(manager.complete_pending_subscription(99).is_some());
+		assert!(manager.remove_subscription(Id::Number(99), SubscriptionId::Num(0)).is_none());
+		assert!(manager.complete_pending_call(Id::Number(99)).is_none());
+		assert!(manager.complete_pending_subscription(Id::Number(99)).is_some());
 	}
 
 	#[test]
@@ -408,15 +460,21 @@ mod tests {
 
 		let mut manager = RequestManager::new();
 
-		assert!(manager.insert_subscription(3, 4, SubscriptionId::Num(0), sub_tx1, "bibimbap".to_string()).is_ok());
-		assert!(manager.insert_subscription(3, 4, SubscriptionId::Num(1), sub_tx2, "bibimbap".to_string()).is_err());
-		assert!(manager.insert_pending_subscription(3, 4, pending_sub_tx, "beef".to_string()).is_err());
-		assert!(manager.insert_pending_call(3, Some(request_tx)).is_err());
+		assert!(manager
+			.insert_subscription(Id::Number(3), Id::Number(4), SubscriptionId::Num(0), sub_tx1, "bibimbap".to_string())
+			.is_ok());
+		assert!(manager
+			.insert_subscription(Id::Number(3), Id::Number(4), SubscriptionId::Num(1), sub_tx2, "bibimbap".to_string())
+			.is_err());
+		assert!(manager
+			.insert_pending_subscription(Id::Number(3), Id::Number(4), pending_sub_tx, "beef".to_string())
+			.is_err());
+		assert!(manager.insert_pending_call(Id::Number(3), Some(request_tx)).is_err());
 
-		assert!(manager.remove_subscription(3, SubscriptionId::Num(7)).is_none());
-		assert!(manager.complete_pending_call(3).is_none());
-		assert!(manager.complete_pending_subscription(3).is_none());
-		assert!(manager.remove_subscription(3, SubscriptionId::Num(1)).is_none());
-		assert!(manager.remove_subscription(3, SubscriptionId::Num(0)).is_some());
+		assert!(manager.remove_subscription(Id::Number(3), SubscriptionId::Num(7)).is_none());
+		assert!(manager.complete_pending_call(Id::Number(3)).is_none());
+		assert!(manager.complete_pending_subscription(Id::Number(3)).is_none());
+		assert!(manager.remove_subscription(Id::Number(3), SubscriptionId::Num(1)).is_none());
+		assert!(manager.remove_subscription(Id::Number(3), SubscriptionId::Num(0)).is_some());
 	}
 }

@@ -71,7 +71,18 @@ tuple_impls! {
 }
 
 /// Trait to generate subscription IDs.
-pub trait IdProvider: Send + Sync {
+pub trait IdProvider: Send + Sync + std::fmt::Debug {
 	/// Returns the next ID for the subscription.
 	fn next_id(&self) -> SubscriptionId<'static>;
+}
+
+// Implement `IdProvider` for `Box<T>`
+//
+// It's not implemented for `&'_ T` because
+// of the required `'static lifetime`
+// Thus, `&dyn IdProvider` won't work.
+impl<T: IdProvider + ?Sized> IdProvider for Box<T> {
+	fn next_id(&self) -> SubscriptionId<'static> {
+		(**self).next_id()
+	}
 }

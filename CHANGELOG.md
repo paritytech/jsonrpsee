@@ -6,7 +6,26 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
-## [v0.7.0] - 2022-12-22
+## [v0.8.0] - 2022-01-21
+
+v0.8.0 is a breaking release for the way subscription closing is handled, along with a few other minor tweaks and fixes.
+
+### [Added]
+
+- feat(client): support request id as Strings. [#659](https://github.com/paritytech/jsonrpsee/pull/659)
+- feat(rpc module) Add a method to RpcModule that transforms the module into a RpcModule<()>, i.e. removes the context. [#660](https://github.com/paritytech/jsonrpsee/pull/660)
+- feat(rpc module): stream API for SubscriptionSink [#639](https://github.com/paritytech/jsonrpsee/pull/639)
+
+### [Fixed]
+
+- fix: nit in WsError [#662](https://github.com/paritytech/jsonrpsee/pull/662)
+- fix(jsonrpsee): feature macros include client types [#656](https://github.com/paritytech/jsonrpsee/pull/656)
+- fix(ws client): export WsClient [#646](https://github.com/paritytech/jsonrpsee/pull/646)
+- fix(ws client): improve error message bad URL [#642](https://github.com/paritytech/jsonrpsee/pull/642)
+- fix(ws client): expose tls feature. [#640](https://github.com/paritytech/jsonrpsee/pull/640)
+- fix(http server): handle post and option HTTP requests properly. [#637](https://github.com/paritytech/jsonrpsee/pull/637)
+
+## [v0.7.0] - 2021-12-22
 
 v0.7.0 is a breaking release that contains a big refactoring of the crate structure. The `types` and
 `utils` crates are split up as `types` and `core` to clarify the difference between the two.

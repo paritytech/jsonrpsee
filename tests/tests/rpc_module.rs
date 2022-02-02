@@ -26,10 +26,18 @@
 
 use std::collections::HashMap;
 
+use jsonrpsee::core::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::core::Error;
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
+
+// Helper macro to assert that a binding is of a specific type.
+macro_rules! assert_type {
+	( $ty:ty, $expected:expr $(,)?) => {{
+		fn assert_type<Expected>(_expected: &Expected) {}
+		assert_type::<$ty>($expected)
+	}};
+}
 
 #[test]
 fn rpc_modules_with_different_contexts_can_be_merged() {
@@ -43,6 +51,14 @@ fn rpc_modules_with_different_contexts_can_be_merged() {
 
 	assert!(mod1.method("bla with Vec context").is_some());
 	assert!(mod1.method("bla with String context").is_some());
+}
+
+#[test]
+fn flatten_rpc_modules() {
+	let mod1 = RpcModule::new(String::new());
+	assert_type!(RpcModule<String>, &mod1);
+	let unit_mod = mod1.remove_context();
+	assert_type!(RpcModule<()>, &unit_mod);
 }
 
 #[test]
@@ -205,9 +221,10 @@ async fn subscribing_without_server() {
 	}
 
 	let sub_err = my_sub.next::<char>().await.unwrap().unwrap_err();
+	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server("No close reason provided".to_string()));
 
 	// The subscription is now closed by the server.
-	assert!(matches!(sub_err, Error::SubscriptionClosed(_)));
+	assert!(matches!(sub_err, Error::SubscriptionClosed(close_reason) if close_reason == exp));
 }
 
 #[tokio::test]
@@ -215,11 +232,16 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
-			std::thread::spawn(move || loop {
-				if let Err(Error::SubscriptionClosed(_)) = sink.send(&"lo") {
-					return;
+			std::thread::spawn(move || {
+				// make sure to only send one item
+				sink.send(&"lo").unwrap();
+				while !sink.is_closed() {
+					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
-				std::thread::sleep(std::time::Duration::from_millis(500));
+				// Get the close reason.
+				if let Error::SubscriptionClosed(close_reason) = sink.send(&"lo").unwrap_err() {
+					sink.close(&close_reason);
+				}
 			});
 			Ok(())
 		})
@@ -232,5 +254,11 @@ async fn close_test_subscribing_without_server() {
 
 	// close the subscription to ensure it doesn't return any items.
 	my_sub.close();
-	assert!(matches!(my_sub.next::<String>().await, None));
+
+	// In this case, the unsubscribe method was not called and
+	// it will be treated as the connection was closed.
+	let exp = SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset);
+	assert!(
+		matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
+	);
 }

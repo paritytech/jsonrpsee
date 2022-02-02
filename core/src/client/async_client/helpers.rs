@@ -45,8 +45,8 @@ pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<Resp
 	let mut rps_unordered: Vec<_> = Vec::with_capacity(rps.len());
 
 	for rp in rps {
-		let id = rp.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
-		digest.push(id);
+		let id = rp.id.into_owned();
+		digest.push(id.clone());
 		rps_unordered.push((id, rp.result));
 	}
 
@@ -131,7 +131,7 @@ pub(crate) fn process_single_response(
 	response: Response<JsonValue>,
 	max_capacity_per_subscription: usize,
 ) -> Result<Option<RequestMessage>, Error> {
-	let response_id = response.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
+	let response_id = response.id.into_owned();
 	match manager.request_status(&response_id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back_oneshot = match manager.complete_pending_call(response_id) {
@@ -144,7 +144,7 @@ pub(crate) fn process_single_response(
 		}
 		RequestStatus::PendingSubscription => {
 			let (unsub_id, send_back_oneshot, unsubscribe_method) =
-				manager.complete_pending_subscription(response_id).ok_or(Error::InvalidRequestId)?;
+				manager.complete_pending_subscription(response_id.clone()).ok_or(Error::InvalidRequestId)?;
 
 			let sub_id: Result<SubscriptionId, _> = response.result.try_into();
 			let sub_id = match sub_id {
@@ -157,7 +157,7 @@ pub(crate) fn process_single_response(
 
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_capacity_per_subscription);
 			if manager
-				.insert_subscription(response_id, unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
+				.insert_subscription(response_id.clone(), unsub_id, sub_id.clone(), subscribe_tx, unsubscribe_method)
 				.is_ok()
 			{
 				match send_back_oneshot.send(Ok((subscribe_rx, sub_id.clone()))) {
@@ -191,14 +191,14 @@ pub(crate) async fn stop_subscription(
 /// Builds an unsubscription message.
 pub(crate) fn build_unsubscribe_message(
 	manager: &mut RequestManager,
-	sub_req_id: u64,
+	sub_req_id: Id<'static>,
 	sub_id: SubscriptionId<'static>,
 ) -> Option<RequestMessage> {
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
 	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
 	// TODO: https://github.com/paritytech/jsonrpsee/issues/275
 	let params = ParamsSer::ArrayRef(sub_id_slice);
-	let raw = serde_json::to_string(&RequestSer::new(Id::Number(unsub_req_id), &unsub, Some(params))).ok()?;
+	let raw = serde_json::to_string(&RequestSer::new(&unsub_req_id, &unsub, Some(params))).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 
@@ -207,7 +207,7 @@ pub(crate) fn build_unsubscribe_message(
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
 pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) -> Result<(), Error> {
-	let id = err.id.as_number().copied().ok_or(Error::InvalidRequestId)?;
+	let id = err.id.clone().into_owned();
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back = manager.complete_pending_call(id).expect("State checked above; qed");

@@ -350,7 +350,7 @@ impl<'a> SubscriptionId<'a> {
 }
 
 /// Request Id
-#[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq, Deserialize, Serialize, PartialOrd, Ord)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
 pub enum Id<'a> {
