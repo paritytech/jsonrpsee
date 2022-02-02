@@ -57,28 +57,32 @@ impl HttpTransportClient {
 			return Err(Error::Url("Port number is missing in the URL".into()));
 		}
 
+		let mut connector = HttpConnector::new();
+
+		connector.set_reuse_address(true);
+		connector.set_nodelay(true);
+
 		let client = match target.scheme_str() {
 			Some("http") => {
-				let mut connector = HttpConnector::new();
-
-				connector.set_reuse_address(true);
-				connector.set_nodelay(true);
-
 				let client = Client::builder().build::<_, hyper::Body>(connector);
 				HyperClient::Http(client)
 			}
 			#[cfg(feature = "tls")]
 			Some("https") => {
 				let connector = match cert_store {
-					CertificateStore::Native => {
-						hyper_rustls::HttpsConnectorBuilder::new().with_native_roots().https_or_http().enable_http1()
-					}
-					CertificateStore::WebPki => {
-						hyper_rustls::HttpsConnectorBuilder::new().with_webpki_roots().https_or_http().enable_http1()
-					}
+					CertificateStore::Native => hyper_rustls::HttpsConnectorBuilder::new()
+						.with_native_roots()
+						.https_or_http()
+						.enable_http1()
+						.wrap_connector(connector),
+					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
+						.with_webpki_roots()
+						.https_or_http()
+						.enable_http1()
+						.wrap_connector(connector),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
-				let client = Client::builder().build::<_, hyper::Body>(connector.build());
+				let client = Client::builder().build::<_, hyper::Body>(connector);
 				HyperClient::Https(client)
 			}
 			_ => {
