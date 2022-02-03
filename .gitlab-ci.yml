@@ -10,7 +10,12 @@ default:
 stages:
   - lint
   - test
-  - benchmark
+  - benchmark1
+  - benchmark2
+  - benchmark3
+  - benchmark4
+  - benchmark5
+  - benchmark6
   - check_benchmark
   - publish
 
@@ -75,28 +80,28 @@ variables:                         &default-vars
   artifacts:
     name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
     when:                          on_success
-    expire_in:                     28 days
+    expire_in:                     1 days
     paths:
       - ./artifacts/
     reports:
       dotenv: runner.env
 #### stage:                        lint
 
-fmt:
+.fmt:
   stage:                           lint
   <<:                              *docker-env
   <<:                              *common-refs
   script:
     - cargo fmt --all -- --check
 
-clippy:
+.clippy:
   stage:                           lint
   <<:                              *docker-env
   <<:                              *common-refs
   script:
     - cargo clippy --all-targets
 
-check-rustdoc-links:
+.check-rustdoc-links:
   stage:                           lint
   <<:                              *docker-env
   <<:                              *common-refs
@@ -105,7 +110,7 @@ check-rustdoc-links:
 
 #### stage:                       test
 
-check-code:
+.check-code:
   stage:                           test
   <<:                              *docker-env
   <<:                              *common-refs
@@ -113,18 +118,17 @@ check-code:
     - cargo install cargo-hack
     - cargo hack check --workspace --each-feature
 
-test:
+.test:
   stage:                           test
   <<:                              *docker-env
   <<:                              *common-refs
   script:
     - cargo test
 
-benchmarks:
-  stage:                           benchmark
+.benchmarks:                       &bench_templ
   <<:                              *docker-env
   <<:                              *collect-artifacts
-  <<:                              *schedule-refs
+  <<:                              *common-refs
   script:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
     - mkdir artifacts
@@ -134,7 +138,31 @@ benchmarks:
   tags:
     - ci5
 
-check_bench:
+bench1:
+  stage:                           benchmark1
+  <<:                              *bench_templ
+
+bench2:
+  stage:                           benchmark2
+  <<:                              *bench_templ
+
+bench3:
+  stage:                           benchmark3
+  <<:                              *bench_templ
+
+bench4:
+  stage:                           benchmark4
+  <<:                              *bench_templ
+
+bench5:
+  stage:                           benchmark5
+  <<:                              *bench_templ
+
+bench6:
+  stage:                           benchmark6
+  <<:                              *bench_templ
+
+.check_bench:
   stage:                           check_benchmark
   variables:
     PROMETHEUS_URL:                "http://vm-longterm.parity-build.parity.io"
@@ -146,7 +174,7 @@ check_bench:
   script:
     - check_bench_result artifacts/output.txt
 
-publish-ghpages:
+.publish-ghpages:
   stage:                           publish
   variables:
     CI_IMAGE:                      "paritytech/tools:latest"
@@ -175,7 +203,7 @@ publish-ghpages:
     - git push origin gh-pages
   allow_failure:                   true
 
-publish-bench:
+.publish-bench:
   stage:                           publish
   variables:
     CI_IMAGE:                      "paritytech/tools:latest"
