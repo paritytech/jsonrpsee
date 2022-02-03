@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog].
 
 ## [v0.9.0] - 2022-02-03
 
+v0.9.0 is technically a breaking release because of the `Debug` impl of the websocket server `Builder` struct changed. In practise it should be a non-breaking upgrade for most users.
+
 ### [Changed]
 refactor(ws server): impl IdProvider for Box<T> [#684](https://github.com/paritytech/jsonrpsee/pull/684)
 chore(deps): update parking_lot requirement from 0.11 to 0.12 [#682](https://github.com/paritytech/jsonrpsee/pull/682)
