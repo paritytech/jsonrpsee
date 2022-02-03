@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.9.0] - 2022-02-03
+
+### [Changed]
+refactor(ws server): impl IdProvider for Box<T> [#684](https://github.com/paritytech/jsonrpsee/pull/684)
+chore(deps): update parking_lot requirement from 0.11 to 0.12 [#682](https://github.com/paritytech/jsonrpsee/pull/682)
+
 ## [v0.8.0] - 2022-01-21
 
 v0.8.0 is a breaking release for the way subscription closing is handled, along with a few other minor tweaks and fixes.
