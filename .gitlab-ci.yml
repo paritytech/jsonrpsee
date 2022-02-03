@@ -129,10 +129,12 @@ variables:                         &default-vars
   <<:                              *docker-env
   <<:                              *collect-artifacts
   <<:                              *common-refs
+  variables:
+    FILENAME:                      "output.txt"
   script:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
     - mkdir artifacts
-    - cp output.txt artifacts/
+    - cp $FILENAME artifacts/
     - echo ${CI_RUNNER_DESCRIPTION}
     - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
   tags:
@@ -140,25 +142,37 @@ variables:                         &default-vars
 
 bench1:
   stage:                           benchmark1
+  variables:
+    FILENAME:                      "output1.txt"
   <<:                              *bench_templ
 
 bench2:
+  variables:
+    FILENAME:                      "output2.txt"
   stage:                           benchmark2
   <<:                              *bench_templ
 
 bench3:
+  variables:
+    FILENAME:                      "output3.txt"
   stage:                           benchmark3
   <<:                              *bench_templ
 
 bench4:
+  variables:
+    FILENAME:                      "output4.txt"
   stage:                           benchmark4
   <<:                              *bench_templ
 
 bench5:
+  variables:
+    FILENAME:                      "output5.txt"
   stage:                           benchmark5
   <<:                              *bench_templ
 
 bench6:
+  variables:
+    FILENAME:                      "output6.txt"
   stage:                           benchmark6
   <<:                              *bench_templ
 
