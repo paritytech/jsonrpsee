@@ -132,7 +132,7 @@ variables:                         &default-vars
   variables:
     FILENAME:                      "output.txt"
   script:
-    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
+    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee $FILENAME
     - mkdir artifacts
     - cp $FILENAME artifacts/
     - echo ${CI_RUNNER_DESCRIPTION}
