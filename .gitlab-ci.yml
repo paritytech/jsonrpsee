@@ -83,8 +83,8 @@ variables:                         &default-vars
     expire_in:                     1 days
     paths:
       - ./artifacts/
-    reports:
-      dotenv: runner.env
+    # reports:
+    #   dotenv: runner.env
 #### stage:                        lint
 
 .fmt:
@@ -134,10 +134,9 @@ variables:                         &default-vars
   script:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee $FILENAME
-    - mkdir artifacts
-    - cp $FILENAME artifacts/
-    - echo ${CI_RUNNER_DESCRIPTION}
-    - echo "RUNNER_NAME=${CI_RUNNER_DESCRIPTION}" > runner.env
+    - mkdir artifacts || echo "Directory exists"
+    - cp $FILENAME artifacts/ || echo "Something went wrong"
+  allow_failure: true
   tags:
     - ci5
 
