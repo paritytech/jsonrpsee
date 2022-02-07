@@ -136,6 +136,7 @@ variables:                         &default-vars
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee $FILENAME
     - mkdir artifacts || echo "Directory exists"
     - cp $FILENAME artifacts/ || echo "Something went wrong"
+    - date
   allow_failure: true
   tags:
     - ci5
