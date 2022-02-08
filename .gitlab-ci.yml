@@ -83,8 +83,8 @@ variables:                         &default-vars
     expire_in:                     1 days
     paths:
       - ./artifacts/
-    # reports:
-    #   dotenv: runner.env
+
+
 #### stage:                        lint
 
 .fmt:
@@ -129,13 +129,31 @@ variables:                         &default-vars
   <<:                              *docker-env
   <<:                              *collect-artifacts
   <<:                              *common-refs
-  variables:
-    FILENAME:                      "output.txt"
   script:
-    # - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher
+    - artifacts/bench --bench --output-format bencher | tee $FILENAME
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee $FILENAME
     - mkdir artifacts || echo "Directory exists"
     - cp $FILENAME artifacts/ || echo "Something went wrong"
+    - date
+  allow_failure: true
+  tags:
+    - ci5
+
+benchmarks-create-bin:             &bench_templ
+  stage:                           test
+  <<:                              *docker-env
+  <<:                              *collect-artifacts
+  <<:                              *common-refs
+  variables:
+    FILENAME:                      "output.txt"
+  script:
+    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher
+    - mkdir artifacts || echo "Directory exists"
+    - cp target/release/deps/bench* artifacts/
+    - rm -f artifacts/bench-*.d
+    - mv artifacts/bench* artifacts/bench
+    - chmod +x artifacts/bench
+    - cp -r target/criterion artifacts/
     - date
   allow_failure: true
   tags:
