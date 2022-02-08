@@ -3,23 +3,23 @@ use futures_util::StreamExt;
 use jsonrpsee_core::async_trait;
 use jsonrpsee_core::client::{TransportReceiverT, TransportSenderT};
 use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::spawn_local;
+use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CloseEvent, MessageEvent, WebSocket};
 
-#[derive(Debug)]
-enum WebSocketMessage {
-	Data(String),
-	Close,
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into());
+    }
 }
 
 /// Sender.
-// TODO(niklasad1): this might be slow because extra channel but did like this to avoid `unsafe Send for Sender { .. }`
 #[derive(Debug)]
-pub struct Sender(mpsc::UnboundedSender<WebSocketMessage>);
+pub struct Sender(WebSocket);
+
+// TODO: safety.
+unsafe impl Send for Sender {}
 
 /// Receiver.
-// TODO(niklasad1): this might be slow because extra channel but did like this to avoid `unsafe Send for Receiver { .. }`
 #[derive(Debug)]
 pub struct Receiver(mpsc::UnboundedReceiver<String>);
 
@@ -30,12 +30,13 @@ impl TransportSenderT for Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
-		self.0.unbounded_send(WebSocketMessage::Data(msg)).map_err(|_| ())
+		log!("tx: {:?}", msg);
+		self.0.send_with_str(&msg).map_err(|_| ())
 	}
 
 	/// Send a close message and close the connection.
 	async fn close(&mut self) -> Result<(), Self::Error> {
-		self.0.unbounded_send(WebSocketMessage::Close).map_err(|_| ())
+		self.0.close().map_err(|_e| ())
 	}
 }
 
@@ -46,7 +47,10 @@ impl TransportReceiverT for Receiver {
 	/// Returns a `Future` resolving when the server sent us something back.
 	async fn receive(&mut self) -> Result<String, Self::Error> {
 		match self.0.next().await {
-			Some(msg) => Ok(msg),
+			Some(msg) => {
+				log!("rx: {:?}", msg);
+				Ok(msg)
+			}
 			None => Err(()),
 		}
 	}
@@ -54,49 +58,50 @@ impl TransportReceiverT for Receiver {
 
 /// Create a transport sender & receiver pair.
 pub async fn build_transport(url: impl AsRef<str>) -> Result<(Sender, Receiver), ()> {
-	let (from_back, rx) = mpsc::unbounded();
-	let (tx, mut to_back) = mpsc::unbounded();
+	let (tx, rx) = mpsc::unbounded();
 
 	let websocket = WebSocket::new(url.as_ref()).map_err(|_| ())?;
 	websocket.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
-	let from_back1 = from_back.clone();
+	let tx1 = tx.clone();
+
 	let on_msg_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
 		// Binary message.
 		if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
 			let msg = abuf.to_string();
-			let _ = from_back1.unbounded_send(msg.into());
+			let _ = tx.unbounded_send(msg.into());
 		// Text message.
 		} else if let Some(txt) = e.data().as_string() {
-			let _ = from_back1.unbounded_send(txt);
+			let _ = tx.unbounded_send(txt);
 		} else if let Ok(_blob) = e.data().dyn_into::<web_sys::Blob>() {
-			// no supported yet..
+			log!("Received blob message; not supported");
 		} else {
-			// add logging...
+			log!("Received unsupported message");
 		}
 	}) as Box<dyn FnMut(MessageEvent)>);
 
-	let websocket2 = websocket.clone();
-	spawn_local(async move {
-		while let Some(WebSocketMessage::Data(msg)) = to_back.next().await {
-			let _ = websocket2.send_with_str(&msg);
-		}
-		let _ = websocket2.close();
-	});
-
-	let tx1 = tx.clone();
 	// Close event.
 	let on_close_callback = Closure::wrap(Box::new(move |_e: CloseEvent| {
-		from_back.close_channel();
+		log!("channel closed");
 		tx1.close_channel();
 	}) as Box<dyn FnMut(web_sys::CloseEvent)>);
 
-	websocket.set_onopen(Some(on_msg_callback.as_ref().unchecked_ref()));
+	let (conn_tx, mut conn_rx) = mpsc::unbounded();
+
+	let on_open_callback = Closure::wrap(Box::new(move |_| {
+		conn_tx.unbounded_send(()).expect("rx still alive; qed");
+	}) as Box<dyn FnMut(JsValue)>);
+
+	websocket.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));
+	websocket.set_onmessage(Some(on_msg_callback.as_ref().unchecked_ref()));
 	websocket.set_onclose(Some(on_close_callback.as_ref().unchecked_ref()));
 
 	// Prevent for being dropped (this will be leaked intentionally).
 	on_msg_callback.forget();
+	on_open_callback.forget();
 	on_close_callback.forget();
 
-	Ok((Sender(tx), Receiver(rx)))
+	conn_rx.next().await;
+
+	Ok((Sender(websocket), Receiver(rx)))
 }
