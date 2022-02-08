@@ -139,13 +139,11 @@ variables:                         &default-vars
   tags:
     - ci5
 
-benchmarks-create-bin:             &bench_templ
+benchmarks-create-bin:
   stage:                           test
   <<:                              *docker-env
   <<:                              *collect-artifacts
   <<:                              *common-refs
-  variables:
-    FILENAME:                      "output.txt"
   script:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher
     - mkdir artifacts || echo "Directory exists"
