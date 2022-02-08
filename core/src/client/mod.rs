@@ -48,10 +48,10 @@ pub mod __reexports {
 }
 
 /// Async client abstraction that brings additional deps.
-#[cfg(feature = "async-client")]
+#[cfg(any(feature = "async-client", feature = "async-client-wasm"))]
 mod async_client;
 
-#[cfg(feature = "async-client")]
+#[cfg(any(feature = "async-client", feature = "async-client-wasm"))]
 pub use async_client::{Client, ClientBuilder};
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
@@ -113,14 +113,11 @@ pub trait SubscriptionClientT: ClientT {
 #[async_trait]
 /// Transport interface for an asyncronous client.
 pub trait TransportSenderT: Send + 'static {
-	/// Error.
-	type Error: core::fmt::Debug + Send + Sync;
-
 	/// Send.
-	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
+	async fn send(&mut self, msg: String) -> Result<(), Error>;
 
 	/// If the transport supports sending customized close messages.
-	async fn close(&mut self) -> Result<(), Self::Error> {
+	async fn close(&mut self) -> Result<(), Error> {
 		Ok(())
 	}
 }
@@ -128,11 +125,8 @@ pub trait TransportSenderT: Send + 'static {
 /// Transport interface to receive data asynchronous.
 #[async_trait]
 pub trait TransportReceiverT: Send + 'static {
-	/// Error that occur during send or receiving a message.
-	type Error: core::fmt::Debug + Send + Sync;
-
 	/// Receive.
-	async fn receive(&mut self) -> Result<String, Self::Error>;
+	async fn receive(&mut self) -> Result<String, Error>;
 }
 
 #[macro_export]

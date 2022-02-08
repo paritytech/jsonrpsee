@@ -1,7 +1,7 @@
 use futures_channel::mpsc;
 use futures_util::StreamExt;
-use jsonrpsee_core::async_trait;
 use jsonrpsee_core::client::{TransportReceiverT, TransportSenderT};
+use jsonrpsee_core::{async_trait, Error};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CloseEvent, MessageEvent, WebSocket};
@@ -25,33 +25,29 @@ pub struct Receiver(mpsc::UnboundedReceiver<String>);
 
 #[async_trait]
 impl TransportSenderT for Sender {
-	type Error = ();
-
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
+	async fn send(&mut self, msg: String) -> Result<(), Error> {
 		log!("tx: {:?}", msg);
-		self.0.send_with_str(&msg).map_err(|_| ())
+		self.0.send_with_str(&msg).map_err(|e| Error::Custom(e.as_string().unwrap()))
 	}
 
 	/// Send a close message and close the connection.
-	async fn close(&mut self) -> Result<(), Self::Error> {
-		self.0.close().map_err(|_e| ())
+	async fn close(&mut self) -> Result<(), Error> {
+		self.0.close().map_err(|e| Error::Custom(e.as_string().unwrap()))
 	}
 }
 
 #[async_trait]
 impl TransportReceiverT for Receiver {
-	type Error = ();
-
 	/// Returns a `Future` resolving when the server sent us something back.
-	async fn receive(&mut self) -> Result<String, Self::Error> {
+	async fn receive(&mut self) -> Result<String, Error> {
 		match self.0.next().await {
 			Some(msg) => {
 				log!("rx: {:?}", msg);
 				Ok(msg)
 			}
-			None => Err(()),
+			None => Err(Error::Custom("channel closed".into())),
 		}
 	}
 }
