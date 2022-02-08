@@ -23,7 +23,7 @@ variables:                         &default-vars
   GIT_STRATEGY:                    fetch
   GIT_DEPTH:                       100
   CARGO_INCREMENTAL:               0
-  CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
+  # CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
   CI_IMAGE:                        "paritytech/ci-linux:production"
   VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
   VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
@@ -132,7 +132,7 @@ variables:                         &default-vars
   variables:
     FILENAME:                      "output.txt"
   script:
-    - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher
+    # - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee $FILENAME
     - mkdir artifacts || echo "Directory exists"
     - cp $FILENAME artifacts/ || echo "Something went wrong"
