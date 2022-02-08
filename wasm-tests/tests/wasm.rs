@@ -1,6 +1,6 @@
 use jsonrpsee_client_transport::web_sys::*;
 use jsonrpsee_core::{
-	client::{Client, ClientT, TransportReceiverT, TransportSenderT},
+	client::{Client, ClientT, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
 	rpc_params,
 };
 use wasm_bindgen_test::*;
@@ -23,10 +23,23 @@ async fn wasm_ws_transport_works() {
 }
 
 #[wasm_bindgen_test]
-async fn rpc_wasm_client_works() {
+async fn rpc_method_call_works() {
 	let client: Client = build_transport("wss://kusama-rpc.polkadot.io").await.unwrap().into();
 
 	let rp: String = client.request("system_name", rpc_params![]).await.unwrap();
 
 	assert_eq!("Parity Polkadot", &rp);
+}
+
+#[wasm_bindgen_test]
+async fn rpc_subcription_works() {
+	let client: Client = build_transport("wss://kusama-rpc.polkadot.io").await.unwrap().into();
+
+	let mut sub: Subscription<serde_json::Value> =
+		client.subscribe("state_subscribeStorage", rpc_params![], "state_unsubscribeStorage").await.unwrap();
+
+	for _ in 0..3 {
+		let val = sub.next().await.unwrap();
+		assert!(val.is_ok());
+	}
 }
