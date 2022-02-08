@@ -34,12 +34,11 @@ use crate::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
-use crate::to_json_raw_value;
 use crate::traits::{IdProvider, ToRpcParams};
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::Either;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt};
-use jsonrpsee_types::error::{invalid_subscription_err, ErrorCode, CALL_EXECUTION_FAILED_CODE};
+use jsonrpsee_types::error::{ErrorCode, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload, SubscriptionResponse,
 };
@@ -681,27 +680,17 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								params,
 								id
 							);
-							let err =
-								to_json_raw_value(&"Invalid subscription ID type, must be Integer or String").ok();
-							return sink.send_error(id, invalid_subscription_err(err.as_deref()));
+							return sink.send_response(id, false);
 						}
 					};
 					let sub_id = sub_id.into_owned();
 
-					if subscribers
+					let result = subscribers
 						.lock()
 						.remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() })
-						.is_some()
-					{
-						sink.send_response(id, "Unsubscribed")
-					} else {
-						let err = to_json_raw_value(&format!(
-							"Invalid subscription ID={}",
-							serde_json::to_string(&sub_id).expect("valid JSON; qed")
-						))
-						.ok();
-						sink.send_error(id, invalid_subscription_err(err.as_deref()))
-					}
+						.is_some();
+
+					sink.send_response(id, result)
 				})),
 			);
 		}
