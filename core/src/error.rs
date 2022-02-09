@@ -24,8 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::fmt;
-
+use core::fmt;
 use jsonrpsee_types::error::CallError;
 use serde::{Deserialize, Serialize};
 
@@ -53,68 +52,86 @@ impl From<anyhow::Error> for Error {
 }
 
 /// Error type.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Error that occurs when a call failed.
-	Call(CallError),
+	#[error("Server call failed: {0}")]
+	Call(#[from] CallError),
 	/// Networking error or error on the low-level protocol layer.
-	Transport(anyhow::Error),
+	#[error("Networking or low-level protocol error: {0}")]
+	Transport(#[source] anyhow::Error),
 	/// JSON-RPC request error.
+	#[error("JSON-RPC request error: {0:?}")]
 	Request(String),
 	/// Frontend/backend channel error.
-	Internal(futures_channel::mpsc::SendError),
+	#[error("Frontend/backend channel error: {0}")]
+	Internal(#[from] futures_channel::mpsc::SendError),
 	/// Invalid response,
+	#[error("Invalid response: {0}")]
 	InvalidResponse(Mismatch<String>),
 	/// The background task has been terminated.
+	#[error("The background task been terminated because: {0}; restart required")]
 	RestartNeeded(String),
 	/// Failed to parse the data.
-	ParseError(serde_json::Error),
+	#[error("Parse error: {0}")]
+	ParseError(#[from] serde_json::Error),
 	/// Invalid subscription ID.
+	#[error("Invalid subscription ID")]
 	InvalidSubscriptionId,
 	/// Invalid request ID.
+	#[error("Invalid request ID")]
 	InvalidRequestId,
 	/// Client received a notification with an unregistered method
+	#[error("Unregistered notification method")]
 	UnregisteredNotification(String),
 	/// A request with the same request ID has already been registered.
+	#[error("A request with the same request ID has already been registered")]
 	DuplicateRequestId,
 	/// Method was already registered.
+	#[error("Method: {0} was already registered")]
 	MethodAlreadyRegistered(String),
+	/// Method with that name has not yet been registered.
+	#[error("Method: {0} has not yet been registered")]
 	MethodNotFound(String),
 	/// Subscribe and unsubscribe method names are the same.
+	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
 	/// Subscription got closed.
+	#[error("Subscription closed: {0:?}")]
 	SubscriptionClosed(SubscriptionClosed),
 	/// Request timeout
+	#[error("Request timeout")]
 	RequestTimeout,
 	/// Configured max number of request slots exceeded.
+	#[error("Configured max number of request slots exceeded")]
 	MaxSlotsExceeded,
 	/// Attempted to stop server that is already stopped.
+	#[error("Attempted to stop server that is already stopped")]
 	AlreadyStopped,
 	/// List passed into `set_allowed_origins` was empty
+	#[error("Must set at least one allowed value for the {0} header")]
 	EmptyAllowList(&'static str),
 	/// Failed to execute a method because a resource was already at capacity
+	#[error("Resource at capacity: {0}")]
 	ResourceAtCapacity(&'static str),
 	/// Failed to register a resource due to a name conflict
+	#[error("Resource name already taken: {0}")]
 	ResourceNameAlreadyTaken(&'static str),
 	/// Failed to initialize resources for a method at startup
+	#[error("Resource name `{0}` not found for method `{1}`")]
 	ResourceNameNotFoundForMethod(&'static str, &'static str),
 	/// Trying to claim resources for a method execution, but the method resources have not been initialized
+	#[error("Method `{0}` has uninitialized resources")]
 	UninitializedMethod(Box<str>),
 	/// Failed to register a resource due to a maximum number of resources already registered
+	#[error("Maximum number of resources reached")]
 	MaxResourcesReached,
 	/// Custom error.
+	#[error("Custom error: {0}")]
 	Custom(String),
 	/// Not implemented for HTTP clients.
+	#[error("Not implemented")]
 	HttpNotImplemented,
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for Error {}
-
-impl core::fmt::Display for Error {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "lazy")
-	}
 }
 
 impl Error {
@@ -172,13 +189,16 @@ pub enum SubscriptionClosedReason {
 }
 
 /// Generic transport error.
-#[derive(Debug)]
-pub enum GenericTransportError<T: Send + Sync> {
+#[derive(Debug, thiserror::Error)]
+pub enum GenericTransportError<T: std::error::Error + Send + Sync> {
 	/// Request was too large.
+	#[error("The request was too big")]
 	TooLarge,
 	/// Malformed request
+	#[error("Malformed request")]
 	Malformed,
 	/// Concrete transport error.
+	#[error("Transport error: {0}")]
 	Inner(T),
 }
 

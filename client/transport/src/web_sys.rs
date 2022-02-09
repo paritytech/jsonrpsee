@@ -8,7 +8,7 @@ use web_sys::{CloseEvent, MessageEvent, WebSocket};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
+		web_sys::console::log_1(&format!( $( $t )* ).into());
     }
 }
 
@@ -25,14 +25,13 @@ pub struct Receiver(mpsc::UnboundedReceiver<String>);
 
 #[async_trait]
 impl TransportSenderT for Sender {
-	/// Sends out a request. Returns a `Future` that finishes when the request has been
-	/// successfully sent.
-	async fn send(&mut self, msg: String) -> Result<(), Error> {
+	type Error = Error;
+
+	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
 		log!("tx: {:?}", msg);
 		self.0.send_with_str(&msg).map_err(|e| Error::Custom(e.as_string().unwrap()))
 	}
 
-	/// Send a close message and close the connection.
 	async fn close(&mut self) -> Result<(), Error> {
 		self.0.close().map_err(|e| Error::Custom(e.as_string().unwrap()))
 	}
@@ -40,8 +39,9 @@ impl TransportSenderT for Sender {
 
 #[async_trait]
 impl TransportReceiverT for Receiver {
-	/// Returns a `Future` resolving when the server sent us something back.
-	async fn receive(&mut self) -> Result<String, Error> {
+	type Error = Error;
+
+	async fn receive(&mut self) -> Result<String, Self::Error> {
 		match self.0.next().await {
 			Some(msg) => {
 				log!("rx: {:?}", msg);

@@ -113,6 +113,9 @@ pub trait SubscriptionClientT: ClientT {
 #[async_trait]
 /// Transport interface for an asyncronous client.
 pub trait TransportSenderT: Send + 'static {
+	/// Error.
+	type Error: std::error::Error + Send + Sync;
+
 	/// Send.
 	async fn send(&mut self, msg: String) -> Result<(), Error>;
 
@@ -125,6 +128,9 @@ pub trait TransportSenderT: Send + 'static {
 /// Transport interface to receive data asynchronous.
 #[async_trait]
 pub trait TransportReceiverT: Send + 'static {
+	/// Error.
+	type Error: std::error::Error + Send + Sync;
+
 	/// Receive.
 	async fn receive(&mut self) -> Result<String, Error>;
 }
