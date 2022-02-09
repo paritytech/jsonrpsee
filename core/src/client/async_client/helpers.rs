@@ -29,6 +29,8 @@ use crate::client::{RequestMessage, TransportSenderT};
 use crate::Error;
 
 use futures_channel::mpsc;
+use futures_timer::Delay;
+use futures_util::future::{self, Either};
 use jsonrpsee_types::{
 	ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
 };
@@ -52,7 +54,7 @@ pub(crate) fn process_batch_response(manager: &mut RequestManager, rps: Vec<Resp
 	let batch_state = match manager.complete_pending_batch(digest) {
 		Some(state) => state,
 		None => {
-			//tracing::warn!("Received unknown batch response");
+			tracing::warn!("Received unknown batch response");
 			return Err(Error::InvalidRequestId);
 		}
 	};
@@ -85,14 +87,14 @@ pub(crate) fn process_subscription_response(
 		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
 			Err(err) => {
-				//tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
+				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
 				let msg = build_unsubscribe_message(manager, request_id, sub_id)
 					.expect("request ID and subscription ID valid checked above; qed");
 				Err(Some(msg))
 			}
 		},
 		None => {
-			//tracing::error!("Subscription ID: {:?} is not an active subscription", sub_id);
+			tracing::error!("Subscription ID: {:?} is not an active subscription", sub_id);
 			Err(None)
 		}
 	}
@@ -107,13 +109,13 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 		Some(send_back_sink) => match send_back_sink.try_send(notif.params) {
 			Ok(()) => Ok(()),
 			Err(err) => {
-				//tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
+				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
 				let _ = manager.remove_notification_handler(notif.method.into_owned());
 				Err(Error::Internal(err.into_send_error()))
 			}
 		},
 		None => {
-			//tracing::error!("Notification: {:?} not a registered method", notif.method);
+			tracing::error!("Notification: {:?} not a registered method", notif.method);
 			Err(Error::UnregisteredNotification(notif.method.into_owned()))
 		}
 	}
@@ -181,7 +183,7 @@ pub(crate) async fn stop_subscription(
 	unsub: RequestMessage,
 ) {
 	if let Err(e) = sender.send(unsub.raw).await {
-		//tracing::error!("Send unsubscribe request failed: {:?}", e);
+		tracing::error!("Send unsubscribe request failed: {:?}", e);
 		let _ = manager.complete_pending_call(unsub.id);
 	}
 }
@@ -221,24 +223,13 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 	}
 }
 
-#[cfg(all(feature = "async-client", not(feature = "async-wasm-client")))]
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
 	timeout: std::time::Duration,
 	rx: futures_channel::oneshot::Receiver<Result<T, Error>>,
 ) -> Result<Result<T, Error>, futures_channel::oneshot::Canceled> {
-	let timeout = tokio::time::sleep(timeout);
-	tokio::select! {
-		res = rx => res,
-		_ = timeout => Ok(Err(Error::RequestTimeout))
+	match future::select(rx, Delay::new(timeout)).await {
+		Either::Left((res, _)) => res,
+		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
 	}
-}
-
-#[cfg(all(feature = "async-wasm-client", not(feature = "async-client")))]
-/// Wait for a stream to complete within the given timeout.
-pub(crate) async fn call_with_timeout<T>(
-	timeout: core::time::Duration,
-	rx: futures_channel::oneshot::Receiver<Result<T, Error>>,
-) -> Result<Result<T, Error>, futures_channel::oneshot::Canceled> {
-	rx.await
 }

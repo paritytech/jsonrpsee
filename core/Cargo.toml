@@ -30,6 +30,7 @@ soketto = { version = "0.7.1", optional = true }
 parking_lot = { version = "0.12", optional = true }
 tokio = { version = "1.8", features = ["rt"], optional = true }
 wasm-bindgen-futures = { version = "0.4.19", optional = true }
+futures-timer = { version = "3", optional = true }
 
 [features]
 default = []
@@ -50,15 +51,16 @@ async-client = [
 	"rustc-hash",
 	"hashbrown",
 	"tokio/sync",
-	"tokio/macros",
-	"tokio/time",
 	"tracing",
+	"futures-timer",
 ]
 async-wasm-client = [
 	"client",
 	"wasm-bindgen-futures",
 	"hashbrown",
 	"rustc-hash",
+	"futures-timer/wasm-bindgen",
+	"tracing",
 ]
 
 [dev-dependencies]
