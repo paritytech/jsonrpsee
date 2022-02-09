@@ -20,6 +20,7 @@ serde_json = { version = "1", features = ["raw_value"] }
 
 # optional deps
 async-channel = { version = "1.6", optional = true }
+async-lock = { version = "2.4", optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
 tracing = { version = "0.1", optional = true }
@@ -47,14 +48,15 @@ server = [
 ]
 client = ["futures-util/sink", "futures-channel/sink", "futures-channel/std"]
 async-client = [
+	"async-lock",
 	"client",
 	"rustc-hash",
 	"hashbrown",
-	"tokio/sync",
 	"tracing",
 	"futures-timer",
 ]
 async-wasm-client = [
+	"async-lock",
 	"client",
 	"wasm-bindgen-futures",
 	"hashbrown",

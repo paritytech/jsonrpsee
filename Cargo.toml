@@ -13,6 +13,6 @@ members = [
 	"client/http-client",
 	"client/transport",
 	"proc-macros",
+	"wasm-tests",
 ]
-exclude = ["wasm-tests"]
 resolver = "2"

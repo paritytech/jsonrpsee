@@ -14,6 +14,7 @@ use helpers::{
 use manager::RequestManager;
 
 use crate::error::Error;
+use async_lock::Mutex;
 use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
@@ -115,8 +116,8 @@ impl ClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	#[cfg(all(feature = "async-client", not(feature = "async-wasm-client")))]
-	pub fn build<S, R>(self, sender: S, receiver: R) -> Client
+	#[cfg(feature = "async-client")]
+	pub fn build_with_tokio<S, R>(self, sender: S, receiver: R) -> Client
 	where
 		S: TransportSenderT,
 		<S as TransportSenderT>::Error: Sync,
@@ -133,18 +134,14 @@ impl ClientBuilder {
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
-			error: tokio::sync::Mutex::new(ErrorFromBack::Unread(err_rx)),
+			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 		}
 	}
 
 	/// Build the client with given transport.
-	///
-	/// ## Panics
-	///
-	/// Panics if being called outside of `tokio` runtime context.
-	#[cfg(all(feature = "async-wasm-client", not(feature = "async-client")))]
-	pub fn build<S, R>(self, sender: S, receiver: R) -> Client
+	#[cfg(feature = "async-wasm-client")]
+	pub fn build_with_wasm<S, R>(self, sender: S, receiver: R) -> Client
 	where
 		S: TransportSenderT,
 		<S as TransportSenderT>::Error: Sync,
@@ -161,6 +158,7 @@ impl ClientBuilder {
 		Client {
 			to_back,
 			request_timeout: self.request_timeout,
+			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 		}
 	}
@@ -173,8 +171,7 @@ pub struct Client {
 	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
-	#[cfg(feature = "async-client")]
-	error: tokio::sync::Mutex<ErrorFromBack>,
+	error: Mutex<ErrorFromBack>,
 	/// Request timeout. Defaults to 60sec.
 	request_timeout: Duration,
 	/// Request ID manager.
@@ -188,31 +185,12 @@ impl Client {
 	}
 
 	// Reads the error message from the backend thread.
-	#[cfg(all(feature = "async-client", not(feature = "async-wasm-client")))]
 	async fn read_error_from_backend(&self) -> Error {
 		let mut err_lock = self.error.lock().await;
 		let from_back = std::mem::replace(&mut *err_lock, ErrorFromBack::Read(String::new()));
 		let (next_state, err) = from_back.read_error().await;
 		*err_lock = next_state;
 		err
-	}
-
-	// Reads the error message from the backend thread.
-	#[cfg(all(feature = "async-wasm-client", not(feature = "async-client")))]
-	async fn read_error_from_backend(&self) -> Error {
-		Error::Custom("Unknown for wasm".to_string())
-	}
-}
-
-impl<S, R> From<(S, R)> for Client
-where
-	S: TransportSenderT,
-	<S as TransportSenderT>::Error: Sync,
-	R: TransportReceiverT,
-	<R as TransportReceiverT>::Error: Sync,
-{
-	fn from(transport: (S, R)) -> Client {
-		ClientBuilder::default().build(transport.0, transport.1)
 	}
 }
 
@@ -569,8 +547,7 @@ async fn background_task<S, R>(
 			}
 			Either::Right((Some(Err(e)), _)) => {
 				tracing::error!("Error: {:?} terminating client", e);
-				let err = anyhow::anyhow!("{}", e);
-				let _ = front_error.send(Error::Transport(err));
+				let _ = front_error.send(Error::Transport(e.into()));
 				break;
 			}
 			Either::Right((None, _)) => {

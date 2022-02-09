@@ -1,6 +1,6 @@
 use jsonrpsee_client_transport::web_sys::*;
 use jsonrpsee_core::{
-	client::{Client, ClientT, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
+	client::{Client, ClientBuilder, ClientT, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
 	rpc_params,
 };
 use wasm_bindgen_test::*;
@@ -30,7 +30,8 @@ async fn wasm_ws_transport_works() {
 
 #[wasm_bindgen_test]
 async fn rpc_method_call_works() {
-	let client: Client = build_transport("wss://kusama-rpc.polkadot.io").await.unwrap().into();
+	let (tx, rx) = build_transport("wss://kusama-rpc.polkadot.io").await.unwrap();
+	let client: Client = ClientBuilder::default().build_with_wasm(tx, rx);
 
 	let rp: String = client.request("system_name", rpc_params![]).await.unwrap();
 
@@ -39,7 +40,8 @@ async fn rpc_method_call_works() {
 
 #[wasm_bindgen_test]
 async fn rpc_subcription_works() {
-	let client: Client = build_transport("wss://kusama-rpc.polkadot.io").await.unwrap().into();
+	let (tx, rx) = build_transport("wss://kusama-rpc.polkadot.io").await.unwrap();
+	let client: Client = ClientBuilder::default().build_with_wasm(tx, rx);
 
 	let mut sub: Subscription<serde_json::Value> =
 		client.subscribe("state_subscribeStorage", rpc_params![], "state_unsubscribeStorage").await.unwrap();
