@@ -54,7 +54,7 @@ async-client = [
 	"tokio/time",
 	"tracing",
 ]
-async-client-wasm = [
+async-wasm-client = [
 	"client",
 	"wasm-bindgen-futures",
 	"hashbrown",

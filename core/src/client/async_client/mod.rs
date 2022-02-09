@@ -114,11 +114,13 @@ impl ClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	#[cfg(all(feature = "async-client", not(feature = "async-client-wasm")))]
+	#[cfg(all(feature = "async-client", not(feature = "async-wasm-client")))]
 	pub fn build<S, R>(self, sender: S, receiver: R) -> Client
 	where
 		S: TransportSenderT,
+		<S as TransportSenderT>::Error: Sync,
 		R: TransportReceiverT,
+		<R as TransportReceiverT>::Error: Sync,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
@@ -140,11 +142,13 @@ impl ClientBuilder {
 	/// ## Panics
 	///
 	/// Panics if being called outside of `tokio` runtime context.
-	#[cfg(all(feature = "async-client-wasm", not(feature = "async-client")))]
+	#[cfg(all(feature = "async-wasm-client", not(feature = "async-client")))]
 	pub fn build<S, R>(self, sender: S, receiver: R) -> Client
 	where
 		S: TransportSenderT,
+		<S as TransportSenderT>::Error: Sync,
 		R: TransportReceiverT,
+		<R as TransportReceiverT>::Error: Sync,
 	{
 		use wasm_bindgen_futures::JsFuture;
 
@@ -185,7 +189,7 @@ impl Client {
 	}
 
 	// Reads the error message from the backend thread.
-	#[cfg(all(feature = "async-client", not(feature = "async-client-wasm")))]
+	#[cfg(all(feature = "async-client", not(feature = "async-wasm-client")))]
 	async fn read_error_from_backend(&self) -> Error {
 		let mut err_lock = self.error.lock().await;
 		let from_back = std::mem::replace(&mut *err_lock, ErrorFromBack::Read(String::new()));
@@ -195,7 +199,7 @@ impl Client {
 	}
 
 	// Reads the error message from the backend thread.
-	#[cfg(all(feature = "async-client-wasm", not(feature = "async-client")))]
+	#[cfg(all(feature = "async-wasm-client", not(feature = "async-client")))]
 	async fn read_error_from_backend(&self) -> Error {
 		Error::Custom("Unknown for wasm".to_string())
 	}
@@ -204,7 +208,9 @@ impl Client {
 impl<S, R> From<(S, R)> for Client
 where
 	S: TransportSenderT,
+	<S as TransportSenderT>::Error: Sync,
 	R: TransportReceiverT,
+	<R as TransportReceiverT>::Error: Sync,
 {
 	fn from(transport: (S, R)) -> Client {
 		ClientBuilder::default().build(transport.0, transport.1)
@@ -409,7 +415,9 @@ async fn background_task<S, R>(
 	max_notifs_per_subscription: usize,
 ) where
 	S: TransportSenderT,
+	<S as TransportSenderT>::Error: Sync,
 	R: TransportReceiverT,
+	<R as TransportReceiverT>::Error: Sync,
 {
 	let mut manager = RequestManager::new();
 
@@ -464,8 +472,7 @@ async fn background_task<S, R>(
 						.expect("ID unused checked above; qed"),
 					Err(e) => {
 						//tracing::warn!("[backend]: client request failed: {:?}", e);
-						let err = anyhow::anyhow!("{:?}", e);
-						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(err))));
+						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
 					}
 				}
 			}
@@ -482,8 +489,7 @@ async fn background_task<S, R>(
 					.expect("Request ID unused checked above; qed"),
 				Err(e) => {
 					//tracing::warn!("[backend]: client subscription failed: {:?}", e);
-					let err = anyhow::anyhow!("{:?}", e);
-					let _ = sub.send_back.send(Err(Error::Transport(err)));
+					let _ = sub.send_back.send(Err(Error::Transport(e.into())));
 				}
 			},
 			// User dropped a subscription.

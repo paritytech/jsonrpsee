@@ -221,7 +221,7 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 	}
 }
 
-#[cfg(all(feature = "async-client", not(feature = "async-client-wasm")))]
+#[cfg(all(feature = "async-client", not(feature = "async-wasm-client")))]
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
 	timeout: std::time::Duration,
@@ -234,7 +234,7 @@ pub(crate) async fn call_with_timeout<T>(
 	}
 }
 
-#[cfg(all(feature = "async-client-wasm", not(feature = "async-client")))]
+#[cfg(all(feature = "async-wasm-client", not(feature = "async-client")))]
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
 	timeout: core::time::Duration,

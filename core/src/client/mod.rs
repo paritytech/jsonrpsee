@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Shared utilities for `jsonrpsee` clients.
+
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -48,10 +49,16 @@ pub mod __reexports {
 }
 
 /// Async client abstraction that brings additional deps.
-#[cfg(any(feature = "async-client", feature = "async-client-wasm"))]
+#[cfg(any(
+	all(feature = "async-wasm-client", not(feature = "async-client")),
+	all(feature = "async-client", not(feature = "async-wasm-client")),
+))]
 mod async_client;
 
-#[cfg(any(feature = "async-client", feature = "async-client-wasm"))]
+#[cfg(any(
+	all(feature = "async-wasm-client", not(feature = "async-client")),
+	all(feature = "async-client", not(feature = "async-wasm-client")),
+))]
 pub use async_client::{Client, ClientBuilder};
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
@@ -114,13 +121,13 @@ pub trait SubscriptionClientT: ClientT {
 /// Transport interface for an asyncronous client.
 pub trait TransportSenderT: Send + 'static {
 	/// Error.
-	type Error: std::error::Error + Send + Sync;
+	type Error: std::error::Error + Send;
 
 	/// Send.
-	async fn send(&mut self, msg: String) -> Result<(), Error>;
+	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
 
 	/// If the transport supports sending customized close messages.
-	async fn close(&mut self) -> Result<(), Error> {
+	async fn close(&mut self) -> Result<(), Self::Error> {
 		Ok(())
 	}
 }
@@ -129,10 +136,10 @@ pub trait TransportSenderT: Send + 'static {
 #[async_trait]
 pub trait TransportReceiverT: Send + 'static {
 	/// Error.
-	type Error: std::error::Error + Send + Sync;
+	type Error: std::error::Error + Send;
 
 	/// Receive.
-	async fn receive(&mut self) -> Result<String, Error>;
+	async fn receive(&mut self) -> Result<String, Self::Error>;
 }
 
 #[macro_export]
