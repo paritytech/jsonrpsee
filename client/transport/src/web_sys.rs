@@ -6,12 +6,6 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CloseEvent, MessageEvent, WebSocket};
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-		web_sys::console::log_1(&format!( $( $t )* ).into());
-    }
-}
-
 /// Sender.
 #[derive(Debug)]
 pub struct Sender(WebSocket);
@@ -28,7 +22,7 @@ impl TransportSenderT for Sender {
 	type Error = Error;
 
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
-		log!("tx: {:?}", msg);
+		tracing::trace!("tx: {:?}", msg);
 		self.0.send_with_str(&msg).map_err(|e| Error::Custom(e.as_string().unwrap()))
 	}
 
@@ -44,7 +38,7 @@ impl TransportReceiverT for Receiver {
 	async fn receive(&mut self) -> Result<String, Self::Error> {
 		match self.0.next().await {
 			Some(msg) => {
-				log!("rx: {:?}", msg);
+				tracing::trace!("rx: {:?}", msg);
 				Ok(msg)
 			}
 			None => Err(Error::Custom("channel closed".into())),
@@ -70,21 +64,22 @@ pub async fn build_transport(url: impl AsRef<str>) -> Result<(Sender, Receiver),
 		} else if let Some(txt) = e.data().as_string() {
 			let _ = tx.unbounded_send(txt);
 		} else if let Ok(_blob) = e.data().dyn_into::<web_sys::Blob>() {
-			log!("Received blob message; not supported");
+			tracing::warn!("Received blob message; not supported");
 		} else {
-			log!("Received unsupported message");
+			tracing::warn!("Received unsupported message");
 		}
 	}) as Box<dyn FnMut(MessageEvent)>);
 
 	// Close event.
 	let on_close_callback = Closure::wrap(Box::new(move |_e: CloseEvent| {
-		log!("channel closed");
+		tracing::info!("Connection closed");
 		tx1.close_channel();
 	}) as Box<dyn FnMut(web_sys::CloseEvent)>);
 
 	let (conn_tx, mut conn_rx) = mpsc::unbounded();
 
 	let on_open_callback = Closure::wrap(Box::new(move |_| {
+		tracing::info!("Connection established");
 		conn_tx.unbounded_send(()).expect("rx still alive; qed");
 	}) as Box<dyn FnMut(JsValue)>);
 

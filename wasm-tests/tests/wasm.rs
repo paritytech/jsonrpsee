@@ -9,8 +9,14 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 /// Run the tests by `$ wasm-pack test --firefox --headless`
 
+fn init_tracing() {
+	console_error_panic_hook::set_once();
+	tracing_wasm::set_as_global_default();
+}
+
 #[wasm_bindgen_test]
 async fn wasm_ws_transport_works() {
+	init_tracing();
 	let (mut tx, mut rx) = build_transport("wss://kusama-rpc.polkadot.io").await.unwrap();
 
 	let req = r#"{"jsonrpc": "2.0", "method": "system_name", "id": 1}"#;
