@@ -14,6 +14,7 @@ jsonrpsee-types = { path = "../../types", version = "0.9.0", optional = true }
 jsonrpsee-core = { path = "../../core", version = "0.9.0", features = ["client"] }
 tracing = "0.1"
 thiserror = { version = "1", optional = true }
+anyhow = { version = "1", optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 http = { version = "0.2", optional = true }
@@ -23,6 +24,7 @@ pin-project = { version = "1", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
 webpki-roots = { version = "0.22", optional = true }
 tokio-rustls = { version = "0.23", optional = true }
+futures-timer = { version = "3", optional = true }
 
 # ws
 soketto = { version = "0.7.1", optional = true }
@@ -45,4 +47,13 @@ ws = [
     "jsonrpsee-types",
     "thiserror",
 ]
-wasm = ["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys", "futures-channel", "futures-util"]
+wasm = [
+    "wasm-bindgen",
+    "wasm-bindgen-futures",
+    "js-sys",
+    "web-sys",
+    "futures-channel",
+    "futures-timer",
+    "futures-util",
+    "anyhow",
+]

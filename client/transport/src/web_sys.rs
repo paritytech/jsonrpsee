@@ -1,4 +1,9 @@
-use futures_channel::mpsc;
+use std::time::Duration;
+
+use anyhow::anyhow;
+use futures_channel::{mpsc, oneshot};
+use futures_timer::Delay;
+use futures_util::future::{self, Either};
 use futures_util::StreamExt;
 use jsonrpsee_core::client::{TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::{async_trait, Error};
@@ -6,12 +11,15 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CloseEvent, MessageEvent, WebSocket};
 
+#[derive(Debug)]
+enum WebSocketMessage {
+	Data(String),
+	Close,
+}
+
 /// Sender.
 #[derive(Debug)]
-pub struct Sender(WebSocket);
-
-// TODO: safety.
-unsafe impl Send for Sender {}
+pub struct Sender(mpsc::UnboundedSender<WebSocketMessage>);
 
 /// Receiver.
 #[derive(Debug)]
@@ -23,11 +31,11 @@ impl TransportSenderT for Sender {
 
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
 		tracing::trace!("tx: {:?}", msg);
-		self.0.send_with_str(&msg).map_err(|e| Error::Custom(e.as_string().unwrap()))
+		self.0.unbounded_send(WebSocketMessage::Data(msg)).map_err(|e| Error::Transport(anyhow!("{:?}", e)))
 	}
 
 	async fn close(&mut self) -> Result<(), Error> {
-		self.0.close().map_err(|e| Error::Custom(e.as_string().unwrap()))
+		self.0.unbounded_send(WebSocketMessage::Close).map_err(|e| Error::Transport(anyhow!("{:?}", e)))
 	}
 }
 
@@ -41,47 +49,49 @@ impl TransportReceiverT for Receiver {
 				tracing::trace!("rx: {:?}", msg);
 				Ok(msg)
 			}
-			None => Err(Error::Custom("channel closed".into())),
+			None => Err(Error::Transport(anyhow!("Connection closed"))),
 		}
 	}
 }
 
 /// Create a transport sender & receiver pair.
-pub async fn build_transport(url: impl AsRef<str>) -> Result<(Sender, Receiver), ()> {
-	let (tx, rx) = mpsc::unbounded();
+pub async fn connect(url: impl AsRef<str>, connection_timeout: Duration) -> Result<(Sender, Receiver), Error> {
+	let (from_back, rx) = mpsc::unbounded();
+	let (tx, mut to_back) = mpsc::unbounded();
 
-	let websocket = WebSocket::new(url.as_ref()).map_err(|_| ())?;
+	let websocket =
+		WebSocket::new(url.as_ref()).map_err(|e| Error::Transport(anyhow!("Connection failed: {:?}", e)))?;
 	websocket.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
 	let tx1 = tx.clone();
 
+	let from_back1 = from_back.clone();
 	let on_msg_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
 		// Binary message.
 		if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
 			let msg = abuf.to_string();
-			let _ = tx.unbounded_send(msg.into());
+			let _ = from_back1.unbounded_send(msg.into());
 		// Text message.
 		} else if let Some(txt) = e.data().as_string() {
-			let _ = tx.unbounded_send(txt);
-		} else if let Ok(_blob) = e.data().dyn_into::<web_sys::Blob>() {
-			tracing::warn!("Received blob message; not supported");
+			let _ = from_back1.unbounded_send(txt);
 		} else {
 			tracing::warn!("Received unsupported message");
 		}
 	}) as Box<dyn FnMut(MessageEvent)>);
 
 	// Close event.
-	let on_close_callback = Closure::wrap(Box::new(move |_e: CloseEvent| {
+	let on_close_callback = Closure::once(move |_e: CloseEvent| {
 		tracing::info!("Connection closed");
 		tx1.close_channel();
-	}) as Box<dyn FnMut(web_sys::CloseEvent)>);
+		from_back.close_channel();
+	});
 
-	let (conn_tx, mut conn_rx) = mpsc::unbounded();
+	let (conn_tx, conn_rx) = oneshot::channel();
 
-	let on_open_callback = Closure::wrap(Box::new(move |_| {
+	let on_open_callback = Closure::once(move |_: JsValue| {
 		tracing::info!("Connection established");
-		conn_tx.unbounded_send(()).expect("rx still alive; qed");
-	}) as Box<dyn FnMut(JsValue)>);
+		conn_tx.send(()).expect("rx still alive; qed");
+	});
 
 	websocket.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));
 	websocket.set_onmessage(Some(on_msg_callback.as_ref().unchecked_ref()));
@@ -92,7 +102,23 @@ pub async fn build_transport(url: impl AsRef<str>) -> Result<(Sender, Receiver),
 	on_open_callback.forget();
 	on_close_callback.forget();
 
-	conn_rx.next().await;
+	match future::select(conn_rx, Delay::new(connection_timeout)).await {
+		Either::Left((_, _)) => (),
+		Either::Right((_, _)) => return Err(Error::Transport(anyhow!("Connection timeout exceeded"))),
+	};
 
-	Ok((Sender(websocket), Receiver(rx)))
+	let tx3 = tx.clone();
+	wasm_bindgen_futures::spawn_local(async move {
+		while let Some(WebSocketMessage::Data(msg)) = to_back.next().await {
+			if let Err(e) = websocket.send_with_str(&msg) {
+				tracing::warn!("Failed to send: {:?}", e);
+				break;
+			}
+		}
+
+		let _ = websocket.close();
+		tx3.close_channel();
+	});
+
+	Ok((Sender(tx), Receiver(rx)))
 }
