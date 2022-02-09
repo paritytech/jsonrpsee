@@ -52,6 +52,7 @@ async-client = [
 	"client",
 	"rustc-hash",
 	"hashbrown",
+	"tokio",
 	"tracing",
 	"futures-timer",
 ]
