@@ -126,7 +126,8 @@ variables:                         &default-vars
     - cargo test
 
 .benchmarks:                       &bench_templ
-  <<:                              *docker-env
+  # <<:                              *docker-env
+  <<:                              *kubernetes-env
   <<:                              *collect-artifacts
   <<:                              *common-refs
   script:
@@ -135,8 +136,8 @@ variables:                         &default-vars
     - cp $FILENAME artifacts/ || echo "Something went wrong"
     - date
   allow_failure: true
-  tags:
-    - ci5
+  # tags:
+  #   - ci5
 
 benchmarks-create-bin:
   stage:                           test
@@ -153,8 +154,6 @@ benchmarks-create-bin:
     - cp -r target/criterion artifacts/
     - date
   allow_failure: true
-  tags:
-    - ci5
 
 bench1:
   stage:                           benchmark1
