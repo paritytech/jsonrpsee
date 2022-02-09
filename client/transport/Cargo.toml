@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-client-transport"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
 edition = "2021"

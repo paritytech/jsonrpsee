@@ -183,5 +183,5 @@ publish-bench:
   <<:                              *schedule-refs
   script:
     - echo $RUNNER_NAME
-    - .scripts/ci/push_bench_results.sh artifacts/output.txt
+    - ./scripts/ci/push_bench_results.sh artifacts/output.txt
 
