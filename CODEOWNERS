@@ -21,5 +21,5 @@
 
 # CI
 /.github/ @paritytech/ci @paritytech/tools-team
-/.scripts/ci/ @paritytech/ci @paritytech/tools-team
+/scripts/ci/ @paritytech/ci @paritytech/tools-team
 /.gitlab-ci.yml @paritytech/ci @paritytech/tools-team
