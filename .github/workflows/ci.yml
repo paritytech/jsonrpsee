@@ -143,41 +143,20 @@ jobs:
           command: test
           args: --workspace
 
-  tests_wasm:
+  test_wasm:
     name: Test wasm
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2.4.0
+    - uses: actions/checkout@master
 
-      - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1.0.7
-        with:
-          profile: minimal
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
-
-      - name: Install cargo-hack
-        run: cargo install cargo-hack
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v1.3.0
-
-    - name: Install wasm-pack
+    - name: Install
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-    - name: Download Substrate
-      run: |
-        curl $SUBSTRATE_URL --output substrate --location
-        chmod +x substrate
-        mkdir -p ~/.local/bin
-        mv substrate ~/.local/bin
+    - name: Chrome
+      run: wasm-pack test --headless --chrome
+      working-directory: wasm-tests
 
-    - name: Run WASM tests
-      run: |
-        substrate --dev --tmp > /dev/null 2>&1
-        wasm-pack test --headless --firefox
-        wasm-pack test --headless --chrome
-        pkill substrate
-      working-directory: wasm-test
+    - name: Firefox
+      run: wasm-pack test --headless --firefox
+      working-directory: wasm-tests
