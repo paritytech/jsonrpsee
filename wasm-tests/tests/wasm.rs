@@ -22,7 +22,7 @@ async fn wasm_ws_transport_works() {
 	let (mut tx, mut rx) = connect("ws://localhost:9944", Duration::from_secs(60)).await.unwrap();
 
 	let req = r#"{"jsonrpc": "2.0", "method": "system_name", "id": 1}"#;
-	let exp = r#"{"jsonrpc":"2.0","result":"Parity Polkadot","id":1}"#;
+	let exp = r#"{"jsonrpc":"2.0","result":"Substrate Node","id":1}"#;
 
 	tx.send(req.to_string()).await.unwrap();
 	let rp = rx.receive().await.unwrap();
@@ -37,7 +37,7 @@ async fn rpc_method_call_works() {
 
 	let rp: String = client.request("system_name", rpc_params![]).await.unwrap();
 
-	assert_eq!("Parity Polkadot", &rp);
+	assert_eq!("Substrate Node", &rp);
 }
 
 #[wasm_bindgen_test]
