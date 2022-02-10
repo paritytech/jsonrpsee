@@ -90,7 +90,7 @@ pub async fn connect(url: impl AsRef<str>, connection_timeout: Duration) -> Resu
 
 	let on_open_callback = Closure::once(move |_: JsValue| {
 		tracing::info!("Connection established");
-		conn_tx.send(()).expect("rx still alive; qed");
+		let _ = conn_tx.send(());
 	});
 
 	websocket.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));

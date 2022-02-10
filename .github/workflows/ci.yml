@@ -12,6 +12,11 @@ on:
     branches:
       - master
 
+env:
+  CARGO_TERM_COLOR: always
+  # Use latest substrate for nightly runs:
+  SUBSTRATE_URL: https://releases.parity.io/substrate/x86_64-debian:stretch/latest/substrate/substrate
+
 jobs:
   check-style:
     name: Check style
@@ -137,3 +142,42 @@ jobs:
         with:
           command: test
           args: --workspace
+
+  test_wasm:
+    name: Test wasm
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2.4.0
+
+      - name: Install Rust stable toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Install cargo-hack
+        run: cargo install cargo-hack
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v1.3.0
+
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+    - name: Download Substrate
+      run: |
+        curl $SUBSTRATE_URL --output substrate --location
+        chmod +x substrate
+        mkdir -p ~/.local/bin
+        mv substrate ~/.local/bin
+
+    - name: Run WASM tests
+      run: |
+        substrate --dev --tmp > /dev/null 2>&1
+        wasm-pack test --headless --firefox
+        wasm-pack test --headless --chrome
+        pkill substrate
+      working-directory: wasm-test

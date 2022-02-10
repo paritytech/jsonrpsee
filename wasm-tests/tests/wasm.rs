@@ -19,7 +19,7 @@ fn init_tracing() {
 #[wasm_bindgen_test]
 async fn wasm_ws_transport_works() {
 	init_tracing();
-	let (mut tx, mut rx) = connect("wss://kusama-rpc.polkadot.io", Duration::from_secs(60)).await.unwrap();
+	let (mut tx, mut rx) = connect("ws://localhost:9944", Duration::from_secs(60)).await.unwrap();
 
 	let req = r#"{"jsonrpc": "2.0", "method": "system_name", "id": 1}"#;
 	let exp = r#"{"jsonrpc":"2.0","result":"Parity Polkadot","id":1}"#;
@@ -32,7 +32,7 @@ async fn wasm_ws_transport_works() {
 
 #[wasm_bindgen_test]
 async fn rpc_method_call_works() {
-	let (tx, rx) = connect("wss://kusama-rpc.polkadot.io", Duration::from_secs(60)).await.unwrap();
+	let (tx, rx) = connect("ws://localhost:9944", Duration::from_secs(60)).await.unwrap();
 	let client: Client = ClientBuilder::default().build_with_wasm(tx, rx);
 
 	let rp: String = client.request("system_name", rpc_params![]).await.unwrap();
@@ -42,7 +42,7 @@ async fn rpc_method_call_works() {
 
 #[wasm_bindgen_test]
 async fn rpc_subcription_works() {
-	let (tx, rx) = connect("wss://kusama-rpc.polkadot.io", Duration::from_secs(60)).await.unwrap();
+	let (tx, rx) = connect("ws://localhost:9944", Duration::from_secs(60)).await.unwrap();
 	let client: Client = ClientBuilder::default().build_with_wasm(tx, rx);
 
 	let mut sub: Subscription<serde_json::Value> =
