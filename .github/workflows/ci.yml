@@ -153,10 +153,17 @@ jobs:
     - name: Install
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-    - name: Chrome
-      run: wasm-pack test --headless --chrome
-      working-directory: wasm-tests
+    - name: Download Substrate
+      run: |
+        curl $SUBSTRATE_URL --output substrate --location
+        chmod +x substrate
+        mkdir -p ~/.local/bin
+        mv substrate ~/.local/bin
 
-    - name: Firefox
-      run: wasm-pack test --headless --firefox
+    - name: Run WASM tests
+      run: |
+        substrate --dev --tmp > /dev/null 2>&1
+        wasm-pack test --headless --firefox
+        wasm-pack test --headless --chrome
+        pkill substrate
       working-directory: wasm-tests
