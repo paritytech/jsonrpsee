@@ -120,9 +120,7 @@ impl ClientBuilder {
 	pub fn build_with_tokio<S, R>(self, sender: S, receiver: R) -> Client
 	where
 		S: TransportSenderT,
-		<S as TransportSenderT>::Error: Sync,
 		R: TransportReceiverT,
-		<R as TransportReceiverT>::Error: Sync,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
@@ -144,9 +142,7 @@ impl ClientBuilder {
 	pub fn build_with_wasm<S, R>(self, sender: S, receiver: R) -> Client
 	where
 		S: TransportSenderT,
-		<S as TransportSenderT>::Error: Sync,
 		R: TransportReceiverT,
-		<R as TransportReceiverT>::Error: Sync,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
@@ -385,9 +381,7 @@ async fn background_task<S, R>(
 	max_notifs_per_subscription: usize,
 ) where
 	S: TransportSenderT,
-	<S as TransportSenderT>::Error: Sync,
 	R: TransportReceiverT,
-	<R as TransportReceiverT>::Error: Sync,
 {
 	let mut manager = RequestManager::new();
 
