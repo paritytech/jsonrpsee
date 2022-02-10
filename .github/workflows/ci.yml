@@ -143,7 +143,7 @@ jobs:
           command: test
           args: --workspace
 
-  test_wasm:
+  tests_wasm:
     name: Test wasm
     runs-on: ubuntu-latest
 
