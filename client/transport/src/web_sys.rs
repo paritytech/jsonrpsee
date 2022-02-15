@@ -73,7 +73,7 @@ impl TransportReceiverT for Receiver {
 }
 
 /// Create a transport sender & receiver pair.
-pub async fn connect(url: impl AsRef<str>, connection_timeout: Duration) -> Result<(Sender, Receiver), Error> {
+pub async fn connect(url: impl AsRef<str>, conn_timeout: Duration) -> Result<(Sender, Receiver), Error> {
 	let (from_back, rx) = mpsc::unbounded();
 	let (tx, mut to_back) = mpsc::unbounded();
 
@@ -110,27 +110,14 @@ pub async fn connect(url: impl AsRef<str>, connection_timeout: Duration) -> Resu
 		from_back.close_channel();
 	});
 
-	let (conn_tx, conn_rx) = oneshot::channel();
-
-	let on_open_callback = Closure::once(move |_: JsValue| {
-		tracing::info!("Connection established");
-		let _ = conn_tx.send(());
-	});
-
-	websocket.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));
 	websocket.set_onmessage(Some(on_msg_callback.as_ref().unchecked_ref()));
 	websocket.set_onclose(Some(on_close_callback.as_ref().unchecked_ref()));
 
 	// Prevent for being dropped (this will be leaked intentionally).
 	on_msg_callback.forget();
-	on_open_callback.forget();
 	on_close_callback.forget();
 
-	match future::select(conn_rx, Delay::new(connection_timeout)).await {
-		Either::Left((Ok(()), _)) => (),
-		Either::Left((Err(_), _)) => unreachable!("A message is sent on this channel before close; qed"),
-		Either::Right((_, _)) => return Err(Error::ConnectionTimeout(connection_timeout)),
-	};
+	try_connect_until(&websocket, conn_timeout).await?;
 
 	let tx3 = tx.clone();
 	wasm_bindgen_futures::spawn_local(async move {
@@ -146,4 +133,24 @@ pub async fn connect(url: impl AsRef<str>, connection_timeout: Duration) -> Resu
 	});
 
 	Ok((Sender(tx), Receiver(rx)))
+}
+
+async fn try_connect_until(websocket: &WebSocket, conn_timeout: Duration) -> Result<(), Error> {
+	let (tx, rx) = oneshot::channel();
+
+	let on_open_callback = Closure::once(move |_: JsValue| {
+		tracing::info!("Connection established");
+		let _ = tx.send(());
+	});
+
+	websocket.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));
+
+	let res = match future::select(rx, Delay::new(conn_timeout)).await {
+		Either::Left((Ok(()), _)) => Ok(()),
+		Either::Left((Err(_), _)) => unreachable!("A message is sent on this channel before close; qed"),
+		Either::Right((_, _)) => Err(Error::ConnectionTimeout(conn_timeout)),
+	};
+	drop(on_open_callback);
+
+	res
 }
