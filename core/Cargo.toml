@@ -23,8 +23,7 @@ async-lock = { version = "2.4", optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
 tracing = { version = "0.1", optional = true }
-rustc-hash = { version = "1", default-features = false, optional = true }
-hashbrown = { version = "0.12", optional = true }
+rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
 soketto = { version = "0.7.1", optional = true }
 parking_lot = { version = "0.12", optional = true }
@@ -50,7 +49,6 @@ async-client = [
 	"async-lock",
 	"client",
 	"rustc-hash",
-	"hashbrown",
 	"tokio",
 	"tracing",
 	"futures-timer",
@@ -59,8 +57,7 @@ async-wasm-client = [
 	"async-lock",
 	"client",
 	"wasm-bindgen-futures",
-	"hashbrown",
-	"rustc-hash",
+	"rustc-hash/std",
 	"futures-timer/wasm-bindgen",
 	"tracing",
 ]
