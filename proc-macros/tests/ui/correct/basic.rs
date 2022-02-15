@@ -2,9 +2,9 @@
 
 use std::net::SocketAddr;
 
+use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
-use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
 
@@ -25,10 +25,10 @@ pub trait Rpc {
 	#[method(name = "bar")]
 	fn sync_method(&self) -> RpcResult<u16>;
 
-	#[subscription(name = "sub", item = String)]
+	#[subscription(name = "subscribe", item = String)]
 	fn sub(&self) -> RpcResult<()>;
 
-	#[subscription(name = "echo", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
+	#[subscription(name = "echo", unsubscribe = "unsubscribeEcho", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
 	fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 
 	// This will send data to subscribers with the `method` field in the JSON payload set to `foo_subscribe_override`

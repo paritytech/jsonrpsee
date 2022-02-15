@@ -1,6 +1,6 @@
 //! Example of using proc macro to generate working client and server.
 
-use jsonrpsee::{proc_macros::rpc, core::RpcResult};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(client)]
 pub trait Rpc {
@@ -10,7 +10,7 @@ pub trait Rpc {
 	#[method(name = "bar")]
 	fn sync_method(&self) -> RpcResult<u16>;
 
-	#[subscription(name = "sub", item = String)]
+	#[subscription(name = "subscribe", item = String)]
 	fn sub(&self);
 }
 

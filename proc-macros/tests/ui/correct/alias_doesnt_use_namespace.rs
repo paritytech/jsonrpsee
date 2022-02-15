@@ -1,4 +1,4 @@
-use jsonrpsee::{proc_macros::rpc, core::RpcResult};
+use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(client, server, namespace = "myapi")]
 pub trait Rpc {
@@ -6,7 +6,7 @@ pub trait Rpc {
 	#[method(name = "getTemp", aliases = ["getTemp"])]
 	async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
-	#[subscription(name = "getFood", item = String, aliases = ["getFood"], unsubscribe_aliases = ["unsubscribegetFood"])]
+	#[subscription(name = "subscribeGetFood", item = String, aliases = ["getFood"], unsubscribe_aliases = ["unsubscribegetFood"])]
 	fn sub(&self) -> RpcResult<()>;
 }
 
