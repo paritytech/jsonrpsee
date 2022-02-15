@@ -56,4 +56,5 @@ wasm = [
     "futures-timer",
     "futures-util",
     "anyhow",
+    "thiserror",
 ]

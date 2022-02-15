@@ -1,12 +1,11 @@
 use std::time::Duration;
 
-use anyhow::anyhow;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
 use futures_util::StreamExt;
+use jsonrpsee_core::async_trait;
 use jsonrpsee_core::client::{TransportReceiverT, TransportSenderT};
-use jsonrpsee_core::{async_trait, Error};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CloseEvent, MessageEvent, WebSocket};
@@ -15,6 +14,23 @@ use web_sys::{CloseEvent, MessageEvent, WebSocket};
 enum WebSocketMessage {
 	Data(String),
 	Close,
+}
+
+/// Web-sys transport error that can occur.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+	/// Internal send error
+	#[error("Could not send message: {0}")]
+	SendError(#[from] mpsc::SendError),
+	/// Connection got closed
+	#[error("Connection is closed")]
+	ConnectionClosed,
+	/// Timeout while trying to connect.
+	#[error("Connection timeout exceeded: {0:?}")]
+	ConnectionTimeout(Duration),
+	/// Error that occurred in `JS context`.
+	#[error("JS Error: {0:?}")]
+	JsError(String),
 }
 
 /// Sender.
@@ -31,11 +47,13 @@ impl TransportSenderT for Sender {
 
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
 		tracing::trace!("tx: {:?}", msg);
-		self.0.unbounded_send(WebSocketMessage::Data(msg)).map_err(|e| Error::Transport(anyhow!("{:?}", e)))
+		self.0.unbounded_send(WebSocketMessage::Data(msg)).map_err(|e| e.into_send_error())?;
+		Ok(())
 	}
 
 	async fn close(&mut self) -> Result<(), Error> {
-		self.0.unbounded_send(WebSocketMessage::Close).map_err(|e| Error::Transport(anyhow!("{:?}", e)))
+		self.0.unbounded_send(WebSocketMessage::Close).map_err(|e| e.into_send_error())?;
+		Ok(())
 	}
 }
 
@@ -49,7 +67,7 @@ impl TransportReceiverT for Receiver {
 				tracing::trace!("rx: {:?}", msg);
 				Ok(msg)
 			}
-			None => Err(Error::Transport(anyhow!("Connection closed"))),
+			None => Err(Error::ConnectionClosed),
 		}
 	}
 }
@@ -59,23 +77,29 @@ pub async fn connect(url: impl AsRef<str>, connection_timeout: Duration) -> Resu
 	let (from_back, rx) = mpsc::unbounded();
 	let (tx, mut to_back) = mpsc::unbounded();
 
-	let websocket =
-		WebSocket::new(url.as_ref()).map_err(|e| Error::Transport(anyhow!("Connection failed: {:?}", e)))?;
+	let websocket = WebSocket::new(url.as_ref()).map_err(|e| Error::JsError(format!("{:?}", e)))?;
+	// TODO: use `BinaryType::Blob` it's faster for larger objects.
 	websocket.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
 	let tx1 = tx.clone();
 
 	let from_back1 = from_back.clone();
 	let on_msg_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
-		// Binary message.
-		if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
-			let msg = abuf.to_string();
-			let _ = from_back1.unbounded_send(msg.into());
+		// Supported formats: https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/send
+		let js_val = e.data();
+		tracing::trace!("rx: {:?}", js_val);
+
 		// Text message.
-		} else if let Some(txt) = e.data().as_string() {
-			let _ = from_back1.unbounded_send(txt);
+		if let Some(txt) = js_val.dyn_ref::<js_sys::JsString>() {
+			let _ = from_back1.unbounded_send(String::from(txt));
+		}
+		// Binary message.
+		else if let Some(abuf) = js_val.dyn_ref::<js_sys::ArrayBuffer>() {
+			let array = js_sys::Uint8Array::new(abuf);
+			let msg = String::from_utf8(array.to_vec()).expect("valid UTF-8 from WebSocket; qed");
+			let _ = from_back1.unbounded_send(msg);
 		} else {
-			tracing::warn!("Received unsupported message");
+			tracing::warn!("Received unsupported message: {:?}", js_val);
 		}
 	}) as Box<dyn FnMut(MessageEvent)>);
 
@@ -103,8 +127,9 @@ pub async fn connect(url: impl AsRef<str>, connection_timeout: Duration) -> Resu
 	on_close_callback.forget();
 
 	match future::select(conn_rx, Delay::new(connection_timeout)).await {
-		Either::Left((_, _)) => (),
-		Either::Right((_, _)) => return Err(Error::Transport(anyhow!("Connection timeout exceeded"))),
+		Either::Left((Ok(()), _)) => (),
+		Either::Left((Err(_), _)) => unreachable!("A message is sent on this channel before close; qed"),
+		Either::Right((_, _)) => return Err(Error::ConnectionTimeout(connection_timeout)),
 	};
 
 	let tx3 = tx.clone();
