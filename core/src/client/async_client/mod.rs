@@ -115,7 +115,7 @@ impl ClientBuilder {
 	///
 	/// ## Panics
 	///
-	/// Panics if being called outside of `tokio` runtime context.
+	/// Panics if called outside of `tokio` runtime context.
 	#[cfg(feature = "async-client")]
 	pub fn build_with_tokio<S, R>(self, sender: S, receiver: R) -> Client
 	where
