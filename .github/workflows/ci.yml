@@ -69,8 +69,8 @@ jobs:
       - name: Cargo check all targets and features
         run: cargo hack check --workspace --each-feature --all-targets
 
-  tests:
-    name: Run tests Ubuntu
+  tests_ubuntu:
+    name: Run nextests on Ubuntu
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -83,14 +83,17 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install cargo-nextest
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          version: 0.9
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
-          args: --workspace
+      - name: Cargo nextest
+        run: cargo nextest run --workspace
 
   tests_macos:
     name: Run tests macos
@@ -106,14 +109,17 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install cargo-nextest
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          version: 0.9
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
-          args: --workspace
+      - name: Cargo nextest
+        run: cargo nextest run --workspace
 
   tests_windows:
     name: Run tests Windows
@@ -129,11 +135,14 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install cargo-nextest
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-nextest
+          version: 0.9
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
 
-      - name: Cargo test
-        uses: actions-rs/cargo@v1.0.3
-        with:
-          command: test
-          args: --workspace
+      - name: Cargo nextest
+        run: cargo nextest run --workspace
