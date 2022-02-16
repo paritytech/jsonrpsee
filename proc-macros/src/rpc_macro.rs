@@ -153,7 +153,7 @@ impl RpcSubscription {
 		let unsubscribe = match parse_subscribe(unsubscribe)? {
 			Some(unsub) => unsub,
 			None => build_unsubscribe_method(&name).expect(
-				"Could not generate `unsubscribe method`, you need to provide the `unsubscribe` manually in your API",
+				format!("Could not generate the unsubscribe method with name '{name}'.  You need to provide the name manually using the `unsubscribe` attribute in your RPC API definition", name),
 			),
 		};
 
