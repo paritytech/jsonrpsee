@@ -27,7 +27,7 @@
 //! Example that shows how to broadcasts the produced values to active all subscriptions using `mpsc channels`.
 //!
 //! It's possible to use `tokio::sync::broadcast` too but because the Receiver doesn't implement
-//! stream we chose this `mpsc channels` in this example.
+//! stream thus `mpsc channels` were picked in this example.
 
 use std::{net::SocketAddr, sync::Arc};
 
