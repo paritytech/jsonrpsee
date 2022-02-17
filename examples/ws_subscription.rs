@@ -24,21 +24,21 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Example that shows how to broadcasts the produced values to active all subscriptions using `mpsc channels`.
+//! Example that shows how to broadcasts the produced values to all active subscriptions using `tokio::sync::broadcast`.
 
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
+use std::time::Duration;
 
-use futures::channel::mpsc;
+use futures::future;
+use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
-use tokio::sync::Mutex;
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
-
-/// Sinks that can be shared across threads.
-type SharedSinks = Arc<Mutex<Vec<mpsc::UnboundedSender<i32>>>>;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -50,32 +50,35 @@ async fn main() -> anyhow::Result<()> {
 	let addr = run_server().await?;
 	let url = format!("ws://{}", addr);
 
-	let client = WsClientBuilder::default().build(&url).await?;
-	let mut sub: Subscription<i32> = client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
+	let client1 = WsClientBuilder::default().build(&url).await?;
+	let client2 = WsClientBuilder::default().build(&url).await?;
+	let sub1: Subscription<i32> = client1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
+	let sub2: Subscription<i32> = client2.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 
-	let mut i = 0;
-	while i <= NUM_SUBSCRIPTION_RESPONSES {
-		let r = sub.next().await.unwrap().unwrap();
-		tracing::info!("{}", r);
-		i += 1;
-	}
+	let fut1 = sub1.take(NUM_SUBSCRIPTION_RESPONSES).for_each(|r| async move { tracing::info!("sub1 rx: {:?}", r) });
+	let fut2 = sub2.take(NUM_SUBSCRIPTION_RESPONSES).for_each(|r| async move { tracing::info!("sub2 rx: {:?}", r) });
+
+	future::join(fut1, fut2).await;
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
-	let sinks = SharedSinks::default();
-	let mut module = RpcModule::new(sinks.clone());
+	let mut module = RpcModule::new(());
+	let (tx, _) = broadcast::channel(1024);
 
-	// Produce new items for the server to publish.
-	tokio::spawn(produce_items(sinks));
+	tokio::spawn(produce_items(tx.clone()));
 
-	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, sink, ctx| {
+	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, sink, _| {
+		let rx = tx.subscribe();
+
+		// Convert stream from `Item = Result<T: Serialize, Error>` to `Item = T::Serialize`.
+		let stream =
+			BroadcastStream::new(rx).take_while(|r| future::ready(r.is_ok())).filter_map(|r| future::ready(r.ok()));
+
 		tokio::spawn(async move {
-			let (tx, rx) = mpsc::unbounded();
-			ctx.lock().await.push(tx);
-			let _ = sink.pipe_from_stream(rx).await;
+			let _ = sink.pipe_from_stream(stream).await;
 		});
 		Ok(())
 	})?;
@@ -84,24 +87,14 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	Ok(addr)
 }
 
-/// Produce new values that are sent to each active subscription.
-async fn produce_items(sinks: SharedSinks) {
-	let mut count = 0;
+// Naive example that broadcasts the produced values to all subscribers.
+async fn produce_items(tx: broadcast::Sender<i32>) {
+	let mut i = 0;
 	loop {
-		let mut to_remove = Vec::new();
-
-		for (idx, sink) in sinks.lock().await.iter().enumerate() {
-			if sink.unbounded_send(count).is_err() {
-				to_remove.push(idx);
-			}
-		}
-
-		// If the channel is closed remove that channel.
-		for rm in to_remove {
-			sinks.lock().await.remove(rm);
-		}
-
-		count += 1;
-		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+		// This might fail if no receivers are alive
+		// could occur if no subscriptions are active...
+		let _ = tx.send(i);
+		i += 1;
+		tokio::time::sleep(Duration::from_secs(1)).await;
 	}
 }
