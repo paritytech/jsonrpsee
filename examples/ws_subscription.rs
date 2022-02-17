@@ -72,7 +72,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	tokio::spawn(produce_items(sinks));
 
 	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, sink, ctx| {
-		let ctx = ctx.clone();
 		tokio::spawn(async move {
 			let (tx, rx) = mpsc::unbounded();
 			ctx.lock().await.push(tx);
