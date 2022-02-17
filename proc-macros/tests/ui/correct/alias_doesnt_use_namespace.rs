@@ -2,7 +2,8 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
 #[rpc(client, server, namespace = "myapi")]
 pub trait Rpc {
-	/// Alias doesn't use the namespace so not duplicated.
+	/// Aliases doesn't use the namespace.
+	/// Thus, this will generate `myapi_getTemp` and `getTemp`.
 	#[method(name = "getTemp", aliases = ["getTemp"])]
 	async fn async_method(&self, param_a: u8, param_b: String) -> RpcResult<u16>;
 
