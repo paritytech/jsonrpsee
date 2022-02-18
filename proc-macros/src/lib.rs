@@ -163,7 +163,7 @@ pub(crate) mod visitor;
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `aliases`: list of name aliases for the RPC method as a comma separated string.
-///              The aliases are kept outside namespace, so you need add that if you want aliases in the current
+///              Aliases are processed ignoring the namespace, so add the complete name, including the
 ///              namespace.
 /// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
