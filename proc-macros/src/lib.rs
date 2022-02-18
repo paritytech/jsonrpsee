@@ -182,7 +182,7 @@ pub(crate) mod visitor;
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `unsubscribe` (optional): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
-///                             This is generated for you if the subscription name starts with `subscribe`-
+///                             This is generated for you if the subscription name starts with `subscribe`.
 /// - `aliases` (optional): aliases for `name`. Aliases are processed ignoring the namespace,
 ///                         so add the complete name, including the namespace.
 /// - `unsubscribe_aliases` (optional): Similar to `aliases` but for `unsubscribe`.
