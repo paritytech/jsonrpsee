@@ -61,7 +61,10 @@ jobs:
           override: true
 
       - name: Install cargo-hack
-        run: cargo install cargo-hack
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-hack
+          version: 0.5
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.3.0
