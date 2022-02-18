@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
-use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::core::{async_trait, RpcResult};
+use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
 
 #[rpc(server)]
@@ -12,7 +12,7 @@ pub trait Rpc {
 	#[method(name = "bar")]
 	fn sync_method(&self) -> RpcResult<u16>;
 
-	#[subscription(name = "sub", item = String)]
+	#[subscription(name = "subscribe", item = String)]
 	fn sub(&self) -> RpcResult<()>;
 }
 
@@ -39,7 +39,7 @@ pub async fn websocket_server() -> SocketAddr {
 	let addr = server.local_addr().unwrap();
 
 	server.start(RpcServerImpl.into_rpc()).unwrap();
-	
+
 	addr
 }
 
