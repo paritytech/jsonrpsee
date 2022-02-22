@@ -78,7 +78,6 @@ pub async fn connect(url: impl AsRef<str>, conn_timeout: Duration) -> Result<(Se
 	let (tx, mut to_back) = mpsc::unbounded();
 
 	let websocket = WebSocket::new(url.as_ref()).map_err(|e| Error::JsError(format!("{:?}", e)))?;
-	// TODO: use `BinaryType::Blob` it's faster for larger objects.
 	websocket.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
 	let tx1 = tx.clone();
