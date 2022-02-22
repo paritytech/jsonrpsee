@@ -178,6 +178,8 @@ pub(crate) mod visitor;
 ///
 /// ### `subscription` attribute
 ///
+/// `subscription` attribute is used to define a publish/subscribe interface according to the [ethereum pubsub specification](https://geth.ethereum.org/docs/rpc/pubsub)
+///
 /// **Arguments:**
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
@@ -226,7 +228,37 @@ pub(crate) mod visitor;
 ///         #[method(name = "baz", blocking)]
 ///         fn blocking_method(&self) -> RpcResult<u16>;
 ///
-///         #[subscription(name = "sub", unsubscribe = "unsub", item = String)]
+///         /// Override the `foo_sub` and use `foo_subNotif` for the notifications.
+///         ///
+///         /// The item field indicates which type goes into result field below.
+///         ///
+///         /// The notification format:
+///         ///
+///         /// ```
+///         /// {
+///         ///     "jsonrpc":"2.0",
+///         ///     "method":"foo_subNotif",
+///         ///     "params":["subscription":"someID", "result":"some string"]
+///         /// }
+///         /// ```
+///         #[subscription(name = "sub" => "subNotif", unsubscribe = "unsub", item = String)]
+///         fn sub(&self) -> RpcResult<()>;
+///
+///         /// Use the same method name for both the `subscribe call` and `notifications`
+///         ///
+///         /// The unsubscribe method name is generated here `foo_unsubscribe`
+///         /// Thus the `unsubscribe attribute` is not needed unless a custom unsubscribe method name is wanted.
+///         ///
+///         /// The notification format:
+///         ///
+///         /// ```
+///         /// {
+///         ///     "jsonrpc":"2.0",
+///         ///     "method":"foo_subscribe",
+///         ///     "params":["subscription":"someID", "result":"some string"]
+///         /// }
+///         /// ```
+///         #[subscription(name = "subscribe", item = String)]
 ///         fn sub(&self) -> RpcResult<()>;
 ///     }
 ///

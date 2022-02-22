@@ -572,7 +572,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
-	/// Register a new RPC subscription that invokes s callback on every subscription call.
+	/// Register a new publish/subscribe interface using JSON-RPC notifications.
+	///
+	/// It implements the [ethereum pubsub specification](https://geth.ethereum.org/docs/rpc/pubsub)
+	/// with an option to choose custom subscription ID generation.
+	///
+	/// Furthermore, it generates the `unsubscribe implementation` where a `bool` is used as
+	/// the result to indicate whether the subscription was successfully unsubscribed to or not.
+	/// For instance an `unsubscribe call` may fail if a non-existent subscriptionID is used in the call.
 	///
 	/// This method ensures that the `subscription_method_name` and `unsubscription_method_name` are unique.
 	/// The `notif_method_name` argument sets the content of the `method` field in the JSON document that
@@ -584,7 +591,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// * `subscription_method_name` - name of the method to call to initiate a subscription
 	/// * `notif_method_name` - name of method to be used in the subscription payload (technically a JSON-RPC notification)
 	/// * `unsubscription_method` - name of the method to call to terminate a subscription
-	/// *  `callback` - A callback to invoke on each subscription; it takes three parameters:
+	/// * `callback` - A callback to invoke on each subscription; it takes three parameters:
 	///     - [`Params`]: JSON-RPC parameters in the subscription call.
 	///     - [`SubscriptionSink`]: A sink to send messages to the subscriber.
 	///     - Context: Any type that can be embedded into the [`RpcModule`].
