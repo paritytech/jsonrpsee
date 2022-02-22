@@ -437,11 +437,9 @@ async fn background_task(
 							},
 							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
 								Ok(guard) => {
-									// let close_notify = Arc::new(Notify::new());
 									let cn = close_notify.clone();
 									let conn_state =
 										ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
-									// ConnState { conn_id, close_notify: conn_rx.clone(), id_provider: &*id_provider };
 
 									let result = callback(id, params, &sink, conn_state);
 									middleware.on_result(name, result, request_start);
@@ -541,10 +539,10 @@ async fn background_task(
 										MethodKind::Subscription(callback) => {
 											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
-													let cn = close_notify2.clone();
+													let close_notify = close_notify2.clone();
 													let conn_state = ConnState {
 														conn_id,
-														close_notify: cn,
+														close_notify,
 														id_provider: &*id_provider,
 													};
 

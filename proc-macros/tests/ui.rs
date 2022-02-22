@@ -5,14 +5,12 @@
 //! Use with `TRYBUILD=overwrite` after updating codebase (see `trybuild` docs for more details on that)
 //! to automatically regenerate `stderr` files, but don't forget to check that new files make sense.
 
-#[ignore = "reason"]
 #[test]
 fn ui_pass() {
 	let t = trybuild::TestCases::new();
 	t.pass("tests/ui/correct/*.rs");
 }
 
-#[ignore = "reason"]
 #[test]
 fn ui_fail() {
 	let t = trybuild::TestCases::new();
