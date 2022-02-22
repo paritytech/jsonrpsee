@@ -78,7 +78,7 @@ fn find_jsonrpsee_crate(http_name: &str, ws_name: &str) -> Result<proc_macro2::T
 ///    #[method(name = "call")]
 ///    fn call(&self, a: A) -> RpcResult<B>;
 ///
-///    #[subscription(name = "sub", item = Vec<C>)]
+///    #[subscription(name = "subscribe", item = Vec<C>)]
 ///    fn sub(&self) -> RpcResult<()>;
 ///  }
 /// ```

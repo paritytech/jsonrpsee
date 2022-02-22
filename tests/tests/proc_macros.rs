@@ -48,10 +48,10 @@ mod rpc_impl {
 		#[method(name = "bar")]
 		fn sync_method(&self) -> RpcResult<u16>;
 
-		#[subscription(name = "sub", item = String)]
+		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
 		fn sub(&self) -> RpcResult<()>;
 
-		#[subscription(name = "echo", aliases = ["alias_echo"], item = u32)]
+		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
 		fn sub_with_params(&self, val: u32) -> RpcResult<()>;
 
 		#[method(name = "params")]
@@ -123,7 +123,7 @@ mod rpc_impl {
 	#[rpc(client, server, namespace = "generic_sub")]
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
-		#[subscription(name = "sub", item = Vec<R>)]
+		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
 		fn sub(&self, hash: Input) -> RpcResult<()>;
 	}
 
