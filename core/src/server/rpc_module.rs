@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::fmt::{self, Debug};
 use std::future::Future;
@@ -64,19 +63,18 @@ pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
+
+// TODO: (dp) Document the tuple a bit better
 /// Raw RPC response.
 pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, Arc<Notify>);
-// pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, watch::Receiver<()>);
-// pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, async_channel::Sender<()>);
 
+// TODO: (dp) Does this need to be `pub`?
 /// Data for stateful connections.
 pub struct ConnState<'a> {
 	/// Connection ID
 	pub conn_id: ConnectionId,
-	/// Channel to know whether the connection is closed or not.
+	/// Get notified when the connection to subscribers is closed.
 	pub close_notify: Arc<Notify>,
-	// pub close_tx: watch::Sender<()>,
-	// pub close: async_channel::Receiver<()>,
 	/// ID provider.
 	pub id_provider: &'a dyn IdProvider,
 }
@@ -378,8 +376,6 @@ impl Methods {
 		// TODO: (dp) pretty annoying having to do this for all `inner_call`s. We only need it for subscriptions yeah?
 		let notify1 = Arc::new(Notify::new());
 		let notify2 = notify1.clone();
-		// let (close_tx, close_rx) = watch::channel(());
-		// let (close_tx, close_rx) = async_channel::unbounded();
 
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
@@ -390,7 +386,6 @@ impl Methods {
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
 			Some(MethodKind::Subscription(cb)) => {
 				let conn_state = ConnState { conn_id: 0, close_notify: notify1, id_provider: &RandomIntegerIdProvider };
-				// let conn_state = ConnState { conn_id: 0, close_tx, id_provider: &RandomIntegerIdProvider };
 				(cb)(id, params, &sink, conn_state)
 			}
 		};
@@ -743,9 +738,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 pub struct SubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
-	/// Close
+	/// Get notified when subscribers leave so we can exit
 	close_notify: Option<Arc<Notify>>,
-	// close_gg: async_channel::Receiver<()>,
 	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
@@ -792,73 +786,47 @@ impl SubscriptionSink {
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
 	{
-		// let mut close_stream = self.close_gg.clone();
-		let mut item = stream.next();
-		// let mut close = close_stream.next();
-		// let mut closed = Box::pin(self.close_tx.closed());
-		// tokio::pin!(closed);
-		// let mut closed = self.close_tx.take();
-		// let mut myclose = watch::Sender<()>::new();
-		// let n = Arc::new(Notify::new());
-		// let mut close = self.close_notify.take().unwrap().clone();
-		if self.close_notify.is_none() {
-			tracing::warn!("[SubscriptionSink::pipe_from_stream] We're closed.");
-			return Ok(())
-		}
-		let close = self.close_notify.clone().unwrap().clone();
-		tracing::trace!("[SubscriptionSink::pipe_from_stream] Entering loop");
-		loop {
-			// match futures_util::future::select(item, close).await {
-			match futures_util::future::select(item, Box::pin(close.notified())).await {
-				// Either::Left((Some(result), c)) => {
-				Either::Left((Some(result), _)) => {
-					tracing::trace!("[SubscriptionSink::pipe_from_stream] Left - sending a result back");
-					match self.send(&result) {
-						Ok(_) => (),
-						Err(Error::SubscriptionClosed(close_reason)) => {
-							self.close(&close_reason);
-							break Ok(());
-						}
-						Err(err) => {
-							tracing::error!("subscription `{}` failed to send item. Error: {:?}", self.method, err);
-							break Err(err);
-						}
-					};
-					// close = c;
-					item = stream.next();
+		if let Some(close_notify) = self.close_notify.clone() {
+			let mut item = stream.next();
+			tracing::trace!("[SubscriptionSink::pipe_from_stream] Entering loop");
+			loop {
+				match futures_util::future::select(item, Box::pin(close_notify.notified())).await {
+					// The app sent us a value to send back to the subscribers
+					Either::Left((Some(result), _)) => {
+						tracing::trace!("[SubscriptionSink::pipe_from_stream] Left - sending a result back");
+						match self.send(&result) {
+							Ok(_) => (),
+							Err(Error::SubscriptionClosed(close_reason)) => {
+								self.close(&close_reason);
+								break Ok(());
+							}
+							Err(err) => {
+								tracing::error!("subscription `{}` failed to send item. Error: {:?}", self.method, err);
+								break Err(err);
+							}
+						};
+						item = stream.next();
+					}
+					// Stream terminated.
+					Either::Left((None, _)) => break Ok(()),
+					// The subscriber went away without telling us.
+					Either::Right(((), _)) => {
+						tracing::trace!("[SubscriptionSink::pipe_from_stream] Right - closing");
+						self.close(&SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset));
+						break Ok(());
+					}
 				}
-				// Either::Right(((), _)) => {
-				Either::Right((n, _x)) => {
-					tracing::trace!("[SubscriptionSink::pipe_from_stream] Right - closing");
-					self.close(&SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset));
-					break Ok(());
-				}
-				// // No messages should be sent over this channel
-				// // if that occurred just ignore and continue.
-				// Either::Right((Some(_), i)) => {
-				// 	item = i;
-				// 	close = close_stream.next();
-				// }
-				// // Connection terminated.
-				// Either::Right((None, _)) => {
-				// 	self.close(&SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset));
-				// 	break Ok(());
-				// }
-				// Stream terminated.
-				Either::Left((None, _)) => break Ok(()),
 			}
+		} else {
+			tracing::warn!("[SubscriptionSink::pipe_from_stream] We're closed.");
+			// TODO: (dp) Is this right? Should return `Err`?
+			return Ok(())
 		}
 	}
 
 	/// Returns whether this channel is closed without needing a context.
 	pub fn is_closed(&self) -> bool {
-		tracing::trace!(
-			"[SubscriptionSink::is_closed] self.inner.is_closed? {}, self.close_notify.is_none()? {}",
-			self.inner.is_closed(),
-			self.close_notify.is_none()
-		);
 		self.inner.is_closed() || self.close_notify.is_none()
-		// self.inner.is_closed() || self.close_notify.is_closed()
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
@@ -925,7 +893,6 @@ impl Drop for SubscriptionSink {
 /// Wrapper struct that maintains a subscription "mainly" for testing.
 #[derive(Debug)]
 pub struct Subscription {
-	// tx: async_channel::Sender<()>,
 	close_notify: Option<Arc<Notify>>,
 	rx: mpsc::UnboundedReceiver<String>,
 	sub_id: RpcSubscriptionId<'static>,
@@ -940,11 +907,6 @@ impl Subscription {
 			None::<Arc<Notify>>
 		});
 	}
-	// /// Close the subscription channel.
-	// pub fn close(&mut self) {
-	// 	self.tx.close();
-	// }
-
 	/// Get the subscription ID
 	pub fn subscription_id(&self) -> &RpcSubscriptionId {
 		&self.sub_id
