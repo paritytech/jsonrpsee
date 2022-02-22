@@ -84,7 +84,7 @@ pub(crate) mod visitor;
 ///     #[method(name = "bar")]
 ///     fn sync_method(&self) -> String;
 ///
-///     #[subscription(name = "sub", unsub = "unsub", item = "String")]
+///     #[subscription(name = "subscribe", item = "String")]
 ///     fn sub(&self);
 /// }
 /// ```
@@ -163,6 +163,8 @@ pub(crate) mod visitor;
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `aliases`: list of name aliases for the RPC method as a comma separated string.
+///              Aliases are processed ignoring the namespace, so add the complete name, including the
+///              namespace.
 /// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
@@ -179,7 +181,11 @@ pub(crate) mod visitor;
 /// **Arguments:**
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
-/// - `unsub` (mandatory): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
+/// - `unsubscribe` (optional): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
+///                             This is generated for you if the subscription name starts with `subscribe`.
+/// - `aliases` (optional): aliases for `name`. Aliases are processed ignoring the namespace,
+///                         so add the complete name, including the namespace.
+/// - `unsubscribe_aliases` (optional): Similar to `aliases` but for `unsubscribe`.
 /// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
@@ -188,7 +194,7 @@ pub(crate) mod visitor;
 /// Rust method marked with the `subscription` attribute **must**:
 ///
 /// - be synchronous;
-/// - not have return value.
+/// - return `RpcResult<()>`
 ///
 /// Rust method marked with `subscription` attribute **may**:
 ///
@@ -220,7 +226,7 @@ pub(crate) mod visitor;
 ///         #[method(name = "baz", blocking)]
 ///         fn blocking_method(&self) -> RpcResult<u16>;
 ///
-///         #[subscription(name = "sub", item = String)]
+///         #[subscription(name = "sub", unsubscribe = "unsub", item = String)]
 ///         fn sub(&self) -> RpcResult<()>;
 ///     }
 ///

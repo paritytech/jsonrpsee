@@ -2,8 +2,8 @@
 
 #![deny(missing_docs)]
 
-use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::core::RpcResult;
+use jsonrpsee::proc_macros::rpc;
 
 #[rpc(client, server)]
 pub trait ApiWithDocumentation {
@@ -12,7 +12,7 @@ pub trait ApiWithDocumentation {
 	async fn async_method(&self) -> RpcResult<u8>;
 
 	/// Subscription docs.
-	#[subscription(name = "sub", item = String)]
+	#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
 	fn sub(&self) -> RpcResult<()>;
 }
 

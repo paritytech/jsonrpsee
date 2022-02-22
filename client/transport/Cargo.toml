@@ -18,7 +18,7 @@ anyhow = { version = "1", optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 http = { version = "0.2", optional = true }
-tokio-util = { version = "0.6", features = ["compat"], optional = true }
+tokio-util = { version = "0.7", features = ["compat"], optional = true }
 tokio = { version = "1", features = ["net", "time", "macros"], optional = true }
 pin-project = { version = "1", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
