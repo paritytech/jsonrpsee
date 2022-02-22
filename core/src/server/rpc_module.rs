@@ -820,7 +820,7 @@ impl SubscriptionSink {
 		} else {
 			tracing::warn!("[SubscriptionSink::pipe_from_stream] We're closed.");
 			// TODO: (dp) Is this right? Should return `Err`?
-			return Ok(())
+			return Ok(());
 		}
 	}
 

@@ -451,8 +451,10 @@ async fn ws_server_subscribe_with_stream() {
 	server.start(module).unwrap();
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub1: Subscription<usize> = client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
-	let mut sub2: Subscription<usize> = client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
+	let mut sub1: Subscription<usize> =
+		client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
+	let mut sub2: Subscription<usize> =
+		client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
 	tracing::info!("[test] Subscribed");
 	let r = sub1.next().await;
 	tracing::debug!("[test] sub1 next: {r:?}");
