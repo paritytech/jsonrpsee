@@ -242,7 +242,7 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "sub" => "subNotif", unsubscribe = "unsub", item = String)]
-///         fn sub(&self) -> RpcResult<()>;
+///         fn sub_override_notif_method(&self) -> RpcResult<()>;
 ///
 ///         /// Use the same method name for both the `subscribe call` and `notifications`
 ///         ///
@@ -282,6 +282,17 @@ pub(crate) mod visitor;
 ///             // this method as `blocking` above.
 ///             std::thread::sleep(std::time::Duration::from_millis(1000));
 ///             Ok(11)
+///         }
+///
+///         // The stream API can be used to pipe items from the underlying stream
+///         // as subscription responses.
+///         fn sub_override_notif_method(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+///             tokio::spawn(async move {
+///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
+///                 sink.pipe_from_stream(stream).await;
+///             });
+///
+///             Ok(())
 ///         }
 ///
 ///         // We could've spawned a `tokio` future that yields values while our program works,
