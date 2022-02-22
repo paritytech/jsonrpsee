@@ -540,11 +540,8 @@ async fn background_task(
 											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
 													let close_notify = close_notify2.clone();
-													let conn_state = ConnState {
-														conn_id,
-														close_notify,
-														id_provider: &*id_provider,
-													};
+													let conn_state =
+														ConnState { conn_id, close_notify, id_provider: &*id_provider };
 
 													let result = callback(id, params, &sink_batch, conn_state);
 													middleware.on_result(&req.method, result, request_start);
