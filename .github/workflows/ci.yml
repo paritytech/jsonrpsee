@@ -14,7 +14,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # Use latest substrate for nightly runs:
+  # Download a RPC server to run wasm tests against.
   SUBSTRATE_URL: https://releases.parity.io/substrate/x86_64-debian:stretch/latest/substrate/substrate
 
 jobs:
@@ -154,3 +154,27 @@ jobs:
 
       - name: Cargo nextest
         run: cargo nextest run --workspace
+
+ test_wasm:
+    name: Test wasm
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@master
+
+    - name: Install
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+    - name: Download Substrate
+      run: |
+        curl $SUBSTRATE_URL --output substrate --location
+        chmod +x substrate
+        mkdir -p ~/.local/bin
+        mv substrate ~/.local/bin
+    - name: Run WASM tests
+      run: |
+        substrate --dev --tmp > /dev/null 2>&1 &
+        wasm-pack test --headless --firefox
+        wasm-pack test --headless --chrome
+        pkill substrate
+      working-directory: wasm-tests
