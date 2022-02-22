@@ -379,6 +379,11 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 #[tokio::test]
 async fn ws_server_cancels_stream_after_reset_conn() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	use futures::{channel::mpsc, SinkExt, StreamExt};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
@@ -409,6 +414,57 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 	let _sub2: Subscription<usize> =
 		client.subscribe("subscribe_never_produce", None, "unsubscribe_never_produce").await.unwrap();
 
+	// terminate connection.
+	drop(client);
+	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+}
+
+#[tokio::test]
+async fn ws_server_subscribe_with_stream() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
+	use futures::{channel::mpsc, SinkExt, StreamExt};
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let (tx, mut rx) = mpsc::channel(1);
+	let mut module = RpcModule::new(tx);
+
+	module
+		.register_subscription("subscribe_10_ints", "n", "unsubscribe_10_ints", |_, sink, mut tx| {
+			let stream = futures::stream::iter(1..=10);
+			tokio::spawn(async move {
+				sink.pipe_from_stream(stream).await.unwrap();
+				let send_back = Arc::make_mut(&mut tx);
+				send_back.feed(()).await.unwrap();
+			});
+			Ok(())
+		})
+		.unwrap();
+	tracing::info!("[test] Starting server");
+	server.start(module).unwrap();
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let mut sub1: Subscription<usize> = client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
+	let mut sub2: Subscription<usize> = client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
+	tracing::info!("[test] Subscribed");
+	let r = sub1.next().await;
+	tracing::debug!("[test] sub1 next: {r:?}");
+	let r = sub2.next().await;
+	tracing::debug!("[test] sub2 next: {r:?}");
+	let r = sub1.next().await;
+	tracing::debug!("[test] sub1 next: {r:?}");
+	let r = sub1.next().await;
+	let r = sub1.next().await;
+	tracing::debug!("[test] sub1 next: {r:?}");
+	let r = sub2.next().await;
+	tracing::debug!("[test] sub2 next: {r:?}");
 	// terminate connection.
 	drop(client);
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");

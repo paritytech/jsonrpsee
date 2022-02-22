@@ -229,6 +229,11 @@ async fn subscribing_without_server() {
 
 #[tokio::test]
 async fn close_test_subscribing_without_server() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
@@ -236,6 +241,7 @@ async fn close_test_subscribing_without_server() {
 				// make sure to only send one item
 				sink.send(&"lo").unwrap();
 				while !sink.is_closed() {
+					tracing::debug!("[test] Sink is open, sleeping");
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
 				// Get the close reason.
@@ -247,12 +253,14 @@ async fn close_test_subscribing_without_server() {
 		})
 		.unwrap();
 
+	tracing::info!("[test] About to subscribe");
 	let mut my_sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap();
 	let (val, id) = my_sub.next::<String>().await.unwrap().unwrap();
 	assert_eq!(&val, "lo");
 	assert_eq!(&id, my_sub.subscription_id());
 
 	// close the subscription to ensure it doesn't return any items.
+	tracing::info!("[test] Closing the subscription");
 	my_sub.close();
 
 	// In this case, the unsubscribe method was not called and
