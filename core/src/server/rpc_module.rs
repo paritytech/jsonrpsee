@@ -904,7 +904,9 @@ impl Subscription {
 	/// Close the subscription channel.
 	pub fn close(&mut self) {
 		tracing::trace!("[Subscription::close] Notifying");
-		self.close_notify.take().and_then(|n| {
+if let Some(n) = self.close_notify.take() { 
+     n.notify_one() 
+}
 			n.notify_one();
 			None::<Arc<Notify>>
 		});
