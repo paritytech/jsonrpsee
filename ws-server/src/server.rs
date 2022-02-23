@@ -473,7 +473,6 @@ async fn background_task(
 				let id_provider = id_provider.clone();
 				let close_notify2 = close_notify.clone();
 
-				// let conn_rx2 = conn_rx.clone();
 				let fut = async move {
 					// Batch responses must be sent back as a single message so we read the results from each
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
