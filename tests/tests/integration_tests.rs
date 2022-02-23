@@ -441,7 +441,9 @@ async fn ws_server_subscribe_with_stream() {
 			use futures::task::Poll;
 			let mut int_counter = 1usize;
 			let stream = futures::stream::poll_fn(move |_| -> Poll<Option<usize>> {
-				if int_counter == 10 { return Poll::Ready(None); }
+				if int_counter == 10 {
+					return Poll::Ready(None);
+				}
 				std::thread::sleep(Duration::from_millis(100));
 				let out = Poll::Ready(Some(int_counter));
 				int_counter += 1;
