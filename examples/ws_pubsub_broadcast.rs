@@ -35,8 +35,6 @@ use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
-use tokio::sync::broadcast;
-use tokio_stream::wrappers::BroadcastStream;
 
 const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 
@@ -66,19 +64,15 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	let (tx, _) = broadcast::channel(1024);
+	let (tx, rx) = async_broadcast::broadcast(16);
 
 	tokio::spawn(produce_items(tx.clone()));
 
 	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, sink, _| {
-		let rx = tx.subscribe();
-
-		// Convert stream from `Item = Result<T: Serialize, Error>` to `Item = T::Serialize`.
-		let stream =
-			BroadcastStream::new(rx).take_while(|r| future::ready(r.is_ok())).filter_map(|r| future::ready(r.ok()));
+		let rx = rx.clone();
 
 		tokio::spawn(async move {
-			let _ = sink.pipe_from_stream(stream).await;
+			let _ = sink.pipe_from_stream(rx).await;
 		});
 		Ok(())
 	})?;
@@ -88,12 +82,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 }
 
 // Naive example that broadcasts the produced values to all subscribers.
-async fn produce_items(tx: broadcast::Sender<i32>) {
+async fn produce_items(tx: async_broadcast::Sender<i32>) {
 	let mut i = 0;
-	loop {
-		// This might fail if no receivers are alive
-		// could occur if no subscriptions are active...
-		let _ = tx.send(i);
+	while let Ok(_) = tx.broadcast(i).await {
 		i += 1;
 		tokio::time::sleep(Duration::from_secs(1)).await;
 	}
