@@ -377,7 +377,6 @@ impl Methods {
 		let sink = MethodSink::new(tx_sink);
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
-		// TODO: (dp) pretty annoying having to do this for all `inner_call`s. We only need it for subscriptions yeah?
 		let notify = Arc::new(Notify::new());
 
 		let _result = match self.method(&req.method).map(|c| &c.callback) {
@@ -904,12 +903,9 @@ impl Subscription {
 	/// Close the subscription channel.
 	pub fn close(&mut self) {
 		tracing::trace!("[Subscription::close] Notifying");
-if let Some(n) = self.close_notify.take() { 
-     n.notify_one() 
-}
-			n.notify_one();
-			None::<Arc<Notify>>
-		});
+		if let Some(n) = self.close_notify.take() {
+			n.notify_one()
+		}
 	}
 	/// Get the subscription ID
 	pub fn subscription_id(&self) -> &RpcSubscriptionId {
