@@ -30,6 +30,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::TryStreamExt;
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosedReason;
@@ -37,6 +38,8 @@ use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
+use tokio::time::interval;
+use tokio_stream::wrappers::IntervalStream;
 
 mod helpers;
 
@@ -438,19 +441,10 @@ async fn ws_server_subscribe_with_stream() {
 
 	module
 		.register_subscription("subscribe_10_ints", "n", "unsubscribe_10_ints", |_, sink, mut tx| {
-			use futures::task::Poll;
-			let mut int_counter = 1usize;
-			let stream = futures::stream::poll_fn(move |_| -> Poll<Option<usize>> {
-				if int_counter == 10 {
-					return Poll::Ready(None);
-				}
-				std::thread::sleep(Duration::from_millis(100));
-				let out = Poll::Ready(Some(int_counter));
-				int_counter += 1;
-				out
-			});
-
 			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(200));
+				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..11)).map(|(_, c)| c);
+
 				sink.pipe_from_stream(stream).await.unwrap();
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed(()).await.unwrap();
@@ -468,11 +462,15 @@ async fn ws_server_subscribe_with_stream() {
 		client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
 	tracing::info!("[test] Subscribed");
 
-	assert_eq!(sub1.next().await.unwrap().unwrap(), 1);
-	assert_eq!(sub2.next().await.unwrap().unwrap(), 1);
-	assert_eq!(sub1.next().await.unwrap().unwrap(), 2);
-	assert_eq!(sub2.next().await.unwrap().unwrap(), 2);
-	assert_eq!(sub2.next().await.unwrap().unwrap(), 3);
+	let (r1, r2) = futures::future::try_join(
+		sub1.by_ref().take(2).try_collect::<Vec<_>>(),
+		sub2.by_ref().take(3).try_collect::<Vec<_>>(),
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(r1, vec![1, 2]);
+	assert_eq!(r2, vec![1, 2, 3]);
 
 	// Be rude, don't run the destructor
 	std::mem::forget(sub2);
