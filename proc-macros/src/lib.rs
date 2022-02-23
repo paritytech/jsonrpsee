@@ -84,7 +84,7 @@ pub(crate) mod visitor;
 ///     #[method(name = "bar")]
 ///     fn sync_method(&self) -> String;
 ///
-///     #[subscription(name = "sub", unsub = "unsub", item = "String")]
+///     #[subscription(name = "subscribe", item = "String")]
 ///     fn sub(&self);
 /// }
 /// ```
@@ -163,6 +163,8 @@ pub(crate) mod visitor;
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
 /// - `aliases`: list of name aliases for the RPC method as a comma separated string.
+///              Aliases are processed ignoring the namespace, so add the complete name, including the
+///              namespace.
 /// - `blocking`: when set method execution will always spawn on a dedicated thread. Only usable with non-`async` methods.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
@@ -176,10 +178,16 @@ pub(crate) mod visitor;
 ///
 /// ### `subscription` attribute
 ///
+/// `subscription` attribute is used to define a publish/subscribe interface according to the [ethereum pubsub specification](https://geth.ethereum.org/docs/rpc/pubsub)
+///
 /// **Arguments:**
 ///
 /// - `name` (mandatory): name of the RPC method. Does not have to be the same as the Rust method name.
-/// - `unsub` (mandatory): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
+/// - `unsubscribe` (optional): name of the RPC method to unsubscribe from the subscription. Must not be the same as `name`.
+///                             This is generated for you if the subscription name starts with `subscribe`.
+/// - `aliases` (optional): aliases for `name`. Aliases are processed ignoring the namespace,
+///                         so add the complete name, including the namespace.
+/// - `unsubscribe_aliases` (optional): Similar to `aliases` but for `unsubscribe`.
 /// - `item` (mandatory): type of items yielded by the subscription. Note that it must be the type, not string.
 /// - `param_kind`: kind of structure to use for parameter passing. Can be "array" or "map", defaults to "array".
 ///
@@ -188,7 +196,7 @@ pub(crate) mod visitor;
 /// Rust method marked with the `subscription` attribute **must**:
 ///
 /// - be synchronous;
-/// - not have return value.
+/// - return `RpcResult<()>`
 ///
 /// Rust method marked with `subscription` attribute **may**:
 ///
@@ -220,7 +228,37 @@ pub(crate) mod visitor;
 ///         #[method(name = "baz", blocking)]
 ///         fn blocking_method(&self) -> RpcResult<u16>;
 ///
-///         #[subscription(name = "sub", item = String)]
+///         /// Override the `foo_sub` and use `foo_subNotif` for the notifications.
+///         ///
+///         /// The item field indicates which type goes into result field below.
+///         ///
+///         /// The notification format:
+///         ///
+///         /// ```
+///         /// {
+///         ///     "jsonrpc":"2.0",
+///         ///     "method":"foo_subNotif",
+///         ///     "params":["subscription":"someID", "result":"some string"]
+///         /// }
+///         /// ```
+///         #[subscription(name = "sub" => "subNotif", unsubscribe = "unsub", item = String)]
+///         fn sub_override_notif_method(&self) -> RpcResult<()>;
+///
+///         /// Use the same method name for both the `subscribe call` and `notifications`
+///         ///
+///         /// The unsubscribe method name is generated here `foo_unsubscribe`
+///         /// Thus the `unsubscribe attribute` is not needed unless a custom unsubscribe method name is wanted.
+///         ///
+///         /// The notification format:
+///         ///
+///         /// ```
+///         /// {
+///         ///     "jsonrpc":"2.0",
+///         ///     "method":"foo_subscribe",
+///         ///     "params":["subscription":"someID", "result":"some string"]
+///         /// }
+///         /// ```
+///         #[subscription(name = "subscribe", item = String)]
 ///         fn sub(&self) -> RpcResult<()>;
 ///     }
 ///
@@ -244,6 +282,17 @@ pub(crate) mod visitor;
 ///             // this method as `blocking` above.
 ///             std::thread::sleep(std::time::Duration::from_millis(1000));
 ///             Ok(11)
+///         }
+///
+///         // The stream API can be used to pipe items from the underlying stream
+///         // as subscription responses.
+///         fn sub_override_notif_method(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+///             tokio::spawn(async move {
+///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
+///                 sink.pipe_from_stream(stream).await;
+///             });
+///
+///             Ok(())
 ///         }
 ///
 ///         // We could've spawned a `tokio` future that yields values while our program works,

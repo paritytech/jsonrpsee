@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-client-transport"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
 edition = "2021"
@@ -10,13 +10,13 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
-jsonrpsee-types = { path = "../../types", version = "0.8.0", optional = true }
-jsonrpsee-core = { path = "../../core", version = "0.8.0", features = ["client"] }
+jsonrpsee-types = { path = "../../types", version = "0.9.0", optional = true }
+jsonrpsee-core = { path = "../../core", version = "0.9.0", features = ["client"] }
 tracing = { version = "0.1", optional = true }
 thiserror = { version = "1", optional = true }
 futures = { version = "0.3.14", default-features = false, features = ["std"], optional = true }
 http = { version = "0.2", optional = true }
-tokio-util = { version = "0.6", features = ["compat"], optional = true }
+tokio-util = { version = "0.7", features = ["compat"], optional = true }
 tokio = { version = "1", features = ["net", "time", "macros"], optional = true }
 pin-project = { version = "1", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
