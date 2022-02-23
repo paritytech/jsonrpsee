@@ -438,7 +438,16 @@ async fn ws_server_subscribe_with_stream() {
 
 	module
 		.register_subscription("subscribe_10_ints", "n", "unsubscribe_10_ints", |_, sink, mut tx| {
-			let stream = futures::stream::iter(1..=10);
+			use futures::task::Poll;
+			let mut int_counter = 1usize;
+			let stream = futures::stream::poll_fn(move |_| -> Poll<Option<usize>> {
+				if int_counter == 10 { return Poll::Ready(None); }
+				std::thread::sleep(Duration::from_millis(100));
+				let out = Poll::Ready(Some(int_counter));
+				int_counter += 1;
+				out
+			});
+
 			tokio::spawn(async move {
 				sink.pipe_from_stream(stream).await.unwrap();
 				let send_back = Arc::make_mut(&mut tx);
@@ -456,20 +465,21 @@ async fn ws_server_subscribe_with_stream() {
 	let mut sub2: Subscription<usize> =
 		client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
 	tracing::info!("[test] Subscribed");
-	let r = sub1.next().await;
-	tracing::debug!("[test] sub1 next: {r:?}");
-	let r = sub2.next().await;
-	tracing::debug!("[test] sub2 next: {r:?}");
-	let r = sub1.next().await;
-	tracing::debug!("[test] sub1 next: {r:?}");
-	let r = sub1.next().await;
-	let r = sub1.next().await;
-	tracing::debug!("[test] sub1 next: {r:?}");
-	let r = sub2.next().await;
-	tracing::debug!("[test] sub2 next: {r:?}");
+
+	assert_eq!(sub1.next().await.unwrap().unwrap(), 1);
+	assert_eq!(sub2.next().await.unwrap().unwrap(), 1);
+	assert_eq!(sub1.next().await.unwrap().unwrap(), 2);
+	assert_eq!(sub2.next().await.unwrap().unwrap(), 2);
+	assert_eq!(sub2.next().await.unwrap().unwrap(), 3);
+
+	// Be rude, don't run the destructor
+	std::mem::forget(sub2);
+	// Sub1 is still in business
+	assert_eq!(sub1.next().await.unwrap().unwrap(), 3);
+
 	// terminate connection.
+	// TODO: (dp) removing the drop changes nothing. Why is that?
 	drop(client);
-	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
 }
 
