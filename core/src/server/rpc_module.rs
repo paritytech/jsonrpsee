@@ -64,12 +64,14 @@ pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, 
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
 
-// TODO: (dp) Document the tuple a bit better
-/// Raw RPC response.
+/// Raw response from an RPC
+/// A 3-tuple containing:
+/// 	- Call result as a `String`,
+/// 	- a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
+/// 	- a [`tokio::sync::Notify`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, Arc<Notify>);
 
-// TODO: (dp) Does this need to be `pub`?
-/// Data for stateful connections.
+/// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
 	/// Connection ID
 	pub conn_id: ConnectionId,
@@ -371,27 +373,27 @@ impl Methods {
 
 	/// Execute a callback.
 	async fn inner_call(&self, req: Request<'_>) -> RawRpcResponse {
-		let (tx, mut rx) = mpsc::unbounded();
-		let sink = MethodSink::new(tx);
-		// TODO: (dp) pretty annoying having to do this for all `inner_call`s. We only need it for subscriptions yeah?
-		let notify1 = Arc::new(Notify::new());
-		let notify2 = notify1.clone();
-
+		let (tx_sink, mut rx_sink) = mpsc::unbounded();
+		let sink = MethodSink::new(tx_sink);
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
+		// TODO: (dp) pretty annoying having to do this for all `inner_call`s. We only need it for subscriptions yeah?
+		let notify = Arc::new(Notify::new());
 
 		let _result = match self.method(&req.method).map(|c| &c.callback) {
 			None => sink.send_error(req.id, ErrorCode::MethodNotFound.into()),
 			Some(MethodKind::Sync(cb)) => (cb)(id, params, &sink),
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
 			Some(MethodKind::Subscription(cb)) => {
-				let conn_state = ConnState { conn_id: 0, close_notify: notify1, id_provider: &RandomIntegerIdProvider };
+				let close_notify = notify.clone();
+				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
 				(cb)(id, params, &sink, conn_state)
 			}
 		};
 
-		let resp = rx.next().await.expect("tx and rx still alive; qed");
-		(resp, rx, notify2)
+		let resp = rx_sink.next().await.expect("tx and rx still alive; qed");
+
+		(resp, rx_sink, notify)
 	}
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
