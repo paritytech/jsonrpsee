@@ -793,7 +793,6 @@ impl SubscriptionSink {
 			let closed_fut = close_notify.notified();
 			pin_mut!(closed_fut);
 			loop {
-				// match futures_util::future::select(item, Box::pin(close_notify.notified())).await {
 				match futures_util::future::select(stream_item, closed_fut).await {
 					// The app sent us a value to send back to the subscribers
 					Either::Left((Some(result), next_closed_fut)) => {
@@ -821,7 +820,7 @@ impl SubscriptionSink {
 			}
 		} else {
 			// The sink is closed.
-			return Ok(());
+			Ok(())
 		}
 	}
 
