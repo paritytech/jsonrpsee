@@ -33,7 +33,7 @@ use std::time::Duration;
 use futures::TryStreamExt;
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::SubscriptionClosedReason;
+use jsonrpsee::core::error::{SubscriptionClosed, SubscriptionClosedReason};
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -425,24 +425,21 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 
 #[tokio::test]
 async fn ws_server_subscribe_with_stream() {
-	use futures::{channel::mpsc, SinkExt, StreamExt};
+	use futures::StreamExt;
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
-	let (tx, mut rx) = mpsc::channel(1);
-	let mut module = RpcModule::new(tx);
+	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, mut tx| {
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
 				sink.pipe_from_stream(stream).await.unwrap();
-				let send_back = Arc::make_mut(&mut tx);
-				send_back.feed(()).await.unwrap();
 			});
 			Ok(())
 		})
@@ -465,14 +462,13 @@ async fn ws_server_subscribe_with_stream() {
 
 	// Be rude, don't run the destructor
 	std::mem::forget(sub2);
-	// Sub1 is still in business
-	assert_eq!(sub1.next().await.unwrap().unwrap(), 3);
 
-	// We expect two subscription streams complete to and should be getting 2 values on `rx`.
-	// We've read three, so two more expected and then the channel is closed.
-	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
-	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
-	assert!(rx.try_next().is_err());
+	// sub1 is still in business, read remaining items.
+	assert_eq!(sub1.by_ref().take(3).try_collect::<Vec<usize>>().await.unwrap(), vec![3, 4, 5]);
+
+	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server("No close reason provided".to_string()));
+	// The server closed down the subscription it will send a close reason.
+	assert!(matches!(sub1.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
 }
 
 #[tokio::test]
