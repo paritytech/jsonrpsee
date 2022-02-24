@@ -468,7 +468,7 @@ async fn ws_server_subscribe_with_stream() {
 	// Sub1 is still in business
 	assert_eq!(sub1.next().await.unwrap().unwrap(), 3);
 
-	// We expect the stream to run five times and should be getting 5 values on `rx`.
+	// We expect two subscription streams complete to and should be getting 2 values on `rx`.
 	// We've read three, so two more expected and then the channel is closed.
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
