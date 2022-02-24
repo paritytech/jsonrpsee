@@ -10,7 +10,6 @@ license = "MIT"
 anyhow = "1"
 arrayvec = "0.7.1"
 async-trait = "0.1"
-async-channel = { version = "1.6", optional = true }
 beef = { version = "0.5.1", features = ["impl_serde"] }
 thiserror = "1"
 futures-channel = { version = "0.3.14", default-features = false }
@@ -30,7 +29,6 @@ tokio = { version = "1.8", features = ["rt", "sync"], optional = true }
 default = []
 http-helpers = ["futures-util"]
 server = [
-	"async-channel",
 	"futures-util",
 	"rustc-hash",
 	"tracing",
