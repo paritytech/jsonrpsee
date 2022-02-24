@@ -422,14 +422,9 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
 }
-// TODO: (dp) Finish this test: check that dropping one subscriber doesn't halt the stream etc
+
 #[tokio::test]
 async fn ws_server_subscribe_with_stream() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
-
 	use futures::{channel::mpsc, SinkExt, StreamExt};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 

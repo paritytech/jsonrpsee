@@ -253,20 +253,32 @@ async fn close_test_subscribing_without_server() {
 		})
 		.unwrap();
 
-	tracing::info!("[test] About to subscribe");
 	let mut my_sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap();
 	let (val, id) = my_sub.next::<String>().await.unwrap().unwrap();
 	assert_eq!(&val, "lo");
 	assert_eq!(&id, my_sub.subscription_id());
+	let mut my_sub2 = std::mem::ManuallyDrop::new(module.subscribe("my_sub", EmptyParams::new()).await.unwrap());
 
-	// close the subscription to ensure it doesn't return any items.
-	tracing::info!("[test] Closing the subscription");
+	// Close the subscription to ensure it doesn't return any items.
 	my_sub.close();
+	tracing::info!("[test] closed first sub");
 
-	// In this case, the unsubscribe method was not called and
+	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
 	let exp = SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset);
 	assert!(
 		matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
+	);
+
+	// The second subscription still works
+	let (val, _) = my_sub2.next::<String>().await.unwrap().unwrap();
+	assert_eq!(val, "lo".to_string());
+	// Simulate a rude client that disconnects suddenly.
+	unsafe {
+		std::mem::ManuallyDrop::drop(&mut my_sub2);
+	}
+
+	assert!(
+		matches!(my_sub2.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
 	);
 }

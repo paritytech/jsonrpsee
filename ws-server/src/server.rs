@@ -299,7 +299,6 @@ async fn background_task(
 	builder.set_max_message_size(max_request_body_size as usize);
 	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	// let (conn_tx, conn_rx) = async_channel::unbounded();
 	let close_notify = Arc::new(Notify::new());
 	let close_notify_server_stop = close_notify.clone();
 
@@ -327,7 +326,6 @@ async fn background_task(
 
 		// Force `conn_tx` to this async block and close it down
 		// when the connection closes to be on safe side.
-		// conn_tx.close();
 		close_notify_server_stop.notify_one();
 	});
 

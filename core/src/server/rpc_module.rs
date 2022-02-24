@@ -789,12 +789,10 @@ impl SubscriptionSink {
 	{
 		if let Some(close_notify) = self.close_notify.clone() {
 			let mut item = stream.next();
-			tracing::trace!("[SubscriptionSink::pipe_from_stream] Entering loop");
 			loop {
 				match futures_util::future::select(item, Box::pin(close_notify.notified())).await {
 					// The app sent us a value to send back to the subscribers
 					Either::Left((Some(result), _)) => {
-						tracing::trace!("[SubscriptionSink::pipe_from_stream] Left - sending a result back");
 						match self.send(&result) {
 							Ok(_) => (),
 							Err(Error::SubscriptionClosed(close_reason)) => {
@@ -802,7 +800,6 @@ impl SubscriptionSink {
 								break Ok(());
 							}
 							Err(err) => {
-								tracing::error!("subscription `{}` failed to send item. Error: {:?}", self.method, err);
 								break Err(err);
 							}
 						};
@@ -812,15 +809,13 @@ impl SubscriptionSink {
 					Either::Left((None, _)) => break Ok(()),
 					// The subscriber went away without telling us.
 					Either::Right(((), _)) => {
-						tracing::trace!("[SubscriptionSink::pipe_from_stream] Right - closing");
 						self.close(&SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset));
 						break Ok(());
 					}
 				}
 			}
 		} else {
-			tracing::warn!("[SubscriptionSink::pipe_from_stream] We're closed.");
-			// TODO: (dp) Is this right? Should return `Err`?
+			// The sink is closed.
 			return Ok(());
 		}
 	}
