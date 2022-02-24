@@ -66,9 +66,9 @@ pub type ConnectionId = usize;
 
 /// Raw response from an RPC
 /// A 3-tuple containing:
-/// 	- Call result as a `String`,
-/// 	- a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-/// 	- a [`tokio::sync::Notify`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
+///   - Call result as a `String`,
+///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
+///   - a [`tokio::sync::Notify`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, Arc<Notify>);
 
 /// Helper struct to manage subscriptions.

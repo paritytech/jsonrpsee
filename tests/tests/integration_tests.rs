@@ -440,10 +440,10 @@ async fn ws_server_subscribe_with_stream() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_10_ints", "n", "unsubscribe_10_ints", |_, sink, mut tx| {
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, mut tx| {
 			tokio::spawn(async move {
-				let interval = interval(Duration::from_millis(200));
-				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..11)).map(|(_, c)| c);
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
 				sink.pipe_from_stream(stream).await.unwrap();
 				let send_back = Arc::make_mut(&mut tx);
@@ -452,15 +452,11 @@ async fn ws_server_subscribe_with_stream() {
 			Ok(())
 		})
 		.unwrap();
-	tracing::info!("[test] Starting server");
 	server.start(module).unwrap();
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub1: Subscription<usize> =
-		client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
-	let mut sub2: Subscription<usize> =
-		client.subscribe("subscribe_10_ints", None, "unsubscribe_10_ints").await.unwrap();
-	tracing::info!("[test] Subscribed");
+	let mut sub1: Subscription<usize> = client.subscribe("subscribe_5_ints", None, "unsubscribe_5_ints").await.unwrap();
+	let mut sub2: Subscription<usize> = client.subscribe("subscribe_5_ints", None, "unsubscribe_5_ints").await.unwrap();
 
 	let (r1, r2) = futures::future::try_join(
 		sub1.by_ref().take(2).try_collect::<Vec<_>>(),
@@ -477,10 +473,11 @@ async fn ws_server_subscribe_with_stream() {
 	// Sub1 is still in business
 	assert_eq!(sub1.next().await.unwrap().unwrap(), 3);
 
-	// terminate connection.
-	// TODO: (dp) removing the drop changes nothing. Why is that?
-	drop(client);
+	// We expect the stream to run five times and should be getting 5 values on `rx`.
+	// We've read three, so two more expected and then the channel is closed.
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+	assert!(rx.try_next().is_err());
 }
 
 #[tokio::test]
