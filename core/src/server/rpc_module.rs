@@ -38,6 +38,7 @@ use crate::to_json_raw_value;
 use crate::traits::{IdProvider, ToRpcParams};
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::Either;
+use futures_util::pin_mut;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use jsonrpsee_types::error::{invalid_subscription_err, ErrorCode, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
@@ -788,11 +789,14 @@ impl SubscriptionSink {
 		T: Serialize,
 	{
 		if let Some(close_notify) = self.close_notify.clone() {
-			let mut item = stream.next();
+			let mut stream_item = stream.next();
+			let closed_fut = close_notify.notified();
+			pin_mut!(closed_fut);
 			loop {
-				match futures_util::future::select(item, Box::pin(close_notify.notified())).await {
+				// match futures_util::future::select(item, Box::pin(close_notify.notified())).await {
+				match futures_util::future::select(stream_item, closed_fut).await {
 					// The app sent us a value to send back to the subscribers
-					Either::Left((Some(result), _)) => {
+					Either::Left((Some(result), next_closed_fut)) => {
 						match self.send(&result) {
 							Ok(_) => (),
 							Err(Error::SubscriptionClosed(close_reason)) => {
@@ -803,7 +807,8 @@ impl SubscriptionSink {
 								break Err(err);
 							}
 						};
-						item = stream.next();
+						stream_item = stream.next();
+						closed_fut = next_closed_fut;
 					}
 					// Stream terminated.
 					Either::Left((None, _)) => break Ok(()),
