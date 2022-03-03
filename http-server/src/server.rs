@@ -33,7 +33,7 @@ use std::task::{Context, Poll};
 use crate::response::{internal_error, malformed};
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
-use futures_util::{future::join_all, stream::StreamExt, FutureExt};
+use futures_util::{stream::StreamExt, FutureExt};
 use hyper::header::{HeaderMap, HeaderValue};
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
@@ -465,7 +465,7 @@ async fn process_validated_request(
 					false
 				}
 				Some((name, method_callback)) => match method_callback.inner() {
-					MethodKind::Sync(callback) => match method_callback.claim(&req.method, &resources) {
+					MethodKind::Sync(callback) => match method_callback.claim(&req.method, &resources).await {
 						Ok(guard) => {
 							let result = (callback)(id, params, &sink);
 							drop(guard);
@@ -477,7 +477,7 @@ async fn process_validated_request(
 							false
 						}
 					},
-					MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
+					MethodKind::Async(callback) => match method_callback.claim(name, &resources).await {
 						Ok(guard) => {
 							let result =
 								(callback)(id.into_owned(), params.into_owned(), sink.clone(), 0, Some(guard)).await;
@@ -508,22 +508,20 @@ async fn process_validated_request(
 		if !batch.is_empty() {
 			let middleware = &middleware;
 
-			join_all(batch.into_iter().filter_map(move |req| {
+			for req in batch {
 				let id = req.id.clone();
 				let params = Params::new(req.params.map(|params| params.get()));
 
 				match methods.method_with_name(&req.method) {
 					None => {
 						sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-						None
 					}
 					Some((name, method_callback)) => match method_callback.inner() {
-						MethodKind::Sync(callback) => match method_callback.claim(name, &resources) {
+						MethodKind::Sync(callback) => match method_callback.claim(name, &resources).await {
 							Ok(guard) => {
 								let result = (callback)(id, params, &sink);
 								middleware.on_result(name, result, request_start);
 								drop(guard);
-								None
 							}
 							Err(err) => {
 								tracing::error!(
@@ -532,20 +530,17 @@ async fn process_validated_request(
 								);
 								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
 								middleware.on_result(name, false, request_start);
-								None
 							}
 						},
-						MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
+						MethodKind::Async(callback) => match method_callback.claim(name, &resources).await {
 							Ok(guard) => {
 								let sink = sink.clone();
 								let id = id.into_owned();
 								let params = params.into_owned();
 								let callback = callback.clone();
 
-								Some(async move {
-									let result = (callback)(id, params, sink, 0, Some(guard)).await;
-									middleware.on_result(name, result, request_start);
-								})
+								let result = (callback)(id, params, sink, 0, Some(guard)).await;
+								middleware.on_result(name, result, request_start);
 							}
 							Err(err) => {
 								tracing::error!(
@@ -554,19 +549,16 @@ async fn process_validated_request(
 								);
 								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
 								middleware.on_result(name, false, request_start);
-								None
 							}
 						},
 						MethodKind::Subscription(_) => {
 							tracing::error!("Subscriptions not supported on HTTP");
 							sink.send_error(req.id, ErrorCode::InternalError.into());
 							middleware.on_result(&req.method, false, request_start);
-							None
 						}
 					},
 				}
-			}))
-			.await;
+			}
 		} else {
 			// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
 			// Array with at least one value, the response from the Server MUST be a single

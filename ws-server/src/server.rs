@@ -34,7 +34,7 @@ use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::error::ErrorCode;
 use crate::types::{Id, Request};
 use futures_channel::mpsc;
-use futures_util::future::{join_all, FutureExt};
+use futures_util::future::FutureExt;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
@@ -391,7 +391,7 @@ async fn background_task(
 							middleware.on_response(request_start);
 						}
 						Some((name, method)) => match &method.inner() {
-							MethodKind::Sync(callback) => match method.claim(name, &resources) {
+							MethodKind::Sync(callback) => match method.claim(name, &resources).await {
 								Ok(guard) => {
 									let result = (callback)(id, params, &sink);
 
@@ -409,7 +409,7 @@ async fn background_task(
 									middleware.on_response(request_start);
 								}
 							},
-							MethodKind::Async(callback) => match method.claim(name, &resources) {
+							MethodKind::Async(callback) => match method.claim(name, &resources).await {
 								Ok(guard) => {
 									let sink = sink.clone();
 									let id = id.into_owned();
@@ -433,7 +433,7 @@ async fn background_task(
 									middleware.on_response(request_start);
 								}
 							},
-							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
+							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources).await {
 								Ok(guard) => {
 									let cn = close_notify.clone();
 									let conn_state =
@@ -481,7 +481,7 @@ async fn background_task(
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
 						if !batch.is_empty() {
-							join_all(batch.into_iter().filter_map(move |req| {
+							for req in batch {
 								let id = req.id.clone();
 								let params = Params::new(req.params.map(|params| params.get()));
 								let name = &req.method;
@@ -489,52 +489,48 @@ async fn background_task(
 								match methods.method_with_name(name) {
 									None => {
 										sink_batch.send_error(req.id, ErrorCode::MethodNotFound.into());
-										None
 									}
 									Some((name, method_callback)) => match &method_callback.inner() {
-										MethodKind::Sync(callback) => match method_callback.claim(name, resources) {
-											Ok(guard) => {
-												let result = (callback)(id, params, &sink_batch);
-												middleware.on_result(name, result, request_start);
-												drop(guard);
-												None
+										MethodKind::Sync(callback) => {
+											match method_callback.claim(name, resources).await {
+												Ok(guard) => {
+													let result = (callback)(id, params, &sink_batch);
+													middleware.on_result(name, result, request_start);
+													drop(guard);
+												}
+												Err(err) => {
+													tracing::error!(
+														"[Methods::execute_with_resources] failed to lock resources: {:?}",
+														err
+													);
+													sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
+													middleware.on_result(&req.method, false, request_start);
+												}
 											}
-											Err(err) => {
-												tracing::error!(
-													"[Methods::execute_with_resources] failed to lock resources: {:?}",
-													err
-												);
-												sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
-												middleware.on_result(&req.method, false, request_start);
-												None
-											}
-										},
-										MethodKind::Async(callback) => match method_callback
-											.claim(&req.method, resources)
-										{
-											Ok(guard) => {
-												let sink_batch = sink_batch.clone();
-												let id = id.into_owned();
-												let params = params.into_owned();
+										}
+										MethodKind::Async(callback) => {
+											match method_callback.claim(&req.method, resources).await {
+												Ok(guard) => {
+													let sink_batch = sink_batch.clone();
+													let id = id.into_owned();
+													let params = params.into_owned();
 
-												Some(async move {
 													let result =
 														(callback)(id, params, sink_batch, conn_id, Some(guard)).await;
 													middleware.on_result(&req.method, result, request_start);
-												})
+												}
+												Err(err) => {
+													tracing::error!(
+														"[Methods::execute_with_resources] failed to lock resources: {:?}",
+														err
+													);
+													sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
+													middleware.on_result(&req.method, false, request_start);
+												}
 											}
-											Err(err) => {
-												tracing::error!(
-													"[Methods::execute_with_resources] failed to lock resources: {:?}",
-													err
-												);
-												sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
-												middleware.on_result(&req.method, false, request_start);
-												None
-											}
-										},
+										}
 										MethodKind::Subscription(callback) => {
-											match method_callback.claim(&req.method, resources) {
+											match method_callback.claim(&req.method, resources).await {
 												Ok(guard) => {
 													let close_notify = close_notify2.clone();
 													let conn_state =
@@ -543,7 +539,6 @@ async fn background_task(
 													let result = callback(id, params, &sink_batch, conn_state);
 													middleware.on_result(&req.method, result, request_start);
 													drop(guard);
-													None
 												}
 												Err(err) => {
 													tracing::error!(
@@ -553,14 +548,12 @@ async fn background_task(
 
 													sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
 													middleware.on_result(&req.method, false, request_start);
-													None
 												}
 											}
 										}
 									},
 								}
-							}))
-							.await;
+							}
 
 							rx_batch.close();
 							let results = collect_batch_response(rx_batch).await;

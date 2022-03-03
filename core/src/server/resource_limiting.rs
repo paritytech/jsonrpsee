@@ -93,7 +93,7 @@ use std::sync::Arc;
 
 use crate::Error;
 use arrayvec::ArrayVec;
-use parking_lot::Mutex;
+use async_lock::Mutex;
 
 // The number of kinds of resources that can be used for limiting.
 const RESOURCE_COUNT: usize = 8;
@@ -139,8 +139,8 @@ impl Resources {
 	/// Attempt to claim `units` units for each resource, incrementing current totals.
 	/// If successful, returns a [`ResourceGuard`] which decrements the totals by the same
 	/// amounts once dropped.
-	pub fn claim(&self, units: ResourceTable) -> Result<ResourceGuard, Error> {
-		let mut totals = self.totals.lock();
+	pub async fn claim(&self, units: ResourceTable) -> Result<ResourceGuard, Error> {
+		let mut totals = self.totals.lock().await;
 		let mut sum = *totals;
 
 		for (idx, sum) in sum.iter_mut().enumerate() {
@@ -169,8 +169,12 @@ pub struct ResourceGuard {
 
 impl Drop for ResourceGuard {
 	fn drop(&mut self) {
-		for (sum, claimed) in self.totals.lock().iter_mut().zip(self.units) {
-			*sum -= claimed;
-		}
+		let totals = self.totals.clone();
+		let units = self.units;
+		tokio::spawn(async move {
+			for (sum, claimed) in totals.lock().await.iter_mut().zip(units) {
+				*sum -= claimed;
+			}
+		});
 	}
 }

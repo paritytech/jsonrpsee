@@ -180,10 +180,10 @@ impl MethodCallback {
 
 	/// Attempt to claim resources prior to executing a method. On success returns a guard that releases
 	/// claimed resources when dropped.
-	pub fn claim(&self, name: &str, resources: &Resources) -> Result<ResourceGuard, Error> {
+	pub async fn claim(&self, name: &str, resources: &Resources) -> Result<ResourceGuard, Error> {
 		match self.resources {
 			MethodResources::Uninitialized(_) => Err(Error::UninitializedMethod(name.into())),
-			MethodResources::Initialized(units) => resources.claim(units),
+			MethodResources::Initialized(units) => resources.claim(units).await,
 		}
 	}
 
