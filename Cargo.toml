@@ -12,6 +12,7 @@ members = [
 	"client/ws-client",
 	"client/http-client",
 	"client/transport",
+	"client/wasm-client",
 	"proc-macros",
 	"wasm-tests",
 ]

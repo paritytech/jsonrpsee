@@ -47,7 +47,7 @@ ws = [
     "jsonrpsee-types",
     "thiserror",
 ]
-wasm = [
+web = [
     "wasm-bindgen",
     "wasm-bindgen-futures",
     "js-sys",

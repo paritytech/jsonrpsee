@@ -2,9 +2,10 @@ use std::time::Duration;
 
 use jsonrpsee_client_transport::web_sys::*;
 use jsonrpsee_core::{
-	client::{Client, ClientBuilder, ClientT, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
+	client::{ClientT, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
 	rpc_params,
 };
+use jsonrpsee_wasm_client::WasmClientBuilder;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
@@ -32,8 +33,7 @@ async fn wasm_ws_transport_works() {
 
 #[wasm_bindgen_test]
 async fn rpc_method_call_works() {
-	let (tx, rx) = connect("ws://localhost:9944", Duration::from_secs(60)).await.unwrap();
-	let client: Client = ClientBuilder::default().build_with_wasm(tx, rx);
+	let client = WasmClientBuilder::default().build("ws://localhost:9944").await.unwrap();
 
 	let rp: String = client.request("system_name", rpc_params![]).await.unwrap();
 
@@ -42,8 +42,7 @@ async fn rpc_method_call_works() {
 
 #[wasm_bindgen_test]
 async fn rpc_subcription_works() {
-	let (tx, rx) = connect("ws://localhost:9944", Duration::from_secs(60)).await.unwrap();
-	let client: Client = ClientBuilder::default().build_with_wasm(tx, rx);
+	let client = WasmClientBuilder::default().build("ws://localhost:9944").await.unwrap();
 
 	let mut sub: Subscription<serde_json::Value> =
 		client.subscribe("state_subscribeStorage", rpc_params![], "state_unsubscribeStorage").await.unwrap();

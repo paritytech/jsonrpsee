@@ -8,5 +8,6 @@ wasm-bindgen-test = "0.3.24"
 tracing-wasm = "0.2.1"
 console_error_panic_hook = "0.1.7"
 serde_json = "1.0.57"
-jsonrpsee-core = { path = "../core", features = ["async-wasm-client", "client"] }
-jsonrpsee-client-transport = { path = "../client/transport", features = ["wasm"] }
+jsonrpsee-wasm-client = { path = "../client/wasm-client" }
+jsonrpsee-core = { path = "../core" , features = ["client"] }
+jsonrpsee-client-transport = { path = "../client/transport", features = ["web"] }
