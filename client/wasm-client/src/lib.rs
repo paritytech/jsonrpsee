@@ -37,7 +37,7 @@ use jsonrpsee_client_transport::web_sys;
 use jsonrpsee_core::client::{ClientBuilder, IdKind};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
-/// Builder for [`WasmClient`].
+/// Builder for [`Client`].
 ///
 /// # Examples
 ///
@@ -81,7 +81,7 @@ impl Default for WasmClientBuilder {
 }
 
 impl WasmClientBuilder {
-	/// See documentation [`WsTransportClientBuilder::max_request_body_size`] (default is 10 MB).
+	/// Max request body size.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
 		self
@@ -93,7 +93,7 @@ impl WasmClientBuilder {
 		self
 	}
 
-	/// See documentation [`WsTransportClientBuilder::connection_timeout`] (default is 10 seconds).
+	/// Connection timeout.
 	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
 		self.connection_timeout = timeout;
 		self
