@@ -137,8 +137,8 @@ pub struct RpcSubscription {
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, param_kind, unsubscribe_aliases] =
-			AttributeMeta::parse(attr)?.retain(["aliases", "item", "name", "param_kind", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases] = AttributeMeta::parse(attr)?
+			.retain(["aliases", "item", "name", "param_kind", "unsubscribe", "unsubscribe_aliases"])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let map = name?.value::<NameMapping>()?;
@@ -150,7 +150,12 @@ impl RpcSubscription {
 
 		let sig = sub.sig.clone();
 		let docs = extract_doc_comments(&sub.attrs);
-		let unsubscribe = build_unsubscribe_method(&name);
+		let unsubscribe = match parse_subscribe(unsubscribe)? {
+			Some(unsub) => unsub,
+			None => build_unsubscribe_method(&name).unwrap_or_else(||
+				panic!("Could not generate the unsubscribe method with name '{}'. You need to provide the name manually using the `unsubscribe` attribute in your RPC API definition", name),
+			),
+		};
 
 		let params: Vec<_> = sig
 			.inputs
@@ -335,10 +340,16 @@ fn parse_aliases(arg: Result<Argument, MissingArgument>) -> syn::Result<Vec<Stri
 	Ok(aliases.map(|a| a.list.into_iter().map(|lit| lit.value()).collect()).unwrap_or_default())
 }
 
+fn parse_subscribe(arg: Result<Argument, MissingArgument>) -> syn::Result<Option<String>> {
+	let unsub = optional(arg, Argument::string)?;
+
+	Ok(unsub)
+}
+
 fn find_attr<'a>(attrs: &'a [Attribute], ident: &str) -> Option<&'a Attribute> {
 	attrs.iter().find(|a| a.path.is_ident(ident))
 }
 
-fn build_unsubscribe_method(method: &str) -> String {
-	format!("unsubscribe{}", method.strip_prefix("subscribe").unwrap_or(method))
+fn build_unsubscribe_method(method: &str) -> Option<String> {
+	method.strip_prefix("subscribe").map(|s| format!("unsubscribe{}", s))
 }

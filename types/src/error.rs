@@ -262,11 +262,6 @@ impl CallError {
 	}
 }
 
-/// Create a invalid subscription ID error.
-pub fn invalid_subscription_err(data: Option<&RawValue>) -> ErrorObject {
-	ErrorObject::new(ErrorCode::ServerError(INVALID_SUBSCRIPTION_CODE), data)
-}
-
 #[cfg(test)]
 mod tests {
 	use super::{ErrorCode, ErrorObject, ErrorResponse, Id, TwoPointZero};

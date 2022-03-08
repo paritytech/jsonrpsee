@@ -30,15 +30,14 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use crate::types::error::CallError;
-use crate::types::{self, ErrorResponse, Response, SubscriptionId};
+use crate::types::{Response, SubscriptionId};
 use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
 use anyhow::anyhow;
 use futures_util::future::join;
-use jsonrpsee_core::{to_json_raw_value, traits::IdProvider, DeserializeOwned, Error};
+use jsonrpsee_core::{traits::IdProvider, DeserializeOwned, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
-use jsonrpsee_types::error::invalid_subscription_err;
 use serde_json::Value as JsonValue;
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
@@ -606,16 +605,13 @@ async fn unsubscribe_twice_should_indicate_error() {
 	let sub_id: u64 = deser_call(client.send_request_text(sub_call).await.unwrap());
 
 	let unsub_call = call("unsubscribe_hello", vec![sub_id], Id::Num(1));
-	let unsub_1: String = deser_call(client.send_request_text(unsub_call).await.unwrap());
-	assert_eq!(&unsub_1, "Unsubscribed");
+	let unsub_1: bool = deser_call(client.send_request_text(unsub_call).await.unwrap());
+	assert!(unsub_1);
 
 	let unsub_call = call("unsubscribe_hello", vec![sub_id], Id::Num(2));
-	let unsub_2 = client.send_request_text(unsub_call).await.unwrap();
-	let unsub_2_err: ErrorResponse = serde_json::from_str(&unsub_2).unwrap();
-	let sub_id = to_json_raw_value(&sub_id).unwrap();
+	let unsub_2: bool = deser_call(client.send_request_text(unsub_call).await.unwrap());
 
-	let err = Some(to_json_raw_value(&format!("Invalid subscription ID={}", sub_id)).unwrap());
-	assert_eq!(unsub_2_err, ErrorResponse::new(invalid_subscription_err(err.as_deref()), types::Id::Number(2)));
+	assert!(!unsub_2);
 }
 
 #[tokio::test]
@@ -624,10 +620,9 @@ async fn unsubscribe_wrong_sub_id_type() {
 	let addr = server().await;
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 
-	let unsub = client.send_request_text(call("unsubscribe_hello", vec![13.99_f64], Id::Num(0))).await.unwrap();
-	let unsub_2_err: ErrorResponse = serde_json::from_str(&unsub).unwrap();
-	let err = Some(to_json_raw_value(&"Invalid subscription ID type, must be Integer or String").unwrap());
-	assert_eq!(unsub_2_err, ErrorResponse::new(invalid_subscription_err(err.as_deref()), types::Id::Number(0)));
+	let unsub: bool =
+		deser_call(client.send_request_text(call("unsubscribe_hello", vec![13.99_f64], Id::Num(0))).await.unwrap());
+	assert!(!unsub);
 }
 
 #[tokio::test]
@@ -667,5 +662,5 @@ async fn custom_subscription_id_works() {
 	let sub = client.send_request_text(call("subscribe_hello", Vec::<()>::new(), Id::Num(0))).await.unwrap();
 	assert_eq!(&sub, r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":0}"#);
 	let unsub = client.send_request_text(call("unsubscribe_hello", vec!["0xdeadbeef"], Id::Num(1))).await.unwrap();
-	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","result":"Unsubscribed","id":1}"#);
+	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 }
