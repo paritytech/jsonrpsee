@@ -270,7 +270,7 @@ where
 				methods.clone(),
 				resources.clone(),
 				cfg.max_request_body_size,
-				cfg.max_response_size,
+				cfg.max_response_body_size,
 				stop_monitor.clone(),
 				middleware,
 				id_provider,
@@ -291,7 +291,7 @@ async fn background_task(
 	methods: Methods,
 	resources: Resources,
 	max_request_body_size: u32,
-	max_response_size: u32,
+	max_response_body_size: u32,
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
 	id_provider: Arc<dyn IdProvider>,
@@ -305,7 +305,7 @@ async fn background_task(
 	let close_notify_server_stop = close_notify.clone();
 
 	let stop_server2 = stop_server.clone();
-	let sink = MethodSink::new_with_limit(tx, max_response_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
 	middleware.on_connect();
 
@@ -478,7 +478,7 @@ async fn background_task(
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
-					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_size);
+					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size);
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
@@ -627,7 +627,7 @@ struct Settings {
 	/// Maximum size in bytes of a request.
 	max_request_body_size: u32,
 	/// Maximum size in bytes of a response.
-	max_response_size: u32,
+	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
 	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
@@ -642,7 +642,7 @@ impl Default for Settings {
 	fn default() -> Self {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
-			max_response_size: u32::MAX,
+			max_response_body_size: TEN_MB_SIZE_BYTES,
 			max_connections: MAX_CONNECTIONS,
 			allowed_origins: AllowedValue::Any,
 			allowed_hosts: AllowedValue::Any,
@@ -685,9 +685,9 @@ impl<M> Builder<M> {
 		self
 	}
 
-	/// Set the maximum size of a response in bytes. Default is u32::MAX.
-	pub fn max_response_size(mut self, size: u32) -> Self {
-		self.settings.max_response_size = size;
+	/// Set the maximum size of a response body in bytes. Default is 10 MiB.
+	pub fn max_response_body_size(mut self, size: u32) -> Self {
+		self.settings.max_response_body_size = size;
 		self
 	}
 

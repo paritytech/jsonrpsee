@@ -434,7 +434,7 @@ async fn can_set_the_max_request_body_size() {
 async fn can_set_the_max_response_size() {
 	let addr = "127.0.0.1:0";
 	// Set the max response size to 100 bytes
-	let server = HttpServerBuilder::default().max_response_size(100).build(addr).unwrap();
+	let server = HttpServerBuilder::default().max_response_body_size(100).build(addr).unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(101))).unwrap();
 	let addr = server.local_addr().unwrap();
