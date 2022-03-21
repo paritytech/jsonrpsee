@@ -152,8 +152,8 @@ impl RpcSubscription {
 		let docs = extract_doc_comments(&sub.attrs);
 		let unsubscribe = match parse_subscribe(unsubscribe)? {
 			Some(unsub) => unsub,
-			None => build_unsubscribe_method(&name).expect(
-				&format!("Could not generate the unsubscribe method with name '{}'. You need to provide the name manually using the `unsubscribe` attribute in your RPC API definition", name),
+			None => build_unsubscribe_method(&name).unwrap_or_else(||
+				panic!("Could not generate the unsubscribe method with name '{}'. You need to provide the name manually using the `unsubscribe` attribute in your RPC API definition", name),
 			),
 		};
 

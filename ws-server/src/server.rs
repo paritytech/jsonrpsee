@@ -49,6 +49,7 @@ use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::sync::Notify;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Default maximum connections allowed.
@@ -298,7 +299,8 @@ async fn background_task(
 	builder.set_max_message_size(max_request_body_size as usize);
 	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let (conn_tx, conn_rx) = async_channel::unbounded();
+	let close_notify = Arc::new(Notify::new());
+	let close_notify_server_stop = close_notify.clone();
 
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
@@ -324,7 +326,7 @@ async fn background_task(
 
 		// Force `conn_tx` to this async block and close it down
 		// when the connection closes to be on safe side.
-		conn_tx.close();
+		close_notify_server_stop.notify_one();
 	});
 
 	// Buffer for incoming data.
@@ -433,8 +435,9 @@ async fn background_task(
 							},
 							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
 								Ok(guard) => {
+									let cn = close_notify.clone();
 									let conn_state =
-										ConnState { conn_id, close: conn_rx.clone(), id_provider: &*id_provider };
+										ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
 
 									let result = callback(id, params, &sink, conn_state);
 									middleware.on_result(name, result, request_start);
@@ -466,8 +469,8 @@ async fn background_task(
 				let methods = &methods;
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
+				let close_notify2 = close_notify.clone();
 
-				let conn_rx2 = conn_rx.clone();
 				let fut = async move {
 					// Batch responses must be sent back as a single message so we read the results from each
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
@@ -533,11 +536,9 @@ async fn background_task(
 										MethodKind::Subscription(callback) => {
 											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
-													let conn_state = ConnState {
-														conn_id,
-														close: conn_rx2.clone(),
-														id_provider: &*id_provider,
-													};
+													let close_notify = close_notify2.clone();
+													let conn_state =
+														ConnState { conn_id, close_notify, id_provider: &*id_provider };
 
 													let result = callback(id, params, &sink_batch, conn_state);
 													middleware.on_result(&req.method, result, request_start);

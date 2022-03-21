@@ -30,13 +30,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::TryStreamExt;
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::SubscriptionClosedReason;
+use jsonrpsee::core::error::{SubscriptionClosed, SubscriptionClosedReason};
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
+use tokio::time::interval;
+use tokio_stream::wrappers::IntervalStream;
 
 mod helpers;
 
@@ -379,6 +382,11 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 #[tokio::test]
 async fn ws_server_cancels_stream_after_reset_conn() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	use futures::{channel::mpsc, SinkExt, StreamExt};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
@@ -413,6 +421,54 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 	drop(client);
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
 	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+}
+
+#[tokio::test]
+async fn ws_server_subscribe_with_stream() {
+	use futures::StreamExt;
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, _| {
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
+
+				sink.pipe_from_stream(stream).await.unwrap();
+			});
+			Ok(())
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let mut sub1: Subscription<usize> = client.subscribe("subscribe_5_ints", None, "unsubscribe_5_ints").await.unwrap();
+	let mut sub2: Subscription<usize> = client.subscribe("subscribe_5_ints", None, "unsubscribe_5_ints").await.unwrap();
+
+	let (r1, r2) = futures::future::try_join(
+		sub1.by_ref().take(2).try_collect::<Vec<_>>(),
+		sub2.by_ref().take(3).try_collect::<Vec<_>>(),
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(r1, vec![1, 2]);
+	assert_eq!(r2, vec![1, 2, 3]);
+
+	// Be rude, don't run the destructor
+	std::mem::forget(sub2);
+
+	// sub1 is still in business, read remaining items.
+	assert_eq!(sub1.by_ref().take(3).try_collect::<Vec<usize>>().await.unwrap(), vec![3, 4, 5]);
+
+	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server("No close reason provided".to_string()));
+	// The server closed down the subscription it will send a close reason.
+	assert!(matches!(sub1.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
 }
 
 #[tokio::test]
