@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use jsonrpsee_client_transport::web_sys::*;
 use jsonrpsee_core::{
 	client::{ClientT, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
@@ -20,7 +18,7 @@ fn init_tracing() {
 #[wasm_bindgen_test]
 async fn wasm_ws_transport_works() {
 	init_tracing();
-	let (mut tx, mut rx) = connect("ws://localhost:9944", Duration::from_secs(60)).await.unwrap();
+	let (mut tx, mut rx) = connect("ws://localhost:9944").await.unwrap();
 
 	let req = r#"{"jsonrpc": "2.0", "method": "system_name", "id": 1}"#;
 	let exp = r#"{"jsonrpc":"2.0","result":"Substrate Node","id":1}"#;

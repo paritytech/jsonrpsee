@@ -16,7 +16,7 @@ tracing = "0.1"
 thiserror = { version = "1", optional = true }
 anyhow = { version = "1", optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }
-futures-util = { version = "0.3.14", default-features = false, optional = true }
+futures-util = { version = "0.3.14", default-features = false, features = ["alloc"], optional = true }
 http = { version = "0.2", optional = true }
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 tokio = { version = "1", features = ["net", "time", "macros"], optional = true }
@@ -29,11 +29,10 @@ futures-timer = { version = "3", optional = true }
 # ws
 soketto = { version = "0.7.1", optional = true }
 
-# wasm
+# web-sys
 wasm-bindgen = { version = "0.2.69", optional = true }
 wasm-bindgen-futures = { version = "0.4.19", optional = true }
-js-sys = { version = "0.3.46", optional = true }
-web-sys = { version = "0.3.46", features = ["BinaryType", "Blob", "ErrorEvent", "FileReader", "MessageEvent", "CloseEvent", "ProgressEvent", "WebSocket", "console"], optional = true }
+gloo-net = { version = "0.1.0", default-features = false, features = ["json", "websocket"], optional = true }
 
 [features]
 tls = ["tokio-rustls", "webpki-roots", "rustls-native-certs"]
@@ -50,8 +49,7 @@ ws = [
 web = [
     "wasm-bindgen",
     "wasm-bindgen-futures",
-    "js-sys",
-    "web-sys",
+    "gloo-net",
     "futures-channel",
     "futures-timer",
     "futures-util",

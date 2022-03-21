@@ -1,20 +1,13 @@
-use std::time::Duration;
+#![cfg(target_arch = "wasm32")]
 
-use futures_channel::{mpsc, oneshot};
-use futures_timer::Delay;
-use futures_util::future::{self, Either};
-use futures_util::StreamExt;
+use core::fmt;
+
+use futures_channel::mpsc;
+use futures_util::sink::SinkExt;
+use futures_util::stream::{SplitSink, SplitStream, StreamExt};
+use gloo_net::websocket::{futures::WebSocket, Message, WebSocketError};
 use jsonrpsee_core::async_trait;
 use jsonrpsee_core::client::{TransportReceiverT, TransportSenderT};
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{CloseEvent, MessageEvent, WebSocket};
-
-#[derive(Debug)]
-enum WebSocketMessage {
-	Data(String),
-	Close,
-}
 
 /// Web-sys transport error that can occur.
 #[derive(Debug, thiserror::Error)]
@@ -22,134 +15,76 @@ pub enum Error {
 	/// Internal send error
 	#[error("Could not send message: {0}")]
 	SendError(#[from] mpsc::SendError),
-	/// Connection got closed
-	#[error("Connection is closed")]
-	ConnectionClosed,
-	/// Timeout while trying to connect.
-	#[error("Connection timeout exceeded: {0:?}")]
-	ConnectionTimeout(Duration),
+	/// Sender went away
+	#[error("Sender went away couldn't receive the message")]
+	SenderDisconnected,
 	/// Error that occurred in `JS context`.
 	#[error("JS Error: {0:?}")]
-	JsError(String),
+	Js(String),
+	/// WebSocket error
+	#[error("WebSocket Error: {0:?}")]
+	WebSocket(WebSocketError),
 }
 
 /// Sender.
-#[derive(Debug)]
-pub struct Sender(mpsc::UnboundedSender<WebSocketMessage>);
+pub struct Sender(SplitSink<WebSocket, Message>);
+
+impl fmt::Debug for Sender {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Sender").finish()
+	}
+}
 
 /// Receiver.
-#[derive(Debug)]
-pub struct Receiver(mpsc::UnboundedReceiver<String>);
+pub struct Receiver(SplitStream<WebSocket>);
 
-#[async_trait]
+impl fmt::Debug for Receiver {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Receiver").finish()
+	}
+}
+
+#[async_trait(?Send)]
 impl TransportSenderT for Sender {
 	type Error = Error;
 
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error> {
 		tracing::trace!("tx: {:?}", msg);
-		self.0.unbounded_send(WebSocketMessage::Data(msg)).map_err(|e| e.into_send_error())?;
+		self.0.send(Message::Text(msg)).await.map_err(|e| Error::WebSocket(e))?;
 		Ok(())
 	}
 
 	async fn close(&mut self) -> Result<(), Error> {
-		self.0.unbounded_send(WebSocketMessage::Close).map_err(|e| e.into_send_error())?;
 		Ok(())
 	}
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl TransportReceiverT for Receiver {
 	type Error = Error;
 
 	async fn receive(&mut self) -> Result<String, Self::Error> {
 		match self.0.next().await {
-			Some(msg) => {
+			Some(Ok(msg)) => {
 				tracing::trace!("rx: {:?}", msg);
-				Ok(msg)
+
+				let txt = match msg {
+					Message::Bytes(bytes) => String::from_utf8(bytes).expect("WebSocket message is valid utf8; qed"),
+					Message::Text(txt) => txt,
+				};
+
+				Ok(txt)
 			}
-			None => Err(Error::ConnectionClosed),
+			Some(Err(err)) => Err(Error::WebSocket(err)),
+			None => Err(Error::SenderDisconnected),
 		}
 	}
 }
 
 /// Create a transport sender & receiver pair.
-pub async fn connect(url: impl AsRef<str>, conn_timeout: Duration) -> Result<(Sender, Receiver), Error> {
-	let (from_back, rx) = mpsc::unbounded();
-	let (tx, mut to_back) = mpsc::unbounded();
+pub async fn connect(url: impl AsRef<str>) -> Result<(Sender, Receiver), Error> {
+	let websocket = WebSocket::open(url.as_ref()).map_err(|e| Error::Js(e.to_string()))?;
+	let (write, read) = websocket.split();
 
-	let websocket = WebSocket::new(url.as_ref()).map_err(|e| Error::JsError(format!("{:?}", e)))?;
-	websocket.set_binary_type(web_sys::BinaryType::Arraybuffer);
-
-	let tx1 = tx.clone();
-
-	let from_back1 = from_back.clone();
-	let on_msg_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
-		// Supported formats: https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/send
-		let js_val = e.data();
-		tracing::trace!("rx: {:?}", js_val);
-
-		// Text message.
-		if let Some(txt) = js_val.dyn_ref::<js_sys::JsString>() {
-			let _ = from_back1.unbounded_send(String::from(txt));
-		}
-		// Binary message.
-		else if let Some(abuf) = js_val.dyn_ref::<js_sys::ArrayBuffer>() {
-			let array = js_sys::Uint8Array::new(abuf);
-			let msg = String::from_utf8(array.to_vec()).expect("valid UTF-8 from WebSocket; qed");
-			let _ = from_back1.unbounded_send(msg);
-		} else {
-			tracing::warn!("Received unsupported message: {:?}", js_val);
-		}
-	}) as Box<dyn FnMut(MessageEvent)>);
-
-	// Close event.
-	let on_close_callback = Closure::once(move |_e: CloseEvent| {
-		tracing::info!("Connection closed");
-		tx1.close_channel();
-		from_back.close_channel();
-	});
-
-	websocket.set_onmessage(Some(on_msg_callback.as_ref().unchecked_ref()));
-	websocket.set_onclose(Some(on_close_callback.as_ref().unchecked_ref()));
-
-	// Prevent for being dropped (this will be leaked intentionally).
-	on_msg_callback.forget();
-	on_close_callback.forget();
-
-	try_connect_until(&websocket, conn_timeout).await?;
-
-	let tx3 = tx.clone();
-	wasm_bindgen_futures::spawn_local(async move {
-		while let Some(WebSocketMessage::Data(msg)) = to_back.next().await {
-			if let Err(e) = websocket.send_with_str(&msg) {
-				tracing::warn!("Failed to send: {:?}", e);
-				break;
-			}
-		}
-
-		let _ = websocket.close();
-		tx3.close_channel();
-	});
-
-	Ok((Sender(tx), Receiver(rx)))
-}
-
-async fn try_connect_until(websocket: &WebSocket, conn_timeout: Duration) -> Result<(), Error> {
-	let (tx, rx) = oneshot::channel();
-
-	let on_open_callback = Closure::once(move |_: JsValue| {
-		tracing::info!("Connection established");
-		let _ = tx.send(());
-	});
-
-	websocket.set_onopen(Some(on_open_callback.as_ref().unchecked_ref()));
-
-	let res = match future::select(rx, Delay::new(conn_timeout)).await {
-		Either::Left((Ok(()), _)) => Ok(()),
-		Either::Left((Err(_), _)) => unreachable!("A message is sent on this channel before close; qed"),
-		Either::Right((_, _)) => Err(Error::ConnectionTimeout(conn_timeout)),
-	};
-	drop(on_open_callback);
-
-	res
+	Ok((Sender(write), Receiver(read)))
 }

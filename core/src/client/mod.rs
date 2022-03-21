@@ -111,6 +111,24 @@ pub trait SubscriptionClientT: ClientT {
 }
 
 /// Transport interface to send data asynchronous.
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+/// Transport interface for an asynchronous client.
+pub trait TransportSenderT: 'static {
+	/// Error that may occur during sending a message.
+	type Error: std::error::Error + Send + Sync;
+
+	/// Send.
+	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
+
+	/// If the transport supports sending customized close messages.
+	async fn close(&mut self) -> Result<(), Self::Error> {
+		Ok(())
+	}
+}
+
+/// Transport interface to send data asynchronous.
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 /// Transport interface for an asynchronous client.
 pub trait TransportSenderT: Send + 'static {
@@ -127,6 +145,18 @@ pub trait TransportSenderT: Send + 'static {
 }
 
 /// Transport interface to receive data asynchronous.
+#[cfg(target_arch = "wasm32")]
+#[async_trait(?Send)]
+pub trait TransportReceiverT: 'static {
+	/// Error that may occur during receiving a message.
+	type Error: std::error::Error + Send + Sync;
+
+	/// Receive.
+	async fn receive(&mut self) -> Result<String, Self::Error>;
+}
+
+/// Transport interface to receive data asynchronous.
+#[cfg(not(target_arch = "wasm32"))]
 #[async_trait]
 pub trait TransportReceiverT: Send + 'static {
 	/// Error that may occur during receiving a message.

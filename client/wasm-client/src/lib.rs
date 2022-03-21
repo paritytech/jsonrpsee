@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
+#![cfg(target_arch = "wasm32")]
 
 //! # jsonrpsee-wasm-client
 
@@ -61,7 +62,6 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 pub struct WasmClientBuilder {
 	max_request_body_size: u32,
 	request_timeout: Duration,
-	connection_timeout: Duration,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	id_kind: IdKind,
@@ -72,7 +72,6 @@ impl Default for WasmClientBuilder {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
-			connection_timeout: Duration::from_secs(10),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			id_kind: IdKind::Number,
@@ -90,12 +89,6 @@ impl WasmClientBuilder {
 	/// See documentation [`ClientBuilder::request_timeout`] (default is 60 seconds).
 	pub fn request_timeout(mut self, timeout: Duration) -> Self {
 		self.request_timeout = timeout;
-		self
-	}
-
-	/// Connection timeout.
-	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
-		self.connection_timeout = timeout;
 		self
 	}
 
@@ -119,8 +112,7 @@ impl WasmClientBuilder {
 
 	/// Build the client with specified URL to connect to.
 	pub async fn build(self, url: impl AsRef<str>) -> Result<Client, Error> {
-		let (sender, receiver) =
-			web_sys::connect(url, self.connection_timeout).await.map_err(|e| Error::Transport(e.into()))?;
+		let (sender, receiver) = web_sys::connect(url).await.map_err(|e| Error::Transport(e.into()))?;
 
 		let builder = ClientBuilder::default();
 
