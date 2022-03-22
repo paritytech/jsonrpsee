@@ -114,9 +114,3 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws
 	let handle = server.start(module).unwrap();
 	(addr, handle)
 }
-
-/// Get number of concurrent tasks based on the num_cpus.
-pub fn concurrent_tasks() -> Vec<usize> {
-	let cores = num_cpus::get();
-	vec![cores / 4, cores / 2, cores, cores * 2, cores * 4]
-}
