@@ -1,3 +1,5 @@
+#![cfg(target_arch = "wasm32")]
+
 use jsonrpsee_client_transport::web_sys::*;
 use jsonrpsee_core::{
 	client::{ClientT, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
