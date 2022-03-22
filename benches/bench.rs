@@ -84,7 +84,7 @@ trait RequestBencher {
 		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
 		let client = Arc::new(HttpClientBuilder::default().max_concurrent_requests(1024 * 1024).build(&url).unwrap());
 		round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
-		http_concurrent_conn_calls(&rt, crit, &url, "http_concurrent_connections", Self::REQUEST_TYPE);
+		http_concurrent_conn_calls(&rt, crit, &url, "http_concurrent_conn_calls", Self::REQUEST_TYPE);
 	}
 
 	fn batched_http_requests(crit: &mut Criterion) {
@@ -291,7 +291,7 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 
 fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for conns in [2, 4, 8, 16, 32, 64, 128, 512] {
+	for conns in [2, 4, 8, 16, 32, 64, 128, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
 				|| (0..conns).map(|_| HttpClientBuilder::default().build(url).unwrap()),

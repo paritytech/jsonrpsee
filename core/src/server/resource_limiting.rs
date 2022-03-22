@@ -140,7 +140,7 @@ impl Resources {
 	/// If successful, returns a [`ResourceGuard`] which decrements the totals by the same
 	/// amounts once dropped.
 	pub fn claim(&self, units: ResourceTable) -> Result<ResourceGuard, Error> {
-		/*let mut totals = self.totals.lock();
+		let mut totals = self.totals.lock();
 		let mut sum = *totals;
 
 		for (idx, sum) in sum.iter_mut().enumerate() {
@@ -156,8 +156,7 @@ impl Resources {
 
 		*totals = sum;
 
-		Ok(ResourceGuard { totals: self.totals.clone(), units })*/
-		Ok(ResourceGuard { totals: self.totals.clone(), units: Default::default() })
+		Ok(ResourceGuard { totals: self.totals.clone(), units })
 	}
 }
 
