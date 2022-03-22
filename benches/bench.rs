@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use criterion::*;
 use futures_util::future::join_all;
+use futures_util::stream::FuturesUnordered;
 use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -237,7 +238,7 @@ fn run_concurrent_round_trip<C: 'static + ClientT + Send + Sync>(
 
 fn run_ws_concurrent_connections(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for conns in [2, 4, 8, 16, 32, 64] {
+	for conns in [2, 4, 8, 16, 32, 64, 128, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
 				|| {
@@ -257,7 +258,12 @@ fn run_ws_concurrent_connections(rt: &TokioRuntime, crit: &mut Criterion, url: &
 				|clients| async {
 					let tasks = clients.into_iter().map(|client| {
 						rt.spawn(async move {
-							let _ = black_box(client.request::<String>(request.method_name(), None).await.unwrap());
+							let futs = FuturesUnordered::new();
+
+							for _ in 0..10 {
+								futs.push(client.request::<String>(request.method_name(), None));
+							}
+							join_all(futs).await;
 						})
 					});
 					join_all(tasks).await;
@@ -276,14 +282,19 @@ fn run_http_concurrent_connections(
 	request: RequestType,
 ) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for conns in [2, 4, 8, 16, 32, 64] {
+	for conns in [2, 4, 8, 16, 32] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
 				|| (0..conns).map(|_| HttpClientBuilder::default().build(url).unwrap()),
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
-							let _ = black_box(client.request::<String>(request.method_name(), None).await.unwrap());
+							let futs = FuturesUnordered::new();
+
+							for _ in 0..10 {
+								futs.push(client.request::<String>(request.method_name(), None));
+							}
+							join_all(futs).await;
 						})
 					});
 					join_all(tasks).await;

@@ -62,6 +62,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 		std::sync::Arc::new(Session::new(context.sender().clone()))
 	})
 	.event_loop_executor(handle)
+	.max_connections(10 * 1024)
 	.start(&"127.0.0.1:0".parse().unwrap())
 	.expect("Server must start with no issues");
 
@@ -94,6 +95,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws
 
 	let server = WsServerBuilder::default()
 		.max_request_body_size(u32::MAX)
+		.max_connections(10 * 1024)
 		.custom_tokio_runtime(handle)
 		.build("127.0.0.1:0")
 		.await
