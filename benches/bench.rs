@@ -205,7 +205,7 @@ fn batch_round_trip(
 
 fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for conns in [2, 4, 8, 16, 32, 64, 128, 512, 1024] {
+	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
 				|| {
@@ -244,7 +244,7 @@ fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, 
 
 fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for conns in [2, 4, 8, 16, 32, 64, 128, 512, 1024] {
+	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
 				|| {
@@ -291,7 +291,7 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 
 fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for conns in [2, 4, 8, 16, 32, 64, 128, 512, 1024] {
+	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
 				|| (0..conns).map(|_| HttpClientBuilder::default().build(url).unwrap()),
