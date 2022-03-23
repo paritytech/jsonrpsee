@@ -613,7 +613,7 @@ impl AllowedValue {
 			if !list.iter().any(|o| o.as_bytes() == value) {
 				let error = format!("{} denied: {}", header, String::from_utf8_lossy(value));
 				tracing::warn!("{}", error);
-				return Err(Error::Request(error));
+				return Err(Error::Custom(error));
 			}
 		}
 

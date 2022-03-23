@@ -147,7 +147,7 @@ impl ClientT for HttpClient {
 			Ok(response) => response,
 			Err(_) => {
 				let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-				return Err(Error::Request(err.to_string()));
+				return Err(Error::Call(err.error.to_owned()));
 			}
 		};
 
@@ -186,7 +186,7 @@ impl ClientT for HttpClient {
 
 		let rps: Vec<Response<_>> =
 			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
-				Ok(e) => Error::Request(e.to_string()),
+				Ok(e) => Error::Call(e.error.to_owned()),
 				Err(e) => Error::ParseError(e),
 			})?;
 
