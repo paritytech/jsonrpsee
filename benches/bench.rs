@@ -8,26 +8,31 @@ use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::types::{Id, ParamsSer, RequestSer};
 use jsonrpsee::ws_client::WsClientBuilder;
+use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
-criterion_group!(types_benches, jsonrpsee_types_v2);
 criterion_group!(
-	sync_benches,
-	SyncBencher::http_requests,
-	SyncBencher::batched_http_requests,
-	SyncBencher::websocket_requests,
-	SyncBencher::batched_ws_requests,
+	name = types_benches;
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	targets = jsonrpsee_types_v2
 );
 criterion_group!(
-	async_benches,
-	AsyncBencher::http_requests,
-	AsyncBencher::batched_http_requests,
-	AsyncBencher::websocket_requests,
-	AsyncBencher::batched_ws_requests
+	name = sync_benches;
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	targets = SyncBencher::http_requests, SyncBencher::batched_http_requests, SyncBencher::websocket_requests, SyncBencher::batched_ws_requests
 );
-criterion_group!(subscriptions, AsyncBencher::subscriptions);
+criterion_group!(
+	name = async_benches;
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	targets = AsyncBencher::http_requests, AsyncBencher::batched_http_requests, AsyncBencher::websocket_requests, AsyncBencher::batched_ws_requests
+);
+criterion_group!(
+	name = subscriptions;
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	targets = AsyncBencher::subscriptions
+);
 criterion_main!(types_benches, sync_benches, async_benches, subscriptions);
 
 #[derive(Debug, Clone, Copy)]
