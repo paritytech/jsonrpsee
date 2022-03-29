@@ -182,10 +182,10 @@ impl<M> Builder<M> {
 	///
 	///   socket.listen(4096).unwrap();
 	///
-	///   let server = HttpServerBuilder::new().build_from_tcp(socket).await.unwrap();
+	///   let server = HttpServerBuilder::new().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub async fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<M>, Error> {
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<M>, Error> {
 		let listener = listener.into();
 		let local_addr = listener.local_addr().ok();
 		let listener = hyper::Server::from_tcp(listener)?.tcp_nodelay(true);
