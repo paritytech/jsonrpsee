@@ -183,7 +183,7 @@ async fn can_set_the_max_request_body_size() {
 	init_logger();
 
 	let addr = "127.0.0.1:0";
-	// Rejects all requests larger than 10 bytes
+	// Rejects all requests larger than 100 bytes
 	let server = WsServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
@@ -196,6 +196,28 @@ async fn can_set_the_max_request_body_size() {
 	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, oversized_request());
+
+	// Max request body size should not override the max response body size
+	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
+
+	handle.stop().unwrap();
+}
+
+#[tokio::test]
+async fn can_set_the_max_response_body_size() {
+	init_logger();
+
+	let addr = "127.0.0.1:0";
+	// Set the max response body size to 100 bytes
+	let server = WsServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("anything", |_p, _cx| Ok("a".repeat(101))).unwrap();
+	let addr = server.local_addr().unwrap();
+	let handle = server.start(module).unwrap();
+
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
 	// Oversized response.
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;

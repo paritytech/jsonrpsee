@@ -49,6 +49,7 @@ use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::sync::Notify;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Default maximum connections allowed.
@@ -269,6 +270,7 @@ where
 				methods.clone(),
 				resources.clone(),
 				cfg.max_request_body_size,
+				cfg.max_response_body_size,
 				stop_monitor.clone(),
 				middleware,
 				id_provider,
@@ -289,6 +291,7 @@ async fn background_task(
 	methods: Methods,
 	resources: Resources,
 	max_request_body_size: u32,
+	max_response_body_size: u32,
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
 	id_provider: Arc<dyn IdProvider>,
@@ -298,10 +301,11 @@ async fn background_task(
 	builder.set_max_message_size(max_request_body_size as usize);
 	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let (conn_tx, conn_rx) = async_channel::unbounded();
+	let close_notify = Arc::new(Notify::new());
+	let close_notify_server_stop = close_notify.clone();
 
 	let stop_server2 = stop_server.clone();
-	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
 	middleware.on_connect();
 
@@ -324,7 +328,7 @@ async fn background_task(
 
 		// Force `conn_tx` to this async block and close it down
 		// when the connection closes to be on safe side.
-		conn_tx.close();
+		close_notify_server_stop.notify_one();
 	});
 
 	// Buffer for incoming data.
@@ -433,8 +437,9 @@ async fn background_task(
 							},
 							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
 								Ok(guard) => {
+									let cn = close_notify.clone();
 									let conn_state =
-										ConnState { conn_id, close: conn_rx.clone(), id_provider: &*id_provider };
+										ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
 
 									let result = callback(id, params, &sink, conn_state);
 									middleware.on_result(name, result, request_start);
@@ -466,14 +471,14 @@ async fn background_task(
 				let methods = &methods;
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
+				let close_notify2 = close_notify.clone();
 
-				let conn_rx2 = conn_rx.clone();
 				let fut = async move {
 					// Batch responses must be sent back as a single message so we read the results from each
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
-					let sink_batch = MethodSink::new_with_limit(tx_batch, max_request_body_size);
+					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size);
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
@@ -533,11 +538,9 @@ async fn background_task(
 										MethodKind::Subscription(callback) => {
 											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
-													let conn_state = ConnState {
-														conn_id,
-														close: conn_rx2.clone(),
-														id_provider: &*id_provider,
-													};
+													let close_notify = close_notify2.clone();
+													let conn_state =
+														ConnState { conn_id, close_notify, id_provider: &*id_provider };
 
 													let result = callback(id, params, &sink_batch, conn_state);
 													middleware.on_result(&req.method, result, request_start);
@@ -623,6 +626,8 @@ impl AllowedValue {
 struct Settings {
 	/// Maximum size in bytes of a request.
 	max_request_body_size: u32,
+	/// Maximum size in bytes of a response.
+	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
 	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
@@ -637,6 +642,7 @@ impl Default for Settings {
 	fn default() -> Self {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_response_body_size: TEN_MB_SIZE_BYTES,
 			max_connections: MAX_CONNECTIONS,
 			allowed_origins: AllowedValue::Any,
 			allowed_hosts: AllowedValue::Any,
@@ -676,6 +682,12 @@ impl<M> Builder<M> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
+		self
+	}
+
+	/// Set the maximum size of a response body in bytes. Default is 10 MiB.
+	pub fn max_response_body_size(mut self, size: u32) -> Self {
+		self.settings.max_response_body_size = size;
 		self
 	}
 
