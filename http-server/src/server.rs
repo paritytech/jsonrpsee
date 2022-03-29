@@ -26,7 +26,7 @@
 
 use std::cmp;
 use std::future::Future;
-use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -49,6 +49,7 @@ use jsonrpsee_types::error::ErrorCode;
 use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
 use socket2::{Domain, Socket, Type};
+use tokio::net::{TcpListener, ToSocketAddrs};
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
@@ -182,52 +183,23 @@ impl<M> Builder<M> {
 	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).is_ok());
 	/// }
 	/// ```
-	pub fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
-		let mut err: Option<Error> = None;
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
+		let listener = TcpListener::bind(addrs).await?;
 
-		for addr in addrs.to_socket_addrs()? {
-			let (listener, local_addr) = match self.inner_builder(addr) {
-				Ok(res) => res,
-				Err(e) => {
-					err = Some(e);
-					continue;
-				}
-			};
-
-			return Ok(Server {
-				listener,
-				local_addr,
-				access_control: self.access_control,
-				max_request_body_size: self.max_request_body_size,
-				max_response_body_size: self.max_response_body_size,
-				resources: self.resources,
-				tokio_runtime: self.tokio_runtime,
-				middleware: self.middleware,
-			});
-		}
-
-		let err = err.unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No address found").into());
-		Err(err)
-	}
-
-	fn inner_builder(
-		&self,
-		addr: SocketAddr,
-	) -> Result<(hyper::server::Builder<hyper::server::conn::AddrIncoming>, Option<SocketAddr>), Error> {
-		let domain = Domain::for_address(addr);
-		let socket = Socket::new(domain, Type::STREAM, None)?;
-		socket.set_nodelay(true)?;
-		socket.set_reuse_address(true)?;
-		socket.set_nonblocking(true)?;
-		socket.set_keepalive(self.keep_alive)?;
-		let address = addr.into();
-		socket.bind(&address)?;
-
-		socket.listen(128)?;
-		let listener: TcpListener = socket.into();
 		let local_addr = listener.local_addr().ok();
-		let listener = hyper::Server::from_tcp(listener)?;
-		Ok((listener, local_addr))
+		let std_listener = listener.into_std()?;
+		let listener = hyper::Server::from_tcp(std_listener)?.tcp_nodelay(true);
+
+		Ok(Server {
+			listener,
+			local_addr,
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
+			middleware: self.middleware,
+		})
 	}
 }
 

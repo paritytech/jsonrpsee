@@ -38,7 +38,7 @@ use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
 async fn server() -> (SocketAddr, ServerHandle) {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0").unwrap();
+	let server = HttpServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
@@ -410,7 +410,7 @@ async fn run_forever() {
 async fn can_set_the_max_request_body_size() {
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 100 bytes
-	let server = HttpServerBuilder::default().max_request_body_size(100).build(addr).unwrap();
+	let server = HttpServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -434,7 +434,7 @@ async fn can_set_the_max_request_body_size() {
 async fn can_set_the_max_response_size() {
 	let addr = "127.0.0.1:0";
 	// Set the max response size to 100 bytes
-	let server = HttpServerBuilder::default().max_response_body_size(100).build(addr).unwrap();
+	let server = HttpServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(101))).unwrap();
 	let addr = server.local_addr().unwrap();
