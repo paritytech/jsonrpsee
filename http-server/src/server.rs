@@ -57,8 +57,6 @@ pub struct Builder<M = ()> {
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
-	/// Custom TCP listener to use.
-	tcp_listener: Option<StdTcpListener>,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
@@ -71,7 +69,6 @@ impl Default for Builder {
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			resources: Resources::default(),
 			access_control: AccessControl::default(),
-			tcp_listener: None,
 			tokio_runtime: None,
 			middleware: (),
 		}
@@ -117,7 +114,6 @@ impl<M> Builder<M> {
 			max_response_body_size: self.max_response_body_size,
 			resources: self.resources,
 			access_control: self.access_control,
-			tcp_listener: self.tcp_listener,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
 		}
@@ -160,8 +156,12 @@ impl<M> Builder<M> {
 		self
 	}
 
-	/// Finalizes the configuration of the server with customized TCP settings on socket.
-	/// Note, that [`hyper`] does some configurations internally such that we configure `tcp_nodelay == true` ourselves.
+	/// Finalizes the configuration of the server with customized TCP settings on the socket.
+	///
+	/// Note, that [`hyper`] does some configurations on the socket
+	/// such as `sleep_on_errors == true`, `non_blocking == true` and `tcp_nondelay == false`.
+	///
+	/// See [`hyper::Server::from_tcp`] for further information.
 	///
 	/// ```rust
 	/// use jsonrpsee_http_server::HttpServerBuilder;
@@ -204,6 +204,11 @@ impl<M> Builder<M> {
 
 	/// Finalizes the configuration of the server.
 	///
+	/// Note, that [`hyper`] does some configurations on the socket
+	/// such as `sleep_on_errors == true`, `non_blocking == true` and `tcp_nodelay == false`.
+	///
+	/// See [`hyper::Server::from_tcp`] for further information.
+	///
 	/// ```rust
 	/// #[tokio::main]
 	/// async fn main() {
@@ -218,13 +223,7 @@ impl<M> Builder<M> {
 	/// }
 	/// ```
 	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
-		let listener = match self.tcp_listener {
-			Some(listener) => listener,
-			None => {
-				let listener = TcpListener::bind(addrs).await?;
-				listener.into_std()?
-			}
-		};
+		let listener = TcpListener::bind(addrs).await?.into_std()?;
 
 		let local_addr = listener.local_addr().ok();
 		let listener = hyper::Server::from_tcp(listener)?.tcp_nodelay(true);
