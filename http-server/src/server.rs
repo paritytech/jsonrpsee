@@ -26,7 +26,7 @@
 
 use std::cmp;
 use std::future::Future;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -48,7 +48,6 @@ use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::ErrorCode;
 use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
-use socket2::{Domain, Socket, Type};
 use tokio::net::{TcpListener, ToSocketAddrs};
 
 /// Builder to create JSON-RPC HTTP server.
@@ -58,7 +57,8 @@ pub struct Builder<M = ()> {
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
-	keep_alive: bool,
+	/// Custom TCP listener to use.
+	tcp_listener: Option<StdTcpListener>,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
@@ -71,7 +71,7 @@ impl Default for Builder {
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			resources: Resources::default(),
 			access_control: AccessControl::default(),
-			keep_alive: true,
+			tcp_listener: None,
 			tokio_runtime: None,
 			middleware: (),
 		}
@@ -117,7 +117,7 @@ impl<M> Builder<M> {
 			max_response_body_size: self.max_response_body_size,
 			resources: self.resources,
 			access_control: self.access_control,
-			keep_alive: self.keep_alive,
+			tcp_listener: self.tcp_listener,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
 		}
@@ -141,14 +141,6 @@ impl<M> Builder<M> {
 		self
 	}
 
-	/// Enables or disables HTTP keep-alive.
-	///
-	/// Default is true.
-	pub fn keep_alive(mut self, keep_alive: bool) -> Self {
-		self.keep_alive = keep_alive;
-		self
-	}
-
 	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
 	/// registered resources on this server instance would exceed 8.
 	///
@@ -168,6 +160,48 @@ impl<M> Builder<M> {
 		self
 	}
 
+	/// Finalizes the configuration of the server with customized TCP settings on socket.
+	/// Note, that [`hyper`] does some configurations internally such that we configure `tcp_nodelay == true` ourselves.
+	///
+	/// ```rust
+	/// use jsonrpsee_http_server::HttpServerBuilder;
+	/// use socket2::{Domain, Socket, Type};
+	///
+	/// #[tokio::main]
+	/// async fn main() {
+	///   let addr = "127.0.0.1:0".parse().unwrap();
+	///   let domain = Domain::for_address(addr);
+	///   let socket = Socket::new(domain, Type::STREAM, None).unwrap();
+	///   socket.set_nodelay(true).unwrap();
+	///   socket.set_reuse_address(true).unwrap();
+	///   socket.set_nonblocking(true).unwrap();
+	///   socket.set_keepalive(true).unwrap();
+	///
+	///   let address = addr.into();
+	///   socket.bind(&address).unwrap();
+	///
+	///   socket.listen(4096).unwrap();
+	///
+	///   let server = HttpServerBuilder::new().build_from_tcp(socket).await.unwrap();
+	/// }
+	/// ```
+	pub async fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<M>, Error> {
+		let listener = listener.into();
+		let local_addr = listener.local_addr().ok();
+		let listener = hyper::Server::from_tcp(listener)?.tcp_nodelay(true);
+
+		Ok(Server {
+			listener,
+			local_addr,
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
+			middleware: self.middleware,
+		})
+	}
+
 	/// Finalizes the configuration of the server.
 	///
 	/// ```rust
@@ -179,16 +213,21 @@ impl<M> Builder<M> {
 	///       occupied_addr,
 	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(occupied_addr).is_err());
-	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).is_ok());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(occupied_addr).await.is_err());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).await.is_ok());
 	/// }
 	/// ```
 	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
-		let listener = TcpListener::bind(addrs).await?;
+		let listener = match self.tcp_listener {
+			Some(listener) => listener,
+			None => {
+				let listener = TcpListener::bind(addrs).await?;
+				listener.into_std()?
+			}
+		};
 
 		let local_addr = listener.local_addr().ok();
-		let std_listener = listener.into_std()?;
-		let listener = hyper::Server::from_tcp(std_listener)?.tcp_nodelay(true);
+		let listener = hyper::Server::from_tcp(listener)?.tcp_nodelay(true);
 
 		Ok(Server {
 			listener,
