@@ -1,3 +1,6 @@
+use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+
 pub(crate) const SYNC_FAST_CALL: &str = "fast_call";
 pub(crate) const ASYNC_FAST_CALL: &str = "fast_async";
 pub(crate) const SYNC_MEM_CALL: &str = "memory_intense";
@@ -66,7 +69,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 		tokio::time::sleep(std::time::Duration::from_millis(1)).await;
 		Ok(Value::String("slow call async".to_string()))
 	});
-	
+
 	io.add_subscription(
 		SUB_METHOD_NAME,
 		(SUB_METHOD_NAME, move |_params: Params, _, subscriber: Subscriber| {
@@ -104,7 +107,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 /// Run jsonrpsee HTTP server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
 pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::http_server::HttpServerHandle) {
-	use jsonrpsee::http_server::{HttpServerBuilder};
+	use jsonrpsee::http_server::HttpServerBuilder;
 
 	let server = HttpServerBuilder::default()
 		.max_request_body_size(u32::MAX)
@@ -114,7 +117,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 		.unwrap();
 
 	let module = gen_rpc_module();
-	
+
 	let addr = server.local_addr().unwrap();
 	let handle = server.start(module).unwrap();
 	(format!("http://{}", addr), handle)
@@ -123,7 +126,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 /// Run jsonrpsee WebSocket server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
 pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws_server::WsServerHandle) {
-	use jsonrpsee::ws_server::{WsServerBuilder};
+	use jsonrpsee::ws_server::WsServerBuilder;
 
 	let server = WsServerBuilder::default()
 		.max_request_body_size(u32::MAX)
@@ -149,31 +152,47 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws
 	(addr, handle)
 }
 
-
 #[cfg(not(feature = "jsonrpc-crate"))]
 fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	let mut module = jsonrpsee::RpcModule::new(());
 
 	module.register_method(SYNC_FAST_CALL, |_, _| Ok("lo")).unwrap();
 	module.register_async_method(ASYNC_FAST_CALL, |_, _| async { Ok("lo") }).unwrap();
-	
-	module.register_method(SYNC_MEM_CALL, |_, _| {
-		Ok("A".repeat(15 * 1024 * 1024))
-	}).unwrap();
 
-	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move {
-		Ok("A".repeat(15 * 1024 * 1024))
-	}).unwrap();
+	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(15 * 1024 * 1024))).unwrap();
 
-	module.register_method(SYNC_SLOW_CALL, |_, _| {
-		std::thread::sleep(std::time::Duration::from_millis(1));
-		Ok("slow call")
-	}).unwrap();
-
-	module.register_async_method(ASYNC_SLOW_CALL, |_, _| async move {
-		tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-		Ok("slow call async")
-	}).unwrap();
+	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(15 * 1024 * 1024)) }).unwrap();
 
 	module
+		.register_method(SYNC_SLOW_CALL, |_, _| {
+			std::thread::sleep(std::time::Duration::from_millis(1));
+			Ok("slow call")
+		})
+		.unwrap();
+
+	module
+		.register_async_method(ASYNC_SLOW_CALL, |_, _| async move {
+			tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+			Ok("slow call async")
+		})
+		.unwrap();
+
+	module
+}
+
+pub(crate) fn http_client(url: &str) -> HttpClient {
+	HttpClientBuilder::default()
+		.max_request_body_size(u32::MAX)
+		.max_concurrent_requests(1024 * 1024)
+		.build(url)
+		.unwrap()
+}
+
+pub(crate) async fn ws_client(url: &str) -> WsClient {
+	WsClientBuilder::default()
+		.max_request_body_size(u32::MAX)
+		.max_concurrent_requests(1024 * 1024)
+		.build(url)
+		.await
+		.unwrap()
 }

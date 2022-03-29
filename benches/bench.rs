@@ -3,11 +3,9 @@ use std::sync::Arc;
 use criterion::*;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
-use helpers::{SUB_METHOD_NAME, UNSUB_METHOD_NAME};
+use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
-use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::types::{Id, ParamsSer, RequestSer};
-use jsonrpsee::ws_client::WsClientBuilder;
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -21,12 +19,12 @@ criterion_group!(
 criterion_group!(
 	name = sync_benches;
 	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
-	targets = SyncBencher::http_requests, SyncBencher::batched_http_requests, SyncBencher::websocket_requests, SyncBencher::batched_ws_requests
+	targets = SyncBencher::http_benches, SyncBencher::websocket_benches
 );
 criterion_group!(
 	name = async_benches;
 	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
-	targets = AsyncBencher::http_requests, AsyncBencher::batched_http_requests, AsyncBencher::websocket_requests, AsyncBencher::batched_ws_requests
+	targets = AsyncBencher::http_benches, AsyncBencher::websocket_benches
 );
 criterion_group!(
 	name = subscriptions;
@@ -42,10 +40,10 @@ enum RequestType {
 }
 
 impl RequestType {
-	fn methods(self) -> Vec<&'static str> {
+	fn methods(self) -> [&'static str; 3] {
 		match self {
-			RequestType::Sync => crate::helpers::SYNC_METHODS.to_vec(),
-			RequestType::Async => crate::helpers::ASYNC_METHODS.to_vec(),
+			RequestType::Sync => crate::helpers::SYNC_METHODS,
+			RequestType::Async => crate::helpers::ASYNC_METHODS,
 		}
 	}
 
@@ -84,42 +82,29 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 trait RequestBencher {
 	const REQUEST_TYPE: RequestType;
 
-	fn http_requests(crit: &mut Criterion) {
+	fn http_benches(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
 		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
-		let client = Arc::new(HttpClientBuilder::default().max_request_body_size(u32::MAX).max_concurrent_requests(1024 * 1024).build(&url).unwrap());
+		let client = Arc::new(http_client(&url));
 		round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		http_concurrent_conn_calls(&rt, crit, &url, "http_concurrent_conn_calls", Self::REQUEST_TYPE);
-	}
-
-	fn batched_http_requests(crit: &mut Criterion) {
-		let rt = TokioRuntime::new().unwrap();
-		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
-		let client = Arc::new(HttpClientBuilder::default().max_request_body_size(u32::MAX).max_concurrent_requests(1024 * 1024).build(&url).unwrap());
 		batch_round_trip(&rt, crit, client, "http_batch_requests", Self::REQUEST_TYPE);
 	}
 
-	fn websocket_requests(crit: &mut Criterion) {
+	fn websocket_benches(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
 		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
-		let client =
-			Arc::new(rt.block_on(WsClientBuilder::default().max_request_body_size(u32::MAX).max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
+		let client = Arc::new(rt.block_on(ws_client(&url)));
 		round_trip(&rt, crit, client.clone(), "ws_round_trip", Self::REQUEST_TYPE);
 		ws_concurrent_conn_calls(&rt, crit, &url, "ws_concurrent_conn_calls", Self::REQUEST_TYPE);
 		ws_concurrent_conn_subs(&rt, crit, &url, "ws_concurrent_conn_subs", Self::REQUEST_TYPE);
-	}
-
-	fn batched_ws_requests(crit: &mut Criterion) {
-		let rt = TokioRuntime::new().unwrap();
-		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
-		let client = Arc::new(rt.block_on(WsClientBuilder::default().max_request_body_size(u32::MAX).max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
 		batch_round_trip(&rt, crit, client, "ws_batch_requests", Self::REQUEST_TYPE);
 	}
 
 	fn subscriptions(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
 		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
-		let client = Arc::new(rt.block_on(WsClientBuilder::default().max_request_body_size(u32::MAX).max_concurrent_requests(1024 * 1024).build(&url)).unwrap());
+		let client = Arc::new(rt.block_on(ws_client(&url)));
 		sub_round_trip(&rt, crit, client, "subscriptions");
 	}
 }
@@ -143,7 +128,7 @@ fn round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl ClientT>
 				black_box(client.request::<String>(method, None).await.unwrap());
 			})
 		});
-	}	
+	}
 }
 
 fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl SubscriptionClientT>, name: &str) {
@@ -198,7 +183,6 @@ fn batch_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-
 	for method in request.methods() {
 		let bench_name = format!("{}/{}", name, method);
 		let mut group = crit.benchmark_group(request.group_name(&bench_name));
@@ -214,9 +198,8 @@ fn batch_round_trip(
 }
 
 fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
-	let method = request.methods()[0];
-	let bench_name = format!("{}/{}", name, method);
-	let mut group = crit.benchmark_group(request.group_name(&bench_name));
+	let methods = request.methods();
+	let mut group = crit.benchmark_group(request.group_name(name));
 	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
@@ -227,7 +210,7 @@ fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, 
 					tokio::task::block_in_place(|| {
 						tokio::runtime::Handle::current().block_on(async {
 							for _ in 0..conns {
-								clients.push(WsClientBuilder::default().max_request_body_size(u32::MAX).build(url).await.unwrap());
+								clients.push(ws_client(url).await);
 							}
 						})
 					});
@@ -240,7 +223,7 @@ fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, 
 							let futs = FuturesUnordered::new();
 
 							for _ in 0..10 {
-								futs.push(client.request::<String>(method, None));
+								futs.push(client.request::<String>(methods[0], None));
 							}
 
 							join_all(futs).await;
@@ -254,6 +237,7 @@ fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, 
 	group.finish();
 }
 
+// As this is so slow only fast calls are executed in this benchmark.
 fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
 	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
@@ -266,7 +250,7 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 					tokio::task::block_in_place(|| {
 						tokio::runtime::Handle::current().block_on(async {
 							for _ in 0..conns {
-								clients.push(WsClientBuilder::default().max_request_body_size(u32::MAX).build(url).await.unwrap());
+								clients.push(ws_client(url).await);
 							}
 						})
 					});
@@ -301,6 +285,7 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 	group.finish();
 }
 
+// As this is so slow only fast calls are executed in this benchmark.
 fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let method = request.methods()[0];
 	let bench_name = format!("{}/{}", name, method);
@@ -308,7 +293,7 @@ fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str
 	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
-				|| (0..conns).map(|_| HttpClientBuilder::default().max_request_body_size(u32::MAX).build(url).unwrap()),
+				|| (0..conns).map(|_| http_client(url)),
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
