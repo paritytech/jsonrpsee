@@ -56,6 +56,7 @@ pub struct Builder<M = ()> {
 	access_control: AccessControl,
 	resources: Resources,
 	max_request_body_size: u32,
+	max_response_body_size: u32,
 	keep_alive: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
@@ -66,6 +67,7 @@ impl Default for Builder {
 	fn default() -> Self {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_response_body_size: TEN_MB_SIZE_BYTES,
 			resources: Resources::default(),
 			access_control: AccessControl::default(),
 			keep_alive: true,
@@ -111,6 +113,7 @@ impl<M> Builder<M> {
 	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
 		Builder {
 			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
 			resources: self.resources,
 			access_control: self.access_control,
 			keep_alive: self.keep_alive,
@@ -122,6 +125,12 @@ impl<M> Builder<M> {
 	/// Sets the maximum size of a request body in bytes (default is 10 MiB).
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.max_request_body_size = size;
+		self
+	}
+
+	/// Sets the maximum size of a response body in bytes (default is 10 MiB).
+	pub fn max_response_body_size(mut self, size: u32) -> Self {
+		self.max_response_body_size = size;
 		self
 	}
 
@@ -190,6 +199,7 @@ impl<M> Builder<M> {
 				local_addr,
 				access_control: self.access_control,
 				max_request_body_size: self.max_request_body_size,
+				max_response_body_size: self.max_response_body_size,
 				resources: self.resources,
 				tokio_runtime: self.tokio_runtime,
 				middleware: self.middleware,
@@ -210,14 +220,10 @@ impl<M> Builder<M> {
 		socket.set_reuse_address(true)?;
 		socket.set_nonblocking(true)?;
 		socket.set_keepalive(self.keep_alive)?;
-
-		#[cfg(all(unix, not(any(target_os = "solaris", target_os = "illumos"))))]
-		socket.set_reuse_port(true)?;
-
 		let address = addr.into();
 		socket.bind(&address)?;
 
-		socket.listen(128)?;
+		socket.listen(1024)?;
 		let listener: TcpListener = socket.into();
 		let local_addr = listener.local_addr().ok();
 		let listener = hyper::Server::from_tcp(listener)?;
@@ -265,6 +271,8 @@ pub struct Server<M = ()> {
 	local_addr: Option<SocketAddr>,
 	/// Max request body size.
 	max_request_body_size: u32,
+	/// Max response body size.
+	max_response_body_size: u32,
 	/// Access control
 	access_control: AccessControl,
 	/// Tracker for currently used resources on the server
@@ -283,6 +291,7 @@ impl<M: Middleware> Server<M> {
 	/// Start the server.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
+		let max_response_body_size = self.max_response_body_size;
 		let access_control = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
@@ -345,6 +354,7 @@ impl<M: Middleware> Server<M> {
 									methods,
 									resources,
 									max_request_body_size,
+									max_response_body_size,
 								)
 								.await?;
 
@@ -433,6 +443,7 @@ async fn process_validated_request(
 	methods: Methods,
 	resources: Resources,
 	max_request_body_size: u32,
+	max_response_body_size: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (parts, body) = request.into_parts();
 
@@ -450,7 +461,7 @@ async fn process_validated_request(
 
 	// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
 	type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
