@@ -56,14 +56,11 @@ impl From<anyhow::Error> for Error {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Error that occurs when a call failed.
-	#[error("Server call failed: {0}")]
+	#[error("JSON-RPC call failed: {0}")]
 	Call(#[from] CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] anyhow::Error),
-	/// JSON-RPC request error.
-	#[error("JSON-RPC request error: {0:?}")]
-	Request(String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	Internal(#[from] futures_channel::mpsc::SendError),

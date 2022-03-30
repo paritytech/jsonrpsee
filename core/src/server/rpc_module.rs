@@ -41,7 +41,8 @@ use futures_util::pin_mut;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt};
 use jsonrpsee_types::error::{ErrorCode, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
-	Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload, SubscriptionResponse,
+	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
+	SubscriptionResponse,
 };
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -331,10 +332,16 @@ impl Methods {
 		let req = Request::new(method.into(), Some(&params), Id::Number(0));
 		tracing::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let (resp, _, _) = self.inner_call(req).await;
+
 		if let Ok(res) = serde_json::from_str::<Response<T>>(&resp) {
 			return Ok(res.result);
 		}
-		Err(Error::Request(resp))
+
+		if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp) {
+			return Err(Error::Call(err.error.to_call_error()));
+		}
+
+		unreachable!("Invalid JSON-RPC response is not possible using jsonrpsee; this is bug please file an issue");
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
