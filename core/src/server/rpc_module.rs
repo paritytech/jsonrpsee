@@ -764,7 +764,7 @@ impl SubscriptionSink {
 	/// when items gets produced by the stream.
 	///
 	/// Returns `Ok(())` if the stream or connection was terminated.
-	/// Returns `Err(_)` if the underlying stream return an error or if an item from the stream could not be serialized.
+	/// Returns `Err(_)` if the underlying stream returns an error or if an item from the stream could not be serialized.
 	///
 	/// # Examples
 	///
