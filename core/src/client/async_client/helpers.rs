@@ -212,12 +212,12 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back = manager.complete_pending_call(id).expect("State checked above; qed");
-			let _ = send_back.map(|s| s.send(Err(Error::Call(err.error.to_owned()))));
+			let _ = send_back.map(|s| s.send(Err(Error::Call(err.error.to_call_error()))));
 			Ok(())
 		}
 		RequestStatus::PendingSubscription => {
 			let (_, send_back, _) = manager.complete_pending_subscription(id).expect("State checked above; qed");
-			let _ = send_back.send(Err(Error::Call(err.error.to_owned())));
+			let _ = send_back.send(Err(Error::Call(err.error.to_call_error())));
 			Ok(())
 		}
 		_ => Err(Error::InvalidRequestId),

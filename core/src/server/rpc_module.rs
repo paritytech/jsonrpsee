@@ -338,7 +338,7 @@ impl Methods {
 		}
 
 		if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp) {
-			return Err(Error::Call(err.error.to_owned()));
+			return Err(Error::Call(err.error.to_call_error()));
 		}
 
 		unreachable!("Invalid JSON-RPC response is not possible using jsonrpsee; this is bug please file an issue");

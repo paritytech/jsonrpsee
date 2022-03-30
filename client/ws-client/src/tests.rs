@@ -109,34 +109,34 @@ async fn response_with_wrong_id() {
 async fn response_method_not_found() {
 	let err =
 		run_request_with_response(method_not_found(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorObject::from(ErrorCode::MethodNotFound).to_owned());
+	assert_error_response(err, ErrorObject::from(ErrorCode::MethodNotFound).to_call_error());
 }
 
 #[tokio::test]
 async fn parse_error_works() {
 	let err = run_request_with_response(parse_error(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorObject::from(ErrorCode::ParseError).to_owned());
+	assert_error_response(err, ErrorObject::from(ErrorCode::ParseError).to_call_error());
 }
 
 #[tokio::test]
 async fn invalid_request_works() {
 	let err =
 		run_request_with_response(invalid_request(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorObject::from(ErrorCode::InvalidRequest).to_owned());
+	assert_error_response(err, ErrorObject::from(ErrorCode::InvalidRequest).to_call_error());
 }
 
 #[tokio::test]
 async fn invalid_params_works() {
 	let err =
 		run_request_with_response(invalid_params(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorObject::from(ErrorCode::InvalidParams).to_owned());
+	assert_error_response(err, ErrorObject::from(ErrorCode::InvalidParams).to_call_error());
 }
 
 #[tokio::test]
 async fn internal_error_works() {
 	let err =
 		run_request_with_response(internal_error(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorObject::from(ErrorCode::InternalError).to_owned());
+	assert_error_response(err, ErrorObject::from(ErrorCode::InternalError).to_call_error());
 }
 
 #[tokio::test]

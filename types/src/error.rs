@@ -80,8 +80,8 @@ impl<'a> ErrorObject<'a> {
 		Self { code, message: code.message().into(), data }
 	}
 
-	/// Create an owned ErrorObject.
-	pub fn to_owned(self) -> CallError {
+	/// Create an owned ErrorObject via [`CallError`]
+	pub fn to_call_error(self) -> CallError {
 		CallError::Custom {
 			code: self.code.code(),
 			data: self.data.map(|d| d.to_owned()),
