@@ -775,7 +775,7 @@ impl SubscriptionSink {
 	///
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
-	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Ok(3), Err(Box::new(anyhow!("error on the stream"))]);
+	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Ok(3), Err("error on the stream")]);
 	///     tokio::spawn(sink.pipe_from_stream(stream));
 	///     Ok(())
 	/// });
@@ -784,7 +784,7 @@ impl SubscriptionSink {
 	where
 		S: Stream<Item = Result<T, E>> + Unpin,
 		T: Serialize,
-		E: std::error::Error,
+		E: std::fmt::Display,
 	{
 		if let Some(close_notify) = self.close_notify.clone() {
 			let mut stream_item = stream.next();
@@ -808,7 +808,7 @@ impl SubscriptionSink {
 						closed_fut = next_closed_fut;
 					}
 					Either::Left((Some(Err(e)), _)) => {
-						break Err(Error::Custom(e.to_string()));
+						break Err(Error::SubscriptionClosed(SubscriptionClosedReason::Server(e.to_string()).into()));
 					}
 					// Stream terminated.
 					Either::Left((None, _)) => break Ok(()),
