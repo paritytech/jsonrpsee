@@ -223,7 +223,7 @@ impl<M> Builder<M> {
 		let address = addr.into();
 		socket.bind(&address)?;
 
-		socket.listen(128)?;
+		socket.listen(1024)?;
 		let listener: TcpListener = socket.into();
 		let local_addr = listener.local_addr().ok();
 		let listener = hyper::Server::from_tcp(listener)?;
