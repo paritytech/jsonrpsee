@@ -424,6 +424,44 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 }
 
 #[tokio::test]
+async fn ws_server_cancels_sub_stream_after_err() {
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let err: &'static str = "error on the stream";
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription(
+			"subscribe_with_err_on_stream",
+			"n",
+			"unsubscribe_with_err_on_stream",
+			move |_, sink, _| {
+				// create stream that produce an error which will cancel the subscription.
+				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
+				tokio::spawn(async move {
+					let _ = sink.pipe_from_stream(stream).await;
+				});
+				Ok(())
+			},
+		)
+		.unwrap();
+
+	server.start(module).unwrap();
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let mut sub: Subscription<usize> =
+		client.subscribe("subscribe_with_err_on_stream", None, "unsubscribe_with_err_on_stream").await.unwrap();
+
+	assert_eq!(sub.next().await.unwrap().unwrap(), 1);
+	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server(err.to_string()));
+	// The server closed down the subscription with the underlying error from the stream.
+	assert!(matches!(sub.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
+}
+
+#[tokio::test]
 async fn ws_server_subscribe_with_stream() {
 	use futures::StreamExt;
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};

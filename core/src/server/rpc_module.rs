@@ -764,7 +764,7 @@ impl SubscriptionSink {
 	/// when items gets produced by the stream.
 	///
 	/// Returns `Ok(())` if the stream or connection was terminated.
-	/// Returns `Err(_)` if the underlying stream returns an error or if an item from the stream could not be serialized.
+	/// Returns `Err(_)` immediately if the underlying stream returns an error or if an item from the stream could not be serialized.
 	///
 	/// # Examples
 	///
@@ -775,7 +775,9 @@ impl SubscriptionSink {
 	///
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
-	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Ok(3), Err("error on the stream")]);
+	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
+	///     // This will return send `[Ok(1_u32), Ok(2_u32)]` to the subscriber
+	///     // because after the `Err(_)` the stream is terminated.
 	///     tokio::spawn(sink.pipe_from_stream(stream));
 	///     Ok(())
 	/// });
@@ -808,7 +810,9 @@ impl SubscriptionSink {
 						closed_fut = next_closed_fut;
 					}
 					Either::Left((Some(Err(e)), _)) => {
-						break Err(Error::SubscriptionClosed(SubscriptionClosedReason::Server(e.to_string()).into()));
+						let close_reason = SubscriptionClosedReason::Server(e.to_string()).into();
+						self.close(&close_reason);
+						break Err(Error::SubscriptionClosed(close_reason));
 					}
 					// Stream terminated.
 					Either::Left((None, _)) => break Ok(()),

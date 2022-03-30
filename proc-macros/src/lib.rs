@@ -288,7 +288,7 @@ pub(crate) mod visitor;
 ///         // as subscription responses.
 ///         fn sub_override_notif_method(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
 ///             tokio::spawn(async move {
-///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
+///                 let stream = futures_util::stream::iter([Ok::<_, &str>("one"), Ok("two"), Ok("three")]);
 ///                 sink.pipe_from_stream(stream).await;
 ///             });
 ///
