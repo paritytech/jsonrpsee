@@ -399,7 +399,7 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 	module
 		.register_subscription("subscribe_never_produce", "n", "unsubscribe_never_produce", |_, sink, mut tx| {
 			// create stream that doesn't produce items.
-			let stream = futures::stream::empty::<usize>();
+			let stream = futures::stream::empty::<usize>().map(|i| Ok::<_, Error>(i));
 			tokio::spawn(async move {
 				sink.pipe_from_stream(stream).await.unwrap();
 				let send_back = Arc::make_mut(&mut tx);
@@ -437,7 +437,8 @@ async fn ws_server_subscribe_with_stream() {
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
-				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
+				let stream =
+					IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| Ok::<_, Error>(c));
 
 				sink.pipe_from_stream(stream).await.unwrap();
 			});

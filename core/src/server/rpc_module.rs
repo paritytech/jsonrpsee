@@ -764,25 +764,27 @@ impl SubscriptionSink {
 	/// when items gets produced by the stream.
 	///
 	/// Returns `Ok(())` if the stream or connection was terminated.
-	/// Returns `Err(_)` if one of the items couldn't be serialized.
+	/// Returns `Err(_)` if the underlying stream return an error or if an item from the stream could not be serialized.
 	///
 	/// # Examples
 	///
 	/// ```no_run
 	///
 	/// use jsonrpsee_core::server::rpc_module::RpcModule;
+	/// use anyhow::anyhow;
 	///
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
-	///     let stream = futures_util::stream::iter(vec![1_u32, 2, 3]);
+	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Ok(3), Err(Box::new(anyhow!("error on the stream"))]);
 	///     tokio::spawn(sink.pipe_from_stream(stream));
 	///     Ok(())
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T>(mut self, mut stream: S) -> Result<(), Error>
+	pub async fn pipe_from_stream<S, T, E>(mut self, mut stream: S) -> Result<(), Error>
 	where
-		S: Stream<Item = T> + Unpin,
+		S: Stream<Item = Result<T, E>> + Unpin,
 		T: Serialize,
+		E: std::error::Error,
 	{
 		if let Some(close_notify) = self.close_notify.clone() {
 			let mut stream_item = stream.next();
@@ -791,7 +793,7 @@ impl SubscriptionSink {
 			loop {
 				match futures_util::future::select(stream_item, closed_fut).await {
 					// The app sent us a value to send back to the subscribers
-					Either::Left((Some(result), next_closed_fut)) => {
+					Either::Left((Some(Ok(result)), next_closed_fut)) => {
 						match self.send(&result) {
 							Ok(_) => (),
 							Err(Error::SubscriptionClosed(close_reason)) => {
@@ -804,6 +806,9 @@ impl SubscriptionSink {
 						};
 						stream_item = stream.next();
 						closed_fut = next_closed_fut;
+					}
+					Either::Left((Some(Err(e)), _)) => {
+						break Err(Error::Custom(e.to_string()));
 					}
 					// Stream terminated.
 					Either::Left((None, _)) => break Ok(()),
