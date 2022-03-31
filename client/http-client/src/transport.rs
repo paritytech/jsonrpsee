@@ -97,7 +97,7 @@ impl HttpTransportClient {
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
-		tracing::debug!("send: {}", body);
+		tracing::trace!(tx = ?&body);
 
 		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
@@ -122,12 +122,16 @@ impl HttpTransportClient {
 		let response = self.inner_send(body).await?;
 		let (parts, body) = response.into_parts();
 		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_request_body_size).await?;
+
+		tracing::trace!(rx = ?serde_json::from_slice::<serde_json::Value>(&body));
+
 		Ok(body)
 	}
 
 	/// Send serialized message without reading the HTTP message body.
 	pub(crate) async fn send(&self, body: String) -> Result<(), Error> {
 		let _ = self.inner_send(body).await?;
+
 		Ok(())
 	}
 }

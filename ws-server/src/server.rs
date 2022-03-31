@@ -39,7 +39,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
-use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
+use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink, RpcLogger, RpcLoggerKind};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
 use jsonrpsee_core::traits::IdProvider;
@@ -51,6 +51,7 @@ use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::Notify;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use tracing_futures::Instrument;
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
@@ -348,7 +349,7 @@ async fn background_task(
 			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
-						tracing::debug!("WS transport error: remote peer terminated the connection: {}", conn_id);
+						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
 						sink.close();
 						break Ok(());
 					}
@@ -372,15 +373,15 @@ async fn background_task(
 			};
 		};
 
-		tracing::debug!("recv {} bytes", data.len());
-
 		let request_start = middleware.on_request();
 
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					tracing::debug!("recv method call={}", req.method);
-					tracing::trace!("recv: req={:?}", req);
+					let log = RpcLogger::new(RpcLoggerKind::MethodCall(req.method.to_string()));
+					let _enter = log.span().enter();
+
+					RpcLogger::write_log_rx(&req, data.len());
 
 					let id = req.id.clone();
 					let params = Params::new(req.params.map(|params| params.get()));
@@ -423,7 +424,7 @@ async fn background_task(
 										middleware.on_response(request_start);
 									};
 
-									method_executors.add(fut.boxed());
+									method_executors.add(fut.in_current_span().boxed());
 								}
 								Err(err) => {
 									tracing::error!(
@@ -480,8 +481,10 @@ async fn background_task(
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
 					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size);
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
-						tracing::debug!("recv batch len={}", batch.len());
-						tracing::trace!("recv: batch={:?}", batch);
+						let log = RpcLogger::new(RpcLoggerKind::Batch);
+						let _enter = log.span().enter();
+						RpcLogger::write_log_rx(&batch, batch.len());
+
 						if !batch.is_empty() {
 							join_all(batch.into_iter().filter_map(move |req| {
 								let id = req.id.clone();
@@ -876,8 +879,6 @@ async fn send_ws_message(
 	sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>,
 	response: String,
 ) -> Result<(), Error> {
-	tracing::debug!("send {} bytes", response.len());
-	tracing::trace!("send: {}", response);
 	sender.send_text_owned(response).await?;
 	sender.flush().await.map_err(Into::into)
 }

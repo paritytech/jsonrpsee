@@ -470,7 +470,7 @@ async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
-					tracing::debug!("[backend]: recv method_call {:?}", single);
+					tracing::trace!("[backend]: recv method_call {:?}", single);
 					match process_single_response(&mut manager, single, max_notifs_per_subscription) {
 						Ok(Some(unsub)) => {
 							stop_subscription(&mut sender, &mut manager, unsub).await;
@@ -484,19 +484,19 @@ async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
-					tracing::debug!("[backend]: recv subscription {:?}", response);
+					tracing::trace!("[backend]: recv subscription {:?}", response);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
 				}
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
-					tracing::debug!("[backend]: recv notification {:?}", notif);
+					tracing::trace!("[backend]: recv notification {:?}", notif);
 					let _ = process_notification(&mut manager, notif);
 				}
 				// Batch response.
 				else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
-					tracing::debug!("[backend]: recv batch {:?}", batch);
+					tracing::trace!("[backend]: recv batch {:?}", batch);
 					if let Err(e) = process_batch_response(&mut manager, batch) {
 						let _ = front_error.send(e);
 						break;
@@ -504,7 +504,7 @@ async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
 				}
 				// Error response
 				else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
-					tracing::debug!("[backend]: recv error response {:?}", err);
+					tracing::trace!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);
 						break;

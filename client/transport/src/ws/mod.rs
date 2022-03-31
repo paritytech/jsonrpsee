@@ -189,7 +189,7 @@ impl TransportSenderT for Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	async fn send(&mut self, body: String) -> Result<(), WsError> {
-		tracing::debug!("send: {}", body);
+		tracing::trace!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
 		Ok(())
