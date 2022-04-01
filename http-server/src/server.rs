@@ -29,7 +29,6 @@ use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::Duration;
 
 use crate::response::{internal_error, malformed};
 use crate::{response, AccessControl};
@@ -203,9 +202,11 @@ impl<M> Builder<M> {
 	}
 
 	/// Finalizes the configuration of the server with customized TCP settings on the socket.
+	/// Note, that [`hyper`] might overwrite some of the TCP settings on socket
+	/// if you want full-control of socket settings use [`Builder::build_from_hyper`] instead.
 	///
 	/// ```rust
-	/// use jsonrpsee_http_server::{HttpServerBuilder, HyperTcpConfig};
+	/// use jsonrpsee_http_server::HttpServerBuilder;
 	/// use socket2::{Domain, Socket, Type};
 	/// use std::time::Duration;
 	///
@@ -274,24 +275,6 @@ impl<M> Builder<M> {
 			middleware: self.middleware,
 		})
 	}
-}
-
-/// [`hyper`] does some TCP settings on the socket by default, this type provides a way
-/// to configure it.
-///
-/// This type mimics configurations provided by [`hyper::server::conn::AddrIncoming`].
-#[derive(Debug, Copy, Clone)]
-pub struct HyperTcpConfig {
-	/// Set whether to sleep on accepts errors.
-	pub sleep_on_accept_errors: bool,
-	/// Set whether TCP keepalive messages are enabled on accepted connections.
-	///
-	/// If `None` is specified, keepalive is disabled, otherwise the duration
-	/// specified will be the time to remain idle before sending TCP keepalive
-	/// probes.
-	pub keepalive_timeout: Option<Duration>,
-	/// Set the value of `TCP_NODELAY` option for accepted connections.
-	pub no_delay: bool,
 }
 
 /// Handle used to run or stop the server.
