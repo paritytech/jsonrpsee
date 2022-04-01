@@ -178,9 +178,9 @@ impl<M> Builder<M> {
 	///
 	///   let listener = hyper::Server::from_tcp(socket.into())
 	///     .unwrap()
-	///		.tcp_sleep_on_accept_errors(true)
-	///		.tcp_keepalive(None)
-	///		.tcp_nodelay(true);
+	///     .tcp_sleep_on_accept_errors(true)
+	///     .tcp_keepalive(None)
+	///     .tcp_nodelay(true);
 	///
 	///   let server = HttpServerBuilder::new().build_from_hyper(listener, addr).unwrap();
 	/// }
