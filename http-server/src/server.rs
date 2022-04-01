@@ -244,7 +244,7 @@ impl<M> Builder<M> {
 /// [`hyper`] does some TCP settings on the socket by default, this type provides a way
 /// to configure it.
 ///
-/// This type mimics configurations provided by [`hyper::server::AddrIncoming`].
+/// This type mimics configurations provided by [`hyper::server::conn::AddrIncoming`].
 #[derive(Debug, Copy, Clone)]
 pub struct HyperTcpConfig {
 	/// Set whether to sleep on accepts errors.
