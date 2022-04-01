@@ -459,6 +459,7 @@ async fn ws_server_cancels_sub_stream_after_err() {
 	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server(err.to_string()));
 	// The server closed down the subscription with the underlying error from the stream.
 	assert!(matches!(sub.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
+	assert!(sub.next().await.is_none());
 }
 
 #[tokio::test]
