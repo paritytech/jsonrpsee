@@ -159,7 +159,7 @@ impl<M> Builder<M> {
 	/// Finalizes the configuration of the server with customized TCP settings on the socket and on hyper.
 	///
 	/// ```rust
-	/// use jsonrpsee_http_server::{HttpServerBuilder, HyperTcpConfig};
+	/// use jsonrpsee_http_server::HttpServerBuilder;
 	/// use socket2::{Domain, Socket, Type};
 	///
 	/// #[tokio::main]
@@ -202,7 +202,7 @@ impl<M> Builder<M> {
 	}
 
 	/// Finalizes the configuration of the server with customized TCP settings on the socket.
-	/// Note, that [`hyper`] might overwrite some of the TCP settings on socket
+	/// Note, that [`hyper`] might overwrite some of the TCP settings on the socket
 	/// if you want full-control of socket settings use [`Builder::build_from_hyper`] instead.
 	///
 	/// ```rust
