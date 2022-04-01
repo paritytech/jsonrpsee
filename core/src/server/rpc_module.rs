@@ -38,7 +38,7 @@ use crate::traits::{IdProvider, ToRpcParams};
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::Either;
 use futures_util::pin_mut;
-use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt};
+use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, TryStreamExt};
 use jsonrpsee_types::error::{ErrorCode, CALL_EXECUTION_FAILED_CODE};
 use jsonrpsee_types::{
 	Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload, SubscriptionResponse,
@@ -762,6 +762,7 @@ impl SubscriptionSink {
 
 	/// Consumes the `SubscriptionSink` and reads data from the `stream` and sends back data on the subscription
 	/// when items gets produced by the stream.
+	/// The underlying stream must produce `Result values, see [`futures_util::TryStream`] for further information.
 	///
 	/// Returns `Ok(())` if the stream or connection was terminated.
 	/// Returns `Err(_)` immediately if the underlying stream returns an error or if an item from the stream could not be serialized.
@@ -776,26 +777,26 @@ impl SubscriptionSink {
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
 	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
-	///     // This will return send `[Ok(1_u32), Ok(2_u32)]` to the subscriber
+	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
 	///     // because after the `Err(_)` the stream is terminated.
-	///     tokio::spawn(sink.pipe_from_stream(stream));
+	///     tokio::spawn(sink.pipe_from_try_stream(stream));
 	///     Ok(())
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T, E>(mut self, mut stream: S) -> Result<(), Error>
+	pub async fn pipe_from_try_stream<S, T, E>(mut self, mut stream: S) -> Result<(), Error>
 	where
-		S: Stream<Item = Result<T, E>> + Unpin,
+		S: TryStream<Ok = T, Error = E> + Unpin,
 		T: Serialize,
 		E: std::fmt::Display,
 	{
 		if let Some(close_notify) = self.close_notify.clone() {
-			let mut stream_item = stream.next();
+			let mut stream_item = stream.try_next();
 			let closed_fut = close_notify.notified();
 			pin_mut!(closed_fut);
 			loop {
 				match futures_util::future::select(stream_item, closed_fut).await {
 					// The app sent us a value to send back to the subscribers
-					Either::Left((Some(Ok(result)), next_closed_fut)) => {
+					Either::Left((Ok(Some(result)), next_closed_fut)) => {
 						match self.send(&result) {
 							Ok(_) => (),
 							Err(Error::SubscriptionClosed(close_reason)) => {
@@ -806,16 +807,16 @@ impl SubscriptionSink {
 								break Err(err);
 							}
 						};
-						stream_item = stream.next();
+						stream_item = stream.try_next();
 						closed_fut = next_closed_fut;
 					}
-					Either::Left((Some(Err(e)), _)) => {
+					Either::Left((Err(e), _)) => {
 						let close_reason = SubscriptionClosedReason::Server(e.to_string()).into();
 						self.close(&close_reason);
 						break Err(Error::SubscriptionClosed(close_reason));
 					}
 					// Stream terminated.
-					Either::Left((None, _)) => break Ok(()),
+					Either::Left((Ok(None), _)) => break Ok(()),
 					// The subscriber went away without telling us.
 					Either::Right(((), _)) => {
 						self.close(&SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset));
@@ -827,6 +828,33 @@ impl SubscriptionSink {
 			// The sink is closed.
 			Ok(())
 		}
+	}
+
+	/// Similar to [`SubscriptionSink::pipe_from_try_stream`] but it doesn't require the stream return `Result`.
+	///
+	/// Warning: it's possible to pass in a stream that returns `Result` if `Result: Serialize` is satisfied
+	/// but it won't cancel the stream when an error occurs. If you want the stream to be canceled when an
+	/// error occurs use [`SubscriptionSink::pipe_from_try_stream`] instead.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_core::server::rpc_module::RpcModule;
+	///
+	/// let mut m = RpcModule::new(());
+	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
+	///     let stream = futures_util::stream::iter(vec![1, 2, 3]);
+	///     tokio::spawn(sink.pipe_from_stream(stream));
+	///     Ok(())
+	/// });
+	/// ```
+	pub async fn pipe_from_stream<S, T>(self, stream: S) -> Result<(), Error>
+	where
+		S: Stream<Item = T> + Unpin,
+		T: Serialize,
+	{
+		self.pipe_from_try_stream::<_, _, Error>(stream.map(|item| Ok(item))).await
 	}
 
 	/// Returns whether this channel is closed without needing a context.

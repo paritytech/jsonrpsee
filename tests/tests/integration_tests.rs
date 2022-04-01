@@ -399,7 +399,7 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 	module
 		.register_subscription("subscribe_never_produce", "n", "unsubscribe_never_produce", |_, sink, mut tx| {
 			// create stream that doesn't produce items.
-			let stream = futures::stream::empty::<usize>().map(|i| Ok::<_, Error>(i));
+			let stream = futures::stream::empty::<usize>();
 			tokio::spawn(async move {
 				sink.pipe_from_stream(stream).await.unwrap();
 				let send_back = Arc::make_mut(&mut tx);
@@ -442,7 +442,7 @@ async fn ws_server_cancels_sub_stream_after_err() {
 				// create stream that produce an error which will cancel the subscription.
 				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
 				tokio::spawn(async move {
-					let _ = sink.pipe_from_stream(stream).await;
+					let _ = sink.pipe_from_try_stream(stream).await;
 				});
 				Ok(())
 			},
@@ -459,6 +459,7 @@ async fn ws_server_cancels_sub_stream_after_err() {
 	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server(err.to_string()));
 	// The server closed down the subscription with the underlying error from the stream.
 	assert!(matches!(sub.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
+	sub.next().await.unwrap();
 }
 
 #[tokio::test]
@@ -475,8 +476,7 @@ async fn ws_server_subscribe_with_stream() {
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
-				let stream =
-					IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| Ok::<_, Error>(c));
+				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
 				sink.pipe_from_stream(stream).await.unwrap();
 			});
