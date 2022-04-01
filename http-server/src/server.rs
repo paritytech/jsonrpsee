@@ -29,6 +29,7 @@ use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use crate::response::{internal_error, malformed};
 use crate::{response, AccessControl};
@@ -140,7 +141,7 @@ impl<M> Builder<M> {
 	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
 	/// registered resources on this server instance would exceed 8.
 	///
-	/// See the module documentation for [`resurce_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
+	/// See the module documentation for [`resource_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
 	/// for details.
 	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
 		self.resources.register(label, capacity, default)?;
@@ -158,14 +159,11 @@ impl<M> Builder<M> {
 
 	/// Finalizes the configuration of the server with customized TCP settings on the socket.
 	///
-	/// Note, that [`hyper`] does some configurations on the socket
-	/// such as `sleep_on_errors == true`, `non_blocking == true` and `tcp_nondelay == false`.
-	///
-	/// See [`hyper::Server::from_tcp`] for further information.
 	///
 	/// ```rust
-	/// use jsonrpsee_http_server::HttpServerBuilder;
+	/// use jsonrpsee_http_server::{HttpServerBuilder, HyperTcpConfig};
 	/// use socket2::{Domain, Socket, Type};
+	/// use std::time::Duration;
 	///
 	/// #[tokio::main]
 	/// async fn main() {
@@ -182,13 +180,20 @@ impl<M> Builder<M> {
 	///
 	///   socket.listen(4096).unwrap();
 	///
-	///   let server = HttpServerBuilder::new().build_from_tcp(socket).unwrap();
+	///   // hyper does some settings on the provided socket, ensure that nothing breaks the our settings.
+	///   let hyper_cfg = HyperTcpConfig { sleep_on_accept_errors: true, keepalive_timeout: Some(Duration::from_secs(1)), no_delay: true };
+	///
+	///   let server = HttpServerBuilder::new().build_from_tcp(socket, hyper_cfg).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<M>, Error> {
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>, cfg: HyperTcpConfig) -> Result<Server<M>, Error> {
 		let listener = listener.into();
 		let local_addr = listener.local_addr().ok();
-		let listener = hyper::Server::from_tcp(listener)?.tcp_nodelay(true);
+
+		let listener = hyper::Server::from_tcp(listener)?
+			.tcp_sleep_on_accept_errors(cfg.sleep_on_accept_errors)
+			.tcp_keepalive(cfg.keepalive_timeout)
+			.tcp_nodelay(cfg.no_delay);
 
 		Ok(Server {
 			listener,
@@ -203,11 +208,6 @@ impl<M> Builder<M> {
 	}
 
 	/// Finalizes the configuration of the server.
-	///
-	/// Note, that [`hyper`] does some configurations on the socket
-	/// such as `sleep_on_errors == true`, `non_blocking == true` and `tcp_nodelay == false`.
-	///
-	/// See [`hyper::Server::from_tcp`] for further information.
 	///
 	/// ```rust
 	/// #[tokio::main]
@@ -239,6 +239,24 @@ impl<M> Builder<M> {
 			middleware: self.middleware,
 		})
 	}
+}
+
+/// [`hyper`] does some TCP settings on the socket by default, this type provides a way
+/// to configure it.
+///
+/// This type mimics configurations provided by [`hyper::server::AddrIncoming`].
+#[derive(Debug, Copy, Clone)]
+pub struct HyperTcpConfig {
+	/// Set whether to sleep on accepts errors.
+	pub sleep_on_accept_errors: bool,
+	/// Set whether TCP keepalive messages are enabled on accepted connections.
+	///
+	/// If `None` is specified, keepalive is disabled, otherwise the duration
+	/// specified will be the time to remain idle before sending TCP keepalive
+	/// probes.
+	pub keepalive_timeout: Option<Duration>,
+	/// Set the value of `TCP_NODELAY` option for accepted connections.
+	pub no_delay: bool,
 }
 
 /// Handle used to run or stop the server.
