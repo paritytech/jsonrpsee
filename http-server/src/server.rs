@@ -180,7 +180,7 @@ impl<M> Builder<M> {
 	///
 	///   socket.listen(4096).unwrap();
 	///
-	///   // hyper does some settings on the provided socket, ensure that nothing breaks the our settings.
+	///   // hyper does some settings on the provided socket, ensure that nothing breaks our "expected settings".
 	///   let hyper_cfg = HyperTcpConfig { sleep_on_accept_errors: true, keepalive_timeout: Some(Duration::from_secs(1)), no_delay: true };
 	///
 	///   let server = HttpServerBuilder::new().build_from_tcp(socket, hyper_cfg).unwrap();
