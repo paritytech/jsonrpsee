@@ -161,6 +161,7 @@ impl<M> Builder<M> {
 	/// ```rust
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	/// use socket2::{Domain, Socket, Type};
+	/// use std::net::TcpListener;
 	///
 	/// #[tokio::main]
 	/// async fn main() {
@@ -173,9 +174,12 @@ impl<M> Builder<M> {
 	///   socket.bind(&address).unwrap();
 	///   socket.listen(4096).unwrap();
 	///
+	///   let listener: TcpListener = socket.into();
+	///   let local_addr = listener.local_addr().ok();
+	///
 	///   // hyper does some settings on the provided socket, ensure that nothing breaks our "expected settings".
 	///
-	///   let listener = hyper::Server::from_tcp(socket.into())
+	///   let listener = hyper::Server::from_tcp(listener)
 	///     .unwrap()
 	///     .tcp_sleep_on_accept_errors(true)
 	///     .tcp_keepalive(None)
