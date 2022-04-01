@@ -91,7 +91,7 @@ pub(crate) fn process_subscription_response(
 				if manager.remove_subscription(request_id, sub_id.clone()).is_some() {
 					Ok(())
 				} else {
-					tracing::error!("The server tried to closed down invalid subscription: {:?}", sub_id);
+					tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
 					Err(None)
 				}
 			}
