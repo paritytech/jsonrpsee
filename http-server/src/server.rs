@@ -157,8 +157,7 @@ impl<M> Builder<M> {
 		self
 	}
 
-	/// Finalizes the configuration of the server with customized TCP settings on the socket.
-	///
+	/// Finalizes the configuration of the server with customized TCP settings on the socket and on hyper.
 	///
 	/// ```rust
 	/// use jsonrpsee_http_server::{HttpServerBuilder, HyperTcpConfig};
@@ -170,10 +169,7 @@ impl<M> Builder<M> {
 	///   let addr = "127.0.0.1:0".parse().unwrap();
 	///   let domain = Domain::for_address(addr);
 	///   let socket = Socket::new(domain, Type::STREAM, None).unwrap();
-	///   socket.set_nodelay(true).unwrap();
-	///   socket.set_reuse_address(true).unwrap();
 	///   socket.set_nonblocking(true).unwrap();
-	///   socket.set_keepalive(true).unwrap();
 	///
 	///   let address = addr.into();
 	///   socket.bind(&address).unwrap();
@@ -181,19 +177,56 @@ impl<M> Builder<M> {
 	///   socket.listen(4096).unwrap();
 	///
 	///   // hyper does some settings on the provided socket, ensure that nothing breaks our "expected settings".
-	///   let hyper_cfg = HyperTcpConfig { sleep_on_accept_errors: true, keepalive_timeout: Some(Duration::from_secs(1)), no_delay: true };
 	///
-	///   let server = HttpServerBuilder::new().build_from_tcp(socket, hyper_cfg).unwrap();
+	///   let listener = hyper::Server::from_tcp(listener)?
+	///		.tcp_sleep_on_accept_errors(true)
+	///		.tcp_keepalive(false)
+	///		.tcp_nodelay(true);
+	///
+	///
+	///   let server = HttpServerBuilder::new().build_from_hyper(listener).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>, cfg: HyperTcpConfig) -> Result<Server<M>, Error> {
+	pub fn build_from_hyper(self, listener: hyper::server::Builder<AddrIncoming>) -> Result<Server<M>, Error> {
+		Ok(Server {
+			listener,
+			local_addr: None,
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
+			middleware: self.middleware,
+		})
+	}
+
+	/// Finalizes the configuration of the server with customized TCP settings on the socket.
+	///
+	/// ```rust
+	/// use jsonrpsee_http_server::{HttpServerBuilder, HyperTcpConfig};
+	/// use socket2::{Domain, Socket, Type};
+	/// use std::time::Duration;
+	///
+	/// #[tokio::main]
+	/// async fn main() {
+	///   let addr = "127.0.0.1:0".parse().unwrap();
+	///   let domain = Domain::for_address(addr);
+	///   let socket = Socket::new(domain, Type::STREAM, None).unwrap();
+	///   socket.set_nonblocking(true).unwrap();
+	///
+	///   let address = addr.into();
+	///   socket.bind(&address).unwrap();
+	///
+	///   socket.listen(4096).unwrap();
+	///
+	///   let server = HttpServerBuilder::new().build_from_tcp(socket).unwrap();
+	/// }
+	/// ```
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<M>, Error> {
 		let listener = listener.into();
 		let local_addr = listener.local_addr().ok();
 
-		let listener = hyper::Server::from_tcp(listener)?
-			.tcp_sleep_on_accept_errors(cfg.sleep_on_accept_errors)
-			.tcp_keepalive(cfg.keepalive_timeout)
-			.tcp_nodelay(cfg.no_delay);
+		let listener = hyper::Server::from_tcp(listener)?;
 
 		Ok(Server {
 			listener,
