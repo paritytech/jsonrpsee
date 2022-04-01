@@ -162,7 +162,6 @@ impl<M> Builder<M> {
 	/// ```rust
 	/// use jsonrpsee_http_server::{HttpServerBuilder, HyperTcpConfig};
 	/// use socket2::{Domain, Socket, Type};
-	/// use std::time::Duration;
 	///
 	/// #[tokio::main]
 	/// async fn main() {
@@ -173,24 +172,27 @@ impl<M> Builder<M> {
 	///
 	///   let address = addr.into();
 	///   socket.bind(&address).unwrap();
-	///
 	///   socket.listen(4096).unwrap();
 	///
 	///   // hyper does some settings on the provided socket, ensure that nothing breaks our "expected settings".
 	///
-	///   let listener = hyper::Server::from_tcp(listener)?
+	///   let listener = hyper::Server::from_tcp(socket.into())
+	///     .unwrap()
 	///		.tcp_sleep_on_accept_errors(true)
-	///		.tcp_keepalive(false)
+	///		.tcp_keepalive(None)
 	///		.tcp_nodelay(true);
 	///
-	///
-	///   let server = HttpServerBuilder::new().build_from_hyper(listener).unwrap();
+	///   let server = HttpServerBuilder::new().build_from_hyper(listener, addr).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_hyper(self, listener: hyper::server::Builder<AddrIncoming>) -> Result<Server<M>, Error> {
+	pub fn build_from_hyper(
+		self,
+		listener: hyper::server::Builder<AddrIncoming>,
+		local_addr: SocketAddr,
+	) -> Result<Server<M>, Error> {
 		Ok(Server {
 			listener,
-			local_addr: None,
+			local_addr: Some(local_addr),
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,

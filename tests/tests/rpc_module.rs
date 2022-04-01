@@ -28,6 +28,7 @@ use std::collections::HashMap;
 
 use jsonrpsee::core::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
 use jsonrpsee::core::server::rpc_module::*;
+use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
@@ -103,9 +104,10 @@ async fn calling_method_without_server() {
 
 	// Call sync method with bad param
 	let err = module.call::<_, ()>("foo", (false,)).await.unwrap_err();
-	assert!(
-		matches!(err, Error::Request(err) if err == r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected u16 at line 1 column 6"},"id":0}"#)
-	);
+	assert!(matches!(
+		err,
+		Error::Call(CallError::Custom { code, message, data: _}) if code == -32602 && message.as_str() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
+	));
 
 	// Call async method with params and context
 	struct MyContext;
@@ -184,9 +186,8 @@ async fn calling_method_without_server_using_proc_macro() {
 
 	// Call sync method with bad params
 	let err = module.call::<_, ()>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
-	assert!(matches!(
-		err,
-		Error::Request(err) if err == r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected a map at line 1 column 5"},"id":0}"#
+	assert!(matches!(err,
+		Error::Call(CallError::Custom { code, message, data: _}) if code == -32602 && message.as_str() == "invalid type: boolean `false`, expected a map at line 1 column 5"
 	));
 
 	// Call async method with params and context
