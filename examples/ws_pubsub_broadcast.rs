@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Example that shows how to broadcasts the produced values to all active subscriptions using `tokio::sync::broadcast`.
+//! Example that shows how to broadcast to all active subscriptions using `tokio::sync::broadcast`.
 
 use std::net::SocketAddr;
 
