@@ -10,7 +10,6 @@ license = "MIT"
 anyhow = "1"
 arrayvec = "0.7.1"
 async-trait = "0.1"
-async-channel = { version = "1.6", optional = true }
 beef = { version = "0.5.1", features = ["impl_serde"] }
 thiserror = "1"
 futures-channel = { version = "0.3.14", default-features = false }
@@ -24,26 +23,27 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 soketto = "0.7.1"
 parking_lot = { version = "0.12", optional = true }
-tokio = { version = "1.8", features = ["rt"], optional = true }
+tokio = { version = "1.8", optional = true }
 
 [features]
 default = []
 http-helpers = ["futures-util"]
 server = [
-	"async-channel",
 	"futures-util",
 	"rustc-hash",
 	"tracing",
 	"parking_lot",
 	"rand",
-	"tokio",
+	"tokio/rt",
+	"tokio/sync",
 ]
 client = ["futures-util"]
 async-client = [
 	"client",
 	"rustc-hash",
-	"tokio/sync",
 	"tokio/macros",
+	"tokio/rt",
+	"tokio/sync",
 	"tokio/time",
 	"tracing"
 ]

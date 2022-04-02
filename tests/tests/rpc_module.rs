@@ -28,6 +28,7 @@ use std::collections::HashMap;
 
 use jsonrpsee::core::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
 use jsonrpsee::core::server::rpc_module::*;
+use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
@@ -103,9 +104,10 @@ async fn calling_method_without_server() {
 
 	// Call sync method with bad param
 	let err = module.call::<_, ()>("foo", (false,)).await.unwrap_err();
-	assert!(
-		matches!(err, Error::Request(err) if err == r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected u16 at line 1 column 6"},"id":0}"#)
-	);
+	assert!(matches!(
+		err,
+		Error::Call(CallError::Custom { code, message, data: _}) if code == -32602 && message.as_str() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
+	));
 
 	// Call async method with params and context
 	struct MyContext;
@@ -184,9 +186,8 @@ async fn calling_method_without_server_using_proc_macro() {
 
 	// Call sync method with bad params
 	let err = module.call::<_, ()>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
-	assert!(matches!(
-		err,
-		Error::Request(err) if err == r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"invalid type: boolean `false`, expected a map at line 1 column 5"},"id":0}"#
+	assert!(matches!(err,
+		Error::Call(CallError::Custom { code, message, data: _}) if code == -32602 && message.as_str() == "invalid type: boolean `false`, expected a map at line 1 column 5"
 	));
 
 	// Call async method with params and context
@@ -229,6 +230,11 @@ async fn subscribing_without_server() {
 
 #[tokio::test]
 async fn close_test_subscribing_without_server() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
@@ -236,6 +242,7 @@ async fn close_test_subscribing_without_server() {
 				// make sure to only send one item
 				sink.send(&"lo").unwrap();
 				while !sink.is_closed() {
+					tracing::debug!("[test] Sink is open, sleeping");
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
 				// Get the close reason.
@@ -251,14 +258,28 @@ async fn close_test_subscribing_without_server() {
 	let (val, id) = my_sub.next::<String>().await.unwrap().unwrap();
 	assert_eq!(&val, "lo");
 	assert_eq!(&id, my_sub.subscription_id());
+	let mut my_sub2 = std::mem::ManuallyDrop::new(module.subscribe("my_sub", EmptyParams::new()).await.unwrap());
 
-	// close the subscription to ensure it doesn't return any items.
+	// Close the subscription to ensure it doesn't return any items.
 	my_sub.close();
+	tracing::info!("[test] closed first sub");
 
-	// In this case, the unsubscribe method was not called and
+	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
 	let exp = SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset);
 	assert!(
 		matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
+	);
+
+	// The second subscription still works
+	let (val, _) = my_sub2.next::<String>().await.unwrap().unwrap();
+	assert_eq!(val, "lo".to_string());
+	// Simulate a rude client that disconnects suddenly.
+	unsafe {
+		std::mem::ManuallyDrop::drop(&mut my_sub2);
+	}
+
+	assert!(
+		matches!(my_sub2.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
 	);
 }

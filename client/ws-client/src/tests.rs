@@ -25,7 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![cfg(test)]
-use crate::types::error::{ErrorCode, ErrorObject, ErrorResponse};
+use crate::types::error::{ErrorCode, ErrorObject};
 use crate::types::ParamsSer;
 use crate::WsClientBuilder;
 use jsonrpsee_core::client::{ClientT, SubscriptionClientT};
@@ -35,6 +35,7 @@ use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
+use jsonrpsee_types::error::CallError;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]
@@ -108,34 +109,34 @@ async fn response_with_wrong_id() {
 async fn response_method_not_found() {
 	let err =
 		run_request_with_response(method_not_found(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorCode::MethodNotFound.into());
+	assert_error_response(err, ErrorObject::from(ErrorCode::MethodNotFound).to_call_error());
 }
 
 #[tokio::test]
 async fn parse_error_works() {
 	let err = run_request_with_response(parse_error(Id::Num(0))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorCode::ParseError.into());
+	assert_error_response(err, ErrorObject::from(ErrorCode::ParseError).to_call_error());
 }
 
 #[tokio::test]
 async fn invalid_request_works() {
 	let err =
 		run_request_with_response(invalid_request(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorCode::InvalidRequest.into());
+	assert_error_response(err, ErrorObject::from(ErrorCode::InvalidRequest).to_call_error());
 }
 
 #[tokio::test]
 async fn invalid_params_works() {
 	let err =
 		run_request_with_response(invalid_params(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorCode::InvalidParams.into());
+	assert_error_response(err, ErrorObject::from(ErrorCode::InvalidParams).to_call_error());
 }
 
 #[tokio::test]
 async fn internal_error_works() {
 	let err =
 		run_request_with_response(internal_error(Id::Num(0_u64))).with_default_timeout().await.unwrap().unwrap_err();
-	assert_error_response(err, ErrorCode::InternalError.into());
+	assert_error_response(err, ErrorObject::from(ErrorCode::InternalError).to_call_error());
 }
 
 #[tokio::test]
@@ -282,11 +283,10 @@ async fn run_request_with_response(response: String) -> Result<String, Error> {
 	client.request("say_hello", None).with_default_timeout().await.unwrap()
 }
 
-fn assert_error_response(err: Error, exp: ErrorObject) {
+fn assert_error_response(err: Error, exp: CallError) {
 	match &err {
-		Error::Request(e) => {
-			let this: ErrorResponse = serde_json::from_str(e).unwrap();
-			assert_eq!(this.error, exp);
+		Error::Call(e) => {
+			assert_eq!(e.to_string(), exp.to_string());
 		}
 		e => panic!("Expected error: \"{}\", got: {:?}", err, e),
 	};

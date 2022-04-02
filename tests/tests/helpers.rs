@@ -121,7 +121,7 @@ pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
 }
 
 pub async fn http_server_with_access_control(acl: AccessControl) -> (SocketAddr, HttpServerHandle) {
-	let server = HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").unwrap();
+	let server = HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

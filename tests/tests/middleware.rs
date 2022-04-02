@@ -126,7 +126,8 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
 		.set_middleware(counter)
-		.build("127.0.0.1:0")?;
+		.build("127.0.0.1:0")
+		.await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(module)?;
