@@ -25,14 +25,15 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
-use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
-use jsonrpsee::core::Error;
+use futures::StreamExt;
+use jsonrpsee::core::client::SubscriptionClientT;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
-
-const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
+use tokio::time::interval;
+use tokio_stream::wrappers::IntervalStream;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -45,31 +46,53 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let mut subscribe_hello: Subscription<String> =
-		client.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await?;
 
-	let mut i = 0;
-	while i <= NUM_SUBSCRIPTION_RESPONSES {
-		let r = subscribe_hello.next().await;
-		tracing::info!("received {:?}", r);
-		i += 1;
-	}
+	// Subscription with a single parameter
+	let mut sub_params_one =
+		client.subscribe::<Option<char>>("sub_one_param", rpc_params![3], "unsub_one_param").await?;
+	tracing::info!("subscription with one param: {:?}", sub_params_one.next().await);
+
+	// Subscription with multiple parameters
+	let mut sub_params_two =
+		client.subscribe::<String>("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
+	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
+	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", |_, mut sink, _| {
-		std::thread::spawn(move || loop {
-			if let Err(Error::SubscriptionClosed(_)) = sink.send(&"hello my friend") {
-				return;
-			}
-			std::thread::sleep(std::time::Duration::from_secs(1));
-		});
-		Ok(())
-	})?;
+	module
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, sink, _| {
+			let idx: usize = params.one()?;
+			let item = LETTERS.chars().nth(idx);
+
+			let interval = interval(Duration::from_millis(200));
+			let stream = IntervalStream::new(interval).map(move |_| item);
+
+			tokio::spawn(async move {
+				let _ = sink.pipe_from_stream(stream).await;
+			});
+			Ok(())
+		})
+		.unwrap();
+	module
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, sink, _| {
+			let (one, two): (usize, usize) = params.parse()?;
+			let item = &LETTERS[one..two];
+
+			let interval = interval(Duration::from_millis(200));
+			let stream = IntervalStream::new(interval).map(move |_| item);
+
+			tokio::spawn(async move {
+				let _ = sink.pipe_from_stream(stream).await;
+			});
+			Ok(())
+		})
+		.unwrap();
+
 	let addr = server.local_addr()?;
 	server.start(module)?;
 	Ok(addr)
