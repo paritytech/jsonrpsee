@@ -27,7 +27,6 @@
 //! Example that shows how to broadcasts the produced values to all active subscriptions using `tokio::sync::broadcast`.
 
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use futures::future;
 use futures::StreamExt;
@@ -35,6 +34,8 @@ use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
+use tokio::sync::broadcast;
+use tokio_stream::wrappers::BroadcastStream;
 
 const NUM_SUBSCRIPTION_RESPONSES: usize = 5;
 
@@ -64,15 +65,16 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
-	let (tx, rx) = async_broadcast::broadcast(16);
+	let (tx, _rx) = broadcast::channel(16);
+	let tx2 = tx.clone();
 
-	tokio::spawn(produce_items(tx.clone()));
+	std::thread::spawn(move || produce_items(tx2));
 
 	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, sink, _| {
-		let rx = rx.clone();
+		let rx = BroadcastStream::new(tx.clone().subscribe());
 
 		tokio::spawn(async move {
-			let _ = sink.pipe_from_stream(rx).await;
+			let _ = sink.pipe_from_try_stream(rx).await;
 		});
 		Ok(())
 	})?;
@@ -81,11 +83,15 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	Ok(addr)
 }
 
-// Naive example that broadcasts the produced values to all subscribers.
-async fn produce_items(tx: async_broadcast::Sender<i32>) {
-	let mut i = 0;
-	while let Ok(_) = tx.broadcast(i).await {
-		i += 1;
-		tokio::time::sleep(Duration::from_secs(1)).await;
+// Naive example that broadcasts the produced values to all active subscribers.
+fn produce_items(tx: broadcast::Sender<usize>) {
+	for c in 1..=100 {
+		std::thread::sleep(std::time::Duration::from_secs(1));
+
+		// This might fail if no receivers are alive, could occur if no subscriptions are active...
+		// Also be aware that this will succeed when at least one receiver is alive
+		// Thus, clients connecting at different point in time will not receive
+		// the items sent before the subscription got established.
+		let _ = tx.send(c);
 	}
 }
