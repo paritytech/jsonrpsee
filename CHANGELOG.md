@@ -30,7 +30,7 @@ v0.10.0 is a release that fixes a regression in the HTTP server where the `backl
 
 ### [Added]
 - feat(http server): add new builder APIs `build_from_tcp` and `build_from_hyper` [#719](https://github.com/paritytech/jsonrpsee/pull/719)
-- feat: add `SubscriptionSink::pipe_from_try_stream` to support streams that returns `Result` [#720](https://github.com/paritytech/jsonrpsee/pull/720)
+- feat(servers): add `SubscriptionSink::pipe_from_try_stream` to support streams that returns `Result` [#720](https://github.com/paritytech/jsonrpsee/pull/720)
 - feat(servers): add max_response_size [#711](https://github.com/paritytech/jsonrpsee/pull/711)
 
 ## [v0.9.0] - 2022-02-03
