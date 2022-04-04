@@ -19,7 +19,7 @@ v0.10.0 is a release that fixes a regression in the HTTP server where the `backl
 - CI: cache cargo hack installation [#706](https://github.com/paritytech/jsonrpsee/pull/706)
 - CI: try nextest [#701](https://github.com/paritytech/jsonrpsee/pull/701)
 - chore(deps): update tokio-util requirement from 0.6 to 0.7 [#695](https://github.com/paritytech/jsonrpsee/pull/695)
-- Move CI script to new location [#694](https://github.com/paritytech/jsonrpsee/pull/694)
+- CI: Move CI script to new location [#694](https://github.com/paritytech/jsonrpsee/pull/694)
 
 ### [Fixed]
 - fix(client): close subscription when server sent `SubscriptionClosed` notification [#721](https://github.com/paritytech/jsonrpsee/pull/721)
