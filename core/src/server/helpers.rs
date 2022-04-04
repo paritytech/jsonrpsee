@@ -26,7 +26,7 @@
 
 use std::io;
 
-use crate::{to_json_raw_value, Error};
+use crate::{to_json_raw_value, tracing::RpcTracing, Error};
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use jsonrpsee_types::error::{
@@ -133,7 +133,7 @@ impl MethodSink {
 			}
 		};
 
-		RpcLogger::write_log_tx(&json, json.len());
+		RpcTracing::write_log_tx(&json, json.len());
 
 		if let Err(err) = self.tx.unbounded_send(json) {
 			tracing::error!("Error sending response to the client: {:?}", err);
@@ -154,7 +154,7 @@ impl MethodSink {
 			}
 		};
 
-		RpcLogger::write_log_tx(&json, json.len());
+		RpcTracing::write_log_tx(&json, json.len());
 
 		if let Err(err) = self.tx.unbounded_send(json) {
 			tracing::error!("Could not send error response to the client: {:?}", err)
@@ -218,53 +218,6 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 	buf.pop();
 	buf.push(']');
 	buf
-}
-
-#[derive(Debug)]
-/// Wrapper over [`tracing::Span`] to trace individual method calls, notifications and similar.
-pub struct RpcLogger(tracing::Span);
-
-impl RpcLogger {
-	/// Create a new tracing target.
-	///
-	/// To enable this you need to call `RpcLogger::new().span().enable()`.
-	pub fn new(kind: RpcLoggerKind) -> Self {
-		let span = match kind {
-			RpcLoggerKind::MethodCall(method) => tracing::span!(tracing::Level::DEBUG, "method_call", %method),
-			RpcLoggerKind::Notification(method) => tracing::span!(tracing::Level::DEBUG, "notification", %method),
-			RpcLoggerKind::Batch => tracing::span!(tracing::Level::DEBUG, "batch"),
-		};
-
-		Self(span)
-	}
-
-	/// Get the inner span.
-	pub fn span(&self) -> &tracing::Span {
-		&self.0
-	}
-
-	/// Write log
-	pub fn write_log_tx<T: std::fmt::Debug>(req: T, len: usize) {
-		tracing::debug!(tx_len = len);
-		tracing::trace!(tx = ?req);
-	}
-
-	/// Write log
-	pub fn write_log_rx<T: std::fmt::Debug>(req: T, len: usize) {
-		tracing::debug!(rx_len = len);
-		tracing::trace!(rx = ?req);
-	}
-}
-
-#[derive(Debug)]
-/// The different kind of tracing targets for JSON-RPC requests.
-pub enum RpcLoggerKind {
-	/// Method call.
-	MethodCall(String),
-	/// Notification.
-	Notification(String),
-	/// Batch.
-	Batch,
 }
 
 #[cfg(test)]

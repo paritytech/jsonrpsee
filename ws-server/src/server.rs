@@ -39,9 +39,10 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
-use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink, RpcLogger, RpcLoggerKind};
+use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
+use jsonrpsee_core::tracing::{RpcTracing, RpcTracingKind};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::Params;
@@ -378,10 +379,10 @@ async fn background_task(
 		match data.get(0) {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					let log = RpcLogger::new(RpcLoggerKind::MethodCall(req.method.to_string()));
+					let log = RpcTracing::new(RpcTracingKind::MethodCall(req.method.to_string()));
 					let _enter = log.span().enter();
 
-					RpcLogger::write_log_rx(&req, data.len());
+					RpcTracing::write_log_rx(&req, data.len());
 
 					let id = req.id.clone();
 					let params = Params::new(req.params.map(|params| params.get()));
@@ -481,9 +482,9 @@ async fn background_task(
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
 					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size);
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
-						let log = RpcLogger::new(RpcLoggerKind::Batch);
+						let log = RpcTracing::new(RpcTracingKind::Batch);
 						let _enter = log.span().enter();
-						RpcLogger::write_log_rx(&batch, batch.len());
+						RpcTracing::write_log_rx(&batch, batch.len());
 
 						if !batch.is_empty() {
 							join_all(batch.into_iter().filter_map(move |req| {

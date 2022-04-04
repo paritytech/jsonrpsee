@@ -17,6 +17,7 @@ futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"] }
 jsonrpsee-types = { path = "../types", version = "0.9.0"}
 tracing = { version = "0.1", optional = true }
+tracing-futures = { version = "0.2", optional = true }
 rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
@@ -45,7 +46,8 @@ async-client = [
 	"tokio/rt",
 	"tokio/sync",
 	"tokio/time",
-	"tracing"
+	"tracing",
+	"tracing-futures"
 ]
 
 [dev-dependencies]

@@ -3,9 +3,12 @@ mod manager;
 
 use std::time::Duration;
 
-use crate::client::{
-	BatchMessage, ClientT, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT,
-	SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
+use crate::{
+	client::{
+		BatchMessage, ClientT, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT,
+		SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
+	},
+	tracing::{RpcTracing, RpcTracingKind},
 };
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
@@ -24,6 +27,7 @@ use jsonrpsee_types::{
 };
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
+use tracing_futures::Instrument;
 
 use super::{FrontToBack, IdKind, RequestIdManager};
 
@@ -180,11 +184,14 @@ impl ClientT for Client {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_manager.next_request_id()?;
 		let notif = NotificationSer::new(method, params);
+		let log = RpcTracing::new(RpcTracingKind::Batch);
+		let _enter = log.span().enter();
+
 		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
-		tracing::trace!("[frontend]: send notification: {:?}", raw);
+		RpcTracing::write_log_tx(&raw, raw.len());
 
 		let mut sender = self.to_back.clone();
-		let fut = sender.send(FrontToBack::Notification(raw));
+		let fut = sender.send(FrontToBack::Notification(raw)).in_current_span();
 
 		let timeout = tokio::time::sleep(self.request_timeout);
 
@@ -206,9 +213,11 @@ impl ClientT for Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
+		let log = RpcTracing::new(RpcTracingKind::MethodCall(method.to_string()));
+		let _enter = log.span().enter();
 
 		let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
-		tracing::trace!("[frontend]: send request: {:?}", raw);
+		RpcTracing::write_log_tx(&raw, raw.len());
 
 		if self
 			.to_back
@@ -220,12 +229,16 @@ impl ClientT for Client {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).in_current_span().await;
 		let json_value = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
+
+		// there is no way to get the length of `serde_json::Value` without deserializing.
+		tracing::trace!(rx = ?json_value);
+
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
@@ -236,6 +249,8 @@ impl ClientT for Client {
 		let guard = self.id_manager.next_request_ids(batch.len())?;
 		let batch_ids: Vec<Id> = guard.inner();
 		let mut batches = Vec::with_capacity(batch.len());
+		let log = RpcTracing::new(RpcTracingKind::Batch);
+		let _enter = log.span().enter();
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
 			batches.push(RequestSer::new(&batch_ids[idx], method, params));
@@ -244,7 +259,8 @@ impl ClientT for Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
 		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
-		tracing::trace!("[frontend]: send batch request: {:?}", raw);
+		RpcTracing::write_log_tx(&raw, raw.len());
+
 		if self
 			.to_back
 			.clone()
@@ -255,12 +271,14 @@ impl ClientT for Client {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).in_current_span().await;
 		let json_values = match res {
 			Ok(Ok(v)) => v,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
+
+		RpcTracing::write_log_rx(&json_values, json_values.len());
 
 		let values: Result<_, _> =
 			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
@@ -283,15 +301,14 @@ impl SubscriptionClientT for Client {
 	where
 		N: DeserializeOwned,
 	{
-		tracing::trace!("[frontend]: subscribe: {:?}, unsubscribe: {:?}", subscribe_method, unsubscribe_method);
-
 		if subscribe_method == unsubscribe_method {
 			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
 		}
 
 		let guard = self.id_manager.next_request_ids(2)?;
-
 		let mut ids: Vec<Id> = guard.inner();
+		let log = RpcTracing::new(RpcTracingKind::MethodCall(subscribe_method.to_string()));
+		let _enter = log.span().enter();
 
 		let raw =
 			serde_json::to_string(&RequestSer::new(&ids[0], subscribe_method, params)).map_err(Error::ParseError)?;

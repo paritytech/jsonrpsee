@@ -40,9 +40,10 @@ use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
 use jsonrpsee_core::middleware::Middleware;
-use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink, RpcLogger, RpcLoggerKind};
+use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
+use jsonrpsee_core::tracing::{RpcTracing, RpcTracingKind};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::ErrorCode;
 use jsonrpsee_types::{Id, Notification, Params, Request};
@@ -520,10 +521,10 @@ async fn process_validated_request(
 		if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 			let method = req.method.as_ref();
 
-			let log = RpcLogger::new(RpcLoggerKind::MethodCall(method.to_string()));
+			let log = RpcTracing::new(RpcTracingKind::MethodCall(method.to_string()));
 			let _enter = log.span().enter();
 
-			RpcLogger::write_log_rx(&req, body.len());
+			RpcTracing::write_log_rx(&req, body.len());
 			middleware.on_call(method);
 
 			let id = req.id.clone();
@@ -570,10 +571,10 @@ async fn process_validated_request(
 			};
 			middleware.on_result(&req.method, result, request_start);
 		} else if let Ok(req) = serde_json::from_slice::<Notif>(&body) {
-			let log = RpcLogger::new(RpcLoggerKind::Notification(req.method.to_string()));
+			let log = RpcTracing::new(RpcTracingKind::Notification(req.method.to_string()));
 			let _enter = log.span().enter();
 
-			RpcLogger::write_log_rx(&req, body.len());
+			RpcTracing::write_log_rx(&req, body.len());
 
 			return Ok::<_, HyperError>(response::ok_response("".into()));
 		} else {
@@ -582,10 +583,10 @@ async fn process_validated_request(
 		}
 	// Batch of requests or notifications
 	} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
-		let log = RpcLogger::new(RpcLoggerKind::Batch);
+		let log = RpcTracing::new(RpcTracingKind::Batch);
 		let _enter = log.span().enter();
 
-		RpcLogger::write_log_rx(&batch, batch.len());
+		RpcTracing::write_log_rx(&batch, batch.len());
 
 		if !batch.is_empty() {
 			let middleware = &middleware;
