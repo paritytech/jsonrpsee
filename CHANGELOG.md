@@ -12,7 +12,6 @@ v0.10.0 is release that fixes a regression in HTTP server where the `backlog` wa
 from this release on the `default backlog` is set `1024` by using `tokio::net::TcpListener`.
 In addition, this release introduces a couple new APIs to manually configure the HTTP server via `build_from_tcp` and `build_from_hyper`
 
-
 ### [Changed]
 - [proc macros]: only generate unsub method if not provided (#702)
 - [examples]: update pubsub examples [#705](https://github.com/paritytech/jsonrpsee/pull/705)
