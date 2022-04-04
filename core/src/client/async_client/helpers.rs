@@ -28,6 +28,7 @@ use std::time::Duration;
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::{RequestMessage, TransportSenderT};
+use crate::error::SubscriptionClosed;
 use crate::Error;
 
 use futures_channel::{mpsc, oneshot};
@@ -84,7 +85,16 @@ pub(crate) fn process_subscription_response(
 	};
 
 	match manager.as_subscription_mut(&request_id) {
-		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
+		Some(send_back_sink) => match send_back_sink.try_send(response.params.result.clone()) {
+			// The server sent a subscription closed notification, then close down the subscription.
+			Ok(()) if serde_json::from_value::<SubscriptionClosed>(response.params.result).is_ok() => {
+				if manager.remove_subscription(request_id, sub_id.clone()).is_some() {
+					Ok(())
+				} else {
+					tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
+					Err(None)
+				}
+			}
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);

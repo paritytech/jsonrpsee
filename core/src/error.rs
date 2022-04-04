@@ -176,7 +176,7 @@ impl SubscriptionClosed {
 
 /// A type to represent when a subscription gets closed
 /// by either the server or client side.
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub enum SubscriptionClosedReason {
 	/// The subscription was closed by calling the unsubscribe method.
 	Unsubscribed,
