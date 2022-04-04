@@ -114,6 +114,7 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 		.max_response_body_size(u32::MAX)
 		.custom_tokio_runtime(handle)
 		.build("127.0.0.1:0")
+		.await
 		.unwrap();
 
 	let module = gen_rpc_module();
