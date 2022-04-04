@@ -19,7 +19,7 @@ serde_json = { version = "1", features = ["raw_value"] }
 soketto = "0.7.1"
 tokio = { version = "1.8", features = ["net", "rt-multi-thread", "macros", "time"] }
 tokio-util = { version = "0.7", features = ["compat"] }
-tracing-futures = { version = "0.2.5", features = ["futures-03"] }
+tracing-futures = "0.2.5"
 
 [dev-dependencies]
 anyhow = "1"
