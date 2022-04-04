@@ -8,7 +8,9 @@ The format is based on [Keep a Changelog].
 
 ## [v0.10.0] - 2022-04-04
 
-v0.10.0 is a release that fixes a regression in the HTTP server where the `backlog` was configured to `128` (this is also configurable now), introduces a couple of new APIs and a few minor bug fixes.
+v0.10.0 is a release that fixes a regression in the HTTP server where the backlog was hardcoded to 128 (this is now set to 1024 by default but also configurable), introduces a couple of new APIs and a few minor bug fixes.
+
+If your usage expects a high rate of new HTTP connections you are encouraged to update or manually configure the socket based on the traffic characteristics 
 
 ### [Changed]
 - [proc macros]: only generate unsub method if not provided (#702)
