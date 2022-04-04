@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog].
 
 v0.10.0 is release that fixes a regression in HTTP server where the `backlog` was configured to `128`
 from this release on the `default backlog` is set `1024` by using `tokio::net::TcpListener`.
-In addition, this release introduces a couple new APIs for users to manually configure sockets based on their usage.
+In addition, this release introduces a couple new APIs to manually configure the HTTP server via `build_from_tcp` and `build_from_hyper`
 
 
 ### [Changed]
