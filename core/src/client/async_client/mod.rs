@@ -8,7 +8,7 @@ use crate::{
 		BatchMessage, ClientT, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT,
 		SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
 	},
-	tracing::{RpcTracing, RpcTracingKind},
+	tracing::RpcTracing,
 };
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
@@ -184,11 +184,11 @@ impl ClientT for Client {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_manager.next_request_id()?;
 		let notif = NotificationSer::new(method, params);
-		let log = RpcTracing::new(RpcTracingKind::Batch);
-		let _enter = log.span().enter();
+		let trace = RpcTracing::batch();
+		let _enter = trace.span().enter();
 
 		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
-		RpcTracing::write_log_tx(&raw, raw.len());
+		tracing::trace!(tx_len = raw.len(), tx = raw.as_str());
 
 		let mut sender = self.to_back.clone();
 		let fut = sender.send(FrontToBack::Notification(raw)).in_current_span();
@@ -213,11 +213,11 @@ impl ClientT for Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
-		let log = RpcTracing::new(RpcTracingKind::MethodCall(method.to_string()));
-		let _enter = log.span().enter();
+		let trace = RpcTracing::method_call(method);
+		let _enter = trace.span().enter();
 
 		let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
-		RpcTracing::write_log_tx(&raw, raw.len());
+		tracing::trace!(tx_len = raw.len(), tx = raw.as_str());
 
 		if self
 			.to_back
@@ -237,7 +237,7 @@ impl ClientT for Client {
 		};
 
 		// there is no way to get the length of `serde_json::Value` without deserializing.
-		tracing::trace!(rx = ?json_value);
+		tracing::trace!(rx = serde_json::to_string(&json_value).expect("valid JSON; qed").as_str());
 
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
@@ -249,7 +249,7 @@ impl ClientT for Client {
 		let guard = self.id_manager.next_request_ids(batch.len())?;
 		let batch_ids: Vec<Id> = guard.inner();
 		let mut batches = Vec::with_capacity(batch.len());
-		let log = RpcTracing::new(RpcTracingKind::Batch);
+		let log = RpcTracing::batch();
 		let _enter = log.span().enter();
 
 		for (idx, (method, params)) in batch.into_iter().enumerate() {
@@ -259,7 +259,7 @@ impl ClientT for Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
 		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
-		RpcTracing::write_log_tx(&raw, raw.len());
+		tracing::trace!(tx_len = raw.len(), tx = raw.as_str());
 
 		if self
 			.to_back
@@ -278,7 +278,7 @@ impl ClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		RpcTracing::write_log_rx(&json_values, json_values.len());
+		tracing::trace!(rx_len = json_values.len(), tx = ?json_values);
 
 		let values: Result<_, _> =
 			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
@@ -307,12 +307,12 @@ impl SubscriptionClientT for Client {
 
 		let guard = self.id_manager.next_request_ids(2)?;
 		let mut ids: Vec<Id> = guard.inner();
-		let log = RpcTracing::new(RpcTracingKind::MethodCall(subscribe_method.to_string()));
-		let _enter = log.span().enter();
+		let trace = RpcTracing::method_call(subscribe_method);
+		let _enter = trace.span().enter();
 
 		let raw =
 			serde_json::to_string(&RequestSer::new(&ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
-		RpcTracing::write_log_tx(&raw, raw.len());
+		tracing::trace!(tx_len = raw.len(), tx = raw.as_str());
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -339,7 +339,7 @@ impl SubscriptionClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		tracing::trace!(rx = ?id);
+		tracing::trace!(rx = serde_json::to_string(&id).expect("valid JSON; qed").as_str());
 
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(id)))
 	}

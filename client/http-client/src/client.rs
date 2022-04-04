@@ -31,7 +31,7 @@ use crate::transport::HttpTransportClient;
 use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response};
 use async_trait::async_trait;
 use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
-use jsonrpsee_core::tracing::{RpcTracing, RpcTracingKind};
+use jsonrpsee_core::tracing::RpcTracing;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
@@ -116,8 +116,8 @@ pub struct HttpClient {
 #[async_trait]
 impl ClientT for HttpClient {
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
-		let log = RpcTracing::new(RpcTracingKind::Notification(method.to_string()));
-		let _enter = log.span().enter();
+		let trace = RpcTracing::notification(method);
+		let _enter = trace.span().enter();
 
 		let notif = NotificationSer::new(method, params);
 		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?).in_current_span();
@@ -136,8 +136,8 @@ impl ClientT for HttpClient {
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
 		let request = RequestSer::new(&id, method, params);
-		let log = RpcTracing::new(RpcTracingKind::MethodCall(method.to_string()));
-		let _enter = log.span().enter();
+		let trace = RpcTracing::method_call(method);
+		let _enter = trace.span().enter();
 
 		let fut = self
 			.transport
@@ -174,8 +174,8 @@ impl ClientT for HttpClient {
 	{
 		let guard = self.id_manager.next_request_ids(batch.len())?;
 		let ids: Vec<Id> = guard.inner();
-		let log = RpcTracing::new(RpcTracingKind::Batch);
-		let _enter = log.span().enter();
+		let trace = RpcTracing::batch();
+		let _enter = trace.span().enter();
 
 		let mut batch_request = Vec::with_capacity(batch.len());
 		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.

@@ -43,7 +43,7 @@ use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
-use jsonrpsee_core::tracing::{RpcTracing, RpcTracingKind};
+use jsonrpsee_core::tracing::RpcTracing;
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::ErrorCode;
 use jsonrpsee_types::{Id, Notification, Params, Request};
@@ -61,6 +61,7 @@ pub struct Builder<M = ()> {
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
+	max_tracing_length: u32,
 }
 
 impl Default for Builder {
@@ -72,6 +73,7 @@ impl Default for Builder {
 			access_control: AccessControl::default(),
 			tokio_runtime: None,
 			middleware: (),
+			max_tracing_length: 1024,
 		}
 	}
 }
@@ -117,6 +119,7 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
+			max_tracing_length: self.max_tracing_length,
 		}
 	}
 
@@ -203,6 +206,7 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			max_tracing_length: self.max_tracing_length,
 		})
 	}
 
@@ -245,6 +249,7 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			max_tracing_length: self.max_tracing_length,
 		})
 	}
 
@@ -278,6 +283,7 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			max_tracing_length: self.max_tracing_length,
 		})
 	}
 }
@@ -324,6 +330,8 @@ pub struct Server<M = ()> {
 	max_request_body_size: u32,
 	/// Max response body size.
 	max_response_body_size: u32,
+	/// Max length for tracing for request and response
+	max_tracing_length: u32,
 	/// Access control
 	access_control: AccessControl,
 	/// Tracker for currently used resources on the server
@@ -343,6 +351,7 @@ impl<M: Middleware> Server<M> {
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let max_response_body_size = self.max_response_body_size;
+		let max_trace_length = self.max_tracing_length;
 		let access_control = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
@@ -406,6 +415,7 @@ impl<M: Middleware> Server<M> {
 									resources,
 									max_request_body_size,
 									max_response_body_size,
+									max_trace_length,
 								)
 								.await?;
 
@@ -495,6 +505,7 @@ async fn process_validated_request(
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	max_tracing_length: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (parts, body) = request.into_parts();
 
@@ -521,10 +532,11 @@ async fn process_validated_request(
 		if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 			let method = req.method.as_ref();
 
-			let log = RpcTracing::new(RpcTracingKind::MethodCall(method.to_string()));
-			let _enter = log.span().enter();
+			let trace = RpcTracing::method_call(&req.method);
+			let _enter = trace.span().enter();
 
-			RpcTracing::write_log_rx(&req, body.len());
+			// TODO: add limit to this.
+			tracing::trace!(rx_len = body.len(), rx = serde_json::to_string(&req).expect("valid JSON; qed").as_str());
 			middleware.on_call(method);
 
 			let id = req.id.clone();
@@ -571,10 +583,11 @@ async fn process_validated_request(
 			};
 			middleware.on_result(&req.method, result, request_start);
 		} else if let Ok(req) = serde_json::from_slice::<Notif>(&body) {
-			let log = RpcTracing::new(RpcTracingKind::Notification(req.method.to_string()));
-			let _enter = log.span().enter();
+			let trace = RpcTracing::notification(&req.method);
+			let _enter = trace.span().enter();
 
-			RpcTracing::write_log_rx(&req, body.len());
+			// Todo introduce BoundedWriterAtMostBytes to serialize this.
+			tracing::trace!(rx_len = body.len(), rx = serde_json::to_string(&req).expect("valid JSON; qed").as_str());
 
 			return Ok::<_, HyperError>(response::ok_response("".into()));
 		} else {
@@ -583,10 +596,10 @@ async fn process_validated_request(
 		}
 	// Batch of requests or notifications
 	} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
-		let log = RpcTracing::new(RpcTracingKind::Batch);
-		let _enter = log.span().enter();
+		let trace = RpcTracing::batch();
+		let _enter = trace.span().enter();
 
-		RpcTracing::write_log_rx(&batch, batch.len());
+		tracing::trace!(rx_len = batch.len(), rx = ?&batch[0..std::cmp::max(batch.len(), max_tracing_length as usize)]);
 
 		if !batch.is_empty() {
 			let middleware = &middleware;

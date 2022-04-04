@@ -3,44 +3,29 @@
 pub struct RpcTracing(tracing::Span);
 
 impl RpcTracing {
-	/// Create a new tracing target.
+	/// Create a `method_call` tracing target.
 	///
-	/// To enable this you need to call `RpcTracing::new().span().enable()`.
-	pub fn new(kind: RpcTracingKind) -> Self {
-		let span = match kind {
-			RpcTracingKind::MethodCall(method) => tracing::span!(tracing::Level::DEBUG, "method_call", %method),
-			RpcTracingKind::Notification(method) => tracing::span!(tracing::Level::DEBUG, "notification", %method),
-			RpcTracingKind::Batch => tracing::span!(tracing::Level::DEBUG, "batch"),
-		};
+	/// To enable this you need to call `RpcTracing::method_call("some_method").span().enable()`.
+	pub fn method_call(method: &str) -> Self {
+		Self(tracing::span!(tracing::Level::DEBUG, "method_call", %method))
+	}
 
-		Self(span)
+	/// Create a `notification` tracing target.
+	///
+	/// To enable this you need to call `RpcTracing::notification("some_method").span().enable()`.
+	pub fn notification(method: &str) -> Self {
+		Self(tracing::span!(tracing::Level::DEBUG, "notification", %method))
+	}
+
+	/// Create a `batch` tracing target.
+	///
+	/// To enable this you need to call `RpcTracing::batch().span().enable()`.
+	pub fn batch() -> Self {
+		Self(tracing::span!(tracing::Level::DEBUG, "batch"))
 	}
 
 	/// Get the inner span.
 	pub fn span(&self) -> &tracing::Span {
 		&self.0
 	}
-
-	/// Write log
-	pub fn write_log_tx<T: std::fmt::Debug>(req: T, len: usize) {
-		tracing::debug!(tx_len = len);
-		tracing::trace!(tx = ?req);
-	}
-
-	/// Write log
-	pub fn write_log_rx<T: std::fmt::Debug>(req: T, len: usize) {
-		tracing::debug!(rx_len = len);
-		tracing::trace!(rx = ?req);
-	}
-}
-
-#[derive(Debug)]
-/// The different kind of tracing targets for JSON-RPC requests.
-pub enum RpcTracingKind {
-	/// Method call.
-	MethodCall(String),
-	/// Notification.
-	Notification(String),
-	/// Batch.
-	Batch,
 }

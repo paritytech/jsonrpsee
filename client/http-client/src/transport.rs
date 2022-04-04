@@ -11,7 +11,6 @@ use hyper::Uri;
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
-use jsonrpsee_core::tracing::RpcTracing;
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
@@ -98,7 +97,7 @@ impl HttpTransportClient {
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
-		RpcTracing::write_log_tx(&body, body.len());
+		tracing::trace!(tx_len = body.len(), tx = body.as_str());
 
 		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
@@ -124,7 +123,10 @@ impl HttpTransportClient {
 		let (parts, body) = response.into_parts();
 		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_request_body_size).await?;
 
-		RpcTracing::write_log_rx(&body, body.len());
+		tracing::trace!(
+			rx_len = body.len(),
+			rx = serde_json::from_slice::<serde_json::Value>(&body).unwrap_or_default().to_string().as_str()
+		);
 
 		Ok(body)
 	}

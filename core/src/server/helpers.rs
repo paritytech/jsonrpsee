@@ -26,7 +26,7 @@
 
 use std::io;
 
-use crate::{to_json_raw_value, tracing::RpcTracing, Error};
+use crate::{to_json_raw_value, Error};
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use jsonrpsee_types::error::{
@@ -133,7 +133,7 @@ impl MethodSink {
 			}
 		};
 
-		RpcTracing::write_log_tx(&json, json.len());
+		tracing::trace!(tx_len = json.len(), tx = json.as_str());
 
 		if let Err(err) = self.tx.unbounded_send(json) {
 			tracing::error!("Error sending response to the client: {:?}", err);
@@ -154,7 +154,7 @@ impl MethodSink {
 			}
 		};
 
-		RpcTracing::write_log_tx(&json, json.len());
+		tracing::trace!(tx_len = json.len(), tx = json.as_str());
 
 		if let Err(err) = self.tx.unbounded_send(json) {
 			tracing::error!("Could not send error response to the client: {:?}", err)
