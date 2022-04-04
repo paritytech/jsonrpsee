@@ -1,9 +1,21 @@
 # jsonrpsee benchmarks
 
 This crate contains benchmarks mainly to test the server implementations of some common scenarios such as concurrent connections.
-Further, running these will open lots of sockets and file descriptors, it doesn't work well on macOS for instance.
+Further, running these will open lots of sockets and file descriptors.
 
-Make sure that ulimit on your system is bigger than 1024.
+Note that on MacOS inparticular, you may need to increase some limits to be
+able to open a large number of connections. Try commands like:
+
+```sh
+sudo sysctl -w kern.maxfiles=100000
+sudo sysctl -w kern.maxfilesperproc=100000
+ulimit -n 100000
+sudo sysctl -w kern.ipc.somaxconn=100000
+sudo sysctl -w kern.ipc.maxsockbuf=16777216
+```
+
+In general, if you run into issues, it may be better to run this on a linux
+box; MacOS seems to hit limits quicker in general.
 
 ## Run all benchmarks
 
