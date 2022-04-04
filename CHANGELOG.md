@@ -9,7 +9,6 @@ The format is based on [Keep a Changelog].
 ## [v0.10.0] - 2022-04-04
 
 v0.10.0 is release a that fixes a regression in HTTP server where the `backlog` was configured to `128`, introduces a couple of new APIs and a few minor bug fixes.
-In addition, this release introduces a couple new APIs to manually configure the HTTP server via `build_from_tcp` and `build_from_hyper`
 
 ### [Changed]
 - [proc macros]: only generate unsub method if not provided (#702)
