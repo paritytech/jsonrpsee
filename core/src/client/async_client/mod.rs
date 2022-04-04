@@ -312,6 +312,7 @@ impl SubscriptionClientT for Client {
 
 		let raw =
 			serde_json::to_string(&RequestSer::new(&ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
+		RpcTracing::write_log_tx(&raw, raw.len());
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -330,13 +331,16 @@ impl SubscriptionClientT for Client {
 			return Err(self.read_error_from_backend().await);
 		}
 
-		let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+		let res = call_with_timeout(self.request_timeout, send_back_rx).in_current_span().await;
 
 		let (notifs_rx, id) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
+
+		tracing::trace!(rx = ?id);
+
 		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(id)))
 	}
 
