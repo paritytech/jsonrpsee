@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.10.0] - 2022-04-04
+
+v0.10.0 is a release that fixes a regression in the HTTP server where the backlog was hardcoded to 128 (this is now set to 1024 by default but also configurable), introduces a couple of new APIs and a few minor bug fixes.
+
+If your usage expects a high rate of new HTTP connections you are encouraged to update or manually configure the socket based on the traffic characteristics 
+
+### [Changed]
+- [proc macros]: only generate unsub method if not provided (#702)
+- [examples]: update pubsub examples [#705](https://github.com/paritytech/jsonrpsee/pull/705)
+- core: remove `Error::Request` variant [#717](https://github.com/paritytech/jsonrpsee/pull/717)
+- Replace async-channel [#708](https://github.com/paritytech/jsonrpsee/pull/708)
+- chore(deps): bump actions/checkout from 2.4.0 to 3 [#710](https://github.com/paritytech/jsonrpsee/pull/710)
+- CI: cache cargo hack installation [#706](https://github.com/paritytech/jsonrpsee/pull/706)
+- CI: try nextest [#701](https://github.com/paritytech/jsonrpsee/pull/701)
+- chore(deps): update tokio-util requirement from 0.6 to 0.7 [#695](https://github.com/paritytech/jsonrpsee/pull/695)
+- CI: Move CI script to new location [#694](https://github.com/paritytech/jsonrpsee/pull/694)
+
+### [Fixed]
+- fix(client): close subscription when server sent `SubscriptionClosed` notification [#721](https://github.com/paritytech/jsonrpsee/pull/721)
+- fix(http client): set reuseaddr and nodelay. [#687](https://github.com/paritytech/jsonrpsee/pull/687)
+- fix(rpc module): unsubscribe according ethereum pubsub spec [#693](https://github.com/paritytech/jsonrpsee/pull/693)
+- http server: fix regression set backlog to 1024 [#718](https://github.com/paritytech/jsonrpsee/pull/718)
+- README.MD: fix link to `ws server` [#703](https://github.com/paritytech/jsonrpsee/pull/703)
+
+### [Added]
+- feat(http server): add new builder APIs `build_from_tcp` and `build_from_hyper` [#719](https://github.com/paritytech/jsonrpsee/pull/719)
+- feat(servers): add `SubscriptionSink::pipe_from_try_stream` to support streams that returns `Result` [#720](https://github.com/paritytech/jsonrpsee/pull/720)
+- feat(servers): add max_response_size [#711](https://github.com/paritytech/jsonrpsee/pull/711)
+
 ## [v0.9.0] - 2022-02-03
 
 v0.9.0 is technically a breaking release because of the `Debug` bound of the `IdProvider` trait changed which is used by WebSocket server. In practise it should be a non-breaking upgrade for most users.
