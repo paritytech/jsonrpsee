@@ -911,12 +911,16 @@ impl SubscriptionSink {
 		self.inner_close(Some(close_reason));
 	}
 
-	fn inner_close(&mut self, close_reason: Option<&SubscriptionClosed>) {
+	fn inner_close(&mut self, maybe_close: Option<&SubscriptionClosed>) {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
-			tracing::debug!("Closing subscription: {:?} reason: {:?}", self.uniq_sub.sub_id, close_reason);
-			if let Some(close_reason) = close_reason {
-				let msg = self.build_message(close_reason).expect("valid json infallible; qed");
+			tracing::debug!("Closing subscription: {:?} reason: {:?}", self.uniq_sub.sub_id, maybe_close);
+
+			let closed_by_server =
+				maybe_close.map_or(false, |c| matches!(c.close_reason(), SubscriptionClosedReason::Server(_)));
+
+			if closed_by_server {
+				let msg = self.build_message(&maybe_close).expect("valid json infallible; qed");
 				let _ = sink.send_raw(msg);
 			}
 		}
