@@ -22,8 +22,8 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_htt
 	let mut io = IoHandler::new();
 	io.add_sync_method(SYNC_FAST_CALL, |_| Ok(Value::String("lo".to_string())));
 	io.add_method(ASYNC_FAST_CALL, |_| async { Ok(Value::String("lo".to_string())) });
-	io.add_sync_method(SYNC_MEM_CALL, |_| Ok(Value::String("A".repeat(15 * 1024 * 1024))));
-	io.add_method(ASYNC_MEM_CALL, |_| async { Ok(Value::String("A".repeat(15 * 1024 * 1024))) });
+	io.add_sync_method(SYNC_MEM_CALL, |_| Ok(Value::String("A".repeat(1 * 1024 * 1024))));
+	io.add_method(ASYNC_MEM_CALL, |_| async { Ok(Value::String("A".repeat(1 * 1024 * 1024))) });
 	io.add_sync_method(SYNC_SLOW_CALL, |_| {
 		std::thread::sleep(std::time::Duration::from_millis(1));
 		Ok(Value::String("slow call".to_string()))
@@ -59,8 +59,8 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 	let mut io = PubSubHandler::new(MetaIoHandler::default());
 	io.add_sync_method(SYNC_FAST_CALL, |_| Ok(Value::String("lo".to_string())));
 	io.add_method(ASYNC_FAST_CALL, |_| async { Ok(Value::String("lo".to_string())) });
-	io.add_sync_method(SYNC_MEM_CALL, |_| Ok(Value::String("A".repeat(15 * 1024 * 1024))));
-	io.add_method(ASYNC_MEM_CALL, |_| async { Ok(Value::String("A".repeat(15 * 1024 * 1024))) });
+	io.add_sync_method(SYNC_MEM_CALL, |_| Ok(Value::String("A".repeat(1 * 1024 * 1024))));
+	io.add_method(ASYNC_MEM_CALL, |_| async { Ok(Value::String("A".repeat(1 * 1024 * 1024))) });
 	io.add_sync_method(SYNC_SLOW_CALL, |_| {
 		std::thread::sleep(std::time::Duration::from_millis(1));
 		Ok(Value::String("slow call".to_string()))
@@ -160,9 +160,9 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module.register_method(SYNC_FAST_CALL, |_, _| Ok("lo")).unwrap();
 	module.register_async_method(ASYNC_FAST_CALL, |_, _| async { Ok("lo") }).unwrap();
 
-	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(15 * 1024 * 1024))).unwrap();
+	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(1 * 1024 * 1024))).unwrap();
 
-	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(15 * 1024 * 1024)) }).unwrap();
+	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(1 * 1024 * 1024)) }).unwrap();
 
 	module
 		.register_method(SYNC_SLOW_CALL, |_, _| {
