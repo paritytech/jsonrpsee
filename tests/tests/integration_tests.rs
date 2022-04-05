@@ -399,7 +399,7 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	module
 		.register_subscription("subscribe_for_ever", "n", "unsubscribe_for_ever", |_, sink, mut tx| {
 			// Create stream that produce one item then sleeps for an hour.
-			let interval = interval(Duration::from_secs(60));
+			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
 			tokio::spawn(async move {
