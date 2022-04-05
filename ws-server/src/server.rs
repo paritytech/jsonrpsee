@@ -327,7 +327,7 @@ async fn background_task(
 		let _ = sender.close().await;
 
 		// Notify all listeners and close down associated tasks.
-		close_notify_server_stop.notify_one();
+		close_notify_server_stop.notify_waiters();
 	});
 
 	// Buffer for incoming data.
