@@ -6,11 +6,11 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
-## [v0.10.0] - 2022-04-04
+## [v0.10.1] - 2022-04-05
 
-v0.10.0 is a release that fixes a regression in the HTTP server where the backlog was hardcoded to 128 (this is now set to 1024 by default but also configurable), introduces a couple of new APIs and a few minor bug fixes.
+v0.10.1 is a release that fixes a regression in the HTTP server where the backlog was hardcoded to 128 (this is now set to 1024 by default but also configurable), introduces a couple of new APIs and a few minor bug fixes.
 
-If your usage expects a high rate of new HTTP connections you are encouraged to update or manually configure the socket based on the traffic characteristics 
+If your usage expects a high rate of new HTTP connections you are encouraged to update or manually configure the socket based on the traffic characteristics.
 
 ### [Changed]
 - [proc macros]: only generate unsub method if not provided (#702)
@@ -22,6 +22,7 @@ If your usage expects a high rate of new HTTP connections you are encouraged to 
 - CI: try nextest [#701](https://github.com/paritytech/jsonrpsee/pull/701)
 - chore(deps): update tokio-util requirement from 0.6 to 0.7 [#695](https://github.com/paritytech/jsonrpsee/pull/695)
 - CI: Move CI script to new location [#694](https://github.com/paritytech/jsonrpsee/pull/694)
+- refactor(log): downgrade send errors to warn [#726](https://github.com/paritytech/jsonrpsee/pull/726)
 
 ### [Fixed]
 - fix(client): close subscription when server sent `SubscriptionClosed` notification [#721](https://github.com/paritytech/jsonrpsee/pull/721)
@@ -29,11 +30,17 @@ If your usage expects a high rate of new HTTP connections you are encouraged to 
 - fix(rpc module): unsubscribe according ethereum pubsub spec [#693](https://github.com/paritytech/jsonrpsee/pull/693)
 - http server: fix regression set backlog to 1024 [#718](https://github.com/paritytech/jsonrpsee/pull/718)
 - README.MD: fix link to `ws server` [#703](https://github.com/paritytech/jsonrpsee/pull/703)
+- fix(ws server): close all subscription when the connection is closed [#725](https://github.com/paritytech/jsonrpsee/pull/725)
+- perf: don't send messages when client is gone [#724](https://github.com/paritytech/jsonrpsee/pull/724)
 
 ### [Added]
 - feat(http server): add new builder APIs `build_from_tcp` and `build_from_hyper` [#719](https://github.com/paritytech/jsonrpsee/pull/719)
 - feat(servers): add `SubscriptionSink::pipe_from_try_stream` to support streams that returns `Result` [#720](https://github.com/paritytech/jsonrpsee/pull/720)
 - feat(servers): add max_response_size [#711](https://github.com/paritytech/jsonrpsee/pull/711)
+
+## [v0.10.0] - 2022-04-04 [YANKED]
+
+Yanked due to a leak when closing subscriptions in WebSocket server.
 
 ## [v0.9.0] - 2022-02-03
 
