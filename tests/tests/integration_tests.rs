@@ -381,7 +381,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 }
 
 #[tokio::test]
-async fn ws_server_cancels_stream_after_reset_conn() {
+async fn ws_server_cancels_subsription_on_reset_conn() {
 	tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
 		.try_init()
@@ -393,17 +393,16 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
-	let (tx, mut rx) = mpsc::channel(1);
-	let mut module = RpcModule::new(tx);
+	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_never_produce", "n", "unsubscribe_never_produce", |_, sink, mut tx| {
-			// create stream that doesn't produce items.
-			let stream = futures::stream::empty::<usize>();
+		.register_subscription("subscribe_never_produce", "n", "unsubscribe_never_produce", |_, sink, _| {
+			// Create stream that produce one item then sleeps for an hour.
+			let interval = interval(Duration::from_secs(60 * 60));
+			let stream = IntervalStream::new(interval).map(move |_| 0);
+
 			tokio::spawn(async move {
 				sink.pipe_from_stream(stream).await.unwrap();
-				let send_back = Arc::make_mut(&mut tx);
-				send_back.feed(()).await.unwrap();
 			});
 			Ok(())
 		})
@@ -412,15 +411,25 @@ async fn ws_server_cancels_stream_after_reset_conn() {
 	server.start(module).unwrap();
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let _sub1: Subscription<usize> =
+	let mut sub1: Subscription<usize> =
 		client.subscribe("subscribe_never_produce", None, "unsubscribe_never_produce").await.unwrap();
-	let _sub2: Subscription<usize> =
+	let mut sub2: Subscription<usize> =
 		client.subscribe("subscribe_never_produce", None, "unsubscribe_never_produce").await.unwrap();
 
 	// terminate connection.
 	drop(client);
-	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
-	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+
+	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server("No close reason provided".to_string()));
+	// The server closed down the subscription it will send a close reason.
+
+	assert_eq!(sub1.next().await.unwrap().unwrap(), 0);
+	assert_eq!(sub2.next().await.unwrap().unwrap(), 0);
+
+	panic!("{:?}", sub1.next().await);
+
+	// Make sure both subscriptions has been terminated.
+	//assert!(matches!(sub1.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
+	//assert!(matches!(sub2.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
 }
 
 #[tokio::test]
