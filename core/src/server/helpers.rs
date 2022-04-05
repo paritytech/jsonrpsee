@@ -134,7 +134,7 @@ impl MethodSink {
 		};
 
 		if let Err(err) = self.tx.unbounded_send(json) {
-			tracing::error!("Error sending response to the client: {:?}", err);
+			tracing::warn!("Error sending response {:?}", err);
 			false
 		} else {
 			true
@@ -153,7 +153,7 @@ impl MethodSink {
 		};
 
 		if let Err(err) = self.tx.unbounded_send(json) {
-			tracing::error!("Could not send error response to the client: {:?}", err)
+			tracing::warn!("Error sending response {:?}", err);
 		}
 
 		false

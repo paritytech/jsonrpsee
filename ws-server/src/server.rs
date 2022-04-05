@@ -315,7 +315,7 @@ async fn background_task(
 			if let Some(response) = rx.next().await {
 				// If websocket message send fail then terminate the connection.
 				if let Err(err) = send_ws_message(&mut sender, response).await {
-					tracing::error!("WS transport error: {:?}; terminate connection", err);
+					tracing::warn!("WS send error: {}; terminate connection", err);
 					break;
 				}
 			} else {
@@ -362,7 +362,7 @@ async fn background_task(
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
+						tracing::warn!("WS error: {}; terminate connection {}", err, conn_id);
 						sink.close();
 						break Err(err.into());
 					}
@@ -567,7 +567,7 @@ async fn background_task(
 							let results = collect_batch_response(rx_batch).await;
 
 							if let Err(err) = sink.send_raw(results) {
-								tracing::error!("Error sending batch response to the client: {:?}", err)
+								tracing::warn!("Error sending batch response to the client: {:?}", err)
 							} else {
 								middleware.on_response(request_start);
 							}
