@@ -326,9 +326,8 @@ async fn background_task(
 		// Terminate connection and send close message.
 		let _ = sender.close().await;
 
-		// Force `conn_tx` to this async block and close it down
-		// when the connection closes to be on safe side.
-		close_notify_server_stop.notify_one();
+		// Notify all listeners and close down associated tasks.
+		close_notify_server_stop.notify_waiters();
 	});
 
 	// Buffer for incoming data.
