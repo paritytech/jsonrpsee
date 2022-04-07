@@ -667,3 +667,16 @@ fn comma_separated_header_values(headers: &hyper::HeaderMap, header: &str) -> Ve
 		.map(|header| header.to_ascii_lowercase())
 		.collect()
 }
+
+#[tokio::test]
+async fn ws_subscribe_with_bad_params() {
+	let (server_addr, _handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let err = client
+		.subscribe::<serde_json::Value>("subscribe_bad", rpc_params!["0x0"], "unsubscribe_bad")
+		.await
+		.unwrap_err();
+	assert!(matches!(err, Error::Call(_)));
+}

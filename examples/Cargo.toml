@@ -15,6 +15,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio = { version = "1.8", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
+serde_json = { version = "1" }
 
 [[example]]
 name = "http"

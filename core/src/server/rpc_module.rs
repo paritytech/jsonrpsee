@@ -406,7 +406,7 @@ impl Methods {
 	///
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
-	/// Returns [`Subscription`] on succes which can used to get results from the subscriptions.
+	/// Returns [`Subscription`] on success which can used to get results from the subscriptions.
 	///
 	/// # Examples
 	///
@@ -666,16 +666,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						sub_id
 					};
 
-					method_sink.send_response(id.clone(), &sub_id);
-
 					let sink = SubscriptionSink {
 						inner: method_sink.clone(),
 						close_notify: Some(conn.close_notify),
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
-						uniq_sub: SubscriptionKey { conn_id: conn.conn_id, sub_id },
+						uniq_sub: SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() },
 						is_connected: Some(conn_tx),
 					};
+
 					if let Err(err) = callback(params, sink, ctx.clone()) {
 						tracing::error!(
 							"subscribe call '{}' failed: {:?}, request id={:?}",
@@ -685,6 +684,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 						method_sink.send_error(id, ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into())
 					} else {
+						method_sink.send_response(id, &sub_id);
 						true
 					}
 				})),
