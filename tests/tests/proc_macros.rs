@@ -28,9 +28,11 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::Error;
+use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::HttpServerBuilder;
+use jsonrpsee::rpc_params;
+use jsonrpsee::types::error::{CallError, ErrorCode};
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::WsServerBuilder;
 use serde_json::json;
@@ -221,7 +223,7 @@ async fn proc_macros_generic_ws_client_api() {
 	let mut sub = client.sub().await.unwrap();
 	let first_recv = sub.next().await.unwrap().unwrap();
 	assert_eq!(first_recv, "Response_A".to_string());
-	/*let second_recv = sub.next().await.unwrap().unwrap();
+	let second_recv = sub.next().await.unwrap().unwrap();
 	assert_eq!(second_recv, "Response_B".to_string());
 
 	// Sub with params
@@ -229,7 +231,16 @@ async fn proc_macros_generic_ws_client_api() {
 	let first_recv = sub.next().await.unwrap().unwrap();
 	assert_eq!(first_recv, 42);
 	let second_recv = sub.next().await.unwrap().unwrap();
-	assert_eq!(second_recv, 42);*/
+	assert_eq!(second_recv, 42);
+
+	// Sub with faulty params.
+	let err = client
+		.subscribe::<serde_json::Value>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
+		.await
+		.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message == "Invalid params" && code == ErrorCode::InvalidParams.code())
+	);
 }
 
 #[tokio::test]

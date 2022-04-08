@@ -668,14 +668,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn| {
 					let sub_id: RpcSubscriptionId = conn.id_provider.next_id().into_owned();
 
-					let sink = PendingSubscription {
-						inner: method_sink.clone(),
+					let sink = PendingSubscription(Some(InnerPendingSubscription {
+						sink: method_sink.clone(),
 						close_notify: Some(conn.close_notify),
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() },
 						id: id.clone().into_owned(),
-					};
+					}));
 
 					if let Err(err) = callback(params, sink, ctx.clone()) {
 						tracing::error!(
@@ -743,9 +743,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 /// Warning: you need to call either `PendingSubscription::accept` or `PendingSubscription::reject` otherwise
 /// the subscription will not make any progress.
 #[derive(Debug)]
-pub struct PendingSubscription {
+struct InnerPendingSubscription {
 	/// Sink.
-	inner: MethodSink,
+	sink: MethodSink,
 	/// Get notified when subscribers leave so we can exit
 	close_notify: Option<Arc<Notify>>,
 	/// MethodCallback.
@@ -758,24 +758,60 @@ pub struct PendingSubscription {
 	id: Id<'static>,
 }
 
+/// Represent a pending subscription which waits for being accepted or rejected.
+///
+/// This type implement drop for ease of use, such as dropped in error short circuiting via `map_err()?`.
+#[derive(Debug)]
+pub struct PendingSubscription(Option<InnerPendingSubscription>);
+
 impl PendingSubscription {
 	/// Reject the subscription call.
-	pub fn reject(self, err: ErrorObject) -> bool {
-		self.inner.send_error(self.id, err)
+	pub fn reject(mut self, err: ErrorObject) -> Result<(), Error> {
+		if let Some(inner) = self.0.take() {
+			let InnerPendingSubscription { sink, id, .. } = inner;
+			if sink.send_error(id, err) {
+				Ok(())
+			} else {
+				Err(Error::Custom("Connection is closed".to_string()))
+			}
+		} else {
+			Err(Error::Custom("Subscription is already claimed".to_string()))
+		}
 	}
 
 	/// Attempt to accept the subscription and respond the subscription method call.
 	///
 	/// Fails if the connection was closed
-	pub fn accept(self) -> Result<SubscriptionSink, Error> {
-		let PendingSubscription { inner, close_notify, method, uniq_sub, subscribers, id } = self;
+	pub fn accept(mut self) -> Result<SubscriptionSink, Error> {
+		let inner = match self.0.take() {
+			Some(inner) => inner,
+			None => return Err(Error::Custom("Subscription is already claimed".to_string())),
+		};
 
-		if inner.send_response(id, &uniq_sub.sub_id) {
+		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id } = inner;
+
+		if sink.send_response(id, &uniq_sub.sub_id) {
 			let (tx, rx) = oneshot::channel();
-			subscribers.lock().insert(uniq_sub.clone(), (inner.clone(), rx));
-			Ok(SubscriptionSink { inner, close_notify, method, uniq_sub, subscribers, is_connected: Some(tx) })
+			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), rx));
+			Ok(SubscriptionSink {
+				inner: sink,
+				close_notify,
+				method,
+				uniq_sub,
+				subscribers: subscribers,
+				is_connected: Some(tx),
+			})
 		} else {
 			Err(Error::Custom("Connection is closed".into()))
+		}
+	}
+}
+
+impl Drop for PendingSubscription {
+	fn drop(&mut self) {
+		if let Some(inner) = self.0.take() {
+			let InnerPendingSubscription { sink, id, .. } = inner;
+			sink.send_error(id, ErrorCode::InvalidParams.into());
 		}
 	}
 }
