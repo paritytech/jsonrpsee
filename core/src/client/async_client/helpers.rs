@@ -28,10 +28,10 @@ use std::time::Duration;
 
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::{RequestMessage, TransportSenderT};
-use crate::error::SubscriptionClosed;
 use crate::Error;
 
 use futures_channel::{mpsc, oneshot};
+use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
 	ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
 };
@@ -81,20 +81,15 @@ pub(crate) fn process_subscription_response(
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
-		None => return Err(None),
+		None => {
+			tracing::error!("Subscription ID: {:?} is not an active subscription", sub_id);
+			return Err(None);
+		}
 	};
 
 	match manager.as_subscription_mut(&request_id) {
-		Some(send_back_sink) => match send_back_sink.try_send(response.params.result.clone()) {
+		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			// The server sent a subscription closed notification, then close down the subscription.
-			Ok(()) if serde_json::from_value::<SubscriptionClosed>(response.params.result).is_ok() => {
-				if manager.remove_subscription(request_id, sub_id.clone()).is_some() {
-					Ok(())
-				} else {
-					tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
-					Err(None)
-				}
-			}
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
@@ -107,6 +102,32 @@ pub(crate) fn process_subscription_response(
 			tracing::error!("Subscription ID: {:?} is not an active subscription", sub_id);
 			Err(None)
 		}
+	}
+}
+
+/// Attempts to process a subscription response.
+///
+/// Returns `Ok()` if the response was successfully sent to the frontend.
+/// Return `Err(None)` if the subscription was not found.
+/// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
+pub(crate) fn process_subscription_close_response(
+	manager: &mut RequestManager,
+	response: SubscriptionError<JsonValue>,
+) -> Result<(), Option<RequestMessage>> {
+	let sub_id = response.params.subscription.into_owned();
+	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
+		Some(request_id) => request_id,
+		None => {
+			tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
+			return Err(None);
+		}
+	};
+
+	if manager.remove_subscription(request_id, sub_id.clone()).is_some() {
+		Ok(())
+	} else {
+		tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
+		Err(None)
 	}
 }
 
