@@ -55,7 +55,7 @@ pub(crate) mod visitor;
 /// - The trait will have one additional (already implemented) method, `into_rpc`, which turns any object that
 ///   implements the server trait into an `RpcModule`.
 /// - For subscription methods, there will be one additional argument inserted right after `&self`: `subscription_sink:
-///   SubscriptionSink`. It should be used to actually maintain the subscription.
+///   PendingSubscription`. It should be used to actually maintain the subscription.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
@@ -99,7 +99,7 @@ pub(crate) mod visitor;
 ///     fn sync_method(&self) -> String;
 ///
 ///     // Note that `subscription_sink` was added automatically.
-///     fn sub(&self, subscription_sink: SubscriptionSink);
+///     fn sub(&self, subscription_sink: PendingSubscription);
 ///
 ///     fn into_rpc(self) -> Result<Self, jsonrpsee::core::Error> {
 ///         // Actual implementation stripped, but inside we will create
@@ -214,7 +214,7 @@ pub(crate) mod visitor;
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc, core::async_trait, core::RpcResult, ws_server::SubscriptionSink};
+///     use jsonrpsee::{proc_macros::rpc, core::async_trait, core::RpcResult, ws_server::PendingSubscription};
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.
 ///     #[rpc(client, server, namespace = "foo")]
@@ -286,7 +286,8 @@ pub(crate) mod visitor;
 ///
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
-///         fn sub_override_notif_method(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+///         fn sub_override_notif_method(&self, pending: PendingSubscription) -> RpcResult<()> {
+///             let sink = pending.accept()?;    
 ///             tokio::spawn(async move {
 ///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
 ///                 sink.pipe_from_stream(stream).await;
@@ -298,7 +299,8 @@ pub(crate) mod visitor;
 ///         // We could've spawned a `tokio` future that yields values while our program works,
 ///         // but for simplicity of the example we will only send two values and then close
 ///         // the subscription.
-///         fn sub(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+///         fn sub(&self, pending: PendingSubscription) -> RpcResult<()> {
+///             let mut sink = pending.accept()?;    
 ///             sink.send(&"Response_A")?;
 ///             sink.send(&"Response_B")
 ///         }

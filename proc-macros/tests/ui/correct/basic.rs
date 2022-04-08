@@ -6,7 +6,7 @@ use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
+use jsonrpsee::ws_server::{PendingSubscription, WsServerBuilder};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -63,18 +63,20 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	fn sub(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
+	fn sub(&self, pending: PendingSubscription) -> RpcResult<()> {
+		let mut sink = pending.accept()?;
 		sink.send(&"Response_A")?;
 		sink.send(&"Response_B")
 	}
 
-	fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> RpcResult<()> {
+	fn sub_with_params(&self, pending: PendingSubscription, val: u32) -> RpcResult<()> {
+		let mut sink = pending.accept()?;
 		sink.send(&val)?;
 		sink.send(&val)
 	}
 
-	fn sub_with_override_notif_method(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
-		sink.send(&1)
+	fn sub_with_override_notif_method(&self, pending: PendingSubscription) -> RpcResult<()> {
+		pending.accept()?.send(&1)
 	}
 }
 

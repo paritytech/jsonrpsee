@@ -30,16 +30,15 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
-use crate::error::{Error, SubscriptionClosed};
+use crate::error::Error;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{Id, ParamsSer, SubscriptionId};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
 #[doc(hidden)]

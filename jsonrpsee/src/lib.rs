@@ -80,7 +80,7 @@ pub use jsonrpsee_types as types;
 
 /// Set of RPC methods that can be mounted to the server.
 #[cfg(any(feature = "http-server", feature = "ws-server"))]
-pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
+pub use jsonrpsee_core::server::rpc_module::{PendingSubscription, RpcModule, SubscriptionSink};
 
 #[cfg(any(
 	feature = "http-server",

@@ -65,8 +65,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, sink, _| {
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
 			let idx: usize = params.one()?;
+			let sink = pending.accept()?;
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
@@ -79,8 +80,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, sink, _| {
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
 			let (one, two): (usize, usize) = params.parse()?;
+			let sink = pending.accept()?;
 			let item = &LETTERS[one..two];
 
 			let interval = interval(Duration::from_millis(200));

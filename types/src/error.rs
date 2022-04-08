@@ -126,6 +126,10 @@ pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 pub const UNKNOWN_ERROR_CODE: i32 = -32001;
 /// Invalid subscription error code.
 pub const INVALID_SUBSCRIPTION_CODE: i32 = -32002;
+/// Subscription got closed by the server.
+pub const SUBSCRIPTION_CLOSED: i32 = -32003;
+/// Subscription got closed by the server.
+pub const SUBSCRIPTION_CLOSED_WITH_ERROR: i32 = -32004;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";

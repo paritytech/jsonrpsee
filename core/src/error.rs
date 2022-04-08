@@ -156,6 +156,17 @@ pub enum SubscriptionClosed {
 	Server(String),
 }
 
+impl std::fmt::Display for SubscriptionClosed {
+	/// Get close reason as str.
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::Unsubscribed => write!(f, "Subscription was closed by a unsubscribe call"),
+			Self::ConnectionReset => write!(f, "Subscription was closed by connection reset"),
+			Self::Server(msg) => write!(f, "Subscription was closed by server: {}", msg.as_str()),
+		}
+	}
+}
+
 /// Generic transport error.
 #[derive(Debug, thiserror::Error)]
 pub enum GenericTransportError<T: std::error::Error + Send + Sync> {

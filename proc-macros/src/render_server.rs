@@ -69,7 +69,7 @@ impl RpcDescription {
 
 		let subscriptions = self.subscriptions.iter().map(|sub| {
 			let docs = &sub.docs;
-			let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
+			let subscription_sink_ty = self.jrps_server_item(quote! { PendingSubscription });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
@@ -196,9 +196,9 @@ impl RpcDescription {
 				};
 
 				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, sink, context| {
+					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, subscription_sink, context| {
 						#parsing
-						context.as_ref().#rust_method_name(sink, #params_seq)
+						context.as_ref().#rust_method_name(subscription_sink, #params_seq)
 					})
 				})
 			})

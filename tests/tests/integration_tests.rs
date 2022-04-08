@@ -352,8 +352,8 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut pending, mut tx| {
-			let sink = pending.accept().unwrap();
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, mut tx| {
+			let mut sink = pending.accept().unwrap();
 			tokio::spawn(async move {
 				let close_err = loop {
 					if let Err(Error::SubscriptionClosed(err)) = sink.send(&1) {
@@ -396,13 +396,15 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_for_ever", "n", "unsubscribe_for_ever", |_, sink, mut tx| {
+		.register_subscription("subscribe_for_ever", "n", "unsubscribe_for_ever", |_, pending, mut tx| {
 			// Create stream that produce one item then sleeps for an hour.
 			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
+			let pending = pending.accept()?;
+
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream).await.unwrap();
+				pending.pipe_from_stream(stream).await.unwrap();
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
@@ -443,7 +445,9 @@ async fn ws_server_cancels_sub_stream_after_err() {
 			"subscribe_with_err_on_stream",
 			"n",
 			"unsubscribe_with_err_on_stream",
-			move |_, sink, _| {
+			move |_, pending, _| {
+				let sink = pending.accept()?;
+
 				// create stream that produce an error which will cancel the subscription.
 				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
 				tokio::spawn(async move {
@@ -476,7 +480,9 @@ async fn ws_server_subscribe_with_stream() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, _| {
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
+			let sink = pending.accept()?;
+
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
@@ -670,7 +676,7 @@ async fn ws_subscribe_with_bad_params() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	let err = client
-		.subscribe::<serde_json::Value>("subscribe_bad", rpc_params!["0x0"], "unsubscribe_bad")
+		.subscribe::<serde_json::Value>("subscribe_add_one", rpc_params!["0x0"], "unsubscribe_add_one")
 		.await
 		.unwrap_err();
 	assert!(matches!(err, Error::Call(_)));
