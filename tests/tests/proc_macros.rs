@@ -28,6 +28,7 @@
 
 use std::net::SocketAddr;
 
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::HttpServerBuilder;
@@ -232,15 +233,6 @@ async fn proc_macros_generic_ws_client_api() {
 	assert_eq!(first_recv, 42);
 	let second_recv = sub.next().await.unwrap().unwrap();
 	assert_eq!(second_recv, 42);
-
-	// Sub with faulty params.
-	let err = client
-		.subscribe::<serde_json::Value>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
-		.await
-		.unwrap_err();
-	assert!(
-		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message == "Invalid params" && code == ErrorCode::InvalidParams.code())
-	);
 }
 
 #[tokio::test]
@@ -337,4 +329,25 @@ async fn subscriptions_do_not_work_for_http_servers() {
 	assert!(htclient.sub().await.is_err());
 	assert!(matches!(htclient.sub().await, Err(Error::HttpNotImplemented)));
 	assert_eq!(htclient.sync_method().await.unwrap(), 10);
+}
+
+#[tokio::test]
+async fn calls_with_bad_params() {
+	let server_addr = websocket_server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Sub with faulty params.
+	let err = client
+		.subscribe::<serde_json::Value>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
+		.await
+		.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message == "Invalid params" && code == ErrorCode::InvalidParams.code())
+	);
+
+	let err = client.request::<serde_json::Value>("foo_foo", rpc_params!["faulty"]).await.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: string") && code == ErrorCode::InvalidParams.code())
+	);
 }
