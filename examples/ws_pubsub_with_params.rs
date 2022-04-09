@@ -42,20 +42,20 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	// let addr = run_server().await?;
-	let url = format!("ws://127.0.0.1:9944");
+	let addr = run_server().await?;
+	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
 
 	// Subscription with a single parameter
 	let mut sub_params_one =
-		client.subscribe::<Option<char>>("author_submitAndWatchExtrinsic", rpc_params![], "unsub_one_param").await?;
+		client.subscribe::<Option<char>>("sub_one_param", rpc_params![3], "unsub_one_param").await?;
 	tracing::info!("subscription with one param: {:?}", sub_params_one.next().await);
 
 	// Subscription with multiple parameters
-	// let mut sub_params_two =
-	//     client.subscribe::<String>("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
-	// tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
+	let mut sub_params_two =
+		client.subscribe::<String>("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
+	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
 }
@@ -65,9 +65,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, sink, _| {
 			let idx: usize = params.one()?;
-			let sink = pending.accept()?;
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
@@ -80,9 +79,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, sink, _| {
 			let (one, two): (usize, usize) = params.parse()?;
-			let sink = pending.accept()?;
 			let item = &LETTERS[one..two];
 
 			let interval = interval(Duration::from_millis(200));
