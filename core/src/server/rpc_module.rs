@@ -886,46 +886,36 @@ impl SubscriptionSink {
 						match self.send(&result) {
 							Ok(_) => (),
 							Err(Error::SubscriptionClosed(close)) => {
-								let close = ErrorObject {
-									code: ErrorCode::ServerError(SUBSCRIPTION_CLOSED),
-									message: close.to_string().into(),
-									data: None,
-								};
-								self.close(close);
+								self.close(&ErrorObject::code_and_message(
+									SUBSCRIPTION_CLOSED_WITH_ERROR,
+									&close.to_string(),
+								));
 								break Ok(());
 							}
 							Err(err) => {
-								let close = ErrorObject {
-									code: ErrorCode::ServerError(SUBSCRIPTION_CLOSED_WITH_ERROR),
-									message: err.to_string().into(),
-									data: None,
-								};
-								self.close(close);
-								break Err(err);
+								let reason = err.to_string();
+								self.close(&ErrorObject::code_and_message(SUBSCRIPTION_CLOSED_WITH_ERROR, &reason));
+								break Err(Error::SubscriptionClosed(SubscriptionClosed::Server(reason)));
 							}
 						};
 						stream_item = stream.try_next();
 						closed_fut = next_closed_fut;
 					}
+					// Stream canceled because of error.
 					Either::Left((Err(e), _)) => {
-						let close_reason = SubscriptionClosed::Server(e.to_string());
-						let close = ErrorObject {
-							code: ErrorCode::ServerError(SUBSCRIPTION_CLOSED_WITH_ERROR),
-							message: close_reason.to_string().into(),
-							data: None,
-						};
-						self.close(close);
+						let reason = e.to_string();
+						self.close(&ErrorObject::code_and_message(SUBSCRIPTION_CLOSED_WITH_ERROR, &reason));
 
-						break Err(Error::SubscriptionClosed(close_reason));
+						break Err(Error::SubscriptionClosed(SubscriptionClosed::Server(reason)));
 					}
-					// Stream terminated.
+					// Stream completed.
 					Either::Left((Ok(None), _)) => {
 						let close = ErrorObject {
 							code: ErrorCode::ServerError(SUBSCRIPTION_CLOSED),
-							message: "Subscription stream terminated successful".into(),
+							message: "Subscription stream completed successful".into(),
 							data: None,
 						};
-						self.close(close);
+						self.close(&close);
 						break Ok(());
 					}
 					// The subscriber went away without telling us.
@@ -1006,7 +996,13 @@ impl SubscriptionSink {
 		})
 	}
 
-	/// Send an error notification on the subscription
+	/// Send an error notification on the subscription with a special field `error`.
+	///
+	/// This may be used for indicating to connected clients that a given subscription has been canceled
+	/// as well so not necessarily an error but this is used for compat reason with existing JavaScript libraries.
+	///
+	/// The APIs [`SubscriptionSink::pipe_from_stream`] and [`SubscriptionSink::pipe_from_stream`] uses this
+	/// when the stream is terminated.
 	///
 	/// ```json
 	/// {
@@ -1014,13 +1010,13 @@ impl SubscriptionSink {
 	///  "method": "<method>",
 	///  "params": {
 	///    "subscription": "<subscriptionID>",
-	///    "error": <YOUR MESSAGE>
+	///    "error": { "code": <your code>, "message": <your message>, "data": <your data but might be omitted> }
 	///    }
 	///  }
 	/// }
 	/// ```
 	///
-	pub fn close(&mut self, close: impl Serialize) -> bool {
+	pub fn close(&mut self, close: &ErrorObject) -> bool {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
 			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);

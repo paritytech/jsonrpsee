@@ -80,6 +80,11 @@ impl<'a> ErrorObject<'a> {
 		Self { code, message: code.message().into(), data }
 	}
 
+	/// Create a new `ErrorObject` from message and code.
+	pub fn code_and_message(code: i32, message: &'a str) -> ErrorObject<'a> {
+		Self { code: code.into(), message: message.into(), data: None }
+	}
+
 	/// Create an owned ErrorObject via [`CallError`]
 	pub fn to_call_error(self) -> CallError {
 		CallError::Custom {

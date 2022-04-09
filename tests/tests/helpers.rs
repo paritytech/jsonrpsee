@@ -29,9 +29,9 @@ use std::time::Duration;
 
 use jsonrpsee::core::Error;
 use jsonrpsee::http_server::{AccessControl, HttpServerBuilder, HttpServerHandle};
-use jsonrpsee::types::error::ErrorCode;
+use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED};
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
-use jsonrpsee::{RpcModule, SubscriptionSink};
+use jsonrpsee::RpcModule;
 
 pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
@@ -67,16 +67,8 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 
 	module
 		.register_subscription("subscribe_add_one", "subscribe_add_one", "unsubscribe_add_one", |params, pending, _| {
-			let (mut count, mut sink): (usize, SubscriptionSink) = match params.one() {
-				Ok(c) => {
-					let sink = pending.accept()?;
-					(c, sink)
-				}
-				Err(e) => {
-					pending.reject(ErrorCode::InvalidParams.into());
-					return Err(e.into());
-				}
-			};
+			let mut count: usize = params.one()?;
+			let mut sink = pending.accept()?;
 
 			std::thread::spawn(move || loop {
 				count = count.wrapping_add(1);
@@ -94,7 +86,9 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 			let mut sink = pending.accept()?;
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
-				sink.close("Server closed the stream because it was lazy")
+				let close =
+					ErrorObject::code_and_message(SUBSCRIPTION_CLOSED, "Server closed the stream because it was lazy");
+				sink.close(&close);
 			});
 			Ok(())
 		})
