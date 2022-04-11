@@ -27,7 +27,7 @@
 use std::fmt;
 
 use jsonrpsee_types::error::{
-	CallError, ErrorObject, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
+	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
 	SUBSCRIPTION_CLOSED_WITH_ERROR,
 };
 use serde::{Deserialize, Serialize};
@@ -149,8 +149,8 @@ impl Error {
 	/// Get the JSON-RPC error object representation of the error.
 	pub fn as_error_object<'a, 'b: 'a>(&'b self) -> ErrorObject<'a> {
 		match self {
-			Error::Call(CallError::Custom { message, code, data }) => {
-				ErrorObject { code: (*code).into(), message: message.as_str().into(), data: data.as_deref() }
+			Error::Call(CallError::Custom(ErrorObjectOwned { code, message, data })) => {
+				ErrorObject { code: *code, message: message.as_str().into(), data: data.as_deref() }
 			}
 			Error::Call(CallError::InvalidParams(e)) => {
 				ErrorObject::code_and_message(INVALID_PARAMS_CODE, e.to_string().into())

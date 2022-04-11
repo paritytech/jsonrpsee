@@ -31,6 +31,7 @@ use crate::client::{RequestMessage, TransportSenderT};
 use crate::Error;
 
 use futures_channel::{mpsc, oneshot};
+use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
 	ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
@@ -243,12 +244,12 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back = manager.complete_pending_call(id).expect("State checked above; qed");
-			let _ = send_back.map(|s| s.send(Err(Error::Call(err.error.to_call_error()))));
+			let _ = send_back.map(|s| s.send(Err(Error::Call(CallError::Custom(err.error.into_owned())))));
 			Ok(())
 		}
 		RequestStatus::PendingSubscription => {
 			let (_, send_back, _) = manager.complete_pending_subscription(id).expect("State checked above; qed");
-			let _ = send_back.send(Err(Error::Call(err.error.to_call_error())));
+			let _ = send_back.send(Err(Error::Call(CallError::Custom(err.error.into_owned()))));
 			Ok(())
 		}
 		_ => Err(Error::InvalidRequestId),

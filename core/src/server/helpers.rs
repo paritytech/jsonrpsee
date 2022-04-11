@@ -30,8 +30,8 @@ use crate::{to_json_raw_value, Error};
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use jsonrpsee_types::error::{
-	CallError, ErrorCode, ErrorObject, ErrorResponse, CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE,
-	OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE,
+	CallError, ErrorCode, ErrorObject, ErrorObjectOwned, ErrorResponse, CALL_EXECUTION_FAILED_CODE,
+	OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE,
 };
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
@@ -166,7 +166,7 @@ impl MethodSink {
 			Error::Call(CallError::Failed(e)) => {
 				(ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None)
 			}
-			Error::Call(CallError::Custom { code, message, data }) => (code.into(), message, data),
+			Error::Call(CallError::Custom(ErrorObjectOwned { code, message, data })) => (code.into(), message, data),
 			// This should normally not happen because the most common use case is to
 			// return `Error::Call` in `register_async_method`.
 			e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),

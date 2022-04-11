@@ -39,7 +39,7 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::future::Either;
 use futures_util::pin_mut;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, TryStreamExt};
-use jsonrpsee_types::error::{ErrorCode, ErrorObject};
+use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject};
 use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
 use jsonrpsee_types::{
 	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
@@ -348,7 +348,7 @@ impl Methods {
 		}
 
 		if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp) {
-			return Err(Error::Call(err.error.to_call_error()));
+			return Err(Error::Call(CallError::Custom(err.error.into_owned())));
 		}
 
 		unreachable!("Invalid JSON-RPC response is not possible using jsonrpsee; this is bug please file an issue");
@@ -810,14 +810,7 @@ impl PendingSubscription {
 		if sink.send_response(id, &uniq_sub.sub_id) {
 			let (tx, rx) = oneshot::channel();
 			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), rx));
-			Ok(SubscriptionSink {
-				inner: sink,
-				close_notify,
-				method,
-				uniq_sub,
-				subscribers,
-				is_connected: Some(tx),
-			})
+			Ok(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, is_connected: Some(tx) })
 		} else {
 			Err(Error::Custom("Connection is closed".into()))
 		}

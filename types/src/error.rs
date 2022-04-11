@@ -85,13 +85,9 @@ impl<'a> ErrorObject<'a> {
 		Self { code: code.into(), message, data: None }
 	}
 
-	/// Create an owned ErrorObject via [`CallError`]
-	pub fn to_call_error(self) -> CallError {
-		CallError::Custom {
-			code: self.code.code(),
-			data: self.data.map(|d| d.to_owned()),
-			message: self.message.into_owned(),
-		}
+	/// Create an owned ErrorObject.
+	pub fn into_owned(self) -> ErrorObjectOwned {
+		ErrorObjectOwned { code: self.code, data: self.data.map(|d| d.to_owned()), message: self.message.into_owned() }
 	}
 }
 
@@ -107,6 +103,19 @@ impl<'a> PartialEq for ErrorObject<'a> {
 		let other_raw = other.data.map(|r| r.get());
 		self.code == other.code && self.message == other.message && this_raw == other_raw
 	}
+}
+
+/// JSON-RPC error object.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ErrorObjectOwned {
+	/// Code
+	pub code: ErrorCode,
+	/// Message
+	pub message: String,
+	/// Optional data
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub data: Option<Box<RawValue>>,
 }
 
 /// Parse error code.
@@ -259,15 +268,8 @@ pub enum CallError {
 	#[error("RPC Call failed: {0}")]
 	Failed(#[from] anyhow::Error),
 	/// Custom error with specific JSON-RPC error code, message and data.
-	#[error("RPC Call failed: code: {code}, message: {message}, data: {data:?}")]
-	Custom {
-		/// JSON-RPC error code
-		code: i32,
-		/// Short description of the error.
-		message: String,
-		/// A primitive or structured value that contains additional information about the error.
-		data: Option<Box<RawValue>>,
-	},
+	#[error("RPC Call failed: {0:?}")]
+	Custom(ErrorObjectOwned),
 }
 
 impl CallError {
