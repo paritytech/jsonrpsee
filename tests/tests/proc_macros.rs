@@ -34,7 +34,7 @@ use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::HttpServerBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::types::error::{CallError, ErrorCode};
+use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObjectOwned};
 use jsonrpsee::types::ParamsSer;
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::WsServerBuilder;
@@ -345,13 +345,13 @@ async fn calls_with_bad_params() {
 		.await
 		.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: string \"0x0\", expected u32") && code == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if message.contains("invalid type: string \"0x0\", expected u32") && code == ErrorCode::InvalidParams)
 	);
 
 	// Call with faulty params as array.
 	let err = client.request::<serde_json::Value>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: string \"faulty\", expected u8") && code == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if message.contains("invalid type: string \"faulty\", expected u8") && code == ErrorCode::InvalidParams)
 	);
 
 	// Sub with faulty params as map.
@@ -361,7 +361,7 @@ async fn calls_with_bad_params() {
 	let err =
 		client.subscribe::<serde_json::Value>("foo_echo", Some(params), "foo_unsubscribe_echo").await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: string \"0x0\", expected u32") && code == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if message.contains("invalid type: string \"0x0\", expected u32") && code == ErrorCode::InvalidParams)
 	);
 
 	// Call with faulty params as map.
@@ -371,6 +371,6 @@ async fn calls_with_bad_params() {
 	let params = ParamsSer::Map(map);
 	let err = client.request::<serde_json::Value>("foo_foo", Some(params)).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: integer `99`, expected a string") && code == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if message.contains("invalid type: integer `99`, expected a string") && code == ErrorCode::InvalidParams)
 	);
 }

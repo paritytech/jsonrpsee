@@ -87,7 +87,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
 				let err: Error = CallError::Custom(ErrorObjectOwned {
-					code: SUBSCRIPTION_CLOSED_WITH_ERROR,
+					code: SUBSCRIPTION_CLOSED_WITH_ERROR.into(),
 					message: "Server closed the stream because it was lazy".into(),
 					data: None,
 				})
