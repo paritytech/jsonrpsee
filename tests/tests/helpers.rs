@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use jsonrpsee::core::Error;
 use jsonrpsee::http_server::{AccessControl, HttpServerBuilder, HttpServerHandle};
-use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED};
+use jsonrpsee::types::error::{CallError, SUBSCRIPTION_CLOSED_WITH_ERROR};
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
 
@@ -86,9 +86,13 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 			let mut sink = pending.accept()?;
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
-				let close =
-					ErrorObject::code_and_message(SUBSCRIPTION_CLOSED, "Server closed the stream because it was lazy");
-				sink.close(&close);
+				let err: Error = CallError::Custom {
+					code: SUBSCRIPTION_CLOSED_WITH_ERROR,
+					message: "Server closed the stream because it was lazy".into(),
+					data: None,
+				}
+				.into();
+				sink.close(err);
 			});
 			Ok(())
 		})

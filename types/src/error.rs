@@ -81,7 +81,7 @@ impl<'a> ErrorObject<'a> {
 	}
 
 	/// Create a new `ErrorObject` from message and code.
-	pub fn code_and_message(code: i32, message: &'a str) -> ErrorObject<'a> {
+	pub fn code_and_message(code: i32, message: Cow<'a, str>) -> ErrorObject<'a> {
 		Self { code: code.into(), message: message.into(), data: None }
 	}
 

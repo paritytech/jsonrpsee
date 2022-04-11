@@ -401,10 +401,10 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-			let pending = pending.accept()?;
+			let mut sink = pending.accept()?;
 
 			tokio::spawn(async move {
-				pending.pipe_from_stream(stream).await.unwrap();
+				let _ = sink.pipe_from_stream(stream).await.map_err(|e| sink.close(e));
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
@@ -446,12 +446,12 @@ async fn ws_server_cancels_sub_stream_after_err() {
 			"n",
 			"unsubscribe_with_err_on_stream",
 			move |_, pending, _| {
-				let sink = pending.accept()?;
+				let mut sink = pending.accept()?;
 
 				// create stream that produce an error which will cancel the subscription.
 				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
 				tokio::spawn(async move {
-					let _ = sink.pipe_from_try_stream(stream).await;
+					let _ = sink.pipe_from_try_stream(stream).await.map_err(|e| sink.close(e));
 				});
 				Ok(())
 			},
@@ -461,7 +461,7 @@ async fn ws_server_cancels_sub_stream_after_err() {
 	server.start(module).unwrap();
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub: Subscription<usize> =
+	let mut sub: Subscription<serde_json::Value> =
 		client.subscribe("subscribe_with_err_on_stream", None, "unsubscribe_with_err_on_stream").await.unwrap();
 
 	assert_eq!(sub.next().await.unwrap().unwrap(), 1);
@@ -481,13 +481,13 @@ async fn ws_server_subscribe_with_stream() {
 
 	module
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
-			let sink = pending.accept()?;
+			let mut sink = pending.accept()?;
 
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
-				sink.pipe_from_stream(stream).await.unwrap();
+				let _ = sink.pipe_from_stream(stream).await.map_err(|e| sink.close(e));
 			});
 			Ok(())
 		})

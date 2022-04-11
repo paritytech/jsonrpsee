@@ -287,7 +287,7 @@ pub(crate) mod visitor;
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
 ///         fn sub_override_notif_method(&self, pending: PendingSubscription) -> RpcResult<()> {
-///             let sink = pending.accept()?;    
+///             let mut sink = pending.accept()?;    
 ///             tokio::spawn(async move {
 ///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
 ///                 sink.pipe_from_stream(stream).await;

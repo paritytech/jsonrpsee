@@ -26,7 +26,10 @@
 
 use std::fmt;
 
-use jsonrpsee_types::error::CallError;
+use jsonrpsee_types::error::{
+	CallError, ErrorObject, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
+	SUBSCRIPTION_CLOSED_WITH_ERROR,
+};
 use serde::{Deserialize, Serialize};
 
 /// Convenience type for displaying errors.
@@ -142,6 +145,33 @@ impl Error {
 	{
 		Error::Call(CallError::from_std_error(err))
 	}
+
+	/// Get the JSON-RPC error object representation of the error.
+	pub fn as_error_object<'a, 'b: 'a>(&'b self) -> ErrorObject<'a> {
+		match self {
+			Error::Call(CallError::Custom { message, code, data }) => {
+				ErrorObject { code: (*code).into(), message: message.as_str().into(), data: data.as_deref() }
+			}
+			Error::Call(CallError::InvalidParams(e)) => {
+				ErrorObject::code_and_message(INVALID_PARAMS_CODE, e.to_string().into())
+			}
+			Error::SubscriptionClosed(SubscriptionClosed::Server(CloseReason::Failed(e))) => {
+				ErrorObject::code_and_message(SUBSCRIPTION_CLOSED_WITH_ERROR, e.as_str().into())
+			}
+			Error::SubscriptionClosed(SubscriptionClosed::Server(CloseReason::Unknown)) => {
+				ErrorObject::code_and_message(
+					SUBSCRIPTION_CLOSED_WITH_ERROR,
+					"Subscription closed with unknown reason".into(),
+				)
+			}
+			// Not really errors see [`SubscriptionClosed`] for further info.
+			// Such as if the subscription was closed by the client and similar.
+			Error::SubscriptionClosed(other) => {
+				ErrorObject::code_and_message(SUBSCRIPTION_CLOSED, other.to_string().into())
+			}
+			_ => ErrorObject::code_and_message(CALL_EXECUTION_FAILED_CODE, self.to_string().into()),
+		}
+	}
 }
 
 /// A type to represent when a subscription gets closed
@@ -153,7 +183,24 @@ pub enum SubscriptionClosed {
 	/// The client closed the connection.
 	ConnectionReset,
 	/// The server closed the subscription, providing a description of the reason as a `String`.
-	Server(String),
+	Server(CloseReason),
+}
+
+impl From<CloseReason> for SubscriptionClosed {
+	fn from(reason: CloseReason) -> Self {
+		Self::Server(reason)
+	}
+}
+
+/// Represent why a subscription was closed by the server.
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub enum CloseReason {
+	/// The subscription was completed successfully.
+	Success,
+	/// The subscription was closed with unknown reason.
+	Unknown,
+	/// The subscription failed because of some error.
+	Failed(String),
 }
 
 impl std::fmt::Display for SubscriptionClosed {
@@ -162,7 +209,7 @@ impl std::fmt::Display for SubscriptionClosed {
 		match self {
 			Self::Unsubscribed => write!(f, "Subscription was closed by a unsubscribe call"),
 			Self::ConnectionReset => write!(f, "Subscription was closed by connection reset"),
-			Self::Server(msg) => write!(f, "Subscription was closed by server: {}", msg.as_str()),
+			Self::Server(reason) => write!(f, "Subscription was closed by server: {:?}", reason),
 		}
 	}
 }

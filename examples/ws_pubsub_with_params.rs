@@ -67,14 +67,14 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
 			let idx: usize = params.one()?;
-			let sink = pending.accept()?;
+			let mut sink = pending.accept()?;
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let _ = sink.pipe_from_stream(stream).await;
+				let _ = sink.pipe_from_stream(stream).await.map_err(|e| sink.close(e));
 			});
 			Ok(())
 		})
@@ -82,14 +82,14 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module
 		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
 			let (one, two): (usize, usize) = params.parse()?;
-			let sink = pending.accept()?;
+			let mut sink = pending.accept()?;
 			let item = &LETTERS[one..two];
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let _ = sink.pipe_from_stream(stream).await;
+				let _ = sink.pipe_from_stream(stream).await.map_err(|e| sink.close(e));
 			});
 			Ok(())
 		})

@@ -26,9 +26,9 @@
 
 use std::collections::HashMap;
 
-use jsonrpsee::core::error::{Error, SubscriptionClosed};
+use jsonrpsee::core::error::{CloseReason, Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::types::error::{CallError, ErrorObject, SUBSCRIPTION_CLOSED};
+use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
@@ -209,7 +209,7 @@ async fn subscribing_without_server() {
 					let _ = sink.send(&letter);
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
-				sink.close(&ErrorObject::code_and_message(SUBSCRIPTION_CLOSED, "Subscription terminated successful"));
+				sink.close(Error::SubscriptionClosed(CloseReason::Success.into()));
 			});
 
 			Ok(())
@@ -246,8 +246,8 @@ async fn close_test_subscribing_without_server() {
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
 				// Get the close reason.
-				if let Error::SubscriptionClosed(close) = sink.send(&"lo").unwrap_err() {
-					sink.close(&ErrorObject::code_and_message(SUBSCRIPTION_CLOSED, &close.to_string()));
+				if let Err(e) = sink.send(&"lo") {
+					sink.close(e);
 				}
 			});
 			Ok(())

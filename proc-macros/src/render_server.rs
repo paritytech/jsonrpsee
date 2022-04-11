@@ -299,8 +299,7 @@ impl RpcDescription {
 		let params_fields_seq = params.iter().map(|(name, _)| name);
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
-		let err_obj = self.jrps_server_item(quote! { types::error::ErrorObject });
-		let invalid_params = self.jrps_server_item(quote! { types::error::INVALID_PARAMS_CODE });
+		let err = self.jrps_server_item(quote! { core::Error });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -311,8 +310,9 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								let _ = #pending.reject(#err_obj::code_and_message(#invalid_params, &e.to_string()));
-								return Err(e.into())
+								let _e: #err = e.into();
+								let _ = #pending.reject_from_error_object(_e.as_error_object());
+								return Err(_e)
 							}
 						};
 					}
@@ -334,8 +334,9 @@ impl RpcDescription {
 							Ok(v) => v,
 							Err(e) => {
 								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
-								let _ = #pending.reject(#err_obj::code_and_message(#invalid_params, &e.to_string()));
-								return Err(e.into())
+								let _e: #err = e.into();
+								let _ = #pending.reject_from_error_object(_e.as_error_object());
+								return Err(_e)
 							}
 						};
 					}
@@ -384,8 +385,9 @@ impl RpcDescription {
 						Ok(p) => p,
 						Err(e) => {
 							#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
-							let _ = #pending.reject(#err_obj::code_and_message(#invalid_params, &e.to_string()));
-							return Err(e.into());
+							let _e: #err = e.into();
+							let _ = #pending.reject_from_error_object(_e.as_error_object());
+							return Err(_e);
 						}
 					};
 
