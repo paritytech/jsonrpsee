@@ -106,30 +106,28 @@ pub(crate) fn process_subscription_response(
 	}
 }
 
-/// Attempts to process a subscription response.
+/// Attempts to close a subscription when a [`SubscriptionError`] is received.
 ///
-/// Returns `Ok()` if the response was successfully sent to the frontend.
-/// Return `Err(None)` if the subscription was not found.
-/// Returns `Err(Some(msg))` if the channel to the `Subscription` was full.
+/// Returns `Ok(())` if the subscription was removed
+/// Return `Err(e)` if the subscription was not found.
 pub(crate) fn process_subscription_close_response(
 	manager: &mut RequestManager,
 	response: SubscriptionError<JsonValue>,
-) -> Result<(), Option<RequestMessage>> {
+) -> Result<(), Error> {
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => {
 			tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
-			return Err(None);
+			return Err(Error::InvalidSubscriptionId);
 		}
 	};
 
-	if manager.remove_subscription(request_id, sub_id.clone()).is_some() {
-		Ok(())
-	} else {
-		tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
-		Err(None)
-	}
+	debug_assert!(
+		manager.remove_subscription(request_id, sub_id).is_some(),
+		"Both request ID and sub ID in RequestManager; qed"
+	);
+	Ok(())
 }
 
 /// Attempts to process an incoming notification

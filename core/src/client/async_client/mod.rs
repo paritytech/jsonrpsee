@@ -493,7 +493,7 @@ async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
 				}
 				// Subscription error response.
 				else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
-					tracing::debug!("[backend]: recv subscription err {:?}", response);
+					tracing::debug!("[backend]: recv subscription closed {:?}", response);
 					let _ = process_subscription_close_response(&mut manager, response);
 				}
 				// Incoming Notification
