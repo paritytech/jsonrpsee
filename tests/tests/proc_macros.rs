@@ -26,6 +26,7 @@
 
 //! Example of using proc macro to generate working client and server.
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
@@ -34,6 +35,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::HttpServerBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::{CallError, ErrorCode};
+use jsonrpsee::types::ParamsSer;
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::WsServerBuilder;
 use serde_json::json;
@@ -337,17 +339,38 @@ async fn calls_with_bad_params() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	// Sub with faulty params.
+	// Sub with faulty params as array.
 	let err = client
 		.subscribe::<serde_json::Value>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
 		.await
 		.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message == "Invalid params" && code == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: string \"0x0\", expected u32") && code == ErrorCode::InvalidParams.code())
 	);
 
-	let err = client.request::<serde_json::Value>("foo_foo", rpc_params!["faulty"]).await.unwrap_err();
+	// Call with faulty params as array.
+	let err = client.request::<serde_json::Value>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: string") && code == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: string \"faulty\", expected u8") && code == ErrorCode::InvalidParams.code())
+	);
+
+	// Sub with faulty params as map.
+	let mut map = BTreeMap::new();
+	map.insert("val", "0x0".into());
+	let params = ParamsSer::Map(map);
+	let err =
+		client.subscribe::<serde_json::Value>("foo_echo", Some(params), "foo_unsubscribe_echo").await.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: string \"0x0\", expected u32") && code == ErrorCode::InvalidParams.code())
+	);
+
+	// Call with faulty params as map.
+	let mut map = BTreeMap::new();
+	map.insert("param_a", 1.into());
+	map.insert("param_b", 99.into());
+	let params = ParamsSer::Map(map);
+	let err = client.request::<serde_json::Value>("foo_foo", Some(params)).await.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom { message, code, .. }) if message.contains("invalid type: integer `99`, expected a string") && code == ErrorCode::InvalidParams.code())
 	);
 }
