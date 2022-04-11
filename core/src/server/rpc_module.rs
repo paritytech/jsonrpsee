@@ -83,6 +83,15 @@ pub struct ConnState<'a> {
 	pub id_provider: &'a dyn IdProvider,
 }
 
+/// Outcome of a successful terminated subscription.
+#[derive(Debug)]
+pub enum SubscriptionResult {
+	/// The subscription stream was executed successful.
+	Success,
+	/// The subscription was aborted the remote peer.
+	Aborted,
+}
+
 impl<'a> std::fmt::Debug for ConnState<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("ConnState").field("conn_id", &self.conn_id).field("close", &self.close_notify).finish()
@@ -627,7 +636,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///            let sink = pending.accept()?;
 	///            (x, sink)
 	///         }
-	///         // Explicitly reject the call with the error received from parsing the param.  
+	///         // Explicitly reject the call with the error received from parsing the param.
 	///         Err(e) => {
 	///            let err: Error = e.into();
 	///            pending.reject_from_error_object(err.as_error_object());
@@ -806,7 +815,7 @@ impl PendingSubscription {
 				close_notify,
 				method,
 				uniq_sub,
-				subscribers: subscribers,
+				subscribers,
 				is_connected: Some(tx),
 			})
 		} else {
@@ -864,7 +873,8 @@ impl SubscriptionSink {
 	///
 	/// ```no_run
 	///
-	/// use jsonrpsee_core::server::rpc_module::RpcModule;
+	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionResult};
+	/// use jsonrpsee_core::error::{Error, CloseReason};
 	/// use anyhow::anyhow;
 	///
 	/// let mut m = RpcModule::new(());
@@ -875,12 +885,25 @@ impl SubscriptionSink {
 	///     // because after the `Err(_)` the stream is terminated.
 	///     tokio::spawn(async move {
 	///         // jsonrpsee doesn't send an error notification if the stream was closed unless `close` is called.
-	///         let _ = sink.pipe_from_try_stream(stream).await.map_err(|e| sink.close(e));
+	///         // jsonrpsee doesn't send a notification if the stream was terminated or canceled.
+	///         //
+	///         // But it's possible to get reason why subscription was terminated
+	///         //
+	///         match sink.pipe_from_try_stream(stream).await {
+	///            Ok(SubscriptionResult::Success) => {
+	///                sink.close(Error::SubscriptionClosed(CloseReason::Success.into()));
+	///            }
+	///            // we don't want to send close reason when the client is unsubscribed or disconnected.
+	///            Ok(SubscriptionResult::Aborted) => (),
+	///            Err(e) => {
+	///                sink.close(e);
+	///            }
+	///         };
 	///     });
 	///     Ok(())
 	/// });
 	/// ```
-	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> Result<(), Error>
+	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> Result<SubscriptionResult, Error>
 	where
 		S: TryStream<Ok = T, Error = E> + Unpin,
 		T: Serialize,
@@ -907,19 +930,16 @@ impl SubscriptionSink {
 					Either::Left((Err(e), _)) => {
 						break Err(Error::SubscriptionClosed(CloseReason::Failed(e.to_string()).into()));
 					}
-					// Stream completed (this is not really an error)
 					Either::Left((Ok(None), _)) => {
-						break Err(Error::SubscriptionClosed(CloseReason::Success.into()));
+						break Ok(SubscriptionResult::Success);
 					}
-					// The subscriber went away without telling us.
 					Either::Right(((), _)) => {
-						break Ok(());
+						break Ok(SubscriptionResult::Aborted);
 					}
 				}
 			}
 		} else {
-			// The sink is closed.
-			Ok(())
+			Ok(SubscriptionResult::Aborted)
 		}
 	}
 
@@ -943,7 +963,7 @@ impl SubscriptionSink {
 	///     Ok(())
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T>(&mut self, stream: S) -> Result<(), Error>
+	pub async fn pipe_from_stream<S, T>(&mut self, stream: S) -> Result<SubscriptionResult, Error>
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
@@ -985,7 +1005,7 @@ impl SubscriptionSink {
 
 		res.map_err(|e| {
 			let err = e.unwrap_or_else(|| CloseReason::Unknown.into());
-			Error::SubscriptionClosed(err.into())
+			Error::SubscriptionClosed(err)
 		})
 	}
 
@@ -1018,6 +1038,14 @@ impl SubscriptionSink {
 			sink.send_raw(msg).is_ok()
 		} else {
 			false
+		}
+	}
+}
+
+impl Drop for SubscriptionSink {
+	fn drop(&mut self) {
+		if self.is_connected.is_some() {
+			self.subscribers.lock().remove(&self.uniq_sub);
 		}
 	}
 }

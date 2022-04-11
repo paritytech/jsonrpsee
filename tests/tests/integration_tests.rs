@@ -33,7 +33,8 @@ use std::time::Duration;
 use futures::TryStreamExt;
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::SubscriptionClosed;
+use jsonrpsee::core::error::{CloseReason, SubscriptionClosed};
+use jsonrpsee::core::server::rpc_module::SubscriptionResult;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
@@ -487,7 +488,13 @@ async fn ws_server_subscribe_with_stream() {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
-				let _ = sink.pipe_from_stream(stream).await.map_err(|e| sink.close(e));
+				match sink.pipe_from_stream(stream).await {
+					Ok(SubscriptionResult::Success) => {
+						sink.close(Error::SubscriptionClosed(CloseReason::Success.into()))
+					}
+					Ok(SubscriptionResult::Aborted) => unreachable!(),
+					Err(e) => sink.close(e),
+				};
 			});
 			Ok(())
 		})

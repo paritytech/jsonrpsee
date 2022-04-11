@@ -83,7 +83,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 
 	module
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| {
-			let mut sink = pending.accept()?;
+			let sink = pending.accept()?;
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
 				let err: Error = CallError::Custom {
