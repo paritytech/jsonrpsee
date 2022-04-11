@@ -905,13 +905,11 @@ impl SubscriptionSink {
 					}
 					// Stream canceled because of error.
 					Either::Left((Err(e), _)) => {
-						let close_reason: SubscriptionClosed = CloseReason::Failed(e.to_string()).into();
-						break Err(Error::SubscriptionClosed(close_reason));
+						break Err(Error::SubscriptionClosed(CloseReason::Failed(e.to_string()).into()));
 					}
 					// Stream completed (this is not really an error)
 					Either::Left((Ok(None), _)) => {
-						let close_reason: SubscriptionClosed = CloseReason::Success.into();
-						break Err(Error::SubscriptionClosed(close_reason));
+						break Err(Error::SubscriptionClosed(CloseReason::Success.into()));
 					}
 					// The subscriber went away without telling us.
 					Either::Right(((), _)) => {
@@ -1005,13 +1003,13 @@ impl SubscriptionSink {
 	///  "method": "<method>",
 	///  "params": {
 	///    "subscription": "<subscriptionID>",
-	///    "error": { "code": <your code>, "message": <your message>, "data": <your data but might be omitted> }
+	///    "error": { "code": <code from error>, "message": <message from error>, "data": <data from error> }
 	///    }
 	///  }
 	/// }
 	/// ```
 	///
-	pub fn close(&mut self, err: Error) -> bool {
+	pub fn close(mut self, err: Error) -> bool {
 		self.is_connected.take();
 		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
 			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
