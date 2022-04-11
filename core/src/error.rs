@@ -178,10 +178,8 @@ impl Error {
 /// by either the server or client side.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub enum SubscriptionClosed {
-	/// The subscription was closed by calling the unsubscribe method.
-	Unsubscribed,
-	/// The client closed the connection.
-	ConnectionReset,
+	/// The remote peer closed the connection or called the unsubscribe method.
+	RemotePeerAborted,
 	/// The server closed the subscription, providing a description of the reason as a `String`.
 	Server(CloseReason),
 }
@@ -207,8 +205,7 @@ impl std::fmt::Display for SubscriptionClosed {
 	/// Get close reason as str.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::Unsubscribed => write!(f, "Subscription was closed by a unsubscribe call"),
-			Self::ConnectionReset => write!(f, "Subscription was closed by connection reset"),
+			Self::RemotePeerAborted => write!(f, "Subscription was closed by the remote peer"),
 			Self::Server(reason) => write!(f, "Subscription was closed by server: {:?}", reason),
 		}
 	}

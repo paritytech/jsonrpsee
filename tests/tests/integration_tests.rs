@@ -382,7 +382,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let close_err = rx.next().await.unwrap();
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert!(matches!(close_err, SubscriptionClosed::ConnectionReset));
+	assert!(matches!(close_err, SubscriptionClosed::RemotePeerAborted));
 }
 
 #[tokio::test]

@@ -266,7 +266,7 @@ async fn close_test_subscribing_without_server() {
 
 	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
-	let exp = SubscriptionClosed::ConnectionReset;
+	let exp = SubscriptionClosed::RemotePeerAborted;
 	assert!(
 		matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
 	);
