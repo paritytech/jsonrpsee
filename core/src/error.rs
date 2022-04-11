@@ -158,12 +158,6 @@ impl Error {
 			Error::SubscriptionClosed(SubscriptionClosed::Server(CloseReason::Failed(e))) => {
 				ErrorObject::code_and_message(SUBSCRIPTION_CLOSED_WITH_ERROR, e.as_str().into())
 			}
-			Error::SubscriptionClosed(SubscriptionClosed::Server(CloseReason::Unknown)) => {
-				ErrorObject::code_and_message(
-					SUBSCRIPTION_CLOSED_WITH_ERROR,
-					"Subscription closed with unknown reason".into(),
-				)
-			}
 			// Not really errors see [`SubscriptionClosed`] for further info.
 			// Such as if the subscription was closed by the client and similar.
 			Error::SubscriptionClosed(other) => {
@@ -195,8 +189,6 @@ impl From<CloseReason> for SubscriptionClosed {
 pub enum CloseReason {
 	/// The subscription was completed successfully.
 	Success,
-	/// The subscription was closed with unknown reason.
-	Unknown,
 	/// The subscription failed because of some error.
 	Failed(String),
 }

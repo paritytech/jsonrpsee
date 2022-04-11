@@ -917,9 +917,6 @@ impl SubscriptionSink {
 									SubscriptionClosed::Server(CloseReason::Failed(f)) => {
 										Err(Error::SubscriptionClosed(CloseReason::Failed(f).into()))
 									}
-									SubscriptionClosed::Server(CloseReason::Unknown) => {
-										Err(Error::SubscriptionClosed(CloseReason::Unknown.into()))
-									}
 								};
 								break res;
 							}
