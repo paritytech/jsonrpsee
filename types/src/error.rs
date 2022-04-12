@@ -76,13 +76,13 @@ pub struct ErrorObject<'a> {
 
 impl<'a> ErrorObject<'a> {
 	/// Create a new `ErrorObject` with optional data.
-	pub fn new(code: ErrorCode, message: Cow<'a, str>, data: Option<&'a RawValue>) -> ErrorObject<'a> {
-		Self { code, message, data }
+	pub fn new(code: i32, message: &'a str, data: Option<&'a RawValue>) -> ErrorObject<'a> {
+		Self { code: code.into(), message: message.into(), data }
 	}
 
 	/// Create a new `ErrorObject` from message and code.
-	pub fn code_and_message(code: i32, message: Cow<'a, str>) -> ErrorObject<'a> {
-		Self { code: code.into(), message, data: None }
+	pub fn code_and_message(code: i32, message: &'a str) -> ErrorObject<'a> {
+		Self { code: code.into(), message: message.into(), data: None }
 	}
 
 	/// Create an owned ErrorObject.
@@ -120,9 +120,9 @@ pub struct ErrorObjectOwned {
 
 impl ErrorObjectOwned {
 	/// Create a new `ErrorObjectOwned` with optional data.
-	pub fn new(code: ErrorCode, message: impl Into<String>, data: &impl Serialize) -> Self {
+	pub fn new(code: i32, message: impl Into<String>, data: impl Serialize) -> Self {
 		let data = serde_json::value::to_raw_value(&data).ok();
-		Self { code, message: message.into(), data }
+		Self { code: code.into(), message: message.into(), data }
 	}
 
 	/// Create a new `ErrorObject` from message and code.
