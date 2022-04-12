@@ -65,7 +65,7 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		pending: PendingSubscription,
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> Result<(), Error> {
-		pending.accept()?.send(&vec![[0; 32]])
+		pending.accept()?.send(&vec![[0; 32]]).map(|_| ()).map_err(Into::into)
 	}
 }
 

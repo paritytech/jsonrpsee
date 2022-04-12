@@ -27,10 +27,8 @@
 use std::fmt;
 
 use jsonrpsee_types::error::{
-	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
-	SUBSCRIPTION_CLOSED_WITH_ERROR,
+	CallError, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
 };
-use serde::{Deserialize, Serialize};
 
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
@@ -97,9 +95,6 @@ pub enum Error {
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
-	/// Subscription got closed.
-	#[error("Subscription closed: {0:?}")]
-	SubscriptionClosed(SubscriptionClosed),
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,
@@ -147,58 +142,43 @@ impl Error {
 	}
 
 	/// Get the JSON-RPC error object representation of the error.
-	pub fn as_error_object<'a, 'b: 'a>(&'b self) -> ErrorObject<'a> {
+	pub fn to_error_object(&self) -> ErrorObjectOwned {
 		match self {
-			Error::Call(CallError::Custom(ErrorObjectOwned { code, message, data })) => {
-				ErrorObject { code: *code, message: message.as_str().into(), data: data.as_deref() }
-			}
+			Error::Call(CallError::Custom(err)) => err.clone(),
 			Error::Call(CallError::InvalidParams(e)) => {
-				ErrorObject::code_and_message(INVALID_PARAMS_CODE, e.to_string().into())
+				ErrorObjectOwned { code: INVALID_PARAMS_CODE.into(), message: e.to_string(), data: None }
 			}
-			Error::SubscriptionClosed(SubscriptionClosed::Server(CloseReason::Failed(e))) => {
-				ErrorObject::code_and_message(SUBSCRIPTION_CLOSED_WITH_ERROR, e.as_str().into())
-			}
-			// Not really errors see [`SubscriptionClosed`] for further info.
-			// Such as if the subscription was closed by the client and similar.
-			Error::SubscriptionClosed(other) => {
-				ErrorObject::code_and_message(SUBSCRIPTION_CLOSED, other.to_string().into())
-			}
-			_ => ErrorObject::code_and_message(CALL_EXECUTION_FAILED_CODE, self.to_string().into()),
+			_ => ErrorObjectOwned { code: CALL_EXECUTION_FAILED_CODE.into(), message: self.to_string(), data: None },
 		}
 	}
 }
 
 /// A type to represent when a subscription gets closed
 /// by either the server or client side.
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum SubscriptionClosed {
 	/// The remote peer closed the connection or called the unsubscribe method.
 	RemotePeerAborted,
-	/// The server closed the subscription, providing a description of the reason as a `String`.
-	Server(CloseReason),
-}
-
-impl From<CloseReason> for SubscriptionClosed {
-	fn from(reason: CloseReason) -> Self {
-		Self::Server(reason)
-	}
-}
-
-/// Represent why a subscription was closed by the server.
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub enum CloseReason {
-	/// The subscription was completed successfully.
+	/// The subscription was completed successfully by the server.
 	Success,
-	/// The subscription failed because of some error.
-	Failed(String),
+	/// The subscription failed during execution by the server.
+	Failed(ErrorObjectOwned),
 }
 
-impl std::fmt::Display for SubscriptionClosed {
-	/// Get close reason as str.
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+impl Into<ErrorObjectOwned> for SubscriptionClosed {
+	fn into(self) -> ErrorObjectOwned {
 		match self {
-			Self::RemotePeerAborted => write!(f, "Subscription was closed by the remote peer"),
-			Self::Server(reason) => write!(f, "Subscription was closed by server: {:?}", reason),
+			Self::RemotePeerAborted => ErrorObjectOwned {
+				code: SUBSCRIPTION_CLOSED.into(),
+				message: "Subscription was closed by the remote peer".into(),
+				data: None,
+			},
+			Self::Success => ErrorObjectOwned {
+				code: SUBSCRIPTION_CLOSED.into(),
+				message: "Subscription was completed by the server successfully".into(),
+				data: None,
+			},
+			Self::Failed(err) => err,
 		}
 	}
 }

@@ -191,7 +191,7 @@ mod rpc_impl {
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
 		fn sub(&self, pending: PendingSubscription, _: String) -> RpcResult<()> {
-			pending.accept()?.send(&"hello")
+			pending.accept()?.send(&"hello").map(|_| ()).map_err(Into::into)
 		}
 	}
 }

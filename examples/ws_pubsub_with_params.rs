@@ -29,6 +29,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use jsonrpsee::core::client::SubscriptionClientT;
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
@@ -74,7 +75,16 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let _ = sink.pipe_from_stream(stream).await.map_err(|e| sink.close(e));
+				match sink.pipe_from_stream(stream).await {
+					// Send close notification when subscription stream failed.
+					SubscriptionClosed::Failed(err) => {
+						sink.close(err);
+					}
+					// Don't send close notification because the stream should run forever.
+					SubscriptionClosed::Success => (),
+					// Don't send close because the client has already disconnected.
+					SubscriptionClosed::RemotePeerAborted => (),
+				};
 			});
 			Ok(())
 		})
@@ -89,7 +99,16 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let _ = sink.pipe_from_stream(stream).await.map_err(|e| sink.close(e));
+				match sink.pipe_from_stream(stream).await {
+					// Send close notification when subscription stream failed.
+					SubscriptionClosed::Failed(err) => {
+						sink.close(err);
+					}
+					// Don't send close notification because the stream should run forever.
+					SubscriptionClosed::Success => (),
+					// Don't send close because the client has already disconnected.
+					SubscriptionClosed::RemotePeerAborted => (),
+				};
 			});
 			Ok(())
 		})

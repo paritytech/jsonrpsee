@@ -33,11 +33,11 @@ use std::time::Duration;
 use futures::TryStreamExt;
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::{CloseReason, SubscriptionClosed};
-use jsonrpsee::core::server::rpc_module::SubscriptionResult;
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
+use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -357,8 +357,8 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			let mut sink = pending.accept().unwrap();
 			tokio::spawn(async move {
 				let close_err = loop {
-					if let Err(Error::SubscriptionClosed(err)) = sink.send(&1) {
-						break err;
+					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
+						break ErrorObject::code_and_message(0_i32, "Subscription terminated successfully".into());
 					}
 					tokio::time::sleep(Duration::from_millis(100)).await;
 				};
@@ -382,7 +382,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let close_err = rx.next().await.unwrap();
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert!(matches!(close_err, SubscriptionClosed::RemotePeerAborted));
+	assert_eq!(close_err, ErrorObject::code_and_message(0_i32, "Subscription terminated successfully".into()));
 }
 
 #[tokio::test]
@@ -405,7 +405,7 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 			let mut sink = pending.accept()?;
 
 			tokio::spawn(async move {
-				let _ = sink.pipe_from_stream(stream).await.map_err(|e| sink.close(e));
+				sink.pipe_from_stream(stream).await;
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
@@ -452,7 +452,10 @@ async fn ws_server_cancels_sub_stream_after_err() {
 				// create stream that produce an error which will cancel the subscription.
 				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
 				tokio::spawn(async move {
-					let _ = sink.pipe_from_try_stream(stream).await.map_err(|e| sink.close(e));
+					match sink.pipe_from_try_stream(stream).await {
+						SubscriptionClosed::Failed(e) => sink.close(e),
+						_ => unreachable!(),
+					};
 				});
 				Ok(())
 			},
@@ -489,11 +492,10 @@ async fn ws_server_subscribe_with_stream() {
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
 				match sink.pipe_from_stream(stream).await {
-					Ok(SubscriptionResult::Success) => {
-						sink.close(Error::SubscriptionClosed(CloseReason::Success.into()))
+					SubscriptionClosed::Success => {
+						sink.close(SubscriptionClosed::Success);
 					}
-					Ok(SubscriptionResult::Aborted) => unreachable!(),
-					Err(e) => sink.close(e),
+					_ => unreachable!(),
 				};
 			});
 			Ok(())

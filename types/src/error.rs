@@ -118,6 +118,13 @@ pub struct ErrorObjectOwned {
 	pub data: Option<Box<RawValue>>,
 }
 
+impl ErrorObjectOwned {
+	/// Get the borrowed variant [`ErrorObject`].
+	pub fn borrow<'a>(&'a self) -> ErrorObject<'a> {
+		ErrorObject { code: self.code, message: self.message.as_str().into(), data: self.data.as_deref() }
+	}
+}
+
 /// Parse error code.
 pub const PARSE_ERROR_CODE: i32 = -32700;
 /// Oversized request error code.

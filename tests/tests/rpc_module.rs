@@ -26,9 +26,9 @@
 
 use std::collections::HashMap;
 
-use jsonrpsee::core::error::{CloseReason, Error, SubscriptionClosed};
+use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::types::error::{CallError, ErrorObjectOwned};
+use jsonrpsee::types::error::{CallError, ErrorObject, ErrorObjectOwned};
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
@@ -209,7 +209,8 @@ async fn subscribing_without_server() {
 					let _ = sink.send(&letter);
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
-				sink.close(Error::SubscriptionClosed(CloseReason::Success.into()));
+				let close = ErrorObject::code_and_message(0_i32, "closed successfully".into());
+				sink.close(close.into_owned());
 			});
 
 			Ok(())
@@ -223,7 +224,7 @@ async fn subscribing_without_server() {
 		assert_eq!(&id, my_sub.subscription_id());
 	}
 
-	assert!(my_sub.next::<char>().await.is_none());
+	assert!(matches!(my_sub.next::<char>().await, Ok(None)));
 }
 
 #[tokio::test]
@@ -246,8 +247,8 @@ async fn close_test_subscribing_without_server() {
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
 				// Get the close reason.
-				if let Err(e) = sink.send(&"lo") {
-					sink.close(e);
+				if !sink.send(&"lo").expect("str serializeable; qed") {
+					sink.close(SubscriptionClosed::RemotePeerAborted);
 				}
 			});
 			Ok(())
@@ -266,10 +267,7 @@ async fn close_test_subscribing_without_server() {
 
 	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
-	let exp = SubscriptionClosed::RemotePeerAborted;
-	assert!(
-		matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
-	);
+	assert!(matches!(my_sub.next::<String>().await, Ok(None)));
 
 	// The second subscription still works
 	let (val, _) = my_sub2.next::<String>().await.unwrap().unwrap();
@@ -279,7 +277,5 @@ async fn close_test_subscribing_without_server() {
 		std::mem::ManuallyDrop::drop(&mut my_sub2);
 	}
 
-	assert!(
-		matches!(my_sub2.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
-	);
+	assert!(matches!(my_sub.next::<String>().await, Ok(None)));
 }
