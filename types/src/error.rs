@@ -76,8 +76,8 @@ pub struct ErrorObject<'a> {
 
 impl<'a> ErrorObject<'a> {
 	/// Create a new `ErrorObject` with optional data.
-	pub fn new(code: ErrorCode, data: Option<&'a RawValue>) -> ErrorObject<'a> {
-		Self { code, message: code.message().into(), data }
+	pub fn new(code: ErrorCode, message: Cow<'a, str>, data: Option<&'a RawValue>) -> ErrorObject<'a> {
+		Self { code, message, data }
 	}
 
 	/// Create a new `ErrorObject` from message and code.
@@ -119,6 +119,16 @@ pub struct ErrorObjectOwned {
 }
 
 impl ErrorObjectOwned {
+	/// Create a new `ErrorObjectOwned` with optional data.
+	pub fn new(code: ErrorCode, message: impl Into<String>, data: &impl Serialize) -> Self {
+		let data = serde_json::value::to_raw_value(&data).ok();
+		Self { code, message: message.into(), data }
+	}
+
+	/// Create a new `ErrorObject` from message and code.
+	pub fn code_and_message(code: i32, message: impl Into<String>) -> Self {
+		Self { code: code.into(), message: message.into(), data: None }
+	}
 	/// Get the borrowed variant [`ErrorObject`].
 	pub fn borrow<'a>(&'a self) -> ErrorObject<'a> {
 		ErrorObject { code: self.code, message: self.message.as_str().into(), data: self.data.as_deref() }
