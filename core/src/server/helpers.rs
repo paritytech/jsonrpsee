@@ -29,10 +29,7 @@ use std::io;
 use crate::{to_json_raw_value, Error};
 use futures_channel::mpsc;
 use futures_util::StreamExt;
-use jsonrpsee_types::error::{
-	CallError, ErrorCode, ErrorObject, ErrorObjectOwned, ErrorResponse, CALL_EXECUTION_FAILED_CODE,
-	OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE,
-};
+use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
 
@@ -121,11 +118,7 @@ impl MethodSink {
 
 				if err.is_io() {
 					let data = to_json_raw_value(&format!("Exceeded max limit {}", self.max_response_size)).ok();
-					let err = ErrorObject {
-						code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
-						message: OVERSIZED_RESPONSE_MSG.into(),
-						data: data.as_deref(),
-					};
+					let err = ErrorObject::borrowed(OVERSIZED_RESPONSE_CODE, &OVERSIZED_RESPONSE_MSG, data.as_deref());
 					return self.send_error(id, err);
 				} else {
 					return self.send_error(id, ErrorCode::InternalError.into());
@@ -161,20 +154,7 @@ impl MethodSink {
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
 	pub fn send_call_error(&self, id: Id, err: Error) -> bool {
-		let (code, message, data) = match err {
-			Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
-			Error::Call(CallError::Failed(e)) => {
-				(ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None)
-			}
-			Error::Call(CallError::Custom(ErrorObjectOwned { code, message, data })) => (code.into(), message, data),
-			// This should normally not happen because the most common use case is to
-			// return `Error::Call` in `register_async_method`.
-			e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
-		};
-
-		let err = ErrorObject { code, message: message.into(), data: data.as_deref() };
-
-		self.send_error(id, err)
+		self.send_error(id, err.to_error_object())
 	}
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity

@@ -358,14 +358,13 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 			tokio::spawn(async move {
 				let close_err = loop {
 					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
-						break ErrorObject::code_and_message(0_i32, "Subscription terminated successfully".into());
+						break ErrorObject::borrowed(0, &"Subscription terminated successfully", None);
 					}
 					tokio::time::sleep(Duration::from_millis(100)).await;
 				};
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed(close_err).await.unwrap();
 			});
-			Ok(())
 		})
 		.unwrap();
 
@@ -382,7 +381,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let close_err = rx.next().await.unwrap();
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert_eq!(close_err, ErrorObject::code_and_message(0_i32, "Subscription terminated successfully".into()));
+	assert_eq!(close_err, ErrorObject::borrowed(0, &"Subscription terminated successfully", None));
 }
 
 #[tokio::test]
@@ -402,15 +401,16 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-			let mut sink = pending.accept()?;
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
 
 			tokio::spawn(async move {
 				sink.pipe_from_stream(stream).await;
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
-
-			Ok(())
 		})
 		.unwrap();
 
@@ -447,7 +447,10 @@ async fn ws_server_cancels_sub_stream_after_err() {
 			"n",
 			"unsubscribe_with_err_on_stream",
 			move |_, pending, _| {
-				let mut sink = pending.accept()?;
+				let mut sink = match pending.accept() {
+					Ok(sink) => sink,
+					_ => return,
+				};
 
 				// create stream that produce an error which will cancel the subscription.
 				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
@@ -457,7 +460,6 @@ async fn ws_server_cancels_sub_stream_after_err() {
 						_ => unreachable!(),
 					};
 				});
-				Ok(())
 			},
 		)
 		.unwrap();
@@ -485,7 +487,10 @@ async fn ws_server_subscribe_with_stream() {
 
 	module
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
-			let mut sink = pending.accept()?;
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
 
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
@@ -498,7 +503,6 @@ async fn ws_server_subscribe_with_stream() {
 					_ => unreachable!(),
 				};
 			});
-			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();

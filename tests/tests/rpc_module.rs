@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::types::error::{CallError, ErrorObject, ErrorObjectOwned};
+use jsonrpsee::types::error::{CallError, ErrorObject};
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
@@ -66,7 +66,7 @@ fn flatten_rpc_modules() {
 fn rpc_context_modules_can_register_subscriptions() {
 	let cx = ();
 	let mut cxmodule = RpcModule::new(cx);
-	let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(()));
+	let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| {});
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -106,7 +106,7 @@ async fn calling_method_without_server() {
 	let err = module.call::<_, ()>("foo", (false,)).await.unwrap_err();
 	assert!(matches!(
 		err,
-		Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if code.code() == -32602 && message.as_str() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
+		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
 	));
 
 	// Call async method with params and context
@@ -187,7 +187,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	// Call sync method with bad params
 	let err = module.call::<_, ()>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
 	assert!(matches!(err,
-		Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if code.code() == -32602 && message.as_str() == "invalid type: boolean `false`, expected a map at line 1 column 5"
+		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected a map at line 1 column 5"
 	));
 
 	// Call async method with params and context
@@ -200,7 +200,10 @@ async fn subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = pending.accept()?;
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
 
 			let mut stream_data = vec!['0', '1', '2'];
 			std::thread::spawn(move || {
@@ -209,11 +212,9 @@ async fn subscribing_without_server() {
 					let _ = sink.send(&letter);
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
-				let close = ErrorObject::code_and_message(0_i32, "closed successfully".into());
+				let close = ErrorObject::borrowed(0, &"closed successfully", None);
 				sink.close(close.into_owned());
 			});
-
-			Ok(())
 		})
 		.unwrap();
 
@@ -237,7 +238,10 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = pending.accept()?;
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
 
 			std::thread::spawn(move || {
 				// make sure to only send one item
@@ -251,7 +255,6 @@ async fn close_test_subscribing_without_server() {
 					sink.close(SubscriptionClosed::RemotePeerAborted);
 				}
 			});
-			Ok(())
 		})
 		.unwrap();
 

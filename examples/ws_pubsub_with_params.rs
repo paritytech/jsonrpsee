@@ -67,8 +67,10 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
-			let idx: usize = params.one()?;
-			let mut sink = pending.accept()?;
+			let (idx, mut sink) = match (params.one(), pending.accept()) {
+				(Ok(idx), Ok(sink)) => (idx, sink),
+				_ => return,
+			};
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
@@ -86,13 +88,15 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					SubscriptionClosed::RemotePeerAborted => (),
 				};
 			});
-			Ok(())
 		})
 		.unwrap();
 	module
 		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
-			let (one, two): (usize, usize) = params.parse()?;
-			let mut sink = pending.accept()?;
+			let (one, two, mut sink) = match (params.parse::<(usize, usize)>(), pending.accept()) {
+				(Ok((one, two)), Ok(sink)) => (one, two, sink),
+				_ => return,
+			};
+
 			let item = &LETTERS[one..two];
 
 			let interval = interval(Duration::from_millis(200));
@@ -110,7 +114,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					SubscriptionClosed::RemotePeerAborted => (),
 				};
 			});
-			Ok(())
 		})
 		.unwrap();
 

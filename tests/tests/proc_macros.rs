@@ -34,7 +34,7 @@ use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::HttpServerBuilder;
 use jsonrpsee::rpc_params;
-use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObjectOwned};
+use jsonrpsee::types::error::{CallError, ErrorCode};
 use jsonrpsee::types::ParamsSer;
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::WsServerBuilder;
@@ -54,10 +54,10 @@ mod rpc_impl {
 		fn sync_method(&self) -> RpcResult<u16>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-		fn sub(&self) -> RpcResult<()>;
+		fn sub(&self);
 
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
-		fn sub_with_params(&self, val: u32) -> RpcResult<()>;
+		fn sub_with_params(&self, val: u32);
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
@@ -114,7 +114,7 @@ mod rpc_impl {
 
 		/// All head subscription
 		#[subscription(name = "subscribeAllHeads", item = Header)]
-		fn subscribe_all_heads(&self, hash: Hash) -> RpcResult<()>;
+		fn subscribe_all_heads(&self, hash: Hash);
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -129,7 +129,7 @@ mod rpc_impl {
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
 		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
-		fn sub(&self, hash: Input) -> RpcResult<()>;
+		fn sub(&self, hash: Input);
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -166,18 +166,22 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		fn sub(&self, pending: PendingSubscription) -> RpcResult<()> {
-			let mut sink = pending.accept()?;
-			sink.send(&"Response_A")?;
-			sink.send(&"Response_B")?;
-			Ok(())
+		fn sub(&self, pending: PendingSubscription) {
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&"Response_A");
+			let _ = sink.send(&"Response_B");
 		}
 
-		fn sub_with_params(&self, pending: PendingSubscription, val: u32) -> RpcResult<()> {
-			let mut sink = pending.accept()?;
-			sink.send(&val)?;
-			sink.send(&val)?;
-			Ok(())
+		fn sub_with_params(&self, pending: PendingSubscription, val: u32) {
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&val);
+			let _ = sink.send(&val);
 		}
 	}
 
@@ -190,8 +194,12 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		fn sub(&self, pending: PendingSubscription, _: String) -> RpcResult<()> {
-			pending.accept()?.send(&"hello").map(|_| ()).map_err(Into::into)
+		fn sub(&self, pending: PendingSubscription, _: String) {
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&"hello");
 		}
 	}
 }
@@ -345,13 +353,13 @@ async fn calls_with_bad_params() {
 		.await
 		.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if message.contains("invalid type: string \"0x0\", expected u32") && code == ErrorCode::InvalidParams)
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Call with faulty params as array.
 	let err = client.request::<serde_json::Value>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if message.contains("invalid type: string \"faulty\", expected u8") && code == ErrorCode::InvalidParams)
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"faulty\", expected u8") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Sub with faulty params as map.
@@ -361,7 +369,7 @@ async fn calls_with_bad_params() {
 	let err =
 		client.subscribe::<serde_json::Value>("foo_echo", Some(params), "foo_unsubscribe_echo").await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if message.contains("invalid type: string \"0x0\", expected u32") && code == ErrorCode::InvalidParams)
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Call with faulty params as map.
@@ -371,6 +379,6 @@ async fn calls_with_bad_params() {
 	let params = ParamsSer::Map(map);
 	let err = client.request::<serde_json::Value>("foo_foo", Some(params)).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom ( ErrorObjectOwned { code, message, .. })) if message.contains("invalid type: integer `99`, expected a string") && code == ErrorCode::InvalidParams)
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: integer `99`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
 	);
 }

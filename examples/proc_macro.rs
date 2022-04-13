@@ -45,7 +45,7 @@ where
 
 	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
 	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
-	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>) -> Result<(), Error>;
+	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
 }
 
 pub struct RpcServerImpl;
@@ -60,12 +60,10 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		Ok(vec![storage_key])
 	}
 
-	fn subscribe_storage(
-		&self,
-		pending: PendingSubscription,
-		_keys: Option<Vec<ExampleStorageKey>>,
-	) -> Result<(), Error> {
-		pending.accept()?.send(&vec![[0; 32]]).map(|_| ()).map_err(Into::into)
+	fn subscribe_storage(&self, pending: PendingSubscription, _keys: Option<Vec<ExampleStorageKey>>) {
+		if let Ok(mut sink) = pending.accept() {
+			let _ = sink.send(&vec![[0; 32]]);
+		}
 	}
 }
 

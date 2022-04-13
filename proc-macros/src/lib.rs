@@ -242,7 +242,7 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "sub" => "subNotif", unsubscribe = "unsub", item = String)]
-///         fn sub_override_notif_method(&self) -> RpcResult<()>;
+///         fn sub_override_notif_method(&self);
 ///
 ///         /// Use the same method name for both the `subscribe call` and `notifications`
 ///         ///
@@ -259,7 +259,7 @@ pub(crate) mod visitor;
 ///         /// }
 ///         /// ```
 ///         #[subscription(name = "subscribe", item = String)]
-///         fn sub(&self) -> RpcResult<()>;
+///         fn sub(&self);
 ///     }
 ///
 ///     // Structure that will implement the `MyRpcServer` trait.
@@ -286,23 +286,21 @@ pub(crate) mod visitor;
 ///
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
-///         fn sub_override_notif_method(&self, pending: PendingSubscription) -> RpcResult<()> {
-///             let mut sink = pending.accept()?;    
+///         fn sub_override_notif_method(&self, pending: PendingSubscription) {
+///             let mut sink = pending.accept().unwrap();     
 ///             tokio::spawn(async move {
 ///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
 ///                 sink.pipe_from_stream(stream).await;
 ///             });
-///
-///             Ok(())
 ///         }
 ///
 ///         // We could've spawned a `tokio` future that yields values while our program works,
 ///         // but for simplicity of the example we will only send two values and then close
 ///         // the subscription.
-///         fn sub(&self, pending: PendingSubscription) -> RpcResult<()> {
-///             let mut sink = pending.accept()?;    
-///             sink.send(&"Response_A")?;
-///             sink.send(&"Response_B")
+///         fn sub(&self, pending: PendingSubscription) {
+///             let mut sink = pending.accept().unwrap();
+///             let _ = sink.send(&"Response_A");
+///             let _ = sink.send(&"Response_B");
 ///         }
 ///     }
 /// }

@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use jsonrpsee::http_server::{AccessControl, HttpServerBuilder, HttpServerHandle};
-use jsonrpsee::types::error::{ErrorObjectOwned, SUBSCRIPTION_CLOSED_WITH_ERROR};
+use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
 
@@ -40,34 +40,45 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
-			let mut sink = pending.accept()?;
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
 			std::thread::spawn(move || loop {
 				if let Ok(false) = sink.send(&"hello from subscription") {
 					break;
 				}
 				std::thread::sleep(Duration::from_millis(50));
 			});
-			Ok(())
 		})
 		.unwrap();
 
 	module
 		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| {
-			let mut sink = pending.accept()?;
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
 			std::thread::spawn(move || loop {
-				if let Ok(false) = sink.send(&1337) {
+				if let Ok(false) = sink.send(&1337_usize) {
 					break;
 				}
 				std::thread::sleep(Duration::from_millis(100));
 			});
-			Ok(())
 		})
 		.unwrap();
 
 	module
 		.register_subscription("subscribe_add_one", "subscribe_add_one", "unsubscribe_add_one", |params, pending, _| {
-			let mut count: usize = params.one()?;
-			let mut sink = pending.accept()?;
+			let mut count = match params.one::<usize>() {
+				Ok(count) => count,
+				_ => return,
+			};
+
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
 
 			std::thread::spawn(move || loop {
 				count = count.wrapping_add(1);
@@ -76,23 +87,24 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 				}
 				std::thread::sleep(Duration::from_millis(100));
 			});
-			Ok(())
 		})
 		.unwrap();
 
 	module
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| {
-			let sink = pending.accept()?;
+			let sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
-				let err = ErrorObjectOwned {
-					code: SUBSCRIPTION_CLOSED_WITH_ERROR.into(),
-					message: "Server closed the stream because it was lazy".into(),
-					data: None,
-				};
+				let err = ErrorObject::owned(
+					SUBSCRIPTION_CLOSED_WITH_ERROR,
+					"Server closed the stream because it was lazy",
+					None::<()>,
+				);
 				sink.close(err);
 			});
-			Ok(())
 		})
 		.unwrap();
 

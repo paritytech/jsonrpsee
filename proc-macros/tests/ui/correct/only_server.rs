@@ -13,7 +13,7 @@ pub trait Rpc {
 	fn sync_method(&self) -> RpcResult<u16>;
 
 	#[subscription(name = "subscribe", item = String)]
-	fn sub(&self) -> RpcResult<()>;
+	fn sub(&self);
 }
 
 pub struct RpcServerImpl;
@@ -28,10 +28,14 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	fn sub(&self, pending: PendingSubscription) -> RpcResult<()> {
-		let mut sink = pending.accept()?;
-		sink.send(&"Response_A")?;
-		sink.send(&"Response_B")
+	fn sub(&self, pending: PendingSubscription) {
+		let mut sink = match pending.accept() {
+			Ok(sink) => sink,
+			_ => return,
+		};
+
+		let _ = sink.send(&"Response_A");
+		let _ = sink.send(&"Response_B");
 	}
 }
 

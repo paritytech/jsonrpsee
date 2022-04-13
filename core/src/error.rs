@@ -27,7 +27,7 @@
 use std::fmt;
 
 use jsonrpsee_types::error::{
-	CallError, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
+	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
 };
 
 /// Convenience type for displaying errors.
@@ -57,7 +57,7 @@ impl From<anyhow::Error> for Error {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Error that occurs when a call failed.
-	#[error("JSON-RPC call failed: {0}")]
+	#[error("{0}")]
 	Call(#[from] CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
@@ -142,13 +142,13 @@ impl Error {
 	}
 
 	/// Get the JSON-RPC error object representation of the error.
-	pub fn to_error_object(&self) -> ErrorObjectOwned {
+	pub fn to_error_object(&self) -> ErrorObject<'static> {
 		match self {
 			Error::Call(CallError::Custom(err)) => err.clone(),
 			Error::Call(CallError::InvalidParams(e)) => {
-				ErrorObjectOwned { code: INVALID_PARAMS_CODE.into(), message: e.to_string(), data: None }
+				ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>)
 			}
-			_ => ErrorObjectOwned { code: CALL_EXECUTION_FAILED_CODE.into(), message: self.to_string(), data: None },
+			_ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, self.to_string(), None::<()>),
 		}
 	}
 }
@@ -162,22 +162,20 @@ pub enum SubscriptionClosed {
 	/// The subscription was completed successfully by the server.
 	Success,
 	/// The subscription failed during execution by the server.
-	Failed(ErrorObjectOwned),
+	Failed(ErrorObject<'static>),
 }
 
 impl Into<ErrorObjectOwned> for SubscriptionClosed {
 	fn into(self) -> ErrorObjectOwned {
 		match self {
-			Self::RemotePeerAborted => ErrorObjectOwned {
-				code: SUBSCRIPTION_CLOSED.into(),
-				message: "Subscription was closed by the remote peer".into(),
-				data: None,
-			},
-			Self::Success => ErrorObjectOwned {
-				code: SUBSCRIPTION_CLOSED.into(),
-				message: "Subscription was completed by the server successfully".into(),
-				data: None,
-			},
+			Self::RemotePeerAborted => {
+				ErrorObject::owned(SUBSCRIPTION_CLOSED, "Subscription was closed by the remote peer", None::<()>)
+			}
+			Self::Success => ErrorObject::owned(
+				SUBSCRIPTION_CLOSED,
+				"Subscription was completed by the server successfully",
+				None::<()>,
+			),
 			Self::Failed(err) => err,
 		}
 	}

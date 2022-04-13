@@ -32,7 +32,7 @@ use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::types::error::{CallError, ErrorObjectOwned};
+use jsonrpsee::types::error::CallError;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
@@ -119,9 +119,9 @@ async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpServerHan
 
 fn assert_server_busy(fail: Result<String, Error>) {
 	match fail {
-		Err(Error::Call(CallError::Custom(ErrorObjectOwned { code, message, .. }))) => {
-			assert_eq!(code.code(), -32604);
-			assert_eq!(message, "Server is busy, try again later");
+		Err(Error::Call(CallError::Custom(err))) => {
+			assert_eq!(err.code(), -32604);
+			assert_eq!(err.message(), "Server is busy, try again later");
 		}
 		fail => panic!("Expected error, got: {:?}", fail),
 	}
