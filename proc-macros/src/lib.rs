@@ -55,7 +55,7 @@ pub(crate) mod visitor;
 /// - The trait will have one additional (already implemented) method, `into_rpc`, which turns any object that
 ///   implements the server trait into an `RpcModule`.
 /// - For subscription methods, there will be one additional argument inserted right after `&self`: `subscription_sink:
-///   PendingSubscription`. It should be used to actually maintain the subscription.
+///   PendingSubscription`. It should be used accept or reject a pending subscription.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
