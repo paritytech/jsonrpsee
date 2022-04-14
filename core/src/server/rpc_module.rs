@@ -876,11 +876,8 @@ impl SubscriptionSink {
 	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
 	///     // because after the `Err(_)` the stream is terminated.
 	///     tokio::spawn(async move {
-	///         // jsonrpsee doesn't send an error notification if the stream was closed unless `close` is called.
-	///         // jsonrpsee doesn't send a notification if the stream was terminated or canceled.
-	///         //
-	///         // But it's possible to get reason why subscription was terminated
-	///         //
+	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
+	///         // If we pipe messages to the sink, we can inspect why it ended:
 	///         match sink.pipe_from_try_stream(stream).await {
 	///            SubscriptionClosed::Success => {
 	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
