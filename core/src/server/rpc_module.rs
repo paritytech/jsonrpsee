@@ -996,10 +996,10 @@ impl SubscriptionSink {
 		}
 	}
 
-	/// Send an error notification on the subscription with a special field `error`.
+	/// Close the subscription, sending a notification with a special `error` field containing the provided error.
 	///
-	/// This may be used for indicating to connected clients that a given subscription has been canceled
-	/// as well so not necessarily an error but this is used for compat reason with existing JavaScript libraries.
+	/// This can be used to signal an actual error, or just to signal that the subscription has been closed,
+	/// depending on your preference. 
 	///
 	/// The APIs [`SubscriptionSink::pipe_from_stream`] and [`SubscriptionSink::pipe_from_stream`] uses this
 	/// when the stream is terminated.
