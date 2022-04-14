@@ -840,7 +840,7 @@ impl SubscriptionSink {
 	/// Send a message back to subscribers.
 	///
 	/// Returns `Ok(true)` if the message could be send
-	/// Returns `Ok(false)` if the sink was closed (this is not an error because the subscription got closed or connection was terminated)
+	/// Returns `Ok(false)` if the sink was closed (either because the subscription was closed or the connection was terminated)
 	/// Return `Err(err)` if the message could not be serialized.
 	///
 	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<bool, serde_json::Error> {
