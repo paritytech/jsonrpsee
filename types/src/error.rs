@@ -39,18 +39,38 @@ use thiserror::Error;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ErrorResponse<'a> {
 	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
+	jsonrpc: TwoPointZero,
 	/// Error.
 	#[serde(borrow)]
-	pub error: ErrorObject<'a>,
+	error: ErrorObject<'a>,
 	/// Request ID
-	pub id: Id<'a>,
+	id: Id<'a>,
 }
 
 impl<'a> ErrorResponse<'a> {
-	/// Create a new `ErrorResponse`.
-	pub fn new(error: ErrorObject<'a>, id: Id<'a>) -> Self {
+	/// Create a borrowed `ErrorResponse`.
+	pub fn borrowed(error: ErrorObject<'a>, id: Id<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, error, id }
+	}
+
+	/// Create a borrowed `ErrorResponse`.
+	pub fn owned(error: ErrorObject<'static>, id: Id<'static>) -> Self {
+		Self { jsonrpc: TwoPointZero, error, id }
+	}
+
+	/// Take ownership of the parameters within, if we haven't already.
+	pub fn into_owned(self) -> ErrorResponse<'static> {
+		ErrorResponse { jsonrpc: self.jsonrpc, error: self.error.into_owned(), id: self.id.into_owned() }
+	}
+
+	/// Get the [`ErrorObject`] of the error response.
+	pub fn error_object(&self) -> &ErrorObject {
+		&self.error
+	}
+
+	/// Get the [`Id`] of the error response.
+	pub fn id(&self) -> &Id {
+		&self.id
 	}
 }
 

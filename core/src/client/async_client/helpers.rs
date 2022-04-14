@@ -237,17 +237,18 @@ pub(crate) fn build_unsubscribe_message(
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
 pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) -> Result<(), Error> {
-	let id = err.id.clone().into_owned();
+	let id = err.id().clone().into_owned();
 
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back = manager.complete_pending_call(id).expect("State checked above; qed");
-			let _ = send_back.map(|s| s.send(Err(Error::Call(CallError::Custom(err.error.into_owned())))));
+			let _ =
+				send_back.map(|s| s.send(Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())))));
 			Ok(())
 		}
 		RequestStatus::PendingSubscription => {
 			let (_, send_back, _) = manager.complete_pending_subscription(id).expect("State checked above; qed");
-			let _ = send_back.send(Err(Error::Call(CallError::Custom(err.error.into_owned()))));
+			let _ = send_back.send(Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))));
 			Ok(())
 		}
 		_ => Err(Error::InvalidRequestId),

@@ -136,7 +136,7 @@ impl MethodSink {
 
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
-		let json = match serde_json::to_string(&ErrorResponse::new(error, id)) {
+		let json = match serde_json::to_string(&ErrorResponse::borrowed(error, id)) {
 			Ok(json) => json,
 			Err(err) => {
 				tracing::error!("Error serializing error message: {:?}", err);

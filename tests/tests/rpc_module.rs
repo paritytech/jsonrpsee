@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::types::error::{CallError, ErrorObject};
+use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject};
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
@@ -225,7 +225,7 @@ async fn subscribing_without_server() {
 		assert_eq!(&id, my_sub.subscription_id());
 	}
 
-	assert!(matches!(my_sub.next::<char>().await, Ok(None)));
+	assert!(matches!(my_sub.next::<char>().await, None));
 }
 
 #[tokio::test]
@@ -251,7 +251,7 @@ async fn close_test_subscribing_without_server() {
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
 				// Get the close reason.
-				if !sink.send(&"lo").expect("str serializeable; qed") {
+				if !sink.send(&"lo").expect("str serializable; qed") {
 					sink.close(SubscriptionClosed::RemotePeerAborted);
 				}
 			});
@@ -270,7 +270,7 @@ async fn close_test_subscribing_without_server() {
 
 	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
-	assert!(matches!(my_sub.next::<String>().await, Ok(None)));
+	assert!(matches!(my_sub.next::<String>().await, None));
 
 	// The second subscription still works
 	let (val, _) = my_sub2.next::<String>().await.unwrap().unwrap();
@@ -280,5 +280,34 @@ async fn close_test_subscribing_without_server() {
 		std::mem::ManuallyDrop::drop(&mut my_sub2);
 	}
 
-	assert!(matches!(my_sub.next::<String>().await, Ok(None)));
+	assert!(matches!(my_sub.next::<String>().await, None));
+}
+
+#[tokio::test]
+async fn subscribing_without_server_bad_params() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| {
+			let p = match params.one::<String>() {
+				Ok(p) => p,
+				Err(e) => {
+					let err: Error = e.into();
+					let _ = pending.reject(err);
+					return;
+				}
+			};
+
+			let mut sink = match pending.accept() {
+				Ok(sink) => sink,
+				_ => return,
+			};
+			sink.send(&p).unwrap();
+		})
+		.unwrap();
+
+	let sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+
+	assert!(
+		matches!(sub, Error::Call(CallError::Custom(e)) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
+	);
 }

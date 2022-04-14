@@ -348,7 +348,7 @@ impl Methods {
 		}
 
 		if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp) {
-			return Err(Error::Call(CallError::Custom(err.error.into_owned())));
+			return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
 		}
 
 		unreachable!("Invalid JSON-RPC response is not possible using jsonrpsee; this is bug please file an issue");
@@ -440,7 +440,14 @@ impl Methods {
 		let req = Request::new(sub_method.into(), Some(&params), Id::Number(0));
 		tracing::trace!("[Methods::subscribe] Calling subscription method: {:?}, params: {:?}", sub_method, params);
 		let (response, rx, close_notify) = self.inner_call(req).await;
-		let subscription_response = serde_json::from_str::<Response<RpcSubscriptionId>>(&response)?;
+		tracing::trace!("[Methods::subscribe] response {:?}", response);
+		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&response) {
+			Ok(r) => r,
+			Err(_) => match serde_json::from_str::<ErrorResponse>(&response) {
+				Ok(err) => return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))),
+				Err(err) => return Err(err.into()),
+			},
+		};
 		let sub_id = subscription_response.result.into_owned();
 		let close_notify = Some(close_notify);
 		Ok(Subscription { sub_id, rx, close_notify })
@@ -632,7 +639,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///     let x = match params.one::<usize>() {
 	///         Ok(x) => x,
 	///         Err(e) => {
-	///             pending.reject(e.into());
+	///             let err: Error = e.into();
+	///             pending.reject(err);
 	///             return;
 	///         }
 	///     };
@@ -1059,22 +1067,19 @@ impl Subscription {
 	/// # Panics
 	///
 	/// If the decoding the value as `T` fails.
-	pub async fn next<T: DeserializeOwned>(&mut self) -> Result<Option<(T, RpcSubscriptionId<'static>)>, Error> {
+	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, RpcSubscriptionId<'static>), Error>> {
 		if self.close_notify.is_none() {
 			tracing::debug!("[Subscription::next] Closed.");
-			return Ok(None);
+			return None;
 		}
-		let raw = match self.rx.next().await {
-			Some(r) => r,
-			None => return Ok(None),
-		};
+		let raw = self.rx.next().await?;
 
 		tracing::debug!("rx: {}", raw);
 		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
-			Ok(r) => Ok(Some((r.params.result, r.params.subscription.into_owned()))),
-			Err(_) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {
-				Ok(_e) => Ok(None),
-				Err(e) => Err(e.into()),
+			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
+			Err(e) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {
+				Ok(_) => None,
+				Err(_) => Some(Err(e.into())),
 			},
 		};
 		res
