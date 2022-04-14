@@ -262,6 +262,14 @@ impl RpcDescription {
 							"Element cannot be both subscription and method at the same time",
 						));
 					}
+
+					if !matches!(method.sig.output, syn::ReturnType::Default) {
+						return Err(syn::Error::new_spanned(
+							&method,
+							"Subscription methods must not return anything; the error must send via subscription via either `PendingSubscription::reject` or `SubscripionSink::close`",
+						));
+					}
+
 					if method.sig.asyncness.is_some() {
 						return Err(syn::Error::new_spanned(&method, "Subscription methods must not be `async`"));
 					}
