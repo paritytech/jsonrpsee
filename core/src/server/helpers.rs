@@ -154,7 +154,7 @@ impl MethodSink {
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
 	pub fn send_call_error(&self, id: Id, err: Error) -> bool {
-		self.send_error(id, err.to_error_object())
+		self.send_error(id, err.into())
 	}
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity

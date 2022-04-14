@@ -767,17 +767,12 @@ struct InnerPendingSubscription {
 pub struct PendingSubscription(Option<InnerPendingSubscription>);
 
 impl PendingSubscription {
-	/// Reject the subscription call.
-	pub fn reject(self, err: Error) -> Result<(), Error> {
-		self.reject_from_error_object(err.to_error_object())
-	}
-
 	/// Reject the subscription call from [`ErrorObject`].
-	pub fn reject_from_error_object(mut self, err: ErrorObject) -> Result<(), Error> {
+	pub fn reject(mut self, err: impl Into<ErrorObjectOwned>) -> Result<(), Error> {
 		if let Some(inner) = self.0.take() {
 			let InnerPendingSubscription { sink, id, .. } = inner;
 
-			if sink.send_error(id, err.borrow()) {
+			if sink.send_error(id, err.into()) {
 				Ok(())
 			} else {
 				Err(Error::Custom("Connection is closed".to_string()))
@@ -1026,12 +1021,6 @@ impl SubscriptionSink {
 			}
 		}
 		false
-	}
-
-	/// Similar to [`SubscriptionSink`] but extracts the JSON-RPC error object from [`Error`] and sends it out
-	/// as error notification on the subscription.
-	pub fn close_from_jsonrpsee_error(self, err: Error) -> bool {
-		self.close(err.to_error_object())
 	}
 }
 

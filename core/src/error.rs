@@ -140,9 +140,10 @@ impl Error {
 	{
 		Error::Call(CallError::from_std_error(err))
 	}
+}
 
-	/// Get the JSON-RPC error object representation of the error.
-	pub fn to_error_object(&self) -> ErrorObject<'static> {
+impl Into<ErrorObjectOwned> for Error {
+	fn into(self) -> ErrorObjectOwned {
 		match self {
 			Error::Call(CallError::Custom(err)) => err.clone(),
 			Error::Call(CallError::InvalidParams(e)) => {
