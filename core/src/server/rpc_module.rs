@@ -86,7 +86,7 @@ pub struct ConnState<'a> {
 /// Outcome of a successful terminated subscription.
 #[derive(Debug)]
 pub enum SubscriptionResult {
-	/// The subscription stream was executed successful.
+	/// The subscription stream was executed successfully.
 	Success,
 	/// The subscription was aborted the remote peer.
 	Aborted,
