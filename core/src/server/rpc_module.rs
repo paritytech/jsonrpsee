@@ -803,6 +803,7 @@ impl PendingSubscription {
 	}
 }
 
+// If this type is dropped, it will return an InvalidParams error to the subscriber
 impl Drop for PendingSubscription {
 	fn drop(&mut self) {
 		if let Some(inner) = self.0.take() {

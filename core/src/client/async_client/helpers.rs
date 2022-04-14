@@ -90,7 +90,6 @@ pub(crate) fn process_subscription_response(
 
 	match manager.as_subscription_mut(&request_id) {
 		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
-			// The server sent a subscription closed notification, then close down the subscription.
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
