@@ -402,7 +402,7 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 
@@ -448,7 +448,7 @@ async fn ws_server_cancels_sub_stream_after_err() {
 			"unsubscribe_with_err_on_stream",
 			move |_, pending, _| {
 				let mut sink = match pending.accept() {
-					Ok(sink) => sink,
+					Some(sink) => sink,
 					_ => return,
 				};
 
@@ -488,7 +488,7 @@ async fn ws_server_subscribe_with_stream() {
 	module
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 

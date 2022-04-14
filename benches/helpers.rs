@@ -143,7 +143,7 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws
 	module
 		.register_subscription(SUB_METHOD_NAME, SUB_METHOD_NAME, UNSUB_METHOD_NAME, |_params, pending, _ctx| {
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 			let x = "Hello";

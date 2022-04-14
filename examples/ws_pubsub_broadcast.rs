@@ -74,7 +74,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
 		let rx = BroadcastStream::new(tx.clone().subscribe());
 		let mut sink = match pending.accept() {
-			Ok(sink) => sink,
+			Some(sink) => sink,
 			_ => return,
 		};
 

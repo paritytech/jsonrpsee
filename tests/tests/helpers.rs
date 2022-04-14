@@ -41,7 +41,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 			std::thread::spawn(move || loop {
@@ -56,7 +56,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 	module
 		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| {
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 			std::thread::spawn(move || loop {
@@ -76,7 +76,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 			};
 
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 
@@ -93,7 +93,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 	module
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| {
 			let sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 			std::thread::spawn(move || {

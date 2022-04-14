@@ -30,7 +30,7 @@ impl RpcServer for RpcServerImpl {
 
 	fn sub(&self, pending: PendingSubscription) {
 		let mut sink = match pending.accept() {
-			Ok(sink) => sink,
+			Some(sink) => sink,
 			_ => return,
 		};
 

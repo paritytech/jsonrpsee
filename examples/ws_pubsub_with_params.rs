@@ -68,7 +68,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
 			let (idx, mut sink) = match (params.one(), pending.accept()) {
-				(Ok(idx), Ok(sink)) => (idx, sink),
+				(Ok(idx), Some(sink)) => (idx, sink),
 				_ => return,
 			};
 			let item = LETTERS.chars().nth(idx);
@@ -93,7 +93,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module
 		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
 			let (one, two, mut sink) = match (params.parse::<(usize, usize)>(), pending.accept()) {
-				(Ok((one, two)), Ok(sink)) => (one, two, sink),
+				(Ok((one, two)), Some(sink)) => (one, two, sink),
 				_ => return,
 			};
 

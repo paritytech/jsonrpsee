@@ -201,7 +201,7 @@ async fn subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 
@@ -239,7 +239,7 @@ async fn close_test_subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 
@@ -298,7 +298,7 @@ async fn subscribing_without_server_bad_params() {
 			};
 
 			let mut sink = match pending.accept() {
-				Ok(sink) => sink,
+				Some(sink) => sink,
 				_ => return,
 			};
 			sink.send(&p).unwrap();

@@ -61,7 +61,7 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 	}
 
 	fn subscribe_storage(&self, pending: PendingSubscription, _keys: Option<Vec<ExampleStorageKey>>) {
-		if let Ok(mut sink) = pending.accept() {
+		if let Some(mut sink) = pending.accept() {
 			let _ = sink.send(&vec![[0; 32]]);
 		}
 	}
