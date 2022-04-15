@@ -770,7 +770,7 @@ struct InnerPendingSubscription {
 
 /// Represent a pending subscription which waits until it's either accepted or rejected.
 ///
-/// This type implement drop for ease of use, such as dropped in error short circuiting via `map_err()?`.
+/// This type implements `Drop` for ease of use, e.g. when dropped in error short circuiting via `map_err()?`.
 #[derive(Debug)]
 pub struct PendingSubscription(Option<InnerPendingSubscription>);
 
