@@ -768,7 +768,7 @@ struct InnerPendingSubscription {
 	id: Id<'static>,
 }
 
-/// Represent a pending subscription which waits for being accepted or rejected.
+/// Represent a pending subscription which waits until it's either accepted or rejected.
 ///
 /// This type implement drop for ease of use, such as dropped in error short circuiting via `map_err()?`.
 #[derive(Debug)]
