@@ -748,7 +748,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 }
 
-/// Represent a pending subscription which waits being accepted or rejected.
+/// Represent a pending subscription which waits to be accepted or rejected.
 ///
 /// Warning: you need to call either `PendingSubscription::accept` or `PendingSubscription::reject` otherwise
 /// the subscription will be dropped with an `InvalidParams` error.
