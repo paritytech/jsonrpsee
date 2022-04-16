@@ -748,9 +748,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 }
 
-/// Represent a pending subscription which waits being accepted or rejected.
+/// Represent a pending subscription which waits to be accepted or rejected.
 ///
-/// Warning: you need to call either `PendingSubscription::accept` or `PendingSubscription::reject` otherwise
+/// Note: you need to call either `PendingSubscription::accept` or `PendingSubscription::reject` otherwise
 /// the subscription will be dropped with an `InvalidParams` error.
 #[derive(Debug)]
 struct InnerPendingSubscription {
@@ -768,9 +768,9 @@ struct InnerPendingSubscription {
 	id: Id<'static>,
 }
 
-/// Represent a pending subscription which waits for being accepted or rejected.
+/// Represent a pending subscription which waits until it's either accepted or rejected.
 ///
-/// This type implement drop for ease of use, such as dropped in error short circuiting via `map_err()?`.
+/// This type implements `Drop` for ease of use, e.g. when dropped in error short circuiting via `map_err()?`.
 #[derive(Debug)]
 pub struct PendingSubscription(Option<InnerPendingSubscription>);
 
@@ -803,7 +803,7 @@ impl PendingSubscription {
 	}
 }
 
-// If this type is dropped, it will return an InvalidParams error to the subscriber
+// When dropped it returns an [`InvalidParams`] error to the subscriber
 impl Drop for PendingSubscription {
 	fn drop(&mut self) {
 		if let Some(inner) = self.0.take() {
