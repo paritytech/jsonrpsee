@@ -176,8 +176,6 @@ pub const SERVER_IS_BUSY_CODE: i32 = -32604;
 pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Unknown error.
 pub const UNKNOWN_ERROR_CODE: i32 = -32001;
-/// Invalid subscription error code.
-pub const INVALID_SUBSCRIPTION_CODE: i32 = -32002;
 /// Subscription got closed by the server.
 pub const SUBSCRIPTION_CLOSED: i32 = -32003;
 /// Subscription got closed by the server.

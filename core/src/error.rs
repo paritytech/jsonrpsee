@@ -28,6 +28,7 @@ use std::fmt;
 
 use jsonrpsee_types::error::{
 	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
+	UNKNOWN_ERROR_CODE,
 };
 
 /// Convenience type for displaying errors.
@@ -145,11 +146,14 @@ impl Error {
 impl Into<ErrorObjectOwned> for Error {
 	fn into(self) -> ErrorObjectOwned {
 		match self {
-			Error::Call(CallError::Custom(err)) => err.clone(),
+			Error::Call(CallError::Custom(err)) => err,
 			Error::Call(CallError::InvalidParams(e)) => {
 				ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>)
 			}
-			_ => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, self.to_string(), None::<()>),
+			Error::Call(CallError::Failed(e)) => {
+				ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>)
+			}
+			_ => ErrorObject::owned(UNKNOWN_ERROR_CODE, self.to_string(), None::<()>),
 		}
 	}
 }

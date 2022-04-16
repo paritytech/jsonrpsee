@@ -332,7 +332,7 @@ async fn batch_method_call_where_some_calls_fail() {
 
 	assert_eq!(
 		response,
-		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"RPC call failed: MyAppError"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
+		r#"[{"jsonrpc":"2.0","result":"hello","id":1},{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":2},{"jsonrpc":"2.0","result":79,"id":3}]"#
 	);
 }
 
@@ -410,7 +410,7 @@ async fn single_method_call_with_faulty_context() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response, call_execution_failed("RPC call failed: RPC context failed", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("RPC context failed", Id::Num(1)));
 }
 
 #[tokio::test]
@@ -450,7 +450,7 @@ async fn async_method_call_that_fails() {
 
 	let req = r#"{"jsonrpc":"2.0","method":"err_async", "params":[],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, call_execution_failed("RPC call failed: nah", Id::Num(1)));
+	assert_eq!(response, call_execution_failed("nah", Id::Num(1)));
 }
 
 #[tokio::test]
@@ -560,10 +560,7 @@ async fn valid_request_that_fails_to_execute_should_not_close_connection() {
 	// Good request, but causes error.
 	let req = r#"{"jsonrpc":"2.0","method":"call_fail","params":[],"id":123}"#;
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(
-		response,
-		r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"RPC call failed: MyAppError"},"id":123}"#
-	);
+	assert_eq!(response, r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"MyAppError"},"id":123}"#);
 
 	// Connection is still good.
 	let request = r#"{"jsonrpc":"2.0","method":"say_hello","id":333}"#;
