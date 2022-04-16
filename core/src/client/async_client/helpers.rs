@@ -122,10 +122,7 @@ pub(crate) fn process_subscription_close_response(
 		}
 	};
 
-	debug_assert!(
-		manager.remove_subscription(request_id, sub_id).is_some(),
-		"Both request ID and sub ID in RequestManager; qed"
-	);
+	manager.remove_subscription(request_id, sub_id).expect("Both request ID and sub ID in RequestManager; qed");
 	Ok(())
 }
 
