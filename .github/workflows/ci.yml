@@ -155,7 +155,7 @@ jobs:
       - name: Cargo nextest
         run: cargo nextest run --workspace
 
- wasm_tests:
+  wasm_tests:
     name: Test wasm
     runs-on: ubuntu-latest
 
