@@ -1,7 +1,7 @@
 mod helpers;
 mod manager;
 
-use std::time::Duration;
+use core::time::Duration;
 
 use crate::client::{
 	async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, RegisterNotificationMessage,
@@ -15,9 +15,11 @@ use helpers::{
 use manager::RequestManager;
 
 use crate::error::Error;
+use async_lock::Mutex;
 use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
-use futures_util::future::Either;
+use futures_timer::Delay;
+use futures_util::future::{self, Either};
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::{
@@ -25,7 +27,6 @@ use jsonrpsee_types::{
 	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
-use tokio::sync::Mutex;
 
 use super::{FrontToBack, IdKind, RequestIdManager};
 
@@ -116,8 +117,13 @@ impl ClientBuilder {
 	///
 	/// ## Panics
 	///
-	/// Panics if being called outside of `tokio` runtime context.
-	pub fn build<S: TransportSenderT, R: TransportReceiverT>(self, sender: S, receiver: R) -> Client {
+	/// Panics if called outside of `tokio` runtime context.
+	#[cfg(feature = "async-client")]
+	pub fn build_with_tokio<S, R>(self, sender: S, receiver: R) -> Client
+	where
+		S: TransportSenderT + Send,
+		R: TransportReceiverT + Send,
+	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
@@ -132,9 +138,31 @@ impl ClientBuilder {
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 		}
 	}
+
+	/// Build the client with given transport.
+	#[cfg(all(feature = "async-wasm-client", target_arch = "wasm32"))]
+	pub fn build_with_wasm<S, R>(self, sender: S, receiver: R) -> Client
+	where
+		S: TransportSenderT,
+		R: TransportReceiverT,
+	{
+		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
+		let (err_tx, err_rx) = oneshot::channel();
+		let max_notifs_per_subscription = self.max_notifs_per_subscription;
+
+		wasm_bindgen_futures::spawn_local(async move {
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription).await;
+		});
+		Client {
+			to_back,
+			request_timeout: self.request_timeout,
+			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
+			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
+		}
+	}
 }
 
-/// Generic asyncronous client.
+/// Generic asynchronous client.
 #[derive(Debug)]
 pub struct Client {
 	/// Channel to send requests to the background task.
@@ -164,12 +192,6 @@ impl Client {
 	}
 }
 
-impl<S: TransportSenderT, R: TransportReceiverT> From<(S, R)> for Client {
-	fn from(transport: (S, R)) -> Client {
-		ClientBuilder::default().build(transport.0, transport.1)
-	}
-}
-
 impl Drop for Client {
 	fn drop(&mut self) {
 		self.to_back.close_channel();
@@ -188,16 +210,10 @@ impl ClientT for Client {
 		let mut sender = self.to_back.clone();
 		let fut = sender.send(FrontToBack::Notification(raw));
 
-		let timeout = tokio::time::sleep(self.request_timeout);
-
-		let res = tokio::select! {
-			x = fut => x,
-			_ = timeout => return Err(Error::RequestTimeout)
-		};
-
-		match res {
-			Ok(()) => Ok(()),
-			Err(_) => Err(self.read_error_from_backend().await),
+		match future::select(fut, Delay::new(self.request_timeout)).await {
+			Either::Left((Ok(()), _)) => Ok(()),
+			Either::Left((Err(_), _)) => Err(self.read_error_from_backend().await),
+			Either::Right((_, _)) => Err(Error::RequestTimeout),
 		}
 	}
 
@@ -359,13 +375,16 @@ impl SubscriptionClientT for Client {
 }
 
 /// Function being run in the background that processes messages from the frontend.
-async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
+async fn background_task<S, R>(
 	mut sender: S,
 	receiver: R,
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
-) {
+) where
+	S: TransportSenderT,
+	R: TransportReceiverT,
+{
 	let mut manager = RequestManager::new();
 
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {

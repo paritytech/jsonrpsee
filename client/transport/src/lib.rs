@@ -32,3 +32,7 @@
 /// Websocket transport
 #[cfg(feature = "ws")]
 pub mod ws;
+
+/// Websocket transport via web-sys.
+#[cfg(all(feature = "web", target_arch = "wasm32"))]
+pub mod web;

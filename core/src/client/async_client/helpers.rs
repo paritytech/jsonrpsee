@@ -24,13 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::time::Duration;
-
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::{RequestMessage, TransportSenderT};
 use crate::Error;
 
-use futures_channel::{mpsc, oneshot};
+use futures_channel::mpsc;
+use futures_timer::Delay;
+use futures_util::future::{self, Either};
+
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
@@ -253,12 +254,11 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
-	timeout: Duration,
-	rx: oneshot::Receiver<Result<T, Error>>,
-) -> Result<Result<T, Error>, oneshot::Canceled> {
-	let timeout = tokio::time::sleep(timeout);
-	tokio::select! {
-		res = rx => res,
-		_ = timeout => Ok(Err(Error::RequestTimeout))
+	timeout: std::time::Duration,
+	rx: futures_channel::oneshot::Receiver<Result<T, Error>>,
+) -> Result<Result<T, Error>, futures_channel::oneshot::Canceled> {
+	match future::select(rx, Delay::new(timeout)).await {
+		Either::Left((res, _)) => res,
+		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
 	}
 }

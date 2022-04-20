@@ -30,7 +30,7 @@ use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-use futures::io::{BufReader, BufWriter};
+use futures_util::io::{BufReader, BufWriter};
 use jsonrpsee_core::client::{CertificateStore, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
@@ -188,7 +188,7 @@ impl TransportSenderT for Sender {
 
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	async fn send(&mut self, body: String) -> Result<(), WsError> {
+	async fn send(&mut self, body: String) -> Result<(), Self::Error> {
 		tracing::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
 		self.inner.flush().await?;
@@ -206,7 +206,7 @@ impl TransportReceiverT for Receiver {
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
-	async fn receive(&mut self) -> Result<String, WsError> {
+	async fn receive(&mut self) -> Result<String, Self::Error> {
 		let mut message = Vec::new();
 		self.inner.receive_data(&mut message).await?;
 		let s = String::from_utf8(message).expect("Found invalid UTF-8");
