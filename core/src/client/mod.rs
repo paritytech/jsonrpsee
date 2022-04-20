@@ -127,7 +127,6 @@ impl<T> MaybeSend for T {}
 /// Transport interface to send data asynchronous.
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-/// Transport interface for an asynchronous client.
 pub trait TransportSenderT: MaybeSend + 'static {
 	/// Error that may occur during sending a message.
 	type Error: std::error::Error + Send + Sync;
