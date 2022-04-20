@@ -13,7 +13,7 @@ documentation = "https://docs.rs/jsonrpsee-ws-server"
 futures-channel = "0.3.14"
 futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
 jsonrpsee-types = { path = "../types", version = "0.11.0" }
-jsonrpsee-core = { path = "../core", version = "0.11.0", features = ["server"] }
+jsonrpsee-core = { path = "../core", version = "0.11.0", features = ["server", "soketto"] }
 tracing = "0.1"
 serde_json = { version = "1", features = ["raw_value"] }
 soketto = "0.7.1"

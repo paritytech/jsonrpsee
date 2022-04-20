@@ -13,8 +13,13 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 jsonrpsee-types = { path = "../../types", version = "0.11.0", optional = true }
 jsonrpsee-core = { path = "../../core", version = "0.11.0", features = ["client"] }
 tracing = { version = "0.1", optional = true }
+tracing = "0.1"
+
+# optional
 thiserror = { version = "1", optional = true }
-futures = { version = "0.3.14", default-features = false, features = ["std"], optional = true }
+anyhow = { version = "1", optional = true }
+futures-channel = { version = "0.3.14", default-features = false, optional = true }
+futures-util = { version = "0.3.14", default-features = false, features = ["alloc"], optional = true }
 http = { version = "0.2", optional = true }
 tokio-util = { version = "0.7", features = ["compat"], optional = true }
 tokio = { version = "1", features = ["net", "time", "macros"], optional = true }
@@ -22,14 +27,20 @@ pin-project = { version = "1", optional = true }
 rustls-native-certs = { version = "0.6", optional = true }
 webpki-roots = { version = "0.22", optional = true }
 tokio-rustls = { version = "0.23", optional = true }
+futures-timer = { version = "3", optional = true }
 
 # ws
 soketto = { version = "0.7.1", optional = true }
 
+# web-sys
+wasm-bindgen = { version = "0.2.69", optional = true }
+wasm-bindgen-futures = { version = "0.4.19", optional = true }
+gloo-net = { version = "0.1.0", default-features = false, features = ["json", "websocket"], optional = true }
+
 [features]
 tls = ["tokio-rustls", "webpki-roots", "rustls-native-certs"]
 ws = [
-    "futures",
+    "futures-util",
     "http",
     "tokio",
     "tokio-util",
@@ -37,5 +48,14 @@ ws = [
     "pin-project",
     "jsonrpsee-types",
     "thiserror",
-    "tracing"
+]
+web = [
+    "wasm-bindgen",
+    "wasm-bindgen-futures",
+    "gloo-net",
+    "futures-channel",
+    "futures-timer",
+    "futures-util",
+    "anyhow",
+    "thiserror",
 ]

@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Shared utilities for `jsonrpsee` clients.
+
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -48,10 +49,10 @@ pub mod __reexports {
 }
 
 /// Async client abstraction that brings additional deps.
-#[cfg(feature = "async-client")]
+#[cfg(any(feature = "async-wasm-client", feature = "async-client"))]
 mod async_client;
 
-#[cfg(feature = "async-client")]
+#[cfg(any(feature = "async-wasm-client", feature = "async-client"))]
 pub use async_client::{Client, ClientBuilder};
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
@@ -109,11 +110,25 @@ pub trait SubscriptionClientT: ClientT {
 		Notif: DeserializeOwned;
 }
 
+/// Marker trait to determine whether a type implements `Send` or not.
+#[cfg(target_arch = "wasm32")]
+pub trait MaybeSend {}
+
+/// Marker trait to determine whether a type implements `Send` or not.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait MaybeSend: Send {}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Send> MaybeSend for T {}
+
+#[cfg(target_arch = "wasm32")]
+impl<T> MaybeSend for T {}
+
 /// Transport interface to send data asynchronous.
-#[async_trait]
-/// Transport interface for an asyncronous client.
-pub trait TransportSenderT: Send + 'static {
-	/// Error.
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+pub trait TransportSenderT: MaybeSend + 'static {
+	/// Error that may occur during sending a message.
 	type Error: std::error::Error + Send + Sync;
 
 	/// Send.
@@ -126,9 +141,10 @@ pub trait TransportSenderT: Send + 'static {
 }
 
 /// Transport interface to receive data asynchronous.
-#[async_trait]
-pub trait TransportReceiverT: Send + 'static {
-	/// Error that occur during send or receiving a message.
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+pub trait TransportReceiverT: 'static {
+	/// Error that may occur during receiving a message.
 	type Error: std::error::Error + Send + Sync;
 
 	/// Receive.

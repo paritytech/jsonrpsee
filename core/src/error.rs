@@ -206,18 +206,21 @@ impl From<std::io::Error> for Error {
 	}
 }
 
+#[cfg(feature = "soketto")]
 impl From<soketto::handshake::Error> for Error {
 	fn from(handshake_err: soketto::handshake::Error) -> Error {
 		Error::Transport(handshake_err.into())
 	}
 }
 
+#[cfg(feature = "soketto")]
 impl From<soketto::connection::Error> for Error {
 	fn from(conn_err: soketto::connection::Error) -> Error {
 		Error::Transport(conn_err.into())
 	}
 }
 
+#[cfg(feature = "hyper")]
 impl From<hyper::Error> for Error {
 	fn from(hyper_err: hyper::Error) -> Error {
 		Error::Transport(hyper_err.into())
