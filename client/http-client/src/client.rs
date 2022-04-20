@@ -32,6 +32,7 @@ use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Re
 use async_trait::async_trait;
 use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_types::error::CallError;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
 
@@ -147,7 +148,7 @@ impl ClientT for HttpClient {
 			Ok(response) => response,
 			Err(_) => {
 				let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-				return Err(Error::Call(err.error.to_call_error()));
+				return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
 			}
 		};
 
@@ -186,7 +187,7 @@ impl ClientT for HttpClient {
 
 		let rps: Vec<Response<_>> =
 			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
-				Ok(e) => Error::Call(e.error.to_call_error()),
+				Ok(e) => Error::Call(CallError::Custom(e.error_object().clone().into_owned())),
 				Err(e) => Error::ParseError(e),
 			})?;
 

@@ -33,10 +33,11 @@ use std::time::Duration;
 use futures::TryStreamExt;
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::{SubscriptionClosed, SubscriptionClosedReason};
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
+use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -294,6 +295,11 @@ async fn ws_unsubscribe_releases_request_slots() {
 
 #[tokio::test]
 async fn server_should_be_able_to_close_subscriptions() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -301,9 +307,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 	let mut sub: Subscription<String> = client.subscribe("subscribe_noop", None, "unsubscribe_noop").await.unwrap();
 
-	let res = sub.next().await;
-
-	assert!(matches!(res, Some(Err(Error::SubscriptionClosed(_)))));
+	assert!(sub.next().await.is_none());
 }
 
 #[tokio::test]
@@ -349,18 +353,18 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, mut tx| {
+			let mut sink = pending.accept().unwrap();
 			tokio::spawn(async move {
 				let close_err = loop {
-					if let Err(Error::SubscriptionClosed(err)) = sink.send(&1) {
-						break err;
+					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
+						break ErrorObject::borrowed(0, &"Subscription terminated successfully", None);
 					}
 					tokio::time::sleep(Duration::from_millis(100)).await;
 				};
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed(close_err).await.unwrap();
 			});
-			Ok(())
 		})
 		.unwrap();
 
@@ -377,16 +381,11 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let close_err = rx.next().await.unwrap();
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert!(matches!(close_err.close_reason(), &SubscriptionClosedReason::ConnectionReset));
+	assert_eq!(close_err, ErrorObject::borrowed(0, &"Subscription terminated successfully", None));
 }
 
 #[tokio::test]
 async fn ws_server_cancels_subscriptions_on_reset_conn() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
-
 	use futures::{channel::mpsc, SinkExt, StreamExt};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
@@ -397,18 +396,21 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_for_ever", "n", "unsubscribe_for_ever", |_, sink, mut tx| {
+		.register_subscription("subscribe_for_ever", "n", "unsubscribe_for_ever", |_, pending, mut tx| {
 			// Create stream that produce one item then sleeps for an hour.
 			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream).await.unwrap();
+				sink.pipe_from_stream(stream).await;
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
-
-			Ok(())
 		})
 		.unwrap();
 
@@ -444,13 +446,20 @@ async fn ws_server_cancels_sub_stream_after_err() {
 			"subscribe_with_err_on_stream",
 			"n",
 			"unsubscribe_with_err_on_stream",
-			move |_, sink, _| {
+			move |_, pending, _| {
+				let mut sink = match pending.accept() {
+					Some(sink) => sink,
+					_ => return,
+				};
+
 				// create stream that produce an error which will cancel the subscription.
 				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
 				tokio::spawn(async move {
-					let _ = sink.pipe_from_try_stream(stream).await;
+					match sink.pipe_from_try_stream(stream).await {
+						SubscriptionClosed::Failed(e) => sink.close(e),
+						_ => unreachable!(),
+					};
 				});
-				Ok(())
 			},
 		)
 		.unwrap();
@@ -458,13 +467,11 @@ async fn ws_server_cancels_sub_stream_after_err() {
 	server.start(module).unwrap();
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub: Subscription<usize> =
+	let mut sub: Subscription<serde_json::Value> =
 		client.subscribe("subscribe_with_err_on_stream", None, "unsubscribe_with_err_on_stream").await.unwrap();
 
 	assert_eq!(sub.next().await.unwrap().unwrap(), 1);
-	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server(err.to_string()));
 	// The server closed down the subscription with the underlying error from the stream.
-	assert!(matches!(sub.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
 	assert!(sub.next().await.is_none());
 }
 
@@ -479,14 +486,23 @@ async fn ws_server_subscribe_with_stream() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, _| {
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
-				sink.pipe_from_stream(stream).await.unwrap();
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::Success => {
+						sink.close(SubscriptionClosed::Success);
+					}
+					_ => unreachable!(),
+				};
 			});
-			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();
@@ -511,9 +527,7 @@ async fn ws_server_subscribe_with_stream() {
 	// sub1 is still in business, read remaining items.
 	assert_eq!(sub1.by_ref().take(3).try_collect::<Vec<usize>>().await.unwrap(), vec![3, 4, 5]);
 
-	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server("No close reason provided".to_string()));
-	// The server closed down the subscription it will send a close reason.
-	assert!(matches!(sub1.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
+	assert!(sub1.next().await.is_none());
 }
 
 #[tokio::test]
@@ -666,4 +680,17 @@ fn comma_separated_header_values(headers: &hyper::HeaderMap, header: &str) -> Ve
 		.flat_map(|value| value.to_str().unwrap().split(',').map(|val| val.trim()))
 		.map(|header| header.to_ascii_lowercase())
 		.collect()
+}
+
+#[tokio::test]
+async fn ws_subscribe_with_bad_params() {
+	let (server_addr, _handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let err = client
+		.subscribe::<serde_json::Value>("subscribe_add_one", rpc_params!["0x0"], "unsubscribe_add_one")
+		.await
+		.unwrap_err();
+	assert!(matches!(err, Error::Call(_)));
 }

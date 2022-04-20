@@ -60,8 +60,20 @@ pub struct SubscriptionPayload<'a, T> {
 	pub result: T,
 }
 
-/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member.
+/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along with `result` field.
 pub type SubscriptionResponse<'a, T> = Notification<'a, SubscriptionPayload<'a, T>>;
+/// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along with `error` field.
+pub type SubscriptionError<'a, T> = Notification<'a, SubscriptionPayloadError<'a, T>>;
+
+/// Error value for subscriptions.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SubscriptionPayloadError<'a, T> {
+	/// Subscription ID
+	#[serde(borrow)]
+	pub subscription: SubscriptionId<'a>,
+	/// Result.
+	pub error: T,
+}
 
 #[cfg(test)]
 mod tests {

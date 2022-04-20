@@ -27,29 +27,50 @@
 use std::fmt;
 
 use crate::params::{Id, TwoPointZero};
-use beef::Cow;
 use serde::de::Deserializer;
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
+use std::borrow::Borrow;
+use std::borrow::Cow as StdCow;
 use thiserror::Error;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ErrorResponse<'a> {
 	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
+	jsonrpc: TwoPointZero,
 	/// Error.
 	#[serde(borrow)]
-	pub error: ErrorObject<'a>,
+	error: ErrorObject<'a>,
 	/// Request ID
-	pub id: Id<'a>,
+	id: Id<'a>,
 }
 
 impl<'a> ErrorResponse<'a> {
-	/// Create a new `ErrorResponse`.
-	pub fn new(error: ErrorObject<'a>, id: Id<'a>) -> Self {
+	/// Create a borrowed `ErrorResponse`.
+	pub fn borrowed(error: ErrorObject<'a>, id: Id<'a>) -> Self {
 		Self { jsonrpc: TwoPointZero, error, id }
+	}
+
+	/// Create a borrowed `ErrorResponse`.
+	pub fn owned(error: ErrorObject<'static>, id: Id<'static>) -> Self {
+		Self { jsonrpc: TwoPointZero, error, id }
+	}
+
+	/// Take ownership of the parameters within, if we haven't already.
+	pub fn into_owned(self) -> ErrorResponse<'static> {
+		ErrorResponse { jsonrpc: self.jsonrpc, error: self.error.into_owned(), id: self.id.into_owned() }
+	}
+
+	/// Get the [`ErrorObject`] of the error response.
+	pub fn error_object(&self) -> &ErrorObject {
+		&self.error
+	}
+
+	/// Get the [`Id`] of the error response.
+	pub fn id(&self) -> &Id {
+		&self.id
 	}
 }
 
@@ -59,48 +80,79 @@ impl<'a> fmt::Display for ErrorResponse<'a> {
 	}
 }
 
-/// JSON-RPC error object.
+/// Owned variant of [`ErrorObject`].
+pub type ErrorObjectOwned = ErrorObject<'static>;
+
+/// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ErrorObject<'a> {
 	/// Code
-	pub code: ErrorCode,
+	code: ErrorCode,
 	/// Message
-	#[serde(borrow)]
-	pub message: Cow<'a, str>,
+	message: StdCow<'a, str>,
 	/// Optional data
 	#[serde(skip_serializing_if = "Option::is_none")]
-	#[serde(borrow)]
-	pub data: Option<&'a RawValue>,
+	data: Option<StdCow<'a, RawValue>>,
 }
 
 impl<'a> ErrorObject<'a> {
-	/// Create a new `ErrorObject` with optional data.
-	pub fn new(code: ErrorCode, data: Option<&'a RawValue>) -> ErrorObject<'a> {
-		Self { code, message: code.message().into(), data }
+	/// Return the error code
+	pub fn code(&self) -> i32 {
+		self.code.code()
 	}
 
-	/// Create an owned ErrorObject via [`CallError`]
-	pub fn to_call_error(self) -> CallError {
-		CallError::Custom {
-			code: self.code.code(),
-			data: self.data.map(|d| d.to_owned()),
-			message: self.message.into_owned(),
+	/// Return the message
+	pub fn message(&self) -> &str {
+		self.message.borrow()
+	}
+
+	/// Return the data associated with this error, if any
+	pub fn data(&self) -> Option<&RawValue> {
+		self.data.as_ref().map(|d| d.borrow())
+	}
+
+	/// Create a new `ErrorObjectOwned` with optional data.
+	pub fn owned<S: Serialize>(code: i32, message: impl Into<String>, data: Option<S>) -> ErrorObject<'static> {
+		let data = data.and_then(|d| serde_json::value::to_raw_value(&d).ok());
+		ErrorObject { code: code.into(), message: message.into().into(), data: data.map(StdCow::Owned) }
+	}
+
+	/// Create a new [`ErrorObject`] with optional data.
+	pub fn borrowed(code: i32, message: &'a impl AsRef<str>, data: Option<&'a RawValue>) -> ErrorObject<'a> {
+		ErrorObject { code: code.into(), message: StdCow::Borrowed(message.as_ref()), data: data.map(StdCow::Borrowed) }
+	}
+
+	/// Take ownership of the parameters within, if we haven't already.
+	pub fn into_owned(self) -> ErrorObject<'static> {
+		ErrorObject {
+			code: self.code,
+			message: StdCow::Owned(self.message.into_owned()),
+			data: self.data.map(|d| StdCow::Owned(d.into_owned())),
 		}
+	}
+
+	/// Borrow the current [`ErrorObject`].
+	pub fn borrow(&'a self) -> ErrorObject<'a> {
+		ErrorObject {
+			code: self.code,
+			message: StdCow::Borrowed(self.message.borrow()),
+			data: self.data.as_ref().map(|d| StdCow::Borrowed(d.borrow())),
+		}
+	}
+}
+
+impl<'a> PartialEq for ErrorObject<'a> {
+	fn eq(&self, other: &Self) -> bool {
+		let this_raw = self.data.as_ref().map(|r| r.get());
+		let other_raw = other.data.as_ref().map(|r| r.get());
+		self.code == other.code && self.message == other.message && this_raw == other_raw
 	}
 }
 
 impl<'a> From<ErrorCode> for ErrorObject<'a> {
 	fn from(code: ErrorCode) -> Self {
 		Self { code, message: code.message().into(), data: None }
-	}
-}
-
-impl<'a> PartialEq for ErrorObject<'a> {
-	fn eq(&self, other: &Self) -> bool {
-		let this_raw = self.data.map(|r| r.get());
-		let other_raw = other.data.map(|r| r.get());
-		self.code == other.code && self.message == other.message && this_raw == other_raw
 	}
 }
 
@@ -124,8 +176,10 @@ pub const SERVER_IS_BUSY_CODE: i32 = -32604;
 pub const CALL_EXECUTION_FAILED_CODE: i32 = -32000;
 /// Unknown error.
 pub const UNKNOWN_ERROR_CODE: i32 = -32001;
-/// Invalid subscription error code.
-pub const INVALID_SUBSCRIPTION_CODE: i32 = -32002;
+/// Subscription got closed by the server.
+pub const SUBSCRIPTION_CLOSED: i32 = -32003;
+/// Subscription got closed by the server.
+pub const SUBSCRIPTION_CLOSED_WITH_ERROR: i32 = -32004;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
@@ -247,18 +301,11 @@ pub enum CallError {
 	#[error("Invalid params in the call: {0}")]
 	InvalidParams(#[source] anyhow::Error),
 	/// The call failed (let jsonrpsee assign default error code and error message).
-	#[error("RPC Call failed: {0}")]
+	#[error("RPC call failed: {0}")]
 	Failed(#[from] anyhow::Error),
 	/// Custom error with specific JSON-RPC error code, message and data.
-	#[error("RPC Call failed: code: {code}, message: {message}, data: {data:?}")]
-	Custom {
-		/// JSON-RPC error code
-		code: i32,
-		/// Short description of the error.
-		message: String,
-		/// A primitive or structured value that contains additional information about the error.
-		data: Option<Box<RawValue>>,
-	},
+	#[error("RPC call failed: {0:?}")]
+	Custom(ErrorObject<'static>),
 }
 
 impl CallError {
@@ -293,7 +340,7 @@ mod tests {
 		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
 		let exp = ErrorResponse {
 			jsonrpc: TwoPointZero,
-			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error".into(), data: Some(&*data) },
+			error: ErrorObject::owned(ErrorCode::ParseError.code(), "Parse error", Some(data)),
 			id: Id::Null,
 		};
 		let err: ErrorResponse = serde_json::from_str(ser).unwrap();
@@ -318,11 +365,11 @@ mod tests {
 		assert_eq!(
 			err,
 			ErrorResponse {
-				error: ErrorObject {
-					code: 1002.into(),
-					message: "desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })".into(),
-					data: Some(&*data),
-				},
+				error: ErrorObject::borrowed(
+					1002,
+					&"desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
+					Some(&*data)
+				),
 				id: Id::Number(7),
 				jsonrpc: TwoPointZero,
 			}

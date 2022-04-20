@@ -4,8 +4,9 @@ mod manager;
 use std::time::Duration;
 
 use crate::client::{
-	BatchMessage, ClientT, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT,
-	SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT,
+	async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, RegisterNotificationMessage,
+	RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT,
+	TransportSenderT,
 };
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
@@ -20,7 +21,8 @@ use futures_util::future::Either;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::{
-	ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response, SubscriptionResponse,
+	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response,
+	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
 use tokio::sync::Mutex;
@@ -488,6 +490,11 @@ async fn background_task<S: TransportSenderT, R: TransportReceiverT>(
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
+				}
+				// Subscription error response.
+				else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
+					tracing::debug!("[backend]: recv subscription closed {:?}", response);
+					let _ = process_subscription_close_response(&mut manager, response);
 				}
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
