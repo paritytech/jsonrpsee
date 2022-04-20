@@ -36,7 +36,6 @@ default = []
 http-helpers = ["hyper", "futures-util"]
 server = [
 	"arrayvec",
-	"async-channel",
 	"futures-util/alloc",
 	"rustc-hash/std",
 	"tracing",
