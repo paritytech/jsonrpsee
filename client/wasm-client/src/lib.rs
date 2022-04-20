@@ -34,7 +34,7 @@ pub use jsonrpsee_types as types;
 
 use std::time::Duration;
 
-use jsonrpsee_client_transport::web_sys;
+use jsonrpsee_client_transport::web;
 use jsonrpsee_core::client::{ClientBuilder, IdKind};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
@@ -112,7 +112,7 @@ impl WasmClientBuilder {
 
 	/// Build the client with specified URL to connect to.
 	pub async fn build(self, url: impl AsRef<str>) -> Result<Client, Error> {
-		let (sender, receiver) = web_sys::connect(url).await.map_err(|e| Error::Transport(e.into()))?;
+		let (sender, receiver) = web::connect(url).await.map_err(|e| Error::Transport(e.into()))?;
 
 		let builder = ClientBuilder::default();
 

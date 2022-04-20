@@ -1,5 +1,3 @@
-#![cfg(target_arch = "wasm32")]
-
 use core::fmt;
 
 use futures_channel::mpsc;
