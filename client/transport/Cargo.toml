@@ -12,7 +12,9 @@ documentation = "https://docs.rs/jsonrpsee-ws-client"
 [dependencies]
 jsonrpsee-types = { path = "../../types", version = "0.10.1", optional = true }
 jsonrpsee-core = { path = "../../core", version = "0.10.1", features = ["client"] }
-tracing = { version = "0.1", optional = true }
+tracing = "0.1"
+
+# optional
 thiserror = { version = "1", optional = true }
 anyhow = { version = "1", optional = true }
 futures-channel = { version = "0.3.14", default-features = false, optional = true }

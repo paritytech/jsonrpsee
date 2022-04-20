@@ -31,7 +31,6 @@ use crate::Error;
 use futures_channel::mpsc;
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
-use futures_channel::{mpsc, oneshot};
 
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
