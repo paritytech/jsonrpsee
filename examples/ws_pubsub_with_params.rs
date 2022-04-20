@@ -25,11 +25,16 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::net::SocketAddr;
+use std::time::Duration;
 
+use futures::StreamExt;
 use jsonrpsee::core::client::SubscriptionClientT;
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
+use tokio::time::interval;
+use tokio_stream::wrappers::IntervalStream;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -61,23 +66,54 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {
-			let idx: usize = params.one()?;
-			std::thread::spawn(move || loop {
-				let _ = sink.send(&LETTERS.chars().nth(idx));
-				std::thread::sleep(std::time::Duration::from_millis(50));
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
+			let (idx, mut sink) = match (params.one(), pending.accept()) {
+				(Ok(idx), Some(sink)) => (idx, sink),
+				_ => return,
+			};
+			let item = LETTERS.chars().nth(idx);
+
+			let interval = interval(Duration::from_millis(200));
+			let stream = IntervalStream::new(interval).map(move |_| item);
+
+			tokio::spawn(async move {
+				match sink.pipe_from_stream(stream).await {
+					// Send close notification when subscription stream failed.
+					SubscriptionClosed::Failed(err) => {
+						sink.close(err);
+					}
+					// Don't send close notification because the stream should run forever.
+					SubscriptionClosed::Success => (),
+					// Don't send close because the client has already disconnected.
+					SubscriptionClosed::RemotePeerAborted => (),
+				};
 			});
-			Ok(())
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, mut sink, _| {
-			let (one, two): (usize, usize) = params.parse()?;
-			std::thread::spawn(move || loop {
-				let _ = sink.send(&LETTERS[one..two].to_string());
-				std::thread::sleep(std::time::Duration::from_millis(100));
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
+			let (one, two, mut sink) = match (params.parse::<(usize, usize)>(), pending.accept()) {
+				(Ok((one, two)), Some(sink)) => (one, two, sink),
+				_ => return,
+			};
+
+			let item = &LETTERS[one..two];
+
+			let interval = interval(Duration::from_millis(200));
+			let stream = IntervalStream::new(interval).map(move |_| item);
+
+			tokio::spawn(async move {
+				match sink.pipe_from_stream(stream).await {
+					// Send close notification when subscription stream failed.
+					SubscriptionClosed::Failed(err) => {
+						sink.close(err);
+					}
+					// Don't send close notification because the stream should run forever.
+					SubscriptionClosed::Success => (),
+					// Don't send close because the client has already disconnected.
+					SubscriptionClosed::RemotePeerAborted => (),
+				};
 			});
-			Ok(())
 		})
 		.unwrap();
 

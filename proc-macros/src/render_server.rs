@@ -69,7 +69,7 @@ impl RpcDescription {
 
 		let subscriptions = self.subscriptions.iter().map(|sub| {
 			let docs = &sub.docs;
-			let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
+			let subscription_sink_ty = self.jrps_server_item(quote! { PendingSubscription });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
@@ -124,7 +124,7 @@ impl RpcDescription {
 				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters we're passing to the rust function
 				// called..
-				let (parsing, params_seq) = self.render_params_decoding(&method.params);
+				let (parsing, params_seq) = self.render_params_decoding(&method.params, None);
 
 				check_name(&rpc_method_name, rust_method_name.span());
 
@@ -182,7 +182,8 @@ impl RpcDescription {
 				// `parsing` is the code associated with parsing structure from the
 				// provided `Params` object.
 				// `params_seq` is the comma-delimited sequence of parameters.
-				let (parsing, params_seq) = self.render_params_decoding(&sub.params);
+				let pending = proc_macro2::Ident::new("subscription_sink", rust_method_name.span());
+				let (parsing, params_seq) = self.render_params_decoding(&sub.params, Some(pending));
 
 				check_name(&rpc_sub_name, rust_method_name.span());
 				check_name(&rpc_unsub_name, rust_method_name.span());
@@ -196,9 +197,9 @@ impl RpcDescription {
 				};
 
 				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, sink, context| {
+					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, subscription_sink, context| {
 						#parsing
-						context.as_ref().#rust_method_name(sink, #params_seq)
+						context.as_ref().#rust_method_name(subscription_sink, #params_seq)
 					})
 				})
 			})
@@ -286,7 +287,11 @@ impl RpcDescription {
 		})
 	}
 
-	fn render_params_decoding(&self, params: &[(syn::PatIdent, syn::Type)]) -> (TokenStream2, TokenStream2) {
+	fn render_params_decoding(
+		&self,
+		params: &[(syn::PatIdent, syn::Type)],
+		sub: Option<proc_macro2::Ident>,
+	) -> (TokenStream2, TokenStream2) {
 		if params.is_empty() {
 			return (TokenStream2::default(), TokenStream2::default());
 		}
@@ -294,11 +299,25 @@ impl RpcDescription {
 		let params_fields_seq = params.iter().map(|(name, _)| name);
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
+		let err = self.jrps_server_item(quote! { core::Error });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
-			let decode_fields = params.iter().map(|(name, ty)| {
-				if is_option(ty) {
+			let decode_fields = params.iter().map(|(name, ty)| match (is_option(ty), sub.as_ref()) {
+				(true, Some(pending)) => {
+					quote! {
+						let #name: #ty = match seq.optional_next() {
+							Ok(v) => v,
+							Err(e) => {
+								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								let _e: #err = e.into();
+								#pending.reject(_e);
+								return;
+							}
+						};
+					}
+				}
+				(true, None) => {
 					quote! {
 						let #name: #ty = match seq.optional_next() {
 							Ok(v) => v,
@@ -308,7 +327,21 @@ impl RpcDescription {
 							}
 						};
 					}
-				} else {
+				}
+				(false, Some(pending)) => {
+					quote! {
+						let #name: #ty = match seq.next() {
+							Ok(v) => v,
+							Err(e) => {
+								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
+								let _e: #err = e.into();
+								#pending.reject(_e);
+								return;
+							}
+						};
+					}
+				}
+				(false, None) => {
 					quote! {
 						let #name: #ty = match seq.next() {
 							Ok(v) => v,
@@ -340,16 +373,40 @@ impl RpcDescription {
 			let destruct = params.iter().map(|(name, _)| quote! { parsed.#name });
 			let types = params.iter().map(|(_, ty)| ty);
 
-			quote! {
-				#[derive(#serde::Deserialize)]
-				#[serde(crate = #serde_crate)]
-				struct ParamsObject<#(#generics,)*> {
-					#(#fields)*
+			if let Some(pending) = sub {
+				quote! {
+					#[derive(#serde::Deserialize)]
+					#[serde(crate = #serde_crate)]
+					struct ParamsObject<#(#generics,)*> {
+						#(#fields)*
+					}
+
+					let parsed: ParamsObject<#(#types,)*> = match params.parse() {
+						Ok(p) => p,
+						Err(e) => {
+							#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
+							let _e: #err = e.into();
+							#pending.reject(_e);
+							return;
+						}
+					};
+
+					(#(#destruct),*)
 				}
+			} else {
+				quote! {
+					#[derive(#serde::Deserialize)]
+					#[serde(crate = #serde_crate)]
+					struct ParamsObject<#(#generics,)*> {
+						#(#fields)*
+					}
 
-				let parsed: ParamsObject<#(#types,)*> = params.parse()?;
-
-				(#(#destruct),*)
+					let parsed: ParamsObject<#(#types,)*> = params.parse().map_err(|e| {
+						#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
+						e
+					})?;
+					(#(#destruct),*)
+				}
 			}
 		};
 

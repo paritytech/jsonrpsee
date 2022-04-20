@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-examples"
-version = "0.9.0"
+version = "0.10.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Examples for jsonrpsee"
 edition = "2021"
@@ -14,6 +14,8 @@ jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio = { version = "1.8", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+serde_json = { version = "1" }
 
 [[example]]
 name = "http"
@@ -36,12 +38,12 @@ name = "ws"
 path = "ws.rs"
 
 [[example]]
-name = "ws_subscription"
-path = "ws_subscription.rs"
+name = "ws_pubsub_broadcast"
+path = "ws_pubsub_broadcast.rs"
 
 [[example]]
-name = "ws_sub_with_params"
-path = "ws_sub_with_params.rs"
+name = "ws_pubsub_with_params"
+path = "ws_pubsub_with_params.rs"
 
 [[example]]
 name = "proc_macro"

@@ -270,6 +270,7 @@ where
 				methods.clone(),
 				resources.clone(),
 				cfg.max_request_body_size,
+				cfg.max_response_body_size,
 				stop_monitor.clone(),
 				middleware,
 				id_provider,
@@ -290,6 +291,7 @@ async fn background_task(
 	methods: Methods,
 	resources: Resources,
 	max_request_body_size: u32,
+	max_response_body_size: u32,
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
 	id_provider: Arc<dyn IdProvider>,
@@ -303,7 +305,7 @@ async fn background_task(
 	let close_notify_server_stop = close_notify.clone();
 
 	let stop_server2 = stop_server.clone();
-	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
 	middleware.on_connect();
 
@@ -313,7 +315,7 @@ async fn background_task(
 			if let Some(response) = rx.next().await {
 				// If websocket message send fail then terminate the connection.
 				if let Err(err) = send_ws_message(&mut sender, response).await {
-					tracing::error!("WS transport error: {:?}; terminate connection", err);
+					tracing::warn!("WS send error: {}; terminate connection", err);
 					break;
 				}
 			} else {
@@ -324,9 +326,8 @@ async fn background_task(
 		// Terminate connection and send close message.
 		let _ = sender.close().await;
 
-		// Force `conn_tx` to this async block and close it down
-		// when the connection closes to be on safe side.
-		close_notify_server_stop.notify_one();
+		// Notify all listeners and close down associated tasks.
+		close_notify_server_stop.notify_waiters();
 	});
 
 	// Buffer for incoming data.
@@ -361,7 +362,7 @@ async fn background_task(
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
+						tracing::warn!("WS error: {}; terminate connection {}", err, conn_id);
 						sink.close();
 						break Err(err.into());
 					}
@@ -476,7 +477,7 @@ async fn background_task(
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
-					let sink_batch = MethodSink::new_with_limit(tx_batch, max_request_body_size);
+					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size);
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
@@ -566,7 +567,7 @@ async fn background_task(
 							let results = collect_batch_response(rx_batch).await;
 
 							if let Err(err) = sink.send_raw(results) {
-								tracing::error!("Error sending batch response to the client: {:?}", err)
+								tracing::warn!("Error sending batch response to the client: {:?}", err)
 							} else {
 								middleware.on_response(request_start);
 							}
@@ -611,7 +612,7 @@ impl AllowedValue {
 			if !list.iter().any(|o| o.as_bytes() == value) {
 				let error = format!("{} denied: {}", header, String::from_utf8_lossy(value));
 				tracing::warn!("{}", error);
-				return Err(Error::Request(error));
+				return Err(Error::Custom(error));
 			}
 		}
 
@@ -624,6 +625,8 @@ impl AllowedValue {
 struct Settings {
 	/// Maximum size in bytes of a request.
 	max_request_body_size: u32,
+	/// Maximum size in bytes of a response.
+	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
 	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
@@ -638,6 +641,7 @@ impl Default for Settings {
 	fn default() -> Self {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_response_body_size: TEN_MB_SIZE_BYTES,
 			max_connections: MAX_CONNECTIONS,
 			allowed_origins: AllowedValue::Any,
 			allowed_hosts: AllowedValue::Any,
@@ -677,6 +681,12 @@ impl<M> Builder<M> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
+		self
+	}
+
+	/// Set the maximum size of a response body in bytes. Default is 10 MiB.
+	pub fn max_response_body_size(mut self, size: u32) -> Self {
+		self.settings.max_response_body_size = size;
 		self
 	}
 

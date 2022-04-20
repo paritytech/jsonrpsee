@@ -31,7 +31,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
-use crate::error::{Error, SubscriptionClosed};
+use crate::error::Error;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
@@ -39,7 +39,7 @@ use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
 use jsonrpsee_types::{Id, ParamsSer, SubscriptionId};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
 #[doc(hidden)]
@@ -193,17 +193,6 @@ pub enum SubscriptionKind {
 	Method(String),
 }
 
-/// Internal type to detect whether a subscription response from
-/// the server was a valid notification or should be treated as an error.
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum NotifResponse<Notif> {
-	/// Successful response.
-	Ok(Notif),
-	/// Subscription was closed.
-	Err(SubscriptionClosed),
-}
-
 /// Active subscription on the client.
 ///
 /// It will automatically unsubscribe in the [`Subscription::drop`] so no need to explicitly call
@@ -332,9 +321,8 @@ where
 	type Item = Result<Notif, Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let n = futures_util::ready!(self.notifs_rx.poll_next_unpin(cx));
-		let res = n.map(|n| match serde_json::from_value::<NotifResponse<Notif>>(n) {
-			Ok(NotifResponse::Ok(parsed)) => Ok(parsed),
-			Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(e)),
+		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
+			Ok(parsed) => Ok(parsed),
 			Err(e) => Err(Error::ParseError(e)),
 		});
 		task::Poll::Ready(res)

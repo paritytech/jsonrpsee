@@ -32,6 +32,7 @@ use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::types::error::CallError;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
@@ -107,7 +108,8 @@ async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpServerHan
 	let server = HttpServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
-		.build("127.0.0.1:0")?;
+		.build("127.0.0.1:0")
+		.await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(module)?;
@@ -117,11 +119,9 @@ async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpServerHan
 
 fn assert_server_busy(fail: Result<String, Error>) {
 	match fail {
-		Err(Error::Request(msg)) => {
-			let err: serde_json::Value = serde_json::from_str(&msg).unwrap();
-
-			assert_eq!(err["error"]["code"], -32604);
-			assert_eq!(err["error"]["message"], "Server is busy, try again later");
+		Err(Error::Call(CallError::Custom(err))) => {
+			assert_eq!(err.code(), -32604);
+			assert_eq!(err.message(), "Server is busy, try again later");
 		}
 		fail => panic!("Expected error, got: {:?}", fail),
 	}

@@ -24,9 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use core::fmt;
-use jsonrpsee_types::error::CallError;
-use serde::{Deserialize, Serialize};
+use std::fmt;
+
+use jsonrpsee_types::error::{
+	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
+	UNKNOWN_ERROR_CODE,
+};
 
 /// Convenience type for displaying errors.
 #[derive(Clone, Debug, PartialEq)]
@@ -55,14 +58,11 @@ impl From<anyhow::Error> for Error {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
 	/// Error that occurs when a call failed.
-	#[error("Server call failed: {0}")]
+	#[error("{0}")]
 	Call(#[from] CallError),
 	/// Networking error or error on the low-level protocol layer.
 	#[error("Networking or low-level protocol error: {0}")]
 	Transport(#[source] anyhow::Error),
-	/// JSON-RPC request error.
-	#[error("JSON-RPC request error: {0:?}")]
-	Request(String),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
 	Internal(#[from] futures_channel::mpsc::SendError),
@@ -96,9 +96,6 @@ pub enum Error {
 	/// Subscribe and unsubscribe method names are the same.
 	#[error("Cannot use the same method name for subscribe and unsubscribe, used: {0}")]
 	SubscriptionNameConflict(String),
-	/// Subscription got closed.
-	#[error("Subscription closed: {0:?}")]
-	SubscriptionClosed(SubscriptionClosed),
 	/// Request timeout
 	#[error("Request timeout")]
 	RequestTimeout,
@@ -146,46 +143,47 @@ impl Error {
 	}
 }
 
-/// A type with a special `subscription_closed` field to detect that
-/// a subscription has been closed to distinguish valid items produced
-/// by the server on the subscription stream from an error.
-///
-/// This is included in the `result field` of the SubscriptionResponse
-/// when an error is reported by the server.
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct SubscriptionClosed {
-	reason: SubscriptionClosedReason,
-}
-
-impl From<SubscriptionClosedReason> for SubscriptionClosed {
-	fn from(reason: SubscriptionClosedReason) -> Self {
-		Self::new(reason)
-	}
-}
-
-impl SubscriptionClosed {
-	/// Create a new [`SubscriptionClosed`].
-	pub fn new(reason: SubscriptionClosedReason) -> Self {
-		Self { reason }
-	}
-
-	/// Get the close reason.
-	pub fn close_reason(&self) -> &SubscriptionClosedReason {
-		&self.reason
+impl Into<ErrorObjectOwned> for Error {
+	fn into(self) -> ErrorObjectOwned {
+		match self {
+			Error::Call(CallError::Custom(err)) => err,
+			Error::Call(CallError::InvalidParams(e)) => {
+				ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>)
+			}
+			Error::Call(CallError::Failed(e)) => {
+				ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>)
+			}
+			_ => ErrorObject::owned(UNKNOWN_ERROR_CODE, self.to_string(), None::<()>),
+		}
 	}
 }
 
 /// A type to represent when a subscription gets closed
 /// by either the server or client side.
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
-pub enum SubscriptionClosedReason {
-	/// The subscription was closed by calling the unsubscribe method.
-	Unsubscribed,
-	/// The client closed the connection.
-	ConnectionReset,
-	/// The server closed the subscription, providing a description of the reason as a `String`.
-	Server(String),
+#[derive(Clone, Debug)]
+pub enum SubscriptionClosed {
+	/// The remote peer closed the connection or called the unsubscribe method.
+	RemotePeerAborted,
+	/// The subscription was completed successfully by the server.
+	Success,
+	/// The subscription failed during execution by the server.
+	Failed(ErrorObject<'static>),
+}
+
+impl Into<ErrorObjectOwned> for SubscriptionClosed {
+	fn into(self) -> ErrorObjectOwned {
+		match self {
+			Self::RemotePeerAborted => {
+				ErrorObject::owned(SUBSCRIPTION_CLOSED, "Subscription was closed by the remote peer", None::<()>)
+			}
+			Self::Success => ErrorObject::owned(
+				SUBSCRIPTION_CLOSED,
+				"Subscription was completed by the server successfully",
+				None::<()>,
+			),
+			Self::Failed(err) => err,
+		}
+	}
 }
 
 /// Generic transport error.
@@ -226,32 +224,5 @@ impl From<soketto::connection::Error> for Error {
 impl From<hyper::Error> for Error {
 	fn from(hyper_err: hyper::Error) -> Error {
 		Error::Transport(hyper_err.into())
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::{SubscriptionClosed, SubscriptionClosedReason};
-
-	#[test]
-	fn subscription_closed_ser_deser_works() {
-		let items: Vec<(&str, SubscriptionClosed)> = vec![
-			(r#"{"reason":"Unsubscribed"}"#, SubscriptionClosedReason::Unsubscribed.into()),
-			(r#"{"reason":"ConnectionReset"}"#, SubscriptionClosedReason::ConnectionReset.into()),
-			(r#"{"reason":{"Server":"hoho"}}"#, SubscriptionClosedReason::Server("hoho".into()).into()),
-		];
-
-		for (s, d) in items {
-			let dsr: SubscriptionClosed = serde_json::from_str(s).unwrap();
-			assert_eq!(dsr, d);
-			let ser = serde_json::to_string(&d).unwrap();
-			assert_eq!(ser, s);
-		}
-	}
-
-	#[test]
-	fn subscription_closed_deny_unknown_field() {
-		let ser = r#"{"reason":"Unsubscribed","deny":1}"#;
-		assert!(serde_json::from_str::<SubscriptionClosed>(ser).is_err());
 	}
 }

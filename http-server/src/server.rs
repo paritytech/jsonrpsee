@@ -26,7 +26,7 @@
 
 use std::cmp;
 use std::future::Future;
-use std::net::{SocketAddr, TcpListener, ToSocketAddrs};
+use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -48,7 +48,7 @@ use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::ErrorCode;
 use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
-use socket2::{Domain, Socket, Type};
+use tokio::net::{TcpListener, ToSocketAddrs};
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
@@ -56,7 +56,7 @@ pub struct Builder<M = ()> {
 	access_control: AccessControl,
 	resources: Resources,
 	max_request_body_size: u32,
-	keep_alive: bool,
+	max_response_body_size: u32,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
@@ -66,9 +66,9 @@ impl Default for Builder {
 	fn default() -> Self {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
+			max_response_body_size: TEN_MB_SIZE_BYTES,
 			resources: Resources::default(),
 			access_control: AccessControl::default(),
-			keep_alive: true,
 			tokio_runtime: None,
 			middleware: (),
 		}
@@ -111,9 +111,9 @@ impl<M> Builder<M> {
 	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
 		Builder {
 			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
 			resources: self.resources,
 			access_control: self.access_control,
-			keep_alive: self.keep_alive,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
 		}
@@ -125,24 +125,22 @@ impl<M> Builder<M> {
 		self
 	}
 
+	/// Sets the maximum size of a response body in bytes (default is 10 MiB).
+	pub fn max_response_body_size(mut self, size: u32) -> Self {
+		self.max_response_body_size = size;
+		self
+	}
+
 	/// Sets access control settings.
 	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
 		self.access_control = acl;
 		self
 	}
 
-	/// Enables or disables HTTP keep-alive.
-	///
-	/// Default is true.
-	pub fn keep_alive(mut self, keep_alive: bool) -> Self {
-		self.keep_alive = keep_alive;
-		self
-	}
-
 	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
 	/// registered resources on this server instance would exceed 8.
 	///
-	/// See the module documentation for [`resurce_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
+	/// See the module documentation for [`resource_limiting`](../jsonrpsee_utils/server/resource_limiting/index.html#resource-limiting)
 	/// for details.
 	pub fn register_resource(mut self, label: &'static str, capacity: u16, default: u16) -> Result<Self, Error> {
 		self.resources.register(label, capacity, default)?;
@@ -158,6 +156,97 @@ impl<M> Builder<M> {
 		self
 	}
 
+	/// Finalizes the configuration of the server with customized TCP settings on the socket and on hyper.
+	///
+	/// ```rust
+	/// use jsonrpsee_http_server::HttpServerBuilder;
+	/// use socket2::{Domain, Socket, Type};
+	/// use std::net::TcpListener;
+	///
+	/// #[tokio::main]
+	/// async fn main() {
+	///   let addr = "127.0.0.1:0".parse().unwrap();
+	///   let domain = Domain::for_address(addr);
+	///   let socket = Socket::new(domain, Type::STREAM, None).unwrap();
+	///   socket.set_nonblocking(true).unwrap();
+	///
+	///   let address = addr.into();
+	///   socket.bind(&address).unwrap();
+	///   socket.listen(4096).unwrap();
+	///
+	///   let listener: TcpListener = socket.into();
+	///   let local_addr = listener.local_addr().ok();
+	///
+	///   // hyper does some settings on the provided socket, ensure that nothing breaks our "expected settings".
+	///
+	///   let listener = hyper::Server::from_tcp(listener)
+	///     .unwrap()
+	///     .tcp_sleep_on_accept_errors(true)
+	///     .tcp_keepalive(None)
+	///     .tcp_nodelay(true);
+	///
+	///   let server = HttpServerBuilder::new().build_from_hyper(listener, addr).unwrap();
+	/// }
+	/// ```
+	pub fn build_from_hyper(
+		self,
+		listener: hyper::server::Builder<AddrIncoming>,
+		local_addr: SocketAddr,
+	) -> Result<Server<M>, Error> {
+		Ok(Server {
+			listener,
+			local_addr: Some(local_addr),
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
+			middleware: self.middleware,
+		})
+	}
+
+	/// Finalizes the configuration of the server with customized TCP settings on the socket.
+	/// Note, that [`hyper`] might overwrite some of the TCP settings on the socket
+	/// if you want full-control of socket settings use [`Builder::build_from_hyper`] instead.
+	///
+	/// ```rust
+	/// use jsonrpsee_http_server::HttpServerBuilder;
+	/// use socket2::{Domain, Socket, Type};
+	/// use std::time::Duration;
+	///
+	/// #[tokio::main]
+	/// async fn main() {
+	///   let addr = "127.0.0.1:0".parse().unwrap();
+	///   let domain = Domain::for_address(addr);
+	///   let socket = Socket::new(domain, Type::STREAM, None).unwrap();
+	///   socket.set_nonblocking(true).unwrap();
+	///
+	///   let address = addr.into();
+	///   socket.bind(&address).unwrap();
+	///
+	///   socket.listen(4096).unwrap();
+	///
+	///   let server = HttpServerBuilder::new().build_from_tcp(socket).unwrap();
+	/// }
+	/// ```
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<M>, Error> {
+		let listener = listener.into();
+		let local_addr = listener.local_addr().ok();
+
+		let listener = hyper::Server::from_tcp(listener)?;
+
+		Ok(Server {
+			listener,
+			local_addr,
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
+			middleware: self.middleware,
+		})
+	}
+
 	/// Finalizes the configuration of the server.
 	///
 	/// ```rust
@@ -169,55 +258,26 @@ impl<M> Builder<M> {
 	///       occupied_addr,
 	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(occupied_addr).is_err());
-	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).is_ok());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(occupied_addr).await.is_err());
+	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).await.is_ok());
 	/// }
 	/// ```
-	pub fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
-		let mut err: Option<Error> = None;
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
+		let listener = TcpListener::bind(addrs).await?.into_std()?;
 
-		for addr in addrs.to_socket_addrs()? {
-			let (listener, local_addr) = match self.inner_builder(addr) {
-				Ok(res) => res,
-				Err(e) => {
-					err = Some(e);
-					continue;
-				}
-			};
-
-			return Ok(Server {
-				listener,
-				local_addr,
-				access_control: self.access_control,
-				max_request_body_size: self.max_request_body_size,
-				resources: self.resources,
-				tokio_runtime: self.tokio_runtime,
-				middleware: self.middleware,
-			});
-		}
-
-		let err = err.unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "No address found").into());
-		Err(err)
-	}
-
-	fn inner_builder(
-		&self,
-		addr: SocketAddr,
-	) -> Result<(hyper::server::Builder<hyper::server::conn::AddrIncoming>, Option<SocketAddr>), Error> {
-		let domain = Domain::for_address(addr);
-		let socket = Socket::new(domain, Type::STREAM, None)?;
-		socket.set_nodelay(true)?;
-		socket.set_reuse_address(true)?;
-		socket.set_nonblocking(true)?;
-		socket.set_keepalive(self.keep_alive)?;
-		let address = addr.into();
-		socket.bind(&address)?;
-
-		socket.listen(128)?;
-		let listener: TcpListener = socket.into();
 		let local_addr = listener.local_addr().ok();
-		let listener = hyper::Server::from_tcp(listener)?;
-		Ok((listener, local_addr))
+		let listener = hyper::Server::from_tcp(listener)?.tcp_nodelay(true);
+
+		Ok(Server {
+			listener,
+			local_addr,
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
+			middleware: self.middleware,
+		})
 	}
 }
 
@@ -261,6 +321,8 @@ pub struct Server<M = ()> {
 	local_addr: Option<SocketAddr>,
 	/// Max request body size.
 	max_request_body_size: u32,
+	/// Max response body size.
+	max_response_body_size: u32,
 	/// Access control
 	access_control: AccessControl,
 	/// Tracker for currently used resources on the server
@@ -279,6 +341,7 @@ impl<M: Middleware> Server<M> {
 	/// Start the server.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
+		let max_response_body_size = self.max_response_body_size;
 		let access_control = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
@@ -341,6 +404,7 @@ impl<M: Middleware> Server<M> {
 									methods,
 									resources,
 									max_request_body_size,
+									max_response_body_size,
 								)
 								.await?;
 
@@ -429,6 +493,7 @@ async fn process_validated_request(
 	methods: Methods,
 	resources: Resources,
 	max_request_body_size: u32,
+	max_response_body_size: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (parts, body) = request.into_parts();
 
@@ -446,7 +511,7 @@ async fn process_validated_request(
 
 	// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_request_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
 	type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 

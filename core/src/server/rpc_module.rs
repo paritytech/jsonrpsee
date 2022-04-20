@@ -30,18 +30,20 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
-use crate::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
+use crate::error::{Error, SubscriptionClosed};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::traits::{IdProvider, ToRpcParams};
-use futures_channel::{mpsc, oneshot};
+use futures_channel::mpsc;
 use futures_util::future::Either;
 use futures_util::pin_mut;
-use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt};
-use jsonrpsee_types::error::{ErrorCode, CALL_EXECUTION_FAILED_CODE};
+use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, TryStreamExt};
+use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned, SUBSCRIPTION_CLOSED_WITH_ERROR};
+use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
 use jsonrpsee_types::{
-	Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload, SubscriptionResponse,
+	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
+	SubscriptionResponse,
 };
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -81,13 +83,22 @@ pub struct ConnState<'a> {
 	pub id_provider: &'a dyn IdProvider,
 }
 
+/// Outcome of a successful terminated subscription.
+#[derive(Debug)]
+pub enum SubscriptionResult {
+	/// The subscription stream was executed successfully.
+	Success,
+	/// The subscription was aborted by the remote peer.
+	Aborted,
+}
+
 impl<'a> std::fmt::Debug for ConnState<'a> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("ConnState").field("conn_id", &self.conn_id).field("close", &self.close_notify).finish()
 	}
 }
 
-type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Receiver<()>)>>>;
+type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, Arc<()>)>>>;
 
 /// Represent a unique subscription entry based on [`RpcSubscriptionId`] and [`ConnectionId`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -331,10 +342,16 @@ impl Methods {
 		let req = Request::new(method.into(), Some(&params), Id::Number(0));
 		tracing::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let (resp, _, _) = self.inner_call(req).await;
+
 		if let Ok(res) = serde_json::from_str::<Response<T>>(&resp) {
 			return Ok(res.result);
 		}
-		Err(Error::Request(resp))
+
+		if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp) {
+			return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
+		}
+
+		unreachable!("Invalid JSON-RPC response is not possible using jsonrpsee; this is bug please file an issue");
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
@@ -351,9 +368,8 @@ impl Methods {
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
-	///         sink.send(&"one answer").unwrap();
-	///         Ok(())
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
+	///         pending.accept().unwrap().send(&"one answer").unwrap();
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#).await.unwrap();
 	///     let resp = serde_json::from_str::<Response<u64>>(&resp).unwrap();
@@ -399,7 +415,7 @@ impl Methods {
 	///
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
-	/// Returns [`Subscription`] on succes which can used to get results from the subscriptions.
+	/// Returns [`Subscription`] on success which can used to get results from the subscriptions.
 	///
 	/// # Examples
 	///
@@ -409,9 +425,8 @@ impl Methods {
 	///     use jsonrpsee::{RpcModule, types::EmptyParams};
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
-	///         sink.send(&"one answer").unwrap();
-	///         Ok(())
+	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
+	///         pending.accept().unwrap().send(&"one answer").unwrap();
 	///     }).unwrap();
 	///
 	///     let mut sub = module.subscribe("hi", EmptyParams::new()).await.unwrap();
@@ -425,7 +440,14 @@ impl Methods {
 		let req = Request::new(sub_method.into(), Some(&params), Id::Number(0));
 		tracing::trace!("[Methods::subscribe] Calling subscription method: {:?}, params: {:?}", sub_method, params);
 		let (response, rx, close_notify) = self.inner_call(req).await;
-		let subscription_response = serde_json::from_str::<Response<RpcSubscriptionId>>(&response)?;
+		tracing::trace!("[Methods::subscribe] response {:?}", response);
+		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&response) {
+			Ok(r) => r,
+			Err(_) => match serde_json::from_str::<ErrorResponse>(&response) {
+				Ok(err) => return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))),
+				Err(err) => return Err(err.into()),
+			},
+		};
 		let sub_id = subscription_response.result.into_owned();
 		let close_notify = Some(close_notify);
 		Ok(Subscription { sub_id, rx, close_notify })
@@ -609,16 +631,31 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///
 	/// ```no_run
 	///
-	/// use jsonrpsee_core::server::rpc_module::RpcModule;
+	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
+	/// use jsonrpsee_core::Error;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, mut sink, ctx| {
-	///     let x: usize = params.one()?;
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| {
+	///     let x = match params.one::<usize>() {
+	///         Ok(x) => x,
+	///         Err(e) => {
+	///             let err: Error = e.into();
+	///             pending.reject(err);
+	///             return;
+	///         }
+	///     };
+	///
+	///     let mut sink = match pending.accept() {
+	///         Some(sink) => sink,
+	///         _ => {
+	///            return;
+	///         }
+	///     };
+	///
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
-	///         sink.send(&sum)
+	///         let _ = sink.send(&sum);
 	///     });
-	///     Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription<F>(
@@ -630,7 +667,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<(), Error>
 	where
 		Context: Send + Sync + 'static,
-		F: Fn(Params, SubscriptionSink, Arc<Context>) -> Result<(), Error> + Send + Sync + 'static,
+		F: Fn(Params, PendingSubscription, Arc<Context>) + Send + Sync + 'static,
 	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
@@ -648,38 +685,20 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			self.methods.mut_callbacks().insert(
 				subscribe_method_name,
 				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn| {
-					let (conn_tx, conn_rx) = oneshot::channel::<()>();
+					let sub_id: RpcSubscriptionId = conn.id_provider.next_id();
 
-					let sub_id = {
-						let sub_id: RpcSubscriptionId = conn.id_provider.next_id().into_owned();
-						let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() };
-
-						subscribers.lock().insert(uniq_sub, (method_sink.clone(), conn_rx));
-
-						sub_id
-					};
-
-					method_sink.send_response(id.clone(), &sub_id);
-
-					let sink = SubscriptionSink {
-						inner: method_sink.clone(),
+					let sink = PendingSubscription(Some(InnerPendingSubscription {
+						sink: method_sink.clone(),
 						close_notify: Some(conn.close_notify),
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id: conn.conn_id, sub_id },
-						is_connected: Some(conn_tx),
-					};
-					if let Err(err) = callback(params, sink, ctx.clone()) {
-						tracing::error!(
-							"subscribe call '{}' failed: {:?}, request id={:?}",
-							subscribe_method_name,
-							err,
-							id
-						);
-						method_sink.send_error(id, ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE).into())
-					} else {
-						true
-					}
+						id: id.clone().into_owned(),
+					}));
+
+					callback(params, sink, ctx.clone());
+
+					true
 				})),
 			);
 		}
@@ -703,10 +722,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					let sub_id = sub_id.into_owned();
 
-					let result = subscribers
-						.lock()
-						.remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id: sub_id.clone() })
-						.is_some();
+					let result =
+						subscribers.lock().remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id }).is_some();
 
 					sink.send_response(id, result)
 				})),
@@ -731,6 +748,71 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 }
 
+/// Represent a pending subscription which waits to be accepted or rejected.
+///
+/// Note: you need to call either `PendingSubscription::accept` or `PendingSubscription::reject` otherwise
+/// the subscription will be dropped with an `InvalidParams` error.
+#[derive(Debug)]
+struct InnerPendingSubscription {
+	/// Sink.
+	sink: MethodSink,
+	/// Get notified when subscribers leave so we can exit
+	close_notify: Option<Arc<Notify>>,
+	/// MethodCallback.
+	method: &'static str,
+	/// Unique subscription.
+	uniq_sub: SubscriptionKey,
+	/// Shared Mutex of subscriptions
+	subscribers: Subscribers,
+	/// Request ID.
+	id: Id<'static>,
+}
+
+/// Represent a pending subscription which waits until it's either accepted or rejected.
+///
+/// This type implements `Drop` for ease of use, e.g. when dropped in error short circuiting via `map_err()?`.
+#[derive(Debug)]
+pub struct PendingSubscription(Option<InnerPendingSubscription>);
+
+impl PendingSubscription {
+	/// Reject the subscription call from [`ErrorObject`].
+	pub fn reject(mut self, err: impl Into<ErrorObjectOwned>) -> bool {
+		if let Some(inner) = self.0.take() {
+			let InnerPendingSubscription { sink, id, .. } = inner;
+			sink.send_error(id, err.into())
+		} else {
+			false
+		}
+	}
+
+	/// Attempt to accept the subscription and respond the subscription method call.
+	///
+	/// Fails if the connection was closed
+	pub fn accept(mut self) -> Option<SubscriptionSink> {
+		let inner = self.0.take()?;
+
+		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id } = inner;
+
+		if sink.send_response(id, &uniq_sub.sub_id) {
+			let active_sub = Arc::new(());
+			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), active_sub.clone()));
+			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, active_sub })
+		} else {
+			None
+		}
+	}
+}
+
+// When dropped it returns an [`InvalidParams`] error to the subscriber
+impl Drop for PendingSubscription {
+	fn drop(&mut self) {
+		if let Some(inner) = self.0.take() {
+			let InnerPendingSubscription { sink, id, .. } = inner;
+			sink.send_error(id, ErrorCode::InvalidParams.into());
+		}
+	}
+}
+
 /// Represents a single subscription.
 #[derive(Debug)]
 pub struct SubscriptionSink {
@@ -744,27 +826,114 @@ pub struct SubscriptionSink {
 	uniq_sub: SubscriptionKey,
 	/// Shared Mutex of subscriptions for this method.
 	subscribers: Subscribers,
-	/// A type to track whether the subscription is active (the subscriber is connected).
-	///
-	/// None - implies that the subscription as been closed.
-	is_connected: Option<oneshot::Sender<()>>,
+	active_sub: Arc<()>,
 }
 
 impl SubscriptionSink {
 	/// Send a message back to subscribers.
-	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<(), Error> {
+	///
+	/// Returns `Ok(true)` if the message could be send
+	/// Returns `Ok(false)` if the sink was closed (either because the subscription was closed or the connection was terminated)
+	/// Return `Err(err)` if the message could not be serialized.
+	///
+	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<bool, serde_json::Error> {
+		// only possible to trigger when the connection is dropped.
 		if self.is_closed() {
-			return Err(Error::SubscriptionClosed(SubscriptionClosedReason::ConnectionReset.into()));
+			return Ok(false);
 		}
+
 		let msg = self.build_message(result)?;
-		self.inner_send(msg).map_err(Into::into)
+		Ok(self.inner_send(msg))
 	}
 
-	/// Consumes the `SubscriptionSink` and reads data from the `stream` and sends back data on the subscription
+	/// Reads data from the `stream` and sends back data on the subscription
 	/// when items gets produced by the stream.
+	/// The underlying stream must produce `Result values, see [`futures_util::TryStream`] for further information.
 	///
 	/// Returns `Ok(())` if the stream or connection was terminated.
-	/// Returns `Err(_)` if one of the items couldn't be serialized.
+	/// Returns `Err(_)` immediately if the underlying stream returns an error or if an item from the stream could not be serialized.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionResult};
+	/// use jsonrpsee_core::error::{Error, SubscriptionClosed};
+	/// use jsonrpsee_types::ErrorObjectOwned;
+	/// use anyhow::anyhow;
+	///
+	/// let mut m = RpcModule::new(());
+	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
+	///     let mut sink = pending.accept().unwrap();
+	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
+	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
+	///     // because after the `Err(_)` the stream is terminated.
+	///     tokio::spawn(async move {
+	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
+	///         // If we pipe messages to the sink, we can inspect why it ended:
+	///         match sink.pipe_from_try_stream(stream).await {
+	///            SubscriptionClosed::Success => {
+	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
+	///                sink.close(err_obj);
+	///            }
+	///            // we don't want to send close reason when the client is unsubscribed or disconnected.
+	///            SubscriptionClosed::RemotePeerAborted => (),
+	///            SubscriptionClosed::Failed(e) => {
+	///                sink.close(e);
+	///            }
+	///         };
+	///     });
+	/// });
+	/// ```
+	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> SubscriptionClosed
+	where
+		S: TryStream<Ok = T, Error = E> + Unpin,
+		T: Serialize,
+		E: std::fmt::Display,
+	{
+		let close_notify = match self.close_notify.clone() {
+			Some(close_notify) => close_notify,
+			None => return SubscriptionClosed::RemotePeerAborted,
+		};
+
+		let mut stream_item = stream.try_next();
+		let closed_fut = close_notify.notified();
+		pin_mut!(closed_fut);
+		loop {
+			match futures_util::future::select(stream_item, closed_fut).await {
+				// The app sent us a value to send back to the subscribers
+				Either::Left((Ok(Some(result)), next_closed_fut)) => {
+					match self.send(&result) {
+						Ok(true) => (),
+						Ok(false) => {
+							break SubscriptionClosed::RemotePeerAborted;
+						}
+						Err(err) => {
+							let err = ErrorObject::owned(SUBSCRIPTION_CLOSED_WITH_ERROR, err.to_string(), None::<()>);
+							break SubscriptionClosed::Failed(err);
+						}
+					};
+					stream_item = stream.try_next();
+					closed_fut = next_closed_fut;
+				}
+				// Stream canceled because of error.
+				Either::Left((Err(err), _)) => {
+					let err = ErrorObject::owned(SUBSCRIPTION_CLOSED_WITH_ERROR, err.to_string(), None::<()>);
+					break SubscriptionClosed::Failed(err);
+				}
+				Either::Left((Ok(None), _)) => break SubscriptionClosed::Success,
+				Either::Right(((), _)) => {
+					break SubscriptionClosed::RemotePeerAborted;
+				}
+			}
+		}
+	}
+
+	/// Similar to [`SubscriptionSink::pipe_from_try_stream`] but it doesn't require the stream return `Result`.
+	///
+	/// Warning: it's possible to pass in a stream that returns `Result` if `Result: Serialize` is satisfied
+	/// but it won't cancel the stream when an error occurs. If you want the stream to be canceled when an
+	/// error occurs use [`SubscriptionSink::pipe_from_try_stream`] instead.
 	///
 	/// # Examples
 	///
@@ -773,51 +942,18 @@ impl SubscriptionSink {
 	/// use jsonrpsee_core::server::rpc_module::RpcModule;
 	///
 	/// let mut m = RpcModule::new(());
-	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
-	///     let stream = futures_util::stream::iter(vec![1_u32, 2, 3]);
-	///     tokio::spawn(sink.pipe_from_stream(stream));
-	///     Ok(())
+	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
+	///     let mut sink = pending.accept().unwrap();
+	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
+	///     tokio::spawn(async move { sink.pipe_from_stream(stream).await; });
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T>(mut self, mut stream: S) -> Result<(), Error>
+	pub async fn pipe_from_stream<S, T>(&mut self, stream: S) -> SubscriptionClosed
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
 	{
-		if let Some(close_notify) = self.close_notify.clone() {
-			let mut stream_item = stream.next();
-			let closed_fut = close_notify.notified();
-			pin_mut!(closed_fut);
-			loop {
-				match futures_util::future::select(stream_item, closed_fut).await {
-					// The app sent us a value to send back to the subscribers
-					Either::Left((Some(result), next_closed_fut)) => {
-						match self.send(&result) {
-							Ok(_) => (),
-							Err(Error::SubscriptionClosed(close_reason)) => {
-								self.close(&close_reason);
-								break Ok(());
-							}
-							Err(err) => {
-								break Err(err);
-							}
-						};
-						stream_item = stream.next();
-						closed_fut = next_closed_fut;
-					}
-					// Stream terminated.
-					Either::Left((None, _)) => break Ok(()),
-					// The subscriber went away without telling us.
-					Either::Right(((), _)) => {
-						self.close(&SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset));
-						break Ok(());
-					}
-				}
-			}
-		} else {
-			// The sink is closed.
-			Ok(())
-		}
+		self.pipe_from_try_stream::<_, _, Error>(stream.map(|item| Ok(item))).await
 	}
 
 	/// Returns whether this channel is closed without needing a context.
@@ -825,7 +961,11 @@ impl SubscriptionSink {
 		self.inner.is_closed() || self.close_notify.is_none()
 	}
 
-	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, Error> {
+	fn is_active_subscription(&self) -> bool {
+		Arc::strong_count(&self.active_sub) > 1
+	}
+
+	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {
 		serde_json::to_string(&SubscriptionResponse::new(
 			self.method.into(),
 			SubscriptionPayload { subscription: self.uniq_sub.sub_id.clone(), result },
@@ -833,56 +973,60 @@ impl SubscriptionSink {
 		.map_err(Into::into)
 	}
 
-	fn inner_send(&mut self, msg: String) -> Result<(), Error> {
-		let res = match self.is_connected.as_ref() {
-			Some(conn) if !conn.is_canceled() => {
-				// unbounded send only fails if the receiver has been dropped.
-				self.inner.send_raw(msg).map_err(|_| Some(SubscriptionClosedReason::ConnectionReset))
-			}
-			Some(_) => Err(Some(SubscriptionClosedReason::Unsubscribed)),
-			// NOTE(niklasad1): this should be unreachable, after the first error is detected the subscription is closed.
-			None => Err(None),
-		};
+	fn build_error_message<T: Serialize>(&self, error: &T) -> Result<String, serde_json::Error> {
+		serde_json::to_string(&SubscriptionError::new(
+			self.method.into(),
+			SubscriptionPayloadError { subscription: self.uniq_sub.sub_id.clone(), error },
+		))
+		.map_err(Into::into)
+	}
 
-		// The subscription was already closed by the client
-		// Close down the subscription but don't send a message to the client.
-		if res.is_err() {
-			self.inner_close(None);
+	fn inner_send(&mut self, msg: String) -> bool {
+		if self.is_active_subscription() {
+			self.inner.send_raw(msg).is_ok()
+		} else {
+			false
 		}
-
-		res.map_err(|e| {
-			let err = e.unwrap_or_else(|| SubscriptionClosedReason::Server("Close reason unknown".to_string()));
-			Error::SubscriptionClosed(err.into())
-		})
 	}
 
-	/// Close the subscription sink with a customized error message.
-	pub fn close_with_custom_message(&mut self, msg: &str) {
-		let close_reason = SubscriptionClosedReason::Server(msg.to_string()).into();
-		self.inner_close(Some(&close_reason));
-	}
+	/// Close the subscription, sending a notification with a special `error` field containing the provided error.
+	///
+	/// This can be used to signal an actual error, or just to signal that the subscription has been closed,
+	/// depending on your preference.
+	///
+	/// If you'd like to to close the subscription without sending an error, just drop it and don't call this method.
+	///
+	///
+	/// ```json
+	/// {
+	///  "jsonrpc": "2.0",
+	///  "method": "<method>",
+	///  "params": {
+	///    "subscription": "<subscriptionID>",
+	///    "error": { "code": <code from error>, "message": <message from error>, "data": <data from error> }
+	///    }
+	///  }
+	/// }
+	/// ```
+	///
+	pub fn close(self, err: impl Into<ErrorObjectOwned>) -> bool {
+		if self.is_active_subscription() {
+			if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+				tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 
-	/// Close the subscription sink with the provided [`SubscriptionClosed`].
-	pub fn close(&mut self, close_reason: &SubscriptionClosed) {
-		self.inner_close(Some(close_reason));
-	}
-
-	fn inner_close(&mut self, close_reason: Option<&SubscriptionClosed>) {
-		self.is_connected.take();
-		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
-			tracing::debug!("Closing subscription: {:?} reason: {:?}", self.uniq_sub.sub_id, close_reason);
-			if let Some(close_reason) = close_reason {
-				let msg = self.build_message(close_reason).expect("valid json infallible; qed");
-				let _ = sink.send_raw(msg);
+				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
+				return sink.send_raw(msg).is_ok();
 			}
 		}
+		false
 	}
 }
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		let err = SubscriptionClosedReason::Server("No close reason provided".into()).into();
-		self.inner_close(Some(&err));
+		if self.is_active_subscription() {
+			self.subscribers.lock().remove(&self.uniq_sub);
+		}
 	}
 }
 
@@ -916,17 +1060,19 @@ impl Subscription {
 	pub async fn next<T: DeserializeOwned>(&mut self) -> Option<Result<(T, RpcSubscriptionId<'static>), Error>> {
 		if self.close_notify.is_none() {
 			tracing::debug!("[Subscription::next] Closed.");
-			return Some(Err(Error::SubscriptionClosed(SubscriptionClosedReason::ConnectionReset.into())));
+			return None;
 		}
 		let raw = self.rx.next().await?;
+
+		tracing::debug!("rx: {}", raw);
 		let res = match serde_json::from_str::<SubscriptionResponse<T>>(&raw) {
-			Ok(r) => Ok((r.params.result, r.params.subscription.into_owned())),
-			Err(_) => match serde_json::from_str::<SubscriptionResponse<SubscriptionClosed>>(&raw) {
-				Ok(e) => Err(Error::SubscriptionClosed(e.params.result)),
-				Err(e) => Err(e.into()),
+			Ok(r) => Some(Ok((r.params.result, r.params.subscription.into_owned()))),
+			Err(e) => match serde_json::from_str::<SubscriptionError<serde_json::Value>>(&raw) {
+				Ok(_) => None,
+				Err(_) => Some(Err(e.into())),
 			},
 		};
-		Some(res)
+		res
 	}
 }
 
