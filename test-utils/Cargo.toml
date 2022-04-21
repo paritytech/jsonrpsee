@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-test-utils"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 license = "MIT"
 edition = "2021"

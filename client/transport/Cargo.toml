@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-client-transport"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
 edition = "2021"
@@ -10,8 +10,8 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
-jsonrpsee-types = { path = "../../types", version = "0.10.1", optional = true }
-jsonrpsee-core = { path = "../../core", version = "0.10.1", features = ["client"] }
+jsonrpsee-types = { path = "../../types", version = "0.11.0", optional = true }
+jsonrpsee-core = { path = "../../core", version = "0.11.0", features = ["client"] }
 tracing = "0.1"
 
 # optional
@@ -32,8 +32,6 @@ futures-timer = { version = "3", optional = true }
 soketto = { version = "0.7.1", optional = true }
 
 # web-sys
-wasm-bindgen = { version = "0.2.69", optional = true }
-wasm-bindgen-futures = { version = "0.4.19", optional = true }
 gloo-net = { version = "0.1.0", default-features = false, features = ["json", "websocket"], optional = true }
 
 [features]
@@ -49,8 +47,6 @@ ws = [
     "thiserror",
 ]
 web = [
-    "wasm-bindgen",
-    "wasm-bindgen-futures",
     "gloo-net",
     "futures-channel",
     "futures-timer",
