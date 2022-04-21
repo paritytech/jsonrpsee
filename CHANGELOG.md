@@ -8,12 +8,14 @@ The format is based on [Keep a Changelog].
 
 ## [v0.11.0] - 2022-04-21
 
-v0.11.0 is a release that reworks how subscriptions are handled by the servers where the users have to explicitly reject or accept each subscription,
-there was a bug were a subscription when the param parsing failed the call was replied to twice.
-Additionally, the servers before sent a `SubscriptionClosed message` which is now disabled by default because it might break other implementations.
-However, it possible to send ``SubscriptionClosed message` but one have to match on the result from `SubscriptionSink::pipe_from_stream`.
+v0.11.0 is a release that reworks how subscriptions are handled by the servers where the users have to explicitly reject or accept each subscription.
+The reason for this is that the actual params in subscription is passed to the callback and it might fail which the server can't know when looking at the call.
+Thus, the actual subscription method call is only answered when the subscription is accepted or rejected.
 
-This release also adds support for `JSON-RPC WASM client` which is using web-sys bindings.
+Additionally, the servers before sent a `SubscriptionClosed message` which is now disabled by default because it might break other implementations.
+However, it possible to send a `SubscriptionClosed message` but one have to match on the result from `SubscriptionSink::pipe_from_stream`.
+
+This release also adds support for `JSON-RPC WASM client` using web-sys bindings.
 
 ### [Added]
 - feat: WASM client via web-sys transport [#648](https://github.com/paritytech/jsonrpsee/pull/648)
