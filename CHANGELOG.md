@@ -13,7 +13,7 @@ The reason for this is that the actual params in the subscription is passed to t
 Thus, the actual subscription method call is only answered when the subscription is accepted or rejected.
 
 Additionally, the servers before sent a `SubscriptionClosed message` which is now disabled by default because it might break other implementations.
-However, it possible to send a `SubscriptionClosed message` but one have to match on the result from `SubscriptionSink::pipe_from_stream`.
+It is still possible to respond with a `SubscriptionClosed message` but one has to match on the result from `SubscriptionSink::pipe_from_stream`.
 
 This release also adds support for `JSON-RPC WASM client` using web-sys bindings.
 
