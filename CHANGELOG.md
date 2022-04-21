@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog].
 ## [v0.11.0] - 2022-04-21
 
 v0.11.0 is a release that reworks how subscriptions are handled by the servers where the users have to explicitly reject or accept each subscription.
-The reason for this is that the actual params in subscription is passed to the callback and it might fail which the server can't know when looking at the call.
+The reason for this is that the actual params in the subscription is passed to the callback and it might fail because the application decides that which the server can't know when looking at the call.
 Thus, the actual subscription method call is only answered when the subscription is accepted or rejected.
 
 Additionally, the servers before sent a `SubscriptionClosed message` which is now disabled by default because it might break other implementations.
