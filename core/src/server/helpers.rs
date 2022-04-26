@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::io;
+use std::sync::Arc;
 
 use crate::{to_json_raw_value, Error};
 use futures_channel::mpsc;
@@ -32,6 +33,7 @@ use futures_util::StreamExt;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
+use tokio::sync::Notify;
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -196,8 +198,41 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 	buf
 }
 
+/// Wrapper over [`tokio::sync::Notify`] with bounds check.
+#[derive(Debug)]
+pub struct BoundedSubscriptions {
+	inner: Arc<Notify>,
+	max_subscriptions: u32,
+}
+
+impl BoundedSubscriptions {
+	/// Create a new bounded subscription.
+	pub fn new(max_subscriptions: u32) -> Self {
+		Self { inner: Arc::new(Notify::new()), max_subscriptions }
+	}
+
+	/// The get a handle to a subscription
+	///
+	/// Fails if `max_subscriptions` have been exceeded.
+	pub fn get(&self) -> Option<Arc<Notify>> {
+		// The type itself increases the strong count by
+		if Arc::strong_count(&self.inner) as u32 > self.max_subscriptions {
+			None
+		} else {
+			Some(self.inner.clone())
+		}
+	}
+
+	/// Close all subscriptions.
+	pub fn close(&self) {
+		self.inner.notify_waiters();
+	}
+}
+
 #[cfg(test)]
 mod tests {
+	use crate::server::helpers::BoundedSubscriptions;
+
 	use super::{BoundedWriter, Id, Response};
 
 	#[test]
@@ -214,5 +249,19 @@ mod tests {
 		let mut writer = BoundedWriter::new(100);
 		// NOTE: `"` is part of the serialization so 101 characters.
 		assert!(serde_json::to_writer(&mut writer, &"x".repeat(99)).is_err());
+	}
+
+	#[test]
+	fn bounded_subscriptions_work() {
+		let subs = Arc::new(BoundedSubscriptions::new(5));
+		let mut handles = Vec::new();
+
+		for _ in 0..5 {
+			handles.push(subs.get().unwrap());
+		}
+
+		assert!(subs.get().is_none());
+		handles.swap_remove(0);
+		assert!(subs.get().is_some());
 	}
 }
