@@ -141,7 +141,12 @@ impl<M: Middleware> Server<M> {
 						},
 					)));
 
-					tracing::info!("Accepting new connection, {}/{}", connections.count(), self.cfg.max_connections);
+					tracing::info!(
+						"Accepting new connection={}, {}/{}",
+						id,
+						connections.count(),
+						self.cfg.max_connections
+					);
 
 					id = id.wrapping_add(1);
 				}

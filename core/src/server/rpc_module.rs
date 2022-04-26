@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::collections::hash_map::Entry;
+use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 use std::future::Future;
 use std::ops::{Deref, DerefMut};
@@ -702,6 +703,21 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				})),
 			);
 		}
+
+		let subscribers2 = subscribers.clone();
+		std::thread::spawn(move || loop {
+			let mut conns = BTreeMap::new();
+
+			for (key, _) in subscribers2.lock().iter() {
+				conns.entry(key.conn_id).and_modify(|c| *c += 1).or_insert(1);
+			}
+
+			let mut v: Vec<_> = conns.into_iter().collect();
+			v.sort_by(|&(_, a), &(_, b)| b.cmp(&a));
+
+			tracing::info!("active subscription `{}`: {:?}", subscribe_method_name, v);
+			std::thread::sleep(std::time::Duration::from_secs(60))
+		});
 
 		// Unsubscribe
 		{
