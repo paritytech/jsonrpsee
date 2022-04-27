@@ -253,7 +253,7 @@ mod tests {
 
 	#[test]
 	fn bounded_subscriptions_work() {
-		let subs = Arc::new(BoundedSubscriptions::new(5));
+		let subs = BoundedSubscriptions::new(5);
 		let mut handles = Vec::new();
 
 		for _ in 0..5 {
