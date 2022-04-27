@@ -48,12 +48,10 @@ pub mod __reexports {
 	pub use jsonrpsee_types::ParamsSer;
 }
 
-/// Async client abstraction that brings additional deps.
-#[cfg(any(feature = "async-wasm-client", feature = "async-client"))]
-mod async_client;
-
-#[cfg(any(feature = "async-wasm-client", feature = "async-client"))]
-pub use async_client::{Client, ClientBuilder};
+cfg_async_client! {
+	pub mod async_client;
+	pub use async_client::{Client, ClientBuilder};
+}
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
 #[async_trait]

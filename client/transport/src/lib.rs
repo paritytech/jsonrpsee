@@ -31,8 +31,10 @@
 
 /// Websocket transport
 #[cfg(feature = "ws")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
 pub mod ws;
 
 /// Websocket transport via web-sys.
 #[cfg(all(feature = "web", target_arch = "wasm32"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 pub mod web;
