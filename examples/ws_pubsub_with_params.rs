@@ -77,7 +77,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				match sink.pipe_from_stream(stream).await {
+				sink.pipe_from_stream(stream, |reason, sink| match reason {
 					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
 						sink.close(err);
@@ -86,7 +86,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					SubscriptionClosed::Success => (),
 					// Don't send close because the client has already disconnected.
 					SubscriptionClosed::RemotePeerAborted => (),
-				};
+				})
+				.await;
 			});
 		})
 		.unwrap();
@@ -103,7 +104,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				match sink.pipe_from_stream(stream).await {
+				sink.pipe_from_stream(stream, |reason, sink| match reason {
 					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
 						sink.close(err);
@@ -112,7 +113,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					SubscriptionClosed::Success => (),
 					// Don't send close because the client has already disconnected.
 					SubscriptionClosed::RemotePeerAborted => (),
-				};
+				})
+				.await
 			});
 		})
 		.unwrap();

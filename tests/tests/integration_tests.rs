@@ -401,13 +401,13 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 			let interval = interval(Duration::from_secs(60 * 60));
 			let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-			let mut sink = match pending.accept() {
+			let sink = match pending.accept() {
 				Some(sink) => sink,
 				_ => return,
 			};
 
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream).await;
+				sink.pipe_from_stream(stream, |_, _| {}).await;
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
@@ -447,7 +447,7 @@ async fn ws_server_cancels_sub_stream_after_err() {
 			"n",
 			"unsubscribe_with_err_on_stream",
 			move |_, pending, _| {
-				let mut sink = match pending.accept() {
+				let sink = match pending.accept() {
 					Some(sink) => sink,
 					_ => return,
 				};
@@ -455,10 +455,13 @@ async fn ws_server_cancels_sub_stream_after_err() {
 				// create stream that produce an error which will cancel the subscription.
 				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
 				tokio::spawn(async move {
-					match sink.pipe_from_try_stream(stream).await {
-						SubscriptionClosed::Failed(e) => sink.close(e),
+					sink.pipe_from_try_stream(stream, |close, sink| match close {
+						SubscriptionClosed::Failed(e) => {
+							sink.close(e);
+						}
 						_ => unreachable!(),
-					};
+					})
+					.await;
 				});
 			},
 		)
@@ -487,7 +490,7 @@ async fn ws_server_subscribe_with_stream() {
 
 	module
 		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
-			let mut sink = match pending.accept() {
+			let sink = match pending.accept() {
 				Some(sink) => sink,
 				_ => return,
 			};
@@ -496,12 +499,13 @@ async fn ws_server_subscribe_with_stream() {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
 
-				match sink.pipe_from_stream(stream).await {
+				sink.pipe_from_stream(stream, |close, sink| match close {
 					SubscriptionClosed::Success => {
 						sink.close(SubscriptionClosed::Success);
 					}
 					_ => unreachable!(),
-				};
+				})
+				.await;
 			});
 		})
 		.unwrap();

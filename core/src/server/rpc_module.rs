@@ -35,7 +35,7 @@ use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::traits::{IdProvider, ToRpcParams};
-use futures_channel::mpsc;
+use futures_channel::{mpsc, oneshot};
 use futures_util::future::Either;
 use futures_util::pin_mut;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, TryStreamExt};
@@ -98,7 +98,7 @@ impl<'a> std::fmt::Debug for ConnState<'a> {
 	}
 }
 
-type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, Arc<()>)>>>;
+type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Sender<()>)>>>;
 
 /// Represent a unique subscription entry based on [`RpcSubscriptionId`] and [`ConnectionId`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -722,6 +722,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					let sub_id = sub_id.into_owned();
 
+					tracing::info!("unsubscribe=`{}` id={:?}", unsubscribe_method_name, sub_id);
+
 					let result =
 						subscribers.lock().remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id }).is_some();
 
@@ -794,9 +796,9 @@ impl PendingSubscription {
 		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id } = inner;
 
 		if sink.send_response(id, &uniq_sub.sub_id) {
-			let active_sub = Arc::new(());
-			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), active_sub.clone()));
-			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, active_sub })
+			let (tx, rx) = oneshot::channel();
+			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), tx));
+			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, unsubscribe: Some(rx) })
 		} else {
 			None
 		}
@@ -826,7 +828,8 @@ pub struct SubscriptionSink {
 	uniq_sub: SubscriptionKey,
 	/// Shared Mutex of subscriptions for this method.
 	subscribers: Subscribers,
-	active_sub: Arc<()>,
+	/// Future that returns when the `unsubscribe method ` has been called.
+	unsubscribe: Option<oneshot::Receiver<()>>,
 }
 
 impl SubscriptionSink {
@@ -885,21 +888,36 @@ impl SubscriptionSink {
 	///     });
 	/// });
 	/// ```
-	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> SubscriptionClosed
+	pub async fn pipe_from_try_stream<S, T, E, F>(mut self, mut stream: S, on_close: F)
 	where
 		S: TryStream<Ok = T, Error = E> + Unpin,
 		T: Serialize,
 		E: std::fmt::Display,
+		F: FnOnce(SubscriptionClosed, SubscriptionSink),
 	{
-		let close_notify = match self.close_notify.clone() {
+		let conn_closed = match self.close_notify.clone() {
 			Some(close_notify) => close_notify,
-			None => return SubscriptionClosed::RemotePeerAborted,
+			None => {
+				on_close(SubscriptionClosed::RemotePeerAborted, self);
+				return;
+			}
 		};
 
+		let sub_closed = match self.unsubscribe.take() {
+			Some(unsub) => unsub,
+			None => {
+				on_close(SubscriptionClosed::RemotePeerAborted, self);
+				return;
+			}
+		};
+
+		let conn_closed_fut = conn_closed.notified();
+		pin_mut!(conn_closed_fut);
+
 		let mut stream_item = stream.try_next();
-		let closed_fut = close_notify.notified();
-		pin_mut!(closed_fut);
-		loop {
+		let mut closed_fut = futures_util::future::select(conn_closed_fut, sub_closed);
+
+		let close = loop {
 			match futures_util::future::select(stream_item, closed_fut).await {
 				// The app sent us a value to send back to the subscribers
 				Either::Left((Ok(Some(result)), next_closed_fut)) => {
@@ -922,11 +940,15 @@ impl SubscriptionSink {
 					break SubscriptionClosed::Failed(err);
 				}
 				Either::Left((Ok(None), _)) => break SubscriptionClosed::Success,
-				Either::Right(((), _)) => {
+				Either::Right((_, _)) => {
+					tracing::info!("subscription stream terminated; by connection reset most likely");
 					break SubscriptionClosed::RemotePeerAborted;
 				}
 			}
-		}
+		};
+
+		on_close(close, self);
+		return;
 	}
 
 	/// Similar to [`SubscriptionSink::pipe_from_try_stream`] but it doesn't require the stream return `Result`.
@@ -948,21 +970,22 @@ impl SubscriptionSink {
 	///     tokio::spawn(async move { sink.pipe_from_stream(stream).await; });
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T>(&mut self, stream: S) -> SubscriptionClosed
+	pub async fn pipe_from_stream<S, T, F>(self, stream: S, on_close: F)
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
+		F: FnOnce(SubscriptionClosed, SubscriptionSink),
 	{
-		self.pipe_from_try_stream::<_, _, Error>(stream.map(|item| Ok(item))).await
+		self.pipe_from_try_stream::<_, _, Error, _>(stream.map(|item| Ok(item)), on_close).await
 	}
 
 	/// Returns whether the subscription is closed.
 	pub fn is_closed(&self) -> bool {
-		self.inner.is_closed() || self.close_notify.is_none() || !self.is_active_subscription()
+		self.inner.is_closed() || self.close_notify.is_none() || self.is_active_subscription()
 	}
 
 	fn is_active_subscription(&self) -> bool {
-		Arc::strong_count(&self.active_sub) > 1
+		self.subscribers.lock().contains_key(&self.uniq_sub)
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {
@@ -1002,15 +1025,14 @@ impl SubscriptionSink {
 	/// ```
 	///
 	pub fn close(self, err: impl Into<ErrorObjectOwned>) -> bool {
-		if self.is_active_subscription() {
-			if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
-				tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
+		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 
-				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
-				return sink.send_raw(msg).is_ok();
-			}
+			let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
+			return sink.send_raw(msg).is_ok();
+		} else {
+			false
 		}
-		false
 	}
 }
 

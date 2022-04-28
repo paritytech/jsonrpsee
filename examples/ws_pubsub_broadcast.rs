@@ -79,7 +79,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		};
 
 		tokio::spawn(async move {
-			match sink.pipe_from_try_stream(rx).await {
+			sink.pipe_from_try_stream(rx, |reason, sink| match reason {
 				SubscriptionClosed::Success => {
 					sink.close(SubscriptionClosed::Success);
 				}
@@ -87,7 +87,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 				SubscriptionClosed::Failed(err) => {
 					sink.close(err);
 				}
-			};
+			})
+			.await;
 		});
 	})?;
 	let addr = server.local_addr()?;
