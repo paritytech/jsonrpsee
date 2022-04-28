@@ -290,7 +290,7 @@ pub(crate) mod visitor;
 ///             let mut sink = pending.accept().unwrap();     
 ///             tokio::spawn(async move {
 ///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
-///                 sink.pipe_from_stream(stream).await;
+///                 sink.pipe_from_stream(stream, |_, _| {}).await;
 ///             });
 ///         }
 ///

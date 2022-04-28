@@ -872,7 +872,7 @@ impl SubscriptionSink {
 	///     tokio::spawn(async move {
 	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
 	///         // If we pipe messages to the sink, we can inspect why it ended:
-	///         match sink.pipe_from_try_stream(stream).await {
+	///         sink.pipe_from_try_stream(stream, |close, sink| match close {
 	///            SubscriptionClosed::Success => {
 	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
 	///                sink.close(err_obj);
@@ -882,7 +882,7 @@ impl SubscriptionSink {
 	///            SubscriptionClosed::Failed(e) => {
 	///                sink.close(e);
 	///            }
-	///         };
+	///         }).await;
 	///     });
 	/// });
 	/// ```
@@ -946,7 +946,6 @@ impl SubscriptionSink {
 		};
 
 		on_close(close, self);
-		return;
 	}
 
 	/// Similar to [`SubscriptionSink::pipe_from_try_stream`] but it doesn't require the stream return `Result`.
@@ -965,7 +964,7 @@ impl SubscriptionSink {
 	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
 	///     let mut sink = pending.accept().unwrap();
 	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
-	///     tokio::spawn(async move { sink.pipe_from_stream(stream).await; });
+	///     tokio::spawn(async move { sink.pipe_from_stream(stream, |_, _| {}).await; });
 	/// });
 	/// ```
 	pub async fn pipe_from_stream<S, T, F>(self, stream: S, on_close: F)
@@ -979,7 +978,7 @@ impl SubscriptionSink {
 
 	/// Returns whether the subscription is closed.
 	pub fn is_closed(&self) -> bool {
-		self.inner.is_closed() || self.close_notify.is_none() || self.is_active_subscription()
+		self.inner.is_closed() || self.close_notify.is_none() || !self.is_active_subscription()
 	}
 
 	fn is_active_subscription(&self) -> bool {
@@ -1027,7 +1026,7 @@ impl SubscriptionSink {
 			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 
 			let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
-			return sink.send_raw(msg).is_ok();
+			sink.send_raw(msg).is_ok()
 		} else {
 			false
 		}
