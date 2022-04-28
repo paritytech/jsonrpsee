@@ -722,7 +722,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					let sub_id = sub_id.into_owned();
 
-					tracing::info!("unsubscribe=`{}` id={:?}", unsubscribe_method_name, sub_id);
 
 					let result =
 						subscribers.lock().remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id }).is_some();
