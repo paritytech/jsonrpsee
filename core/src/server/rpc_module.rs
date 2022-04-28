@@ -939,7 +939,6 @@ impl SubscriptionSink {
 				}
 				Either::Left((Ok(None), _)) => break SubscriptionClosed::Success,
 				Either::Right((_, _)) => {
-					tracing::info!("subscription stream terminated; by connection reset most likely");
 					break SubscriptionClosed::RemotePeerAborted;
 				}
 			}
