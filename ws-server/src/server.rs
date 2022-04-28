@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
-use crate::types::error::ErrorCode;
+use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use crate::types::{Id, Request};
 use futures_channel::mpsc;
 use futures_util::future::{join_all, FutureExt};
@@ -270,6 +270,7 @@ where
 				resources.clone(),
 				cfg.max_request_body_size,
 				cfg.max_response_body_size,
+				cfg.batch_requests_supported,
 				BoundedSubscriptions::new(cfg.max_subscriptions_per_connection),
 				stop_monitor.clone(),
 				middleware,
@@ -292,6 +293,7 @@ async fn background_task(
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	batch_requests_supported: bool,
 	bounded_subscriptions: BoundedSubscriptions,
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
@@ -490,7 +492,13 @@ async fn background_task(
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
-						if !batch.is_empty() {
+						if !batch_requests_supported {
+							sink.send_error(
+								Id::Null,
+								ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+							);
+							middleware.on_response(request_start);
+						} else if !batch.is_empty() {
 							join_all(batch.into_iter().filter_map(move |req| {
 								let id = req.id.clone();
 								let params = Params::new(req.params.map(|params| params.get()));
@@ -656,6 +664,8 @@ struct Settings {
 	allowed_origins: AllowedValue,
 	/// Policy by which to accept or deny incoming requests based on the `Host` header.
 	allowed_hosts: AllowedValue,
+	/// Whether batch requests are supported by this server or not.
+	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 }
@@ -667,6 +677,7 @@ impl Default for Settings {
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
+			batch_requests_supported: true,
 			allowed_origins: AllowedValue::Any,
 			allowed_hosts: AllowedValue::Any,
 			tokio_runtime: None,
@@ -717,6 +728,13 @@ impl<M> Builder<M> {
 	/// Set the maximum number of connections allowed. Default is 100.
 	pub fn max_connections(mut self, max: u64) -> Self {
 		self.settings.max_connections = max;
+		self
+	}
+
+	/// Enables or disables support of [batch requests](https://www.jsonrpc.org/specification#batch).
+	/// By default, support is enabled.
+	pub fn batch_requests_supported(mut self, supported: bool) -> Self {
+		self.settings.batch_requests_supported = supported;
 		self
 	}
 

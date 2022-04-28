@@ -180,6 +180,8 @@ pub const UNKNOWN_ERROR_CODE: i32 = -32001;
 pub const SUBSCRIPTION_CLOSED: i32 = -32003;
 /// Subscription got closed by the server.
 pub const SUBSCRIPTION_CLOSED_WITH_ERROR: i32 = -32004;
+/// Batched requests are not supported by the server.
+pub const BATCHES_NOT_SUPPORTED_CODE: i32 = -32005;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
@@ -199,6 +201,8 @@ pub const METHOD_NOT_FOUND_MSG: &str = "Method not found";
 pub const SERVER_IS_BUSY_MSG: &str = "Server is busy, try again later";
 /// Reserved for implementation-defined server-errors.
 pub const SERVER_ERROR_MSG: &str = "Server error";
+/// Batched requests not supported error message.
+pub const BATCHES_NOT_SUPPORTED_MSG: &str = "Batched requests are not supported by this server";
 
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Copy, Clone)]
