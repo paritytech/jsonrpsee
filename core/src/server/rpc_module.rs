@@ -843,7 +843,7 @@ impl SubscriptionSink {
 		}
 
 		let msg = self.build_message(result)?;
-		Ok(self.inner_send(msg))
+		Ok(self.inner.send_raw(msg).is_ok())
 	}
 
 	/// Reads data from the `stream` and sends back data on the subscription
@@ -956,9 +956,9 @@ impl SubscriptionSink {
 		self.pipe_from_try_stream::<_, _, Error>(stream.map(|item| Ok(item))).await
 	}
 
-	/// Returns whether this channel is closed without needing a context.
+	/// Returns whether the subscription is closed.
 	pub fn is_closed(&self) -> bool {
-		self.inner.is_closed() || self.close_notify.is_none()
+		self.inner.is_closed() || self.close_notify.is_none() || !self.is_active_subscription()
 	}
 
 	fn is_active_subscription(&self) -> bool {
@@ -979,14 +979,6 @@ impl SubscriptionSink {
 			SubscriptionPayloadError { subscription: self.uniq_sub.sub_id.clone(), error },
 		))
 		.map_err(Into::into)
-	}
-
-	fn inner_send(&mut self, msg: String) -> bool {
-		if self.is_active_subscription() {
-			self.inner.send_raw(msg).is_ok()
-		} else {
-			false
-		}
 	}
 
 	/// Close the subscription, sending a notification with a special `error` field containing the provided error.
