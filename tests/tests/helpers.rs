@@ -27,10 +27,14 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use futures::{SinkExt, StreamExt};
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::http_server::{AccessControl, HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
+use tokio::time::interval;
+use tokio_stream::wrappers::IntervalStream;
 
 pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
@@ -108,6 +112,56 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 		})
 		.unwrap();
 
+	module
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
+
+				sink.pipe_from_stream(stream, |close, sink| match close {
+					SubscriptionClosed::Success => {
+						sink.close(SubscriptionClosed::Success);
+					}
+					_ => unreachable!(),
+				})
+				.await;
+			});
+		})
+		.unwrap();
+
+	module
+		.register_subscription(
+			"subscribe_with_err_on_stream",
+			"n",
+			"unsubscribe_with_err_on_stream",
+			move |_, pending, _| {
+				let sink = match pending.accept() {
+					Some(sink) => sink,
+					_ => return,
+				};
+
+				let err: &'static str = "error on the stream";
+
+				// create stream that produce an error which will cancel the subscription.
+				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
+				tokio::spawn(async move {
+					sink.pipe_from_try_stream(stream, |close, sink| match close {
+						SubscriptionClosed::Failed(e) => {
+							sink.close(e);
+						}
+						_ => unreachable!(),
+					})
+					.await;
+				});
+			},
+		)
+		.unwrap();
+
 	let addr = server.local_addr().unwrap();
 	let server_handle = server.start(module).unwrap();
 
@@ -130,6 +184,34 @@ pub async fn websocket_server() -> SocketAddr {
 
 	server.start(module).unwrap();
 
+	addr
+}
+
+/// Yields at one item then sleeps for an hour.
+pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
+	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let addr = server.local_addr().unwrap();
+
+	let mut module = RpcModule::new(tx);
+
+	module
+		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, pending, mut tx| {
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_secs(60 * 60));
+				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
+
+				sink.pipe_from_stream(stream, |_, _| {}).await;
+				let send_back = std::sync::Arc::make_mut(&mut tx);
+				send_back.send(()).await.unwrap();
+			});
+		})
+		.unwrap();
+	server.start(module).unwrap();
 	addr
 }
 
