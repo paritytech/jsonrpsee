@@ -215,7 +215,7 @@ impl BoundedSubscriptions {
 	///
 	/// Fails if `max_subscriptions` have been exceeded.
 	pub fn get(&self) -> Option<Arc<Notify>> {
-		// The type itself increases the strong count by
+		// The type itself increases the strong count by 1 by having an `Arc`
 		if Arc::strong_count(&self.inner) as u32 > self.max_subscriptions {
 			None
 		} else {
