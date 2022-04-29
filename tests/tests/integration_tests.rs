@@ -464,6 +464,17 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 }
 
 #[tokio::test]
+async fn ws_server_pipe_from_stream_can_be_reused() {
+	let (addr, _handle) = websocket_server_with_subscription().await;
+	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
+	let sub = client.subscribe::<i32>("can_reuse_subscription", None, "u_can_reuse_subscription").await.unwrap();
+
+	let items = sub.fold(0, |acc, _| async move { acc + 1 }).await;
+
+	assert_eq!(items, 10);
+}
+
+#[tokio::test]
 async fn ws_batch_works() {
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);

@@ -119,6 +119,31 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 		.unwrap();
 
 	module
+		.register_subscription("can_reuse_subscription", "n", "u_can_reuse_subscription", |_, pending, _| {
+			let mut sink = pending.accept().unwrap();
+
+			tokio::spawn(async move {
+				let stream1 = IntervalStream::new(interval(Duration::from_millis(50)))
+					.zip(futures::stream::iter(1..=5))
+					.map(|(_, c)| c);
+				let stream2 = IntervalStream::new(interval(Duration::from_millis(50)))
+					.zip(futures::stream::iter(6..=10))
+					.map(|(_, c)| c);
+
+				let result = sink.pipe_from_stream(stream1).await;
+				assert!(matches!(result, SubscriptionClosed::Success));
+
+				match sink.pipe_from_stream(stream2).await {
+					SubscriptionClosed::Success => {
+						sink.close(SubscriptionClosed::Success);
+					}
+					_ => unreachable!(),
+				}
+			});
+		})
+		.unwrap();
+
+	module
 		.register_subscription(
 			"subscribe_with_err_on_stream",
 			"n",
