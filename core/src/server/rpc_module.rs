@@ -35,7 +35,7 @@ use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::traits::{IdProvider, ToRpcParams};
-use futures_channel::{mpsc, oneshot};
+use futures_channel::mpsc;
 use futures_util::future::Either;
 use futures_util::pin_mut;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, TryStreamExt};
@@ -48,7 +48,7 @@ use jsonrpsee_types::{
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::Notify;
+use tokio::sync::{watch, Notify};
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -98,7 +98,7 @@ impl<'a> std::fmt::Debug for ConnState<'a> {
 	}
 }
 
-type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, oneshot::Sender<()>)>>>;
+type Subscribers = Arc<Mutex<FxHashMap<SubscriptionKey, (MethodSink, watch::Sender<()>)>>>;
 
 /// Represent a unique subscription entry based on [`RpcSubscriptionId`] and [`ConnectionId`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -794,9 +794,9 @@ impl PendingSubscription {
 		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id } = inner;
 
 		if sink.send_response(id, &uniq_sub.sub_id) {
-			let (tx, rx) = oneshot::channel();
+			let (tx, rx) = watch::channel(());
 			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), tx));
-			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, unsubscribe: Some(rx) })
+			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, unsubscribe: rx })
 		} else {
 			None
 		}
@@ -827,7 +827,7 @@ pub struct SubscriptionSink {
 	/// Shared Mutex of subscriptions for this method.
 	subscribers: Subscribers,
 	/// Future that returns when the `unsubscribe method ` has been called.
-	unsubscribe: Option<oneshot::Receiver<()>>,
+	unsubscribe: watch::Receiver<()>,
 }
 
 impl SubscriptionSink {
@@ -899,18 +899,15 @@ impl SubscriptionSink {
 			}
 		};
 
-		let sub_closed = match self.unsubscribe.take() {
-			Some(unsub) => unsub,
-			None => {
-				return SubscriptionClosed::RemotePeerAborted;
-			}
-		};
+		let mut sub_closed = self.unsubscribe.clone();
+		let sub_closed_fut = sub_closed.changed();
 
 		let conn_closed_fut = conn_closed.notified();
 		pin_mut!(conn_closed_fut);
+		pin_mut!(sub_closed_fut);
 
 		let mut stream_item = stream.try_next();
-		let mut closed_fut = futures_util::future::select(conn_closed_fut, sub_closed);
+		let mut closed_fut = futures_util::future::select(conn_closed_fut, sub_closed_fut);
 
 		loop {
 			match futures_util::future::select(stream_item, closed_fut).await {
@@ -975,7 +972,7 @@ impl SubscriptionSink {
 	}
 
 	fn is_active_subscription(&self) -> bool {
-		self.subscribers.lock().contains_key(&self.uniq_sub)
+		!self.unsubscribe.has_changed().is_err()
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {
@@ -1015,14 +1012,15 @@ impl SubscriptionSink {
 	/// ```
 	///
 	pub fn close(self, err: impl Into<ErrorObjectOwned>) -> bool {
-		if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
-			tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
+		if self.is_active_subscription() {
+			if let Some((sink, _)) = self.subscribers.lock().remove(&self.uniq_sub) {
+				tracing::debug!("Closing subscription: {:?}", self.uniq_sub.sub_id);
 
-			let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
-			sink.send_raw(msg).is_ok()
-		} else {
-			false
+				let msg = self.build_error_message(&err.into()).expect("valid json infallible; qed");
+				return sink.send_raw(msg).is_ok();
+			}
 		}
+		false
 	}
 }
 
