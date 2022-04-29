@@ -888,7 +888,7 @@ impl SubscriptionSink {
 	///     tokio::spawn(async move {
 	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
 	///         // If we pipe messages to the sink, we can inspect why it ended:
-	///         sink.pipe_from_try_stream(stream, |close, sink| match close {
+	///         match sink.pipe_from_try_stream(stream).await {
 	///            SubscriptionClosed::Success => {
 	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
 	///                sink.close(err_obj);
@@ -898,30 +898,27 @@ impl SubscriptionSink {
 	///            SubscriptionClosed::Failed(e) => {
 	///                sink.close(e);
 	///            }
-	///         }).await;
+	///         }
 	///     });
 	/// });
 	/// ```
-	pub async fn pipe_from_try_stream<S, T, E, F>(mut self, mut stream: S, on_close: F)
+	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> SubscriptionClosed
 	where
 		S: TryStream<Ok = T, Error = E> + Unpin,
 		T: Serialize,
 		E: std::fmt::Display,
-		F: FnOnce(SubscriptionClosed, SubscriptionSink),
 	{
 		let conn_closed = match self.close_notify.clone() {
 			Some(close_notify) => close_notify,
 			None => {
-				on_close(SubscriptionClosed::RemotePeerAborted, self);
-				return;
+				return SubscriptionClosed::RemotePeerAborted;
 			}
 		};
 
 		let sub_closed = match self.unsubscribe.take() {
 			Some(unsub) => unsub,
 			None => {
-				on_close(SubscriptionClosed::RemotePeerAborted, self);
-				return;
+				return SubscriptionClosed::RemotePeerAborted;
 			}
 		};
 
@@ -931,7 +928,7 @@ impl SubscriptionSink {
 		let mut stream_item = stream.try_next();
 		let mut closed_fut = futures_util::future::select(conn_closed_fut, sub_closed);
 
-		let close = loop {
+		loop {
 			match futures_util::future::select(stream_item, closed_fut).await {
 				// The app sent us a value to send back to the subscribers
 				Either::Left((Ok(Some(result)), next_closed_fut)) => {
@@ -958,9 +955,7 @@ impl SubscriptionSink {
 					break SubscriptionClosed::RemotePeerAborted;
 				}
 			}
-		};
-
-		on_close(close, self);
+		}
 	}
 
 	/// Similar to [`SubscriptionSink::pipe_from_try_stream`] but it doesn't require the stream return `Result`.
@@ -979,16 +974,15 @@ impl SubscriptionSink {
 	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
 	///     let mut sink = pending.accept().unwrap();
 	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
-	///     tokio::spawn(async move { sink.pipe_from_stream(stream, |_, _| {}).await; });
+	///     tokio::spawn(async move { sink.pipe_from_stream(stream).await; });
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T, F>(self, stream: S, on_close: F)
+	pub async fn pipe_from_stream<S, T>(&mut self, stream: S) -> SubscriptionClosed
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,
-		F: FnOnce(SubscriptionClosed, SubscriptionSink),
 	{
-		self.pipe_from_try_stream::<_, _, Error, _>(stream.map(|item| Ok(item)), on_close).await
+		self.pipe_from_try_stream::<_, _, Error>(stream.map(|item| Ok(item))).await
 	}
 
 	/// Returns whether the subscription is closed.

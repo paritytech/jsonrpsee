@@ -67,7 +67,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
-			let (idx, sink) = match (params.one(), pending.accept()) {
+			let (idx, mut sink) = match (params.one(), pending.accept()) {
 				(Ok(idx), Some(sink)) => (idx, sink),
 				_ => return,
 			};
@@ -77,7 +77,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream, |reason, sink| match reason {
+				match sink.pipe_from_stream(stream).await {
 					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
 						sink.close(err);
@@ -86,14 +86,13 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					SubscriptionClosed::Success => (),
 					// Don't send close because the client has already disconnected.
 					SubscriptionClosed::RemotePeerAborted => (),
-				})
-				.await;
+				};
 			});
 		})
 		.unwrap();
 	module
 		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
-			let (one, two, sink) = match (params.parse::<(usize, usize)>(), pending.accept()) {
+			let (one, two, mut sink) = match (params.parse::<(usize, usize)>(), pending.accept()) {
 				(Ok((one, two)), Some(sink)) => (one, two, sink),
 				_ => return,
 			};
@@ -104,7 +103,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream, |reason, sink| match reason {
+				match sink.pipe_from_stream(stream).await {
 					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
 						sink.close(err);
@@ -113,8 +112,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					SubscriptionClosed::Success => (),
 					// Don't send close because the client has already disconnected.
 					SubscriptionClosed::RemotePeerAborted => (),
-				})
-				.await
+				};
 			});
 		})
 		.unwrap();

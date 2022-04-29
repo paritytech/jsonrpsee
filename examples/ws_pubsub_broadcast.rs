@@ -73,13 +73,13 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
 		let rx = BroadcastStream::new(tx.clone().subscribe());
-		let sink = match pending.accept() {
+		let mut sink = match pending.accept() {
 			Some(sink) => sink,
 			_ => return,
 		};
 
 		tokio::spawn(async move {
-			sink.pipe_from_try_stream(rx, |reason, sink| match reason {
+			match sink.pipe_from_try_stream(rx).await {
 				SubscriptionClosed::Success => {
 					sink.close(SubscriptionClosed::Success);
 				}
@@ -87,8 +87,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 				SubscriptionClosed::Failed(err) => {
 					sink.close(err);
 				}
-			})
-			.await;
+			};
 		});
 	})?;
 	let addr = server.local_addr()?;
