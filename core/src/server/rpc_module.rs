@@ -826,7 +826,7 @@ pub struct SubscriptionSink {
 	uniq_sub: SubscriptionKey,
 	/// Shared Mutex of subscriptions for this method.
 	subscribers: Subscribers,
-	/// Future that returns when the `unsubscribe method ` has been called.
+	/// Future that returns when the unsubscribe method has been called.
 	unsubscribe: watch::Receiver<()>,
 }
 
