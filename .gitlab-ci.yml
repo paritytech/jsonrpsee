@@ -20,21 +20,6 @@ variables:                         &default-vars
   CARGO_INCREMENTAL:               0
   CARGO_TARGET_DIR:                "/ci-cache/${CI_PROJECT_NAME}/targets/${CI_COMMIT_REF_NAME}/${CI_JOB_NAME}"
   CI_IMAGE:                        "paritytech/ci-linux:production"
-  VAULT_SERVER_URL:                "https://vault.parity-mgmt-vault.parity.io"
-  VAULT_AUTH_PATH:                 "gitlab-parity-io-jwt"
-  VAULT_AUTH_ROLE:                 "cicd_gitlab_parity_${CI_PROJECT_NAME}"
-
-.vault-secrets:                    &vault-secrets
-  secrets:
-    GITHUB_SSH_PRIV_KEY:
-      vault:                       cicd/gitlab/parity/${CI_PROJECT_NAME}/GITHUB_SSH_PRIV_KEY@kv
-      file:                        false
-    GITHUB_TOKEN:
-      vault:                       cicd/gitlab/parity/GITHUB_TOKEN@kv
-      file:                        false
-    GITHUB_USER:
-      vault:                       cicd/gitlab/parity/GITHUB_USER@kv
-      file:                        false
 
 .common-refs:                      &common-refs
   rules:
@@ -142,7 +127,6 @@ check_bench:
     CI_IMAGE:                      "paritytech/benchmarks:latest"
   <<:                              *kubernetes-env
   <<:                              *schedule-refs
-  <<:                              *vault-secrets
   script:
     - check_bench_result artifacts/output.txt
 
@@ -152,7 +136,6 @@ publish-ghpages:
     CI_IMAGE:                      "paritytech/tools:latest"
   <<:                              *kubernetes-env
   <<:                              *schedule-refs
-  <<:                              *vault-secrets
   script:
     # setup ssh
     - eval $(ssh-agent)
