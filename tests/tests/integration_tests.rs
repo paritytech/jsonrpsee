@@ -546,6 +546,61 @@ async fn ws_batch_works() {
 }
 
 #[tokio::test]
+async fn ws_server_limit_subs_per_conn_works() {
+	use futures::StreamExt;
+	use jsonrpsee::types::error::{CallError, SERVER_IS_BUSY_CODE, SERVER_IS_BUSY_MSG};
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
+
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::Success => {
+						sink.close(SubscriptionClosed::Success);
+					}
+					_ => unreachable!(),
+				};
+			});
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let c2 = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut subs1 = Vec::new();
+	let mut subs2 = Vec::new();
+
+	for _ in 0..10 {
+		subs1.push(c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+		subs2.push(c2.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+	}
+
+	let err1 = c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await;
+	let err2 = c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await;
+
+	assert!(
+		matches!(err1, Err(Error::Call(CallError::Custom(err))) if err.code() == SERVER_IS_BUSY_CODE && err.message() == SERVER_IS_BUSY_MSG)
+	);
+	assert!(
+		matches!(err2, Err(Error::Call(CallError::Custom(err))) if err.code() == SERVER_IS_BUSY_CODE && err.message() == SERVER_IS_BUSY_MSG)
+	);
+}
+
+#[tokio::test]
 async fn http_unsupported_methods_dont_work() {
 	use hyper::{Body, Client, Method, Request};
 

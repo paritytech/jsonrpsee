@@ -33,7 +33,7 @@ use futures_util::StreamExt;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -198,34 +198,46 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 	buf
 }
 
-/// Wrapper over [`tokio::sync::Notify`] with bounds check.
+/// A permitted subscription.
 #[derive(Debug)]
+pub struct SubscriptionPermit {
+	_permit: OwnedSemaphorePermit,
+	resource: Arc<Notify>,
+}
+
+impl SubscriptionPermit {
+	/// Get the handle to [`tokio::sync::Notify`].
+	pub fn handle(&self) -> Arc<Notify> {
+		self.resource.clone()
+	}
+}
+
+/// Wrapper over [`tokio::sync::Notify`] with bounds check.
+#[derive(Debug, Clone)]
 pub struct BoundedSubscriptions {
-	inner: Arc<Notify>,
-	max_subscriptions: u32,
+	resource: Arc<Notify>,
+	guard: Arc<Semaphore>,
 }
 
 impl BoundedSubscriptions {
 	/// Create a new bounded subscription.
 	pub fn new(max_subscriptions: u32) -> Self {
-		Self { inner: Arc::new(Notify::new()), max_subscriptions }
+		Self { resource: Arc::new(Notify::new()), guard: Arc::new(Semaphore::new(max_subscriptions as usize)) }
 	}
 
-	/// The get a handle to a subscription
+	/// Attempts to acquire a subscription slot.
 	///
 	/// Fails if `max_subscriptions` have been exceeded.
-	pub fn get(&self) -> Option<Arc<Notify>> {
-		// The type itself increases the strong count by 1 by having an `Arc`
-		if Arc::strong_count(&self.inner) as u32 > self.max_subscriptions {
-			None
-		} else {
-			Some(self.inner.clone())
-		}
+	pub fn acquire(&self) -> Option<SubscriptionPermit> {
+		Arc::clone(&self.guard)
+			.try_acquire_owned()
+			.ok()
+			.map(|p| SubscriptionPermit { _permit: p, resource: self.resource.clone() })
 	}
 
 	/// Close all subscriptions.
 	pub fn close(&self) {
-		self.inner.notify_waiters();
+		self.resource.notify_waiters();
 	}
 }
 
@@ -257,11 +269,11 @@ mod tests {
 		let mut handles = Vec::new();
 
 		for _ in 0..5 {
-			handles.push(subs.get().unwrap());
+			handles.push(subs.acquire().unwrap());
 		}
 
-		assert!(subs.get().is_none());
+		assert!(subs.acquire().is_none());
 		handles.swap_remove(0);
-		assert!(subs.get().is_some());
+		assert!(subs.acquire().is_some());
 	}
 }

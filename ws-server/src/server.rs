@@ -302,7 +302,6 @@ async fn background_task(
 	builder.set_max_message_size(max_request_body_size as usize);
 	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let bounded_subscriptions = Arc::new(bounded_subscriptions);
 	let bounded_subscriptions2 = bounded_subscriptions.clone();
 
 	let stop_server2 = stop_server.clone();
@@ -437,7 +436,7 @@ async fn background_task(
 							},
 							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
 								Ok(guard) => {
-									let result = if let Some(cn) = bounded_subscriptions.get() {
+									let result = if let Some(cn) = bounded_subscriptions.acquire() {
 										let conn_state =
 											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
 										callback(id, params, &sink, conn_state)
@@ -541,7 +540,7 @@ async fn background_task(
 										MethodKind::Subscription(callback) => {
 											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
-													let result = if let Some(cn) = bounded_subscriptions2.get() {
+													let result = if let Some(cn) = bounded_subscriptions2.acquire() {
 														let conn_state = ConnState {
 															conn_id,
 															close_notify: cn,
@@ -706,6 +705,12 @@ impl<M> Builder<M> {
 	/// Set the maximum number of connections allowed. Default is 100.
 	pub fn max_connections(mut self, max: u64) -> Self {
 		self.settings.max_connections = max;
+		self
+	}
+
+	/// Set the maximum number of connections allowed. Default is 1024.
+	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
+		self.settings.max_subscriptions_per_connection = max;
 		self
 	}
 

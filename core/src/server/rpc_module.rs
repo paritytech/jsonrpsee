@@ -30,6 +30,7 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
+use super::helpers::{BoundedSubscriptions, SubscriptionPermit};
 use crate::error::{Error, SubscriptionClosed};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::MethodSink;
@@ -48,7 +49,6 @@ use jsonrpsee_types::{
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::Notify;
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -71,14 +71,14 @@ pub type ConnectionId = usize;
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 ///   - a [`tokio::sync::Notify`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
-pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, Arc<Notify>);
+pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, SubscriptionPermit);
 
 /// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
 	/// Connection ID
 	pub conn_id: ConnectionId,
 	/// Get notified when the connection to subscribers is closed.
-	pub close_notify: Arc<Notify>,
+	pub close_notify: SubscriptionPermit,
 	/// ID provider.
 	pub id_provider: &'a dyn IdProvider,
 }
@@ -393,14 +393,15 @@ impl Methods {
 		let sink = MethodSink::new(tx_sink);
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
-		let notify = Arc::new(Notify::new());
+		let bounded_subs = BoundedSubscriptions::new(u32::MAX);
+		let close_notify = bounded_subs.acquire().unwrap();
+		let notify = bounded_subs.acquire().unwrap();
 
 		let _result = match self.method(&req.method).map(|c| &c.callback) {
 			None => sink.send_error(req.id, ErrorCode::MethodNotFound.into()),
 			Some(MethodKind::Sync(cb)) => (cb)(id, params, &sink),
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
 			Some(MethodKind::Subscription(cb)) => {
-				let close_notify = notify.clone();
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
 				(cb)(id, params, &sink, conn_state)
 			}
@@ -757,7 +758,7 @@ struct InnerPendingSubscription {
 	/// Sink.
 	sink: MethodSink,
 	/// Get notified when subscribers leave so we can exit
-	close_notify: Option<Arc<Notify>>,
+	close_notify: Option<SubscriptionPermit>,
 	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
@@ -819,7 +820,7 @@ pub struct SubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
 	/// Get notified when subscribers leave so we can exit
-	close_notify: Option<Arc<Notify>>,
+	close_notify: Option<SubscriptionPermit>,
 	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
@@ -891,7 +892,7 @@ impl SubscriptionSink {
 		T: Serialize,
 		E: std::fmt::Display,
 	{
-		let close_notify = match self.close_notify.clone() {
+		let close_notify = match self.close_notify.as_ref().map(|cn| cn.handle()) {
 			Some(close_notify) => close_notify,
 			None => return SubscriptionClosed::RemotePeerAborted,
 		};
@@ -1033,7 +1034,7 @@ impl Drop for SubscriptionSink {
 /// Wrapper struct that maintains a subscription "mainly" for testing.
 #[derive(Debug)]
 pub struct Subscription {
-	close_notify: Option<Arc<Notify>>,
+	close_notify: Option<SubscriptionPermit>,
 	rx: mpsc::UnboundedReceiver<String>,
 	sub_id: RpcSubscriptionId<'static>,
 }
@@ -1043,7 +1044,7 @@ impl Subscription {
 	pub fn close(&mut self) {
 		tracing::trace!("[Subscription::close] Notifying");
 		if let Some(n) = self.close_notify.take() {
-			n.notify_one()
+			n.handle().notify_one()
 		}
 	}
 	/// Get the subscription ID
