@@ -185,7 +185,7 @@ pub async fn websocket_server() -> SocketAddr {
 	addr
 }
 
-/// Yields at one item then sleeps for an hour.
+/// Yields one item then sleeps for an hour.
 pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
