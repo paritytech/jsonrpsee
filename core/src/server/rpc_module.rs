@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 use crate::error::{Error, SubscriptionClosed};
 use crate::id_providers::RandomIntegerIdProvider;
-use crate::server::helpers::{BoundedSubscriptions, SubscriptionPermit, MethodSink};
+use crate::server::helpers::{BoundedSubscriptions, MethodSink, SubscriptionPermit};
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::traits::{IdProvider, ToRpcParams};
 use futures_channel::mpsc;
@@ -48,7 +48,7 @@ use jsonrpsee_types::{
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::{watch};
+use tokio::sync::watch;
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
