@@ -70,7 +70,7 @@ pub type ConnectionId = usize;
 /// A 3-tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-///   - a [`crate::servers::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
+///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
 pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, SubscriptionPermit);
 
 /// Helper struct to manage subscriptions.
