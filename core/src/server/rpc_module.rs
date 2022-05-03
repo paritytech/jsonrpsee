@@ -64,7 +64,6 @@ pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, 
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId) -> bool>;
 
-
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
@@ -417,10 +416,8 @@ impl Methods {
 			Some(MethodKind::Subscription(cb)) => {
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
 				(cb)(id, params, &sink, conn_state)
-			},
-			Some(MethodKind::Unsubscription(cb)) => {
-				(cb)(id, params, &sink, 0)
 			}
+			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, &sink, 0),
 		};
 
 		let resp = rx_sink.next().await.expect("tx and rx still alive; qed");
@@ -739,8 +736,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					let sub_id = sub_id.into_owned();
 
-					let result =
-						subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some();
+					let result = subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some();
 
 					sink.send_response(id, result)
 				})),

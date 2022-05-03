@@ -583,7 +583,7 @@ async fn background_task(
 													None
 												}
 											}
-										},
+										}
 										MethodKind::Unsubscription(callback) => {
 											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
