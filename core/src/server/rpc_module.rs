@@ -407,7 +407,7 @@ impl Methods {
 		let params = Params::new(req.params.map(|params| params.get()));
 		let bounded_subs = BoundedSubscriptions::new(u32::MAX);
 		let close_notify = bounded_subs.acquire().unwrap();
-		let notify = bounded_subs.acquire().unwrap();
+		let notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 
 		let _result = match self.method(&req.method).map(|c| &c.callback) {
 			None => sink.send_error(req.id, ErrorCode::MethodNotFound.into()),
