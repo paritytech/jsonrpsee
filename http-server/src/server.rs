@@ -554,7 +554,7 @@ async fn process_validated_request(
 							false
 						}
 					},
-					MethodKind::Subscription(_) => {
+					MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
 						tracing::error!("Subscriptions not supported on HTTP");
 						sink.send_error(req.id, ErrorCode::InternalError.into());
 						false
@@ -622,7 +622,7 @@ async fn process_validated_request(
 								None
 							}
 						},
-						MethodKind::Subscription(_) => {
+						MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
 							tracing::error!("Subscriptions not supported on HTTP");
 							sink.send_error(req.id, ErrorCode::InternalError.into());
 							middleware.on_result(&req.method, false, request_start);

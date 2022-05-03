@@ -12,7 +12,7 @@ env_logger = "0.9"
 beef = { version = "0.5.1", features = ["impl_serde"] }
 futures = { version = "0.3.14", default-features = false, features = ["std"] }
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
-tokio = { version = "1.8", features = ["full"] }
+tokio = { version = "1.16", features = ["full"] }
 tracing = "0.1"
 serde = "1"
 serde_json = "1"
