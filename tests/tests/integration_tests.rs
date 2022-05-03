@@ -548,6 +548,62 @@ async fn ws_server_limit_subs_per_conn_works() {
 }
 
 #[tokio::test]
+async fn ws_server_unsub_methods_should_ignore_sub_limit() {
+	use futures::StreamExt;
+	use jsonrpsee::core::client::SubscriptionKind;
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
+
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::RemotePeerAborted => {
+						sink.close(SubscriptionClosed::RemotePeerAborted);
+					}
+					_ => unreachable!(),
+				};
+			});
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Add 10 subscriptions (this should fill our subscrition limit for this connection):
+	let mut subs = Vec::new();
+	for _ in 0..10 {
+		subs.push(client.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+	}
+
+	// Get the ID of one of them:
+	let last_sub = subs.pop().unwrap();
+	let last_sub_id = match last_sub.kind() {
+		SubscriptionKind::Subscription(id) => id.clone(),
+		_ => panic!("Expected a subscription Id to be present"),
+	};
+
+	// Manually call the unsubscribe function for this subscription:
+	let res: Result<bool, _> = client.request("unsubscribe_forever", rpc_params![last_sub_id]).await;
+
+	// This should not hit any limits, and unsubscription should have worked:
+	assert!(res.is_ok(), "Unsubscription method was successfully called");
+	assert_eq!(res.unwrap(), true, "Unsubscription was successful");
+}
+
+#[tokio::test]
 async fn http_unsupported_methods_dont_work() {
 	use hyper::{Body, Client, Method, Request};
 
