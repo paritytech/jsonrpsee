@@ -251,17 +251,15 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn https_works() {
-	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
+	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io:443").unwrap();
 	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
 #[tokio::test]
-#[ignore]
 async fn wss_works() {
-	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
+	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io:443").await.unwrap();
 	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
