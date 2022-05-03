@@ -27,7 +27,7 @@ rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
 soketto = { version = "0.7.1", optional = true }
 parking_lot = { version = "0.12", optional = true }
-tokio = { version = "1.8", optional = true }
+tokio = { version = "1.16", optional = true }
 wasm-bindgen-futures = { version = "0.4.19", optional = true }
 futures-timer = { version = "3", optional = true }
 
@@ -66,5 +66,5 @@ async-wasm-client = [
 
 [dev-dependencies]
 serde_json = "1.0"
-tokio = { version = "1.8", features = ["macros", "rt"] }
+tokio = { version = "1.16", features = ["macros", "rt"] }
 jsonrpsee = { path = "../jsonrpsee", features = ["server", "macros"] }

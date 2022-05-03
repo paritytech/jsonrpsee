@@ -61,6 +61,8 @@ pub type AsyncMethod<'a> = Arc<
 >;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnState) -> bool>;
+// Method callback to unsubscribe.
+type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId) -> bool>;
 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -77,7 +79,7 @@ pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, Subscription
 pub struct ConnState<'a> {
 	/// Connection ID
 	pub conn_id: ConnectionId,
-	/// Get notified when the connection to subscribers is closed.
+	/// Get notified when the connection to subscribers is closed.1
 	pub close_notify: SubscriptionPermit,
 	/// ID provider.
 	pub id_provider: &'a dyn IdProvider,
@@ -114,8 +116,10 @@ pub enum MethodKind {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
-	/// Subscription method handler
+	/// Subscription method handler.
 	Subscription(SubscriptionMethod),
+	/// Unsubscription method handler.
+	Unsubscription(UnsubscriptionMethod),
 }
 
 /// Information about resources the method uses during its execution. Initialized when the the server starts.
@@ -189,6 +193,13 @@ impl MethodCallback {
 		}
 	}
 
+	fn new_unsubscription(callback: UnsubscriptionMethod) -> Self {
+		MethodCallback {
+			callback: MethodKind::Unsubscription(callback),
+			resources: MethodResources::Uninitialized([].into()),
+		}
+	}
+
 	/// Attempt to claim resources prior to executing a method. On success returns a guard that releases
 	/// claimed resources when dropped.
 	pub fn claim(&self, name: &str, resources: &Resources) -> Result<ResourceGuard, Error> {
@@ -210,6 +221,7 @@ impl Debug for MethodKind {
 			Self::Async(_) => write!(f, "Async"),
 			Self::Sync(_) => write!(f, "Sync"),
 			Self::Subscription(_) => write!(f, "Subscription"),
+			Self::Unsubscription(_) => write!(f, "Unsubscription"),
 		}
 	}
 }
@@ -405,6 +417,7 @@ impl Methods {
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
 				(cb)(id, params, &sink, conn_state)
 			}
+			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, &sink, 0),
 		};
 
 		let resp = rx_sink.next().await.expect("tx and rx still alive; qed");
@@ -708,7 +721,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_subscription(Arc::new(move |id, params, sink, conn| {
+				MethodCallback::new_unsubscription(Arc::new(move |id, params, sink, conn_id| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -723,8 +736,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					let sub_id = sub_id.into_owned();
 
-					let result =
-						subscribers.lock().remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id }).is_some();
+					let result = subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some();
 
 					sink.send_response(id, result)
 				})),

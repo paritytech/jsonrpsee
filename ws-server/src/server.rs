@@ -458,6 +458,23 @@ async fn background_task(
 									middleware.on_response(request_start);
 								}
 							},
+							MethodKind::Unsubscription(callback) => match method.claim(&req.method, &resources) {
+								Ok(guard) => {
+									let result = callback(id, params, &sink, conn_id);
+									middleware.on_result(name, result, request_start);
+									middleware.on_response(request_start);
+									drop(guard);
+								}
+								Err(err) => {
+									tracing::error!(
+										"[Methods::execute_with_resources] failed to lock resources: {:?}",
+										err
+									);
+									sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+									middleware.on_result(name, false, request_start);
+									middleware.on_response(request_start);
+								}
+							},
 						},
 					}
 				} else {
@@ -551,6 +568,26 @@ async fn background_task(
 														sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
 														false
 													};
+													middleware.on_result(&req.method, result, request_start);
+													drop(guard);
+													None
+												}
+												Err(err) => {
+													tracing::error!(
+														"[Methods::execute_with_resources] failed to lock resources: {:?}",
+														err
+													);
+
+													sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
+													middleware.on_result(&req.method, false, request_start);
+													None
+												}
+											}
+										}
+										MethodKind::Unsubscription(callback) => {
+											match method_callback.claim(&req.method, resources) {
+												Ok(guard) => {
+													let result = callback(id, params, &sink_batch, conn_id);
 													middleware.on_result(&req.method, result, request_start);
 													drop(guard);
 													None
