@@ -79,7 +79,7 @@ pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, Subscription
 pub struct ConnState<'a> {
 	/// Connection ID
 	pub conn_id: ConnectionId,
-	/// Get notified when the connection to subscribers is closed.1
+	/// Get notified when the connection to subscribers is closed.
 	pub close_notify: SubscriptionPermit,
 	/// ID provider.
 	pub id_provider: &'a dyn IdProvider,
