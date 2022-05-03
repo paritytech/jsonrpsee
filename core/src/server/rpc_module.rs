@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 use crate::error::{Error, SubscriptionClosed};
 use crate::id_providers::RandomIntegerIdProvider;
-use crate::server::helpers::MethodSink;
+use crate::server::helpers::{BoundedSubscriptions, MethodSink, SubscriptionPermit};
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::traits::{IdProvider, ToRpcParams};
 use futures_channel::mpsc;
@@ -48,7 +48,7 @@ use jsonrpsee_types::{
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::{watch, Notify};
+use tokio::sync::watch;
 
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
@@ -61,6 +61,8 @@ pub type AsyncMethod<'a> = Arc<
 >;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnState) -> bool>;
+// Method callback to unsubscribe.
+type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId) -> bool>;
 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -70,15 +72,15 @@ pub type ConnectionId = usize;
 /// A 3-tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
-///   - a [`tokio::sync::Notify`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
-pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, Arc<Notify>);
+///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
+pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, SubscriptionPermit);
 
 /// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
 	/// Connection ID
 	pub conn_id: ConnectionId,
 	/// Get notified when the connection to subscribers is closed.
-	pub close_notify: Arc<Notify>,
+	pub close_notify: SubscriptionPermit,
 	/// ID provider.
 	pub id_provider: &'a dyn IdProvider,
 }
@@ -114,8 +116,10 @@ pub enum MethodKind {
 	Sync(SyncMethod),
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
-	/// Subscription method handler
+	/// Subscription method handler.
 	Subscription(SubscriptionMethod),
+	/// Unsubscription method handler.
+	Unsubscription(UnsubscriptionMethod),
 }
 
 /// Information about resources the method uses during its execution. Initialized when the the server starts.
@@ -189,6 +193,13 @@ impl MethodCallback {
 		}
 	}
 
+	fn new_unsubscription(callback: UnsubscriptionMethod) -> Self {
+		MethodCallback {
+			callback: MethodKind::Unsubscription(callback),
+			resources: MethodResources::Uninitialized([].into()),
+		}
+	}
+
 	/// Attempt to claim resources prior to executing a method. On success returns a guard that releases
 	/// claimed resources when dropped.
 	pub fn claim(&self, name: &str, resources: &Resources) -> Result<ResourceGuard, Error> {
@@ -210,6 +221,7 @@ impl Debug for MethodKind {
 			Self::Async(_) => write!(f, "Async"),
 			Self::Sync(_) => write!(f, "Sync"),
 			Self::Subscription(_) => write!(f, "Subscription"),
+			Self::Unsubscription(_) => write!(f, "Unsubscription"),
 		}
 	}
 }
@@ -393,17 +405,19 @@ impl Methods {
 		let sink = MethodSink::new(tx_sink);
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
-		let notify = Arc::new(Notify::new());
+		let bounded_subs = BoundedSubscriptions::new(u32::MAX);
+		let close_notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
+		let notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 
 		let _result = match self.method(&req.method).map(|c| &c.callback) {
 			None => sink.send_error(req.id, ErrorCode::MethodNotFound.into()),
 			Some(MethodKind::Sync(cb)) => (cb)(id, params, &sink),
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
 			Some(MethodKind::Subscription(cb)) => {
-				let close_notify = notify.clone();
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
 				(cb)(id, params, &sink, conn_state)
 			}
+			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, &sink, 0),
 		};
 
 		let resp = rx_sink.next().await.expect("tx and rx still alive; qed");
@@ -707,7 +721,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_subscription(Arc::new(move |id, params, sink, conn| {
+				MethodCallback::new_unsubscription(Arc::new(move |id, params, sink, conn_id| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -722,8 +736,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 					let sub_id = sub_id.into_owned();
 
-					let result =
-						subscribers.lock().remove(&SubscriptionKey { conn_id: conn.conn_id, sub_id }).is_some();
+					let result = subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some();
 
 					sink.send_response(id, result)
 				})),
@@ -757,7 +770,7 @@ struct InnerPendingSubscription {
 	/// Sink.
 	sink: MethodSink,
 	/// Get notified when subscribers leave so we can exit
-	close_notify: Option<Arc<Notify>>,
+	close_notify: Option<SubscriptionPermit>,
 	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
@@ -819,7 +832,7 @@ pub struct SubscriptionSink {
 	/// Sink.
 	inner: MethodSink,
 	/// Get notified when subscribers leave so we can exit
-	close_notify: Option<Arc<Notify>>,
+	close_notify: Option<SubscriptionPermit>,
 	/// MethodCallback.
 	method: &'static str,
 	/// Unique subscription.
@@ -892,8 +905,8 @@ impl SubscriptionSink {
 		T: Serialize,
 		E: std::fmt::Display,
 	{
-		let conn_closed = match self.close_notify.clone() {
-			Some(close_notify) => close_notify,
+		let conn_closed = match self.close_notify.as_ref().map(|cn| cn.handle()) {
+			Some(cn) => cn,
 			None => {
 				return SubscriptionClosed::RemotePeerAborted;
 			}
@@ -1035,7 +1048,7 @@ impl Drop for SubscriptionSink {
 /// Wrapper struct that maintains a subscription "mainly" for testing.
 #[derive(Debug)]
 pub struct Subscription {
-	close_notify: Option<Arc<Notify>>,
+	close_notify: Option<SubscriptionPermit>,
 	rx: mpsc::UnboundedReceiver<String>,
 	sub_id: RpcSubscriptionId<'static>,
 }
@@ -1045,7 +1058,7 @@ impl Subscription {
 	pub fn close(&mut self) {
 		tracing::trace!("[Subscription::close] Notifying");
 		if let Some(n) = self.close_notify.take() {
-			n.notify_one()
+			n.handle().notify_one()
 		}
 	}
 	/// Get the subscription ID

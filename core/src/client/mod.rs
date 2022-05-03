@@ -207,6 +207,11 @@ impl<Notif> Subscription<Notif> {
 	) -> Self {
 		Self { to_back, notifs_rx, kind, marker: PhantomData }
 	}
+
+	/// Return the subscription type and, if applicable, ID.
+	pub fn kind(&self) -> &SubscriptionKind {
+		&self.kind
+	}
 }
 
 /// Batch request message.

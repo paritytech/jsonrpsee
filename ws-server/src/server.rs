@@ -39,7 +39,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
-use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
+use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, BoundedSubscriptions, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
 use jsonrpsee_core::traits::IdProvider;
@@ -49,7 +49,6 @@ use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::Notify;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Default maximum connections allowed.
@@ -271,6 +270,7 @@ where
 				resources.clone(),
 				cfg.max_request_body_size,
 				cfg.max_response_body_size,
+				BoundedSubscriptions::new(cfg.max_subscriptions_per_connection),
 				stop_monitor.clone(),
 				middleware,
 				id_provider,
@@ -292,6 +292,7 @@ async fn background_task(
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	bounded_subscriptions: BoundedSubscriptions,
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
 	id_provider: Arc<dyn IdProvider>,
@@ -301,8 +302,7 @@ async fn background_task(
 	builder.set_max_message_size(max_request_body_size as usize);
 	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let close_notify = Arc::new(Notify::new());
-	let close_notify_server_stop = close_notify.clone();
+	let bounded_subscriptions2 = bounded_subscriptions.clone();
 
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
@@ -327,7 +327,7 @@ async fn background_task(
 		let _ = sender.close().await;
 
 		// Notify all listeners and close down associated tasks.
-		close_notify_server_stop.notify_waiters();
+		bounded_subscriptions2.close();
 	});
 
 	// Buffer for incoming data.
@@ -436,11 +436,14 @@ async fn background_task(
 							},
 							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
 								Ok(guard) => {
-									let cn = close_notify.clone();
-									let conn_state =
-										ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
-
-									let result = callback(id, params, &sink, conn_state);
+									let result = if let Some(cn) = bounded_subscriptions.acquire() {
+										let conn_state =
+											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
+										callback(id, params, &sink, conn_state)
+									} else {
+										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+										false
+									};
 									middleware.on_result(name, result, request_start);
 									middleware.on_response(request_start);
 									drop(guard);
@@ -455,6 +458,12 @@ async fn background_task(
 									middleware.on_response(request_start);
 								}
 							},
+							MethodKind::Unsubscription(callback) => {
+								// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
+								let result = callback(id, params, &sink, conn_id);
+								middleware.on_result(name, result, request_start);
+								middleware.on_response(request_start);
+							}
 						},
 					}
 				} else {
@@ -470,7 +479,7 @@ async fn background_task(
 				let methods = &methods;
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
-				let close_notify2 = close_notify.clone();
+				let bounded_subscriptions2 = bounded_subscriptions.clone();
 
 				let fut = async move {
 					// Batch responses must be sent back as a single message so we read the results from each
@@ -537,11 +546,17 @@ async fn background_task(
 										MethodKind::Subscription(callback) => {
 											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
-													let close_notify = close_notify2.clone();
-													let conn_state =
-														ConnState { conn_id, close_notify, id_provider: &*id_provider };
-
-													let result = callback(id, params, &sink_batch, conn_state);
+													let result = if let Some(cn) = bounded_subscriptions2.acquire() {
+														let conn_state = ConnState {
+															conn_id,
+															close_notify: cn,
+															id_provider: &*id_provider,
+														};
+														callback(id, params, &sink_batch, conn_state)
+													} else {
+														sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
+														false
+													};
 													middleware.on_result(&req.method, result, request_start);
 													drop(guard);
 													None
@@ -557,6 +572,12 @@ async fn background_task(
 													None
 												}
 											}
+										}
+										MethodKind::Unsubscription(callback) => {
+											// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
+											let result = callback(id, params, &sink_batch, conn_id);
+											middleware.on_result(&req.method, result, request_start);
+											None
 										}
 									},
 								}
@@ -629,6 +650,8 @@ struct Settings {
 	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
+	/// Maximum number of subscriptions per connection.
+	max_subscriptions_per_connection: u32,
 	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
 	allowed_origins: AllowedValue,
 	/// Policy by which to accept or deny incoming requests based on the `Host` header.
@@ -642,6 +665,7 @@ impl Default for Settings {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
+			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
 			allowed_origins: AllowedValue::Any,
 			allowed_hosts: AllowedValue::Any,
@@ -693,6 +717,12 @@ impl<M> Builder<M> {
 	/// Set the maximum number of connections allowed. Default is 100.
 	pub fn max_connections(mut self, max: u64) -> Self {
 		self.settings.max_connections = max;
+		self
+	}
+
+	/// Set the maximum number of connections allowed. Default is 1024.
+	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
+		self.settings.max_subscriptions_per_connection = max;
 		self
 	}
 

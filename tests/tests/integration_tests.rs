@@ -33,11 +33,14 @@ use std::time::Duration;
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::ws_client::WsClientBuilder;
+use tokio::time::interval;
+use tokio_stream::wrappers::IntervalStream;
 
 mod helpers;
 
@@ -485,6 +488,117 @@ async fn ws_batch_works() {
 
 	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
+}
+
+#[tokio::test]
+async fn ws_server_limit_subs_per_conn_works() {
+	use futures::StreamExt;
+	use jsonrpsee::types::error::{CallError, SERVER_IS_BUSY_CODE, SERVER_IS_BUSY_MSG};
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
+
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::Success => {
+						sink.close(SubscriptionClosed::Success);
+					}
+					_ => unreachable!(),
+				};
+			});
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let c2 = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut subs1 = Vec::new();
+	let mut subs2 = Vec::new();
+
+	for _ in 0..10 {
+		subs1.push(c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+		subs2.push(c2.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+	}
+
+	let err1 = c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await;
+	let err2 = c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await;
+
+	assert!(
+		matches!(err1, Err(Error::Call(CallError::Custom(err))) if err.code() == SERVER_IS_BUSY_CODE && err.message() == SERVER_IS_BUSY_MSG)
+	);
+	assert!(
+		matches!(err2, Err(Error::Call(CallError::Custom(err))) if err.code() == SERVER_IS_BUSY_CODE && err.message() == SERVER_IS_BUSY_MSG)
+	);
+}
+
+#[tokio::test]
+async fn ws_server_unsub_methods_should_ignore_sub_limit() {
+	use futures::StreamExt;
+	use jsonrpsee::core::client::SubscriptionKind;
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
+
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::RemotePeerAborted => {
+						sink.close(SubscriptionClosed::RemotePeerAborted);
+					}
+					_ => unreachable!(),
+				};
+			});
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Add 10 subscriptions (this should fill our subscrition limit for this connection):
+	let mut subs = Vec::new();
+	for _ in 0..10 {
+		subs.push(client.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+	}
+
+	// Get the ID of one of them:
+	let last_sub = subs.pop().unwrap();
+	let last_sub_id = match last_sub.kind() {
+		SubscriptionKind::Subscription(id) => id.clone(),
+		_ => panic!("Expected a subscription Id to be present"),
+	};
+
+	// Manually call the unsubscribe function for this subscription:
+	let res: Result<bool, _> = client.request("unsubscribe_forever", rpc_params![last_sub_id]).await;
+
+	// This should not hit any limits, and unsubscription should have worked:
+	assert!(res.is_ok(), "Unsubscription method was successfully called");
+	assert_eq!(res.unwrap(), true, "Unsubscription was successful");
 }
 
 #[tokio::test]
