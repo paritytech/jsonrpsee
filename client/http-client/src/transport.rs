@@ -58,15 +58,7 @@ impl HttpTransportClient {
 		}
 
 		let client = match target.scheme_str() {
-			Some("http") => {
-				let mut connector = HttpConnector::new();
-
-				connector.set_reuse_address(true);
-				connector.set_nodelay(true);
-
-				let client = Client::builder().build::<_, hyper::Body>(connector);
-				HyperClient::Http(client)
-			}
+			Some("http") => HyperClient::Http(Client::new()),
 			#[cfg(feature = "tls")]
 			Some("https") => {
 				let connector = match cert_store {
