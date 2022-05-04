@@ -45,7 +45,7 @@ use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, Met
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
-use jsonrpsee_types::error::ErrorCode;
+use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
 use tokio::net::{TcpListener, ToSocketAddrs};
@@ -57,6 +57,7 @@ pub struct Builder<M = ()> {
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
@@ -67,6 +68,7 @@ impl Default for Builder {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
+			batch_requests_supported: true,
 			resources: Resources::default(),
 			access_control: AccessControl::default(),
 			tokio_runtime: None,
@@ -112,6 +114,7 @@ impl<M> Builder<M> {
 		Builder {
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			access_control: self.access_control,
 			tokio_runtime: self.tokio_runtime,
@@ -134,6 +137,13 @@ impl<M> Builder<M> {
 	/// Sets access control settings.
 	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
 		self.access_control = acl;
+		self
+	}
+
+	/// Enables or disables support of [batch requests](https://www.jsonrpc.org/specification#batch).
+	/// By default, support is enabled.
+	pub fn batch_requests_supported(mut self, supported: bool) -> Self {
+		self.batch_requests_supported = supported;
 		self
 	}
 
@@ -199,6 +209,7 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
@@ -241,6 +252,7 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
@@ -274,6 +286,7 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
@@ -323,6 +336,8 @@ pub struct Server<M = ()> {
 	max_request_body_size: u32,
 	/// Max response body size.
 	max_response_body_size: u32,
+	/// Whether batch requests are supported by this server or not.
+	batch_requests_supported: bool,
 	/// Access control
 	access_control: AccessControl,
 	/// Tracker for currently used resources on the server
@@ -347,6 +362,7 @@ impl<M: Middleware> Server<M> {
 		let listener = self.listener;
 		let resources = self.resources;
 		let middleware = self.middleware;
+		let batch_requests_supported = self.batch_requests_supported;
 		let methods = methods.into().initialize_resources(&resources)?;
 
 		let make_service = make_service_fn(move |_| {
@@ -405,6 +421,7 @@ impl<M: Middleware> Server<M> {
 									resources,
 									max_request_body_size,
 									max_response_body_size,
+									batch_requests_supported,
 								)
 								.await?;
 
@@ -494,6 +511,7 @@ async fn process_validated_request(
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	batch_requests_supported: bool,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (parts, body) = request.into_parts();
 
@@ -570,7 +588,14 @@ async fn process_validated_request(
 		}
 	// Batch of requests or notifications
 	} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
-		if !batch.is_empty() {
+		if !batch_requests_supported {
+			// Server was configured to not support batches.
+			is_single = true;
+			sink.send_error(
+				Id::Null,
+				ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+			);
+		} else if !batch.is_empty() {
 			let middleware = &middleware;
 
 			join_all(batch.into_iter().filter_map(move |req| {

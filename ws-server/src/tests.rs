@@ -692,3 +692,32 @@ async fn custom_subscription_id_works() {
 	let unsub = client.send_request_text(call("unsubscribe_hello", vec!["0xdeadbeef"], Id::Num(1))).await.unwrap();
 	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 }
+
+#[tokio::test]
+async fn disabled_batches() {
+	// Disable batches support.
+	let server = WsServerBuilder::default()
+		.batch_requests_supported(false)
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	let mut module = RpcModule::new(());
+	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
+	let addr = server.local_addr().unwrap();
+
+	let handle = server.start(module).unwrap();
+
+	// Send a valid batch.
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let req = r#"[
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1},
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":2}
+	]"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, batches_not_supported());
+
+	handle.stop().unwrap();
+}

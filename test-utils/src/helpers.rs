@@ -75,6 +75,10 @@ pub fn oversized_request() -> String {
 	r#"{"jsonrpc":"2.0","error":{"code":-32701,"message":"Request is too big"},"id":null}"#.into()
 }
 
+pub fn batches_not_supported() -> String {
+	r#"{"jsonrpc":"2.0","error":{"code":-32005,"message":"Batched requests are not supported by this server"},"id":null}"#.into()
+}
+
 pub fn oversized_response(id: Id, max_limit: u32) -> String {
 	format!(
 		r#"{{"jsonrpc":"2.0","error":{{"code":-32702,"message":"Response is too big","data":"Exceeded max limit {}"}},"id":{}}}"#,
