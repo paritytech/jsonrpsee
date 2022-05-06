@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.12.0] - 2022-05-06
+
+v0.12.0 is mainly a patch release with some minor features added.
+
+### [Added]
+- Make it possible to disable batch requests support [#744](https://github.com/paritytech/jsonrpsee/pull/744)
+- feat: add a way to limit the number of subscriptions per connection [#739](https://github.com/paritytech/jsonrpsee/pull/739)
+
+### [Fixed]
+- fix(http client): use https connector for https [#750](https://github.com/paritytech/jsonrpsee/pull/750)
+- fix(rpc module): close subscription task when a subscription is `unsubscribed` via the `unsubscribe call` [#743](https://github.com/paritytech/jsonrpsee/pull/743)
+- fix(jsonrpsee): generate docs behind features [#741](https://github.com/paritytech/jsonrpsee/pull/741)
+
+### [Changed]
+- remove vault from ci [#745](https://github.com/paritytech/jsonrpsee/pull/745)
+- chore(deps): update pprof requirement from 0.7 to 0.8  [#732](https://github.com/paritytech/jsonrpsee/pull/732)
+- chore(deps): update gloo-net requirement from 0.1.0 to 0.2.0 [#733](https://github.com/paritytech/jsonrpsee/pull/733)
+
 ## [v0.11.0] - 2022-04-21
 
 v0.11.0 is a breaking release that reworks how subscriptions are handled by the servers where the users have to explicitly reject or accept each subscription.

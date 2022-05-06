@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-client-transport"
-version = "0.11.0"
+version = "0.12.0"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket client for JSON-RPC"
 edition = "2021"
@@ -10,8 +10,8 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
-jsonrpsee-types = { path = "../../types", version = "0.11.0", optional = true }
-jsonrpsee-core = { path = "../../core", version = "0.11.0", features = ["client"] }
+jsonrpsee-types = { path = "../../types", version = "0.12.0", optional = true }
+jsonrpsee-core = { path = "../../core", version = "0.12.0", features = ["client"] }
 tracing = "0.1"
 
 # optional
