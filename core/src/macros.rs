@@ -1,4 +1,3 @@
-#[macro_export]
 macro_rules! cfg_feature {
     ($feature:literal, $($item:item)*) => {
         $(
@@ -11,19 +10,19 @@ macro_rules! cfg_feature {
 
 macro_rules! cfg_client {
 	($($item:item)*) => {
-		$crate::cfg_feature!("client", $($item)*);
+		cfg_feature!("client", $($item)*);
 	};
 }
 
 macro_rules! cfg_server {
  ($($item:item)*) => {
-		$crate::cfg_feature!("server", $($item)*);
+		cfg_feature!("server", $($item)*);
 	};
 }
 
 macro_rules! cfg_http_helpers {
  ($($item:item)*) => {
-		$crate::cfg_feature!("http-helpers", $($item)*);
+		cfg_feature!("http-helpers", $($item)*);
 	};
 }
 
