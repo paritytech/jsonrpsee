@@ -48,6 +48,7 @@
 //! - **`client-ws-transport`** - Enables `ws` transport with TLS.
 //! - **`client-ws-transport-no-tls`** - Enables `ws` transport without TLS.
 
+// Macros useful below, but not to be exposed outside of the crate.
 #[macro_use]
 mod macros;
 

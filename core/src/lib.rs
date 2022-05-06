@@ -28,9 +28,9 @@
 
 #![warn(missing_docs, missing_debug_implementations, unreachable_pub)]
 
-#[doc(hidden)]
+// Macros useful internally within this crate, but not to be exposed outside of it.
 #[macro_use]
-pub mod macros;
+mod macros;
 
 /// Error type.
 pub mod error;
