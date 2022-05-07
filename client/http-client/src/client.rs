@@ -24,12 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::HttpTransportClient;
 use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response};
 use async_trait::async_trait;
+use hyper::header::{HeaderName, InvalidHeaderName};
+use hyper::http::HeaderValue;
+use hyper::HeaderMap;
 use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
@@ -44,6 +48,7 @@ pub struct HttpClientBuilder {
 	max_concurrent_requests: usize,
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
+	custom_headers: HeaderMap,
 }
 
 impl HttpClientBuilder {
@@ -77,10 +82,20 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Adds a custom header, which is sent with every request
+	pub fn add_header(mut self, key: &str, value: &str) -> Result<Self, Error> {
+		self.custom_headers.append(
+			HeaderName::from_str(key).map_err(|_| Error::InvalidHeaders)?,
+			HeaderValue::from_str(value).map_err(|_| Error::InvalidHeaders)?,
+		);
+		Ok(self)
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
-		let transport = HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store)
-			.map_err(|e| Error::Transport(e.into()))?;
+		let transport =
+			HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store, self.custom_headers)
+				.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
 			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests, self.id_kind)),
@@ -97,6 +112,7 @@ impl Default for HttpClientBuilder {
 			max_concurrent_requests: 256,
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
+			custom_headers: HeaderMap::new(),
 		}
 	}
 }

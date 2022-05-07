@@ -7,7 +7,7 @@
 // the JSON-RPC request id to a value that might have already been used.
 
 use hyper::client::{Client, HttpConnector};
-use hyper::Uri;
+use hyper::{HeaderMap, Uri};
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
@@ -43,6 +43,8 @@ pub struct HttpTransportClient {
 	client: HyperClient,
 	/// Configurable max request body size
 	max_request_body_size: u32,
+	/// Custom headers sent with every request
+	custom_headers: HeaderMap,
 }
 
 impl HttpTransportClient {
@@ -51,6 +53,7 @@ impl HttpTransportClient {
 		target: impl AsRef<str>,
 		max_request_body_size: u32,
 		cert_store: CertificateStore,
+		custom_headers: hyper::HeaderMap,
 	) -> Result<Self, Error> {
 		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.port_u16().is_none() {
@@ -84,7 +87,7 @@ impl HttpTransportClient {
 				return Err(Error::Url(err.into()));
 			}
 		};
-		Ok(Self { target, client, max_request_body_size })
+		Ok(Self { target, client, max_request_body_size, custom_headers })
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
@@ -94,11 +97,15 @@ impl HttpTransportClient {
 			return Err(Error::RequestTooLarge);
 		}
 
-		let req = hyper::Request::post(&self.target)
+		let mut builder = hyper::Request::post(&self.target)
 			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
-			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
-			.body(From::from(body))
-			.expect("URI and request headers are valid; qed");
+			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
+
+		for (h, v) in self.custom_headers.iter() {
+			builder = builder.header(h, v);
+		}
+
+		let req = builder.body(From::from(body)).expect("URI and request headers are valid; qed");
 
 		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
 		if response.status().is_success() {
