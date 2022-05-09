@@ -89,7 +89,7 @@ impl RpcDescription {
 			(called_method, returns)
 		} else {
 			let called_method = quote::format_ident!("notification");
-			let returns = quote! { Result<(), #jrps_error> };
+			let returns = quote! { core::result::Result<(), #jrps_error> };
 
 			(called_method, returns)
 		};
@@ -127,7 +127,7 @@ impl RpcDescription {
 		// into the `Subscription` object.
 		let sub_type = self.jrps_client_item(quote! { core::client::Subscription });
 		let item = &sub.item;
-		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
+		let returns = quote! { core::result::Result<#sub_type<#item>, #jrps_error> };
 
 		// Encoded parameters for the request.
 		let parameters = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
