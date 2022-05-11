@@ -734,16 +734,19 @@ async fn process_health_request(
 		Some((name, method_callback)) => match method_callback.inner() {
 			MethodKind::Sync(callback) => {
 				let res = (callback)(Id::Number(0), Params::new(None), &sink);
-				middleware.on_result(name, false, request_start);
+				middleware.on_result(name, res, request_start);
 				res
 			}
 			MethodKind::Async(callback) => {
 				let res = (callback)(Id::Number(0), Params::new(None), sink.clone(), 0, None).await;
-				middleware.on_result(name, false, request_start);
+				middleware.on_result(name, res, request_start);
 				res
 			}
 
-			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => false,
+			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
+				middleware.on_result(name, false, request_start);
+				false
+			}
 		},
 	};
 
