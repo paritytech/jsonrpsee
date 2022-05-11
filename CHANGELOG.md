@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.13.0] - 2022-05-11
 
-v0.13.0 is release that adds support health API for HTTP server and a few bug fixes.
+v0.13.0 is release that adds health API support for the HTTP server and a few bug fixes.
 
 ### [Added]
 feat: add http health API [#763](https://github.com/paritytech/jsonrpsee/pull/763)
