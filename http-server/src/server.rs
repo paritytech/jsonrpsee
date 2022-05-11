@@ -747,7 +747,6 @@ async fn process_health_request(
 		},
 	};
 
-	rx.close();
 	let data = rx.next().await;
 	middleware.on_response(request_start);
 
