@@ -750,3 +750,22 @@ async fn ws_subscribe_with_bad_params() {
 		.unwrap_err();
 	assert!(matches!(err, Error::Call(_)));
 }
+
+#[tokio::test]
+async fn http_health_api_works() {
+	use hyper::{Body, Client, Request};
+
+	let (server_addr, _handle) = http_server().await;
+
+	let http_client = Client::new();
+	let uri = format!("http://{}/health", server_addr);
+
+	let req = Request::builder().method("GET").uri(&uri).body(Body::empty()).expect("request builder");
+	let res = http_client.request(req).await.unwrap();
+
+	assert!(res.status().is_success());
+
+	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+	let out = String::from_utf8(bytes.to_vec()).unwrap();
+	assert_eq!(out, "{\"jsonrpc\":\"2.0\",\"result\":\"im ok\",\"id\":0}");
+}

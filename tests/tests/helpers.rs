@@ -222,11 +222,18 @@ pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
 }
 
 pub async fn http_server_with_access_control(acl: AccessControl) -> (SocketAddr, HttpServerHandle) {
-	let server = HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let server = HttpServerBuilder::default()
+		.set_access_control(acl)
+		.health_api("/health", "system_health")
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 	module.register_method("notif", |_, _| Ok("")).unwrap();
+
+	module.register_method("system_health", |_, _| Ok("im ok")).unwrap();
 
 	let handle = server.start(module).unwrap();
 	(addr, handle)
