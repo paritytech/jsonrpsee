@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.13.0] - 2022-05-11
+
+v0.13.0 is release that adds health API support for the HTTP server and a few bug fixes.
+
+### [Added]
+feat: add http health API [#763](https://github.com/paritytech/jsonrpsee/pull/763)
+
+### [Fixed]
+- hide internal macros from public interface [#755](https://github.com/paritytech/jsonrpsee/pull/755)
+- fix: add `core` behind `http-server` feature [#760](https://github.com/paritytech/jsonrpsee/pull/760)
+
+
 ## [v0.12.0] - 2022-05-06
 
 v0.12.0 is mainly a patch release with some minor features added.
