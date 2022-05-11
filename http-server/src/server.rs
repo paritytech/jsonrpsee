@@ -61,6 +61,7 @@ pub struct Builder<M = ()> {
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
+	health_api: Option<HealthApi>,
 }
 
 impl Default for Builder {
@@ -73,6 +74,7 @@ impl Default for Builder {
 			access_control: AccessControl::default(),
 			tokio_runtime: None,
 			middleware: (),
+			health_api: None,
 		}
 	}
 }
@@ -119,6 +121,7 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
+			health_api: self.health_api,
 		}
 	}
 
@@ -163,6 +166,14 @@ impl<M> Builder<M> {
 	/// Default: [`tokio::spawn`]
 	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) -> Self {
 		self.tokio_runtime = Some(rt);
+		self
+	}
+
+	/// Enable health endpoint.
+	/// Allows you to expose one of the methods under GET /<path> The method will be invoked with no parameters. Error returned from the method will be converted to status 500 response.
+	/// Expects a tuple with (<path>, <rpc-method-name>).
+	pub fn health_api(mut self, path: impl Into<String>, method: impl Into<String>) -> Self {
+		self.health_api = Some(HealthApi { path: path.into(), method: method.into() });
 		self
 	}
 
@@ -213,6 +224,7 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			health_api: self.health_api,
 		})
 	}
 
@@ -256,6 +268,7 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			health_api: self.health_api,
 		})
 	}
 
@@ -290,8 +303,15 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			health_api: self.health_api,
 		})
 	}
+}
+
+#[derive(Debug, Clone)]
+struct HealthApi {
+	path: String,
+	method: String,
 }
 
 /// Handle used to run or stop the server.
@@ -345,6 +365,7 @@ pub struct Server<M = ()> {
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
+	health_api: Option<HealthApi>,
 }
 
 impl<M: Middleware> Server<M> {
@@ -364,12 +385,14 @@ impl<M: Middleware> Server<M> {
 		let middleware = self.middleware;
 		let batch_requests_supported = self.batch_requests_supported;
 		let methods = methods.into().initialize_resources(&resources)?;
+		let health_api = self.health_api;
 
 		let make_service = make_service_fn(move |_| {
 			let methods = methods.clone();
 			let access_control = access_control.clone();
 			let resources = resources.clone();
 			let middleware = middleware.clone();
+			let health_api = health_api.clone();
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
@@ -377,6 +400,7 @@ impl<M: Middleware> Server<M> {
 					let access_control = access_control.clone();
 					let resources = resources.clone();
 					let middleware = middleware.clone();
+					let health_api = health_api.clone();
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -430,6 +454,12 @@ impl<M: Middleware> Server<M> {
 								}
 								Ok(res)
 							}
+							Method::GET => match health_api.as_ref() {
+								Some(health) if health.path.as_str() == request.uri().path() => {
+									process_health_request(health, middleware, methods, max_response_body_size).await
+								}
+								_ => Ok(response::method_not_allowed()),
+							},
 							// Error scenarios:
 							Method::POST => Ok(response::unsupported_content_type()),
 							_ => Ok(response::method_not_allowed()),
@@ -686,4 +716,43 @@ async fn process_validated_request(
 	tracing::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
 	middleware.on_response(request_start);
 	Ok(response::ok_response(response))
+}
+
+async fn process_health_request(
+	health_api: &HealthApi,
+	middleware: impl Middleware,
+	methods: Methods,
+	max_response_body_size: u32,
+) -> Result<hyper::Response<hyper::Body>, HyperError> {
+	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+
+	let request_start = middleware.on_request();
+
+	let success = match methods.method_with_name(&health_api.method) {
+		None => false,
+		Some((name, method_callback)) => match method_callback.inner() {
+			MethodKind::Sync(callback) => {
+				let res = (callback)(Id::Number(0), Params::new(None), &sink);
+				middleware.on_result(name, false, request_start);
+				res
+			}
+			MethodKind::Async(callback) => {
+				let res = (callback)(Id::Number(0), Params::new(None), sink.clone(), 0, None).await;
+				middleware.on_result(name, false, request_start);
+				res
+			}
+
+			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => false,
+		},
+	};
+
+	rx.close();
+	let data = rx.next().await;
+	middleware.on_response(request_start);
+
+	match data {
+		Some(resp) if success => Ok(response::ok_response(resp)),
+		_ => Ok(response::internal_error()),
+	}
 }
