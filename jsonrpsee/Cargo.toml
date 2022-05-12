@@ -37,3 +37,10 @@ macros = ["jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-core/client", "
 client = ["http-client", "ws-client", "wasm-client"]
 server = ["http-server", "ws-server"]
 full = ["client", "server", "macros", "async-client", "client-ws-transport"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[package.metadata.playground]
+all-features = true
