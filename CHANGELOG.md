@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.13.1] - 2022-05-13
 
-v0.13.1 is a release that fixes that documentation for feature-gated items on `docs.rs`.
+v0.13.1 is a release that fixes the documentation for feature-gated items on `docs.rs`.
 
 ### [Fixed]
 - fix: generate docs for all features on docs.rs [#767](https://github.com/paritytech/jsonrpsee/pull/767)
