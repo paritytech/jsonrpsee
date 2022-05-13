@@ -15,7 +15,6 @@ v0.13.1 is a release that fixes the documentation for feature-gated items on `do
 
 ### [Changed]
 - chore(deps): update pprof requirement from 0.8 to 0.9 [#761](https://github.com/paritytech/jsonrpsee/pull/761)
-- chore(release): v0.13.0 [#764](https://github.com/paritytech/jsonrpsee/pull/764)
 
 ## [v0.13.0] - 2022-05-11
 
