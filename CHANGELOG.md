@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.13.1] - 2022-05-13
+
+v0.13.1 is a release that fixes that documentation for feature-gated items on `docs.rs`.
+
+### [Fixed]
+- fix: generate docs for all features on docs.rs [#767](https://github.com/paritytech/jsonrpsee/pull/767)
+
+### [Changed]
+- chore(deps): update pprof requirement from 0.8 to 0.9 [#761](https://github.com/paritytech/jsonrpsee/pull/761)
+- chore(release): v0.13.0 [#764](https://github.com/paritytech/jsonrpsee/pull/764)
+
+
 ## [v0.13.0] - 2022-05-11
 
 v0.13.0 is release that adds health API support for the HTTP server and a few bug fixes.
