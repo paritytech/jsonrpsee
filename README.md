@@ -30,11 +30,11 @@ Support `WebSocket` and `HTTP` transports for both client and server.
 
 - [HTTP](./examples/examples/http.rs)
 - [WebSocket](./examples/examples/ws.rs)
-- [WebSocket pubsub](./examples/examples/ws_subscription.rs)
+- [WebSocket pubsub](./examples/examples/ws_pubsub_broadcast.rs)
 - [API generation with proc macro](./examples/examples/proc_macro.rs)
 - [Middleware](./examples/examples/multi_middleware.rs)
 - [CORS server](./examples/examples/cors_server.rs)
-- [Core client](.examples/examples/core_client.rs)
+- [Core client](./examples/examples/core_client.rs)
 
 ## Roadmap
 
