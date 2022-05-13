@@ -48,8 +48,22 @@ jobs:
           command: clippy
           args: --all-targets
 
-      - name: Check rustdoc links
-        run: RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
+  check-docs:
+    name: Check rustdoc
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v3
+
+      - name: Install Rust nightly toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Check rustdoc
+        run: RUSTDOCFLAGS="--cfg docsrs --deny rustdoc:broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items --all-features
 
   check-code:
     name: Check

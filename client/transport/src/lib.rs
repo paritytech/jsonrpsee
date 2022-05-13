@@ -25,6 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 #![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! # jsonrpsee-client-transports
 //!
