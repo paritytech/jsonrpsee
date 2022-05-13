@@ -63,7 +63,7 @@ jobs:
           override: true
 
       - name: Check rustdoc
-        run: RUSTDOCFLAGS="--cfg docsrs --deny rustdoc:broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items --all-features
+        run: RUSTDOCFLAGS="--cfg docsrs --deny rustdoc::broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items --all-features
 
   check-code:
     name: Check
