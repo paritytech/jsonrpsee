@@ -4,7 +4,6 @@ mod helpers;
 mod manager;
 
 use core::time::Duration;
-
 use crate::client::{async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT};
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
@@ -20,6 +19,7 @@ use futures_timer::Delay;
 use futures_util::future::{self, Either};
 use futures_util::select;
 use futures_util::sink::SinkExt;
+use futures_util::FutureExt;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response,
@@ -415,7 +415,18 @@ async fn background_task<S, R>(
 		let next_backend = backend_event.next();
 		futures_util::pin_mut!(next_frontend, next_backend);
 
+		let mut submit_ping = Delay::new(ping_interval).fuse();
+
 		select! {
+			 _ = submit_ping => {
+				tracing::trace!("[backend]: submit ping");
+				if let Err(e) = sender.send_ping(&[]).await {
+					tracing::warn!("[backend]: client send ping failed: {:?}", e);
+					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
+					break;
+				}
+			},
+
 			frontend_value = next_frontend => match frontend_value {
 				// User dropped the sender side of the channel.
 				// There is nothing to do just terminate.
