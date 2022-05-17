@@ -141,6 +141,16 @@ pub trait TransportSenderT: MaybeSend + 'static {
 	}
 }
 
+/// Message type received from the RPC server.
+/// It can either be plain `String` data, or a `Pong` reply to a previously submitted `Ping`.
+#[derive(Debug)]
+pub enum ReceivedMessage {
+	/// Incoming packet contains plain `String` data.
+   Data(String),
+   /// Incoming packet is a `Pong` frame sent in response to a `Ping`.
+   Pong(Vec<u8>),
+}
+
 /// Transport interface to receive data asynchronous.
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
@@ -149,7 +159,7 @@ pub trait TransportReceiverT: 'static {
 	type Error: std::error::Error + Send + Sync;
 
 	/// Receive.
-	async fn receive(&mut self) -> Result<String, Self::Error>;
+	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error>;
 }
 
 #[macro_export]

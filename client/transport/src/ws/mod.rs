@@ -31,11 +31,11 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
 use futures_util::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{CertificateStore, TransportReceiverT, TransportSenderT};
+use jsonrpsee_core::client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
-use soketto::connection;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
+use soketto::{connection, Incoming};
 use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -217,11 +217,19 @@ impl TransportReceiverT for Receiver {
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
-	async fn receive(&mut self) -> Result<String, Self::Error> {
+	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
 		let mut message = Vec::new();
-		self.inner.receive_data(&mut message).await?;
-		let s = String::from_utf8(message).expect("Found invalid UTF-8");
-		Ok(s)
+
+		loop {
+			let recv = self.inner.receive(&mut message).await?;
+
+			if let Incoming::Data(_) = recv {
+				let s = String::from_utf8(message).expect("Found invalid UTF-8");
+				return Ok(ReceivedMessage::Data(s));
+			} else if let Incoming::Pong(pong_data) = recv {
+				return Ok(ReceivedMessage::Pong(Vec::from(pong_data)));
+			}
+		}
 	}
 }
 

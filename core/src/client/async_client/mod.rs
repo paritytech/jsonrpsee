@@ -5,11 +5,7 @@ mod manager;
 
 use core::time::Duration;
 
-use crate::client::{
-	async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, RegisterNotificationMessage,
-	RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT,
-	TransportSenderT,
-};
+use crate::client::{async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT};
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
@@ -492,7 +488,10 @@ async fn background_task<S, R>(
 				tracing::trace!("[backend] unregistering notification handler: {:?}", method);
 				let _ = manager.remove_notification_handler(method);
 			}
-			Either::Right((Some(Ok(raw)), _)) => {
+			Either::Right((Some(Ok(ReceivedMessage::Pong(pong_data))), _)) => {
+				tracing::debug!("[backend]: recv pong {:?}", pong_data);
+			}
+			Either::Right((Some(Ok(ReceivedMessage::Data(raw))), _)) => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
 					tracing::debug!("[backend]: recv method_call {:?}", single);
