@@ -403,6 +403,11 @@ async fn background_task<S, R>(
 {
 	let mut manager = RequestManager::new();
 
+	// Flag has the following meaning:
+	// - true if the ping was submitted.
+	// - false if the ping was not submitted, or a pong reply was received.
+	let mut ping_submitted = false;
+
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
 		Some((res, receiver))
@@ -419,12 +424,21 @@ async fn background_task<S, R>(
 
 		select! {
 			 _ = submit_ping => {
+				// Ping was already submitted.
+				// No activity from frontend, backend (replies or pong) for a duration of `ping_interval`.
+				if ping_submitted {
+					let _ = front_error.send(Error::Custom("Did not receive a pong or activity in due time".into()));
+					break;
+				}
+
 				tracing::trace!("[backend]: submit ping");
 				if let Err(e) = sender.send_ping(&[]).await {
 					tracing::warn!("[backend]: client send ping failed: {:?}", e);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
 					break;
 				}
+
+				ping_submitted = true;
 			},
 
 			frontend_value = next_frontend => match frontend_value {
@@ -515,7 +529,11 @@ async fn background_task<S, R>(
 
 			backend_value = next_backend => match backend_value {
 				Some(Ok(ReceivedMessage::Pong(pong_data))) => {
+					// From WebSocket RFC:https://www.rfc-editor.org/rfc/rfc6455#section-5.5.3
+					// A `Pong` frame may be send unsolicited.
+					// Set just the ping submitted state to allow further pinging.
 					tracing::debug!("[backend]: recv pong {:?}", pong_data);
+					ping_submitted = false;
 				}
 				Some(Ok(ReceivedMessage::Data(raw))) => {
 					// Single response to a request.
