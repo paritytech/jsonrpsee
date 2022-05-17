@@ -66,6 +66,7 @@ pub struct ClientBuilder {
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	id_kind: IdKind,
+	ping_interval: Duration,
 }
 
 impl Default for ClientBuilder {
@@ -75,6 +76,7 @@ impl Default for ClientBuilder {
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			id_kind: IdKind::Number,
+			ping_interval:  Duration::from_secs(300),
 		}
 	}
 }
@@ -112,6 +114,17 @@ impl ClientBuilder {
 		self
 	}
 
+	/// Set the interval at which pings are submitted (default is 5 minutes).
+	///
+	/// Note: The interval duration is restarted when
+	///  - submitted frontend command
+	///  - received backend reply
+	///  - submitted ping
+	pub fn ping_interval(mut self, interval: Duration) -> Self {
+		self.ping_interval = interval;
+		self
+	}
+
 	/// Build the client with given transport.
 	///
 	/// ## Panics
@@ -127,9 +140,10 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
+		let ping_interval = self.ping_interval;
 
 		tokio::spawn(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription).await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, ping_interval).await;
 		});
 		Client {
 			to_back,
@@ -382,6 +396,7 @@ async fn background_task<S, R>(
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
+	ping_interval: Duration,
 ) where
 	S: TransportSenderT,
 	R: TransportReceiverT,

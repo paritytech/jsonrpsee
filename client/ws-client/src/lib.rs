@@ -73,6 +73,7 @@ pub struct WsClientBuilder<'a> {
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
+	ping_interval: Duration,
 	headers: Vec<Header<'a>>,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
@@ -87,6 +88,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
+			ping_interval: Duration::from_secs(300),
 			headers: Vec::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
@@ -118,6 +120,12 @@ impl<'a> WsClientBuilder<'a> {
 	/// See documentation [`WsTransportClientBuilder::connection_timeout`] (default is 10 seconds).
 	pub fn connection_timeout(mut self, timeout: Duration) -> Self {
 		self.connection_timeout = timeout;
+		self
+	}
+
+	/// See documentation [`ClientBuilder::ping_interval`] (default is 5 minutes).
+	pub fn ping_interval(mut self, interval: Duration) -> Self {
+		self.ping_interval = interval;
 		self
 	}
 
@@ -174,6 +182,7 @@ impl<'a> WsClientBuilder<'a> {
 			.request_timeout(self.request_timeout)
 			.max_concurrent_requests(self.max_concurrent_requests)
 			.id_format(self.id_kind)
+			.ping_interval(self.ping_interval)
 			.build_with_tokio(sender, receiver))
 	}
 }
