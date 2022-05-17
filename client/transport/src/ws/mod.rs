@@ -41,6 +41,7 @@ use thiserror::Error;
 use tokio::net::TcpStream;
 
 pub use http::{uri::InvalidUri, Uri};
+use soketto::data::ByteSlice125;
 pub use soketto::handshake::client::Header;
 
 /// Sending end of WebSocket transport.
@@ -191,6 +192,16 @@ impl TransportSenderT for Sender {
 	async fn send(&mut self, body: String) -> Result<(), Self::Error> {
 		tracing::debug!("send: {}", body);
 		self.inner.send_text(body).await?;
+		self.inner.flush().await?;
+		Ok(())
+	}
+
+	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
+	/// successfully sent.
+	async fn send_ping(&mut self, data: &[u8]) -> Result<(), Self::Error> {
+		tracing::debug!("send ping: {:?}", data);
+		let byte_slice = ByteSlice125::try_from(data).expect("Found invalid ping slice");
+		self.inner.send_ping(byte_slice).await?;
 		self.inner.flush().await?;
 		Ok(())
 	}
