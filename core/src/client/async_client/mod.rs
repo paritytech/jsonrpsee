@@ -18,6 +18,7 @@ use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
 use futures_util::future::{self, Either};
+use futures_util::select;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use jsonrpsee_types::{
@@ -399,166 +400,166 @@ async fn background_task<S, R>(
 		let next_backend = backend_event.next();
 		futures_util::pin_mut!(next_frontend, next_backend);
 
-		match futures_util::future::select(next_frontend, next_backend).await {
-			// User dropped the sender side of the channel.
-			// There is nothing to do just terminate.
-			Either::Left((None, _)) => {
-				tracing::trace!("[backend]: frontend dropped; terminate client");
-				break;
-			}
-
-			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
-				tracing::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
-				// NOTE(niklasad1): annoying allocation.
-				if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
-					tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
-					let _ = send_back.send(Err(Error::InvalidRequestId));
-					continue;
+		select! {
+			frontend_value = next_frontend => match frontend_value {
+				// User dropped the sender side of the channel.
+				// There is nothing to do just terminate.
+				None => {
+					tracing::trace!("[backend]: frontend dropped; terminate client");
+					break;
 				}
+				Some(FrontToBack::Batch(batch)) => {
+					tracing::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
+					// NOTE(niklasad1): annoying allocation.
+					if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
+						tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
+						let _ = send_back.send(Err(Error::InvalidRequestId));
+						continue;
+					}
 
-				if let Err(e) = sender.send(batch.raw).await {
-					tracing::warn!("[backend]: client batch request failed: {:?}", e);
-					manager.complete_pending_batch(batch.ids);
-				}
-			}
-			// User called `notification` on the front-end
-			Either::Left((Some(FrontToBack::Notification(notif)), _)) => {
-				tracing::trace!("[backend]: client prepares to send notification: {:?}", notif);
-				if let Err(e) = sender.send(notif).await {
-					tracing::warn!("[backend]: client notif failed: {:?}", e);
-				}
-			}
-
-			// User called `request` on the front-end
-			Either::Left((Some(FrontToBack::Request(request)), _)) => {
-				tracing::trace!("[backend]: client prepares to send request={:?}", request);
-				match sender.send(request.raw).await {
-					Ok(_) => manager
-						.insert_pending_call(request.id, request.send_back)
-						.expect("ID unused checked above; qed"),
-					Err(e) => {
-						tracing::warn!("[backend]: client request failed: {:?}", e);
-						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
+					if let Err(e) = sender.send(batch.raw).await {
+						tracing::warn!("[backend]: client batch request failed: {:?}", e);
+						manager.complete_pending_batch(batch.ids);
 					}
 				}
-			}
+				// User called `notification` on the front-end
+				Some(FrontToBack::Notification(notif)) => {
+					tracing::trace!("[backend]: client prepares to send notification: {:?}", notif);
+					if let Err(e) = sender.send(notif).await {
+						tracing::warn!("[backend]: client notif failed: {:?}", e);
+					}
+				}
+				// User called `request` on the front-end
+				Some(FrontToBack::Request(request)) => {
+					tracing::trace!("[backend]: client prepares to send request={:?}", request);
+					match sender.send(request.raw).await {
+						Ok(_) => manager
+							.insert_pending_call(request.id, request.send_back)
+							.expect("ID unused checked above; qed"),
+						Err(e) => {
+							tracing::warn!("[backend]: client request failed: {:?}", e);
+							let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
+						}
+					}
+				}
+				// User called `subscribe` on the front-end.
+				Some(FrontToBack::Subscribe(sub)) => match sender.send(sub.raw).await {
+					Ok(_) => manager
+						.insert_pending_subscription(
+							sub.subscribe_id,
+							sub.unsubscribe_id,
+							sub.send_back,
+							sub.unsubscribe_method,
+						)
+						.expect("Request ID unused checked above; qed"),
+					Err(e) => {
+						tracing::warn!("[backend]: client subscription failed: {:?}", e);
+						let _ = sub.send_back.send(Err(Error::Transport(e.into())));
+					}
+				}
+				// User dropped a subscription.
+				Some(FrontToBack::SubscriptionClosed(sub_id)) => {
+					tracing::trace!("Closing subscription: {:?}", sub_id);
+					// NOTE: The subscription may have been closed earlier if
+					// the channel was full or disconnected.
+					if let Some(unsub) = manager
+						.get_request_id_by_subscription_id(&sub_id)
+						.and_then(|req_id| build_unsubscribe_message(&mut manager, req_id, sub_id))
+					{
+						stop_subscription(&mut sender, &mut manager, unsub).await;
+					}
+				}
+				// User called `register_notification` on the front-end.
+				Some(FrontToBack::RegisterNotification(reg)) => {
+					tracing::trace!("[backend] registering notification handler: {:?}", reg.method);
+					let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
 
-			// User called `subscribe` on the front-end.
-			Either::Left((Some(FrontToBack::Subscribe(sub)), _)) => match sender.send(sub.raw).await {
-				Ok(_) => manager
-					.insert_pending_subscription(
-						sub.subscribe_id,
-						sub.unsubscribe_id,
-						sub.send_back,
-						sub.unsubscribe_method,
-					)
-					.expect("Request ID unused checked above; qed"),
-				Err(e) => {
-					tracing::warn!("[backend]: client subscription failed: {:?}", e);
-					let _ = sub.send_back.send(Err(Error::Transport(e.into())));
+					if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
+						let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
+					} else {
+						let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
+					}
+				}
+				// User dropped the notificationHandler for this method
+				Some(FrontToBack::UnregisterNotification(method)) => {
+					tracing::trace!("[backend] unregistering notification handler: {:?}", method);
+					let _ = manager.remove_notification_handler(method);
 				}
 			},
-			// User dropped a subscription.
-			Either::Left((Some(FrontToBack::SubscriptionClosed(sub_id)), _)) => {
-				tracing::trace!("Closing subscription: {:?}", sub_id);
-				// NOTE: The subscription may have been closed earlier if
-				// the channel was full or disconnected.
-				if let Some(unsub) = manager
-					.get_request_id_by_subscription_id(&sub_id)
-					.and_then(|req_id| build_unsubscribe_message(&mut manager, req_id, sub_id))
-				{
-					stop_subscription(&mut sender, &mut manager, unsub).await;
+
+			backend_value = next_backend => match backend_value {
+				Some(Ok(ReceivedMessage::Pong(pong_data))) => {
+					tracing::debug!("[backend]: recv pong {:?}", pong_data);
 				}
-			}
-
-			// User called `register_notification` on the front-end.
-			Either::Left((Some(FrontToBack::RegisterNotification(reg)), _)) => {
-				tracing::trace!("[backend] registering notification handler: {:?}", reg.method);
-				let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
-
-				if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
-					let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
-				} else {
-					let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
-				}
-			}
-
-			// User dropped the notificationHandler for this method
-			Either::Left((Some(FrontToBack::UnregisterNotification(method)), _)) => {
-				tracing::trace!("[backend] unregistering notification handler: {:?}", method);
-				let _ = manager.remove_notification_handler(method);
-			}
-			Either::Right((Some(Ok(ReceivedMessage::Pong(pong_data))), _)) => {
-				tracing::debug!("[backend]: recv pong {:?}", pong_data);
-			}
-			Either::Right((Some(Ok(ReceivedMessage::Data(raw))), _)) => {
-				// Single response to a request.
-				if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
-					tracing::debug!("[backend]: recv method_call {:?}", single);
-					match process_single_response(&mut manager, single, max_notifs_per_subscription) {
-						Ok(Some(unsub)) => {
-							stop_subscription(&mut sender, &mut manager, unsub).await;
+				Some(Ok(ReceivedMessage::Data(raw))) => {
+					// Single response to a request.
+					if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
+						tracing::debug!("[backend]: recv method_call {:?}", single);
+						match process_single_response(&mut manager, single, max_notifs_per_subscription) {
+							Ok(Some(unsub)) => {
+								stop_subscription(&mut sender, &mut manager, unsub).await;
+							}
+							Ok(None) => (),
+							Err(err) => {
+								let _ = front_error.send(err);
+								break;
+							}
 						}
-						Ok(None) => (),
-						Err(err) => {
-							let _ = front_error.send(err);
+					}
+					// Subscription response.
+					else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
+						tracing::debug!("[backend]: recv subscription {:?}", response);
+						if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
+							let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
+						}
+					}
+					// Subscription error response.
+					else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
+						tracing::debug!("[backend]: recv subscription closed {:?}", response);
+						let _ = process_subscription_close_response(&mut manager, response);
+					}
+					// Incoming Notification
+					else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
+						tracing::debug!("[backend]: recv notification {:?}", notif);
+						let _ = process_notification(&mut manager, notif);
+					}
+					// Batch response.
+					else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
+						tracing::debug!("[backend]: recv batch {:?}", batch);
+						if let Err(e) = process_batch_response(&mut manager, batch) {
+							let _ = front_error.send(e);
 							break;
 						}
 					}
-				}
-				// Subscription response.
-				else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
-					tracing::debug!("[backend]: recv subscription {:?}", response);
-					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
-						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
+					// Error response
+					else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
+						tracing::debug!("[backend]: recv error response {:?}", err);
+						if let Err(e) = process_error_response(&mut manager, err) {
+							let _ = front_error.send(e);
+							break;
+						}
 					}
-				}
-				// Subscription error response.
-				else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
-					tracing::debug!("[backend]: recv subscription closed {:?}", response);
-					let _ = process_subscription_close_response(&mut manager, response);
-				}
-				// Incoming Notification
-				else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
-					tracing::debug!("[backend]: recv notification {:?}", notif);
-					let _ = process_notification(&mut manager, notif);
-				}
-				// Batch response.
-				else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
-					tracing::debug!("[backend]: recv batch {:?}", batch);
-					if let Err(e) = process_batch_response(&mut manager, batch) {
-						let _ = front_error.send(e);
+					// Unparsable response
+					else {
+						tracing::debug!(
+							"[backend]: recv unparseable message: {:?}",
+							serde_json::from_str::<serde_json::Value>(&raw)
+						);
+						let _ = front_error.send(Error::Custom("Unparsable response".into()));
 						break;
 					}
 				}
-				// Error response
-				else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
-					tracing::debug!("[backend]: recv error response {:?}", err);
-					if let Err(e) = process_error_response(&mut manager, err) {
-						let _ = front_error.send(e);
-						break;
-					}
-				}
-				// Unparsable response
-				else {
-					tracing::debug!(
-						"[backend]: recv unparseable message: {:?}",
-						serde_json::from_str::<serde_json::Value>(&raw)
-					);
-					let _ = front_error.send(Error::Custom("Unparsable response".into()));
+				Some(Err(e)) => {
+					tracing::error!("Error: {:?} terminating client", e);
+					let _ = front_error.send(Error::Transport(e.into()));
 					break;
 				}
-			}
-			Either::Right((Some(Err(e)), _)) => {
-				tracing::error!("Error: {:?} terminating client", e);
-				let _ = front_error.send(Error::Transport(e.into()));
-				break;
-			}
-			Either::Right((None, _)) => {
-				tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
-				let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
-				break;
-			}
+				None => {
+					tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
+					let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
+					break;
+				}
+			},
 		}
 	}
 	// Send close message to the server.
