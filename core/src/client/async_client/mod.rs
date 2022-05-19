@@ -20,7 +20,7 @@ use async_lock::Mutex;
 use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
-use futures_util::future::{self, Either};
+use futures_util::future::{self, Either, Fuse};
 use futures_util::select;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
@@ -606,7 +606,11 @@ async fn background_task<S, R>(
 		let next_backend = backend_event.next();
 		futures_util::pin_mut!(next_frontend, next_backend);
 
-		let mut submit_ping = Delay::new(ping_interval.map_or(Duration::from_secs(10), |f| f)).fuse();
+		let mut submit_ping = if let Some(duration) = ping_interval {
+			Delay::new(duration).fuse()
+		} else {
+			Fuse::<Delay>::terminated()
+		};
 
 		select! {
 			 _ = submit_ping => {
