@@ -118,7 +118,7 @@ impl ClientBuilder {
 		self
 	}
 
-	/// Set the interval at which pings are submitted (default is 5 minutes).
+	/// Set the interval at which pings are submitted (disabled by default).
 	///
 	/// Note: The interval duration is restarted when
 	///  - submitted frontend command
