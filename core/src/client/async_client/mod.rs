@@ -3,8 +3,12 @@
 mod helpers;
 mod manager;
 
+use crate::client::{
+	async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, ReceivedMessage,
+	RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind,
+	SubscriptionMessage, TransportReceiverT, TransportSenderT,
+};
 use core::time::Duration;
-use crate::client::{async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, ReceivedMessage, RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT, TransportSenderT};
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
@@ -19,8 +23,8 @@ use futures_timer::Delay;
 use futures_util::future::{self, Either};
 use futures_util::select;
 use futures_util::sink::SinkExt;
-use futures_util::FutureExt;
 use futures_util::stream::StreamExt;
+use futures_util::FutureExt;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response,
 	SubscriptionResponse,
@@ -389,6 +393,89 @@ impl SubscriptionClientT for Client {
 	}
 }
 
+/// Handle backend messages.
+///
+/// Returns error if the main background loop should be terminated.
+async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
+	message: Option<Result<ReceivedMessage, R::Error>>,
+	ping_submitted: &mut bool,
+	manager: &mut RequestManager,
+	sender: &mut S,
+	max_notifs_per_subscription: usize,
+) -> Result<(), Error> {
+	match message {
+		Some(Ok(ReceivedMessage::Pong(pong_data))) => {
+			// From WebSocket RFC:https://www.rfc-editor.org/rfc/rfc6455#section-5.5.3
+			// A `Pong` frame may be send unsolicited.
+			// Set just the ping submitted state to allow further pinging.
+			tracing::debug!("[backend]: recv pong {:?}", pong_data);
+			*ping_submitted = false;
+		}
+		Some(Ok(ReceivedMessage::Data(raw))) => {
+			// Single response to a request.
+			if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
+				tracing::debug!("[backend]: recv method_call {:?}", single);
+				match process_single_response(manager, single, max_notifs_per_subscription) {
+					Ok(Some(unsub)) => {
+						stop_subscription(sender, manager, unsub).await;
+					}
+					Ok(None) => (),
+					Err(err) => return Err(err),
+				}
+			}
+			// Subscription response.
+			else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
+				tracing::debug!("[backend]: recv subscription {:?}", response);
+				if let Err(Some(unsub)) = process_subscription_response(manager, response) {
+					let _ = stop_subscription(sender, manager, unsub).await;
+				}
+			}
+			// Subscription error response.
+			else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
+				tracing::debug!("[backend]: recv subscription closed {:?}", response);
+				let _ = process_subscription_close_response(manager, response);
+			}
+			// Incoming Notification
+			else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
+				tracing::debug!("[backend]: recv notification {:?}", notif);
+				let _ = process_notification(manager, notif);
+			}
+			// Batch response.
+			else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
+				tracing::debug!("[backend]: recv batch {:?}", batch);
+				if let Err(e) = process_batch_response(manager, batch) {
+					return Err(e);
+				}
+			}
+			// Error response
+			else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
+				tracing::debug!("[backend]: recv error response {:?}", err);
+				if let Err(e) = process_error_response(manager, err) {
+					return Err(e);
+				}
+			}
+			// Unparsable response
+			else {
+				tracing::debug!(
+					"[backend]: recv unparseable message: {:?}",
+					serde_json::from_str::<serde_json::Value>(&raw)
+				);
+				return Err(Error::Custom("Unparsable response".into()));
+			}
+		}
+		Some(Err(e)) => {
+			tracing::error!("Error: {:?} terminating client", e);
+			return Err(Error::Transport(e.into()));
+		}
+		None => {
+			tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
+			return Err(Error::Custom("WebSocket receiver dropped".into()));
+		}
+	}
+
+	return Ok(());
+}
+
 /// Handle frontend messages.
 ///
 /// Returns `true` if the main background loop should be terminated.
@@ -396,7 +483,8 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 	message: Option<FrontToBack>,
 	manager: &mut RequestManager,
 	sender: &mut S,
-	max_notifs_per_subscription: usize) -> bool {
+	max_notifs_per_subscription: usize,
+) -> bool {
 	match message {
 		// User dropped the sender side of the channel.
 		// There is nothing to do just terminate.
@@ -430,9 +518,9 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		Some(FrontToBack::Request(request)) => {
 			tracing::trace!("[backend]: client prepares to send request={:?}", request);
 			match sender.send(request.raw).await {
-				Ok(_) => manager
-					.insert_pending_call(request.id, request.send_back)
-					.expect("ID unused checked above; qed"),
+				Ok(_) => {
+					manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed")
+				}
 				Err(e) => {
 					tracing::warn!("[backend]: client request failed: {:?}", e);
 					let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
@@ -453,7 +541,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				tracing::warn!("[backend]: client subscription failed: {:?}", e);
 				let _ = sub.send_back.send(Err(Error::Transport(e.into())));
 			}
-		}
+		},
 		// User dropped a subscription.
 		Some(FrontToBack::SubscriptionClosed(sub_id)) => {
 			tracing::trace!("Closing subscription: {:?}", sub_id);
@@ -519,7 +607,6 @@ async fn background_task<S, R>(
 		futures_util::pin_mut!(next_frontend, next_backend);
 
 		let mut submit_ping = Delay::new(ping_interval.map_or(Duration::from_secs(10), |f| f)).fuse();
-		let mut should_stop = false;
 
 		select! {
 			 _ = submit_ping => {
@@ -541,83 +628,15 @@ async fn background_task<S, R>(
 			},
 
 			frontend_value = next_frontend => {
-				should_stop = handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await;
-			},
-
-			backend_value = next_backend => match backend_value {
-				Some(Ok(ReceivedMessage::Pong(pong_data))) => {
-					// From WebSocket RFC:https://www.rfc-editor.org/rfc/rfc6455#section-5.5.3
-					// A `Pong` frame may be send unsolicited.
-					// Set just the ping submitted state to allow further pinging.
-					tracing::debug!("[backend]: recv pong {:?}", pong_data);
-					ping_submitted = false;
-				}
-				Some(Ok(ReceivedMessage::Data(raw))) => {
-					// Single response to a request.
-					if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
-						tracing::debug!("[backend]: recv method_call {:?}", single);
-						match process_single_response(&mut manager, single, max_notifs_per_subscription) {
-							Ok(Some(unsub)) => {
-								stop_subscription(&mut sender, &mut manager, unsub).await;
-							}
-							Ok(None) => (),
-							Err(err) => {
-								let _ = front_error.send(err);
-								break;
-							}
-						}
-					}
-					// Subscription response.
-					else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
-						tracing::debug!("[backend]: recv subscription {:?}", response);
-						if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
-							let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
-						}
-					}
-					// Subscription error response.
-					else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
-						tracing::debug!("[backend]: recv subscription closed {:?}", response);
-						let _ = process_subscription_close_response(&mut manager, response);
-					}
-					// Incoming Notification
-					else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
-						tracing::debug!("[backend]: recv notification {:?}", notif);
-						let _ = process_notification(&mut manager, notif);
-					}
-					// Batch response.
-					else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
-						tracing::debug!("[backend]: recv batch {:?}", batch);
-						if let Err(e) = process_batch_response(&mut manager, batch) {
-							let _ = front_error.send(e);
-							break;
-						}
-					}
-					// Error response
-					else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
-						tracing::debug!("[backend]: recv error response {:?}", err);
-						if let Err(e) = process_error_response(&mut manager, err) {
-							let _ = front_error.send(e);
-							break;
-						}
-					}
-					// Unparsable response
-					else {
-						tracing::debug!(
-							"[backend]: recv unparseable message: {:?}",
-							serde_json::from_str::<serde_json::Value>(&raw)
-						);
-						let _ = front_error.send(Error::Custom("Unparsable response".into()));
-						break;
-					}
-				}
-				Some(Err(e)) => {
-					tracing::error!("Error: {:?} terminating client", e);
-					let _ = front_error.send(Error::Transport(e.into()));
+				if handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await {
 					break;
 				}
-				None => {
-					tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
-					let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
+			},
+			backend_value = next_backend => {
+				if let Err(err) = handle_backend_messages::<S, R>(
+					backend_value, &mut ping_submitted, &mut manager, &mut sender, max_notifs_per_subscription
+				).await {
+					let _ = front_error.send(err);
 					break;
 				}
 			},
