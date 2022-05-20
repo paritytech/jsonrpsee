@@ -612,24 +612,6 @@ async fn background_task<S, R>(
 		};
 
 		select_biased! {
-			 _ = submit_ping => {
-				// Ping was already submitted.
-				// No activity from frontend, backend (replies or pong) for a duration of `ping_interval`.
-				if ping_submitted {
-					let _ = front_error.send(Error::Custom("Did not receive a pong or activity in due time".into()));
-					break;
-				}
-
-				tracing::trace!("[backend]: submit ping");
-				if let Err(e) = sender.send_ping().await {
-					tracing::warn!("[backend]: client send ping failed: {:?}", e);
-					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
-					break;
-				}
-
-				ping_submitted = true;
-			},
-
 			frontend_value = next_frontend => {
 				if let Err(err) = handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await {
 					tracing::warn!("{:?}", err);
@@ -645,6 +627,23 @@ async fn background_task<S, R>(
 					let _ = front_error.send(err);
 					break;
 				}
+			},
+			_ = submit_ping => {
+				// Ping was already submitted.
+				// No activity from frontend, backend (replies or pong) for a duration of `ping_interval`.
+				if ping_submitted {
+					let _ = front_error.send(Error::Custom("Did not receive a pong or activity in due time".into()));
+					break;
+				}
+
+				tracing::trace!("[backend]: submit ping");
+				if let Err(e) = sender.send_ping().await {
+					tracing::warn!("[backend]: client send ping failed: {:?}", e);
+					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
+					break;
+				}
+
+				ping_submitted = true;
 			},
 		}
 	}
