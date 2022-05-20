@@ -30,7 +30,7 @@ async-client = ["jsonrpsee-core/async-client"]
 http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-core"]
 http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-core"]
 wasm-client = ["jsonrpsee-wasm-client", "jsonrpsee-types", "jsonrpsee-core"]
-ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-core", "jsonrpsee-core/async-wasm-client"]
+ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-core"]
 ws-server = ["jsonrpsee-ws-server", "jsonrpsee-types", "jsonrpsee-core"]
 macros = ["jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-core/client", "tracing"]
 
