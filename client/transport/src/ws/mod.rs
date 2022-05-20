@@ -203,10 +203,12 @@ impl TransportSenderT for Sender {
 
 	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	async fn send_ping(&mut self, data: &[u8]) -> Result<(), Self::Error> {
+	async fn send_ping(&mut self) -> Result<(), Self::Error> {
 		tracing::debug!("send ping");
+		// Submit empty slice as "optional" parameter.
+		let slice: &[u8] = &[];
 		// Byte slice fails if the provided slice is larger than 125 bytes.
-		let byte_slice = ByteSlice125::try_from(data).map_err(|err| Custom(err.clone().to_string().into()))?;
+		let byte_slice = ByteSlice125::try_from(slice).map_err(|err| Custom(err.clone().to_string().into()))?;
 
 		self.inner.send_ping(byte_slice).await?;
 		self.inner.flush().await?;

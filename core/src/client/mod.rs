@@ -133,7 +133,7 @@ pub trait TransportSenderT: MaybeSend + 'static {
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
 
 	/// Send ping frame (opcode of 0x9).
-	async fn send_ping(&mut self, data: &[u8]) -> Result<(), Self::Error>;
+	async fn send_ping(&mut self) -> Result<(), Self::Error>;
 
 	/// If the transport supports sending customized close messages.
 	async fn close(&mut self) -> Result<(), Self::Error> {

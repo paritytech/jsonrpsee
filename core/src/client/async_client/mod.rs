@@ -621,7 +621,7 @@ async fn background_task<S, R>(
 				}
 
 				tracing::trace!("[backend]: submit ping");
-				if let Err(e) = sender.send_ping(&[]).await {
+				if let Err(e) = sender.send_ping().await {
 					tracing::warn!("[backend]: client send ping failed: {:?}", e);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
 					break;
