@@ -403,6 +403,67 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 	sender: &mut S,
 	max_notifs_per_subscription: usize,
 ) -> Result<(), Error> {
+
+	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
+	async fn handle_recv_message<S: TransportSenderT>(
+		raw: &[u8],
+		manager: &mut RequestManager,
+		sender: &mut S,
+		max_notifs_per_subscription: usize
+	) -> Result<(), Error> {
+		// Single response to a request.
+		if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
+			tracing::debug!("[backend]: recv method_call {:?}", single);
+			match process_single_response(manager, single, max_notifs_per_subscription) {
+				Ok(Some(unsub)) => {
+					stop_subscription(sender, manager, unsub).await;
+				}
+				Ok(None) => (),
+				Err(err) => return Err(err),
+			}
+		}
+		// Subscription response.
+		else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(&raw) {
+			tracing::debug!("[backend]: recv subscription {:?}", response);
+			if let Err(Some(unsub)) = process_subscription_response(manager, response) {
+				let _ = stop_subscription(sender, manager, unsub).await;
+			}
+		}
+		// Subscription error response.
+		else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(&raw) {
+			tracing::debug!("[backend]: recv subscription closed {:?}", response);
+			let _ = process_subscription_close_response(manager, response);
+		}
+		// Incoming Notification
+		else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(&raw) {
+			tracing::debug!("[backend]: recv notification {:?}", notif);
+			let _ = process_notification(manager, notif);
+		}
+		// Batch response.
+		else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(&raw) {
+			tracing::debug!("[backend]: recv batch {:?}", batch);
+			if let Err(e) = process_batch_response(manager, batch) {
+				return Err(e);
+			}
+		}
+		// Error response
+		else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(&raw) {
+			tracing::debug!("[backend]: recv error response {:?}", err);
+			if let Err(e) = process_error_response(manager, err) {
+				return Err(e);
+			}
+		}
+		// Unparsable response
+		else {
+			tracing::debug!(
+					"[backend]: recv unparseable message: {:?}",
+					serde_json::from_slice::<serde_json::Value>(&raw)
+				);
+			return Err(Error::Custom("Unparsable response".into()));
+		}
+		Ok(())
+	}
+
 	match message {
 		Some(Ok(ReceivedMessage::Pong(pong_data))) => {
 			// From WebSocket RFC:https://www.rfc-editor.org/rfc/rfc6455#section-5.5.3
@@ -411,57 +472,11 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			tracing::debug!("[backend]: recv pong {:?}", pong_data);
 			*ping_submitted = false;
 		}
+		Some(Ok(ReceivedMessage::Bytes(raw))) => {
+			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
+		}
 		Some(Ok(ReceivedMessage::Data(raw))) => {
-			// Single response to a request.
-			if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
-				tracing::debug!("[backend]: recv method_call {:?}", single);
-				match process_single_response(manager, single, max_notifs_per_subscription) {
-					Ok(Some(unsub)) => {
-						stop_subscription(sender, manager, unsub).await;
-					}
-					Ok(None) => (),
-					Err(err) => return Err(err),
-				}
-			}
-			// Subscription response.
-			else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
-				tracing::debug!("[backend]: recv subscription {:?}", response);
-				if let Err(Some(unsub)) = process_subscription_response(manager, response) {
-					let _ = stop_subscription(sender, manager, unsub).await;
-				}
-			}
-			// Subscription error response.
-			else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
-				tracing::debug!("[backend]: recv subscription closed {:?}", response);
-				let _ = process_subscription_close_response(manager, response);
-			}
-			// Incoming Notification
-			else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
-				tracing::debug!("[backend]: recv notification {:?}", notif);
-				let _ = process_notification(manager, notif);
-			}
-			// Batch response.
-			else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
-				tracing::debug!("[backend]: recv batch {:?}", batch);
-				if let Err(e) = process_batch_response(manager, batch) {
-					return Err(e);
-				}
-			}
-			// Error response
-			else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
-				tracing::debug!("[backend]: recv error response {:?}", err);
-				if let Err(e) = process_error_response(manager, err) {
-					return Err(e);
-				}
-			}
-			// Unparsable response
-			else {
-				tracing::debug!(
-					"[backend]: recv unparseable message: {:?}",
-					serde_json::from_str::<serde_json::Value>(&raw)
-				);
-				return Err(Error::Custom("Unparsable response".into()));
-			}
+			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
 		}
 		Some(Err(e)) => {
 			tracing::error!("Error: {:?} terminating client", e);

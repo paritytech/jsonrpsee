@@ -147,6 +147,8 @@ pub trait TransportSenderT: MaybeSend + 'static {
 pub enum ReceivedMessage {
 	/// Incoming packet contains plain `String` data.
    Data(String),
+   /// Incoming packet contains bytes.
+   Bytes(Vec<u8>),
    /// Incoming packet is a `Pong` frame sent in response to a `Ping`.
    Pong(Vec<u8>),
 }
