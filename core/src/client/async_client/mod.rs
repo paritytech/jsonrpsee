@@ -170,7 +170,7 @@ impl ClientBuilder {
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 
 		wasm_bindgen_futures::spawn_local(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription).await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None).await;
 		});
 		Client {
 			to_back,
