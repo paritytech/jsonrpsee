@@ -478,19 +478,18 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 
 /// Handle frontend messages.
 ///
-/// Returns `true` if the main background loop should be terminated.
+/// Returns error if the main background loop should be terminated.
 async fn handle_frontend_messages<S: TransportSenderT>(
 	message: Option<FrontToBack>,
 	manager: &mut RequestManager,
 	sender: &mut S,
 	max_notifs_per_subscription: usize,
-) -> bool {
+) -> Result<(), Error> {
 	match message {
 		// User dropped the sender side of the channel.
 		// There is nothing to do just terminate.
 		None => {
-			tracing::trace!("[backend]: frontend dropped; terminate client");
-			return true;
+			return Err(Error::Custom("[backend]: frontend dropped; terminate client".into()));
 		}
 
 		Some(FrontToBack::Batch(batch)) => {
@@ -499,7 +498,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
 				tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
 				let _ = send_back.send(Err(Error::InvalidRequestId));
-				return false;
+				return Ok(());
 			}
 
 			if let Err(e) = sender.send(batch.raw).await {
@@ -572,7 +571,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 	}
 
-	return false;
+	Ok(())
 }
 
 /// Function being run in the background that processes messages from the frontend.
@@ -632,7 +631,9 @@ async fn background_task<S, R>(
 			},
 
 			frontend_value = next_frontend => {
-				if handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await {
+				if let Err(err) = handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await {
+					tracing::warn!("{:?}", err);
+					let _ = front_error.send(err);
 					break;
 				}
 			},
@@ -640,6 +641,7 @@ async fn background_task<S, R>(
 				if let Err(err) = handle_backend_messages::<S, R>(
 					backend_value, &mut ping_submitted, &mut manager, &mut sender, max_notifs_per_subscription
 				).await {
+					tracing::warn!("{:?}", err);
 					let _ = front_error.send(err);
 					break;
 				}
