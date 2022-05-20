@@ -34,6 +34,7 @@ use futures_util::io::{BufReader, BufWriter};
 use jsonrpsee_core::client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
+use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
 use soketto::{connection, Incoming};
 use stream::EitherStream;
@@ -41,7 +42,6 @@ use thiserror::Error;
 use tokio::net::TcpStream;
 
 pub use http::{uri::InvalidUri, Uri};
-use soketto::data::ByteSlice125;
 pub use soketto::handshake::client::Header;
 
 /// Sending end of WebSocket transport.
