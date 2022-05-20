@@ -30,7 +30,6 @@ use std::io;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-use crate::ws::WsError::Custom;
 use futures_util::io::{BufReader, BufWriter};
 use jsonrpsee_core::client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
@@ -183,9 +182,6 @@ pub enum WsError {
 	/// Error in the WebSocket connection.
 	#[error("WebSocket connection error: {0}")]
 	Connection(#[source] soketto::connection::Error),
-	/// Custom error that originated before or after interacting with the WebSocket.
-	#[error("Custom error: {0}")]
-	Custom(String),
 }
 
 #[async_trait]
@@ -208,7 +204,7 @@ impl TransportSenderT for Sender {
 		// Submit empty slice as "optional" parameter.
 		let slice: &[u8] = &[];
 		// Byte slice fails if the provided slice is larger than 125 bytes.
-		let byte_slice = ByteSlice125::try_from(slice).map_err(|err| Custom(err.clone().to_string().into()))?;
+		let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
 
 		self.inner.send_ping(byte_slice).await?;
 		self.inner.flush().await?;
