@@ -54,6 +54,7 @@ async-client = [
 	"tokio/sync",
 	"tracing",
 	"futures-timer",
+	"futures-util/async-await-macro",
 ]
 async-wasm-client = [
 	"async-lock",
@@ -62,6 +63,7 @@ async-wasm-client = [
 	"rustc-hash/std",
 	"futures-timer/wasm-bindgen",
 	"tracing",
+	"futures-util/async-await-macro",
 ]
 
 [dev-dependencies]

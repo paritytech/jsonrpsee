@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
-use futures_util::select;
+use futures_util::select_biased;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
@@ -611,7 +611,7 @@ async fn background_task<S, R>(
 			Fuse::<Delay>::terminated()
 		};
 
-		select! {
+		select_biased! {
 			 _ = submit_ping => {
 				// Ping was already submitted.
 				// No activity from frontend, backend (replies or pong) for a duration of `ping_interval`.
