@@ -42,36 +42,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 113,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 200767,
-            "range": "± 15058",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 186197,
-            "range": "± 17116",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 259798,
-            "range": "± 10853",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 449624,
-            "range": "± 23620",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1931850,
             "range": "± 51733",
@@ -111,36 +81,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 111479,
             "range": "± 10775",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 104,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 124658,
-            "range": "± 6985",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 146340,
-            "range": "± 15984",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 171555,
-            "range": "± 16768",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 202903,
-            "range": "± 10763",
             "unit": "ns/iter"
           },
           {
@@ -186,36 +126,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 111,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 177180,
-            "range": "± 14988",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 161363,
-            "range": "± 25080",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 261245,
-            "range": "± 29436",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 449862,
-            "range": "± 24577",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1969144,
             "range": "± 107537",
@@ -255,36 +165,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 114682,
             "range": "± 11241",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 102,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 127535,
-            "range": "± 6423",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 156547,
-            "range": "± 23082",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 175941,
-            "range": "± 19073",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 205550,
-            "range": "± 8776",
             "unit": "ns/iter"
           },
           {
@@ -382,36 +262,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 26",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 110662,
-            "range": "± 1530",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 101192,
-            "range": "± 15789",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 166489,
-            "range": "± 2493",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 278068,
-            "range": "± 7372",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1602700,
             "range": "± 72845",
@@ -451,36 +301,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 65957,
             "range": "± 3089",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 83316,
-            "range": "± 1771",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 91148,
-            "range": "± 4246",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 110506,
-            "range": "± 15756",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 160115,
-            "range": "± 5206",
             "unit": "ns/iter"
           },
           {
@@ -526,36 +346,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 111229,
-            "range": "± 7495",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 96023,
-            "range": "± 4877",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 159323,
-            "range": "± 4817",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 281406,
-            "range": "± 7096",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1614309,
             "range": "± 119292",
@@ -595,36 +385,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 63827,
             "range": "± 2121",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 83841,
-            "range": "± 1589",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 91352,
-            "range": "± 1705",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 111156,
-            "range": "± 1287",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 160200,
-            "range": "± 1372",
             "unit": "ns/iter"
           },
           {
@@ -722,36 +482,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 109101,
-            "range": "± 1238",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 95276,
-            "range": "± 4790",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 153455,
-            "range": "± 1746",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 275292,
-            "range": "± 2959",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1601457,
             "range": "± 19061",
@@ -791,36 +521,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 64693,
             "range": "± 2704",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 81478,
-            "range": "± 1733",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 91317,
-            "range": "± 1419",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 111163,
-            "range": "± 6092",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 162803,
-            "range": "± 10589",
             "unit": "ns/iter"
           },
           {
@@ -866,36 +566,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 110474,
-            "range": "± 13302",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 93707,
-            "range": "± 2053",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 155713,
-            "range": "± 1779",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 278037,
-            "range": "± 2504",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1609671,
             "range": "± 11929",
@@ -935,36 +605,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 65740,
             "range": "± 2794",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 81629,
-            "range": "± 2412",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 91037,
-            "range": "± 1916",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 110975,
-            "range": "± 1130",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 161849,
-            "range": "± 2025",
             "unit": "ns/iter"
           },
           {
@@ -1062,36 +702,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 102,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 164126,
-            "range": "± 11704",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 149602,
-            "range": "± 22428",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 231727,
-            "range": "± 12738",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 407570,
-            "range": "± 55263",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1887292,
             "range": "± 59447",
@@ -1131,36 +741,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 101948,
             "range": "± 7731",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 117,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 121748,
-            "range": "± 9980",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 136491,
-            "range": "± 19957",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 161058,
-            "range": "± 16812",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 189542,
-            "range": "± 12291",
             "unit": "ns/iter"
           },
           {
@@ -1206,36 +786,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 166510,
-            "range": "± 7926",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 149597,
-            "range": "± 16715",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 246166,
-            "range": "± 37399",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 412000,
-            "range": "± 44053",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1908111,
             "range": "± 71502",
@@ -1275,36 +825,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 103827,
             "range": "± 24482",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 109,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 120847,
-            "range": "± 11718",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 136880,
-            "range": "± 13388",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 163464,
-            "range": "± 11534",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 191806,
-            "range": "± 7371",
             "unit": "ns/iter"
           },
           {
@@ -1402,36 +922,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 108,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 190162,
-            "range": "± 31409",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 175740,
-            "range": "± 19833",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 293563,
-            "range": "± 32568",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 471706,
-            "range": "± 40553",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2074627,
             "range": "± 155665",
@@ -1471,36 +961,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 127571,
             "range": "± 95628",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 112,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 149119,
-            "range": "± 17222",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 160692,
-            "range": "± 25674",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 187151,
-            "range": "± 24982",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 225128,
-            "range": "± 17970",
             "unit": "ns/iter"
           },
           {
@@ -1546,36 +1006,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 110,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 194897,
-            "range": "± 17557",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 178444,
-            "range": "± 25226",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 296672,
-            "range": "± 36429",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 456135,
-            "range": "± 55869",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 2016483,
             "range": "± 113842",
@@ -1615,36 +1045,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 130490,
             "range": "± 20388",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 115,
-            "range": "± 12",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 140129,
-            "range": "± 24605",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 159459,
-            "range": "± 25219",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 182986,
-            "range": "± 19700",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 218985,
-            "range": "± 16777",
             "unit": "ns/iter"
           },
           {
@@ -1742,36 +1142,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 112110,
-            "range": "± 5784",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 95871,
-            "range": "± 2590",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 155172,
-            "range": "± 3198",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 279025,
-            "range": "± 3666",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1596860,
             "range": "± 10238",
@@ -1811,36 +1181,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 65778,
             "range": "± 2620",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 83670,
-            "range": "± 2107",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 93453,
-            "range": "± 1857",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 112040,
-            "range": "± 1726",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 162288,
-            "range": "± 2060",
             "unit": "ns/iter"
           },
           {
@@ -1886,36 +1226,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 110888,
-            "range": "± 1804",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 95992,
-            "range": "± 7293",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 156697,
-            "range": "± 5246",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 277339,
-            "range": "± 3932",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1602685,
             "range": "± 7496",
@@ -1955,36 +1265,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 67695,
             "range": "± 2984",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 83855,
-            "range": "± 2504",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 92622,
-            "range": "± 1332",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 113766,
-            "range": "± 1554",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 161505,
-            "range": "± 1993",
             "unit": "ns/iter"
           },
           {
@@ -2082,36 +1362,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 179212,
-            "range": "± 13482",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 162917,
-            "range": "± 10656",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 259628,
-            "range": "± 30584",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 442007,
-            "range": "± 26042",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1976234,
             "range": "± 177540",
@@ -2151,36 +1401,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 117470,
             "range": "± 11366",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 103,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 127784,
-            "range": "± 8007",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 149248,
-            "range": "± 19851",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 178998,
-            "range": "± 25359",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 208645,
-            "range": "± 31634",
             "unit": "ns/iter"
           },
           {
@@ -2226,36 +1446,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 179026,
-            "range": "± 16779",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 162691,
-            "range": "± 8649",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 264011,
-            "range": "± 35314",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 441761,
-            "range": "± 35640",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 2008221,
             "range": "± 97088",
@@ -2295,36 +1485,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 121938,
             "range": "± 9476",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 102,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 129252,
-            "range": "± 8204",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 149236,
-            "range": "± 18602",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 181044,
-            "range": "± 20868",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 206876,
-            "range": "± 17426",
             "unit": "ns/iter"
           },
           {
@@ -2422,36 +1582,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 114514,
-            "range": "± 1773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 97896,
-            "range": "± 33573",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 157388,
-            "range": "± 26344",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 285654,
-            "range": "± 3479",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1608313,
             "range": "± 51172",
@@ -2491,36 +1621,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 69620,
             "range": "± 3659",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 77,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 88780,
-            "range": "± 1465",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 94360,
-            "range": "± 2503",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 114584,
-            "range": "± 4674",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 163360,
-            "range": "± 1826",
             "unit": "ns/iter"
           },
           {
@@ -2566,36 +1666,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 114011,
-            "range": "± 28921",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 105372,
-            "range": "± 6854",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 162658,
-            "range": "± 5345",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 285763,
-            "range": "± 4921",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1618720,
             "range": "± 121031",
@@ -2635,36 +1705,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 69052,
             "range": "± 2913",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 87667,
-            "range": "± 33630",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 97814,
-            "range": "± 19277",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 116250,
-            "range": "± 2684",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 165807,
-            "range": "± 1931",
             "unit": "ns/iter"
           },
           {
@@ -2762,36 +1802,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 128302,
-            "range": "± 3016",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 110837,
-            "range": "± 2778",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 181776,
-            "range": "± 5625",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 316287,
-            "range": "± 10518",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1896831,
             "range": "± 138973",
@@ -2831,36 +1841,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 77634,
             "range": "± 3489",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 96712,
-            "range": "± 6440",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 106793,
-            "range": "± 3883",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 119494,
-            "range": "± 3777",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 177027,
-            "range": "± 4127",
             "unit": "ns/iter"
           },
           {
@@ -2906,36 +1886,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 127386,
-            "range": "± 3662",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 112282,
-            "range": "± 6940",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 183929,
-            "range": "± 6516",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 314976,
-            "range": "± 5896",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1863973,
             "range": "± 37187",
@@ -2975,36 +1925,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 78926,
             "range": "± 3740",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 103,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 97116,
-            "range": "± 2584",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 105224,
-            "range": "± 4840",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 118502,
-            "range": "± 7803",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 180232,
-            "range": "± 3625",
             "unit": "ns/iter"
           },
           {
@@ -3102,36 +2022,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 109313,
-            "range": "± 5131",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 95331,
-            "range": "± 2074",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 151712,
-            "range": "± 5646",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 273980,
-            "range": "± 18360",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1600880,
             "range": "± 10063",
@@ -3171,36 +2061,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 64698,
             "range": "± 2466",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 81890,
-            "range": "± 2766",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 91083,
-            "range": "± 1263",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 110801,
-            "range": "± 5014",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 159211,
-            "range": "± 1131",
             "unit": "ns/iter"
           },
           {
@@ -3246,36 +2106,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 110223,
-            "range": "± 1278",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 96838,
-            "range": "± 3004",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 163551,
-            "range": "± 1764",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 277124,
-            "range": "± 2448",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1617902,
             "range": "± 29386",
@@ -3315,36 +2145,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 65091,
             "range": "± 1880",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 82366,
-            "range": "± 1862",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 92093,
-            "range": "± 1794",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 111267,
-            "range": "± 1340",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 160727,
-            "range": "± 2744",
             "unit": "ns/iter"
           },
           {
@@ -3442,36 +2242,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 161431,
-            "range": "± 31942",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 151656,
-            "range": "± 12566",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 242205,
-            "range": "± 21178",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 399646,
-            "range": "± 36987",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1792183,
             "range": "± 94945",
@@ -3511,36 +2281,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 102178,
             "range": "± 14722",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 99,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 117660,
-            "range": "± 12918",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 127666,
-            "range": "± 7666",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 159179,
-            "range": "± 10163",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 199027,
-            "range": "± 14951",
             "unit": "ns/iter"
           },
           {
@@ -3586,36 +2326,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 106,
-            "range": "± 17",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 171279,
-            "range": "± 42936",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 141622,
-            "range": "± 18136",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 227201,
-            "range": "± 18894",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 397061,
-            "range": "± 35695",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1977739,
             "range": "± 140448",
@@ -3655,36 +2365,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 98777,
             "range": "± 8525",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 92,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 122333,
-            "range": "± 10381",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 134562,
-            "range": "± 17664",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 163346,
-            "range": "± 17784",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 192510,
-            "range": "± 21790",
             "unit": "ns/iter"
           },
           {
@@ -3782,36 +2462,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 105,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 136243,
-            "range": "± 17025",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 133886,
-            "range": "± 16212",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 181691,
-            "range": "± 21207",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 324370,
-            "range": "± 20646",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2161251,
             "range": "± 233054",
@@ -3851,36 +2501,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 78597,
             "range": "± 7922",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 105,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 98842,
-            "range": "± 8934",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 111327,
-            "range": "± 9875",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 126031,
-            "range": "± 32124",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 191216,
-            "range": "± 20635",
             "unit": "ns/iter"
           },
           {
@@ -3926,36 +2546,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 106,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 137564,
-            "range": "± 11478",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 129900,
-            "range": "± 12305",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 198373,
-            "range": "± 14425",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 326342,
-            "range": "± 20538",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1992566,
             "range": "± 149051",
@@ -3995,36 +2585,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 82083,
             "range": "± 8749",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 105,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 100511,
-            "range": "± 13462",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 110092,
-            "range": "± 7192",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 121994,
-            "range": "± 11349",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 183956,
-            "range": "± 36658",
             "unit": "ns/iter"
           },
           {
@@ -4122,36 +2682,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 174723,
-            "range": "± 12436",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 158771,
-            "range": "± 14265",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 251118,
-            "range": "± 17463",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 438808,
-            "range": "± 59377",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1919313,
             "range": "± 93760",
@@ -4191,36 +2721,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 115646,
             "range": "± 8823",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 124530,
-            "range": "± 10250",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 143266,
-            "range": "± 22436",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 177389,
-            "range": "± 137434",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 203880,
-            "range": "± 13113",
             "unit": "ns/iter"
           },
           {
@@ -4266,36 +2766,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 172817,
-            "range": "± 15486",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 154280,
-            "range": "± 21011",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 246329,
-            "range": "± 22171",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 430097,
-            "range": "± 35269",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1911610,
             "range": "± 247135",
@@ -4335,36 +2805,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 112309,
             "range": "± 13259",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 98,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 127057,
-            "range": "± 23773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 145645,
-            "range": "± 11772",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 174865,
-            "range": "± 30524",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 198744,
-            "range": "± 14248",
             "unit": "ns/iter"
           },
           {
@@ -4462,36 +2902,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 108704,
-            "range": "± 1489",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 94644,
-            "range": "± 8889",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 152151,
-            "range": "± 4549",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 274283,
-            "range": "± 2686",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1587695,
             "range": "± 12610",
@@ -4531,36 +2941,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 64479,
             "range": "± 1913",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 82231,
-            "range": "± 1329",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 91469,
-            "range": "± 2321",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 111134,
-            "range": "± 1216",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 161782,
-            "range": "± 5602",
             "unit": "ns/iter"
           },
           {
@@ -4606,36 +2986,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 109138,
-            "range": "± 4082",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 93755,
-            "range": "± 3088",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 152679,
-            "range": "± 2289",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 275429,
-            "range": "± 8596",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1598065,
             "range": "± 14557",
@@ -4675,36 +3025,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 64469,
             "range": "± 1792",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 83142,
-            "range": "± 5623",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 92534,
-            "range": "± 1507",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 112027,
-            "range": "± 1933",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 162059,
-            "range": "± 3713",
             "unit": "ns/iter"
           },
           {
@@ -4802,36 +3122,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 106,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 128942,
-            "range": "± 2471",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 109649,
-            "range": "± 11025",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 178137,
-            "range": "± 5200",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 309420,
-            "range": "± 4250",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1981558,
             "range": "± 26533",
@@ -4871,36 +3161,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 74809,
             "range": "± 3634",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 106,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 96607,
-            "range": "± 8033",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 105659,
-            "range": "± 3537",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 114733,
-            "range": "± 2308",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 171859,
-            "range": "± 2688",
             "unit": "ns/iter"
           },
           {
@@ -4946,36 +3206,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 106,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 130563,
-            "range": "± 2851",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 110207,
-            "range": "± 3919",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 178732,
-            "range": "± 6962",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 307481,
-            "range": "± 4725",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1999093,
             "range": "± 76529",
@@ -5015,36 +3245,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 76294,
             "range": "± 1644",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 106,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 96338,
-            "range": "± 3454",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 106730,
-            "range": "± 2974",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 117116,
-            "range": "± 4087",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 177858,
-            "range": "± 8473",
             "unit": "ns/iter"
           },
           {
@@ -5142,36 +3342,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 89,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 112669,
-            "range": "± 1363",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 95553,
-            "range": "± 2564",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 156810,
-            "range": "± 4742",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 284289,
-            "range": "± 65683",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1605231,
             "range": "± 25459",
@@ -5211,36 +3381,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 68260,
             "range": "± 4560",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 89,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 86811,
-            "range": "± 1371",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 94499,
-            "range": "± 1887",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 116222,
-            "range": "± 1906",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 167569,
-            "range": "± 2335",
             "unit": "ns/iter"
           },
           {
@@ -5286,36 +3426,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 89,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 116672,
-            "range": "± 1604",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 97742,
-            "range": "± 13490",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 169009,
-            "range": "± 3654",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 286291,
-            "range": "± 3381",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1619862,
             "range": "± 12552",
@@ -5355,36 +3465,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 67164,
             "range": "± 2149",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 89,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 85024,
-            "range": "± 2008",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 94406,
-            "range": "± 1461",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 113780,
-            "range": "± 1069",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 163961,
-            "range": "± 3265",
             "unit": "ns/iter"
           },
           {
@@ -5482,36 +3562,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 106,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 129387,
-            "range": "± 6951",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 111318,
-            "range": "± 2721",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 181806,
-            "range": "± 6993",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 314248,
-            "range": "± 5643",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1819437,
             "range": "± 36836",
@@ -5551,36 +3601,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 74803,
             "range": "± 2329",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 105,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 98167,
-            "range": "± 2008",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 106786,
-            "range": "± 23785",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 112624,
-            "range": "± 3270",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 171126,
-            "range": "± 3638",
             "unit": "ns/iter"
           },
           {
@@ -5626,36 +3646,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 99,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 127525,
-            "range": "± 3346",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 106482,
-            "range": "± 3361",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 179944,
-            "range": "± 9483",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 308279,
-            "range": "± 7679",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1834309,
             "range": "± 29993",
@@ -5695,36 +3685,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 75095,
             "range": "± 2689",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 98,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 94044,
-            "range": "± 1773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 105102,
-            "range": "± 3678",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 114336,
-            "range": "± 3599",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 168896,
-            "range": "± 8510",
             "unit": "ns/iter"
           },
           {
@@ -5822,36 +3782,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 132730,
-            "range": "± 9731",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 112100,
-            "range": "± 5356",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 187647,
-            "range": "± 14552",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 313729,
-            "range": "± 6023",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1966874,
             "range": "± 160869",
@@ -5891,36 +3821,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 78740,
             "range": "± 6725",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 98624,
-            "range": "± 7139",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 106460,
-            "range": "± 4195",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 116076,
-            "range": "± 2722",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 174970,
-            "range": "± 3348",
             "unit": "ns/iter"
           },
           {
@@ -5966,36 +3866,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 104,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 133917,
-            "range": "± 9750",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 120512,
-            "range": "± 26066",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 194009,
-            "range": "± 12486",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 316830,
-            "range": "± 7546",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1931552,
             "range": "± 156910",
@@ -6035,36 +3905,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 79212,
             "range": "± 6012",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 99,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 96103,
-            "range": "± 3309",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 106613,
-            "range": "± 2529",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 122176,
-            "range": "± 10130",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 177066,
-            "range": "± 5827",
             "unit": "ns/iter"
           },
           {
@@ -6162,36 +4002,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 110262,
-            "range": "± 1433",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 102060,
-            "range": "± 2217",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 159453,
-            "range": "± 4067",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 277825,
-            "range": "± 2818",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1570270,
             "range": "± 25117",
@@ -6231,36 +4041,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 64821,
             "range": "± 2890",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 87041,
-            "range": "± 19035",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 91433,
-            "range": "± 1438",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 111643,
-            "range": "± 1165",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 159875,
-            "range": "± 7990",
             "unit": "ns/iter"
           },
           {
@@ -6306,36 +4086,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 109981,
-            "range": "± 1930",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 101919,
-            "range": "± 4662",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 161400,
-            "range": "± 4568",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 277376,
-            "range": "± 8960",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1570145,
             "range": "± 23793",
@@ -6375,36 +4125,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 64354,
             "range": "± 1457",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 82677,
-            "range": "± 1768",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 91949,
-            "range": "± 3379",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 111617,
-            "range": "± 1038",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 159739,
-            "range": "± 1617",
             "unit": "ns/iter"
           },
           {
@@ -6502,36 +4222,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 169916,
-            "range": "± 33469",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 160498,
-            "range": "± 24594",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 244477,
-            "range": "± 42898",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 429509,
-            "range": "± 52867",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1904024,
             "range": "± 145383",
@@ -6571,36 +4261,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 104531,
             "range": "± 12132",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 94,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 119255,
-            "range": "± 22126",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 137292,
-            "range": "± 13414",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 159700,
-            "range": "± 15808",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 207275,
-            "range": "± 23952",
             "unit": "ns/iter"
           },
           {
@@ -6646,36 +4306,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 172774,
-            "range": "± 17942",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 162512,
-            "range": "± 106161",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 250715,
-            "range": "± 47866",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 434974,
-            "range": "± 48900",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1929223,
             "range": "± 130525",
@@ -6715,36 +4345,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 104797,
             "range": "± 22944",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 94,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 121100,
-            "range": "± 7240",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 136391,
-            "range": "± 14793",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 162696,
-            "range": "± 15480",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 205112,
-            "range": "± 18843",
             "unit": "ns/iter"
           },
           {
@@ -6842,36 +4442,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 154807,
-            "range": "± 10476",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 142373,
-            "range": "± 7093",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 227204,
-            "range": "± 17006",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 390377,
-            "range": "± 16765",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1769807,
             "range": "± 79053",
@@ -6911,36 +4481,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 101837,
             "range": "± 13285",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 115331,
-            "range": "± 5646",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 132538,
-            "range": "± 6818",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 157068,
-            "range": "± 7406",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 198197,
-            "range": "± 11457",
             "unit": "ns/iter"
           },
           {
@@ -6986,36 +4526,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 89,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 163038,
-            "range": "± 17729",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 146993,
-            "range": "± 10672",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 228236,
-            "range": "± 14330",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 389692,
-            "range": "± 18143",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1795556,
             "range": "± 108701",
@@ -7055,36 +4565,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 100462,
             "range": "± 7074",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 114979,
-            "range": "± 5962",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 132812,
-            "range": "± 10666",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 155792,
-            "range": "± 15972",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 193393,
-            "range": "± 10147",
             "unit": "ns/iter"
           },
           {
@@ -7182,36 +4662,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 127819,
-            "range": "± 2726",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 120517,
-            "range": "± 2833",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 186609,
-            "range": "± 8362",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 311352,
-            "range": "± 17498",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1909326,
             "range": "± 132817",
@@ -7251,36 +4701,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 76460,
             "range": "± 1741",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 98,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 98166,
-            "range": "± 3522",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 100655,
-            "range": "± 3331",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 115150,
-            "range": "± 3378",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 176754,
-            "range": "± 10880",
             "unit": "ns/iter"
           },
           {
@@ -7326,36 +4746,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 99,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 126230,
-            "range": "± 3429",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 119638,
-            "range": "± 5145",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 193647,
-            "range": "± 4054",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 308036,
-            "range": "± 8361",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1858045,
             "range": "± 56301",
@@ -7395,36 +4785,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 75654,
             "range": "± 2195",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 99,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 99464,
-            "range": "± 2969",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 106651,
-            "range": "± 18427",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 117326,
-            "range": "± 3894",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 174966,
-            "range": "± 3862",
             "unit": "ns/iter"
           },
           {
@@ -7522,36 +4882,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 162249,
-            "range": "± 43206",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 151635,
-            "range": "± 9606",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 237288,
-            "range": "± 19438",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 397414,
-            "range": "± 18660",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1895234,
             "range": "± 70193",
@@ -7591,36 +4921,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 103460,
             "range": "± 17520",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 92,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 114490,
-            "range": "± 11352",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 134918,
-            "range": "± 12063",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 160114,
-            "range": "± 9633",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 199093,
-            "range": "± 8845",
             "unit": "ns/iter"
           },
           {
@@ -7666,36 +4966,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 160454,
-            "range": "± 11953",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 145747,
-            "range": "± 13114",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 236900,
-            "range": "± 25151",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 394678,
-            "range": "± 24723",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1904831,
             "range": "± 140607",
@@ -7735,36 +5005,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 101821,
             "range": "± 6331",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 115257,
-            "range": "± 3173",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 135230,
-            "range": "± 12832",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 160628,
-            "range": "± 14013",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 200214,
-            "range": "± 10769",
             "unit": "ns/iter"
           },
           {
@@ -7862,36 +5102,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 113405,
-            "range": "± 1308",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 198070,
-            "range": "± 54025",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 159430,
-            "range": "± 8120",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 281832,
-            "range": "± 5566",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1617215,
             "range": "± 60757",
@@ -7931,36 +5141,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 67637,
             "range": "± 2797",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 87158,
-            "range": "± 1770",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 94581,
-            "range": "± 1702",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 114695,
-            "range": "± 2572",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 163323,
-            "range": "± 1768",
             "unit": "ns/iter"
           },
           {
@@ -8006,36 +5186,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 112502,
-            "range": "± 2397",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 105306,
-            "range": "± 2192",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 163544,
-            "range": "± 3430",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 278393,
-            "range": "± 3919",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1600899,
             "range": "± 11932",
@@ -8075,36 +5225,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 67133,
             "range": "± 2885",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 87326,
-            "range": "± 1866",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 94023,
-            "range": "± 1634",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 115431,
-            "range": "± 11467",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 162591,
-            "range": "± 4634",
             "unit": "ns/iter"
           },
           {
@@ -8202,36 +5322,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 171887,
-            "range": "± 11853",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 155810,
-            "range": "± 12227",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 251843,
-            "range": "± 44455",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 422149,
-            "range": "± 27115",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1940627,
             "range": "± 134446",
@@ -8271,36 +5361,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 111461,
             "range": "± 7466",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 121674,
-            "range": "± 8190",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 143283,
-            "range": "± 19594",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 165542,
-            "range": "± 11408",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 200251,
-            "range": "± 10432",
             "unit": "ns/iter"
           },
           {
@@ -8346,36 +5406,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 169925,
-            "range": "± 10736",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 159415,
-            "range": "± 12798",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 250300,
-            "range": "± 18056",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 430393,
-            "range": "± 36371",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1951266,
             "range": "± 73844",
@@ -8415,36 +5445,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 111065,
             "range": "± 12474",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 92,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 126924,
-            "range": "± 10835",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 143521,
-            "range": "± 8577",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 163414,
-            "range": "± 13577",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 208091,
-            "range": "± 34974",
             "unit": "ns/iter"
           },
           {
@@ -8542,36 +5542,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 181045,
-            "range": "± 12352",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 169002,
-            "range": "± 17494",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 263418,
-            "range": "± 27001",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 444916,
-            "range": "± 41304",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2130901,
             "range": "± 110979",
@@ -8611,36 +5581,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 118061,
             "range": "± 7920",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 130998,
-            "range": "± 11189",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 146560,
-            "range": "± 26790",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 173357,
-            "range": "± 29511",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 219764,
-            "range": "± 31344",
             "unit": "ns/iter"
           },
           {
@@ -8686,36 +5626,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 185757,
-            "range": "± 16155",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 169702,
-            "range": "± 26324",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 258260,
-            "range": "± 19626",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 445427,
-            "range": "± 24081",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 2104293,
             "range": "± 113261",
@@ -8755,36 +5665,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 116695,
             "range": "± 12088",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 136451,
-            "range": "± 14934",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 151804,
-            "range": "± 17192",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 177305,
-            "range": "± 16645",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 226897,
-            "range": "± 23538",
             "unit": "ns/iter"
           },
           {
@@ -8882,36 +5762,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 96,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 178456,
-            "range": "± 15831",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 173769,
-            "range": "± 18159",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 258938,
-            "range": "± 67251",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 432659,
-            "range": "± 32754",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2124766,
             "range": "± 116765",
@@ -8951,36 +5801,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 112329,
             "range": "± 15059",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 96,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 128958,
-            "range": "± 12502",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 142295,
-            "range": "± 13877",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 167291,
-            "range": "± 23461",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 223137,
-            "range": "± 42732",
             "unit": "ns/iter"
           },
           {
@@ -9026,36 +5846,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 181475,
-            "range": "± 21312",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 166699,
-            "range": "± 23920",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 261119,
-            "range": "± 20331",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 431151,
-            "range": "± 36949",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 2163838,
             "range": "± 177404",
@@ -9095,36 +5885,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 111353,
             "range": "± 14071",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 129624,
-            "range": "± 12335",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 142513,
-            "range": "± 18009",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 173059,
-            "range": "± 16648",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 217263,
-            "range": "± 25289",
             "unit": "ns/iter"
           },
           {
@@ -9222,36 +5982,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 91,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 177198,
-            "range": "± 28581",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 160325,
-            "range": "± 14611",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 254339,
-            "range": "± 18043",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 439948,
-            "range": "± 32662",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1927070,
             "range": "± 94769",
@@ -9291,36 +6021,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 113306,
             "range": "± 10923",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 90,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 124544,
-            "range": "± 9327",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 139300,
-            "range": "± 20224",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 163464,
-            "range": "± 8311",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 206038,
-            "range": "± 127034",
             "unit": "ns/iter"
           },
           {
@@ -9366,36 +6066,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 89,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 170238,
-            "range": "± 31794",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 160354,
-            "range": "± 16450",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 270312,
-            "range": "± 32478",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 425864,
-            "range": "± 33479",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 2008194,
             "range": "± 98480",
@@ -9435,36 +6105,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 111624,
             "range": "± 8280",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 96,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 123815,
-            "range": "± 7423",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 137139,
-            "range": "± 14277",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 162504,
-            "range": "± 10137",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 208912,
-            "range": "± 22961",
             "unit": "ns/iter"
           },
           {
@@ -9562,36 +6202,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 94,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 170345,
-            "range": "± 13861",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 155494,
-            "range": "± 32349",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 243251,
-            "range": "± 21791",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 399925,
-            "range": "± 17728",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1985220,
             "range": "± 164453",
@@ -9631,36 +6241,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 107331,
             "range": "± 8183",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 17",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 127048,
-            "range": "± 14585",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 137842,
-            "range": "± 14193",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 163226,
-            "range": "± 17187",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 205681,
-            "range": "± 18349",
             "unit": "ns/iter"
           },
           {
@@ -9706,36 +6286,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 90,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 168266,
-            "range": "± 13390",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 153586,
-            "range": "± 12408",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 239723,
-            "range": "± 37162",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 406584,
-            "range": "± 30523",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1990062,
             "range": "± 270315",
@@ -9775,36 +6325,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 106929,
             "range": "± 76643",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 91,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 124814,
-            "range": "± 10332",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 138926,
-            "range": "± 15027",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 163694,
-            "range": "± 17659",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 212825,
-            "range": "± 49114",
             "unit": "ns/iter"
           },
           {
@@ -9902,36 +6422,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 98,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 175917,
-            "range": "± 9519",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 160725,
-            "range": "± 10019",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 255971,
-            "range": "± 14652",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 450616,
-            "range": "± 36385",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2009013,
             "range": "± 109984",
@@ -9971,36 +6461,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 113566,
             "range": "± 9273",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 128900,
-            "range": "± 11587",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 145515,
-            "range": "± 12408",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 171493,
-            "range": "± 18106",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 214823,
-            "range": "± 20762",
             "unit": "ns/iter"
           },
           {
@@ -10046,36 +6506,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 177832,
-            "range": "± 8624",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 163493,
-            "range": "± 12017",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 251591,
-            "range": "± 25900",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 436251,
-            "range": "± 30005",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1987141,
             "range": "± 142887",
@@ -10115,36 +6545,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 110372,
             "range": "± 9509",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 127194,
-            "range": "± 8611",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 144872,
-            "range": "± 11322",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 169874,
-            "range": "± 16163",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 210098,
-            "range": "± 17339",
             "unit": "ns/iter"
           },
           {
@@ -10242,36 +6642,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 181672,
-            "range": "± 19215",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 170596,
-            "range": "± 11190",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 263635,
-            "range": "± 21849",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 452057,
-            "range": "± 25130",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2143657,
             "range": "± 95915",
@@ -10311,36 +6681,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 123994,
             "range": "± 18983",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 102,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 141779,
-            "range": "± 8180",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 158773,
-            "range": "± 8971",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 187069,
-            "range": "± 22671",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 232444,
-            "range": "± 13925",
             "unit": "ns/iter"
           },
           {
@@ -10386,36 +6726,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 191173,
-            "range": "± 17725",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 174191,
-            "range": "± 9488",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 260809,
-            "range": "± 19221",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 449667,
-            "range": "± 17948",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 2155762,
             "range": "± 92862",
@@ -10455,36 +6765,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 127560,
             "range": "± 7774",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 103,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 143535,
-            "range": "± 15618",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 158863,
-            "range": "± 10079",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 184430,
-            "range": "± 8895",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 230648,
-            "range": "± 23636",
             "unit": "ns/iter"
           },
           {
@@ -10582,36 +6862,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 98,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 179142,
-            "range": "± 30970",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 171662,
-            "range": "± 23416",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 264239,
-            "range": "± 62625",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 445085,
-            "range": "± 54546",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2039577,
             "range": "± 183239",
@@ -10651,36 +6901,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 113256,
             "range": "± 23660",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 126606,
-            "range": "± 10062",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 143873,
-            "range": "± 30912",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 174266,
-            "range": "± 16766",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 210243,
-            "range": "± 30539",
             "unit": "ns/iter"
           },
           {
@@ -10726,36 +6946,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 181697,
-            "range": "± 24967",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 164969,
-            "range": "± 17636",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 261061,
-            "range": "± 23841",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 451810,
-            "range": "± 40273",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 2055229,
             "range": "± 217216",
@@ -10795,36 +6985,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 112112,
             "range": "± 19614",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 98,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 127417,
-            "range": "± 6587",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 144611,
-            "range": "± 9409",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 174356,
-            "range": "± 61734",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 216710,
-            "range": "± 37002",
             "unit": "ns/iter"
           },
           {
@@ -10922,36 +7082,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 92,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 178061,
-            "range": "± 20144",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 154493,
-            "range": "± 12902",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 245919,
-            "range": "± 19633",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 418444,
-            "range": "± 61250",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2095128,
             "range": "± 223802",
@@ -10991,36 +7121,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 112337,
             "range": "± 7631",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 90,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 124997,
-            "range": "± 8874",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 142776,
-            "range": "± 11725",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 165043,
-            "range": "± 13302",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 209418,
-            "range": "± 13781",
             "unit": "ns/iter"
           },
           {
@@ -11066,36 +7166,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 90,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 168322,
-            "range": "± 8536",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 157381,
-            "range": "± 8935",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 243097,
-            "range": "± 20895",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 406906,
-            "range": "± 32995",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1949989,
             "range": "± 121418",
@@ -11135,36 +7205,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 111566,
             "range": "± 7618",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 91,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 126254,
-            "range": "± 7133",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 143059,
-            "range": "± 9003",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 172626,
-            "range": "± 15679",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 226517,
-            "range": "± 79118",
             "unit": "ns/iter"
           },
           {
@@ -11262,36 +7302,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 183743,
-            "range": "± 27401",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 171085,
-            "range": "± 30979",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 269832,
-            "range": "± 203087",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 445069,
-            "range": "± 45207",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1995232,
             "range": "± 190948",
@@ -11331,36 +7341,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 122871,
             "range": "± 15822",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 92,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 132682,
-            "range": "± 19323",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 161252,
-            "range": "± 14887",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 182268,
-            "range": "± 10147",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 221981,
-            "range": "± 33258",
             "unit": "ns/iter"
           },
           {
@@ -11406,36 +7386,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 92,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 184920,
-            "range": "± 202773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 164378,
-            "range": "± 8243",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 261098,
-            "range": "± 19322",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 449408,
-            "range": "± 33868",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1970072,
             "range": "± 150372",
@@ -11475,36 +7425,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 118803,
             "range": "± 15909",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 92,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 129350,
-            "range": "± 11189",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 158134,
-            "range": "± 18214",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 177651,
-            "range": "± 31487",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 210062,
-            "range": "± 17877",
             "unit": "ns/iter"
           },
           {
@@ -11602,36 +7522,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 190995,
-            "range": "± 19901",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 168978,
-            "range": "± 14778",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 262868,
-            "range": "± 21614",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 441773,
-            "range": "± 26128",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 2089520,
             "range": "± 153737",
@@ -11671,36 +7561,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 119205,
             "range": "± 10182",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 104,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 137268,
-            "range": "± 9329",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 160814,
-            "range": "± 13301",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 179702,
-            "range": "± 11822",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 222929,
-            "range": "± 16070",
             "unit": "ns/iter"
           },
           {
@@ -11746,36 +7606,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 104,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 181413,
-            "range": "± 50932",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 173130,
-            "range": "± 30428",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 262626,
-            "range": "± 18349",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 452429,
-            "range": "± 66441",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 2019621,
             "range": "± 132925",
@@ -11815,36 +7645,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 122873,
             "range": "± 8918",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 103,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 140740,
-            "range": "± 12094",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 152427,
-            "range": "± 10463",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 185548,
-            "range": "± 37361",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 232502,
-            "range": "± 21764",
             "unit": "ns/iter"
           },
           {
@@ -11942,36 +7742,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 81,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 108989,
-            "range": "± 4437",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 96118,
-            "range": "± 3439",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 163693,
-            "range": "± 3317",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 259760,
-            "range": "± 12617",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1692832,
             "range": "± 106717",
@@ -12011,36 +7781,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 68759,
             "range": "± 3297",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 72,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 85182,
-            "range": "± 3238",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 94339,
-            "range": "± 3535",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 112823,
-            "range": "± 1299",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 164614,
-            "range": "± 1277",
             "unit": "ns/iter"
           },
           {
@@ -12086,36 +7826,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 72,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 111671,
-            "range": "± 1792",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 96936,
-            "range": "± 1847",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 163984,
-            "range": "± 4585",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 284807,
-            "range": "± 5213",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1690689,
             "range": "± 79594",
@@ -12155,36 +7865,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 63729,
             "range": "± 2363",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 72,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 84509,
-            "range": "± 1821",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 94544,
-            "range": "± 2619",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 114906,
-            "range": "± 1892",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 165358,
-            "range": "± 1674",
             "unit": "ns/iter"
           },
           {
@@ -12282,36 +7962,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 78,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 157459,
-            "range": "± 25249",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 141711,
-            "range": "± 8210",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 222380,
-            "range": "± 9034",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 383476,
-            "range": "± 31860",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1826625,
             "range": "± 107156",
@@ -12351,36 +8001,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 105376,
             "range": "± 8220",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 77,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 114849,
-            "range": "± 6498",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 139199,
-            "range": "± 25677",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 151804,
-            "range": "± 17643",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 184453,
-            "range": "± 16160",
             "unit": "ns/iter"
           },
           {
@@ -12426,36 +8046,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 77,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 149873,
-            "range": "± 7777",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 141020,
-            "range": "± 14939",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 223464,
-            "range": "± 11122",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 379052,
-            "range": "± 19019",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1802315,
             "range": "± 96952",
@@ -12495,36 +8085,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 104000,
             "range": "± 26619",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 77,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 115248,
-            "range": "± 12730",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 129177,
-            "range": "± 27018",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 152025,
-            "range": "± 12919",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 183432,
-            "range": "± 11701",
             "unit": "ns/iter"
           },
           {
@@ -12622,36 +8182,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 81,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 111351,
-            "range": "± 1739",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 103728,
-            "range": "± 12847",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 164805,
-            "range": "± 4905",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 284178,
-            "range": "± 2217",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1603383,
             "range": "± 21158",
@@ -12691,36 +8221,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 69875,
             "range": "± 5497",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 81,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 85815,
-            "range": "± 2074",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 95283,
-            "range": "± 2030",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 116640,
-            "range": "± 4343",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 166156,
-            "range": "± 2985",
             "unit": "ns/iter"
           },
           {
@@ -12766,36 +8266,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 70,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 107426,
-            "range": "± 1611",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 99572,
-            "range": "± 2512",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 167222,
-            "range": "± 1847",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 282586,
-            "range": "± 3470",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1622746,
             "range": "± 11886",
@@ -12835,36 +8305,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 65416,
             "range": "± 4409",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 71,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 85541,
-            "range": "± 6258",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 95998,
-            "range": "± 2138",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 116932,
-            "range": "± 1490",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 167165,
-            "range": "± 1218",
             "unit": "ns/iter"
           },
           {
@@ -12962,36 +8402,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 188840,
-            "range": "± 28427",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 171594,
-            "range": "± 18933",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 256703,
-            "range": "± 30255",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 433209,
-            "range": "± 43464",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1801108,
             "range": "± 248239",
@@ -13031,36 +8441,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 114998,
             "range": "± 19536",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 137165,
-            "range": "± 15338",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 148676,
-            "range": "± 22675",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 173610,
-            "range": "± 36206",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 222142,
-            "range": "± 78263",
             "unit": "ns/iter"
           },
           {
@@ -13106,36 +8486,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 98,
-            "range": "± 15",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 193772,
-            "range": "± 339120",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 177410,
-            "range": "± 106487",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 256934,
-            "range": "± 185773",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 441632,
-            "range": "± 28713",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1748863,
             "range": "± 270363",
@@ -13175,36 +8525,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 120676,
             "range": "± 146446",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 134073,
-            "range": "± 13642",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 144912,
-            "range": "± 75573",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 168746,
-            "range": "± 13095",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 217800,
-            "range": "± 28919",
             "unit": "ns/iter"
           },
           {
@@ -13302,36 +8622,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 84,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 167667,
-            "range": "± 15293",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 157943,
-            "range": "± 10902",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 236350,
-            "range": "± 36586",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 420509,
-            "range": "± 45933",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1520508,
             "range": "± 71763",
@@ -13371,36 +8661,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 99554,
             "range": "± 19296",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 80,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 115721,
-            "range": "± 12999",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 129171,
-            "range": "± 17722",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 152803,
-            "range": "± 12351",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 206929,
-            "range": "± 95056",
             "unit": "ns/iter"
           },
           {
@@ -13446,36 +8706,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 83,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 166535,
-            "range": "± 12249",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 171191,
-            "range": "± 25669",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 242666,
-            "range": "± 29733",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 405287,
-            "range": "± 20556",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1539350,
             "range": "± 80755",
@@ -13515,36 +8745,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 106140,
             "range": "± 15255",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 84,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 122148,
-            "range": "± 13211",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 139377,
-            "range": "± 6447",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 172481,
-            "range": "± 28363",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 200975,
-            "range": "± 12505",
             "unit": "ns/iter"
           },
           {
@@ -13642,36 +8842,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 79,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 112382,
-            "range": "± 1535",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 105276,
-            "range": "± 2169",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 163851,
-            "range": "± 3758",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 283019,
-            "range": "± 6010",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1367659,
             "range": "± 29102",
@@ -13711,36 +8881,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 67031,
             "range": "± 2560",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 80,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 84410,
-            "range": "± 1806",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 94346,
-            "range": "± 2349",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 115687,
-            "range": "± 1289",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 164365,
-            "range": "± 1681",
             "unit": "ns/iter"
           },
           {
@@ -13786,36 +8926,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 79,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 112319,
-            "range": "± 1518",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 105354,
-            "range": "± 1782",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 164208,
-            "range": "± 4911",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 281967,
-            "range": "± 4372",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1368793,
             "range": "± 7581",
@@ -13855,36 +8965,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 66220,
             "range": "± 2539",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 80,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 83959,
-            "range": "± 1588",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 94622,
-            "range": "± 1565",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 114513,
-            "range": "± 2319",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 164138,
-            "range": "± 1767",
             "unit": "ns/iter"
           },
           {
@@ -13982,36 +9062,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 79,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 110572,
-            "range": "± 1679",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 104299,
-            "range": "± 2296",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 165783,
-            "range": "± 12511",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 279443,
-            "range": "± 3372",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1351319,
             "range": "± 35639",
@@ -14051,36 +9101,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 66137,
             "range": "± 2714",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 79,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 82148,
-            "range": "± 2277",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 93740,
-            "range": "± 6299",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 114081,
-            "range": "± 1320",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 167664,
-            "range": "± 2563",
             "unit": "ns/iter"
           },
           {
@@ -14126,36 +9146,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 79,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 167130,
-            "range": "± 38294",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 103289,
-            "range": "± 3223",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 170074,
-            "range": "± 43732",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 426078,
-            "range": "± 8112",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1353058,
             "range": "± 12016",
@@ -14195,36 +9185,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 65604,
             "range": "± 2312",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 79,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 82778,
-            "range": "± 2447",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 94317,
-            "range": "± 1874",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 114450,
-            "range": "± 1562",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 170599,
-            "range": "± 130966",
             "unit": "ns/iter"
           },
           {
@@ -14322,36 +9282,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 80,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 114166,
-            "range": "± 1643",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 105056,
-            "range": "± 4026",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 168727,
-            "range": "± 3517",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 286853,
-            "range": "± 7891",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1381774,
             "range": "± 29182",
@@ -14391,36 +9321,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 69695,
             "range": "± 6700",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 80,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 87917,
-            "range": "± 1944",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 101265,
-            "range": "± 3123",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 120712,
-            "range": "± 1876",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 170468,
-            "range": "± 2427",
             "unit": "ns/iter"
           },
           {
@@ -14466,36 +9366,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 80,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 114219,
-            "range": "± 1715",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 104968,
-            "range": "± 2367",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 165536,
-            "range": "± 3531",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 288978,
-            "range": "± 8320",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1377629,
             "range": "± 9137",
@@ -14535,36 +9405,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 67407,
             "range": "± 2111",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 80,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 87552,
-            "range": "± 2010",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 97698,
-            "range": "± 2201",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 118456,
-            "range": "± 2473",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 183477,
-            "range": "± 14281",
             "unit": "ns/iter"
           },
           {
@@ -14662,36 +9502,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 94,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 131197,
-            "range": "± 5172",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 121803,
-            "range": "± 3115",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 182515,
-            "range": "± 7696",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 321594,
-            "range": "± 12100",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1548863,
             "range": "± 46674",
@@ -14731,36 +9541,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 73879,
             "range": "± 3315",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 87603,
-            "range": "± 4422",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 108817,
-            "range": "± 6814",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 126243,
-            "range": "± 10986",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 182073,
-            "range": "± 4679",
             "unit": "ns/iter"
           },
           {
@@ -14806,36 +9586,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 91,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 131286,
-            "range": "± 15705",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 122463,
-            "range": "± 5159",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 193187,
-            "range": "± 3665",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 326183,
-            "range": "± 16103",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1607356,
             "range": "± 53418",
@@ -14875,36 +9625,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 80687,
             "range": "± 6702",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 90263,
-            "range": "± 7453",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 110764,
-            "range": "± 3987",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 124206,
-            "range": "± 3692",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 178052,
-            "range": "± 4670",
             "unit": "ns/iter"
           },
           {
@@ -15002,36 +9722,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 84,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 111928,
-            "range": "± 2385",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 105042,
-            "range": "± 2831",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 163550,
-            "range": "± 4526",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 281336,
-            "range": "± 4534",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1356530,
             "range": "± 17423",
@@ -15071,36 +9761,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 64585,
             "range": "± 1512",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 84,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 81173,
-            "range": "± 3898",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 92578,
-            "range": "± 2322",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 113489,
-            "range": "± 4844",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 166070,
-            "range": "± 2760",
             "unit": "ns/iter"
           },
           {
@@ -15146,36 +9806,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 84,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 111486,
-            "range": "± 1054",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 98224,
-            "range": "± 4269",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 166383,
-            "range": "± 3083",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 280602,
-            "range": "± 3396",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1353531,
             "range": "± 39217",
@@ -15215,36 +9845,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 65558,
             "range": "± 1989",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 84,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 83323,
-            "range": "± 3700",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 93276,
-            "range": "± 1071",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 114717,
-            "range": "± 1281",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 164898,
-            "range": "± 1777",
             "unit": "ns/iter"
           },
           {
@@ -15342,36 +9942,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 138488,
-            "range": "± 2657",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 126270,
-            "range": "± 4578",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 195157,
-            "range": "± 8906",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 335959,
-            "range": "± 6254",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1668047,
             "range": "± 68970",
@@ -15411,36 +9981,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 81777,
             "range": "± 5918",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 103415,
-            "range": "± 2576",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 115582,
-            "range": "± 4462",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 127420,
-            "range": "± 5399",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 187573,
-            "range": "± 3440",
             "unit": "ns/iter"
           },
           {
@@ -15486,36 +10026,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 138373,
-            "range": "± 42849",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 125370,
-            "range": "± 1985",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 192592,
-            "range": "± 4745",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 421969,
-            "range": "± 84720",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1635061,
             "range": "± 52424",
@@ -15555,36 +10065,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 82982,
             "range": "± 4056",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 102923,
-            "range": "± 10252",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 115555,
-            "range": "± 3526",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 131061,
-            "range": "± 3167",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 187669,
-            "range": "± 3573",
             "unit": "ns/iter"
           },
           {
@@ -15682,36 +10162,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 132089,
-            "range": "± 2903",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 121066,
-            "range": "± 2706",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 187747,
-            "range": "± 4109",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 317555,
-            "range": "± 5633",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1576735,
             "range": "± 29064",
@@ -15751,36 +10201,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 73267,
             "range": "± 2063",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 87924,
-            "range": "± 4078",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 101974,
-            "range": "± 5124",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 118685,
-            "range": "± 2931",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 173232,
-            "range": "± 5408",
             "unit": "ns/iter"
           },
           {
@@ -15826,36 +10246,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 127734,
-            "range": "± 3169",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 117087,
-            "range": "± 3843",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 182324,
-            "range": "± 6036",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 308566,
-            "range": "± 7794",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1554814,
             "range": "± 40333",
@@ -15895,36 +10285,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 73027,
             "range": "± 2593",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 96,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 87691,
-            "range": "± 4115",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 104479,
-            "range": "± 4246",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 117804,
-            "range": "± 5913",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 173426,
-            "range": "± 5537",
             "unit": "ns/iter"
           },
           {
@@ -16022,36 +10382,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 102,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 135259,
-            "range": "± 6627",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 125160,
-            "range": "± 7370",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 195622,
-            "range": "± 9990",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 327927,
-            "range": "± 10024",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1651869,
             "range": "± 61714",
@@ -16091,36 +10421,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 76456,
             "range": "± 7781",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 100,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 92685,
-            "range": "± 9464",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 107698,
-            "range": "± 72874",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 123198,
-            "range": "± 2093",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 181683,
-            "range": "± 7008",
             "unit": "ns/iter"
           },
           {
@@ -16166,36 +10466,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 101,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 133390,
-            "range": "± 5246",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 125114,
-            "range": "± 5257",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 191341,
-            "range": "± 4762",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 324920,
-            "range": "± 8521",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1645697,
             "range": "± 48550",
@@ -16235,36 +10505,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 78867,
             "range": "± 5083",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 102,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 95661,
-            "range": "± 4775",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 106034,
-            "range": "± 5006",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 122577,
-            "range": "± 3072",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 182020,
-            "range": "± 2559",
             "unit": "ns/iter"
           },
           {
@@ -16362,36 +10602,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 95,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 184332,
-            "range": "± 21124",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 163343,
-            "range": "± 13159",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 237085,
-            "range": "± 15191",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 423935,
-            "range": "± 31066",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1547510,
             "range": "± 286316",
@@ -16461,36 +10671,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 116865,
             "range": "± 28802",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 107265,
-            "range": "± 8820",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 127031,
-            "range": "± 9238",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 152575,
-            "range": "± 8942",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 195650,
-            "range": "± 18181",
             "unit": "ns/iter"
           },
           {
@@ -16566,36 +10746,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 83,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 156604,
-            "range": "± 11222",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 154837,
-            "range": "± 16232",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 249204,
-            "range": "± 26400",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 421992,
-            "range": "± 33695",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1424442,
             "range": "± 196274",
@@ -16665,36 +10815,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 114652,
             "range": "± 13237",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 97,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 120924,
-            "range": "± 8815",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 134832,
-            "range": "± 9221",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 162394,
-            "range": "± 12471",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 207901,
-            "range": "± 17464",
             "unit": "ns/iter"
           },
           {
@@ -16822,36 +10942,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 90,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 163752,
-            "range": "± 23615",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 157741,
-            "range": "± 27516",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 240623,
-            "range": "± 43311",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 419802,
-            "range": "± 38439",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1531663,
             "range": "± 77891",
@@ -16921,36 +11011,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 111551,
             "range": "± 12136",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 96,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 123258,
-            "range": "± 10519",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 134756,
-            "range": "± 5633",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 163377,
-            "range": "± 34599",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 200878,
-            "range": "± 47252",
             "unit": "ns/iter"
           },
           {
@@ -17026,36 +11086,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 96,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 171064,
-            "range": "± 12643",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 168274,
-            "range": "± 19748",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 250117,
-            "range": "± 21190",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 423469,
-            "range": "± 29713",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1580717,
             "range": "± 103752",
@@ -17125,36 +11155,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 99940,
             "range": "± 10404",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 115965,
-            "range": "± 17065",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 134155,
-            "range": "± 8231",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 158284,
-            "range": "± 30037",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 196765,
-            "range": "± 14102",
             "unit": "ns/iter"
           },
           {
@@ -17282,36 +11282,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 113807,
-            "range": "± 4807",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 103376,
-            "range": "± 4517",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 164994,
-            "range": "± 4209",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 286255,
-            "range": "± 4952",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1387481,
             "range": "± 12238",
@@ -17381,36 +11351,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 66232,
             "range": "± 2062",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 85642,
-            "range": "± 1869",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 95989,
-            "range": "± 2634",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 116144,
-            "range": "± 2183",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 167627,
-            "range": "± 2834",
             "unit": "ns/iter"
           },
           {
@@ -17486,36 +11426,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 116336,
-            "range": "± 5680",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 106955,
-            "range": "± 6245",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 164199,
-            "range": "± 3641",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 284905,
-            "range": "± 4173",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1386780,
             "range": "± 44573",
@@ -17585,36 +11495,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 67466,
             "range": "± 2312",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 86792,
-            "range": "± 1785",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 96903,
-            "range": "± 2308",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 115630,
-            "range": "± 1521",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 167380,
-            "range": "± 3107",
             "unit": "ns/iter"
           },
           {
@@ -17742,36 +11622,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 103,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 135449,
-            "range": "± 2056",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 123909,
-            "range": "± 3491",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 192263,
-            "range": "± 6900",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 323184,
-            "range": "± 6053",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 1614908,
             "range": "± 32865",
@@ -17841,36 +11691,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 74667,
             "range": "± 1893",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 103,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 90833,
-            "range": "± 2805",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 107427,
-            "range": "± 2502",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 121844,
-            "range": "± 2421",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 180463,
-            "range": "± 2922",
             "unit": "ns/iter"
           },
           {
@@ -17946,36 +11766,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 103,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 134912,
-            "range": "± 3689",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 125929,
-            "range": "± 2189",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 191546,
-            "range": "± 3459",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 324153,
-            "range": "± 3379",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 1607585,
             "range": "± 14350",
@@ -18045,36 +11835,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 76987,
             "range": "± 5610",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 103,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 97219,
-            "range": "± 3372",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 110325,
-            "range": "± 1977",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 122930,
-            "range": "± 3081",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 181693,
-            "range": "± 2477",
             "unit": "ns/iter"
           },
           {
@@ -18202,36 +11962,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 120889,
-            "range": "± 5002",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 111367,
-            "range": "± 6316",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 170078,
-            "range": "± 9058",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 282187,
-            "range": "± 13056",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 210991,
             "range": "± 9576",
@@ -18301,36 +12031,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 68994,
             "range": "± 7902",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 79929,
-            "range": "± 4862",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 99131,
-            "range": "± 4769",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 111862,
-            "range": "± 5528",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 165099,
-            "range": "± 7079",
             "unit": "ns/iter"
           },
           {
@@ -18406,36 +12106,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 86,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 118531,
-            "range": "± 5243",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 109908,
-            "range": "± 5521",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 171204,
-            "range": "± 8182",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 292558,
-            "range": "± 11750",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 220708,
             "range": "± 9352",
@@ -18505,36 +12175,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 68398,
             "range": "± 3230",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 81852,
-            "range": "± 5176",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 98268,
-            "range": "± 5614",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 109758,
-            "range": "± 5397",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 166014,
-            "range": "± 7483",
             "unit": "ns/iter"
           },
           {
@@ -18662,36 +12302,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 163437,
-            "range": "± 19320",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 153922,
-            "range": "± 11987",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 237128,
-            "range": "± 12020",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 415287,
-            "range": "± 72617",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 291106,
             "range": "± 22914",
@@ -18761,36 +12371,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 102926,
             "range": "± 27629",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 89,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 117133,
-            "range": "± 12587",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 138635,
-            "range": "± 13565",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 161135,
-            "range": "± 17492",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 189166,
-            "range": "± 44281",
             "unit": "ns/iter"
           },
           {
@@ -18866,36 +12446,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 87,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 167133,
-            "range": "± 24152",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 154805,
-            "range": "± 18087",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 237577,
-            "range": "± 14100",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 402688,
-            "range": "± 32408",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 286560,
             "range": "± 24868",
@@ -18965,36 +12515,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 101732,
             "range": "± 7314",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 88,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 114516,
-            "range": "± 12136",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 136070,
-            "range": "± 8211",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 159557,
-            "range": "± 9662",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 186894,
-            "range": "± 8056",
             "unit": "ns/iter"
           },
           {
@@ -19122,36 +12642,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 92,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 170923,
-            "range": "± 15263",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 158672,
-            "range": "± 23567",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 250032,
-            "range": "± 53552",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 406291,
-            "range": "± 25022",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 302488,
             "range": "± 18314",
@@ -19221,36 +12711,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 116263,
             "range": "± 13123",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 93,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 133856,
-            "range": "± 24781",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 148778,
-            "range": "± 10509",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 173865,
-            "range": "± 10145",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 217919,
-            "range": "± 17533",
             "unit": "ns/iter"
           },
           {
@@ -19326,36 +12786,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 90,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 172282,
-            "range": "± 25439",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 158995,
-            "range": "± 16570",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 243619,
-            "range": "± 17481",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 404250,
-            "range": "± 37487",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 305266,
             "range": "± 23217",
@@ -19425,36 +12855,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 113816,
             "range": "± 10846",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 91,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 131820,
-            "range": "± 17726",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 147574,
-            "range": "± 14079",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 168810,
-            "range": "± 16162",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 200800,
-            "range": "± 12298",
             "unit": "ns/iter"
           },
           {
@@ -19582,36 +12982,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/1",
-            "value": 112502,
-            "range": "± 1261",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/2",
-            "value": 103540,
-            "range": "± 4612",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/4",
-            "value": 165116,
-            "range": "± 5806",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_concurrent_round_trip/8",
-            "value": 288667,
-            "range": "± 5834",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_concurrent_connections/2",
             "value": 211924,
             "range": "± 6703",
@@ -19681,36 +13051,6 @@ window.BENCHMARK_DATA = {
             "name": "sync/ws_round_trip",
             "value": 61606,
             "range": "± 2098",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/0",
-            "value": 75,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/1",
-            "value": 80675,
-            "range": "± 4762",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/2",
-            "value": 92528,
-            "range": "± 2377",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/4",
-            "value": 115742,
-            "range": "± 1247",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_concurrent_round_trip/8",
-            "value": 170790,
-            "range": "± 5432",
             "unit": "ns/iter"
           },
           {
@@ -19786,36 +13126,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "async/http_concurrent_round_trip/0",
-            "value": 84,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/1",
-            "value": 115242,
-            "range": "± 9390",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/2",
-            "value": 104506,
-            "range": "± 2769",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/4",
-            "value": 166800,
-            "range": "± 3998",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_concurrent_round_trip/8",
-            "value": 290491,
-            "range": "± 5784",
-            "unit": "ns/iter"
-          },
-          {
             "name": "async/http_concurrent_connections/2",
             "value": 212698,
             "range": "± 5170",
@@ -19885,36 +13195,6 @@ window.BENCHMARK_DATA = {
             "name": "async/ws_round_trip",
             "value": 65360,
             "range": "± 1309",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/0",
-            "value": 85,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/1",
-            "value": 84430,
-            "range": "± 3458",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/2",
-            "value": 95093,
-            "range": "± 4228",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/4",
-            "value": 114487,
-            "range": "± 3216",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_concurrent_round_trip/8",
-            "value": 163175,
-            "range": "± 1785",
             "unit": "ns/iter"
           },
           {
