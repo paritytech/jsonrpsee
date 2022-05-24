@@ -76,7 +76,7 @@ impl TransportReceiverT for Receiver {
 
 				match msg {
 					Message::Bytes(bytes) => Ok(ReceivedMessage::Bytes(bytes)),
-					Message::Text(txt) => Ok(ReceivedMessage::Data(txt)),
+					Message::Text(txt) => Ok(ReceivedMessage::Text(txt)),
 				}
 			}
 			Some(Err(err)) => Err(Error::WebSocket(err)),

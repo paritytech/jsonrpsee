@@ -475,7 +475,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
 		}
-		Some(Ok(ReceivedMessage::Data(raw))) => {
+		Some(Ok(ReceivedMessage::Text(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
 		}
 		Some(Err(e)) => {

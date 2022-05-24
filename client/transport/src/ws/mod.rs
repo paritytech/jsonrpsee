@@ -230,7 +230,7 @@ impl TransportReceiverT for Receiver {
 
 			if let Incoming::Data(_) = recv {
 				let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
-				return Ok(ReceivedMessage::Data(s));
+				return Ok(ReceivedMessage::Text(s));
 			} else if let Incoming::Pong(pong_data) = recv {
 				return Ok(ReceivedMessage::Pong(Vec::from(pong_data)));
 			}
