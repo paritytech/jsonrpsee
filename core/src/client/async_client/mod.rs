@@ -120,6 +120,8 @@ impl ClientBuilder {
 
 	/// Set the interval at which pings are submitted (disabled by default).
 	///
+	/// The Ping interval should be larger than the time expected for receiving a Pong frame.
+	///
 	/// Note: The interval duration is restarted when
 	///  - submitted frontend command
 	///  - received backend reply
@@ -620,9 +622,12 @@ async fn background_task<S, R>(
 		let next_backend = backend_event.next();
 		futures_util::pin_mut!(next_frontend, next_backend);
 
+		// Create either a valid delay fuse triggered every provided `duration`,
+		// or create a terminated fuse that's never selected if the provided `duration` is None.
 		let mut submit_ping = if let Some(duration) = ping_interval {
 			Delay::new(duration).fuse()
 		} else {
+			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
 			Fuse::<Delay>::terminated()
 		};
 
