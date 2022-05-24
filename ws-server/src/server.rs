@@ -27,8 +27,10 @@
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
@@ -46,9 +48,11 @@ use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::Params;
 use soketto::connection::Error as SokettoError;
+use soketto::data::ByteSlice125;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use soketto::Sender;
+use soketto::{Receiver, Sender};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::select;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Default maximum connections allowed.
@@ -309,19 +313,42 @@ async fn background_task(
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
+	let mut submit_ping = tokio::time::interval(Duration::from_secs(30));
+	let ping_submitted_tx = Arc::new(AtomicBool::new(false));
+	let ping_submitted_rx = ping_submitted_tx.clone();
+
 	middleware.on_connect();
 
 	// Send results back to the client.
 	tokio::spawn(async move {
 		while !stop_server2.shutdown_requested() {
-			if let Some(response) = rx.next().await {
-				// If websocket message send fail then terminate the connection.
-				if let Err(err) = send_ws_message(&mut sender, response).await {
-					tracing::warn!("WS send error: {}; terminate connection", err);
-					break;
+			select! {
+				rx_value = rx.next() => {
+					if let Some(response) = rx_value {
+						// If websocket message send fail then terminate the connection.
+						if let Err(err) = send_ws_message(&mut sender, response).await {
+							tracing::warn!("WS send error: {}; terminate connection", err);
+							break;
+						}
+					} else {
+						break;
+					}
 				}
-			} else {
-				break;
+
+				_ = submit_ping.tick() => {
+					// Ping was already submitted.
+					if ping_submitted_tx.load(Ordering::Relaxed) {
+						tracing::warn!("WS did not receive a pong or activity in due time");
+						break;
+					}
+
+					if let Err(err) = send_ws_ping(&mut sender).await {
+						tracing::warn!("WS send ping error: {}; terminate connection", err);
+						break;
+					}
+
+					ping_submitted_tx.store(true, Ordering::Relaxed);
+				}
 			}
 		}
 
@@ -342,8 +369,10 @@ async fn background_task(
 
 		{
 			// Need the extra scope to drop this pinned future and reclaim access to `data`
-			let receive = receiver.receive_data(&mut data);
 
+			let ping_submitted_rx = ping_submitted_rx.clone();
+			// Intercept data, while handling the incoming pong frames.
+			let receive = receive_data(&mut receiver, &mut data, ping_submitted_rx);
 			tokio::pin!(receive);
 
 			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
@@ -927,4 +956,34 @@ async fn send_ws_message(
 	tracing::trace!("send: {}", response);
 	sender.send_text_owned(response).await?;
 	sender.flush().await.map_err(Into::into)
+}
+
+async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>) -> Result<(), Error> {
+	tracing::debug!("submit ping");
+	// Submit empty slice as "optional" parameter.
+	let slice: &[u8] = &[];
+	// Byte slice fails if the provided slice is larger than 125 bytes.
+	let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
+	sender.send_ping(byte_slice).await?;
+	sender.flush().await.map_err(Into::into)
+}
+
+/// Receive data in a similar way to soketto's `receive_data`, but ensure that the provided boolean flag is cleared
+/// upon receiving a `Pong` frame from the socket.
+async fn receive_data(
+	receiver: &mut Receiver<BufReader<BufWriter<Compat<TcpStream>>>>,
+	message: &mut Vec<u8>,
+	ping_submitted: Arc<AtomicBool>,
+) -> Result<soketto::Data, soketto::connection::Error> {
+	loop {
+		let recv = receiver.receive(message).await?;
+
+		if let soketto::Incoming::Data(d) = recv {
+			return Ok(d);
+		} else if let soketto::Incoming::Pong(_) = recv {
+			tracing::debug!("recv pong");
+
+			ping_submitted.store(false, Ordering::Relaxed);
+		}
+	}
 }
