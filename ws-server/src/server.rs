@@ -279,6 +279,7 @@ where
 				stop_monitor.clone(),
 				middleware,
 				id_provider,
+				cfg.ping_interval,
 			))
 			.await;
 
@@ -302,6 +303,7 @@ async fn background_task(
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
 	id_provider: Arc<dyn IdProvider>,
+	ping_interval: Duration,
 ) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
 	let mut builder = server.into_builder();
@@ -313,7 +315,7 @@ async fn background_task(
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
-	let mut submit_ping = tokio::time::interval(Duration::from_secs(30));
+	let mut submit_ping = tokio::time::interval(ping_interval);
 	let ping_submitted_tx = Arc::new(AtomicBool::new(false));
 	let ping_submitted_rx = ping_submitted_tx.clone();
 
@@ -697,6 +699,8 @@ struct Settings {
 	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
+	/// The interval at which `Ping` frames are submitted.
+	ping_interval: Duration,
 }
 
 impl Default for Settings {
@@ -710,6 +714,7 @@ impl Default for Settings {
 			allowed_origins: AllowedValue::Any,
 			allowed_hosts: AllowedValue::Any,
 			tokio_runtime: None,
+			ping_interval: Duration::from_secs(60),
 		}
 	}
 }
@@ -889,6 +894,26 @@ impl<M> Builder<M> {
 	/// Default: [`tokio::spawn`]
 	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) -> Self {
 		self.settings.tokio_runtime = Some(rt);
+		self
+	}
+
+	/// Configure the interval at which pings are submitted.
+	///
+	/// The `Ping` interval should be larger than the time expected for receiving a `Pong` frame.
+	///
+	/// Default: 60 seconds.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use std::time::Duration;
+	/// use jsonrpsee_ws_server::WsServerBuilder;
+	///
+	/// // Set the ping interval to 10 seconds.
+	/// let builder = WsServerBuilder::default().ping_interval(Duration::from_secs(10));
+	/// ```
+	pub fn ping_interval(mut self, interval: Duration) -> Self {
+		self.settings.ping_interval = interval;
 		self
 	}
 
