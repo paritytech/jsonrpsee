@@ -22,6 +22,9 @@ pub enum Error {
 	/// WebSocket error
 	#[error("WebSocket Error: {0:?}")]
 	WebSocket(WebSocketError),
+	/// Operation not supported
+	#[error("Operation not supported")]
+	NotSupported,
 }
 
 /// Sender.
@@ -54,7 +57,7 @@ impl TransportSenderT for Sender {
 
 	async fn send_ping(&mut self) -> Result<(), Self::Error> {
 		tracing::trace!("send ping - not implemented for wasm");
-		Ok(())
+		Err(Error::NotSupported)
 	}
 
 	async fn close(&mut self) -> Result<(), Error> {
