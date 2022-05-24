@@ -29,7 +29,7 @@ async fn wasm_ws_transport_works() {
 	let rp: ReceivedMessage = rx.receive().await.unwrap();
 
 	match rp {
-		ReceivedMessage::Text(str) => assert_eq!(exp, &str),
+		ReceivedMessage::Text(s) => assert_eq!(exp, &s),
 		_ => assert!(false, "Expected string message"),
 	};
 }
