@@ -30,8 +30,8 @@ use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use crate::response;
 use crate::response::{internal_error, malformed};
-use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
 use hyper::header::{HeaderMap, HeaderValue};
@@ -41,6 +41,7 @@ use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
 use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
@@ -53,6 +54,7 @@ use tokio::net::{TcpListener, ToSocketAddrs};
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
 pub struct Builder<M = ()> {
+	/// Access control based on HTTP headers.
 	access_control: AccessControl,
 	resources: Resources,
 	max_request_body_size: u32,
@@ -67,11 +69,11 @@ pub struct Builder<M = ()> {
 impl Default for Builder {
 	fn default() -> Self {
 		Self {
+			access_control: AccessControl::default(),
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			batch_requests_supported: true,
 			resources: Resources::default(),
-			access_control: AccessControl::default(),
 			tokio_runtime: None,
 			middleware: (),
 			health_api: None,
@@ -114,11 +116,11 @@ impl<M> Builder<M> {
 	/// ```
 	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
 		Builder {
+			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
-			access_control: self.access_control,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
 			health_api: self.health_api,
@@ -215,9 +217,9 @@ impl<M> Builder<M> {
 		local_addr: SocketAddr,
 	) -> Result<Server<M>, Error> {
 		Ok(Server {
+			access_control: self.access_control,
 			listener,
 			local_addr: Some(local_addr),
-			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
 			batch_requests_supported: self.batch_requests_supported,
@@ -358,7 +360,7 @@ pub struct Server<M = ()> {
 	max_response_body_size: u32,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_supported: bool,
-	/// Access control
+	/// Access control.
 	access_control: AccessControl,
 	/// Tracker for currently used resources on the server
 	resources: Resources,
@@ -378,7 +380,7 @@ impl<M: Middleware> Server<M> {
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let max_response_body_size = self.max_response_body_size;
-		let access_control = self.access_control;
+		let acl = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
 		let resources = self.resources;
@@ -389,7 +391,7 @@ impl<M: Middleware> Server<M> {
 
 		let make_service = make_service_fn(move |_| {
 			let methods = methods.clone();
-			let access_control = access_control.clone();
+			let acl = acl.clone();
 			let resources = resources.clone();
 			let middleware = middleware.clone();
 			let health_api = health_api.clone();
@@ -397,7 +399,7 @@ impl<M: Middleware> Server<M> {
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
-					let access_control = access_control.clone();
+					let acl = acl.clone();
 					let resources = resources.clone();
 					let middleware = middleware.clone();
 					let health_api = health_api.clone();
@@ -405,8 +407,31 @@ impl<M: Middleware> Server<M> {
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
-						if let Err(e) = access_control_is_valid(&access_control, &request) {
-							return Ok::<_, HyperError>(e);
+						let host = match http_helpers::read_header_value(request.headers(), "host") {
+							Some(origin) => origin,
+							None => return Ok(malformed()),
+						};
+						let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
+						let headers = request.headers().keys().map(|name| name.as_str());
+						let cors_headers =
+							http_helpers::read_header_values(request.headers(), "access-control-request-headers")
+								.filter_map(|val| val.to_str().ok())
+								.flat_map(|val| val.split(", "))
+								.flat_map(|val| val.split(','));
+
+						if let Err(e) = acl.verify_host(host) {
+							tracing::warn!("Denying request: {:?}", e);
+							return Ok(response::host_not_allowed());
+						}
+
+						if let Err(e) = acl.verify_origin(maybe_origin, host) {
+							tracing::warn!("Denying request: {:?}", e);
+							return Ok(response::invalid_allow_origin());
+						}
+
+						if let Err(e) = acl.verify_headers(headers, cors_headers) {
+							tracing::warn!("Denying request: {:?}", e);
+							return Ok(response::invalid_allow_origin());
 						}
 
 						// Only `POST` and `OPTIONS` methods are allowed.
@@ -414,12 +439,13 @@ impl<M: Middleware> Server<M> {
 							// An OPTIONS request is a CORS preflight request. We've done our access check
 							// above so we just need to tell the browser that the request is OK.
 							Method::OPTIONS => {
-								let origin = match http_helpers::read_header_value(request.headers(), "origin") {
+								let allowed_headers = acl.allowed_headers().to_cors_header_value();
+								let allowed_header_bytes = allowed_headers.as_bytes();
+
+								let origin = match maybe_origin {
 									Some(origin) => origin,
 									None => return Ok(malformed()),
 								};
-								let allowed_headers = access_control.allowed_headers().to_cors_header_value();
-								let allowed_header_bytes = allowed_headers.as_bytes();
 
 								let res = hyper::Response::builder()
 									.header("access-control-allow-origin", origin)
@@ -495,23 +521,6 @@ fn return_origin_if_different_from_host(headers: &HeaderMap) -> Option<&HeaderVa
 	} else {
 		None
 	}
-}
-
-// Checks to that access control of the received request is the same as configured.
-fn access_control_is_valid(
-	access_control: &AccessControl,
-	request: &hyper::Request<hyper::Body>,
-) -> Result<(), hyper::Response<hyper::Body>> {
-	if access_control.deny_host(request) {
-		return Err(response::host_not_allowed());
-	}
-	if access_control.deny_cors_origin(request) {
-		return Err(response::invalid_allow_origin());
-	}
-	if access_control.deny_cors_header(request) {
-		return Err(response::invalid_allow_headers());
-	}
-	Ok(())
 }
 
 /// Checks that content type of received request is valid for JSON-RPC.

@@ -36,6 +36,7 @@ use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_server::AccessControlBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -768,4 +769,52 @@ async fn http_health_api_works() {
 	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
 	let out = String::from_utf8(bytes.to_vec()).unwrap();
 	assert_eq!(out, "{\"jsonrpc\":\"2.0\",\"result\":\"im ok\",\"id\":0}");
+}
+
+#[tokio::test]
+async fn ws_cors_wildcard_works() {
+	use jsonrpsee::ws_server::*;
+
+	let acl = AccessControlBuilder::default()
+		.set_allowed_hosts(vec!["http://localhost:*", "http://127.0.0.1:*"])
+		.unwrap()
+		.build();
+
+	let server = WsServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let mut module = RpcModule::new(());
+	let addr = server.local_addr().unwrap();
+	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+
+	let _handle = server.start(module).unwrap();
+
+	let server_url = format!("ws://{}", addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let r = client.request::<String>("say_hello", None).await;
+
+	assert!(r.is_ok());
+}
+
+#[tokio::test]
+async fn http_cors_wildcard_works() {
+	use jsonrpsee::http_server::*;
+
+	let acl = AccessControlBuilder::default()
+		.set_allowed_hosts(vec!["http://localhost:*", "http://127.0.0.1:*"])
+		.unwrap()
+		.build();
+
+	let server = HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let mut module = RpcModule::new(());
+	let addr = server.local_addr().unwrap();
+	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+
+	let _handle = server.start(module).unwrap();
+
+	let server_url = format!("http://{}", addr);
+	let client = HttpClientBuilder::default().build(&server_url).unwrap();
+
+	let r = client.request::<String>("say_hello", None).await;
+
+	assert!(r.is_ok());
 }

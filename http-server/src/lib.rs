@@ -30,17 +30,13 @@
 //!
 //! `jsonrpsee-http-server` is a [JSON RPC](https://www.jsonrpc.org/specification) HTTPS server library that's is built for `async/await`.
 
-mod access_control;
+//mod access_control;
 mod server;
 
 /// Common builders for RPC responses.
 pub mod response;
 
-pub use access_control::{
-	cors::{AccessControlAllowHeaders, AccessControlAllowOrigin},
-	hosts::{AllowHosts, DomainsValidation, Host},
-	AccessControl, AccessControlBuilder,
-};
+pub use jsonrpsee_core::server::access_control::{AccessControl, AccessControlBuilder};
 pub use jsonrpsee_core::server::rpc_module::RpcModule;
 pub use jsonrpsee_types as types;
 pub use server::{Builder as HttpServerBuilder, Server as HttpServer, ServerHandle as HttpServerHandle};

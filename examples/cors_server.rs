@@ -26,7 +26,10 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::{
+	core::server::access_control::AccessControlBuilder,
+	http_server::{HttpServerBuilder, HttpServerHandle, RpcModule},
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -65,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let acl = AccessControlBuilder::new().allow_all_headers().allow_all_origins().allow_all_hosts().build();
+	let acl = AccessControlBuilder::default().allow_all_headers().allow_all_origins().allow_all_hosts().build();
 
 	let server =
 		HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;

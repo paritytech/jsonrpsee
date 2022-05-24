@@ -26,7 +26,8 @@
 
 //! Host header validation.
 
-use crate::access_control::matcher::{Matcher, Pattern};
+use crate::server::access_control::matcher::{Matcher, Pattern};
+use crate::Error;
 
 const SPLIT_PROOF: &str = "split always returns non-empty iterator.";
 
@@ -139,47 +140,33 @@ impl std::ops::Deref for Host {
 	}
 }
 
-/// Specifies if domains should be validated.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum DomainsValidation<T> {
-	/// Allow only domains on the list.
-	AllowOnly(Vec<T>),
-	/// Disable domains validation completely.
-	Disabled,
-}
-
-impl<T> From<Option<Vec<T>>> for DomainsValidation<T> {
-	fn from(other: Option<Vec<T>>) -> Self {
-		match other {
-			Some(list) => DomainsValidation::AllowOnly(list),
-			None => DomainsValidation::Disabled,
-		}
-	}
-}
-
-/// Returns `true` when `Host` header is whitelisted in `allow_hosts`.
-pub(crate) fn is_host_valid(host: Option<&str>, allow_hosts: &AllowHosts) -> bool {
-	match host {
-		None => false,
-		Some(ref host) => match allow_hosts {
-			AllowHosts::Any => true,
-			AllowHosts::Only(allow_hosts) => allow_hosts.iter().any(|h| h.matches(host)),
-		},
-	}
-}
-
-/// Allowed hosts for http header 'host'
-#[derive(Clone, Debug)]
+/// Policy for validating the `HTTP host header`.
+#[derive(Debug, Clone)]
 pub enum AllowHosts {
-	/// Allow requests from any host
+	/// Allow all hosts (no filter).
 	Any,
-	/// Allow only a selection of specific hosts
-	Only(Vec<Host>),
+	/// Allow only specified hosts.
+	Only(Box<[Host]>),
+}
+
+impl AllowHosts {
+	/// Verify a host.
+	pub fn verify(&self, value: &str) -> Result<(), Error> {
+		if let AllowHosts::Only(list) = self {
+			if !list.iter().any(|o| o.matches(value)) {
+				let error = format!("{} denied: {}", "host header", value);
+				tracing::warn!("{}", error);
+				return Err(Error::Custom(error));
+			}
+		}
+
+		Ok(())
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{is_host_valid, AllowHosts, Host};
+	use super::{AllowHosts, Host, Port};
 
 	#[test]
 	fn should_parse_host() {
@@ -188,43 +175,34 @@ mod tests {
 		assert_eq!(Host::parse("chrome-extension://124.0.0.1"), Host::new("124.0.0.1", None));
 		assert_eq!(Host::parse("parity.io/somepath"), Host::new("parity.io", None));
 		assert_eq!(Host::parse("127.0.0.1:8545/somepath"), Host::new("127.0.0.1", Some(8545)));
+
+		let host = Host::parse("*.domain:*/somepath");
+		assert_eq!(host.port, Port::Pattern("*".into()));
+		assert_eq!(host.hostname.as_str(), "*.domain");
 	}
 
 	#[test]
-	fn should_reject_when_there_is_no_header() {
-		let valid = is_host_valid(None, &AllowHosts::Any);
-		assert!(!valid);
-		let valid = is_host_valid(None, &AllowHosts::Only(vec![]));
-		assert!(!valid);
-	}
-
-	#[test]
-	fn should_reject_when_validation_is_disabled() {
-		let valid = is_host_valid(Some("any"), &AllowHosts::Any);
-		assert!(valid);
+	fn should_allow_when_validation_is_disabled() {
+		assert!((AllowHosts::Any).verify("any").is_ok());
 	}
 
 	#[test]
 	fn should_reject_if_header_not_on_the_list() {
-		let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec![]));
-		assert!(!valid);
+		assert!((AllowHosts::Only(vec![].into())).verify("parity.io").is_err());
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list() {
-		let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec!["parity.io".into()]));
-		assert!(valid);
+		assert!((AllowHosts::Only(vec!["parity.io".into()].into())).verify("parity.io").is_ok());
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list_with_port() {
-		let valid = is_host_valid(Some("parity.io:443"), &AllowHosts::Only(vec!["parity.io:443".into()]));
-		assert!(valid);
+		assert!((AllowHosts::Only(vec!["parity.io:443".into()].into())).verify("parity.io:443").is_ok());
 	}
 
 	#[test]
 	fn should_support_wildcards() {
-		let valid = is_host_valid(Some("parity.web3.site:8180"), &AllowHosts::Only(vec!["*.web3.site:*".into()]));
-		assert!(valid);
+		assert!((AllowHosts::Only(vec!["*.web3.site:*".into()].into())).verify("parity.web3.site:8180").is_ok());
 	}
 }
