@@ -377,7 +377,9 @@ async fn background_task(
 
 		let request_start = middleware.on_request();
 
-		match data.get(0) {
+		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
+
+		match first_non_whitespace {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 					tracing::debug!("recv method call={}", req.method);
