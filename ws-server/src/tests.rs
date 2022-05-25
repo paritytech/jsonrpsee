@@ -349,10 +349,6 @@ async fn garbage_request_fails() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
 
-	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));
-
 	let req = r#"{}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
@@ -369,10 +365,6 @@ async fn garbage_request_fails() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
 
-	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
-	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));
-
 	let req = r#"[]"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, invalid_request(Id::Null));
@@ -380,6 +372,20 @@ async fn garbage_request_fails() {
 	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn whitespace_is_not_significant() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::Number(3u32.into()), Id::Num(1)));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, r#"[{"jsonrpc":"2.0","result":3,"id":1}]"#);
 }
 
 #[tokio::test]
