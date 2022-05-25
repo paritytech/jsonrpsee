@@ -105,7 +105,7 @@ pub enum Error {
 	/// Attempted to stop server that is already stopped.
 	#[error("Attempted to stop server that is already stopped")]
 	AlreadyStopped,
-	/// List passed into access control based `HTTP` headers.
+	/// List passed into access control based on HTTP header verification.
 	#[error("Must set at least one allowed value for the {0} header")]
 	EmptyAllowList(&'static str),
 	/// Access control based on `HTTP` header failed.
