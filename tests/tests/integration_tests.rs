@@ -772,7 +772,7 @@ async fn http_health_api_works() {
 }
 
 #[tokio::test]
-async fn ws_cors_wildcard_works() {
+async fn ws_host_filtering_wildcard_works() {
 	use jsonrpsee::ws_server::*;
 
 	let acl = AccessControlBuilder::default()
@@ -790,13 +790,11 @@ async fn ws_cors_wildcard_works() {
 	let server_url = format!("ws://{}", addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let r = client.request::<String>("say_hello", None).await;
-
-	assert!(r.is_ok());
+	assert!(client.request::<String>("say_hello", None).await.is_ok());
 }
 
 #[tokio::test]
-async fn http_cors_wildcard_works() {
+async fn http_host_filtering_wildcard_works() {
 	use jsonrpsee::http_server::*;
 
 	let acl = AccessControlBuilder::default()
@@ -814,7 +812,5 @@ async fn http_cors_wildcard_works() {
 	let server_url = format!("http://{}", addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
-	let r = client.request::<String>("say_hello", None).await;
-
-	assert!(r.is_ok());
+	assert!(client.request::<String>("say_hello", None).await.is_ok());
 }

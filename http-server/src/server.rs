@@ -439,13 +439,13 @@ impl<M: Middleware> Server<M> {
 							// An OPTIONS request is a CORS preflight request. We've done our access check
 							// above so we just need to tell the browser that the request is OK.
 							Method::OPTIONS => {
-								let allowed_headers = acl.allowed_headers().to_cors_header_value();
-								let allowed_header_bytes = allowed_headers.as_bytes();
-
 								let origin = match maybe_origin {
 									Some(origin) => origin,
 									None => return Ok(malformed()),
 								};
+
+								let allowed_headers = acl.allowed_headers().to_cors_header_value();
+								let allowed_header_bytes = allowed_headers.as_bytes();
 
 								let res = hyper::Response::builder()
 									.header("access-control-allow-origin", origin)
