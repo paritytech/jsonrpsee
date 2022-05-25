@@ -355,15 +355,17 @@ impl Methods {
 		tracing::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let (resp, _, _) = self.inner_call(req).await;
 
-		if let Ok(res) = serde_json::from_str::<Response<T>>(&resp) {
-			return Ok(res.result);
-		}
-
-		if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp) {
-			return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
-		}
-
-		unreachable!("Invalid JSON-RPC response is not possible using jsonrpsee; this is bug please file an issue");
+		let res = match serde_json::from_str::<Response<T>>(&resp) {
+			Ok(res) => Ok(res.result),
+			Err(e) => {
+				if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp) {
+					Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())))
+				} else {
+					Err(e.into())
+				}
+			}
+		};
+		res
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.

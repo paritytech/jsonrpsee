@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-core"
-version = "0.13.0"
+version = "0.13.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Utilities for jsonrpsee"
 edition = "2021"
@@ -11,7 +11,7 @@ anyhow = "1"
 async-trait = "0.1"
 beef = { version = "0.5.1", features = ["impl_serde"] }
 futures-channel = "0.3.14"
-jsonrpsee-types = { path = "../types", version = "0.13.0" }
+jsonrpsee-types = { path = "../types", version = "0.13.1" }
 thiserror = "1"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
