@@ -27,7 +27,6 @@
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -50,7 +49,7 @@ use jsonrpsee_types::Params;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use soketto::{Receiver, Sender};
+use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::select;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
@@ -323,24 +322,20 @@ async fn background_task(
 	tokio::spawn(async move {
 		while !stop_server2.shutdown_requested() {
 			select! {
-				rx_value = rx.next() => {
-					if let Some(response) = rx_value {
-						// If websocket message send fail then terminate the connection.
-						if let Err(err) = send_ws_message(&mut sender, response).await {
-							tracing::warn!("WS send error: {}; terminate connection", err);
-							break;
-						}
-					} else {
+				Some(response) = rx.next() => {
+					// If websocket message send fail then terminate the connection.
+					if let Err(err) = send_ws_message(&mut sender, response).await {
+						tracing::warn!("WS send error: {}; terminate connection", err);
 						break;
 					}
 				}
-
 				_ = submit_ping.tick() => {
 					if let Err(err) = send_ws_ping(&mut sender).await {
 						tracing::warn!("WS send ping error: {}; terminate connection", err);
 						break;
 					}
 				}
+				else => break,
 			}
 		}
 
