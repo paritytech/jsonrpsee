@@ -108,7 +108,7 @@ pub enum Error {
 	/// List passed into access control based on HTTP header verification.
 	#[error("Must set at least one allowed value for the {0} header")]
 	EmptyAllowList(&'static str),
-	/// Access control based on `HTTP` header failed.
+	/// Access control verification of HTTP headers failed.
 	#[error("HTTP header: `{0}` value: `{1}` verification failed")]
 	HttpHeaderRejected(&'static str, String),
 	/// Failed to execute a method because a resource was already at capacity
