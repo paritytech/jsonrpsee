@@ -316,8 +316,6 @@ async fn background_task(
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
 	let mut submit_ping = tokio::time::interval(ping_interval);
-	let ping_submitted_tx = Arc::new(AtomicBool::new(false));
-	let ping_submitted_rx = ping_submitted_tx.clone();
 
 	middleware.on_connect();
 
@@ -338,18 +336,10 @@ async fn background_task(
 				}
 
 				_ = submit_ping.tick() => {
-					// Ping was already submitted.
-					if ping_submitted_tx.load(Ordering::Relaxed) {
-						tracing::warn!("WS did not receive a pong or activity in due time");
-						break;
-					}
-
 					if let Err(err) = send_ws_ping(&mut sender).await {
 						tracing::warn!("WS send ping error: {}; terminate connection", err);
 						break;
 					}
-
-					ping_submitted_tx.store(true, Ordering::Relaxed);
 				}
 			}
 		}
@@ -371,10 +361,7 @@ async fn background_task(
 
 		{
 			// Need the extra scope to drop this pinned future and reclaim access to `data`
-
-			let ping_submitted_rx = ping_submitted_rx.clone();
-			// Intercept data, while handling the incoming pong frames.
-			let receive = receive_data(&mut receiver, &mut data, ping_submitted_rx);
+			let receive = receiver.receive_data(&mut data);
 			tokio::pin!(receive);
 
 			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
@@ -899,7 +886,8 @@ impl<M> Builder<M> {
 
 	/// Configure the interval at which pings are submitted.
 	///
-	/// The `Ping` interval should be larger than the time expected for receiving a `Pong` frame.
+	/// This option is used to keep the connection alive, and is just submitting `Ping` frames,
+	/// without making any assumptions about when a `Pong` frame should be received.
 	///
 	/// Default: 60 seconds.
 	///
@@ -991,24 +979,4 @@ async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>
 	let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
 	sender.send_ping(byte_slice).await?;
 	sender.flush().await.map_err(Into::into)
-}
-
-/// Receive data in a similar way to soketto's `receive_data`, but ensure that the provided boolean flag is cleared
-/// upon receiving a `Pong` frame from the socket.
-async fn receive_data(
-	receiver: &mut Receiver<BufReader<BufWriter<Compat<TcpStream>>>>,
-	message: &mut Vec<u8>,
-	ping_submitted: Arc<AtomicBool>,
-) -> Result<soketto::Data, soketto::connection::Error> {
-	loop {
-		let recv = receiver.receive(message).await?;
-
-		if let soketto::Incoming::Data(d) = recv {
-			return Ok(d);
-		} else if let soketto::Incoming::Pong(_) = recv {
-			tracing::debug!("recv pong");
-
-			ping_submitted.store(false, Ordering::Relaxed);
-		}
-	}
 }
