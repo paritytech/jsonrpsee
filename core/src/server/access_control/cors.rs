@@ -27,7 +27,7 @@
 //! CORS handling utility functions
 
 use std::collections::HashSet;
-use std::ops;
+use std::{fmt, ops};
 
 use crate::server::access_control::host::{Host, Port};
 use crate::server::access_control::matcher::{Matcher, Pattern};
@@ -135,6 +135,20 @@ pub enum AllowOrigin {
 	Null,
 	/// Any non-null origin
 	Any,
+}
+
+impl fmt::Display for AllowOrigin {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(
+			f,
+			"{}",
+			match *self {
+				Self::Any => "*",
+				Self::Null => "null",
+				Self::Origin(ref val) => val,
+			}
+		)
+	}
 }
 
 impl<T: Into<String>> From<T> for AllowOrigin {
