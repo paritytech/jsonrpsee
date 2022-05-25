@@ -420,17 +420,17 @@ impl<M: Middleware> Server<M> {
 								.flat_map(|val| val.split(','));
 
 						if let Err(e) = acl.verify_host(host) {
-							tracing::warn!("Denying request: {:?}", e);
+							tracing::warn!("Denied request: {:?}", e);
 							return Ok(response::host_not_allowed());
 						}
 
 						if let Err(e) = acl.verify_origin(maybe_origin, host) {
-							tracing::warn!("Denying request: {:?}", e);
+							tracing::warn!("Denied request: {:?}", e);
 							return Ok(response::invalid_allow_origin());
 						}
 
 						if let Err(e) = acl.verify_headers(headers, cors_headers) {
-							tracing::warn!("Denying request: {:?}", e);
+							tracing::warn!("Denied request: {:?}", e);
 							return Ok(response::invalid_allow_origin());
 						}
 

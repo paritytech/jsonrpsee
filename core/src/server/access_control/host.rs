@@ -146,7 +146,7 @@ pub enum AllowHosts {
 	/// Allow all hosts (no filter).
 	Any,
 	/// Allow only specified hosts.
-	Only(Box<[Host]>),
+	Only(Vec<Host>),
 }
 
 impl AllowHosts {
@@ -154,9 +154,7 @@ impl AllowHosts {
 	pub fn verify(&self, value: &str) -> Result<(), Error> {
 		if let AllowHosts::Only(list) = self {
 			if !list.iter().any(|o| o.matches(value)) {
-				let error = format!("{} denied: {}", "host header", value);
-				tracing::warn!("{}", error);
-				return Err(Error::Custom(error));
+				return Err(Error::HttpHeaderRejected("host", value.into()));
 			}
 		}
 

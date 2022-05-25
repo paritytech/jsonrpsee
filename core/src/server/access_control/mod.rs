@@ -22,23 +22,18 @@ pub struct AccessControl {
 impl AccessControl {
 	/// Validate incoming request by HTTP HOST
 	///
-	/// The `value` is return value from the `host header`
+	/// `host` is return value from the `host header`
 	pub fn verify_host(&self, host: &str) -> Result<(), Error> {
 		self.allowed_hosts.verify(host)
 	}
 
 	/// Validate incoming request by CORS origin value
 	///
-	/// `value` is the return from the `origin header`.
-	///
-	/// Format:
-	///
-	/// Origin: null
-	/// Origin: <scheme>://<hostname>
-	/// Origin: <scheme>://<hostname>:<port>
+	/// `host` is the return value from the `host header`
+	/// `origin` is the value from the `origin header`.
 	pub fn verify_origin(&self, origin: Option<&str>, host: &str) -> Result<(), Error> {
 		if let cors::AllowCors::Invalid = get_cors_allow_origin(origin, &self.allowed_origins, Some(host)) {
-			Err(Error::Custom("Invalid origin".into()))
+			Err(Error::HttpHeaderRejected("origin", origin.unwrap_or("<missing>").into()))
 		} else {
 			Ok(())
 		}
@@ -46,24 +41,18 @@ impl AccessControl {
 
 	/// Validate incoming request by CORS header
 	///
-	/// `value` is the return value(s) from the `access-control-request-headers`.
-	/// Validate incoming request by CORS header
-	///
-	/// `cors_headers`: header names from `"access-control-request-headers"`.
+	/// `header_names` is the headers names in the request.
+	/// `cors_headers`: is the header names from `access-control-request-headers header`.
 	pub fn verify_headers<T, I, II>(&self, header_names: I, cors_headers: II) -> Result<(), Error>
 	where
 		T: AsRef<str>,
 		I: Iterator<Item = T>,
 		II: Iterator<Item = T>,
 	{
-		use hyper::header::HeaderValue;
-
-		let header = cors::get_cors_allow_headers(header_names, cors_headers, &self.allowed_headers, |name| {
-			HeaderValue::from_str(name.as_ref()).unwrap_or_else(|_| HeaderValue::from_static("unknown"))
-		});
+		let header = cors::get_cors_allow_headers(header_names, cors_headers, &self.allowed_headers, |name| name);
 
 		if let cors::AllowCors::Invalid = header {
-			Err(Error::Custom("Header: access-control-request-headers invalid".to_string()))
+			Err(Error::HttpHeaderRejected("access-control-request-headers", "<too long to be logged>".into()))
 		} else {
 			Ok(())
 		}
@@ -127,7 +116,7 @@ impl AccessControlBuilder {
 		List: IntoIterator<Item = H>,
 		H: Into<String>,
 	{
-		let allowed_hosts: Box<[Host]> = list.into_iter().map(|s| Host::parse(&s.into())).map(Into::into).collect();
+		let allowed_hosts: Vec<_> = list.into_iter().map(|s| Host::parse(&s.into())).map(Into::into).collect();
 		if allowed_hosts.is_empty() {
 			return Err(Error::EmptyAllowList("Host"));
 		}

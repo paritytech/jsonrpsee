@@ -48,7 +48,7 @@ server = [
 	"tokio/rt",
 	"tokio/sync",
 	"lazy_static",
-	"unicase"
+	"unicase",
 ]
 client = ["futures-util/sink", "futures-channel/sink", "futures-channel/std"]
 async-client = [

@@ -246,13 +246,14 @@ where
 			let key = {
 				let req = server.receive_request().await?;
 
-				let host = std::str::from_utf8(req.headers().host).map_err(|e| Error::Custom(e.to_string()))?;
+				let host = std::str::from_utf8(req.headers().host)
+					.map_err(|_e| Error::Custom("Host header must be valid UTF-8".into()))?;
 				let origin = req.headers().origin.and_then(|h| std::str::from_utf8(h).ok());
 
 				let host_check = cfg.access_control.verify_host(host);
 				let origin_check = cfg.access_control.verify_origin(origin, host);
 
-				// TODO header check?!.
+				// TODO: "access-control-request-headers" not possible to fetch via soketto.
 
 				host_check.and(origin_check).map(|()| req.key())
 			};
@@ -262,11 +263,12 @@ where
 					let accept = Response::Accept { key, protocol: None };
 					server.send_response(&accept).await?;
 				}
-				Err(error) => {
+				Err(err) => {
+					tracing::warn!("Rejected connection: {:?}", err);
 					let reject = Response::Reject { status_code: 403 };
 					server.send_response(&reject).await?;
 
-					return Err(error);
+					return Err(err);
 				}
 			}
 

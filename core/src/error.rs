@@ -105,9 +105,12 @@ pub enum Error {
 	/// Attempted to stop server that is already stopped.
 	#[error("Attempted to stop server that is already stopped")]
 	AlreadyStopped,
-	/// List passed into `set_allowed_origins` was empty
+	/// List passed into access control based `HTTP` headers.
 	#[error("Must set at least one allowed value for the {0} header")]
 	EmptyAllowList(&'static str),
+	/// Access control based on `HTTP` header failed.
+	#[error("HTTP header: `{0}` value: `{1}` verification failed")]
+	HttpHeaderRejected(&'static str, String),
 	/// Failed to execute a method because a resource was already at capacity
 	#[error("Resource at capacity: {0}")]
 	ResourceAtCapacity(&'static str),
