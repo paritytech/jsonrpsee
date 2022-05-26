@@ -767,5 +767,5 @@ async fn http_health_api_works() {
 
 	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
 	let out = String::from_utf8(bytes.to_vec()).unwrap();
-	assert_eq!(out, "{\"jsonrpc\":\"2.0\",\"result\":\"im ok\",\"id\":0}");
+	assert_eq!(out.as_str(), "{\"health\":true}");
 }
