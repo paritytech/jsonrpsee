@@ -117,14 +117,18 @@ impl ClientBuilder {
 		self
 	}
 
-	/// Set the interval at which pings are submitted (disabled by default).
+	/// Set the interval at which pings frames are submitted (disabled by default).
 	///
-	/// The Ping interval should be larger than the time expected for receiving a Pong frame.
+	/// Periodically submitting pings at a defined interval has mainly two benefits:
+	///  - Directly, it acts as a "keep-alive" alternative in the WebSocket world.
+	///  - Indirectly by inspecting trace logs, ensures that the endpoint is still responding to messages.
+	///
+	/// The underlying implementation does not make any assumptions about at which intervals pongs are received.
 	///
 	/// Note: The interval duration is restarted when
-	///  - submitted frontend command
-	///  - received backend reply
-	///  - submitted ping
+	///  - a frontend command is submitted
+	///  - a reply is received from the backend
+	///  - the interval duration expires
 	pub fn ping_interval(mut self, interval: Duration) -> Self {
 		self.ping_interval = Some(interval);
 		self
