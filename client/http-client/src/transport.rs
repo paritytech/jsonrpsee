@@ -11,6 +11,7 @@ use hyper::Uri;
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers;
+use jsonrpsee_core::tracing::{rx_log_from_bytes, tx_log_from_str};
 use thiserror::Error;
 
 const CONTENT_TYPE_JSON: &str = "application/json";
@@ -43,6 +44,10 @@ pub struct HttpTransportClient {
 	client: HyperClient,
 	/// Configurable max request body size
 	max_request_body_size: u32,
+	/// Max length for logging for requests and responses
+	///
+	/// Logs bigger than this limit will be truncated.
+	max_log_length: u32,
 }
 
 impl HttpTransportClient {
@@ -51,6 +56,7 @@ impl HttpTransportClient {
 		target: impl AsRef<str>,
 		max_request_body_size: u32,
 		cert_store: CertificateStore,
+		max_log_length: u32,
 	) -> Result<Self, Error> {
 		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.port_u16().is_none() {
@@ -84,11 +90,11 @@ impl HttpTransportClient {
 				return Err(Error::Url(err.into()));
 			}
 		};
-		Ok(Self { target, client, max_request_body_size })
+		Ok(Self { target, client, max_request_body_size, max_log_length })
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
-		tracing::trace!(tx_len = body.len(), tx = body.as_str());
+		tx_log_from_str(&body, self.max_log_length);
 
 		if body.len() > self.max_request_body_size as usize {
 			return Err(Error::RequestTooLarge);
@@ -114,10 +120,7 @@ impl HttpTransportClient {
 		let (parts, body) = response.into_parts();
 		let (body, _) = http_helpers::read_body(&parts.headers, body, self.max_request_body_size).await?;
 
-		tracing::trace!(
-			rx_len = body.len(),
-			rx = serde_json::from_slice::<serde_json::Value>(&body).unwrap_or_default().to_string().as_str()
-		);
+		rx_log_from_bytes(&body, self.max_log_length);
 
 		Ok(body)
 	}
@@ -195,36 +198,37 @@ mod tests {
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err = HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native).unwrap_err();
+		let err = HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native, 80).unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[cfg(feature = "tls")]
 	#[test]
 	fn https_works() {
-		let client = HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native).unwrap();
+		let client = HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80).unwrap();
 		assert_target(&client, "localhost", "https", "/", 9933, 80);
 	}
 
 	#[cfg(not(feature = "tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
-		let err = HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native).unwrap_err();
+		let err = HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80).unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[test]
 	fn faulty_port() {
-		let err = HttpTransportClient::new("http://localhost:-43", 80, CertificateStore::Native).unwrap_err();
+		let err = HttpTransportClient::new("http://localhost:-43", 80, CertificateStore::Native, 80).unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
-		let err = HttpTransportClient::new("http://localhost:-99999", 80, CertificateStore::Native).unwrap_err();
+		let err = HttpTransportClient::new("http://localhost:-99999", 80, CertificateStore::Native, 80).unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[test]
 	fn url_with_path_works() {
 		let client =
-			HttpTransportClient::new("http://localhost:9944/my-special-path", 1337, CertificateStore::Native).unwrap();
+			HttpTransportClient::new("http://localhost:9944/my-special-path", 1337, CertificateStore::Native, 80)
+				.unwrap();
 		assert_target(&client, "localhost", "http", "/my-special-path", 9944, 1337);
 	}
 
@@ -234,6 +238,7 @@ mod tests {
 			"http://127.0.0.1:9999/my?name1=value1&name2=value2",
 			u32::MAX,
 			CertificateStore::WebPki,
+			80,
 		)
 		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my?name1=value1&name2=value2", 9999, u32::MAX);
@@ -242,14 +247,14 @@ mod tests {
 	#[test]
 	fn url_with_fragment_is_ignored() {
 		let client =
-			HttpTransportClient::new("http://127.0.0.1:9944/my.htm#ignore", 999, CertificateStore::Native).unwrap();
+			HttpTransportClient::new("http://127.0.0.1:9944/my.htm#ignore", 999, CertificateStore::Native, 80).unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my.htm", 9944, 999);
 	}
 
 	#[tokio::test]
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
-		let client = HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki).unwrap();
+		let client = HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki, 99).unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
 		let body = "a".repeat(81);

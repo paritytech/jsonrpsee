@@ -10,7 +10,7 @@ use crate::client::{
 	RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT,
 	TransportSenderT,
 };
-use crate::tracing::RpcTracing;
+use crate::tracing::{rx_log_from_json, tx_log_from_json, tx_log_from_str, RpcTracing};
 
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
@@ -72,6 +72,7 @@ pub struct ClientBuilder {
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	id_kind: IdKind,
+	max_log_length: u32,
 }
 
 impl Default for ClientBuilder {
@@ -81,6 +82,7 @@ impl Default for ClientBuilder {
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			id_kind: IdKind::Number,
+			max_log_length: 4096,
 		}
 	}
 }
@@ -118,6 +120,14 @@ impl ClientBuilder {
 		self
 	}
 
+	/// Max length for logging for requests and responses in number characters.
+	///
+	/// Logs bigger than this limit will be truncated.
+	pub fn set_max_logging_length(mut self, max: u32) -> Self {
+		self.max_log_length = max;
+		self
+	}
+
 	/// Build the client with given transport.
 	///
 	/// ## Panics
@@ -142,6 +152,7 @@ impl ClientBuilder {
 			request_timeout: self.request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
+			max_log_length: self.max_log_length,
 		}
 	}
 
@@ -181,6 +192,10 @@ pub struct Client {
 	request_timeout: Duration,
 	/// Request ID manager.
 	id_manager: RequestIdManager,
+	/// Max length for logging for requests and responses.
+	///
+	/// Entires bigger than this limit will be truncated.
+	max_log_length: u32,
 }
 
 impl Client {
@@ -215,7 +230,7 @@ impl ClientT for Client {
 		let _enter = trace.span().enter();
 
 		let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
-		tracing::trace!(tx_len = raw.len(), tx = raw.as_str());
+		tx_log_from_str(&raw, self.max_log_length);
 
 		let mut sender = self.to_back.clone();
 		let fut = sender.send(FrontToBack::Notification(raw)).in_current_span();
@@ -238,12 +253,12 @@ impl ClientT for Client {
 		let _enter = trace.span().enter();
 
 		let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
-		tracing::trace!(tx_len = raw.len(), tx = raw.as_str());
+		tx_log_from_str(&raw, self.max_log_length);
 
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::Request(RequestMessage { raw, id, send_back: Some(send_back_tx) }))
+			.send(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) }))
 			.await
 			.is_err()
 		{
@@ -257,8 +272,7 @@ impl ClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		// there is no way to get the length of `serde_json::Value` without deserializing.
-		tracing::trace!(rx = serde_json::to_string(&json_value).expect("valid JSON; qed").as_str());
+		tx_log_from_json(&Response::new(&json_value, id), self.max_log_length);
 
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
@@ -280,7 +294,8 @@ impl ClientT for Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 
 		let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
-		tracing::trace!(tx_len = raw.len(), tx = raw.as_str());
+
+		tx_log_from_str(&raw, self.max_log_length);
 
 		if self
 			.to_back
@@ -299,7 +314,7 @@ impl ClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		tracing::trace!(rx_len = json_values.len(), tx = ?json_values);
+		rx_log_from_json(&json_values, self.max_log_length);
 
 		let values: Result<_, _> =
 			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
@@ -331,9 +346,11 @@ impl SubscriptionClientT for Client {
 		let trace = RpcTracing::method_call(subscribe_method);
 		let _enter = trace.span().enter();
 
-		let raw =
-			serde_json::to_string(&RequestSer::new(&ids[0], subscribe_method, params)).map_err(Error::ParseError)?;
-		tracing::trace!(tx_len = raw.len(), tx = raw.as_str());
+		let id = ids[0].clone();
+
+		let raw = serde_json::to_string(&RequestSer::new(&id, subscribe_method, params)).map_err(Error::ParseError)?;
+
+		tx_log_from_str(&raw, self.max_log_length);
 
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
@@ -354,15 +371,15 @@ impl SubscriptionClientT for Client {
 
 		let res = call_with_timeout(self.request_timeout, send_back_rx).in_current_span().await;
 
-		let (notifs_rx, id) = match res {
+		let (notifs_rx, sub_id) = match res {
 			Ok(Ok(val)) => val,
 			Ok(Err(err)) => return Err(err),
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		tracing::trace!(rx = serde_json::to_string(&id).expect("valid JSON; qed").as_str());
+		rx_log_from_json(&Response::new(&sub_id, id), self.max_log_length);
 
-		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(id)))
+		Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 	}
 
 	/// Subscribe to a specific method.
@@ -370,8 +387,6 @@ impl SubscriptionClientT for Client {
 	where
 		N: DeserializeOwned,
 	{
-		tracing::trace!("[frontend]: register_notification: {:?}", method);
-
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		if self
 			.to_back
@@ -427,13 +442,12 @@ async fn background_task<S, R>(
 			// User dropped the sender side of the channel.
 			// There is nothing to do just terminate.
 			Either::Left((None, _)) => {
-				tracing::trace!("[backend]: frontend dropped; terminate client");
+				tracing::warn!("[backend]: background task terminated");
 				break;
 			}
 
 			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
 				tracing::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
-				// NOTE(niklasad1): annoying allocation.
 				if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
 					tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
 					let _ = send_back.send(Err(Error::InvalidRequestId));
@@ -447,25 +461,21 @@ async fn background_task<S, R>(
 			}
 			// User called `notification` on the front-end
 			Either::Left((Some(FrontToBack::Notification(notif)), _)) => {
-				tracing::trace!("[backend]: client prepares to send notification: {:?}", notif);
 				if let Err(e) = sender.send(notif).await {
 					tracing::warn!("[backend]: client notif failed: {:?}", e);
 				}
 			}
 
 			// User called `request` on the front-end
-			Either::Left((Some(FrontToBack::Request(request)), _)) => {
-				tracing::trace!("[backend]: client prepares to send request={:?}", request);
-				match sender.send(request.raw).await {
-					Ok(_) => manager
-						.insert_pending_call(request.id, request.send_back)
-						.expect("ID unused checked above; qed"),
-					Err(e) => {
-						tracing::warn!("[backend]: client request failed: {:?}", e);
-						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
-					}
+			Either::Left((Some(FrontToBack::Request(request)), _)) => match sender.send(request.raw).await {
+				Ok(_) => {
+					manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed")
 				}
-			}
+				Err(e) => {
+					tracing::warn!("[backend]: client request failed: {:?}", e);
+					let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
+				}
+			},
 
 			// User called `subscribe` on the front-end.
 			Either::Left((Some(FrontToBack::Subscribe(sub)), _)) => match sender.send(sub.raw).await {
@@ -497,7 +507,6 @@ async fn background_task<S, R>(
 
 			// User called `register_notification` on the front-end.
 			Either::Left((Some(FrontToBack::RegisterNotification(reg)), _)) => {
-				tracing::trace!("[backend] registering notification handler: {:?}", reg.method);
 				let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
 
 				if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
@@ -509,13 +518,11 @@ async fn background_task<S, R>(
 
 			// User dropped the notificationHandler for this method
 			Either::Left((Some(FrontToBack::UnregisterNotification(method)), _)) => {
-				tracing::trace!("[backend] unregistering notification handler: {:?}", method);
 				let _ = manager.remove_notification_handler(method);
 			}
 			Either::Right((Some(Ok(raw)), _)) => {
 				// Single response to a request.
 				if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
-					tracing::trace!("[backend]: recv method_call {:?}", single);
 					match process_single_response(&mut manager, single, max_notifs_per_subscription) {
 						Ok(Some(unsub)) => {
 							stop_subscription(&mut sender, &mut manager, unsub).await;
@@ -529,24 +536,20 @@ async fn background_task<S, R>(
 				}
 				// Subscription response.
 				else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
-					tracing::trace!("[backend]: recv subscription {:?}", response);
 					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
 						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
 					}
 				}
 				// Subscription error response.
 				else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
-					tracing::debug!("[backend]: recv subscription closed {:?}", response);
 					let _ = process_subscription_close_response(&mut manager, response);
 				}
 				// Incoming Notification
 				else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
-					tracing::trace!("[backend]: recv notification {:?}", notif);
 					let _ = process_notification(&mut manager, notif);
 				}
 				// Batch response.
 				else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
-					tracing::trace!("[backend]: recv batch {:?}", batch);
 					if let Err(e) = process_batch_response(&mut manager, batch) {
 						let _ = front_error.send(e);
 						break;
@@ -554,7 +557,6 @@ async fn background_task<S, R>(
 				}
 				// Error response
 				else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
-					tracing::trace!("[backend]: recv error response {:?}", err);
 					if let Err(e) = process_error_response(&mut manager, err) {
 						let _ = front_error.send(e);
 						break;
@@ -562,22 +564,17 @@ async fn background_task<S, R>(
 				}
 				// Unparsable response
 				else {
-					tracing::debug!(
-						"[backend]: recv unparseable message: {:?}",
-						serde_json::from_str::<serde_json::Value>(&raw)
-					);
-					let _ = front_error.send(Error::Custom("Unparsable response".into()));
+					let json = serde_json::from_str::<serde_json::Value>(&raw);
+					let _ = front_error.send(Error::Custom(format!("Unparsable response: {:?}", json)));
 					break;
 				}
 			}
 			Either::Right((Some(Err(e)), _)) => {
-				tracing::error!("Error: {:?} terminating client", e);
 				let _ = front_error.send(Error::Transport(e.into()));
 				break;
 			}
 			Either::Right((None, _)) => {
-				tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
-				let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
+				let _ = front_error.send(Error::Custom("Receiver dropped".into()));
 				break;
 			}
 		}

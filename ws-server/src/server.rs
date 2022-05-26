@@ -42,7 +42,7 @@ use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, BoundedSubscriptions, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
-use jsonrpsee_core::tracing::RpcTracing;
+use jsonrpsee_core::tracing::{rx_log_from_json, RpcTracing};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::Params;
@@ -142,7 +142,7 @@ impl<M: Middleware> Server<M> {
 						},
 					)));
 
-					tracing::info!("Accepting new connection, {}/{}", connections.count(), self.cfg.max_connections);
+					tracing::info!("Accepting new connection {}/{}", connections.count(), self.cfg.max_connections);
 
 					id = id.wrapping_add(1);
 				}
@@ -243,7 +243,6 @@ where
 			Ok(())
 		}
 		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor, middleware, id_provider } => {
-			tracing::debug!("Accepting new connection: {}", conn_id);
 			let key = {
 				let req = server.receive_request().await?;
 				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
@@ -258,6 +257,7 @@ where
 					server.send_response(&accept).await?;
 				}
 				Err(error) => {
+					tracing::warn!("Denied connection: {:?}", error);
 					let reject = Response::Reject { status_code: 403 };
 					server.send_response(&reject).await?;
 
@@ -272,6 +272,7 @@ where
 				resources.clone(),
 				cfg.max_request_body_size,
 				cfg.max_response_body_size,
+				cfg.max_log_length,
 				cfg.batch_requests_supported,
 				BoundedSubscriptions::new(cfg.max_subscriptions_per_connection),
 				stop_monitor.clone(),
@@ -295,6 +296,7 @@ async fn background_task(
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	max_log_length: u32,
 	batch_requests_supported: bool,
 	bounded_subscriptions: BoundedSubscriptions,
 	stop_server: StopMonitor,
@@ -309,7 +311,7 @@ async fn background_task(
 	let bounded_subscriptions2 = bounded_subscriptions.clone();
 
 	let stop_server2 = stop_server.clone();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	middleware.on_connect();
 
@@ -385,7 +387,7 @@ async fn background_task(
 					let trace = RpcTracing::method_call(&req.method);
 					let _enter = trace.span().enter();
 
-					tracing::trace!(rx_len = data.len(), rx = ?req);
+					rx_log_from_json(&req, max_log_length);
 
 					let id = req.id.clone();
 					let params = Params::new(req.params.map(|params| params.get()));
@@ -492,9 +494,8 @@ async fn background_task(
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 					// complete batch response back to the client over `tx`.
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
-					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size);
+					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size, max_log_length);
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
-
 						if !batch_requests_supported {
 							sink.send_error(
 								Id::Null,
@@ -504,10 +505,9 @@ async fn background_task(
 						} else if !batch.is_empty() {
 							let trace = RpcTracing::batch();
 							let _enter = trace.span().enter();
-							tracing::debug!("recv batch len={}", batch.len());
-							tracing::trace!("recv: batch={:?}", batch);
 
-							tracing::trace!(rx_len = batch.len(), tx = ?batch);
+							rx_log_from_json(&batch, max_log_length);
+
 							join_all(batch.into_iter().filter_map(move |req| {
 								let id = req.id.clone();
 								let params = Params::new(req.params.map(|params| params.get()));
@@ -669,6 +669,10 @@ struct Settings {
 	max_connections: u64,
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
+	/// Max length for logging for requests and responses
+	///
+	/// Logs bigger than this limit will be truncated.
+	max_log_length: u32,
 	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
 	allowed_origins: AllowedValue,
 	/// Policy by which to accept or deny incoming requests based on the `Host` header.
@@ -684,6 +688,7 @@ impl Default for Settings {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
+			max_log_length: 4096,
 			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
 			batch_requests_supported: true,

@@ -26,6 +26,8 @@
 
 //! Types pertaining to JSON-RPC responses.
 
+use std::fmt;
+
 use crate::params::{Id, SubscriptionId, TwoPointZero};
 use crate::request::Notification;
 use serde::{Deserialize, Serialize};
@@ -47,6 +49,12 @@ impl<'a, T> Response<'a, T> {
 	/// Create a new [`Response`].
 	pub fn new(result: T, id: Id<'a>) -> Response<'a, T> {
 		Response { jsonrpc: TwoPointZero, result, id }
+	}
+}
+
+impl<'a, T: Serialize> fmt::Display for Response<'a, T> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", serde_json::to_string(&self).expect("valid JSON; qed"))
 	}
 }
 

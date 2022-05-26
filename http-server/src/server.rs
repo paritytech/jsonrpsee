@@ -43,7 +43,7 @@ use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
-use jsonrpsee_core::tracing::RpcTracing;
+use jsonrpsee_core::tracing::{rx_log_from_json, RpcTracing};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
@@ -62,7 +62,7 @@ pub struct Builder<M = ()> {
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
-	max_tracing_length: u32,
+	max_log_length: u32,
 	health_api: Option<HealthApi>,
 }
 
@@ -76,7 +76,7 @@ impl Default for Builder {
 			access_control: AccessControl::default(),
 			tokio_runtime: None,
 			middleware: (),
-			max_tracing_length: 1024,
+			max_log_length: 4096,
 			health_api: None,
 		}
 	}
@@ -124,7 +124,7 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
-			max_tracing_length: self.max_tracing_length,
+			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		}
 	}
@@ -228,7 +228,7 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
-			max_tracing_length: self.max_tracing_length,
+			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		})
 	}
@@ -273,7 +273,7 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
-			max_tracing_length: self.max_tracing_length,
+			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		})
 	}
@@ -309,7 +309,7 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
-			max_tracing_length: self.max_tracing_length,
+			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		})
 	}
@@ -363,8 +363,10 @@ pub struct Server<M = ()> {
 	max_request_body_size: u32,
 	/// Max response body size.
 	max_response_body_size: u32,
-	/// Max length for tracing for request and response
-	max_tracing_length: u32,
+	/// Max length for logging for request and response
+	///
+	/// Logs bigger than this limit will be truncated.
+	max_log_length: u32,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_supported: bool,
 	/// Access control
@@ -387,7 +389,7 @@ impl<M: Middleware> Server<M> {
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let max_response_body_size = self.max_response_body_size;
-		let max_trace_length = self.max_tracing_length;
+		let max_log_length = self.max_log_length;
 		let access_control = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
@@ -455,7 +457,7 @@ impl<M: Middleware> Server<M> {
 									resources,
 									max_request_body_size,
 									max_response_body_size,
-									max_trace_length,
+									max_log_length,
 									batch_requests_supported,
 								)
 								.await?;
@@ -467,7 +469,14 @@ impl<M: Middleware> Server<M> {
 							}
 							Method::GET => match health_api.as_ref() {
 								Some(health) if health.path.as_str() == request.uri().path() => {
-									process_health_request(health, middleware, methods, max_response_body_size).await
+									process_health_request(
+										health,
+										middleware,
+										methods,
+										max_response_body_size,
+										max_log_length,
+									)
+									.await
 								}
 								_ => Ok(response::method_not_allowed()),
 							},
@@ -552,7 +561,7 @@ async fn process_validated_request(
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
-	max_tracing_length: u32,
+	max_log_length: u32,
 	batch_requests_supported: bool,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (parts, body) = request.into_parts();
@@ -571,7 +580,7 @@ async fn process_validated_request(
 
 	// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
@@ -583,8 +592,7 @@ async fn process_validated_request(
 			let trace = RpcTracing::method_call(&req.method);
 			let _enter = trace.span().enter();
 
-			// TODO: add limit to this.
-			tracing::trace!(rx_len = body.len(), rx = serde_json::to_string(&req).expect("valid JSON; qed").as_str());
+			rx_log_from_json(&req, max_log_length);
 			middleware.on_call(method);
 
 			let id = req.id.clone();
@@ -634,8 +642,7 @@ async fn process_validated_request(
 			let trace = RpcTracing::notification(&req.method);
 			let _enter = trace.span().enter();
 
-			// Todo introduce BoundedWriterAtMostBytes to serialize this.
-			tracing::trace!(rx_len = body.len(), rx = serde_json::to_string(&req).expect("valid JSON; qed").as_str());
+			rx_log_from_json(&req, max_log_length);
 
 			return Ok::<_, HyperError>(response::ok_response("".into()));
 		} else {
@@ -647,7 +654,7 @@ async fn process_validated_request(
 		let trace = RpcTracing::batch();
 		let _enter = trace.span().enter();
 
-		tracing::trace!(rx_len = batch.len(), rx = ?&batch[0..std::cmp::max(batch.len(), max_tracing_length as usize)]);
+		rx_log_from_json(&batch, max_log_length);
 
 		if !batch_requests_supported {
 			// Server was configured to not support batches.
@@ -754,9 +761,10 @@ async fn process_health_request(
 	middleware: impl Middleware,
 	methods: Methods,
 	max_response_body_size: u32,
+	max_log_length: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	let request_start = middleware.on_request();
 

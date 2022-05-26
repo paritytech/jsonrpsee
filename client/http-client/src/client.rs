@@ -46,6 +46,7 @@ pub struct HttpClientBuilder {
 	max_concurrent_requests: usize,
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
+	max_log_length: u32,
 }
 
 impl HttpClientBuilder {
@@ -79,10 +80,19 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Max length for logging for requests and responses in number characters.
+	///
+	/// Logs bigger than this limit will be truncated.
+	pub fn set_max_logging_length(mut self, max: u32) -> Self {
+		self.max_log_length = max;
+		self
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
-		let transport = HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store)
-			.map_err(|e| Error::Transport(e.into()))?;
+		let transport =
+			HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store, self.max_log_length)
+				.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
 			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests, self.id_kind)),
@@ -99,6 +109,7 @@ impl Default for HttpClientBuilder {
 			max_concurrent_requests: 256,
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
+			max_log_length: 4096,
 		}
 	}
 }
@@ -120,8 +131,10 @@ impl ClientT for HttpClient {
 		let trace = RpcTracing::notification(method);
 		let _enter = trace.span().enter();
 
-		let notif = NotificationSer::new(method, params);
-		let fut = self.transport.send(serde_json::to_string(&notif).map_err(Error::ParseError)?).in_current_span();
+		let notif = serde_json::to_string(&NotificationSer::new(method, params)).map_err(Error::ParseError)?;
+
+		let fut = self.transport.send(notif).in_current_span();
+
 		match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(ok)) => Ok(ok),
 			Err(_) => Err(Error::RequestTimeout),
@@ -140,10 +153,9 @@ impl ClientT for HttpClient {
 		let trace = RpcTracing::method_call(method);
 		let _enter = trace.span().enter();
 
-		let fut = self
-			.transport
-			.send_and_read_body(serde_json::to_string(&request).map_err(Error::ParseError)?)
-			.in_current_span();
+		let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
+
+		let fut = self.transport.send_and_read_body(raw).in_current_span();
 		let body = match tokio::time::timeout(self.request_timeout, fut).await {
 			Ok(Ok(body)) => body,
 			Err(_e) => {
