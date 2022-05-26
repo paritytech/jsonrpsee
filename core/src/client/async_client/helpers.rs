@@ -24,14 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::time::Duration;
-
 use crate::client::async_client::manager::{RequestManager, RequestStatus};
 use crate::client::{RequestMessage, TransportSenderT};
-use crate::error::SubscriptionClosed;
 use crate::Error;
 
-use futures_channel::{mpsc, oneshot};
+use futures_channel::mpsc;
+use futures_timer::Delay;
+use futures_util::future::{self, Either};
+
+use jsonrpsee_types::error::CallError;
+use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{
 	ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
 };
@@ -81,20 +83,14 @@ pub(crate) fn process_subscription_response(
 	let sub_id = response.params.subscription.into_owned();
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
-		None => return Err(None),
+		None => {
+			tracing::error!("Subscription ID: {:?} is not an active subscription", sub_id);
+			return Err(None);
+		}
 	};
 
 	match manager.as_subscription_mut(&request_id) {
-		Some(send_back_sink) => match send_back_sink.try_send(response.params.result.clone()) {
-			// The server sent a subscription closed notification, then close down the subscription.
-			Ok(()) if serde_json::from_value::<SubscriptionClosed>(response.params.result).is_ok() => {
-				if manager.remove_subscription(request_id, sub_id.clone()).is_some() {
-					Ok(())
-				} else {
-					tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
-					Err(None)
-				}
-			}
+		Some(send_back_sink) => match send_back_sink.try_send(response.params.result) {
 			Ok(()) => Ok(()),
 			Err(err) => {
 				tracing::error!("Dropping subscription {:?} error: {:?}", sub_id, err);
@@ -108,6 +104,27 @@ pub(crate) fn process_subscription_response(
 			Err(None)
 		}
 	}
+}
+
+/// Attempts to close a subscription when a [`SubscriptionError`] is received.
+///
+/// Returns `Ok(())` if the subscription was removed
+/// Return `Err(e)` if the subscription was not found.
+pub(crate) fn process_subscription_close_response(
+	manager: &mut RequestManager,
+	response: SubscriptionError<JsonValue>,
+) -> Result<(), Error> {
+	let sub_id = response.params.subscription.into_owned();
+	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
+		Some(request_id) => request_id,
+		None => {
+			tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
+			return Err(Error::InvalidSubscriptionId);
+		}
+	};
+
+	manager.remove_subscription(request_id, sub_id).expect("Both request ID and sub ID in RequestManager; qed");
+	Ok(())
 }
 
 /// Attempts to process an incoming notification
@@ -217,17 +234,18 @@ pub(crate) fn build_unsubscribe_message(
 /// Returns `Ok` if the response was successfully sent.
 /// Returns `Err(_)` if the response ID was not found.
 pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorResponse) -> Result<(), Error> {
-	let id = err.id.clone().into_owned();
+	let id = err.id().clone().into_owned();
 
 	match manager.request_status(&id) {
 		RequestStatus::PendingMethodCall => {
 			let send_back = manager.complete_pending_call(id).expect("State checked above; qed");
-			let _ = send_back.map(|s| s.send(Err(Error::Call(err.error.to_call_error()))));
+			let _ =
+				send_back.map(|s| s.send(Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())))));
 			Ok(())
 		}
 		RequestStatus::PendingSubscription => {
 			let (_, send_back, _) = manager.complete_pending_subscription(id).expect("State checked above; qed");
-			let _ = send_back.send(Err(Error::Call(err.error.to_call_error())));
+			let _ = send_back.send(Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))));
 			Ok(())
 		}
 		_ => Err(Error::InvalidRequestId),
@@ -236,12 +254,11 @@ pub(crate) fn process_error_response(manager: &mut RequestManager, err: ErrorRes
 
 /// Wait for a stream to complete within the given timeout.
 pub(crate) async fn call_with_timeout<T>(
-	timeout: Duration,
-	rx: oneshot::Receiver<Result<T, Error>>,
-) -> Result<Result<T, Error>, oneshot::Canceled> {
-	let timeout = tokio::time::sleep(timeout);
-	tokio::select! {
-		res = rx => res,
-		_ = timeout => Ok(Err(Error::RequestTimeout))
+	timeout: std::time::Duration,
+	rx: futures_channel::oneshot::Receiver<Result<T, Error>>,
+) -> Result<Result<T, Error>, futures_channel::oneshot::Canceled> {
+	match future::select(rx, Delay::new(timeout)).await {
+		Either::Left((res, _)) => res,
+		Either::Right((_, _)) => Ok(Err(Error::RequestTimeout)),
 	}
 }

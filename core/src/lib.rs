@@ -27,6 +27,11 @@
 //! Shared utilities for `jsonrpsee`.
 
 #![warn(missing_docs, missing_debug_implementations, unreachable_pub)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
+// Macros useful internally within this crate, but not to be exposed outside of it.
+#[macro_use]
+mod macros;
 
 /// Error type.
 pub mod error;
@@ -37,21 +42,18 @@ pub mod traits;
 /// Middleware trait and implementation.
 pub mod middleware;
 
-/// Shared hyper helpers.
-#[cfg(feature = "http-helpers")]
-pub mod http_helpers;
+cfg_http_helpers! {
+	pub mod http_helpers;
+}
 
-/// Different ways of setting the "id" in JSON-RPC responses and results.
-#[cfg(feature = "server")]
-pub mod id_providers;
+cfg_server! {
+	pub mod id_providers;
+	pub mod server;
+}
 
-/// Shared code for JSON-RPC servers.
-#[cfg(feature = "server")]
-pub mod server;
-
-/// Shared code for JSON-RPC clients.
-#[cfg(feature = "client")]
-pub mod client;
+cfg_client! {
+	pub mod client;
+}
 
 /// Shared tracing helpers to trace RPC calls.
 pub mod tracing;

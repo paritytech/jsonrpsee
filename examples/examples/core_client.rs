@@ -27,7 +27,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
-use jsonrpsee::core::client::{Client, ClientT};
+use jsonrpsee::core::client::{Client, ClientBuilder, ClientT};
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 #[tokio::main]
@@ -40,7 +40,8 @@ async fn main() -> anyhow::Result<()> {
 	let addr = run_server().await?;
 	let uri: Uri = format!("ws://{}", addr).parse()?;
 
-	let client: Client = WsTransportClientBuilder::default().build(uri).await?.into();
+	let (tx, rx) = WsTransportClientBuilder::default().build(uri).await?;
+	let client: Client = ClientBuilder::default().build_with_tokio(tx, rx);
 	let response: String = client.request("say_hello", None).await?;
 	tracing::info!("response: {:?}", response);
 

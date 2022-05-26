@@ -57,16 +57,8 @@ impl HttpTransportClient {
 			return Err(Error::Url("Port number is missing in the URL".into()));
 		}
 
-		let mut connector = HttpConnector::new();
-
-		connector.set_reuse_address(true);
-		connector.set_nodelay(true);
-
 		let client = match target.scheme_str() {
-			Some("http") => {
-				let client = Client::builder().build::<_, hyper::Body>(connector);
-				HyperClient::Http(client)
-			}
+			Some("http") => HyperClient::Http(Client::new()),
 			#[cfg(feature = "tls")]
 			Some("https") => {
 				let connector = match cert_store {
@@ -74,16 +66,15 @@ impl HttpTransportClient {
 						.with_native_roots()
 						.https_or_http()
 						.enable_http1()
-						.wrap_connector(connector),
+						.build(),
 					CertificateStore::WebPki => hyper_rustls::HttpsConnectorBuilder::new()
 						.with_webpki_roots()
 						.https_or_http()
 						.enable_http1()
-						.wrap_connector(connector),
+						.build(),
 					_ => return Err(Error::InvalidCertficateStore),
 				};
-				let client = Client::builder().build::<_, hyper::Body>(connector);
-				HyperClient::Https(client)
+				HyperClient::Https(Client::builder().build::<_, hyper::Body>(connector))
 			}
 			_ => {
 				#[cfg(feature = "tls")]

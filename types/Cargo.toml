@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-types"
-version = "0.9.0"
+version = "0.13.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Shared types for jsonrpsee"
 edition = "2021"

@@ -174,6 +174,6 @@ impl<'a> WsClientBuilder<'a> {
 			.request_timeout(self.request_timeout)
 			.max_concurrent_requests(self.max_concurrent_requests)
 			.id_format(self.id_kind)
-			.build(sender, receiver))
+			.build_with_tokio(sender, receiver))
 	}
 }

@@ -31,6 +31,7 @@ use std::net::SocketAddr;
 use futures::future;
 use futures::StreamExt;
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
@@ -70,13 +71,24 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	std::thread::spawn(move || produce_items(tx2));
 
-	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, sink, _| {
+	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
 		let rx = BroadcastStream::new(tx.clone().subscribe());
+		let mut sink = match pending.accept() {
+			Some(sink) => sink,
+			_ => return,
+		};
 
 		tokio::spawn(async move {
-			let _ = sink.pipe_from_try_stream(rx).await;
+			match sink.pipe_from_try_stream(rx).await {
+				SubscriptionClosed::Success => {
+					sink.close(SubscriptionClosed::Success);
+				}
+				SubscriptionClosed::RemotePeerAborted => (),
+				SubscriptionClosed::Failed(err) => {
+					sink.close(err);
+				}
+			};
 		});
-		Ok(())
 	})?;
 	let addr = server.local_addr()?;
 	server.start(module)?;

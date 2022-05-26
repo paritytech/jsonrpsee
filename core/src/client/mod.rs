@@ -25,12 +25,13 @@
 // DEALINGS IN THE SOFTWARE.
 
 //! Shared utilities for `jsonrpsee` clients.
+
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::task;
 
-use crate::error::{Error, SubscriptionClosed};
+use crate::error::Error;
 use async_trait::async_trait;
 use core::marker::PhantomData;
 use futures_channel::{mpsc, oneshot};
@@ -38,7 +39,7 @@ use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
 use jsonrpsee_types::{Id, ParamsSer, SubscriptionId};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
 
 #[doc(hidden)]
@@ -47,12 +48,10 @@ pub mod __reexports {
 	pub use jsonrpsee_types::ParamsSer;
 }
 
-/// Async client abstraction that brings additional deps.
-#[cfg(feature = "async-client")]
-mod async_client;
-
-#[cfg(feature = "async-client")]
-pub use async_client::{Client, ClientBuilder};
+cfg_async_client! {
+	pub mod async_client;
+	pub use async_client::{Client, ClientBuilder};
+}
 
 /// [JSON-RPC](https://www.jsonrpc.org/specification) client interface that can make requests and notifications.
 #[async_trait]
@@ -109,11 +108,25 @@ pub trait SubscriptionClientT: ClientT {
 		Notif: DeserializeOwned;
 }
 
+/// Marker trait to determine whether a type implements `Send` or not.
+#[cfg(target_arch = "wasm32")]
+pub trait MaybeSend {}
+
+/// Marker trait to determine whether a type implements `Send` or not.
+#[cfg(not(target_arch = "wasm32"))]
+pub trait MaybeSend: Send {}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<T: Send> MaybeSend for T {}
+
+#[cfg(target_arch = "wasm32")]
+impl<T> MaybeSend for T {}
+
 /// Transport interface to send data asynchronous.
-#[async_trait]
-/// Transport interface for an asyncronous client.
-pub trait TransportSenderT: Send + 'static {
-	/// Error.
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+pub trait TransportSenderT: MaybeSend + 'static {
+	/// Error that may occur during sending a message.
 	type Error: std::error::Error + Send + Sync;
 
 	/// Send.
@@ -126,9 +139,10 @@ pub trait TransportSenderT: Send + 'static {
 }
 
 /// Transport interface to receive data asynchronous.
-#[async_trait]
-pub trait TransportReceiverT: Send + 'static {
-	/// Error that occur during send or receiving a message.
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+pub trait TransportReceiverT: 'static {
+	/// Error that may occur during receiving a message.
 	type Error: std::error::Error + Send + Sync;
 
 	/// Receive.
@@ -162,17 +176,6 @@ pub enum SubscriptionKind {
 	Method(String),
 }
 
-/// Internal type to detect whether a subscription response from
-/// the server was a valid notification or should be treated as an error.
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum NotifResponse<Notif> {
-	/// Successful response.
-	Ok(Notif),
-	/// Subscription was closed.
-	Err(SubscriptionClosed),
-}
-
 /// Active subscription on the client.
 ///
 /// It will automatically unsubscribe in the [`Subscription::drop`] so no need to explicitly call
@@ -201,6 +204,11 @@ impl<Notif> Subscription<Notif> {
 		kind: SubscriptionKind,
 	) -> Self {
 		Self { to_back, notifs_rx, kind, marker: PhantomData }
+	}
+
+	/// Return the subscription type and, if applicable, ID.
+	pub fn kind(&self) -> &SubscriptionKind {
+		&self.kind
 	}
 }
 
@@ -301,9 +309,8 @@ where
 	type Item = Result<Notif, Error>;
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<Option<Self::Item>> {
 		let n = futures_util::ready!(self.notifs_rx.poll_next_unpin(cx));
-		let res = n.map(|n| match serde_json::from_value::<NotifResponse<Notif>>(n) {
-			Ok(NotifResponse::Ok(parsed)) => Ok(parsed),
-			Ok(NotifResponse::Err(e)) => Err(Error::SubscriptionClosed(e)),
+		let res = n.map(|n| match serde_json::from_value::<Notif>(n) {
+			Ok(parsed) => Ok(parsed),
 			Err(e) => Err(Error::ParseError(e)),
 		});
 		task::Poll::Ready(res)

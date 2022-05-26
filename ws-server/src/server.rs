@@ -31,7 +31,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
-use crate::types::error::ErrorCode;
+use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use crate::types::{Id, Request};
 use futures_channel::mpsc;
 use futures_util::future::{join_all, FutureExt};
@@ -39,7 +39,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
-use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
+use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, BoundedSubscriptions, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
 use jsonrpsee_core::tracing::RpcTracing;
@@ -50,7 +50,6 @@ use soketto::connection::Error as SokettoError;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::Notify;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use tracing_futures::Instrument;
 
@@ -273,6 +272,8 @@ where
 				resources.clone(),
 				cfg.max_request_body_size,
 				cfg.max_response_body_size,
+				cfg.batch_requests_supported,
+				BoundedSubscriptions::new(cfg.max_subscriptions_per_connection),
 				stop_monitor.clone(),
 				middleware,
 				id_provider,
@@ -294,6 +295,8 @@ async fn background_task(
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	batch_requests_supported: bool,
+	bounded_subscriptions: BoundedSubscriptions,
 	stop_server: StopMonitor,
 	middleware: impl Middleware,
 	id_provider: Arc<dyn IdProvider>,
@@ -303,8 +306,7 @@ async fn background_task(
 	builder.set_max_message_size(max_request_body_size as usize);
 	let (mut sender, mut receiver) = builder.finish();
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let close_notify = Arc::new(Notify::new());
-	let close_notify_server_stop = close_notify.clone();
+	let bounded_subscriptions2 = bounded_subscriptions.clone();
 
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
@@ -317,7 +319,7 @@ async fn background_task(
 			if let Some(response) = rx.next().await {
 				// If websocket message send fail then terminate the connection.
 				if let Err(err) = send_ws_message(&mut sender, response).await {
-					tracing::error!("WS transport error: {:?}; terminate connection", err);
+					tracing::warn!("WS send error: {}; terminate connection", err);
 					break;
 				}
 			} else {
@@ -328,9 +330,8 @@ async fn background_task(
 		// Terminate connection and send close message.
 		let _ = sender.close().await;
 
-		// Force `conn_tx` to this async block and close it down
-		// when the connection closes to be on safe side.
-		close_notify_server_stop.notify_one();
+		// Notify all listeners and close down associated tasks.
+		bounded_subscriptions2.close();
 	});
 
 	// Buffer for incoming data.
@@ -365,7 +366,7 @@ async fn background_task(
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::error!("WS transport error: {:?} => terminating connection {}", err, conn_id);
+						tracing::warn!("WS error: {}; terminate connection {}", err, conn_id);
 						sink.close();
 						break Err(err.into());
 					}
@@ -376,7 +377,9 @@ async fn background_task(
 
 		let request_start = middleware.on_request();
 
-		match data.get(0) {
+		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
+
+		match first_non_whitespace {
 			Some(b'{') => {
 				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 					let trace = RpcTracing::method_call(&req.method);
@@ -439,11 +442,14 @@ async fn background_task(
 							},
 							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
 								Ok(guard) => {
-									let cn = close_notify.clone();
-									let conn_state =
-										ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
-
-									let result = callback(id, params, &sink, conn_state);
+									let result = if let Some(cn) = bounded_subscriptions.acquire() {
+										let conn_state =
+											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
+										callback(id, params, &sink, conn_state)
+									} else {
+										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+										false
+									};
 									middleware.on_result(name, result, request_start);
 									middleware.on_response(request_start);
 									drop(guard);
@@ -458,6 +464,12 @@ async fn background_task(
 									middleware.on_response(request_start);
 								}
 							},
+							MethodKind::Unsubscription(callback) => {
+								// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
+								let result = callback(id, params, &sink, conn_id);
+								middleware.on_result(name, result, request_start);
+								middleware.on_response(request_start);
+							}
 						},
 					}
 				} else {
@@ -473,7 +485,7 @@ async fn background_task(
 				let methods = &methods;
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
-				let close_notify2 = close_notify.clone();
+				let bounded_subscriptions2 = bounded_subscriptions.clone();
 
 				let fut = async move {
 					// Batch responses must be sent back as a single message so we read the results from each
@@ -482,12 +494,20 @@ async fn background_task(
 					let (tx_batch, mut rx_batch) = mpsc::unbounded();
 					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size);
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
-						let trace = RpcTracing::batch();
-						let _enter = trace.span().enter();
 
-						tracing::trace!(rx_len = batch.len(), tx = ?batch);
+						if !batch_requests_supported {
+							sink.send_error(
+								Id::Null,
+								ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+							);
+							middleware.on_response(request_start);
+						} else if !batch.is_empty() {
+							let trace = RpcTracing::batch();
+							let _enter = trace.span().enter();
+							tracing::debug!("recv batch len={}", batch.len());
+							tracing::trace!("recv: batch={:?}", batch);
 
-						if !batch.is_empty() {
+							tracing::trace!(rx_len = batch.len(), tx = ?batch);
 							join_all(batch.into_iter().filter_map(move |req| {
 								let id = req.id.clone();
 								let params = Params::new(req.params.map(|params| params.get()));
@@ -543,11 +563,17 @@ async fn background_task(
 										MethodKind::Subscription(callback) => {
 											match method_callback.claim(&req.method, resources) {
 												Ok(guard) => {
-													let close_notify = close_notify2.clone();
-													let conn_state =
-														ConnState { conn_id, close_notify, id_provider: &*id_provider };
-
-													let result = callback(id, params, &sink_batch, conn_state);
+													let result = if let Some(cn) = bounded_subscriptions2.acquire() {
+														let conn_state = ConnState {
+															conn_id,
+															close_notify: cn,
+															id_provider: &*id_provider,
+														};
+														callback(id, params, &sink_batch, conn_state)
+													} else {
+														sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
+														false
+													};
 													middleware.on_result(&req.method, result, request_start);
 													drop(guard);
 													None
@@ -564,6 +590,12 @@ async fn background_task(
 												}
 											}
 										}
+										MethodKind::Unsubscription(callback) => {
+											// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
+											let result = callback(id, params, &sink_batch, conn_id);
+											middleware.on_result(&req.method, result, request_start);
+											None
+										}
 									},
 								}
 							}))
@@ -573,7 +605,7 @@ async fn background_task(
 							let results = collect_batch_response(rx_batch).await;
 
 							if let Err(err) = sink.send_raw(results) {
-								tracing::error!("Error sending batch response to the client: {:?}", err)
+								tracing::warn!("Error sending batch response to the client: {:?}", err)
 							} else {
 								middleware.on_response(request_start);
 							}
@@ -635,10 +667,14 @@ struct Settings {
 	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
 	max_connections: u64,
+	/// Maximum number of subscriptions per connection.
+	max_subscriptions_per_connection: u32,
 	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
 	allowed_origins: AllowedValue,
 	/// Policy by which to accept or deny incoming requests based on the `Host` header.
 	allowed_hosts: AllowedValue,
+	/// Whether batch requests are supported by this server or not.
+	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 }
@@ -648,7 +684,9 @@ impl Default for Settings {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
+			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
+			batch_requests_supported: true,
 			allowed_origins: AllowedValue::Any,
 			allowed_hosts: AllowedValue::Any,
 			tokio_runtime: None,
@@ -699,6 +737,19 @@ impl<M> Builder<M> {
 	/// Set the maximum number of connections allowed. Default is 100.
 	pub fn max_connections(mut self, max: u64) -> Self {
 		self.settings.max_connections = max;
+		self
+	}
+
+	/// Enables or disables support of [batch requests](https://www.jsonrpc.org/specification#batch).
+	/// By default, support is enabled.
+	pub fn batch_requests_supported(mut self, supported: bool) -> Self {
+		self.settings.batch_requests_supported = supported;
+		self
+	}
+
+	/// Set the maximum number of connections allowed. Default is 1024.
+	pub fn max_subscriptions_per_connection(mut self, max: u32) -> Self {
+		self.settings.max_subscriptions_per_connection = max;
 		self
 	}
 

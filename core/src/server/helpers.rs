@@ -25,16 +25,15 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::io;
+use std::sync::Arc;
 
 use crate::{to_json_raw_value, Error};
 use futures_channel::mpsc;
 use futures_util::StreamExt;
-use jsonrpsee_types::error::{
-	CallError, ErrorCode, ErrorObject, ErrorResponse, CALL_EXECUTION_FAILED_CODE, OVERSIZED_RESPONSE_CODE,
-	OVERSIZED_RESPONSE_MSG, UNKNOWN_ERROR_CODE,
-};
+use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
+use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
 /// Bounded writer that allows writing at most `max_len` bytes.
 ///
@@ -121,11 +120,7 @@ impl MethodSink {
 
 				if err.is_io() {
 					let data = to_json_raw_value(&format!("Exceeded max limit {}", self.max_response_size)).ok();
-					let err = ErrorObject {
-						code: ErrorCode::ServerError(OVERSIZED_RESPONSE_CODE),
-						message: OVERSIZED_RESPONSE_MSG.into(),
-						data: data.as_deref(),
-					};
+					let err = ErrorObject::borrowed(OVERSIZED_RESPONSE_CODE, &OVERSIZED_RESPONSE_MSG, data.as_deref());
 					return self.send_error(id, err);
 				} else {
 					return self.send_error(id, ErrorCode::InternalError.into());
@@ -136,7 +131,7 @@ impl MethodSink {
 		tracing::trace!(tx_len = json.len(), tx = json.as_str());
 
 		if let Err(err) = self.tx.unbounded_send(json) {
-			tracing::error!("Error sending response to the client: {:?}", err);
+			tracing::warn!("Error sending response {:?}", err);
 			false
 		} else {
 			true
@@ -145,7 +140,7 @@ impl MethodSink {
 
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
-		let json = match serde_json::to_string(&ErrorResponse::new(error, id)) {
+		let json = match serde_json::to_string(&ErrorResponse::borrowed(error, id)) {
 			Ok(json) => json,
 			Err(err) => {
 				tracing::error!("Error serializing error message: {:?}", err);
@@ -157,7 +152,7 @@ impl MethodSink {
 		tracing::trace!(tx_len = json.len(), tx = json.as_str());
 
 		if let Err(err) = self.tx.unbounded_send(json) {
-			tracing::error!("Could not send error response to the client: {:?}", err)
+			tracing::warn!("Error sending response {:?}", err);
 		}
 
 		false
@@ -165,20 +160,7 @@ impl MethodSink {
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
 	pub fn send_call_error(&self, id: Id, err: Error) -> bool {
-		let (code, message, data) = match err {
-			Error::Call(CallError::InvalidParams(e)) => (ErrorCode::InvalidParams, e.to_string(), None),
-			Error::Call(CallError::Failed(e)) => {
-				(ErrorCode::ServerError(CALL_EXECUTION_FAILED_CODE), e.to_string(), None)
-			}
-			Error::Call(CallError::Custom { code, message, data }) => (code.into(), message, data),
-			// This should normally not happen because the most common use case is to
-			// return `Error::Call` in `register_async_method`.
-			e => (ErrorCode::ServerError(UNKNOWN_ERROR_CODE), e.to_string(), None),
-		};
-
-		let err = ErrorObject { code, message: message.into(), data: data.as_deref() };
-
-		self.send_error(id, err)
+		self.send_error(id, err.into())
 	}
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
@@ -220,8 +202,53 @@ pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> Stri
 	buf
 }
 
+/// A permitted subscription.
+#[derive(Debug)]
+pub struct SubscriptionPermit {
+	_permit: OwnedSemaphorePermit,
+	resource: Arc<Notify>,
+}
+
+impl SubscriptionPermit {
+	/// Get the handle to [`tokio::sync::Notify`].
+	pub fn handle(&self) -> Arc<Notify> {
+		self.resource.clone()
+	}
+}
+
+/// Wrapper over [`tokio::sync::Notify`] with bounds check.
+#[derive(Debug, Clone)]
+pub struct BoundedSubscriptions {
+	resource: Arc<Notify>,
+	guard: Arc<Semaphore>,
+}
+
+impl BoundedSubscriptions {
+	/// Create a new bounded subscription.
+	pub fn new(max_subscriptions: u32) -> Self {
+		Self { resource: Arc::new(Notify::new()), guard: Arc::new(Semaphore::new(max_subscriptions as usize)) }
+	}
+
+	/// Attempts to acquire a subscription slot.
+	///
+	/// Fails if `max_subscriptions` have been exceeded.
+	pub fn acquire(&self) -> Option<SubscriptionPermit> {
+		Arc::clone(&self.guard)
+			.try_acquire_owned()
+			.ok()
+			.map(|p| SubscriptionPermit { _permit: p, resource: self.resource.clone() })
+	}
+
+	/// Close all subscriptions.
+	pub fn close(&self) {
+		self.resource.notify_waiters();
+	}
+}
+
 #[cfg(test)]
 mod tests {
+	use crate::server::helpers::BoundedSubscriptions;
+
 	use super::{BoundedWriter, Id, Response};
 
 	#[test]
@@ -238,5 +265,19 @@ mod tests {
 		let mut writer = BoundedWriter::new(100);
 		// NOTE: `"` is part of the serialization so 101 characters.
 		assert!(serde_json::to_writer(&mut writer, &"x".repeat(99)).is_err());
+	}
+
+	#[test]
+	fn bounded_subscriptions_work() {
+		let subs = BoundedSubscriptions::new(5);
+		let mut handles = Vec::new();
+
+		for _ in 0..5 {
+			handles.push(subs.acquire().unwrap());
+		}
+
+		assert!(subs.acquire().is_none());
+		handles.swap_remove(0);
+		assert!(subs.acquire().is_some());
 	}
 }

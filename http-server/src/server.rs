@@ -45,7 +45,7 @@ use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
 use jsonrpsee_core::tracing::RpcTracing;
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
-use jsonrpsee_types::error::ErrorCode;
+use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
 use tokio::net::{TcpListener, ToSocketAddrs};
@@ -58,10 +58,12 @@ pub struct Builder<M = ()> {
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
 	max_tracing_length: u32,
+	health_api: Option<HealthApi>,
 }
 
 impl Default for Builder {
@@ -69,11 +71,13 @@ impl Default for Builder {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
+			batch_requests_supported: true,
 			resources: Resources::default(),
 			access_control: AccessControl::default(),
 			tokio_runtime: None,
 			middleware: (),
 			max_tracing_length: 1024,
+			health_api: None,
 		}
 	}
 }
@@ -115,11 +119,13 @@ impl<M> Builder<M> {
 		Builder {
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			access_control: self.access_control,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
 			max_tracing_length: self.max_tracing_length,
+			health_api: self.health_api,
 		}
 	}
 
@@ -141,6 +147,13 @@ impl<M> Builder<M> {
 		self
 	}
 
+	/// Enables or disables support of [batch requests](https://www.jsonrpc.org/specification#batch).
+	/// By default, support is enabled.
+	pub fn batch_requests_supported(mut self, supported: bool) -> Self {
+		self.batch_requests_supported = supported;
+		self
+	}
+
 	/// Register a new resource kind. Errors if `label` is already registered, or if the number of
 	/// registered resources on this server instance would exceed 8.
 	///
@@ -157,6 +170,14 @@ impl<M> Builder<M> {
 	/// Default: [`tokio::spawn`]
 	pub fn custom_tokio_runtime(mut self, rt: tokio::runtime::Handle) -> Self {
 		self.tokio_runtime = Some(rt);
+		self
+	}
+
+	/// Enable health endpoint.
+	/// Allows you to expose one of the methods under GET /<path> The method will be invoked with no parameters. Error returned from the method will be converted to status 500 response.
+	/// Expects a tuple with (<path>, <rpc-method-name>).
+	pub fn health_api(mut self, path: impl Into<String>, method: impl Into<String>) -> Self {
+		self.health_api = Some(HealthApi { path: path.into(), method: method.into() });
 		self
 	}
 
@@ -203,10 +224,12 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
 			max_tracing_length: self.max_tracing_length,
+			health_api: self.health_api,
 		})
 	}
 
@@ -246,10 +269,12 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
 			max_tracing_length: self.max_tracing_length,
+			health_api: self.health_api,
 		})
 	}
 
@@ -280,12 +305,20 @@ impl<M> Builder<M> {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
 			max_tracing_length: self.max_tracing_length,
+			health_api: self.health_api,
 		})
 	}
+}
+
+#[derive(Debug, Clone)]
+struct HealthApi {
+	path: String,
+	method: String,
 }
 
 /// Handle used to run or stop the server.
@@ -332,6 +365,8 @@ pub struct Server<M = ()> {
 	max_response_body_size: u32,
 	/// Max length for tracing for request and response
 	max_tracing_length: u32,
+	/// Whether batch requests are supported by this server or not.
+	batch_requests_supported: bool,
 	/// Access control
 	access_control: AccessControl,
 	/// Tracker for currently used resources on the server
@@ -339,6 +374,7 @@ pub struct Server<M = ()> {
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
+	health_api: Option<HealthApi>,
 }
 
 impl<M: Middleware> Server<M> {
@@ -357,13 +393,16 @@ impl<M: Middleware> Server<M> {
 		let listener = self.listener;
 		let resources = self.resources;
 		let middleware = self.middleware;
+		let batch_requests_supported = self.batch_requests_supported;
 		let methods = methods.into().initialize_resources(&resources)?;
+		let health_api = self.health_api;
 
 		let make_service = make_service_fn(move |_| {
 			let methods = methods.clone();
 			let access_control = access_control.clone();
 			let resources = resources.clone();
 			let middleware = middleware.clone();
+			let health_api = health_api.clone();
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
@@ -371,6 +410,7 @@ impl<M: Middleware> Server<M> {
 					let access_control = access_control.clone();
 					let resources = resources.clone();
 					let middleware = middleware.clone();
+					let health_api = health_api.clone();
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -416,6 +456,7 @@ impl<M: Middleware> Server<M> {
 									max_request_body_size,
 									max_response_body_size,
 									max_trace_length,
+									batch_requests_supported,
 								)
 								.await?;
 
@@ -424,6 +465,12 @@ impl<M: Middleware> Server<M> {
 								}
 								Ok(res)
 							}
+							Method::GET => match health_api.as_ref() {
+								Some(health) if health.path.as_str() == request.uri().path() => {
+									process_health_request(health, middleware, methods, max_response_body_size).await
+								}
+								_ => Ok(response::method_not_allowed()),
+							},
 							// Error scenarios:
 							Method::POST => Ok(response::unsupported_content_type()),
 							_ => Ok(response::method_not_allowed()),
@@ -506,6 +553,7 @@ async fn process_validated_request(
 	max_request_body_size: u32,
 	max_response_body_size: u32,
 	max_tracing_length: u32,
+	batch_requests_supported: bool,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (parts, body) = request.into_parts();
 
@@ -574,7 +622,7 @@ async fn process_validated_request(
 							false
 						}
 					},
-					MethodKind::Subscription(_) => {
+					MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
 						tracing::error!("Subscriptions not supported on HTTP");
 						sink.send_error(req.id, ErrorCode::InternalError.into());
 						false
@@ -601,7 +649,14 @@ async fn process_validated_request(
 
 		tracing::trace!(rx_len = batch.len(), rx = ?&batch[0..std::cmp::max(batch.len(), max_tracing_length as usize)]);
 
-		if !batch.is_empty() {
+		if !batch_requests_supported {
+			// Server was configured to not support batches.
+			is_single = true;
+			sink.send_error(
+				Id::Null,
+				ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+			);
+		} else if !batch.is_empty() {
 			let middleware = &middleware;
 
 			join_all(batch.into_iter().filter_map(move |req| {
@@ -653,7 +708,7 @@ async fn process_validated_request(
 								None
 							}
 						},
-						MethodKind::Subscription(_) => {
+						MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
 							tracing::error!("Subscriptions not supported on HTTP");
 							sink.send_error(req.id, ErrorCode::InternalError.into());
 							middleware.on_result(&req.method, false, request_start);
@@ -692,4 +747,45 @@ async fn process_validated_request(
 
 	middleware.on_response(request_start);
 	Ok(response::ok_response(response))
+}
+
+async fn process_health_request(
+	health_api: &HealthApi,
+	middleware: impl Middleware,
+	methods: Methods,
+	max_response_body_size: u32,
+) -> Result<hyper::Response<hyper::Body>, HyperError> {
+	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+
+	let request_start = middleware.on_request();
+
+	let success = match methods.method_with_name(&health_api.method) {
+		None => false,
+		Some((name, method_callback)) => match method_callback.inner() {
+			MethodKind::Sync(callback) => {
+				let res = (callback)(Id::Number(0), Params::new(None), &sink);
+				middleware.on_result(name, res, request_start);
+				res
+			}
+			MethodKind::Async(callback) => {
+				let res = (callback)(Id::Number(0), Params::new(None), sink.clone(), 0, None).await;
+				middleware.on_result(name, res, request_start);
+				res
+			}
+
+			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
+				middleware.on_result(name, false, request_start);
+				false
+			}
+		},
+	};
+
+	let data = rx.next().await;
+	middleware.on_response(request_start);
+
+	match data {
+		Some(resp) if success => Ok(response::ok_response(resp)),
+		_ => Ok(response::internal_error()),
+	}
 }

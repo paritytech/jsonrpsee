@@ -162,7 +162,7 @@ async fn single_method_call_with_faulty_context() {
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
-	let req = r#"{"jsonrpc":"2.0","method":"should_err", "params":[],"id":1}"#;
+	let req = r#"{"jsonrpc":"2.0","method":"should_err","params":[],"id":1}"#;
 	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.status, StatusCode::OK);
 	assert_eq!(response.body, call_execution_failed("RPC context failed", Id::Num(1)));
@@ -275,10 +275,6 @@ async fn garbage_request_fails() {
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
 
-	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-	let response = http_request(req.into(), uri.clone()).await.unwrap();
-	assert_eq!(response.body, parse_error(Id::Null));
-
 	let req = r#"{}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
@@ -295,10 +291,6 @@ async fn garbage_request_fails() {
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
 
-	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
-	let response = http_request(req.into(), uri.clone()).await.unwrap();
-	assert_eq!(response.body, parse_error(Id::Null));
-
 	let req = r#"[]"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, invalid_request(Id::Null));
@@ -306,6 +298,24 @@ async fn garbage_request_fails() {
 	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn whitespace_is_not_significant() {
+	let (addr, _handle) = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	let expected = r#"{"jsonrpc":"2.0","result":3,"id":1}"#;
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, expected);
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	let expected = r#"[{"jsonrpc":"2.0","result":3,"id":1}]"#;
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, expected);
 }
 
 #[tokio::test]
@@ -445,6 +455,28 @@ async fn can_set_the_max_response_size() {
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response.body, oversized_response(Id::Num(1), 100));
+
+	handle.stop().unwrap();
+}
+
+#[tokio::test]
+async fn disabled_batches() {
+	let addr = "127.0.0.1:0";
+	// Disable batches support.
+	let server = HttpServerBuilder::default().batch_requests_supported(false).build(addr).await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
+	let addr = server.local_addr().unwrap();
+	let uri = to_http_uri(addr);
+	let handle = server.start(module).unwrap();
+
+	// Send a valid batch.
+	let req = r#"[
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1},
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":2}
+	]"#;
+	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.body, batches_not_supported());
 
 	handle.stop().unwrap();
 }

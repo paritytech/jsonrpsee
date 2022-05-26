@@ -54,7 +54,9 @@ pub async fn read_body(
 		return Err(GenericTransportError::TooLarge);
 	}
 
-	let single = match first_chunk.get(0) {
+	let first_non_whitespace = first_chunk.iter().find(|byte| !byte.is_ascii_whitespace());
+
+	let single = match first_non_whitespace {
 		Some(b'{') => true,
 		Some(b'[') => false,
 		_ => return Err(GenericTransportError::Malformed),

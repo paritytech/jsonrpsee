@@ -6,7 +6,7 @@ use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
+use jsonrpsee::ws_server::{PendingSubscription, WsServerBuilder};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -26,15 +26,15 @@ pub trait Rpc {
 	fn sync_method(&self) -> RpcResult<u16>;
 
 	#[subscription(name = "subscribe", item = String)]
-	fn sub(&self) -> RpcResult<()>;
+	fn sub(&self);
 
 	#[subscription(name = "echo", unsubscribe = "unsubscribeEcho", aliases = ["ECHO"], item = u32, unsubscribe_aliases = ["NotInterested", "listenNoMore"])]
-	fn sub_with_params(&self, val: u32) -> RpcResult<()>;
+	fn sub_with_params(&self, val: u32);
 
 	// This will send data to subscribers with the `method` field in the JSON payload set to `foo_subscribe_override`
 	// because it's in the `foo` namespace.
 	#[subscription(name = "subscribe_method" => "subscribe_override", item = u32)]
-	fn sub_with_override_notif_method(&self) -> RpcResult<()>;
+	fn sub_with_override_notif_method(&self);
 }
 
 pub struct RpcServerImpl;
@@ -63,18 +63,28 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	fn sub(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
-		sink.send(&"Response_A")?;
-		sink.send(&"Response_B")
+	fn sub(&self, pending: PendingSubscription) {
+		let mut sink = match pending.accept() {
+			Some(sink) => sink,
+			_ => return,
+		};
+		let _ = sink.send(&"Response_A");
+		let _ = sink.send(&"Response_B");
 	}
 
-	fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> RpcResult<()> {
-		sink.send(&val)?;
-		sink.send(&val)
+	fn sub_with_params(&self, pending: PendingSubscription, val: u32) {
+		let mut sink = match pending.accept() {
+			Some(sink) => sink,
+			_ => return,
+		};
+		let _ = sink.send(&val);
+		let _ = sink.send(&val);
 	}
 
-	fn sub_with_override_notif_method(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
-		sink.send(&1)
+	fn sub_with_override_notif_method(&self, pending: PendingSubscription) {
+		if let Some(mut sink) = pending.accept() {
+			let _ = sink.send(&1);
+		}
 	}
 }
 

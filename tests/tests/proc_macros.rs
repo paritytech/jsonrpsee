@@ -26,11 +26,16 @@
 
 //! Example of using proc macro to generate working client and server.
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
-use jsonrpsee::core::Error;
+use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::HttpServerBuilder;
+use jsonrpsee::rpc_params;
+use jsonrpsee::types::error::{CallError, ErrorCode};
+use jsonrpsee::types::ParamsSer;
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::WsServerBuilder;
 use serde_json::json;
@@ -38,7 +43,7 @@ use serde_json::json;
 mod rpc_impl {
 	use jsonrpsee::core::{async_trait, RpcResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::ws_server::SubscriptionSink;
+	use jsonrpsee::PendingSubscription;
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
@@ -49,10 +54,10 @@ mod rpc_impl {
 		fn sync_method(&self) -> RpcResult<u16>;
 
 		#[subscription(name = "sub", unsubscribe = "unsub", item = String)]
-		fn sub(&self) -> RpcResult<()>;
+		fn sub(&self);
 
 		#[subscription(name = "echo", unsubscribe = "unsubscribe_echo", aliases = ["alias_echo"], item = u32)]
-		fn sub_with_params(&self, val: u32) -> RpcResult<()>;
+		fn sub_with_params(&self, val: u32);
 
 		#[method(name = "params")]
 		fn params(&self, a: u8, b: &str) -> RpcResult<String> {
@@ -109,7 +114,7 @@ mod rpc_impl {
 
 		/// All head subscription
 		#[subscription(name = "subscribeAllHeads", item = Header)]
-		fn subscribe_all_heads(&self, hash: Hash) -> RpcResult<()>;
+		fn subscribe_all_heads(&self, hash: Hash);
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -124,7 +129,7 @@ mod rpc_impl {
 	pub trait OnlyGenericSubscription<Input, R> {
 		/// Get header of a relay chain block.
 		#[subscription(name = "sub", unsubscribe = "unsub", item = Vec<R>)]
-		fn sub(&self, hash: Input) -> RpcResult<()>;
+		fn sub(&self, hash: Input);
 	}
 
 	/// Trait to ensure that the trait bounds are correct.
@@ -161,16 +166,22 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		fn sub(&self, mut sink: SubscriptionSink) -> RpcResult<()> {
-			sink.send(&"Response_A")?;
-			sink.send(&"Response_B")?;
-			Ok(())
+		fn sub(&self, pending: PendingSubscription) {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&"Response_A");
+			let _ = sink.send(&"Response_B");
 		}
 
-		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> RpcResult<()> {
-			sink.send(&val)?;
-			sink.send(&val)?;
-			Ok(())
+		fn sub_with_params(&self, pending: PendingSubscription, val: u32) {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&val);
+			let _ = sink.send(&val);
 		}
 	}
 
@@ -183,8 +194,12 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		fn sub(&self, mut sink: SubscriptionSink, _: String) -> RpcResult<()> {
-			sink.send(&"hello")
+		fn sub(&self, pending: PendingSubscription, _: String) {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&"hello");
 		}
 	}
 }
@@ -203,6 +218,11 @@ pub async fn websocket_server() -> SocketAddr {
 
 #[tokio::test]
 async fn proc_macros_generic_ws_client_api() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -319,4 +339,46 @@ async fn subscriptions_do_not_work_for_http_servers() {
 	assert!(htclient.sub().await.is_err());
 	assert!(matches!(htclient.sub().await, Err(Error::HttpNotImplemented)));
 	assert_eq!(htclient.sync_method().await.unwrap(), 10);
+}
+
+#[tokio::test]
+async fn calls_with_bad_params() {
+	let server_addr = websocket_server().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Sub with faulty params as array.
+	let err = client
+		.subscribe::<serde_json::Value>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
+		.await
+		.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
+	);
+
+	// Call with faulty params as array.
+	let err = client.request::<serde_json::Value>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"faulty\", expected u8") && err.code() == ErrorCode::InvalidParams.code())
+	);
+
+	// Sub with faulty params as map.
+	let mut map = BTreeMap::new();
+	map.insert("val", "0x0".into());
+	let params = ParamsSer::Map(map);
+	let err =
+		client.subscribe::<serde_json::Value>("foo_echo", Some(params), "foo_unsubscribe_echo").await.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
+	);
+
+	// Call with faulty params as map.
+	let mut map = BTreeMap::new();
+	map.insert("param_a", 1.into());
+	map.insert("param_b", 99.into());
+	let params = ParamsSer::Map(map);
+	let err = client.request::<serde_json::Value>("foo_foo", Some(params)).await.unwrap_err();
+	assert!(
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: integer `99`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
+	);
 }

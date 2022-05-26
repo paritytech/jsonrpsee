@@ -6,6 +6,103 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.13.1] - 2022-05-13
+
+v0.13.1 is a release that fixes the documentation for feature-gated items on `docs.rs`.
+
+### [Fixed]
+- fix: generate docs for all features on docs.rs [#767](https://github.com/paritytech/jsonrpsee/pull/767)
+
+### [Changed]
+- chore(deps): update pprof requirement from 0.8 to 0.9 [#761](https://github.com/paritytech/jsonrpsee/pull/761)
+
+## [v0.13.0] - 2022-05-11
+
+v0.13.0 is release that adds health API support for the HTTP server and a few bug fixes.
+
+### [Added]
+feat: add http health API [#763](https://github.com/paritytech/jsonrpsee/pull/763)
+
+### [Fixed]
+- hide internal macros from public interface [#755](https://github.com/paritytech/jsonrpsee/pull/755)
+- fix: add `core` behind `http-server` feature [#760](https://github.com/paritytech/jsonrpsee/pull/760)
+
+
+## [v0.12.0] - 2022-05-06
+
+v0.12.0 is mainly a patch release with some minor features added.
+
+### [Added]
+- Make it possible to disable batch requests support [#744](https://github.com/paritytech/jsonrpsee/pull/744)
+- feat: add a way to limit the number of subscriptions per connection [#739](https://github.com/paritytech/jsonrpsee/pull/739)
+
+### [Fixed]
+- fix(http client): use https connector for https [#750](https://github.com/paritytech/jsonrpsee/pull/750)
+- fix(rpc module): close subscription task when a subscription is `unsubscribed` via the `unsubscribe call` [#743](https://github.com/paritytech/jsonrpsee/pull/743)
+- fix(jsonrpsee): generate docs behind features [#741](https://github.com/paritytech/jsonrpsee/pull/741)
+
+### [Changed]
+- remove vault from ci [#745](https://github.com/paritytech/jsonrpsee/pull/745)
+- chore(deps): update pprof requirement from 0.7 to 0.8  [#732](https://github.com/paritytech/jsonrpsee/pull/732)
+- chore(deps): update gloo-net requirement from 0.1.0 to 0.2.0 [#733](https://github.com/paritytech/jsonrpsee/pull/733)
+
+## [v0.11.0] - 2022-04-21
+
+v0.11.0 is a breaking release that reworks how subscriptions are handled by the servers where the users have to explicitly reject or accept each subscription.
+The reason for this is that the actual params in the subscription is passed to the callback and if the application decides the params are invalid and the server can't know if the call is going to fail or pass when dispatching the call.
+Thus, the actual subscription method call is only answered when the subscription is accepted or rejected.
+
+Additionally, the servers before sent a `SubscriptionClosed message` which is now disabled by default because it might break other implementations.
+It is still possible to respond with a `SubscriptionClosed message` but one has to match on the result from `SubscriptionSink::pipe_from_stream`.
+
+This release also adds support for `JSON-RPC WASM client` using web-sys bindings.
+
+### [Added]
+- feat: WASM client via web-sys transport [#648](https://github.com/paritytech/jsonrpsee/pull/648)
+
+### [Changed]
+- CI: bump Swatinem/rust-cache from 1.3.0 to 1.4.0 [#730](https://github.com/paritytech/jsonrpsee/pull/730)
+
+### [Fixed]
+- fix(rpc module): fail subscription calls with bad params [#728](https://github.com/paritytech/jsonrpsee/pull/728)
+
+
+## [v0.10.1] - 2022-04-05
+
+v0.10.1 is a release that fixes a regression in the HTTP server where the backlog was hardcoded to 128 (this is now set to 1024 by default but also configurable), introduces a couple of new APIs and a few minor bug fixes.
+
+If your usage expects a high rate of new HTTP connections you are encouraged to update or manually configure the socket based on the traffic characteristics.
+
+### [Changed]
+- [proc macros]: only generate unsub method if not provided (#702)
+- [examples]: update pubsub examples [#705](https://github.com/paritytech/jsonrpsee/pull/705)
+- core: remove `Error::Request` variant [#717](https://github.com/paritytech/jsonrpsee/pull/717)
+- Replace async-channel [#708](https://github.com/paritytech/jsonrpsee/pull/708)
+- chore(deps): bump actions/checkout from 2.4.0 to 3 [#710](https://github.com/paritytech/jsonrpsee/pull/710)
+- CI: cache cargo hack installation [#706](https://github.com/paritytech/jsonrpsee/pull/706)
+- CI: try nextest [#701](https://github.com/paritytech/jsonrpsee/pull/701)
+- chore(deps): update tokio-util requirement from 0.6 to 0.7 [#695](https://github.com/paritytech/jsonrpsee/pull/695)
+- CI: Move CI script to new location [#694](https://github.com/paritytech/jsonrpsee/pull/694)
+- refactor(log): downgrade send errors to warn [#726](https://github.com/paritytech/jsonrpsee/pull/726)
+
+### [Fixed]
+- fix(client): close subscription when server sent `SubscriptionClosed` notification [#721](https://github.com/paritytech/jsonrpsee/pull/721)
+- fix(http client): set reuseaddr and nodelay. [#687](https://github.com/paritytech/jsonrpsee/pull/687)
+- fix(rpc module): unsubscribe according ethereum pubsub spec [#693](https://github.com/paritytech/jsonrpsee/pull/693)
+- http server: fix regression set backlog to 1024 [#718](https://github.com/paritytech/jsonrpsee/pull/718)
+- README.MD: fix link to `ws server` [#703](https://github.com/paritytech/jsonrpsee/pull/703)
+- fix(ws server): close all subscription when the connection is closed [#725](https://github.com/paritytech/jsonrpsee/pull/725)
+- perf: don't send messages when client is gone [#724](https://github.com/paritytech/jsonrpsee/pull/724)
+
+### [Added]
+- feat(http server): add new builder APIs `build_from_tcp` and `build_from_hyper` [#719](https://github.com/paritytech/jsonrpsee/pull/719)
+- feat(servers): add `SubscriptionSink::pipe_from_try_stream` to support streams that returns `Result` [#720](https://github.com/paritytech/jsonrpsee/pull/720)
+- feat(servers): add max_response_size [#711](https://github.com/paritytech/jsonrpsee/pull/711)
+
+## [v0.10.0] - 2022-04-04 [YANKED]
+
+Yanked due to a leak when closing subscriptions in WebSocket server.
+
 ## [v0.9.0] - 2022-02-03
 
 v0.9.0 is technically a breaking release because of the `Debug` bound of the `IdProvider` trait changed which is used by WebSocket server. In practise it should be a non-breaking upgrade for most users.

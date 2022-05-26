@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-examples"
-version = "0.9.0"
+version = "0.13.1"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Examples for jsonrpsee"
 edition = "2021"
@@ -13,45 +13,6 @@ futures = "0.3"
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
-tokio = { version = "1.8", features = ["full"] }
+tokio = { version = "1.16", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
-
-[[example]]
-name = "http"
-path = "http.rs"
-
-[[example]]
-name = "middleware_ws"
-path = "middleware_ws.rs"
-
-[[example]]
-name = "middleware_http"
-path = "middleware_http.rs"
-
-[[example]]
-name = "multi_middleware"
-path = "multi_middleware.rs"
-
-[[example]]
-name = "ws"
-path = "ws.rs"
-
-[[example]]
-name = "ws_pubsub_broadcast"
-path = "ws_pubsub_broadcast.rs"
-
-[[example]]
-name = "ws_pubsub_with_params"
-path = "ws_pubsub_with_params.rs"
-
-[[example]]
-name = "proc_macro"
-path = "proc_macro.rs"
-
-[[example]]
-name = "core_client"
-path = "core_client.rs"
-
-[[example]]
-name = "cors_server"
-path = "cors_server.rs"
+serde_json = { version = "1" }

@@ -120,12 +120,15 @@ async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
 			std::thread::spawn(move || loop {
 				let _ = &sink;
 				std::thread::sleep(std::time::Duration::from_secs(30));
 			});
-			Ok(())
 		})
 		.unwrap();
 
@@ -346,10 +349,6 @@ async fn garbage_request_fails() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
 
-	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));
-
 	let req = r#"{}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
@@ -366,10 +365,6 @@ async fn garbage_request_fails() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
 
-	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
-	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, parse_error(Id::Null));
-
 	let req = r#"[]"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, invalid_request(Id::Null));
@@ -377,6 +372,20 @@ async fn garbage_request_fails() {
 	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn whitespace_is_not_significant() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, ok_response(JsonValue::Number(3u32.into()), Id::Num(1)));
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, r#"[{"jsonrpc":"2.0","result":3,"id":1}]"#);
 }
 
 #[tokio::test]
@@ -498,10 +507,10 @@ async fn register_methods_works() {
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_err());
 	assert!(module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| Ok(()))
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, _, _| {})
 		.is_ok());
 	assert!(module
-		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| Ok(()))
+		.register_subscription("subscribe_hello_again", "subscribe_hello_again", "unsubscribe_hello", |_, _, _| {})
 		.is_err());
 	assert!(
 		module.register_method("subscribe_hello_again", |_, _| Ok("lo")).is_ok(),
@@ -513,7 +522,7 @@ async fn register_methods_works() {
 async fn register_same_subscribe_unsubscribe_is_err() {
 	let mut module = RpcModule::new(());
 	assert!(matches!(
-		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| Ok(())),
+		module.register_subscription("subscribe_hello", "subscribe_hello", "subscribe_hello", |_, _, _| {}),
 		Err(Error::SubscriptionNameConflict(_))
 	));
 }
@@ -669,12 +678,15 @@ async fn custom_subscription_id_works() {
 	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, sink, _| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
 			std::thread::spawn(move || loop {
 				let _ = &sink;
 				std::thread::sleep(std::time::Duration::from_secs(30));
 			});
-			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();
@@ -685,4 +697,33 @@ async fn custom_subscription_id_works() {
 	assert_eq!(&sub, r#"{"jsonrpc":"2.0","result":"0xdeadbeef","id":0}"#);
 	let unsub = client.send_request_text(call("unsubscribe_hello", vec!["0xdeadbeef"], Id::Num(1))).await.unwrap();
 	assert_eq!(&unsub, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
+}
+
+#[tokio::test]
+async fn disabled_batches() {
+	// Disable batches support.
+	let server = WsServerBuilder::default()
+		.batch_requests_supported(false)
+		.build("127.0.0.1:0")
+		.with_default_timeout()
+		.await
+		.unwrap()
+		.unwrap();
+
+	let mut module = RpcModule::new(());
+	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
+	let addr = server.local_addr().unwrap();
+
+	let handle = server.start(module).unwrap();
+
+	// Send a valid batch.
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+	let req = r#"[
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":1},
+		{"jsonrpc":"2.0","method":"should_ok", "params":[],"id":2}
+	]"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, batches_not_supported());
+
+	handle.stop().unwrap();
 }

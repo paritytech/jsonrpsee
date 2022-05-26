@@ -26,9 +26,9 @@
 
 use std::collections::HashMap;
 
-use jsonrpsee::core::error::{Error, SubscriptionClosed, SubscriptionClosedReason};
+use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::types::error::CallError;
+use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject};
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 
@@ -66,7 +66,7 @@ fn flatten_rpc_modules() {
 fn rpc_context_modules_can_register_subscriptions() {
 	let cx = ();
 	let mut cxmodule = RpcModule::new(cx);
-	let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(()));
+	let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| {});
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -106,7 +106,7 @@ async fn calling_method_without_server() {
 	let err = module.call::<_, ()>("foo", (false,)).await.unwrap_err();
 	assert!(matches!(
 		err,
-		Error::Call(CallError::Custom { code, message, data: _}) if code == -32602 && message.as_str() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
+		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
 	));
 
 	// Call async method with params and context
@@ -187,7 +187,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	// Call sync method with bad params
 	let err = module.call::<_, ()>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
 	assert!(matches!(err,
-		Error::Call(CallError::Custom { code, message, data: _}) if code == -32602 && message.as_str() == "invalid type: boolean `false`, expected a map at line 1 column 5"
+		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected a map at line 1 column 5"
 	));
 
 	// Call async method with params and context
@@ -199,18 +199,22 @@ async fn calling_method_without_server_using_proc_macro() {
 async fn subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
 			let mut stream_data = vec!['0', '1', '2'];
 			std::thread::spawn(move || {
 				while let Some(letter) = stream_data.pop() {
 					tracing::debug!("This is your friendly subscription sending data.");
-					if let Err(Error::SubscriptionClosed(_)) = sink.send(&letter) {
-						return;
-					}
+					let _ = sink.send(&letter);
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
+				let close = ErrorObject::borrowed(0, &"closed successfully", None);
+				sink.close(close.into_owned());
 			});
-			Ok(())
 		})
 		.unwrap();
 
@@ -221,11 +225,7 @@ async fn subscribing_without_server() {
 		assert_eq!(&id, my_sub.subscription_id());
 	}
 
-	let sub_err = my_sub.next::<char>().await.unwrap().unwrap_err();
-	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server("No close reason provided".to_string()));
-
-	// The subscription is now closed by the server.
-	assert!(matches!(sub_err, Error::SubscriptionClosed(close_reason) if close_reason == exp));
+	assert!(matches!(my_sub.next::<char>().await, None));
 }
 
 #[tokio::test]
@@ -237,7 +237,12 @@ async fn close_test_subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
 			std::thread::spawn(move || {
 				// make sure to only send one item
 				sink.send(&"lo").unwrap();
@@ -246,11 +251,10 @@ async fn close_test_subscribing_without_server() {
 					std::thread::sleep(std::time::Duration::from_millis(500));
 				}
 				// Get the close reason.
-				if let Error::SubscriptionClosed(close_reason) = sink.send(&"lo").unwrap_err() {
-					sink.close(&close_reason);
+				if !sink.send(&"lo").expect("str serializable; qed") {
+					sink.close(SubscriptionClosed::RemotePeerAborted);
 				}
 			});
-			Ok(())
 		})
 		.unwrap();
 
@@ -266,10 +270,7 @@ async fn close_test_subscribing_without_server() {
 
 	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
-	let exp = SubscriptionClosed::new(SubscriptionClosedReason::ConnectionReset);
-	assert!(
-		matches!(my_sub.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
-	);
+	assert!(matches!(my_sub.next::<String>().await, None));
 
 	// The second subscription still works
 	let (val, _) = my_sub2.next::<String>().await.unwrap().unwrap();
@@ -279,7 +280,34 @@ async fn close_test_subscribing_without_server() {
 		std::mem::ManuallyDrop::drop(&mut my_sub2);
 	}
 
+	assert!(matches!(my_sub.next::<String>().await, None));
+}
+
+#[tokio::test]
+async fn subscribing_without_server_bad_params() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| {
+			let p = match params.one::<String>() {
+				Ok(p) => p,
+				Err(e) => {
+					let err: Error = e.into();
+					let _ = pending.reject(err);
+					return;
+				}
+			};
+
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+			sink.send(&p).unwrap();
+		})
+		.unwrap();
+
+	let sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+
 	assert!(
-		matches!(my_sub2.next::<String>().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp)
+		matches!(sub, Error::Call(CallError::Custom(e)) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
 	);
 }

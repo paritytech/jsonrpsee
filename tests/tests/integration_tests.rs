@@ -30,13 +30,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures::TryStreamExt;
+use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
-use jsonrpsee::core::error::{SubscriptionClosed, SubscriptionClosedReason};
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
+use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -253,17 +254,15 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn https_works() {
-	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io").unwrap();
+	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io:443").unwrap();
 	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
 
 #[tokio::test]
-#[ignore]
 async fn wss_works() {
-	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io").await.unwrap();
+	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io:443").await.unwrap();
 	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
 }
@@ -294,6 +293,11 @@ async fn ws_unsubscribe_releases_request_slots() {
 
 #[tokio::test]
 async fn server_should_be_able_to_close_subscriptions() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -301,9 +305,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 	let mut sub: Subscription<String> = client.subscribe("subscribe_noop", None, "unsubscribe_noop").await.unwrap();
 
-	let res = sub.next().await;
-
-	assert!(matches!(res, Some(Err(Error::SubscriptionClosed(_)))));
+	assert!(sub.next().await.is_none());
 }
 
 #[tokio::test]
@@ -349,18 +351,18 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, mut tx| {
+			let mut sink = pending.accept().unwrap();
 			tokio::spawn(async move {
 				let close_err = loop {
-					if let Err(Error::SubscriptionClosed(err)) = sink.send(&1) {
-						break err;
+					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
+						break ErrorObject::borrowed(0, &"Subscription terminated successfully", None);
 					}
 					tokio::time::sleep(Duration::from_millis(100)).await;
 				};
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed(close_err).await.unwrap();
 			});
-			Ok(())
 		})
 		.unwrap();
 
@@ -377,113 +379,47 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let close_err = rx.next().await.unwrap();
 
 	// assert that the server received `SubscriptionClosed` after the client was dropped.
-	assert!(matches!(close_err.close_reason(), &SubscriptionClosedReason::ConnectionReset));
+	assert_eq!(close_err, ErrorObject::borrowed(0, &"Subscription terminated successfully", None));
 }
 
 #[tokio::test]
-async fn ws_server_cancels_stream_after_reset_conn() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
-
-	use futures::{channel::mpsc, SinkExt, StreamExt};
-	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
-
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	let server_url = format!("ws://{}", server.local_addr().unwrap());
-
-	let (tx, mut rx) = mpsc::channel(1);
-	let mut module = RpcModule::new(tx);
-
-	module
-		.register_subscription("subscribe_never_produce", "n", "unsubscribe_never_produce", |_, sink, mut tx| {
-			// create stream that doesn't produce items.
-			let stream = futures::stream::empty::<usize>();
-			tokio::spawn(async move {
-				sink.pipe_from_stream(stream).await.unwrap();
-				let send_back = Arc::make_mut(&mut tx);
-				send_back.feed(()).await.unwrap();
-			});
-			Ok(())
-		})
-		.unwrap();
-
-	server.start(module).unwrap();
+async fn ws_server_cancels_subscriptions_on_reset_conn() {
+	let (tx, rx) = mpsc::channel(1);
+	let server_url = format!("ws://{}", helpers::websocket_server_with_sleeping_subscription(tx).await);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let _sub1: Subscription<usize> =
-		client.subscribe("subscribe_never_produce", None, "unsubscribe_never_produce").await.unwrap();
-	let _sub2: Subscription<usize> =
-		client.subscribe("subscribe_never_produce", None, "unsubscribe_never_produce").await.unwrap();
+	let mut subs = Vec::new();
+
+	for _ in 0..10 {
+		subs.push(client.subscribe::<usize>("subscribe_sleep", None, "unsubscribe_sleep").await.unwrap());
+	}
 
 	// terminate connection.
 	drop(client);
-	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
-	assert_eq!(Some(()), rx.next().await, "subscription stream should be terminated after the client was dropped");
+
+	let rx_len = rx.take(10).fold(0, |acc, _| async move { acc + 1 }).await;
+
+	assert_eq!(rx_len, 10);
 }
 
 #[tokio::test]
 async fn ws_server_cancels_sub_stream_after_err() {
-	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
-
-	let err: &'static str = "error on the stream";
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	let server_url = format!("ws://{}", server.local_addr().unwrap());
-
-	let mut module = RpcModule::new(());
-
-	module
-		.register_subscription(
-			"subscribe_with_err_on_stream",
-			"n",
-			"unsubscribe_with_err_on_stream",
-			move |_, sink, _| {
-				// create stream that produce an error which will cancel the subscription.
-				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
-				tokio::spawn(async move {
-					let _ = sink.pipe_from_try_stream(stream).await;
-				});
-				Ok(())
-			},
-		)
-		.unwrap();
-
-	server.start(module).unwrap();
+	let (addr, _handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-	let mut sub: Subscription<usize> =
+	let mut sub: Subscription<serde_json::Value> =
 		client.subscribe("subscribe_with_err_on_stream", None, "unsubscribe_with_err_on_stream").await.unwrap();
 
 	assert_eq!(sub.next().await.unwrap().unwrap(), 1);
-	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server(err.to_string()));
 	// The server closed down the subscription with the underlying error from the stream.
-	assert!(matches!(sub.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
 	assert!(sub.next().await.is_none());
 }
 
 #[tokio::test]
 async fn ws_server_subscribe_with_stream() {
-	use futures::StreamExt;
-	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
-
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
-	let server_url = format!("ws://{}", server.local_addr().unwrap());
-
-	let mut module = RpcModule::new(());
-
-	module
-		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, sink, _| {
-			tokio::spawn(async move {
-				let interval = interval(Duration::from_millis(50));
-				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
-
-				sink.pipe_from_stream(stream).await.unwrap();
-			});
-			Ok(())
-		})
-		.unwrap();
-	server.start(module).unwrap();
+	let (addr, _handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut sub1: Subscription<usize> = client.subscribe("subscribe_5_ints", None, "unsubscribe_5_ints").await.unwrap();
@@ -505,9 +441,38 @@ async fn ws_server_subscribe_with_stream() {
 	// sub1 is still in business, read remaining items.
 	assert_eq!(sub1.by_ref().take(3).try_collect::<Vec<usize>>().await.unwrap(), vec![3, 4, 5]);
 
-	let exp = SubscriptionClosed::new(SubscriptionClosedReason::Server("No close reason provided".to_string()));
-	// The server closed down the subscription it will send a close reason.
-	assert!(matches!(sub1.next().await, Some(Err(Error::SubscriptionClosed(close_reason))) if close_reason == exp));
+	assert!(sub1.next().await.is_none());
+}
+
+#[tokio::test]
+async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
+	let (tx, rx) = mpsc::channel(1);
+	let server_url = format!("ws://{}", helpers::websocket_server_with_sleeping_subscription(tx).await);
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let mut subs = Vec::new();
+
+	for _ in 0..10 {
+		subs.push(client.subscribe::<i32>("subscribe_sleep", None, "unsubscribe_sleep").await.unwrap())
+	}
+
+	// This will call the `unsubscribe method`.
+	drop(subs);
+
+	let rx_len = rx.take(10).fold(0, |acc, _| async move { acc + 1 }).await;
+
+	assert_eq!(rx_len, 10);
+}
+
+#[tokio::test]
+async fn ws_server_pipe_from_stream_can_be_reused() {
+	let (addr, _handle) = websocket_server_with_subscription().await;
+	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
+	let sub = client.subscribe::<i32>("can_reuse_subscription", None, "u_can_reuse_subscription").await.unwrap();
+
+	let items = sub.fold(0, |acc, _| async move { acc + 1 }).await;
+
+	assert_eq!(items, 10);
 }
 
 #[tokio::test]
@@ -523,6 +488,117 @@ async fn ws_batch_works() {
 
 	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
+}
+
+#[tokio::test]
+async fn ws_server_limit_subs_per_conn_works() {
+	use futures::StreamExt;
+	use jsonrpsee::types::error::{CallError, SERVER_IS_BUSY_CODE, SERVER_IS_BUSY_MSG};
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
+
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::Success => {
+						sink.close(SubscriptionClosed::Success);
+					}
+					_ => unreachable!(),
+				};
+			});
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
+	let c2 = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let mut subs1 = Vec::new();
+	let mut subs2 = Vec::new();
+
+	for _ in 0..10 {
+		subs1.push(c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+		subs2.push(c2.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+	}
+
+	let err1 = c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await;
+	let err2 = c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await;
+
+	assert!(
+		matches!(err1, Err(Error::Call(CallError::Custom(err))) if err.code() == SERVER_IS_BUSY_CODE && err.message() == SERVER_IS_BUSY_MSG)
+	);
+	assert!(
+		matches!(err2, Err(Error::Call(CallError::Custom(err))) if err.code() == SERVER_IS_BUSY_CODE && err.message() == SERVER_IS_BUSY_MSG)
+	);
+}
+
+#[tokio::test]
+async fn ws_server_unsub_methods_should_ignore_sub_limit() {
+	use futures::StreamExt;
+	use jsonrpsee::core::client::SubscriptionKind;
+	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server_url = format!("ws://{}", server.local_addr().unwrap());
+
+	let mut module = RpcModule::new(());
+
+	module
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				let interval = interval(Duration::from_millis(50));
+				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
+
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::RemotePeerAborted => {
+						sink.close(SubscriptionClosed::RemotePeerAborted);
+					}
+					_ => unreachable!(),
+				};
+			});
+		})
+		.unwrap();
+	server.start(module).unwrap();
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	// Add 10 subscriptions (this should fill our subscrition limit for this connection):
+	let mut subs = Vec::new();
+	for _ in 0..10 {
+		subs.push(client.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await.unwrap());
+	}
+
+	// Get the ID of one of them:
+	let last_sub = subs.pop().unwrap();
+	let last_sub_id = match last_sub.kind() {
+		SubscriptionKind::Subscription(id) => id.clone(),
+		_ => panic!("Expected a subscription Id to be present"),
+	};
+
+	// Manually call the unsubscribe function for this subscription:
+	let res: Result<bool, _> = client.request("unsubscribe_forever", rpc_params![last_sub_id]).await;
+
+	// This should not hit any limits, and unsubscription should have worked:
+	assert!(res.is_ok(), "Unsubscription method was successfully called");
+	assert_eq!(res.unwrap(), true, "Unsubscription was successful");
 }
 
 #[tokio::test]
@@ -660,4 +736,36 @@ fn comma_separated_header_values(headers: &hyper::HeaderMap, header: &str) -> Ve
 		.flat_map(|value| value.to_str().unwrap().split(',').map(|val| val.trim()))
 		.map(|header| header.to_ascii_lowercase())
 		.collect()
+}
+
+#[tokio::test]
+async fn ws_subscribe_with_bad_params() {
+	let (server_addr, _handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	let err = client
+		.subscribe::<serde_json::Value>("subscribe_add_one", rpc_params!["0x0"], "unsubscribe_add_one")
+		.await
+		.unwrap_err();
+	assert!(matches!(err, Error::Call(_)));
+}
+
+#[tokio::test]
+async fn http_health_api_works() {
+	use hyper::{Body, Client, Request};
+
+	let (server_addr, _handle) = http_server().await;
+
+	let http_client = Client::new();
+	let uri = format!("http://{}/health", server_addr);
+
+	let req = Request::builder().method("GET").uri(&uri).body(Body::empty()).expect("request builder");
+	let res = http_client.request(req).await.unwrap();
+
+	assert!(res.status().is_success());
+
+	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+	let out = String::from_utf8(bytes.to_vec()).unwrap();
+	assert_eq!(out, "{\"jsonrpc\":\"2.0\",\"result\":\"im ok\",\"id\":0}");
 }
