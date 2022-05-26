@@ -21,7 +21,6 @@ use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
-use futures_util::select_biased;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
@@ -614,32 +613,38 @@ async fn background_task<S, R>(
 		let res = receiver.receive().await;
 		Some((res, receiver))
 	});
-
 	futures_util::pin_mut!(backend_event);
 
-	loop {
-		let next_frontend = frontend.next();
-		let next_backend = backend_event.next();
-		futures_util::pin_mut!(next_frontend, next_backend);
+	// Place frontend and backend messages into their own select.
+	// This implies that either messages are received (both front or backend),
+	// or submit ping timer expires (if provided).
+	let next_frontend = frontend.next();
+	let next_backend = backend_event.next();
+	let mut message_fut = future::select(next_frontend, next_backend);
 
+	loop {
 		// Create either a valid delay fuse triggered every provided `duration`,
 		// or create a terminated fuse that's never selected if the provided `duration` is None.
-		let mut submit_ping = if let Some(duration) = ping_interval {
+		let submit_ping = if let Some(duration) = ping_interval {
 			Delay::new(duration).fuse()
 		} else {
 			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
 			Fuse::<Delay>::terminated()
 		};
 
-		select_biased! {
-			frontend_value = next_frontend => {
+		match future::select(message_fut, submit_ping).await {
+			// Message received from the frontend.
+			Either::Left((Either::Left((frontend_value, backend)), _)) => {
 				if let Err(err) = handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await {
 					tracing::warn!("{:?}", err);
 					let _ = front_error.send(err);
 					break;
 				}
-			},
-			backend_value = next_backend => {
+				// Advance frontend, save backend.
+				message_fut = future::select(frontend.next(), backend);
+			}
+			// Message received from the backend.
+			Either::Left((Either::Right((backend_value, frontend )), _))=> {
 				if let Err(err) = handle_backend_messages::<S, R>(
 					backend_value, &mut ping_submitted, &mut manager, &mut sender, max_notifs_per_subscription
 				).await {
@@ -647,25 +652,20 @@ async fn background_task<S, R>(
 					let _ = front_error.send(err);
 					break;
 				}
-			},
-			_ = submit_ping => {
-				// Ping was already submitted.
-				// No activity from frontend, backend (replies or pong) for a duration of `ping_interval`.
-				if ping_submitted {
-					let _ = front_error.send(Error::Custom("Did not receive a pong or activity in due time".into()));
-					break;
-				}
-
+				// Advance backend, save frontend.
+				message_fut = future::select(frontend, backend_event.next());
+			}
+			// Submit ping interval was triggered.
+			Either::Right((_, next_message_fut)) => {
 				tracing::trace!("[backend]: submit ping");
 				if let Err(e) = sender.send_ping().await {
 					tracing::warn!("[backend]: client send ping failed: {:?}", e);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
 					break;
 				}
-
-				ping_submitted = true;
-			},
-		}
+				message_fut = next_message_fut;
+			}
+		};
 	}
 	// Send close message to the server.
 	let _ = sender.close().await;
