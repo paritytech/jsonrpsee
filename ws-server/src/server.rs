@@ -35,8 +35,10 @@ use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use crate::types::{Id, Request};
 use futures_channel::mpsc;
-use futures_util::future::{join_all, FutureExt};
+use futures_timer::Delay;
+use futures_util::future::{join_all, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
+use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
@@ -51,7 +53,6 @@ use soketto::data::ByteSlice125;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::select;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Default maximum connections allowed.
@@ -314,28 +315,41 @@ async fn background_task(
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
 
-	let mut submit_ping = tokio::time::interval(ping_interval);
-
 	middleware.on_connect();
 
 	// Send results back to the client.
 	tokio::spawn(async move {
+		// Received messages from the WebSocket.
+		let mut rx_item = rx.next();
+
 		while !stop_server2.shutdown_requested() {
-			select! {
-				Some(response) = rx.next() => {
+			// Triggered ping every `ping_interval`.
+			let ping = Delay::new(ping_interval);
+			pin_mut!(ping);
+
+			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
+			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
+			match futures_util::future::select(rx_item, ping).await {
+				Either::Left((Some(response), _)) => {
 					// If websocket message send fail then terminate the connection.
 					if let Err(err) = send_ws_message(&mut sender, response).await {
 						tracing::warn!("WS send error: {}; terminate connection", err);
 						break;
 					}
+					rx_item = rx.next();
 				}
-				_ = submit_ping.tick() => {
+				// Nothing else to receive.
+				Either::Left((None, _)) => break,
+
+				// Handle timer intervals.
+				Either::Right((_, next_rx)) => {
 					if let Err(err) = send_ws_ping(&mut sender).await {
 						tracing::warn!("WS send ping error: {}; terminate connection", err);
 						break;
 					}
+
+					rx_item = next_rx;
 				}
-				else => break,
 			}
 		}
 
