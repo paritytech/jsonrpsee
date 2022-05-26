@@ -18,7 +18,8 @@ jsonrpsee-core = { path = "../core", version = "0.13.1", features = ["server", "
 globset = "0.4"
 lazy_static = "1.4"
 tracing = "0.1"
-serde_json = "1"
+serde_json = { version = "1.0", features = ["raw_value"] }
+serde = "1"
 tokio = { version = "1.16", features = ["rt-multi-thread", "macros"] }
 unicase = "2.6.0"
 

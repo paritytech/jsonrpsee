@@ -764,12 +764,14 @@ async fn process_health_request(
 
 	match data {
 		Some(data) if success => {
-			let json: serde_json::Value =
-				serde_json::from_str(&data).expect("valid JSON-RPC response is valid JSON; qed");
-			let result = json.get("result").expect("valid JSON-RPC has result field; qed");
-			let ser = serde_json::to_string(result).expect("valid JSON; qed");
+			#[derive(serde::Deserialize)]
+			struct RpcPayload<'a> {
+				#[serde(borrow)]
+				result: &'a serde_json::value::RawValue,
+			}
 
-			Ok(response::ok_response(ser))
+			let payload: RpcPayload = serde_json::from_str(&data).expect("valid JSON-RPC response is valid JSON; qed");
+			Ok(response::ok_response(payload.result.to_string()))
 		}
 		_ => Ok(response::internal_error()),
 	}
