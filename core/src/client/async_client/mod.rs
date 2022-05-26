@@ -399,7 +399,6 @@ impl SubscriptionClientT for Client {
 /// Returns error if the main background loop should be terminated.
 async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 	message: Option<Result<ReceivedMessage, R::Error>>,
-	ping_submitted: &mut bool,
 	manager: &mut RequestManager,
 	sender: &mut S,
 	max_notifs_per_subscription: usize,
@@ -466,13 +465,6 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 	}
 
 	match message {
-		Some(Ok(ReceivedMessage::Pong(pong_data))) => {
-			// From WebSocket RFC:https://www.rfc-editor.org/rfc/rfc6455#section-5.5.3
-			// A `Pong` frame may be send unsolicited.
-			// Set just the ping submitted state to allow further pinging.
-			tracing::debug!("[backend]: recv pong {:?}", pong_data);
-			*ping_submitted = false;
-		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
 		}
@@ -604,11 +596,6 @@ async fn background_task<S, R>(
 {
 	let mut manager = RequestManager::new();
 
-	// Flag has the following meaning:
-	// - true if the ping was submitted.
-	// - false if the ping was not submitted, or a pong reply was received.
-	let mut ping_submitted = false;
-
 	let backend_event = futures_util::stream::unfold(receiver, |mut receiver| async {
 		let res = receiver.receive().await;
 		Some((res, receiver))
@@ -646,7 +633,7 @@ async fn background_task<S, R>(
 			// Message received from the backend.
 			Either::Left((Either::Right((backend_value, frontend )), _))=> {
 				if let Err(err) = handle_backend_messages::<S, R>(
-					backend_value, &mut ping_submitted, &mut manager, &mut sender, max_notifs_per_subscription
+					backend_value, &mut manager, &mut sender, max_notifs_per_subscription
 				).await {
 					tracing::warn!("{:?}", err);
 					let _ = front_error.send(err);

@@ -142,15 +142,13 @@ pub trait TransportSenderT: MaybeSend + 'static {
 }
 
 /// Message type received from the RPC server.
-/// It can either be plain `String` data, or a `Pong` reply to a previously submitted `Ping`.
+/// It can either be plain text data, or bytes.
 #[derive(Debug)]
 pub enum ReceivedMessage {
 	/// Incoming packet contains plain `String` data.
 	Text(String),
 	/// Incoming packet contains bytes.
 	Bytes(Vec<u8>),
-	/// Incoming packet is a `Pong` frame sent in response to a `Ping`.
-	Pong(Vec<u8>),
 }
 
 /// Transport interface to receive data asynchronous.

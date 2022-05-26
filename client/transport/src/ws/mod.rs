@@ -37,7 +37,7 @@ use jsonrpsee_core::{async_trait, Cow};
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use soketto::{connection, Incoming};
+use soketto::{connection, Data};
 use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -225,15 +225,12 @@ impl TransportReceiverT for Receiver {
 	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
 		let mut message = Vec::new();
 
-		loop {
-			let recv = self.inner.receive(&mut message).await?;
-
-			if let Incoming::Data(_) = recv {
+		match self.inner.receive_data(&mut message).await? {
+			Data::Text(_) => {
 				let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
-				return Ok(ReceivedMessage::Text(s));
-			} else if let Incoming::Pong(pong_data) = recv {
-				return Ok(ReceivedMessage::Pong(Vec::from(pong_data)));
+				Ok(ReceivedMessage::Text(s))
 			}
+			Data::Binary(_) => Ok(ReceivedMessage::Bytes(message)),
 		}
 	}
 }
