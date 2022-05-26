@@ -38,7 +38,6 @@ use futures_channel::mpsc;
 use futures_timer::Delay;
 use futures_util::future::{join_all, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::pin_mut;
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
@@ -323,13 +322,9 @@ async fn background_task(
 		let mut rx_item = rx.next();
 
 		while !stop_server2.shutdown_requested() {
-			// Triggered ping every `ping_interval`.
-			let ping = Delay::new(ping_interval);
-			pin_mut!(ping);
-
 			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
 			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
-			match futures_util::future::select(rx_item, ping).await {
+			match futures_util::future::select(rx_item, Delay::new(ping_interval)).await {
 				Either::Left((Some(response), _)) => {
 					// If websocket message send fail then terminate the connection.
 					if let Err(err) = send_ws_message(&mut sender, response).await {
