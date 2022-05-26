@@ -30,7 +30,6 @@
 //!
 //! `jsonrpsee-http-server` is a [JSON RPC](https://www.jsonrpc.org/specification) HTTPS server library that's is built for `async/await`.
 
-//mod access_control;
 mod server;
 
 /// Common builders for RPC responses.
