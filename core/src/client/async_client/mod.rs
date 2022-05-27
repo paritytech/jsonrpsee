@@ -490,7 +490,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 
 /// Handle frontend messages.
 ///
-/// Returns error if the main background loop should be terminated.
+/// Returns an error if the main background loop should be terminated.
 async fn handle_frontend_messages<S: TransportSenderT>(
 	message: Option<FrontToBack>,
 	manager: &mut RequestManager,
