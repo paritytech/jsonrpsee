@@ -608,7 +608,7 @@ async fn background_task<S, R>(
 
 	// Place frontend and backend messages into their own select.
 	// This implies that either messages are received (both front or backend),
-	// or submit ping timer expires (if provided).
+	// or the submitted ping timer expires (if provided).
 	let next_frontend = frontend.next();
 	let next_backend = backend_event.next();
 	let mut message_fut = future::select(next_frontend, next_backend);
