@@ -37,7 +37,7 @@ use jsonrpsee_core::{async_trait, Cow};
 use soketto::connection::Error::Utf8;
 use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
-use soketto::{connection, Data};
+use soketto::{connection, Data, Incoming};
 use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -223,14 +223,19 @@ impl TransportReceiverT for Receiver {
 
 	/// Returns a `Future` resolving when the server sent us something back.
 	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
-		let mut message = Vec::new();
+		loop {
+			let mut message = Vec::new();
+			let recv = self.inner.receive(&mut message).await?;
 
-		match self.inner.receive_data(&mut message).await? {
-			Data::Text(_) => {
-				let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
-				Ok(ReceivedMessage::Text(s))
+			match recv {
+				Incoming::Data(Data::Text(_)) => {
+					let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
+					break Ok(ReceivedMessage::Text(s));
+				}
+				Incoming::Data(Data::Binary(_)) => break Ok(ReceivedMessage::Bytes(message)),
+				Incoming::Pong(_) => break Ok(ReceivedMessage::Pong),
+				_ => continue,
 			}
-			Data::Binary(_) => Ok(ReceivedMessage::Bytes(message)),
 		}
 	}
 }

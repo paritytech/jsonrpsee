@@ -121,7 +121,7 @@ impl ClientBuilder {
 	///
 	/// Periodically submitting pings at a defined interval has mainly two benefits:
 	///  - Directly, it acts as a "keep-alive" alternative in the WebSocket world.
-	///  - Indirectly by inspecting trace logs, it ensures that the endpoint is still responding to messages.
+	///  - Indirectly by inspecting debug logs, it ensures that the endpoint is still responding to messages.
 	///
 	/// The underlying implementation does not make any assumptions about at which intervals pongs are received.
 	///
@@ -469,6 +469,9 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 	}
 
 	match message {
+		Some(Ok(ReceivedMessage::Pong)) => {
+			tracing::debug!("recv pong");
+		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
 		}
