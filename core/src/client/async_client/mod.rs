@@ -121,7 +121,7 @@ impl ClientBuilder {
 	///
 	/// Periodically submitting pings at a defined interval has mainly two benefits:
 	///  - Directly, it acts as a "keep-alive" alternative in the WebSocket world.
-	///  - Indirectly by inspecting trace logs, ensures that the endpoint is still responding to messages.
+	///  - Indirectly by inspecting trace logs, it ensures that the endpoint is still responding to messages.
 	///
 	/// The underlying implementation does not make any assumptions about at which intervals pongs are received.
 	///
