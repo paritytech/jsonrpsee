@@ -635,7 +635,7 @@ async fn background_task<S, R>(
 				message_fut = future::select(frontend.next(), backend);
 			}
 			// Message received from the backend.
-			Either::Left((Either::Right((backend_value, frontend )), _))=> {
+			Either::Left((Either::Right((backend_value, frontend)), _))=> {
 				if let Err(err) = handle_backend_messages::<S, R>(
 					backend_value, &mut manager, &mut sender, max_notifs_per_subscription
 				).await {
