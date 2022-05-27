@@ -646,9 +646,8 @@ async fn background_task<S, R>(
 				// Advance backend, save frontend.
 				message_fut = future::select(frontend, backend_event.next());
 			}
-			// Submit ping interval was triggered.
+			// Submit ping interval was triggered if enabled.
 			Either::Right((_, next_message_fut)) => {
-				tracing::trace!("[backend]: submit ping");
 				if let Err(e) = sender.send_ping().await {
 					tracing::warn!("[backend]: client send ping failed: {:?}", e);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
