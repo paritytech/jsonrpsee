@@ -12,7 +12,6 @@ documentation = "https://docs.rs/jsonrpsee-ws-server"
 [dependencies]
 futures-channel = "0.3.14"
 futures-util = { version = "0.3.14", default-features = false, features = ["io", "async-await-macro"] }
-futures-timer = { version = "3" }
 jsonrpsee-types = { path = "../types", version = "0.13.1" }
 jsonrpsee-core = { path = "../core", version = "0.13.1", features = ["server", "soketto"] }
 tracing = "0.1"

@@ -35,7 +35,6 @@ use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use crate::types::{Id, Request};
 use futures_channel::mpsc;
-use futures_timer::Delay;
 use futures_util::future::{join_all, Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
@@ -322,9 +321,12 @@ async fn background_task(
 		let mut rx_item = rx.next();
 
 		while !stop_server2.shutdown_requested() {
+			let submit_ping = tokio::time::sleep(ping_interval);
+			tokio::pin!(submit_ping);
+
 			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
 			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
-			match futures_util::future::select(rx_item, Delay::new(ping_interval)).await {
+			match futures_util::future::select(rx_item, submit_ping).await {
 				Either::Left((Some(response), _)) => {
 					// If websocket message send fail then terminate the connection.
 					if let Err(err) = send_ws_message(&mut sender, response).await {
