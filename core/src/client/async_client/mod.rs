@@ -10,7 +10,7 @@ use crate::client::{
 	RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT,
 	TransportSenderT,
 };
-use crate::tracing::{rx_log_from_json, tx_log_from_json, tx_log_from_str, RpcTracing};
+use crate::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
 
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
@@ -272,7 +272,7 @@ impl ClientT for Client {
 			Err(_) => return Err(self.read_error_from_backend().await),
 		};
 
-		tx_log_from_json(&Response::new(&json_value, id), self.max_log_length);
+		rx_log_from_json(&Response::new(&json_value, id), self.max_log_length);
 
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
