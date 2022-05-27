@@ -63,7 +63,6 @@ async-wasm-client = [
 	"rustc-hash/std",
 	"futures-timer/wasm-bindgen",
 	"tracing",
-	"futures-util/async-await-macro",
 ]
 
 [dev-dependencies]
