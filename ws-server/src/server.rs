@@ -342,7 +342,6 @@ async fn background_task(
 						tracing::warn!("WS send ping error: {}; terminate connection", err);
 						break;
 					}
-
 					rx_item = next_rx;
 				}
 			}
@@ -365,7 +364,17 @@ async fn background_task(
 
 		{
 			// Need the extra scope to drop this pinned future and reclaim access to `data`
-			let receive = receiver.receive_data(&mut data);
+			let receive = async {
+				// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
+				loop {
+					match receiver.receive(&mut data).await? {
+						soketto::Incoming::Data(d) => break Ok(d),
+						soketto::Incoming::Pong(_) => tracing::debug!("recv pong"),
+						_ => continue,
+					}
+				}
+			};
+
 			tokio::pin!(receive);
 
 			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
@@ -976,7 +985,7 @@ async fn send_ws_message(
 }
 
 async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>) -> Result<(), Error> {
-	tracing::debug!("submit ping");
+	tracing::debug!("send ping");
 	// Submit empty slice as "optional" parameter.
 	let slice: &[u8] = &[];
 	// Byte slice fails if the provided slice is larger than 125 bytes.
