@@ -54,7 +54,6 @@ async-client = [
 	"tokio/sync",
 	"tracing",
 	"futures-timer",
-	"futures-util/async-await-macro",
 ]
 async-wasm-client = [
 	"async-lock",
