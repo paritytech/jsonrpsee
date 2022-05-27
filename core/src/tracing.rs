@@ -92,6 +92,6 @@ mod tests {
 		assert_eq!(truncate_at_char_boundary("ボルテックス", 0), "");
 		assert_eq!(truncate_at_char_boundary("ボルテックス", 4), "ボルテッ");
 		assert_eq!(truncate_at_char_boundary("ボルテックス", 100), "ボルテックス");
-		assert_eq!(truncate_at_char_boundary("hola", 4), "holahola");
+		assert_eq!(truncate_at_char_boundary("hola-hola", 4), "hola");
 	}
 }
