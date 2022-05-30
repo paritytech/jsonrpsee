@@ -680,7 +680,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		notif_method_name: &'static str,
 		unsubscribe_method_name: &'static str,
 		callback: F,
-	) -> Result<(), Error>
+	) -> Result<MethodResourcesBuilder, Error>
 	where
 		Context: Send + Sync + 'static,
 		F: Fn(Params, PendingSubscription, Arc<Context>) + Send + Sync + 'static,
@@ -689,39 +689,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
 
-		self.methods.verify_method_name(subscribe_method_name)?;
-		self.methods.verify_method_name(unsubscribe_method_name)?;
-
 		let ctx = self.ctx.clone();
 		let subscribers = Subscribers::default();
 
-		// Subscribe
-		{
-			let subscribers = subscribers.clone();
-			self.methods.mut_callbacks().insert(
-				subscribe_method_name,
-				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn| {
-					let sub_id: RpcSubscriptionId = conn.id_provider.next_id();
-
-					let sink = PendingSubscription(Some(InnerPendingSubscription {
-						sink: method_sink.clone(),
-						close_notify: Some(conn.close_notify),
-						method: notif_method_name,
-						subscribers: subscribers.clone(),
-						uniq_sub: SubscriptionKey { conn_id: conn.conn_id, sub_id },
-						id: id.clone().into_owned(),
-					}));
-
-					callback(params, sink, ctx.clone());
-
-					true
-				})),
-			);
-		}
-
 		// Unsubscribe
 		{
-			self.methods.mut_callbacks().insert(
+			let subscribers = subscribers.clone();
+
+			let _ = self.methods.verify_and_insert(
 				unsubscribe_method_name,
 				MethodCallback::new_unsubscription(Arc::new(move |id, params, sink, conn_id| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
@@ -745,7 +720,30 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			);
 		}
 
-		Ok(())
+		// Subscribe
+		let callback = {
+			self.methods.verify_and_insert(
+				subscribe_method_name,
+				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn| {
+					let sub_id: RpcSubscriptionId = conn.id_provider.next_id();
+
+					let sink = PendingSubscription(Some(InnerPendingSubscription {
+						sink: method_sink.clone(),
+						close_notify: Some(conn.close_notify),
+						method: notif_method_name,
+						subscribers: subscribers.clone(),
+						uniq_sub: SubscriptionKey { conn_id: conn.conn_id, sub_id },
+						id: id.clone().into_owned(),
+					}));
+
+					callback(params, sink, ctx.clone());
+
+					true
+				})),
+			)?
+		};
+
+		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
 
 	/// Register an alias for an existing_method. Alias uniqueness is enforced.
