@@ -60,7 +60,7 @@ pub type AsyncMethod<'a> = Arc<
 	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, bool>,
 >;
 /// Method callback for subscriptions.
-pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnState) -> bool>;
+pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnState, Option<ResourceGuard>) -> bool>;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId) -> bool>;
 
@@ -417,7 +417,7 @@ impl Methods {
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
 			Some(MethodKind::Subscription(cb)) => {
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
-				(cb)(id, params, &sink, conn_state)
+				(cb)(id, params, &sink, conn_state, None)
 			}
 			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, &sink, 0),
 		};
@@ -724,7 +724,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let callback = {
 			self.methods.verify_and_insert(
 				subscribe_method_name,
-				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn| {
+				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn, claimed| {
 					let sub_id: RpcSubscriptionId = conn.id_provider.next_id();
 
 					let sink = PendingSubscription(Some(InnerPendingSubscription {
@@ -734,6 +734,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						subscribers: subscribers.clone(),
 						uniq_sub: SubscriptionKey { conn_id: conn.conn_id, sub_id },
 						id: id.clone().into_owned(),
+						claimed,
 					}));
 
 					callback(params, sink, ctx.clone());
@@ -779,6 +780,8 @@ struct InnerPendingSubscription {
 	subscribers: Subscribers,
 	/// Request ID.
 	id: Id<'static>,
+	/// Claimed resources.
+	claimed: Option<ResourceGuard>,
 }
 
 /// Represent a pending subscription which waits until it's either accepted or rejected.
@@ -804,12 +807,12 @@ impl PendingSubscription {
 	pub fn accept(mut self) -> Option<SubscriptionSink> {
 		let inner = self.0.take()?;
 
-		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id } = inner;
+		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id, claimed } = inner;
 
 		if sink.send_response(id, &uniq_sub.sub_id) {
 			let (tx, rx) = watch::channel(());
 			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), tx));
-			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, unsubscribe: rx })
+			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, unsubscribe: rx, _claimed: claimed })
 		} else {
 			None
 		}
@@ -841,6 +844,8 @@ pub struct SubscriptionSink {
 	subscribers: Subscribers,
 	/// Future that returns when the unsubscribe method has been called.
 	unsubscribe: watch::Receiver<()>,
+	/// Claimed resources.
+	_claimed: Option<ResourceGuard>,
 }
 
 impl SubscriptionSink {
