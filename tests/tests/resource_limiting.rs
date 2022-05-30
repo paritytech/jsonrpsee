@@ -35,7 +35,7 @@ use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
-use jsonrpsee::RpcModule;
+use jsonrpsee::{PendingSubscription, RpcModule};
 use tokio::time::sleep;
 
 fn module_manual() -> Result<RpcModule<()>, Error> {
@@ -113,9 +113,36 @@ fn module_macro() -> RpcModule<()> {
 			sleep(Duration::from_millis(50)).await;
 			Ok("hello memory hog")
 		}
+
+		#[subscription(name = "subscribe_hello", item = String, resources("SUB" = 3))]
+		fn sub_hello(&self);
+
+		#[subscription(name = "subscribe_hello_limit", item = String, resources("SUB" = 3))]
+		fn sub_hello_limit(&self);
 	}
 
-	impl RpcServer for () {}
+	impl RpcServer for () {
+		fn sub_hello(&self, pending: PendingSubscription) {
+			let mut _sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+		}
+
+		fn sub_hello_limit(&self, pending: PendingSubscription) {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				for val in 0..10 {
+					sink.send(&val).unwrap();
+					sleep(Duration::from_secs(1)).await;
+				}
+			});
+		}
+	}
 
 	().into_rpc()
 }
