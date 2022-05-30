@@ -696,7 +696,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			let subscribers = subscribers.clone();
 
-			let _ = self.methods.verify_and_insert(
+			self.methods.verify_and_insert(
 				unsubscribe_method_name,
 				MethodCallback::new_unsubscription(Arc::new(move |id, params, sink, conn_id| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
@@ -717,7 +717,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					sink.send_response(id, result)
 				})),
-			);
+			)?;
 		}
 
 		// Subscribe
