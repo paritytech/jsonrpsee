@@ -27,7 +27,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
@@ -60,6 +60,35 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 		})?
 		.resource("CPU", 0)?
 		.resource("MEM", 8)?;
+
+	// Drop the `SubscriptionSink` to cause the internal `ResourceGuard` allocated per subscription call
+	// to get dropped. This is the equivalent of not having any resource limits (ie, sink is never used).
+	module
+		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
+			let mut _sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+		})?
+		.resource("SUB", 3)?;
+
+	// Keep the `SubscriptionSink` alive for a bit to validate that `ResourceGuard` is alive
+	// and the subscription method gets limited.
+	module
+		.register_subscription("subscribe_hello_limit", "s_hello", "unsubscribe_hello_limit", move |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
+				for val in 0..10 {
+					sink.send(&val).unwrap();
+					sleep(Duration::from_secs(1)).await;
+				}
+			});
+		})?
+		.resource("SUB", 3)?;
 
 	Ok(module)
 }
@@ -95,6 +124,7 @@ async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsServer
 	let server = WsServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
+		.register_resource("SUB", 6, 1)?
 		.build("127.0.0.1:0")
 		.await?;
 
@@ -108,6 +138,7 @@ async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpServerHan
 	let server = HttpServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
+		.register_resource("SUB", 6, 1)?
 		.build("127.0.0.1:0")
 		.await?;
 
@@ -117,7 +148,7 @@ async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpServerHan
 	Ok((addr, handle))
 }
 
-fn assert_server_busy(fail: Result<String, Error>) {
+fn assert_server_busy<T: std::fmt::Debug>(fail: Result<T, Error>) {
 	match fail {
 		Err(Error::Call(CallError::Custom(err))) => {
 			assert_eq!(err.code(), -32604);
@@ -158,6 +189,28 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 	assert_server_busy(fail_cpu);
 	assert!(pass_mem.is_ok());
 	assert_server_busy(fail_mem);
+
+	// 3 CPU units (manually set for subscriptions) per call, the sink is dropped immediately
+	let (pass1, pass2, pass3) = tokio::join!(
+		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
+		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
+		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
+	);
+
+	assert!(pass1.is_ok());
+	assert!(pass2.is_ok());
+	assert!(pass3.is_ok());
+
+	// 3 CPU units (manually set for subscriptions) per call, so 3th call exceeds cap
+	let (pass1, pass2, fail) = tokio::join!(
+		client.subscribe::<i32>("subscribe_hello_limit", None, "unsubscribe_hello_limit"),
+		client.subscribe::<i32>("subscribe_hello_limit", None, "unsubscribe_hello_limit"),
+		client.subscribe::<i32>("subscribe_hello_limit", None, "unsubscribe_hello_limit"),
+	);
+
+	assert!(pass1.is_ok());
+	assert!(pass2.is_ok());
+	assert_server_busy(fail);
 
 	server_handle.stop().unwrap().await;
 }
