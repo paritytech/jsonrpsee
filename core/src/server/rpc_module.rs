@@ -689,14 +689,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
 		}
 
+		self.methods.verify_method_name(subscribe_method_name)?;
+		self.methods.verify_method_name(unsubscribe_method_name)?;
+
 		let ctx = self.ctx.clone();
 		let subscribers = Subscribers::default();
 
 		// Unsubscribe
 		{
 			let subscribers = subscribers.clone();
-
-			self.methods.verify_and_insert(
+			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
 				MethodCallback::new_unsubscription(Arc::new(move |id, params, sink, conn_id| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
@@ -717,7 +719,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					sink.send_response(id, result)
 				})),
-			)?;
+			);
 		}
 
 		// Subscribe
