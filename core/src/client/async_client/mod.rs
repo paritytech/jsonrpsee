@@ -509,7 +509,6 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 
 		Some(FrontToBack::Batch(batch)) => {
 			tracing::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
-			// NOTE(niklasad1): annoying allocation.
 			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
 				tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
 				let _ = send_back.send(Err(Error::InvalidRequestId));
