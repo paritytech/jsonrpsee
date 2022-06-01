@@ -770,7 +770,8 @@ async fn process_health_request(
 				result: &'a serde_json::value::RawValue,
 			}
 
-			let payload: RpcPayload = serde_json::from_str(&data).expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
+			let payload: RpcPayload = serde_json::from_str(&data)
+				.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
 			Ok(response::ok_response(payload.result.to_string()))
 		}
 		_ => Ok(response::internal_error()),
