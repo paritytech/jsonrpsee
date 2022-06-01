@@ -170,11 +170,20 @@ impl<M> Builder<M> {
 	}
 
 	/// Enable health endpoint.
-	/// Allows you to expose one of the methods under GET /<path> The method will be invoked with no parameters. Error returned from the method will be converted to status 500 response.
-	/// Expects a tuple with (<path>, <rpc-method-name>).
-	pub fn health_api(mut self, path: impl Into<String>, method: impl Into<String>) -> Self {
-		self.health_api = Some(HealthApi { path: path.into(), method: method.into() });
-		self
+	/// Allows you to expose one of the methods under GET /<path> The method will be invoked with no parameters.
+	/// Error returned from the method will be converted to status 500 response.
+	/// Expects a tuple with (</path>, <rpc-method-name>).
+	///
+	/// Fails if the path is missing `/`.
+	pub fn health_api(mut self, path: impl Into<String>, method: impl Into<String>) -> Result<Self, Error> {
+		let path = path.into();
+
+		if !path.starts_with("/") {
+			return Err(Error::Custom(format!("Health endpoint path must start with `/` to work, got: {}", path)));
+		}
+
+		self.health_api = Some(HealthApi { path: path, method: method.into() });
+		Ok(self)
 	}
 
 	/// Finalizes the configuration of the server with customized TCP settings on the socket and on hyper.
@@ -754,7 +763,17 @@ async fn process_health_request(
 	middleware.on_response(request_start);
 
 	match data {
-		Some(resp) if success => Ok(response::ok_response(resp)),
+		Some(data) if success => {
+			#[derive(serde::Deserialize)]
+			struct RpcPayload<'a> {
+				#[serde(borrow)]
+				result: &'a serde_json::value::RawValue,
+			}
+
+			let payload: RpcPayload = serde_json::from_str(&data)
+				.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
+			Ok(response::ok_response(payload.result.to_string()))
+		}
 		_ => Ok(response::internal_error()),
 	}
 }
