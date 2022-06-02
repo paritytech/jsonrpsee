@@ -319,21 +319,20 @@ async fn background_task(
 	tokio::spawn(async move {
 		// Received messages from the WebSocket.
 		let mut rx_item = rx.next();
+		let mut submit_ping = Box::pin(tokio::time::sleep(ping_interval));
 
 		while !stop_server2.shutdown_requested() {
-			let submit_ping = tokio::time::sleep(ping_interval);
-			tokio::pin!(submit_ping);
-
 			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
 			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
 			match futures_util::future::select(rx_item, submit_ping).await {
-				Either::Left((Some(response), _)) => {
+				Either::Left((Some(response), next_ping)) => {
 					// If websocket message send fail then terminate the connection.
 					if let Err(err) = send_ws_message(&mut sender, response).await {
 						tracing::warn!("WS send error: {}; terminate connection", err);
 						break;
 					}
 					rx_item = rx.next();
+					submit_ping = next_ping;
 				}
 				// Nothing else to receive.
 				Either::Left((None, _)) => break,
@@ -345,6 +344,7 @@ async fn background_task(
 						break;
 					}
 					rx_item = next_rx;
+					submit_ping = Box::pin(tokio::time::sleep(ping_interval));
 				}
 			}
 		}
