@@ -176,6 +176,7 @@ impl ClientBuilder {
 			request_timeout: self.request_timeout,
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
+			max_log_length: self.max_log_length,
 		}
 	}
 }
