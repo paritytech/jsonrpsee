@@ -26,6 +26,8 @@
 
 //! Contains common builders for hyper responses.
 
+use jsonrpsee_types::error::reject_too_big_request;
+
 use crate::types::error::{ErrorCode, ErrorResponse};
 use crate::types::Id;
 
@@ -73,8 +75,8 @@ pub fn invalid_allow_headers() -> hyper::Response<hyper::Body> {
 }
 
 /// Create a json response for oversized requests (413)
-pub fn too_large() -> hyper::Response<hyper::Body> {
-	let error = serde_json::to_string(&ErrorResponse::borrowed(ErrorCode::OversizedRequest.into(), Id::Null))
+pub fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
+	let error = serde_json::to_string(&ErrorResponse::borrowed(reject_too_big_request(limit), Id::Null))
 		.expect("built from known-good data; qed");
 
 	from_template(hyper::StatusCode::PAYLOAD_TOO_LARGE, error, JSON)
