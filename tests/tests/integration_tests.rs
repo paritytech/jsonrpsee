@@ -493,7 +493,7 @@ async fn ws_batch_works() {
 #[tokio::test]
 async fn ws_server_limit_subs_per_conn_works() {
 	use futures::StreamExt;
-	use jsonrpsee::types::error::{CallError, SUBSCRIPTIONS_LIMIT_PER_CONN, SUBSCRIPTIONS_LIMIT_PER_CONN_MSG};
+	use jsonrpsee::types::error::{CallError, TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
 	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
@@ -540,10 +540,10 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let data = "\"Exceeded max limit 10\"";
 
 	assert!(
-		matches!(err1, Err(Error::Call(CallError::Custom(err))) if err.code() == SUBSCRIPTIONS_LIMIT_PER_CONN && err.message() == SUBSCRIPTIONS_LIMIT_PER_CONN_MSG && err.data().unwrap().get() == data)
+		matches!(err1, Err(Error::Call(CallError::Custom(err))) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
 	);
 	assert!(
-		matches!(err2, Err(Error::Call(CallError::Custom(err))) if err.code() == SUBSCRIPTIONS_LIMIT_PER_CONN && err.message() == SUBSCRIPTIONS_LIMIT_PER_CONN_MSG && err.data().unwrap().get() == data)
+		matches!(err2, Err(Error::Call(CallError::Custom(err))) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
 	);
 }
 

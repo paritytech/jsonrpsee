@@ -183,7 +183,7 @@ pub const SUBSCRIPTION_CLOSED_WITH_ERROR: i32 = -32004;
 /// Batched requests are not supported by the server.
 pub const BATCHES_NOT_SUPPORTED_CODE: i32 = -32005;
 /// Subscription limit per connection was exceeded.
-pub const SUBSCRIPTIONS_LIMIT_PER_CONN: i32 = -32006;
+pub const TOO_MANY_SUBSCRIPTIONS_CODE: i32 = -32006;
 
 /// Parse error message
 pub const PARSE_ERROR_MSG: &str = "Parse error";
@@ -206,7 +206,7 @@ pub const SERVER_ERROR_MSG: &str = "Server error";
 /// Batched requests not supported error message.
 pub const BATCHES_NOT_SUPPORTED_MSG: &str = "Batched requests are not supported by this server";
 /// Subscription limit per connection was exceeded.
-pub const SUBSCRIPTIONS_LIMIT_PER_CONN_MSG: &str = "Too many subscriptions on the connection";
+pub const TOO_MANY_SUBSCRIPTIONS_MSG: &str = "Too many subscriptions on the connection";
 
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Copy, Clone)]
@@ -329,8 +329,8 @@ impl CallError {
 /// Helper to get a `JSON-RPC` error object when the maximum number of subscriptions have been exceeded.
 pub fn reject_too_many_subscriptions(limit: u32) -> ErrorObject<'static> {
 	ErrorObjectOwned::owned(
-		SUBSCRIPTIONS_LIMIT_PER_CONN,
-		SUBSCRIPTIONS_LIMIT_PER_CONN_MSG,
+		TOO_MANY_SUBSCRIPTIONS_CODE,
+		TOO_MANY_SUBSCRIPTIONS_MSG,
 		Some(format!("Exceeded max limit {}", limit)),
 	)
 }
