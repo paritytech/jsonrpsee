@@ -119,7 +119,7 @@ impl MethodSink {
 				tracing::error!("Error serializing response: {:?}", err);
 
 				if err.is_io() {
-					let data = format!("Exceeded max limit {}", self.max_response_size);
+					let data = format!("Exceeded max limit of {}", self.max_response_size);
 					let err = ErrorObject::owned(OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, Some(data));
 					return self.send_error(id, err);
 				} else {
