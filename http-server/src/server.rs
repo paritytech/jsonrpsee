@@ -362,7 +362,7 @@ pub struct Server<M = ()> {
 	batch_requests_supported: bool,
 	/// Access control.
 	access_control: AccessControl,
-	/// Tracker for currently used resources on the server
+	/// Tracker for currently used resources on the server.
 	resources: Resources,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
