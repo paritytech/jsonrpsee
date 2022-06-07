@@ -22,7 +22,7 @@ pub struct AccessControl {
 impl AccessControl {
 	/// Validate incoming request by HTTP HOST
 	///
-	/// `host` is return value from the `host header`
+	/// `host` is the return value from the `host header`
 	pub fn verify_host(&self, host: &str) -> Result<(), Error> {
 		self.allowed_hosts.verify(host)
 	}
