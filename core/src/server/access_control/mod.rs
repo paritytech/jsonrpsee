@@ -156,7 +156,7 @@ impl AccessControlBuilder {
 		Ok(self)
 	}
 
-	/// Build.
+	/// Finalize the `AccessControl` settings.
 	pub fn build(self) -> AccessControl {
 		AccessControl {
 			allowed_hosts: self.allowed_hosts,
