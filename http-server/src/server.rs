@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::cmp;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
@@ -33,15 +32,16 @@ use std::task::{Context, Poll};
 use crate::response::{internal_error, malformed};
 use crate::{response, AccessControl};
 use futures_channel::mpsc;
-use futures_util::{future::join_all, stream::StreamExt, FutureExt};
+use futures_util::{future, future::join_all, stream::StreamExt, FutureExt};
 use hyper::header::{HeaderMap, HeaderValue};
+use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
 use jsonrpsee_core::middleware::Middleware;
-use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
+use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
@@ -396,7 +396,8 @@ impl<M: Middleware> Server<M> {
 		let methods = methods.into().initialize_resources(&resources)?;
 		let health_api = self.health_api;
 
-		let make_service = make_service_fn(move |_| {
+		let make_service = make_service_fn(move |conn: &AddrStream| {
+			let remote_addr = conn.remote_addr();
 			let methods = methods.clone();
 			let access_control = access_control.clone();
 			let resources = resources.clone();
@@ -455,6 +456,7 @@ impl<M: Middleware> Server<M> {
 									max_request_body_size,
 									max_response_body_size,
 									batch_requests_supported,
+									remote_addr,
 								)
 								.await?;
 
@@ -465,7 +467,15 @@ impl<M: Middleware> Server<M> {
 							}
 							Method::GET => match health_api.as_ref() {
 								Some(health) if health.path.as_str() == request.uri().path() => {
-									process_health_request(health, middleware, methods, max_response_body_size).await
+									process_health_request(
+										health,
+										middleware,
+										methods,
+										max_response_body_size,
+										request.headers(),
+										remote_addr,
+									)
+									.await
 								}
 								_ => Ok(response::method_not_allowed()),
 							},
@@ -551,10 +561,11 @@ async fn process_validated_request(
 	max_request_body_size: u32,
 	max_response_body_size: u32,
 	batch_requests_supported: bool,
+	remote_addr: SocketAddr,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (parts, body) = request.into_parts();
 
-	let (body, mut is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
+	let (body, is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
 		Ok(r) => r,
 		Err(GenericTransportError::TooLarge) => return Ok(response::too_large()),
 		Err(GenericTransportError::Malformed) => return Ok(response::malformed()),
@@ -564,11 +575,7 @@ async fn process_validated_request(
 		}
 	};
 
-	let request_start = middleware.on_request();
-
-	// NOTE(niklasad1): it's a channel because it's needed for batch requests.
-	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+	let request_start = middleware.on_request(remote_addr, &parts.headers);
 
 	type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
@@ -576,155 +583,144 @@ async fn process_validated_request(
 	if is_single {
 		if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 			let method = req.method.as_ref();
-			middleware.on_call(method);
 
 			let id = req.id.clone();
 			let params = Params::new(req.params.map(|params| params.get()));
 
+			middleware.on_call(method, params.clone());
+
 			let result = match methods.method_with_name(method) {
-				None => {
-					sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-					false
-				}
+				None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
 				Some((name, method_callback)) => match method_callback.inner() {
 					MethodKind::Sync(callback) => match method_callback.claim(&req.method, &resources) {
 						Ok(guard) => {
-							let result = (callback)(id, params, &sink);
+							let result = (callback)(id, params, max_response_body_size as usize);
 							drop(guard);
 							result
 						}
 						Err(err) => {
 							tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-							sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-							false
+							MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy))
 						}
 					},
 					MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
 						Ok(guard) => {
-							let result =
-								(callback)(id.into_owned(), params.into_owned(), sink.clone(), 0, Some(guard)).await;
+							let result = (callback)(
+								id.into_owned(),
+								params.into_owned(),
+								0,
+								max_response_body_size as usize,
+								Some(guard),
+							)
+							.await;
 							result
 						}
 						Err(err) => {
 							tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-							sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-							false
+							MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy))
 						}
 					},
 					MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
 						tracing::error!("Subscriptions not supported on HTTP");
-						sink.send_error(req.id, ErrorCode::InternalError.into());
-						false
+						MethodResponse::error(req.id, ErrorObject::from(ErrorCode::InternalError))
 					}
 				},
 			};
-			middleware.on_result(&req.method, result, request_start);
+
+			middleware.on_response(&result.result, request_start);
+			middleware.on_result(&req.method, result.success, request_start);
+			Ok(response::ok_response(result.result))
 		} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
-			return Ok::<_, HyperError>(response::ok_response("".into()));
+			Ok(response::ok_response("".into()))
 		} else {
 			let (id, code) = prepare_error(&body);
-			sink.send_error(id, code.into());
+			let response = MethodResponse::error(id, ErrorObject::from(code));
+			Ok(response::ok_response(response.result))
 		}
 	// Batch of requests or notifications
 	} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
 		if !batch_requests_supported {
-			// Server was configured to not support batches.
-			is_single = true;
-			sink.send_error(
+			let err = MethodResponse::error(
 				Id::Null,
 				ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 			);
+			return Ok(response::ok_response(err.result));
 		} else if !batch.is_empty() {
-			let middleware = &middleware;
+			let batch: Vec<_> = batch.into_iter().map(|b| (b, methods.clone(), resources.clone())).collect();
 
-			join_all(batch.into_iter().filter_map(move |req| {
-				let id = req.id.clone();
-				let params = Params::new(req.params.map(|params| params.get()));
+			let batch_stream = futures_util::stream::iter(batch);
+			let mut result = batch_stream
+				.fold(String::from("["), |mut response, (req, methods, resources)| async move {
+					let id = req.id.clone().into_owned();
+					let params = Params::new(req.params.map(|params| params.get())).into_owned();
 
-				match methods.method_with_name(&req.method) {
-					None => {
-						sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-						None
-					}
-					Some((name, method_callback)) => match method_callback.inner() {
-						MethodKind::Sync(callback) => match method_callback.claim(name, &resources) {
-							Ok(guard) => {
-								let result = (callback)(id, params, &sink);
-								middleware.on_result(name, result, request_start);
-								drop(guard);
-								None
-							}
-							Err(err) => {
-								tracing::error!(
-									"[Methods::execute_with_resources] failed to lock resources: {:?}",
-									err
-								);
-								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-								middleware.on_result(name, false, request_start);
-								None
+					let r = match methods.method_with_name(&req.method) {
+						None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
+						Some((name, method_callback)) => match method_callback.inner() {
+							MethodKind::Sync(callback) => match method_callback.claim(&req.method, &resources) {
+								Ok(guard) => (callback)(id, params, max_response_body_size as usize),
+								Err(err) => {
+									tracing::error!(
+										"[Methods::execute_with_resources] failed to lock resources: {:?}",
+										err
+									);
+									MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy))
+								}
+							},
+							MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
+								Ok(guard) => {
+									(callback)(
+										id.into_owned(),
+										params.into_owned(),
+										0,
+										max_response_body_size as usize,
+										Some(guard),
+									)
+									.await
+								}
+								Err(err) => {
+									tracing::error!(
+										"[Methods::execute_with_resources] failed to lock resources: {:?}",
+										err
+									);
+									MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy))
+								}
+							},
+							MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
+								tracing::error!("Subscriptions not supported on HTTP");
+								MethodResponse::error(req.id, ErrorObject::from(ErrorCode::InternalError))
 							}
 						},
-						MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
-							Ok(guard) => {
-								let sink = sink.clone();
-								let id = id.into_owned();
-								let params = params.into_owned();
-								let callback = callback.clone();
+					};
 
-								Some(async move {
-									let result = (callback)(id, params, sink, 0, Some(guard)).await;
-									middleware.on_result(name, result, request_start);
-								})
-							}
-							Err(err) => {
-								tracing::error!(
-									"[Methods::execute_with_resources] failed to lock resources: {:?}",
-									err
-								);
-								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-								middleware.on_result(name, false, request_start);
-								None
-							}
-						},
-						MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-							tracing::error!("Subscriptions not supported on HTTP");
-							sink.send_error(req.id, ErrorCode::InternalError.into());
-							middleware.on_result(&req.method, false, request_start);
-							None
-						}
-					},
-				}
-			}))
-			.await;
+					response.push_str(&r.result);
+					response.push_str(",");
+
+					response
+				})
+				.await;
+
+			result.pop();
+			result.push(']');
+
+			Ok(response::ok_response(result))
 		} else {
 			// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
 			// Array with at least one value, the response from the Server MUST be a single
 			// Response object." – The Spec.
-			is_single = true;
-			sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
+			let err = MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest));
+			Ok(response::ok_response(err.result))
 		}
 	} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
-		return Ok(response::ok_response("".into()));
+		Ok(response::ok_response("".into()))
 	} else {
 		// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
 		// Array with at least one value, the response from the Server MUST be a single
 		// Response object." – The Spec.
-		is_single = true;
 		let (id, code) = prepare_error(&body);
-		sink.send_error(id, code.into());
+		let err = MethodResponse::error(id, ErrorObject::from(code));
+		Ok(response::ok_response(err.result))
 	}
-
-	// Closes the receiving half of a channel without dropping it. This prevents any further
-	// messages from being sent on the channel.
-	rx.close();
-	let response = if is_single {
-		rx.next().await.expect("Sender is still alive managed by us above; qed")
-	} else {
-		collect_batch_response(rx).await
-	};
-	tracing::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
-	middleware.on_response(request_start);
-	Ok(response::ok_response(response))
 }
 
 async fn process_health_request(
@@ -732,48 +728,39 @@ async fn process_health_request(
 	middleware: impl Middleware,
 	methods: Methods,
 	max_response_body_size: u32,
+	headers: &HeaderMap,
+	remote_addr: SocketAddr,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
-	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+	let request_start = middleware.on_request(remote_addr, headers);
 
-	let request_start = middleware.on_request();
-
-	let success = match methods.method_with_name(&health_api.method) {
-		None => false,
+	let r = match methods.method_with_name(&health_api.method) {
+		None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
 		Some((name, method_callback)) => match method_callback.inner() {
-			MethodKind::Sync(callback) => {
-				let res = (callback)(Id::Number(0), Params::new(None), &sink);
-				middleware.on_result(name, res, request_start);
-				res
-			}
+			MethodKind::Sync(callback) => (callback)(Id::Number(0), Params::new(None), max_response_body_size as usize),
 			MethodKind::Async(callback) => {
-				let res = (callback)(Id::Number(0), Params::new(None), sink.clone(), 0, None).await;
-				middleware.on_result(name, res, request_start);
-				res
+				(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None).await
 			}
 
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				middleware.on_result(name, false, request_start);
-				false
+				MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
 			}
 		},
 	};
 
-	let data = rx.next().await;
-	middleware.on_response(request_start);
+	middleware.on_result(&health_api.method, r.success, request_start);
+	middleware.on_response(&r.result, request_start);
 
-	match data {
-		Some(data) if success => {
-			#[derive(serde::Deserialize)]
-			struct RpcPayload<'a> {
-				#[serde(borrow)]
-				result: &'a serde_json::value::RawValue,
-			}
-
-			let payload: RpcPayload = serde_json::from_str(&data)
-				.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
-			Ok(response::ok_response(payload.result.to_string()))
+	if r.success {
+		#[derive(serde::Deserialize)]
+		struct RpcPayload<'a> {
+			#[serde(borrow)]
+			result: &'a serde_json::value::RawValue,
 		}
-		_ => Ok(response::internal_error()),
+
+		let payload: RpcPayload = serde_json::from_str(&r.result)
+			.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
+		Ok(response::ok_response(payload.result.to_string()))
+	} else {
+		Ok(response::internal_error())
 	}
 }

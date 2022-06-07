@@ -30,8 +30,9 @@ use std::net::SocketAddr;
 use std::process::Command;
 use std::time::Instant;
 
-use jsonrpsee::core::{client::ClientT, middleware};
+use jsonrpsee::core::{client::ClientT, middleware, HeaderMap};
 use jsonrpsee::rpc_params;
+use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
@@ -42,11 +43,11 @@ struct Timings;
 impl middleware::Middleware for Timings {
 	type Instant = Instant;
 
-	fn on_request(&self) -> Self::Instant {
+	fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> Self::Instant {
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str) {
+	fn on_call(&self, name: &str, _params: Params) {
 		println!("[Timings] They called '{}'", name);
 	}
 
@@ -54,7 +55,7 @@ impl middleware::Middleware for Timings {
 		println!("[Timings] call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
 		println!("[Timings] Response duration {:?}", started_at.elapsed());
 	}
 }
@@ -81,13 +82,13 @@ impl ThreadWatcher {
 impl middleware::Middleware for ThreadWatcher {
 	type Instant = isize;
 
-	fn on_request(&self) -> Self::Instant {
+	fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> Self::Instant {
 		let threads = Self::count_threads();
 		println!("[ThreadWatcher] Threads running on the machine at the start of a call: {}", threads);
 		threads as isize
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
 		let current_nr_threads = Self::count_threads() as isize;
 		println!("[ThreadWatcher] Request started {} threads", current_nr_threads - started_at);
 	}

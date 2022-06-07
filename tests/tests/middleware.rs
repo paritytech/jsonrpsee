@@ -29,10 +29,12 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use hyper::HeaderMap;
 use jsonrpsee::core::{client::ClientT, middleware::Middleware, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
@@ -61,7 +63,7 @@ impl Middleware for Counter {
 		self.inner.lock().unwrap().connections.0 += 1;
 	}
 
-	fn on_request(&self) -> u32 {
+	fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> u32 {
 		let mut inner = self.inner.lock().unwrap();
 		let n = inner.requests.0;
 
@@ -70,7 +72,7 @@ impl Middleware for Counter {
 		n
 	}
 
-	fn on_call(&self, name: &str) {
+	fn on_call(&self, name: &str, _params: Params) {
 		let mut inner = self.inner.lock().unwrap();
 		let entry = inner.calls.entry(name.into()).or_insert((0, Vec::new()));
 
@@ -83,7 +85,7 @@ impl Middleware for Counter {
 		}
 	}
 
-	fn on_response(&self, _: u32) {
+	fn on_response(&self, _result: &str, _: u32) {
 		self.inner.lock().unwrap().requests.1 += 1;
 	}
 

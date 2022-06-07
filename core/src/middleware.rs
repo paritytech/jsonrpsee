@@ -26,6 +26,8 @@
 
 //! Middleware for `jsonrpsee` servers.
 
+use jsonrpsee_types::Params;
+
 /// Defines a middleware with callbacks during the RPC request life-cycle. The primary use case for
 /// this is to collect timings for a larger metrics collection solution but the only constraints on
 /// the associated type is that it be [`Send`] and [`Copy`], giving users some freedom to do what
@@ -42,17 +44,17 @@ pub trait Middleware: Send + Sync + Clone + 'static {
 	/// Called when a new client connects (WebSocket only)
 	fn on_connect(&self) {}
 
-	/// Called when a new JSON-RPC comes to the server.
-	fn on_request(&self) -> Self::Instant;
+	/// Called when a new JSON-RPC request comes to the server.
+	fn on_request(&self, remote_addr: std::net::SocketAddr, headers: &http::HeaderMap) -> Self::Instant;
 
 	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
-	fn on_call(&self, _name: &str) {}
+	fn on_call(&self, _name: &str, _params: Params) {}
 
 	/// Called on each JSON-RPC method completion, batch requests will trigger `on_result` multiple times.
 	fn on_result(&self, _name: &str, _success: bool, _started_at: Self::Instant) {}
 
 	/// Called once the JSON-RPC request is finished and response is sent to the output buffer.
-	fn on_response(&self, _started_at: Self::Instant) {}
+	fn on_response(&self, _result: &str, _started_at: Self::Instant) {}
 
 	/// Called when a client disconnects (WebSocket only)
 	fn on_disconnect(&self) {}
@@ -61,7 +63,7 @@ pub trait Middleware: Send + Sync + Clone + 'static {
 impl Middleware for () {
 	type Instant = ();
 
-	fn on_request(&self) -> Self::Instant {}
+	fn on_request(&self, _ip_addr: std::net::SocketAddr, _headers: &http::HeaderMap) -> Self::Instant {}
 }
 
 impl<A, B> Middleware for (A, B)
@@ -71,13 +73,13 @@ where
 {
 	type Instant = (A::Instant, B::Instant);
 
-	fn on_request(&self) -> Self::Instant {
-		(self.0.on_request(), self.1.on_request())
+	fn on_request(&self, ip_addr: std::net::SocketAddr, headers: &http::HeaderMap) -> Self::Instant {
+		(self.0.on_request(ip_addr, headers), self.1.on_request(ip_addr, headers))
 	}
 
-	fn on_call(&self, name: &str) {
-		self.0.on_call(name);
-		self.1.on_call(name);
+	fn on_call(&self, name: &str, params: Params) {
+		self.0.on_call(name, params.clone());
+		self.1.on_call(name, params);
 	}
 
 	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
@@ -85,8 +87,8 @@ where
 		self.1.on_result(name, success, started_at.1);
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
-		self.0.on_response(started_at.0);
-		self.1.on_response(started_at.1);
+	fn on_response(&self, result: &str, started_at: Self::Instant) {
+		self.0.on_response(result, started_at.0);
+		self.1.on_response(result, started_at.1);
 	}
 }

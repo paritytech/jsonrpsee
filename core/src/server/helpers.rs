@@ -241,6 +241,51 @@ impl BoundedSubscriptions {
 	}
 }
 
+/// Represent the response to method call.
+#[derive(Debug)]
+pub struct MethodResponse {
+	/// Serialized response,
+	pub result: String,
+	/// Status indicates whether the call was successful or or.
+	pub success: bool,
+}
+
+impl MethodResponse {
+	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
+	/// an error will be sent instead.
+	pub fn response(id: Id, result: impl Serialize, max_response_size: usize) -> Self {
+		let mut writer = BoundedWriter::new(max_response_size);
+
+		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
+			Ok(_) => {
+				// Safety - serde_json does not emit invalid UTF-8.
+				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
+				Self { result, success: true }
+			}
+			Err(err) => {
+				tracing::error!("Error serializing response: {:?}", err);
+
+				if err.is_io() {
+					let data = to_json_raw_value(&format!("Exceeded max limit {}", max_response_size)).ok();
+					let err = ErrorObject::borrowed(OVERSIZED_RESPONSE_CODE, &OVERSIZED_RESPONSE_MSG, data.as_deref());
+					let result = serde_json::to_string(&ErrorResponse::borrowed(err, id)).unwrap();
+
+					Self { result, success: false }
+				} else {
+					let result =
+						serde_json::to_string(&ErrorResponse::borrowed(ErrorCode::InternalError.into(), id)).unwrap();
+					Self { result, success: false }
+				}
+			}
+		}
+	}
+
+	pub fn error(id: Id, err: impl Into<ErrorObject<'static>>) -> Self {
+		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap();
+		Self { result, success: false }
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::server::helpers::BoundedSubscriptions;

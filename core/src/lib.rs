@@ -57,6 +57,7 @@ cfg_client! {
 
 pub use async_trait::async_trait;
 pub use error::Error;
+pub use http::HeaderMap;
 
 /// JSON-RPC result.
 pub type RpcResult<T> = std::result::Result<T, Error>;

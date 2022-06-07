@@ -35,7 +35,7 @@ use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::{BoundedSubscriptions, MethodSink, SubscriptionPermit};
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
 use crate::traits::{IdProvider, ToRpcParams};
-use futures_channel::mpsc;
+use futures_channel::{mpsc, oneshot};
 use futures_util::future::Either;
 use futures_util::pin_mut;
 use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, TryStreamExt};
@@ -50,30 +50,38 @@ use rustc_hash::FxHashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::sync::watch;
 
+use super::helpers::MethodResponse;
+
 /// A `MethodCallback` is an RPC endpoint, callable with a standard JSON-RPC request,
 /// implemented as a function pointer to a `Fn` function taking four arguments:
 /// the `id`, `params`, a channel the function uses to communicate the result (or error)
 /// back to `jsonrpsee`, and the connection ID (useful for the websocket transport).
-pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink) -> bool>;
+pub type SyncMethod = Arc<dyn Send + Sync + Fn(Id, Params, MaxResponseSize) -> MethodResponse>;
 /// Similar to [`SyncMethod`], but represents an asynchronous handler and takes an additional argument containing a [`ResourceGuard`] if configured.
 pub type AsyncMethod<'a> = Arc<
-	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, bool>,
+	dyn Send
+		+ Sync
+		+ Fn(Id<'a>, Params<'a>, ConnectionId, MaxResponseSize, Option<ResourceGuard>) -> BoxFuture<'a, MethodResponse>,
 >;
 /// Method callback for subscriptions.
-pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnState) -> bool>;
+pub type SubscriptionMethod<'a> =
+	Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnState) -> BoxFuture<'a, MethodResponse>>;
 // Method callback to unsubscribe.
-type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId) -> bool>;
+type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId) -> MethodResponse>;
 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
 pub type ConnectionId = usize;
+
+/// Max response size.
+pub type MaxResponseSize = usize;
 
 /// Raw response from an RPC
 /// A 3-tuple containing:
 ///   - Call result as a `String`,
 ///   - a [`mpsc::UnboundedReceiver<String>`] to receive future subscription results
 ///   - a [`crate::server::helpers::SubscriptionPermit`] to allow subscribers to notify their [`SubscriptionSink`] when they disconnect.
-pub type RawRpcResponse = (String, mpsc::UnboundedReceiver<String>, SubscriptionPermit);
+pub type RawRpcResponse = (MethodResponse, mpsc::UnboundedReceiver<String>, SubscriptionPermit);
 
 /// Helper struct to manage subscriptions.
 pub struct ConnState<'a> {
@@ -117,7 +125,7 @@ pub enum MethodKind {
 	/// Asynchronous method handler.
 	Async(AsyncMethod<'static>),
 	/// Subscription method handler.
-	Subscription(SubscriptionMethod),
+	Subscription(SubscriptionMethod<'static>),
 	/// Unsubscription method handler.
 	Unsubscription(UnsubscriptionMethod),
 }
@@ -186,7 +194,7 @@ impl MethodCallback {
 		MethodCallback { callback: MethodKind::Async(callback), resources: MethodResources::Uninitialized([].into()) }
 	}
 
-	fn new_subscription(callback: SubscriptionMethod) -> Self {
+	fn new_subscription(callback: SubscriptionMethod<'static>) -> Self {
 		MethodCallback {
 			callback: MethodKind::Subscription(callback),
 			resources: MethodResources::Uninitialized([].into()),
@@ -355,10 +363,10 @@ impl Methods {
 		tracing::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let (resp, _, _) = self.inner_call(req).await;
 
-		let res = match serde_json::from_str::<Response<T>>(&resp) {
+		let res = match serde_json::from_str::<Response<T>>(&resp.result) {
 			Ok(res) => Ok(res.result),
 			Err(e) => {
-				if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp) {
+				if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp.result) {
 					Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())))
 				} else {
 					Err(e.into())
@@ -394,7 +402,10 @@ impl Methods {
 	///     );
 	/// }
 	/// ```
-	pub async fn raw_json_request(&self, call: &str) -> Result<(String, mpsc::UnboundedReceiver<String>), Error> {
+	pub async fn raw_json_request(
+		&self,
+		call: &str,
+	) -> Result<(MethodResponse, mpsc::UnboundedReceiver<String>), Error> {
 		tracing::trace!("[Methods::raw_json_request] {:?}", call);
 		let req: Request = serde_json::from_str(call)?;
 		let (resp, rx, _) = self.inner_call(req).await;
@@ -403,7 +414,7 @@ impl Methods {
 
 	/// Execute a callback.
 	async fn inner_call(&self, req: Request<'_>) -> RawRpcResponse {
-		let (tx_sink, mut rx_sink) = mpsc::unbounded();
+		let (tx_sink, rx_sink) = mpsc::unbounded();
 		let sink = MethodSink::new(tx_sink);
 		let id = req.id.clone();
 		let params = Params::new(req.params.map(|params| params.get()));
@@ -411,20 +422,18 @@ impl Methods {
 		let close_notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 		let notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 
-		let _result = match self.method(&req.method).map(|c| &c.callback) {
-			None => sink.send_error(req.id, ErrorCode::MethodNotFound.into()),
-			Some(MethodKind::Sync(cb)) => (cb)(id, params, &sink),
-			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
+		let result = match self.method(&req.method).map(|c| &c.callback) {
+			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
+			Some(MethodKind::Sync(cb)) => (cb)(id, params, usize::MAX),
+			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX, None).await,
 			Some(MethodKind::Subscription(cb)) => {
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
-				(cb)(id, params, &sink, conn_state)
+				(cb)(id, params, &sink, conn_state).await
 			}
-			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, &sink, 0),
+			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0),
 		};
 
-		let resp = rx_sink.next().await.expect("tx and rx still alive; qed");
-
-		(resp, rx_sink, notify)
+		(result, rx_sink, notify)
 	}
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
@@ -457,9 +466,9 @@ impl Methods {
 		tracing::trace!("[Methods::subscribe] Calling subscription method: {:?}, params: {:?}", sub_method, params);
 		let (response, rx, close_notify) = self.inner_call(req).await;
 		tracing::trace!("[Methods::subscribe] response {:?}", response);
-		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&response) {
+		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&response.result) {
 			Ok(r) => r,
-			Err(_) => match serde_json::from_str::<ErrorResponse>(&response) {
+			Err(_) => match serde_json::from_str::<ErrorResponse>(&response.result) {
 				Ok(err) => return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))),
 				Err(err) => return Err(err.into()),
 			},
@@ -533,9 +542,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_sync(Arc::new(move |id, params, sink| match callback(params, &*ctx) {
-				Ok(res) => sink.send_response(id, res),
-				Err(err) => sink.send_call_error(id, err),
+			MethodCallback::new_sync(Arc::new(move |id, params, max_response_size| match callback(params, &*ctx) {
+				Ok(res) => MethodResponse::response(id, res, max_response_size),
+				Err(err) => MethodResponse::error(id, err),
 			})),
 		)?;
 
@@ -556,12 +565,12 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, sink, _, claimed| {
+			MethodCallback::new_async(Arc::new(move |id, params, _, max_response_size, claimed| {
 				let ctx = ctx.clone();
 				let future = async move {
 					let result = match callback(params, ctx).await {
-						Ok(res) => sink.send_response(id, res),
-						Err(err) => sink.send_call_error(id, err),
+						Ok(res) => MethodResponse::response(id, res, max_response_size),
+						Err(err) => MethodResponse::error(id, err),
 					};
 
 					// Release claimed resources
@@ -591,13 +600,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let ctx = self.ctx.clone();
 		let callback = self.methods.verify_and_insert(
 			method_name,
-			MethodCallback::new_async(Arc::new(move |id, params, sink, _, claimed| {
+			MethodCallback::new_async(Arc::new(move |id, params, _, max_response_size, claimed| {
 				let ctx = ctx.clone();
 
 				tokio::task::spawn_blocking(move || {
 					let result = match callback(params, ctx) {
-						Ok(res) => sink.send_response(id, res),
-						Err(err) => sink.send_call_error(id, err),
+						Ok(result) => MethodResponse::response(id, result, max_response_size),
+						Err(err) => MethodResponse::error(id, err),
 					};
 
 					// Release claimed resources
@@ -609,7 +618,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					Ok(r) => r,
 					Err(err) => {
 						tracing::error!("Join error for blocking RPC method: {:?}", err);
-						false
+						todo!();
 					}
 				})
 				.boxed()
@@ -703,8 +712,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn| {
 					let sub_id: RpcSubscriptionId = conn.id_provider.next_id();
 
+					let (tx, rx) = oneshot::channel();
+
 					let sink = PendingSubscription(Some(InnerPendingSubscription {
 						sink: method_sink.clone(),
+						result: tx,
 						close_notify: Some(conn.close_notify),
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
@@ -714,7 +726,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					callback(params, sink, ctx.clone());
 
-					true
+					let id = id.clone().into_owned();
+					let result = rx.then(|r| async move {
+						match r {
+							Ok(r) => r,
+							Err(_) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
+						}
+					});
+
+					Box::pin(result)
 				})),
 			);
 		}
@@ -723,7 +743,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_unsubscription(Arc::new(move |id, params, sink, conn_id| {
+				MethodCallback::new_unsubscription(Arc::new(move |id, params, conn_id| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -733,14 +753,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 								params,
 								id
 							);
-							return sink.send_response(id, false);
+
+							return MethodResponse::response(id, false, 999);
 						}
 					};
 					let sub_id = sub_id.into_owned();
 
 					let result = subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some();
 
-					sink.send_response(id, result)
+					MethodResponse::response(id, result, 999)
 				})),
 			);
 		}
@@ -771,6 +792,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 struct InnerPendingSubscription {
 	/// Sink.
 	sink: MethodSink,
+	/// Oneshot which sends response to the subscription call.
+	result: oneshot::Sender<MethodResponse>,
 	/// Get notified when subscribers leave so we can exit
 	close_notify: Option<SubscriptionPermit>,
 	/// MethodCallback.
@@ -806,9 +829,15 @@ impl PendingSubscription {
 	pub fn accept(mut self) -> Option<SubscriptionSink> {
 		let inner = self.0.take()?;
 
-		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id } = inner;
+		let InnerPendingSubscription { sink, result, close_notify, method, uniq_sub, subscribers, id } = inner;
 
-		if sink.send_response(id, &uniq_sub.sub_id) {
+		let response = MethodResponse::response(id, &uniq_sub.sub_id, usize::MAX);
+		let success = response.success;
+
+		if result.send(response).is_ok() && success {
+			// TODO: It might be possible that the actual `WebSocket message` might not have been sent yet
+			// So we must be super careful that sink doesn't start sending stuff before that actual
+			// subscription call has been answered.
 			let (tx, rx) = watch::channel(());
 			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), tx));
 			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, unsubscribe: rx })

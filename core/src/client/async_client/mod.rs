@@ -407,13 +407,12 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 	sender: &mut S,
 	max_notifs_per_subscription: usize,
 ) -> Result<(), Error> {
-
 	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
 	async fn handle_recv_message<S: TransportSenderT>(
 		raw: &[u8],
 		manager: &mut RequestManager,
 		sender: &mut S,
-		max_notifs_per_subscription: usize
+		max_notifs_per_subscription: usize,
 	) -> Result<(), Error> {
 		// Single response to a request.
 		if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
@@ -460,9 +459,9 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 		// Unparsable response
 		else {
 			tracing::debug!(
-					"[backend]: recv unparseable message: {:?}",
-					serde_json::from_slice::<serde_json::Value>(&raw)
-				);
+				"[backend]: recv unparseable message: {:?}",
+				serde_json::from_slice::<serde_json::Value>(&raw)
+			);
 			return Err(Error::Custom("Unparsable response".into()));
 		}
 		Ok(())
@@ -628,7 +627,10 @@ async fn background_task<S, R>(
 		match future::select(message_fut, submit_ping).await {
 			// Message received from the frontend.
 			Either::Left((Either::Left((frontend_value, backend)), _)) => {
-				if let Err(err) = handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await {
+				if let Err(err) =
+					handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription)
+						.await
+				{
 					tracing::warn!("{:?}", err);
 					let _ = front_error.send(err);
 					break;
@@ -637,10 +639,15 @@ async fn background_task<S, R>(
 				message_fut = future::select(frontend.next(), backend);
 			}
 			// Message received from the backend.
-			Either::Left((Either::Right((backend_value, frontend)), _))=> {
+			Either::Left((Either::Right((backend_value, frontend)), _)) => {
 				if let Err(err) = handle_backend_messages::<S, R>(
-					backend_value, &mut manager, &mut sender, max_notifs_per_subscription
-				).await {
+					backend_value,
+					&mut manager,
+					&mut sender,
+					max_notifs_per_subscription,
+				)
+				.await
+				{
 					tracing::warn!("{:?}", err);
 					let _ = front_error.send(err);
 					break;

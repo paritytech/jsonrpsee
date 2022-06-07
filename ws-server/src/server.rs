@@ -40,7 +40,9 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
-use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, BoundedSubscriptions, MethodSink};
+use jsonrpsee_core::server::helpers::{
+	collect_batch_response, prepare_error, BoundedSubscriptions, MethodResponse, MethodSink,
+};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
 use jsonrpsee_core::traits::IdProvider;
@@ -223,10 +225,9 @@ enum HandshakeResponse<'a, M> {
 	},
 }
 
-async fn handshake<M>(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_, M>) -> Result<(), Error>
-where
-	M: Middleware,
-{
+async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_, M>) -> Result<(), Error> {
+	let remote_addr = socket.peer_addr()?;
+
 	// For each incoming background_task we perform a handshake.
 	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
 
@@ -279,6 +280,7 @@ where
 				middleware,
 				id_provider,
 				cfg.ping_interval,
+				remote_addr,
 			))
 			.await;
 
@@ -303,6 +305,7 @@ async fn background_task(
 	middleware: impl Middleware,
 	id_provider: Arc<dyn IdProvider>,
 	ping_interval: Duration,
+	remote_addr: SocketAddr,
 ) -> Result<(), Error> {
 	// And we can finally transition to a websocket background_task.
 	let mut builder = server.into_builder();
@@ -413,7 +416,8 @@ async fn background_task(
 
 		tracing::debug!("recv {} bytes", data.len());
 
-		let request_start = middleware.on_request();
+		let headers = http::HeaderMap::new();
+		let request_start = middleware.on_request(remote_addr, &headers);
 
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
 
@@ -426,30 +430,27 @@ async fn background_task(
 					let id = req.id.clone();
 					let params = Params::new(req.params.map(|params| params.get()));
 
-					middleware.on_call(&req.method);
+					middleware.on_call(&req.method, params.clone());
 
 					match methods.method_with_name(&req.method) {
 						None => {
-							sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-							middleware.on_response(request_start);
+							let result = MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound));
+							complete_call(&req.method, request_start, result, middleware, &sink);
 						}
 						Some((name, method)) => match &method.inner() {
 							MethodKind::Sync(callback) => match method.claim(name, &resources) {
 								Ok(guard) => {
-									let result = (callback)(id, params, &sink);
-
-									middleware.on_result(name, result, request_start);
-									middleware.on_response(request_start);
-									drop(guard);
+									let result = (callback)(id, params, max_request_body_size as usize);
+									complete_call(&req.method, request_start, result, middleware, &sink);
 								}
 								Err(err) => {
 									tracing::error!(
 										"[Methods::execute_with_resources] failed to lock resources: {:?}",
 										err
 									);
-									sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-									middleware.on_result(name, false, request_start);
-									middleware.on_response(request_start);
+									let result =
+										MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy));
+									complete_call(&req.method, request_start, result, middleware, &sink);
 								}
 							},
 							MethodKind::Async(callback) => match method.claim(name, &resources) {
@@ -459,9 +460,15 @@ async fn background_task(
 									let params = params.into_owned();
 
 									let fut = async move {
-										let result = (callback)(id, params, sink, conn_id, Some(guard)).await;
-										middleware.on_result(name, result, request_start);
-										middleware.on_response(request_start);
+										let result = (callback)(
+											id,
+											params,
+											conn_id,
+											max_response_body_size as usize,
+											Some(guard),
+										)
+										.await;
+										complete_call(name, request_start, result, middleware, &sink);
 									};
 
 									method_executors.add(fut.boxed());
@@ -471,9 +478,9 @@ async fn background_task(
 										"[Methods::execute_with_resources] failed to lock resources: {:?}",
 										err
 									);
-									sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-									middleware.on_result(name, false, request_start);
-									middleware.on_response(request_start);
+									let result =
+										MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy));
+									complete_call(&req.method, request_start, result, middleware, &sink);
 								}
 							},
 							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
@@ -481,37 +488,32 @@ async fn background_task(
 									let result = if let Some(cn) = bounded_subscriptions.acquire() {
 										let conn_state =
 											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
-										callback(id, params, &sink, conn_state)
+										callback(id, params, &sink, conn_state).await
 									} else {
-										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-										false
+										MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy))
 									};
-									middleware.on_result(name, result, request_start);
-									middleware.on_response(request_start);
-									drop(guard);
+									complete_call(&req.method, request_start, result, middleware, &sink);
 								}
 								Err(err) => {
 									tracing::error!(
 										"[Methods::execute_with_resources] failed to lock resources: {:?}",
 										err
 									);
-									sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-									middleware.on_result(name, false, request_start);
-									middleware.on_response(request_start);
+									let result =
+										MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy));
+									complete_call(&req.method, request_start, result, middleware, &sink);
 								}
 							},
 							MethodKind::Unsubscription(callback) => {
 								// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
-								let result = callback(id, params, &sink, conn_id);
-								middleware.on_result(name, result, request_start);
-								middleware.on_response(request_start);
+								let result = callback(id, params, conn_id);
+								complete_call(&req.method, request_start, result, middleware, &sink);
 							}
 						},
 					}
 				} else {
 					let (id, code) = prepare_error(&data);
 					sink.send_error(id, code.into());
-					middleware.on_response(request_start);
 				}
 			}
 			Some(b'[') => {
@@ -527,8 +529,7 @@ async fn background_task(
 					// Batch responses must be sent back as a single message so we read the results from each
 					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 					// complete batch response back to the client over `tx`.
-					let (tx_batch, mut rx_batch) = mpsc::unbounded();
-					let sink_batch = MethodSink::new_with_limit(tx_batch, max_response_body_size);
+
 					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
 						tracing::debug!("recv batch len={}", batch.len());
 						tracing::trace!("recv: batch={:?}", batch);
@@ -537,117 +538,141 @@ async fn background_task(
 								Id::Null,
 								ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 							);
-							middleware.on_response(request_start);
+							middleware.on_response("", request_start);
 						} else if !batch.is_empty() {
-							join_all(batch.into_iter().filter_map(move |req| {
-								let id = req.id.clone();
-								let params = Params::new(req.params.map(|params| params.get()));
-								let name = &req.method;
+							let batch = batch.into_iter().map(|req| {
+								(
+									req,
+									methods.clone(),
+									resources.clone(),
+									sink.clone(),
+									bounded_subscriptions2.clone(),
+									id_provider.clone(),
+								)
+							});
 
-								match methods.method_with_name(name) {
-									None => {
-										sink_batch.send_error(req.id, ErrorCode::MethodNotFound.into());
-										None
-									}
-									Some((name, method_callback)) => match &method_callback.inner() {
-										MethodKind::Sync(callback) => match method_callback.claim(name, resources) {
-											Ok(guard) => {
-												let result = (callback)(id, params, &sink_batch);
-												middleware.on_result(name, result, request_start);
-												drop(guard);
-												None
-											}
-											Err(err) => {
-												tracing::error!(
+							let batch_stream = futures_util::stream::iter(batch);
+
+							let mut response = batch_stream
+								.fold(
+									String::from("["),
+									|mut response, (req, methods, resources, sink, bounded_sub, id_provider)| async move {
+										let id = req.id.clone();
+										let params = Params::new(req.params.map(|params| params.get()));
+										let name = &req.method;
+
+										let mr = match methods.method_with_name(name) {
+											None => MethodResponse::error(
+												req.id,
+												ErrorObject::from(ErrorCode::MethodNotFound),
+											),
+											Some((name, method_callback)) => match &method_callback.inner() {
+												MethodKind::Sync(callback) => {
+													match method_callback.claim(name, &resources) {
+														Ok(guard) => {
+															(callback)(id, params, max_response_body_size as usize)
+														}
+														Err(err) => {
+															tracing::error!(
 													"[Methods::execute_with_resources] failed to lock resources: {:?}",
 													err
 												);
-												sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
-												middleware.on_result(&req.method, false, request_start);
-												None
-											}
-										},
-										MethodKind::Async(callback) => match method_callback
-											.claim(&req.method, resources)
-										{
-											Ok(guard) => {
-												let sink_batch = sink_batch.clone();
-												let id = id.into_owned();
-												let params = params.into_owned();
 
-												Some(async move {
-													let result =
-														(callback)(id, params, sink_batch, conn_id, Some(guard)).await;
-													middleware.on_result(&req.method, result, request_start);
-												})
-											}
-											Err(err) => {
-												tracing::error!(
-													"[Methods::execute_with_resources] failed to lock resources: {:?}",
-													err
-												);
-												sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
-												middleware.on_result(&req.method, false, request_start);
-												None
-											}
-										},
-										MethodKind::Subscription(callback) => {
-											match method_callback.claim(&req.method, resources) {
-												Ok(guard) => {
-													let result = if let Some(cn) = bounded_subscriptions2.acquire() {
-														let conn_state = ConnState {
-															conn_id,
-															close_notify: cn,
-															id_provider: &*id_provider,
-														};
-														callback(id, params, &sink_batch, conn_state)
-													} else {
-														sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
-														false
-													};
-													middleware.on_result(&req.method, result, request_start);
-													drop(guard);
-													None
+															MethodResponse::error(
+																req.id,
+																ErrorObject::from(ErrorCode::ServerIsBusy),
+															)
+														}
+													}
 												}
-												Err(err) => {
-													tracing::error!(
-														"[Methods::execute_with_resources] failed to lock resources: {:?}",
-														err
-													);
+												MethodKind::Async(callback) => {
+													match method_callback.claim(&req.method, &resources) {
+														Ok(guard) => {
+															let id = id.into_owned();
+															let params = params.into_owned();
 
-													sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
-													middleware.on_result(&req.method, false, request_start);
-													None
+															(callback)(
+																id,
+																params,
+																conn_id,
+																max_response_body_size as usize,
+																Some(guard),
+															)
+															.await
+														}
+														Err(err) => {
+															tracing::error!(
+											"[Methods::execute_with_resources] failed to lock resources: {:?}",
+											err
+											);
+															MethodResponse::error(
+																req.id,
+																ErrorObject::from(ErrorCode::ServerIsBusy),
+															)
+														}
+													}
 												}
-											}
-										}
-										MethodKind::Unsubscription(callback) => {
-											// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
-											let result = callback(id, params, &sink_batch, conn_id);
-											middleware.on_result(&req.method, result, request_start);
-											None
-										}
+												MethodKind::Subscription(callback) => {
+													match method_callback.claim(&req.method, &resources) {
+														Ok(guard) => {
+															if let Some(cn) = bounded_sub.acquire() {
+																let conn_state = ConnState {
+																	conn_id,
+																	close_notify: cn,
+																	id_provider: &*id_provider,
+																};
+																callback(id, params, &sink, conn_state).await
+															} else {
+																MethodResponse::error(
+																	req.id,
+																	ErrorObject::from(ErrorCode::ServerIsBusy),
+																)
+															}
+														}
+														Err(err) => {
+															tracing::error!(
+											"[Methods::execute_with_resources] failed to lock resources: {:?}",
+											err
+											);
+
+															MethodResponse::error(
+																req.id,
+																ErrorObject::from(ErrorCode::ServerIsBusy),
+															)
+														}
+													}
+												}
+												MethodKind::Unsubscription(callback) => {
+													// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
+													callback(id, params, conn_id)
+												}
+											},
+										};
+
+										response.push_str(&mr.result);
+										response.push_str(",");
+
+										response
 									},
-								}
-							}))
-							.await;
+								)
+								.await;
 
-							rx_batch.close();
-							let results = collect_batch_response(rx_batch).await;
+							response.pop();
+							response.push(']');
 
-							if let Err(err) = sink.send_raw(results) {
+							if let Err(err) = sink.send_raw(response) {
 								tracing::warn!("Error sending batch response to the client: {:?}", err)
 							} else {
-								middleware.on_response(request_start);
+								middleware.on_response("", request_start);
 							}
 						} else {
 							sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
-							middleware.on_response(request_start);
+							middleware.on_response("", request_start);
 						}
 					} else {
 						let (id, code) = prepare_error(&d);
 						sink.send_error(id, code.into());
-						middleware.on_response(request_start);
+						middleware.on_response("", request_start);
 					}
 				};
 
@@ -1001,4 +1026,16 @@ async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>
 	let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
 	sender.send_ping(byte_slice).await?;
 	sender.flush().await.map_err(Into::into)
+}
+
+fn complete_call<M: Middleware>(
+	method: &str,
+	request_start: M::Instant,
+	r: MethodResponse,
+	middleware: &M,
+	sink: &MethodSink,
+) -> bool {
+	middleware.on_result(method, r.success, request_start);
+	middleware.on_response(&r.result, request_start);
+	sink.send_raw(r.result).is_ok()
 }
