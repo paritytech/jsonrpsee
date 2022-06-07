@@ -253,8 +253,6 @@ where
 				let host_check = cfg.access_control.verify_host(host);
 				let origin_check = cfg.access_control.verify_origin(origin, host);
 
-				// TODO: "access-control-request-headers" not possible to fetch via soketto.
-
 				host_check.and(origin_check).map(|()| req.key())
 			};
 
