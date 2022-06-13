@@ -110,9 +110,9 @@ pub fn get_cors_request_headers<'a>(headers: &'a hyper::header::HeaderMap) -> im
 	read_header_values(headers, ACCESS_CONTROL_ALLOW_HEADERS)
 		.iter()
 		.filter_map(|val| val.to_str().ok())
-		// NOTE(niklasad1): we perform split twice to cover both `val1,val2` and `val1, val2`.
-		.flat_map(|val| val.split(", "))
-		.flat_map(|val| val.split(','))
+		.flat_map(|val| val.split(","))
+		// The strings themselves might contain leading and trailing whitespaces
+		.map(|s| s.trim())
 }
 
 #[cfg(test)]
@@ -153,8 +153,10 @@ mod tests {
 		let values: Vec<&str> = get_cors_request_headers(&headers).collect();
 		assert_eq!(values, vec!["Content-Type", "x-requested-with"]);
 
-		headers
-			.insert(hyper::header::ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type, x-requested-with".parse().unwrap());
+		headers.insert(
+			hyper::header::ACCESS_CONTROL_REQUEST_HEADERS,
+			"Content-Type,               x-requested-with                  ".parse().unwrap(),
+		);
 
 		let values: Vec<&str> = get_cors_request_headers(&headers).collect();
 		assert_eq!(values, vec!["Content-Type", "x-requested-with"]);
