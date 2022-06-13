@@ -262,10 +262,14 @@ pub(crate) fn get_cors_allow_origin(
 	}
 }
 
-/// Validates if the `AllowHeaders` in the request are allowed.
+/// Validates if the headers in the request are allowed.
+///
+/// headers: all the headers in the request.
+/// cors_request_headers: `values` in the `access-control-request-headers` header.
+/// cors_allow_headers: whitelisted headers by the user.
 pub(crate) fn get_cors_allow_headers<T: AsRef<str>, O, F: Fn(T) -> O>(
 	mut headers: impl Iterator<Item = T>,
-	requested_headers: impl Iterator<Item = T>,
+	cors_request_headers: impl Iterator<Item = T>,
 	cors_allow_headers: &AllowHeaders,
 	to_result: F,
 ) -> AllowCors<Vec<O>> {
@@ -284,12 +288,12 @@ pub(crate) fn get_cors_allow_headers<T: AsRef<str>, O, F: Fn(T) -> O>(
 	// Check if `AccessControlRequestHeaders` contains fields which were allowed
 	let (filtered, headers) = match cors_allow_headers {
 		AllowHeaders::Any => {
-			let headers = requested_headers.map(to_result).collect();
+			let headers = cors_request_headers.map(to_result).collect();
 			(false, headers)
 		}
 		AllowHeaders::Only(only) => {
 			let mut filtered = false;
-			let headers: Vec<_> = requested_headers
+			let headers: Vec<_> = cors_request_headers
 				.filter(|header| {
 					let name = &Ascii::new(header.as_ref());
 					filtered = true;
