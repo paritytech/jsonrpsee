@@ -476,7 +476,7 @@ async fn background_task(
 									let result = if let Some(cn) = bounded_subscriptions.acquire() {
 										let conn_state =
 											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
-										callback(id, params, &sink, conn_state)
+										callback(id, params, sink.clone(), conn_state)
 									} else {
 										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
 										false
@@ -595,7 +595,7 @@ async fn background_task(
 															close_notify: cn,
 															id_provider: &*id_provider,
 														};
-														callback(id, params, &sink_batch, conn_state)
+														callback(id, params, sink_batch.clone(), conn_state)
 													} else {
 														sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
 														false
