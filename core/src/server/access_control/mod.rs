@@ -6,8 +6,9 @@ mod matcher;
 
 pub use cors::{AllowHeaders, AllowOrigin, Origin};
 pub use host::{AllowHosts, Host};
+use hyper::HeaderMap;
 
-use crate::Error;
+use crate::{http_helpers::get_cors_request_headers, Error};
 
 use self::cors::get_cors_allow_origin;
 
@@ -20,14 +21,14 @@ pub struct AccessControl {
 }
 
 impl AccessControl {
-	/// Validate incoming request by HTTP HOST
+	/// Validate incoming request by host.
 	///
 	/// `host` is the return value from the `host header`
 	pub fn verify_host(&self, host: &str) -> Result<(), Error> {
 		self.allowed_hosts.verify(host)
 	}
 
-	/// Validate incoming request by CORS origin value
+	/// Validate incoming request by origin.
 	///
 	/// `host` is the return value from the `host header`
 	/// `origin` is the value from the `origin header`.
@@ -39,20 +40,18 @@ impl AccessControl {
 		}
 	}
 
-	/// Validate incoming request by CORS header
-	///
-	/// `header_names` is the headers names in the request.
-	/// `cors_headers`: is the header names from `access-control-request-headers header`.
-	pub fn verify_headers<T, I, II>(&self, header_names: I, cors_headers: II) -> Result<(), Error>
-	where
-		T: AsRef<str>,
-		I: Iterator<Item = T>,
-		II: Iterator<Item = T>,
-	{
-		let header = cors::get_cors_allow_headers(header_names, cors_headers, &self.allowed_headers, |name| name);
+	/// Validate incoming request by CORS(`access-control-request-headers`).
+	pub fn verify_headers(&self, headers: &HeaderMap) -> Result<(), Error> {
+		let keys = headers.keys().map(|k| k.as_str());
+		let cors_request_headers = get_cors_request_headers(headers);
+
+		let header = cors::get_cors_allow_headers(keys, cors_request_headers, &self.allowed_headers, |name| name);
 
 		if let cors::AllowCors::Invalid = header {
-			Err(Error::HttpHeaderRejected("access-control-request-headers", "<too long to be logged>".into()))
+			Err(Error::HttpHeaderRejected(
+				"access-control-request-headers",
+				"<too inefficient to displayed; use wireshark or something similar to find the header values>".into(),
+			))
 		} else {
 			Ok(())
 		}

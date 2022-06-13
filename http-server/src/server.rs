@@ -412,12 +412,6 @@ impl<M: Middleware> Server<M> {
 							None => return Ok(malformed()),
 						};
 						let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
-						let headers = request.headers().keys().map(|name| name.as_str());
-						let cors_headers =
-							http_helpers::read_header_values(request.headers(), "access-control-request-headers")
-								.filter_map(|val| val.to_str().ok())
-								.flat_map(|val| val.split(", "))
-								.flat_map(|val| val.split(','));
 
 						if let Err(e) = acl.verify_host(host) {
 							tracing::warn!("Denied request: {:?}", e);
@@ -429,7 +423,7 @@ impl<M: Middleware> Server<M> {
 							return Ok(response::invalid_allow_origin());
 						}
 
-						if let Err(e) = acl.verify_headers(headers, cors_headers) {
+						if let Err(e) = acl.verify_headers(request.headers()) {
 							tracing::warn!("Denied request: {:?}", e);
 							return Ok(response::invalid_allow_origin());
 						}

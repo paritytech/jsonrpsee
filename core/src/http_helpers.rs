@@ -99,13 +99,25 @@ pub fn read_header_value<'a>(headers: &'a hyper::header::HeaderMap, header_name:
 pub fn read_header_values<'a>(
 	headers: &'a hyper::header::HeaderMap,
 	header_name: &str,
-) -> hyper::header::ValueIter<'a, hyper::header::HeaderValue> {
-	headers.get_all(header_name).iter()
+) -> hyper::header::GetAll<'a, hyper::header::HeaderValue> {
+	headers.get_all(header_name)
+}
+
+/// Get the header values from the `access-control-request-headers` header.
+pub fn get_cors_request_headers<'a>(headers: &'a hyper::header::HeaderMap) -> impl Iterator<Item = &str> {
+	const ACCESS_CONTROL_ALLOW_HEADERS: &str = "access-control-request-headers";
+
+	read_header_values(headers, ACCESS_CONTROL_ALLOW_HEADERS)
+		.iter()
+		.filter_map(|val| val.to_str().ok())
+		// NOTE(niklasad1): we perform split twice to cover both `val1,val2` and `val1, val2`.
+		.flat_map(|val| val.split(", "))
+		.flat_map(|val| val.split(','))
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{read_body, read_header_content_length};
+	use super::{get_cors_request_headers, read_body, read_header_content_length};
 
 	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {
@@ -129,5 +141,22 @@ mod tests {
 		let mut headers = hyper::header::HeaderMap::new();
 		headers.insert(hyper::header::CONTENT_LENGTH, "18446744073709551616".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), None);
+	}
+
+	#[test]
+	fn get_cors_headers_works() {
+		let mut headers = hyper::header::HeaderMap::new();
+
+		// access-control-request-headers
+		headers.insert(hyper::header::ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type,x-requested-with".parse().unwrap());
+
+		let values: Vec<&str> = get_cors_request_headers(&headers).collect();
+		assert_eq!(values, vec!["Content-Type", "x-requested-with"]);
+
+		headers
+			.insert(hyper::header::ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type, x-requested-with".parse().unwrap());
+
+		let values: Vec<&str> = get_cors_request_headers(&headers).collect();
+		assert_eq!(values, vec!["Content-Type", "x-requested-with"]);
 	}
 }

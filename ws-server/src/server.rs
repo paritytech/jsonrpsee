@@ -247,8 +247,14 @@ where
 				let req = server.receive_request().await?;
 
 				let host = std::str::from_utf8(req.headers().host)
-					.map_err(|_e| Error::Custom("Host header must be valid UTF-8".into()))?;
-				let origin = req.headers().origin.and_then(|h| std::str::from_utf8(h).ok());
+					.map_err(|_e| Error::HttpHeaderRejected("Host", "Invalid UTF-8".to_string()))?;
+				let origin = req.headers().origin.and_then(|h| {
+					let res = std::str::from_utf8(h).ok();
+					if res.is_none() {
+						tracing::warn!("Origin header invalid UTF-8; treated as no Origin header");
+					}
+					res
+				});
 
 				let host_check = cfg.access_control.verify_host(host);
 				let origin_check = cfg.access_control.verify_origin(origin, host);
