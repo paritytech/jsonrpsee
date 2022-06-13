@@ -105,9 +105,9 @@ pub fn read_header_values<'a>(
 
 /// Get the header values from the `access-control-request-headers` header.
 pub fn get_cors_request_headers<'a>(headers: &'a hyper::header::HeaderMap) -> impl Iterator<Item = &str> {
-	const ACCESS_CONTROL_ALLOW_HEADERS: &str = "access-control-request-headers";
+	const ACCESS_CONTROL_REQUEST_HEADERS: &str = "access-control-request-headers";
 
-	read_header_values(headers, ACCESS_CONTROL_ALLOW_HEADERS)
+	read_header_values(headers, ACCESS_CONTROL_REQUEST_HEADERS)
 		.iter()
 		.filter_map(|val| val.to_str().ok())
 		.flat_map(|val| val.split(","))
