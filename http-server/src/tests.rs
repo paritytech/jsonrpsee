@@ -430,7 +430,7 @@ async fn can_set_the_max_request_body_size() {
 	// Invalid: too long
 	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response.body, oversized_request());
+	assert_eq!(response.body, oversized_request(100));
 
 	// Max request body size should not override the max response size
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;

@@ -562,7 +562,7 @@ async fn process_validated_request(
 
 	let (body, mut is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
 		Ok(r) => r,
-		Err(GenericTransportError::TooLarge) => return Ok(response::too_large()),
+		Err(GenericTransportError::TooLarge) => return Ok(response::too_large(max_request_body_size)),
 		Err(GenericTransportError::Malformed) => return Ok(response::malformed()),
 		Err(GenericTransportError::Inner(e)) => {
 			tracing::error!("Internal error reading request body: {}", e);

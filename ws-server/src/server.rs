@@ -46,6 +46,7 @@ use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_types::error::{reject_too_big_request, reject_too_many_subscriptions};
 use jsonrpsee_types::Params;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
@@ -410,7 +411,7 @@ async fn background_task(
 							current,
 							maximum
 						);
-						sink.send_error(Id::Null, ErrorCode::OversizedRequest.into());
+						sink.send_error(Id::Null, reject_too_big_request(max_request_body_size));
 						continue;
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
@@ -496,7 +497,10 @@ async fn background_task(
 											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
 										callback(id, params, sink.clone(), conn_state)
 									} else {
-										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+										sink.send_error(
+											req.id,
+											reject_too_many_subscriptions(bounded_subscriptions.max()),
+										);
 										false
 									};
 									middleware.on_result(name, result, request_start);
@@ -615,7 +619,10 @@ async fn background_task(
 														};
 														callback(id, params, sink_batch.clone(), conn_state)
 													} else {
-														sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
+														sink_batch.send_error(
+															req.id,
+															reject_too_many_subscriptions(bounded_subscriptions2.max()),
+														);
 														false
 													};
 													middleware.on_result(&req.method, result, request_start);
