@@ -128,7 +128,7 @@ impl MethodSink {
 			}
 		};
 
-		if let Err(err) = self.tx.unbounded_send(json) {
+		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
 			false
 		} else {
@@ -147,7 +147,7 @@ impl MethodSink {
 			}
 		};
 
-		if let Err(err) = self.tx.unbounded_send(json) {
+		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
 		}
 
@@ -162,6 +162,7 @@ impl MethodSink {
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
 	pub fn send_raw(&self, raw_json: String) -> Result<(), mpsc::TrySendError<String>> {
+		tracing::trace!("send: {:?}", raw_json);
 		self.tx.unbounded_send(raw_json)
 	}
 

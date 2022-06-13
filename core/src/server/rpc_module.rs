@@ -60,7 +60,7 @@ pub type AsyncMethod<'a> = Arc<
 	dyn Send + Sync + Fn(Id<'a>, Params<'a>, MethodSink, ConnectionId, Option<ResourceGuard>) -> BoxFuture<'a, bool>,
 >;
 /// Method callback for subscriptions.
-pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnState) -> bool>;
+pub type SubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, ConnState) -> bool>;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, &MethodSink, ConnectionId) -> bool>;
 
@@ -411,16 +411,18 @@ impl Methods {
 		let close_notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 		let notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 
-		let _result = match self.method(&req.method).map(|c| &c.callback) {
+		let result = match self.method(&req.method).map(|c| &c.callback) {
 			None => sink.send_error(req.id, ErrorCode::MethodNotFound.into()),
 			Some(MethodKind::Sync(cb)) => (cb)(id, params, &sink),
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), sink, 0, None).await,
 			Some(MethodKind::Subscription(cb)) => {
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
-				(cb)(id, params, &sink, conn_state)
+				(cb)(id, params, sink, conn_state)
 			}
 			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, &sink, 0),
 		};
+
+		tracing::trace!("[Methods::inner_call]: method: `{}` success: {}", req.method, result);
 
 		let resp = rx_sink.next().await.expect("tx and rx still alive; qed");
 
@@ -727,7 +729,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
-							tracing::error!(
+							tracing::warn!(
 								"unsubscribe call '{}' failed: couldn't parse subscription id={:?} request id={:?}",
 								unsubscribe_method_name,
 								params,
@@ -736,11 +738,20 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 							return sink.send_response(id, false);
 						}
 					};
-					let sub_id = sub_id.into_owned();
+					let key = SubscriptionKey { conn_id, sub_id: sub_id.into_owned() };
 
-					let result = subscribers.lock().remove(&SubscriptionKey { conn_id, sub_id }).is_some();
+					let result = subscribers.lock().remove(&key).is_some();
 
-					sink.send_response(id, result)
+					if !result {
+						tracing::warn!(
+							"unsubscribe call `{}` subscription key={:?} not an active subscription",
+							unsubscribe_method_name,
+							key,
+						);
+					}
+
+					// if both the message was successful and the subscription was removed.
+					sink.send_response(id, result) && result
 				})),
 			);
 		}
@@ -1063,9 +1074,15 @@ impl Subscription {
 			n.handle().notify_one()
 		}
 	}
+
 	/// Get the subscription ID
 	pub fn subscription_id(&self) -> &RpcSubscriptionId {
 		&self.sub_id
+	}
+
+	/// Check whether the subscription is closed.
+	pub fn is_closed(&self) -> bool {
+		self.close_notify.is_none()
 	}
 
 	/// Returns `Some((val, sub_id))` for the next element of type T from the underlying stream,
