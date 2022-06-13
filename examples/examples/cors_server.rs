@@ -26,7 +26,10 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::{
+	core::server::access_control::AccessControlBuilder,
+	http_server::{HttpServerBuilder, HttpServerHandle, RpcModule},
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
