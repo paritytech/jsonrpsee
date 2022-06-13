@@ -323,7 +323,6 @@ lazy_static! {
 		let mut hs = HashSet::new();
 		hs.insert(Ascii::new("Accept"));
 		hs.insert(Ascii::new("Accept-Language"));
-		hs.insert(Ascii::new("Access-Control-Allow-Origin"));
 		hs.insert(Ascii::new("Access-Control-Request-Headers"));
 		hs.insert(Ascii::new("Content-Language"));
 		hs.insert(Ascii::new("Content-Type"));

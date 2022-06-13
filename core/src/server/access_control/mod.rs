@@ -6,9 +6,8 @@ mod matcher;
 
 pub use cors::{AllowHeaders, AllowOrigin, Origin};
 pub use host::{AllowHosts, Host};
-use hyper::HeaderMap;
 
-use crate::{http_helpers::get_cors_request_headers, Error};
+use crate::Error;
 
 use self::cors::get_cors_allow_origin;
 
@@ -41,11 +40,18 @@ impl AccessControl {
 	}
 
 	/// Validate incoming request by CORS(`access-control-request-headers`).
-	pub fn verify_headers(&self, headers: &HeaderMap) -> Result<(), Error> {
-		let keys = headers.keys().map(|k| k.as_str());
-		let cors_request_headers = get_cors_request_headers(headers);
-
-		let header = cors::get_cors_allow_headers(keys, cors_request_headers, &self.allowed_headers, |name| name);
+	///
+	/// header_name: all keys of the header in the request
+	/// cors_request_headers: values of `access-control-request-headers` headers.
+	///
+	pub fn verify_headers<T, I, II>(&self, header_names: I, cors_request_headers: II) -> Result<(), Error>
+	where
+		T: AsRef<str>,
+		I: Iterator<Item = T>,
+		II: Iterator<Item = T>,
+	{
+		let header =
+			cors::get_cors_allow_headers(header_names, cors_request_headers, &self.allowed_headers, |name| name);
 
 		if let cors::AllowCors::Invalid = header {
 			Err(Error::HttpHeaderRejected(

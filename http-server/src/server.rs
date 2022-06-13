@@ -407,6 +407,9 @@ impl<M: Middleware> Server<M> {
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
+						let keys = request.headers().keys().map(|k| k.as_str());
+						let cors_request_headers = http_helpers::get_cors_request_headers(request.headers());
+
 						let host = match http_helpers::read_header_value(request.headers(), "host") {
 							Some(origin) => origin,
 							None => return Ok(malformed()),
@@ -423,9 +426,9 @@ impl<M: Middleware> Server<M> {
 							return Ok(response::invalid_allow_origin());
 						}
 
-						if let Err(e) = acl.verify_headers(request.headers()) {
+						if let Err(e) = acl.verify_headers(keys, cors_request_headers) {
 							tracing::warn!("Denied request: {:?}", e);
-							return Ok(response::invalid_allow_origin());
+							return Ok(response::invalid_allow_headers());
 						}
 
 						// Only `POST` and `OPTIONS` methods are allowed.
