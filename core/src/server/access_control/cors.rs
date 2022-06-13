@@ -219,7 +219,7 @@ impl<T> From<AllowCors<T>> for Option<T> {
 }
 
 /// Returns correct CORS header (if any) given list of allowed origins and current origin.
-pub(crate) fn get_cors_allow_origin(
+pub(super) fn get_cors_allow_origin(
 	origin: Option<&str>,
 	allowed: &Option<Vec<AllowOrigin>>,
 	host: Option<&str>,
