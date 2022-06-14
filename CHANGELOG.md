@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.14.0] - 2022-06-14
 
-v0.14.0 is breaking release which changes the `health API` to return Result and a bunch of bug fixes.
+v0.14.0 is breaking release which changes the `health and access control APIs` and a bunch of bug fixes.
 
 ### [Fixed]
 - fix(servers): more descriptive errors when calls fail [#790](https://github.com/paritytech/jsonrpsee/pull/790)
