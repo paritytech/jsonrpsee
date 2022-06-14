@@ -217,9 +217,9 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 	assert!(pass_mem.is_ok());
 	assert_server_busy(fail_mem);
 
-	// The subscription requests are issued by the same client, which leads to them being executed serially.
-	// The `subscribe_hello` does not spawn an additional task and the `SubscriptionSink` is dropped immediately.
-	// This means that all calls succeed, because the resources are claimed and released before the next call.
+	// If we issue multiple subscription requests at the same time from the same client,
+	// but the subscriptions immediately drop their sinks, no resources will obviously be held,
+	// and so there is no limit to how many can be executed.
 	let (pass1, pass2, pass3) = tokio::join!(
 		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
 		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
