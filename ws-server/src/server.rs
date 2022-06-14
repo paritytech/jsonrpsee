@@ -495,7 +495,7 @@ async fn background_task(
 									let result = if let Some(cn) = bounded_subscriptions.acquire() {
 										let conn_state =
 											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
-										callback(id, params, sink.clone(), conn_state)
+										callback(id, params, sink.clone(), conn_state, Some(guard))
 									} else {
 										sink.send_error(
 											req.id,
@@ -505,7 +505,6 @@ async fn background_task(
 									};
 									middleware.on_result(name, result, request_start);
 									middleware.on_response(request_start);
-									drop(guard);
 								}
 								Err(err) => {
 									tracing::error!(
@@ -617,7 +616,13 @@ async fn background_task(
 															close_notify: cn,
 															id_provider: &*id_provider,
 														};
-														callback(id, params, sink_batch.clone(), conn_state)
+														callback(
+															id,
+															params,
+															sink_batch.clone(),
+															conn_state,
+															Some(guard),
+														)
 													} else {
 														sink_batch.send_error(
 															req.id,
@@ -626,7 +631,6 @@ async fn background_task(
 														false
 													};
 													middleware.on_result(&req.method, result, request_start);
-													drop(guard);
 													None
 												}
 												Err(err) => {

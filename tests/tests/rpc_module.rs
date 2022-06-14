@@ -70,7 +70,7 @@ fn flatten_rpc_modules() {
 fn rpc_context_modules_can_register_subscriptions() {
 	let cx = ();
 	let mut cxmodule = RpcModule::new(cx);
-	let _subscription = cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| {});
+	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| {}).unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
