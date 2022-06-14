@@ -29,7 +29,6 @@ v0.14.0 is breaking release which changes the `health API` to return Result and 
 - chore(ci): bring back daily benchmarks [#777](https://github.com/paritytech/jsonrpsee/pull/777)
 - chore(examples): Move examples under dedicated folder to simplify `Cargo.toml` [#769](https://github.com/paritytech/jsonrpsee/pull/769)
 
-
 ## [v0.13.1] - 2022-05-13
 
 v0.13.1 is a release that fixes the documentation for feature-gated items on `docs.rs`.
