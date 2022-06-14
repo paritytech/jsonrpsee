@@ -40,17 +40,20 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, BoundedSubscriptions, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_types::error::{reject_too_big_request, reject_too_many_subscriptions};
 use jsonrpsee_types::Params;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 /// Default maximum connections allowed.
@@ -246,8 +249,19 @@ where
 			tracing::debug!("Accepting new connection: {}", conn_id);
 			let key = {
 				let req = server.receive_request().await?;
-				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
-				let origin_check = cfg.allowed_origins.verify("Origin", req.headers().origin);
+
+				let host = std::str::from_utf8(req.headers().host)
+					.map_err(|_e| Error::HttpHeaderRejected("Host", "Invalid UTF-8".to_string()))?;
+				let origin = req.headers().origin.and_then(|h| {
+					let res = std::str::from_utf8(h).ok();
+					if res.is_none() {
+						tracing::warn!("Origin header invalid UTF-8; treated as no Origin header");
+					}
+					res
+				});
+
+				let host_check = cfg.access_control.verify_host(host);
+				let origin_check = cfg.access_control.verify_origin(origin, host);
 
 				host_check.and(origin_check).map(|()| req.key())
 			};
@@ -257,11 +271,12 @@ where
 					let accept = Response::Accept { key, protocol: None };
 					server.send_response(&accept).await?;
 				}
-				Err(error) => {
+				Err(err) => {
+					tracing::warn!("Rejected connection: {:?}", err);
 					let reject = Response::Reject { status_code: 403 };
 					server.send_response(&reject).await?;
 
-					return Err(error);
+					return Err(err);
 				}
 			}
 
@@ -320,20 +335,23 @@ async fn background_task(
 		// Received messages from the WebSocket.
 		let mut rx_item = rx.next();
 
-		while !stop_server2.shutdown_requested() {
-			let submit_ping = tokio::time::sleep(ping_interval);
-			tokio::pin!(submit_ping);
+		// Interval to send out continuously `pings`.
+		let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
+		tokio::pin!(ping_interval);
+		let mut next_ping = ping_interval.next();
 
+		while !stop_server2.shutdown_requested() {
 			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
 			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
-			match futures_util::future::select(rx_item, submit_ping).await {
-				Either::Left((Some(response), _)) => {
+			match futures_util::future::select(rx_item, next_ping).await {
+				Either::Left((Some(response), ping)) => {
 					// If websocket message send fail then terminate the connection.
 					if let Err(err) = send_ws_message(&mut sender, response).await {
 						tracing::warn!("WS send error: {}; terminate connection", err);
 						break;
 					}
 					rx_item = rx.next();
+					next_ping = ping;
 				}
 				// Nothing else to receive.
 				Either::Left((None, _)) => break,
@@ -345,6 +363,7 @@ async fn background_task(
 						break;
 					}
 					rx_item = next_rx;
+					next_ping = ping_interval.next();
 				}
 			}
 		}
@@ -392,7 +411,7 @@ async fn background_task(
 							current,
 							maximum
 						);
-						sink.send_error(Id::Null, ErrorCode::OversizedRequest.into());
+						sink.send_error(Id::Null, reject_too_big_request(max_request_body_size));
 						continue;
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
@@ -476,9 +495,12 @@ async fn background_task(
 									let result = if let Some(cn) = bounded_subscriptions.acquire() {
 										let conn_state =
 											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
-										callback(id, params, &sink, conn_state, Some(guard))
+										callback(id, params, sink.clone(), conn_state, Some(guard))
 									} else {
-										sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
+										sink.send_error(
+											req.id,
+											reject_too_many_subscriptions(bounded_subscriptions.max()),
+										);
 										false
 									};
 									middleware.on_result(name, result, request_start);
@@ -594,9 +616,18 @@ async fn background_task(
 															close_notify: cn,
 															id_provider: &*id_provider,
 														};
-														callback(id, params, &sink_batch, conn_state, Some(guard))
+														callback(
+															id,
+															params,
+															sink_batch.clone(),
+															conn_state,
+															Some(guard),
+														)
 													} else {
-														sink_batch.send_error(req.id, ErrorCode::ServerIsBusy.into());
+														sink_batch.send_error(
+															req.id,
+															reject_too_many_subscriptions(bounded_subscriptions2.max()),
+														);
 														false
 													};
 													middleware.on_result(&req.method, result, request_start);
@@ -662,26 +693,6 @@ async fn background_task(
 	result
 }
 
-#[derive(Debug, Clone)]
-enum AllowedValue {
-	Any,
-	OneOf(Box<[String]>),
-}
-
-impl AllowedValue {
-	fn verify(&self, header: &str, value: Option<&[u8]>) -> Result<(), Error> {
-		if let (AllowedValue::OneOf(list), Some(value)) = (self, value) {
-			if !list.iter().any(|o| o.as_bytes() == value) {
-				let error = format!("{} denied: {}", header, String::from_utf8_lossy(value));
-				tracing::warn!("{}", error);
-				return Err(Error::Custom(error));
-			}
-		}
-
-		Ok(())
-	}
-}
-
 /// JSON-RPC Websocket server settings.
 #[derive(Debug, Clone)]
 struct Settings {
@@ -693,10 +704,8 @@ struct Settings {
 	max_connections: u64,
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
-	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
-	allowed_origins: AllowedValue,
-	/// Policy by which to accept or deny incoming requests based on the `Host` header.
-	allowed_hosts: AllowedValue,
+	/// Access control based on HTTP headers
+	access_control: AccessControl,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
@@ -713,8 +722,7 @@ impl Default for Settings {
 			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
 			batch_requests_supported: true,
-			allowed_origins: AllowedValue::Any,
-			allowed_hosts: AllowedValue::Any,
+			access_control: AccessControl::default(),
 			tokio_runtime: None,
 			ping_interval: Duration::from_secs(60),
 		}
@@ -790,35 +798,6 @@ impl<M> Builder<M> {
 		Ok(self)
 	}
 
-	/// Set a list of allowed origins. During the handshake, the `Origin` header will be
-	/// checked against the list, connections without a matching origin will be denied.
-	/// Values should be hostnames with protocol.
-	///
-	/// ```rust
-	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
-	/// builder.set_allowed_origins(["https://example.com"]);
-	/// ```
-	///
-	/// By default allows any `Origin`.
-	///
-	/// Will return an error if `list` is empty. Use [`allow_all_origins`](Builder::allow_all_origins) to restore the
-	/// default.
-	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
-	where
-		List: IntoIterator<Item = Origin>,
-		Origin: Into<String>,
-	{
-		let list: Box<_> = list.into_iter().map(Into::into).collect();
-
-		if list.len() == 0 {
-			return Err(Error::EmptyAllowList("Origin"));
-		}
-
-		self.settings.allowed_origins = AllowedValue::OneOf(list);
-
-		Ok(self)
-	}
-
 	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
 	///
 	/// ```
@@ -846,49 +825,6 @@ impl<M> Builder<M> {
 	/// ```
 	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
 		Builder { settings: self.settings, resources: self.resources, middleware, id_provider: self.id_provider }
-	}
-
-	/// Restores the default behavior of allowing connections with `Origin` header
-	/// containing any value. This will undo any list set by [`set_allowed_origins`](Builder::set_allowed_origins).
-	pub fn allow_all_origins(mut self) -> Self {
-		self.settings.allowed_origins = AllowedValue::Any;
-		self
-	}
-
-	/// Set a list of allowed hosts. During the handshake, the `Host` header will be
-	/// checked against the list. Connections without a matching host will be denied.
-	/// Values should be hostnames without protocol.
-	///
-	/// ```rust
-	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
-	/// builder.set_allowed_hosts(["example.com"]);
-	/// ```
-	///
-	/// By default allows any `Host`.
-	///
-	/// Will return an error if `list` is empty. Use [`allow_all_hosts`](Builder::allow_all_hosts) to restore the
-	/// default.
-	pub fn set_allowed_hosts<Host, List>(mut self, list: List) -> Result<Self, Error>
-	where
-		List: IntoIterator<Item = Host>,
-		Host: Into<String>,
-	{
-		let list: Box<_> = list.into_iter().map(Into::into).collect();
-
-		if list.len() == 0 {
-			return Err(Error::EmptyAllowList("Host"));
-		}
-
-		self.settings.allowed_hosts = AllowedValue::OneOf(list);
-
-		Ok(self)
-	}
-
-	/// Restores the default behavior of allowing connections with `Host` header
-	/// containing any value. This will undo any list set by [`set_allowed_hosts`](Builder::set_allowed_hosts).
-	pub fn allow_all_hosts(mut self) -> Self {
-		self.settings.allowed_hosts = AllowedValue::Any;
-		self
 	}
 
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
@@ -942,6 +878,12 @@ impl<M> Builder<M> {
 	///
 	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
 		self.id_provider = Arc::new(id_provider);
+		self
+	}
+
+	/// Sets access control settings.
+	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
+		self.settings.access_control = acl;
 		self
 	}
 

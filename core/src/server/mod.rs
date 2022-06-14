@@ -26,6 +26,8 @@
 
 //! Shared modules for the JSON-RPC servers.
 
+/// Access control verification.
+pub mod access_control;
 /// Helpers.
 pub mod helpers;
 /// Resource limiting. Create generic "resources" and configure their limits to ensure servers are not overloaded.

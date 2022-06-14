@@ -2,7 +2,7 @@
 
 use jsonrpsee_client_transport::web::*;
 use jsonrpsee_core::{
-	client::{ClientT, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
+	client::{ClientT, ReceivedMessage, Subscription, SubscriptionClientT, TransportReceiverT, TransportSenderT},
 	rpc_params,
 };
 use jsonrpsee_wasm_client::WasmClientBuilder;
@@ -26,9 +26,12 @@ async fn wasm_ws_transport_works() {
 	let exp = r#"{"jsonrpc":"2.0","result":"Substrate Node","id":1}"#;
 
 	tx.send(req.to_string()).await.unwrap();
-	let rp = rx.receive().await.unwrap();
+	let rp: ReceivedMessage = rx.receive().await.unwrap();
 
-	assert_eq!(exp, &rp);
+	match rp {
+		ReceivedMessage::Text(s) => assert_eq!(exp, &s),
+		_ => assert!(false, "Expected string message"),
+	};
 }
 
 #[wasm_bindgen_test]

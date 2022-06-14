@@ -3,13 +3,12 @@
 mod helpers;
 mod manager;
 
-use core::time::Duration;
-
 use crate::client::{
-	async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, RegisterNotificationMessage,
-	RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind, SubscriptionMessage, TransportReceiverT,
-	TransportSenderT,
+	async_client::helpers::process_subscription_close_response, BatchMessage, ClientT, ReceivedMessage,
+	RegisterNotificationMessage, RequestMessage, Subscription, SubscriptionClientT, SubscriptionKind,
+	SubscriptionMessage, TransportReceiverT, TransportSenderT,
 };
+use core::time::Duration;
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
@@ -21,9 +20,10 @@ use async_lock::Mutex;
 use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
-use futures_util::future::{self, Either};
+use futures_util::future::{self, Either, Fuse};
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
+use futures_util::FutureExt;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response,
 	SubscriptionResponse,
@@ -69,6 +69,7 @@ pub struct ClientBuilder {
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	id_kind: IdKind,
+	ping_interval: Option<Duration>,
 }
 
 impl Default for ClientBuilder {
@@ -78,6 +79,7 @@ impl Default for ClientBuilder {
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			id_kind: IdKind::Number,
+			ping_interval: None,
 		}
 	}
 }
@@ -115,6 +117,23 @@ impl ClientBuilder {
 		self
 	}
 
+	/// Set the interval at which pings frames are submitted (disabled by default).
+	///
+	/// Periodically submitting pings at a defined interval has mainly two benefits:
+	///  - Directly, it acts as a "keep-alive" alternative in the WebSocket world.
+	///  - Indirectly by inspecting debug logs, it ensures that the endpoint is still responding to messages.
+	///
+	/// The underlying implementation does not make any assumptions about at which intervals pongs are received.
+	///
+	/// Note: The interval duration is restarted when
+	///  - a frontend command is submitted
+	///  - a reply is received from the backend
+	///  - the interval duration expires
+	pub fn ping_interval(mut self, interval: Duration) -> Self {
+		self.ping_interval = Some(interval);
+		self
+	}
+
 	/// Build the client with given transport.
 	///
 	/// ## Panics
@@ -130,9 +149,10 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
+		let ping_interval = self.ping_interval;
 
 		tokio::spawn(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription).await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, ping_interval).await;
 		});
 		Client {
 			to_back,
@@ -155,7 +175,7 @@ impl ClientBuilder {
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 
 		wasm_bindgen_futures::spawn_local(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription).await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None).await;
 		});
 		Client {
 			to_back,
@@ -378,6 +398,196 @@ impl SubscriptionClientT for Client {
 	}
 }
 
+/// Handle backend messages.
+///
+/// Returns an error if the main background loop should be terminated.
+async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
+	message: Option<Result<ReceivedMessage, R::Error>>,
+	manager: &mut RequestManager,
+	sender: &mut S,
+	max_notifs_per_subscription: usize,
+) -> Result<(), Error> {
+
+	// Handle raw messages of form `ReceivedMessage::Bytes` (Vec<u8>) or ReceivedMessage::Data` (String).
+	async fn handle_recv_message<S: TransportSenderT>(
+		raw: &[u8],
+		manager: &mut RequestManager,
+		sender: &mut S,
+		max_notifs_per_subscription: usize
+	) -> Result<(), Error> {
+		// Single response to a request.
+		if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
+			tracing::debug!("[backend]: recv method_call {:?}", single);
+			match process_single_response(manager, single, max_notifs_per_subscription) {
+				Ok(Some(unsub)) => {
+					stop_subscription(sender, manager, unsub).await;
+				}
+				Ok(None) => (),
+				Err(err) => return Err(err),
+			}
+		}
+		// Subscription response.
+		else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(&raw) {
+			tracing::debug!("[backend]: recv subscription {:?}", response);
+			if let Err(Some(unsub)) = process_subscription_response(manager, response) {
+				let _ = stop_subscription(sender, manager, unsub).await;
+			}
+		}
+		// Subscription error response.
+		else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(&raw) {
+			tracing::debug!("[backend]: recv subscription closed {:?}", response);
+			let _ = process_subscription_close_response(manager, response);
+		}
+		// Incoming Notification
+		else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(&raw) {
+			tracing::debug!("[backend]: recv notification {:?}", notif);
+			let _ = process_notification(manager, notif);
+		}
+		// Batch response.
+		else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(&raw) {
+			tracing::debug!("[backend]: recv batch {:?}", batch);
+			if let Err(e) = process_batch_response(manager, batch) {
+				return Err(e);
+			}
+		}
+		// Error response
+		else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(&raw) {
+			tracing::debug!("[backend]: recv error response {:?}", err);
+			if let Err(e) = process_error_response(manager, err) {
+				return Err(e);
+			}
+		}
+		// Unparsable response
+		else {
+			tracing::debug!(
+					"[backend]: recv unparseable message: {:?}",
+					serde_json::from_slice::<serde_json::Value>(&raw)
+				);
+			return Err(Error::Custom("Unparsable response".into()));
+		}
+		Ok(())
+	}
+
+	match message {
+		Some(Ok(ReceivedMessage::Pong)) => {
+			tracing::debug!("recv pong");
+		}
+		Some(Ok(ReceivedMessage::Bytes(raw))) => {
+			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
+		}
+		Some(Ok(ReceivedMessage::Text(raw))) => {
+			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
+		}
+		Some(Err(e)) => {
+			tracing::error!("Error: {:?} terminating client", e);
+			return Err(Error::Transport(e.into()));
+		}
+		None => {
+			tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
+			return Err(Error::Custom("WebSocket receiver dropped".into()));
+		}
+	}
+
+	return Ok(());
+}
+
+/// Handle frontend messages.
+///
+/// Returns an error if the main background loop should be terminated.
+async fn handle_frontend_messages<S: TransportSenderT>(
+	message: Option<FrontToBack>,
+	manager: &mut RequestManager,
+	sender: &mut S,
+	max_notifs_per_subscription: usize,
+) -> Result<(), Error> {
+	match message {
+		// User dropped the sender side of the channel.
+		// There is nothing to do just terminate.
+		None => {
+			return Err(Error::Custom("[backend]: frontend dropped; terminate client".into()));
+		}
+
+		Some(FrontToBack::Batch(batch)) => {
+			tracing::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
+			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
+				tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
+				let _ = send_back.send(Err(Error::InvalidRequestId));
+				return Ok(());
+			}
+
+			if let Err(e) = sender.send(batch.raw).await {
+				tracing::warn!("[backend]: client batch request failed: {:?}", e);
+				manager.complete_pending_batch(batch.ids);
+			}
+		}
+		// User called `notification` on the front-end
+		Some(FrontToBack::Notification(notif)) => {
+			tracing::trace!("[backend]: client prepares to send notification: {:?}", notif);
+			if let Err(e) = sender.send(notif).await {
+				tracing::warn!("[backend]: client notif failed: {:?}", e);
+			}
+		}
+		// User called `request` on the front-end
+		Some(FrontToBack::Request(request)) => {
+			tracing::trace!("[backend]: client prepares to send request={:?}", request);
+			match sender.send(request.raw).await {
+				Ok(_) => {
+					manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed")
+				}
+				Err(e) => {
+					tracing::warn!("[backend]: client request failed: {:?}", e);
+					let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
+				}
+			}
+		}
+		// User called `subscribe` on the front-end.
+		Some(FrontToBack::Subscribe(sub)) => match sender.send(sub.raw).await {
+			Ok(_) => manager
+				.insert_pending_subscription(
+					sub.subscribe_id,
+					sub.unsubscribe_id,
+					sub.send_back,
+					sub.unsubscribe_method,
+				)
+				.expect("Request ID unused checked above; qed"),
+			Err(e) => {
+				tracing::warn!("[backend]: client subscription failed: {:?}", e);
+				let _ = sub.send_back.send(Err(Error::Transport(e.into())));
+			}
+		},
+		// User dropped a subscription.
+		Some(FrontToBack::SubscriptionClosed(sub_id)) => {
+			tracing::trace!("Closing subscription: {:?}", sub_id);
+			// NOTE: The subscription may have been closed earlier if
+			// the channel was full or disconnected.
+			if let Some(unsub) = manager
+				.get_request_id_by_subscription_id(&sub_id)
+				.and_then(|req_id| build_unsubscribe_message(manager, req_id, sub_id))
+			{
+				stop_subscription(sender, manager, unsub).await;
+			}
+		}
+		// User called `register_notification` on the front-end.
+		Some(FrontToBack::RegisterNotification(reg)) => {
+			tracing::trace!("[backend] registering notification handler: {:?}", reg.method);
+			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
+
+			if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
+				let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
+			} else {
+				let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
+			}
+		}
+		// User dropped the notificationHandler for this method
+		Some(FrontToBack::UnregisterNotification(method)) => {
+			tracing::trace!("[backend] unregistering notification handler: {:?}", method);
+			let _ = manager.remove_notification_handler(method);
+		}
+	}
+
+	Ok(())
+}
+
 /// Function being run in the background that processes messages from the frontend.
 async fn background_task<S, R>(
 	mut sender: S,
@@ -385,6 +595,7 @@ async fn background_task<S, R>(
 	mut frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
+	ping_interval: Option<Duration>,
 ) where
 	S: TransportSenderT,
 	R: TransportReceiverT,
@@ -395,172 +606,58 @@ async fn background_task<S, R>(
 		let res = receiver.receive().await;
 		Some((res, receiver))
 	});
-
 	futures_util::pin_mut!(backend_event);
 
+	// Place frontend and backend messages into their own select.
+	// This implies that either messages are received (both front or backend),
+	// or the submitted ping timer expires (if provided).
+	let next_frontend = frontend.next();
+	let next_backend = backend_event.next();
+	let mut message_fut = future::select(next_frontend, next_backend);
+
 	loop {
-		let next_frontend = frontend.next();
-		let next_backend = backend_event.next();
-		futures_util::pin_mut!(next_frontend, next_backend);
+		// Create either a valid delay fuse triggered every provided `duration`,
+		// or create a terminated fuse that's never selected if the provided `duration` is None.
+		let submit_ping = if let Some(duration) = ping_interval {
+			Delay::new(duration).fuse()
+		} else {
+			// The select macro bypasses terminated futures, and the `submit_ping` branch is never selected.
+			Fuse::<Delay>::terminated()
+		};
 
-		match futures_util::future::select(next_frontend, next_backend).await {
-			// User dropped the sender side of the channel.
-			// There is nothing to do just terminate.
-			Either::Left((None, _)) => {
-				tracing::trace!("[backend]: frontend dropped; terminate client");
-				break;
-			}
-
-			Either::Left((Some(FrontToBack::Batch(batch)), _)) => {
-				tracing::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
-				// NOTE(niklasad1): annoying allocation.
-				if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
-					tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
-					let _ = send_back.send(Err(Error::InvalidRequestId));
-					continue;
-				}
-
-				if let Err(e) = sender.send(batch.raw).await {
-					tracing::warn!("[backend]: client batch request failed: {:?}", e);
-					manager.complete_pending_batch(batch.ids);
-				}
-			}
-			// User called `notification` on the front-end
-			Either::Left((Some(FrontToBack::Notification(notif)), _)) => {
-				tracing::trace!("[backend]: client prepares to send notification: {:?}", notif);
-				if let Err(e) = sender.send(notif).await {
-					tracing::warn!("[backend]: client notif failed: {:?}", e);
-				}
-			}
-
-			// User called `request` on the front-end
-			Either::Left((Some(FrontToBack::Request(request)), _)) => {
-				tracing::trace!("[backend]: client prepares to send request={:?}", request);
-				match sender.send(request.raw).await {
-					Ok(_) => manager
-						.insert_pending_call(request.id, request.send_back)
-						.expect("ID unused checked above; qed"),
-					Err(e) => {
-						tracing::warn!("[backend]: client request failed: {:?}", e);
-						let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
-					}
-				}
-			}
-
-			// User called `subscribe` on the front-end.
-			Either::Left((Some(FrontToBack::Subscribe(sub)), _)) => match sender.send(sub.raw).await {
-				Ok(_) => manager
-					.insert_pending_subscription(
-						sub.subscribe_id,
-						sub.unsubscribe_id,
-						sub.send_back,
-						sub.unsubscribe_method,
-					)
-					.expect("Request ID unused checked above; qed"),
-				Err(e) => {
-					tracing::warn!("[backend]: client subscription failed: {:?}", e);
-					let _ = sub.send_back.send(Err(Error::Transport(e.into())));
-				}
-			},
-			// User dropped a subscription.
-			Either::Left((Some(FrontToBack::SubscriptionClosed(sub_id)), _)) => {
-				tracing::trace!("Closing subscription: {:?}", sub_id);
-				// NOTE: The subscription may have been closed earlier if
-				// the channel was full or disconnected.
-				if let Some(unsub) = manager
-					.get_request_id_by_subscription_id(&sub_id)
-					.and_then(|req_id| build_unsubscribe_message(&mut manager, req_id, sub_id))
-				{
-					stop_subscription(&mut sender, &mut manager, unsub).await;
-				}
-			}
-
-			// User called `register_notification` on the front-end.
-			Either::Left((Some(FrontToBack::RegisterNotification(reg)), _)) => {
-				tracing::trace!("[backend] registering notification handler: {:?}", reg.method);
-				let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
-
-				if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
-					let _ = reg.send_back.send(Ok((subscribe_rx, reg.method)));
-				} else {
-					let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
-				}
-			}
-
-			// User dropped the notificationHandler for this method
-			Either::Left((Some(FrontToBack::UnregisterNotification(method)), _)) => {
-				tracing::trace!("[backend] unregistering notification handler: {:?}", method);
-				let _ = manager.remove_notification_handler(method);
-			}
-			Either::Right((Some(Ok(raw)), _)) => {
-				// Single response to a request.
-				if let Ok(single) = serde_json::from_str::<Response<_>>(&raw) {
-					tracing::debug!("[backend]: recv method_call {:?}", single);
-					match process_single_response(&mut manager, single, max_notifs_per_subscription) {
-						Ok(Some(unsub)) => {
-							stop_subscription(&mut sender, &mut manager, unsub).await;
-						}
-						Ok(None) => (),
-						Err(err) => {
-							let _ = front_error.send(err);
-							break;
-						}
-					}
-				}
-				// Subscription response.
-				else if let Ok(response) = serde_json::from_str::<SubscriptionResponse<_>>(&raw) {
-					tracing::debug!("[backend]: recv subscription {:?}", response);
-					if let Err(Some(unsub)) = process_subscription_response(&mut manager, response) {
-						let _ = stop_subscription(&mut sender, &mut manager, unsub).await;
-					}
-				}
-				// Subscription error response.
-				else if let Ok(response) = serde_json::from_str::<SubscriptionError<_>>(&raw) {
-					tracing::debug!("[backend]: recv subscription closed {:?}", response);
-					let _ = process_subscription_close_response(&mut manager, response);
-				}
-				// Incoming Notification
-				else if let Ok(notif) = serde_json::from_str::<Notification<_>>(&raw) {
-					tracing::debug!("[backend]: recv notification {:?}", notif);
-					let _ = process_notification(&mut manager, notif);
-				}
-				// Batch response.
-				else if let Ok(batch) = serde_json::from_str::<Vec<Response<_>>>(&raw) {
-					tracing::debug!("[backend]: recv batch {:?}", batch);
-					if let Err(e) = process_batch_response(&mut manager, batch) {
-						let _ = front_error.send(e);
-						break;
-					}
-				}
-				// Error response
-				else if let Ok(err) = serde_json::from_str::<ErrorResponse>(&raw) {
-					tracing::debug!("[backend]: recv error response {:?}", err);
-					if let Err(e) = process_error_response(&mut manager, err) {
-						let _ = front_error.send(e);
-						break;
-					}
-				}
-				// Unparsable response
-				else {
-					tracing::debug!(
-						"[backend]: recv unparseable message: {:?}",
-						serde_json::from_str::<serde_json::Value>(&raw)
-					);
-					let _ = front_error.send(Error::Custom("Unparsable response".into()));
+		match future::select(message_fut, submit_ping).await {
+			// Message received from the frontend.
+			Either::Left((Either::Left((frontend_value, backend)), _)) => {
+				if let Err(err) = handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription).await {
+					tracing::warn!("{:?}", err);
+					let _ = front_error.send(err);
 					break;
 				}
+				// Advance frontend, save backend.
+				message_fut = future::select(frontend.next(), backend);
 			}
-			Either::Right((Some(Err(e)), _)) => {
-				tracing::error!("Error: {:?} terminating client", e);
-				let _ = front_error.send(Error::Transport(e.into()));
-				break;
+			// Message received from the backend.
+			Either::Left((Either::Right((backend_value, frontend)), _))=> {
+				if let Err(err) = handle_backend_messages::<S, R>(
+					backend_value, &mut manager, &mut sender, max_notifs_per_subscription
+				).await {
+					tracing::warn!("{:?}", err);
+					let _ = front_error.send(err);
+					break;
+				}
+				// Advance backend, save frontend.
+				message_fut = future::select(frontend, backend_event.next());
 			}
-			Either::Right((None, _)) => {
-				tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
-				let _ = front_error.send(Error::Custom("WebSocket receiver dropped".into()));
-				break;
+			// Submit ping interval was triggered if enabled.
+			Either::Right((_, next_message_fut)) => {
+				if let Err(e) = sender.send_ping().await {
+					tracing::warn!("[backend]: client send ping failed: {:?}", e);
+					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
+					break;
+				}
+				message_fut = next_message_fut;
 			}
-		}
+		};
 	}
 	// Send close message to the server.
 	let _ = sender.close().await;

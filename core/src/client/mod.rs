@@ -132,10 +132,25 @@ pub trait TransportSenderT: MaybeSend + 'static {
 	/// Send.
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
 
+	/// Send ping frame (opcode of 0x9).
+	async fn send_ping(&mut self) -> Result<(), Self::Error>;
+
 	/// If the transport supports sending customized close messages.
 	async fn close(&mut self) -> Result<(), Self::Error> {
 		Ok(())
 	}
+}
+
+/// Message type received from the RPC server.
+/// It can either be plain text data, bytes, or `Pong` messages.
+#[derive(Debug)]
+pub enum ReceivedMessage {
+	/// Incoming packet contains plain `String` data.
+	Text(String),
+	/// Incoming packet contains bytes.
+	Bytes(Vec<u8>),
+	/// Incoming `Pong` frame as a reply to a previously submitted `Ping` frame.
+	Pong,
 }
 
 /// Transport interface to receive data asynchronous.
@@ -146,7 +161,7 @@ pub trait TransportReceiverT: 'static {
 	type Error: std::error::Error + Send + Sync;
 
 	/// Receive.
-	async fn receive(&mut self) -> Result<String, Self::Error>;
+	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error>;
 }
 
 #[macro_export]
