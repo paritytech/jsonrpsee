@@ -67,7 +67,7 @@ pub type AsyncMethod<'a> = Arc<
 pub type SubscriptionMethod<'a> =
 	Arc<dyn Send + Sync + Fn(Id, Params, MethodSink, ConnState) -> BoxFuture<'a, MethodResponse>>;
 // Method callback to unsubscribe.
-type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId) -> MethodResponse>;
+type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
 
 /// Connection ID, used for stateful protocol such as WebSockets.
 /// For stateless protocols such as http it's unused, so feel free to set it some hardcoded value.
@@ -430,7 +430,7 @@ impl Methods {
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
 				(cb)(id, params, sink.clone(), conn_state).await
 			}
-			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0),
+			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
 
 		tracing::trace!("[Methods::inner_call]: method: `{}` result: {:?}", req.method, result);
@@ -745,7 +745,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		{
 			self.methods.mut_callbacks().insert(
 				unsubscribe_method_name,
-				MethodCallback::new_unsubscription(Arc::new(move |id, params, conn_id| {
+				MethodCallback::new_unsubscription(Arc::new(move |id, params, conn_id, max_response_size| {
 					let sub_id = match params.one::<RpcSubscriptionId>() {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
@@ -771,8 +771,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						);
 					}
 
-					MethodResponse::response(id, result, 999)
-
+					MethodResponse::response(id, result, max_response_size)
 				})),
 			);
 		}

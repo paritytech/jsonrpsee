@@ -35,15 +35,14 @@ use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use crate::types::{Id, Request};
 use futures_channel::mpsc;
-use futures_util::future::{join_all, Either, FutureExt};
+use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{
-	collect_batch_response, prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse,
-	MethodSink,
+	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
@@ -905,7 +904,7 @@ async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> MethodResponse {
 			},
 			MethodKind::Unsubscription(callback) => {
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
-				callback(id, params, conn_id)
+				callback(id, params, conn_id, max_response_body_size as usize)
 			}
 		},
 	};
