@@ -39,7 +39,7 @@ use jsonrpsee_types::Params;
 pub trait Middleware: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware
 	/// measures time, if at all, is entirely up to the implementation.
-	type Instant: Send + Copy;
+	type Instant: std::fmt::Debug + Send + Sync + Copy;
 
 	/// Called when a new client connects (WebSocket only)
 	fn on_connect(&self) {}

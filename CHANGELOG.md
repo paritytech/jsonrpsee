@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog].
 
 ## [Unreleased]
 
+## [v0.14.0] - 2022-06-14
+
+v0.14.0 is breaking release which changes the `health and access control APIs` and a bunch of bug fixes.
+
+### [Fixed]
+- fix(servers): more descriptive errors when calls fail [#790](https://github.com/paritytech/jsonrpsee/pull/790)
+- fix(ws server): support `*` in host and origin filtering [#781](https://github.com/paritytech/jsonrpsee/pull/781)
+- fix(rpc module): register failed `unsubscribe calls` in middleware [#792](https://github.com/paritytech/jsonrpsee/pull/792)
+- fix(http server): omit jsonrpc details in health API [#785](https://github.com/paritytech/jsonrpsee/pull/785)
+- fix(servers): skip leading whitespace in JSON deserialization [#783](https://github.com/paritytech/jsonrpsee/pull/783)
+- fix(ws-server): Submit ping regardless of WS messages [#788](https://github.com/paritytech/jsonrpsee/pull/788)
+- fix(rpc_module): remove expect in `fn call` [#774](https://github.com/paritytech/jsonrpsee/pull/774)
+
+### [Added]
+- feat(ws-client): `ping-pong` for WebSocket clients [#772](https://github.com/paritytech/jsonrpsee/pull/772)
+- feat(ws-server): Implement `ping-pong` for WebSocket server [#782](https://github.com/paritytech/jsonrpsee/pull/782)
+
+### [Changed]
+- chore(deps): bump Swatinem/rust-cache from 1.3.0 to 1.4.0 [#778](https://github.com/paritytech/jsonrpsee/pull/778)
+- chore(deps): bump actions/checkout from 2.4.0 to 3.0.2 [#779](https://github.com/paritytech/jsonrpsee/pull/779)
+- chore(ci): bring back daily benchmarks [#777](https://github.com/paritytech/jsonrpsee/pull/777)
+- chore(examples): Move examples under dedicated folder to simplify `Cargo.toml` [#769](https://github.com/paritytech/jsonrpsee/pull/769)
+
 ## [v0.13.1] - 2022-05-13
 
 v0.13.1 is a release that fixes the documentation for feature-gated items on `docs.rs`.
@@ -74,7 +97,7 @@ v0.10.1 is a release that fixes a regression in the HTTP server where the backlo
 If your usage expects a high rate of new HTTP connections you are encouraged to update or manually configure the socket based on the traffic characteristics.
 
 ### [Changed]
-- [proc macros]: only generate unsub method if not provided (#702)
+- [proc macros]: only generate unsub method if not provided [#702](https://github.com/paritytech/jsonrpsee/pull/702)
 - [examples]: update pubsub examples [#705](https://github.com/paritytech/jsonrpsee/pull/705)
 - core: remove `Error::Request` variant [#717](https://github.com/paritytech/jsonrpsee/pull/717)
 - Replace async-channel [#708](https://github.com/paritytech/jsonrpsee/pull/708)

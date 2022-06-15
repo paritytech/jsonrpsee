@@ -25,12 +25,16 @@
 // DEALINGS IN THE SOFTWARE.
 
 use std::collections::HashMap;
+use std::time::Duration;
 
+use futures::StreamExt;
 use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject};
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
+use tokio::time::interval;
+use tokio_stream::wrappers::IntervalStream;
 
 // Helper macro to assert that a binding is of a specific type.
 macro_rules! assert_type {
@@ -310,4 +314,47 @@ async fn subscribing_without_server_bad_params() {
 	assert!(
 		matches!(sub, Error::Call(CallError::Custom(e)) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
 	);
+}
+
+#[tokio::test]
+async fn subscribe_unsubscribe_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
+			let mut sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			let interval = interval(Duration::from_millis(200));
+			let stream = IntervalStream::new(interval).map(move |_| 1);
+
+			tokio::spawn(async move {
+				sink.pipe_from_stream(stream).await;
+			});
+		})
+		.unwrap();
+
+	async fn subscribe_and_assert(module: &RpcModule<()>) {
+		let sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap();
+
+		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
+
+		// Unsubscribe should be valid.
+		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
+		let (resp, _) = module.raw_json_request(&unsub_req).await.unwrap();
+
+		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
+
+		// Unsubscribe already performed; should be error.
+		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
+		let (resp, _) = module.raw_json_request(&unsub_req).await.unwrap();
+
+		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
+	}
+
+	let sub1 = subscribe_and_assert(&module);
+	let sub2 = subscribe_and_assert(&module);
+
+	futures::future::join(sub1, sub2).await;
 }

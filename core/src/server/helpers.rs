@@ -27,7 +27,7 @@
 use std::io;
 use std::sync::Arc;
 
-use crate::{to_json_raw_value, Error};
+use crate::Error;
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
@@ -119,8 +119,8 @@ impl MethodSink {
 				tracing::error!("Error serializing response: {:?}", err);
 
 				if err.is_io() {
-					let data = to_json_raw_value(&format!("Exceeded max limit {}", self.max_response_size)).ok();
-					let err = ErrorObject::borrowed(OVERSIZED_RESPONSE_CODE, &OVERSIZED_RESPONSE_MSG, data.as_deref());
+					let data = format!("Exceeded max limit of {}", self.max_response_size);
+					let err = ErrorObject::owned(OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, Some(data));
 					return self.send_error(id, err);
 				} else {
 					return self.send_error(id, ErrorCode::InternalError.into());
@@ -128,7 +128,7 @@ impl MethodSink {
 			}
 		};
 
-		if let Err(err) = self.tx.unbounded_send(json) {
+		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
 			false
 		} else {
@@ -147,7 +147,7 @@ impl MethodSink {
 			}
 		};
 
-		if let Err(err) = self.tx.unbounded_send(json) {
+		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
 		}
 
@@ -162,12 +162,18 @@ impl MethodSink {
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
 	pub fn send_raw(&self, raw_json: String) -> Result<(), mpsc::TrySendError<String>> {
+		tracing::trace!("send: {:?}", raw_json);
 		self.tx.unbounded_send(raw_json)
 	}
 
 	/// Close the channel for any further messages.
 	pub fn close(&self) {
 		self.tx.close_channel();
+	}
+
+	/// Get the maximum number of permitted subscriptions.
+	pub const fn max_response_size(&self) -> u32 {
+		self.max_response_size
 	}
 }
 
@@ -217,12 +223,17 @@ impl SubscriptionPermit {
 pub struct BoundedSubscriptions {
 	resource: Arc<Notify>,
 	guard: Arc<Semaphore>,
+	max: u32,
 }
 
 impl BoundedSubscriptions {
 	/// Create a new bounded subscription.
 	pub fn new(max_subscriptions: u32) -> Self {
-		Self { resource: Arc::new(Notify::new()), guard: Arc::new(Semaphore::new(max_subscriptions as usize)) }
+		Self {
+			resource: Arc::new(Notify::new()),
+			guard: Arc::new(Semaphore::new(max_subscriptions as usize)),
+			max: max_subscriptions,
+		}
 	}
 
 	/// Attempts to acquire a subscription slot.
@@ -233,6 +244,11 @@ impl BoundedSubscriptions {
 			.try_acquire_owned()
 			.ok()
 			.map(|p| SubscriptionPermit { _permit: p, resource: self.resource.clone() })
+	}
+
+	/// Get the maximum number of permitted subscriptions.
+	pub const fn max(&self) -> u32 {
+		self.max
 	}
 
 	/// Close all subscriptions.
@@ -266,8 +282,8 @@ impl MethodResponse {
 				tracing::error!("Error serializing response: {:?}", err);
 
 				if err.is_io() {
-					let data = to_json_raw_value(&format!("Exceeded max limit {}", max_response_size)).ok();
-					let err = ErrorObject::borrowed(OVERSIZED_RESPONSE_CODE, &OVERSIZED_RESPONSE_MSG, data.as_deref());
+					let data = format!("Exceeded max limit of {}", max_response_size);
+					let err = ErrorObject::owned(OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, Some(data));
 					let result = serde_json::to_string(&ErrorResponse::borrowed(err, id)).unwrap();
 
 					Self { result, success: false }
@@ -280,6 +296,55 @@ impl MethodResponse {
 		}
 	}
 
+	pub fn error(id: Id, err: impl Into<ErrorObject<'static>>) -> Self {
+		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap();
+		Self { result, success: false }
+	}
+}
+
+#[derive(Debug)]
+pub struct BatchResponseBuilder {
+	/// Serialized response,
+	result: String,
+	/// Status indicates whether the call was successful or or.
+	success: bool,
+}
+
+impl BatchResponseBuilder {
+	/// Create a new batch response builder.
+	pub fn new() -> Self {
+		Self { result: String::from("["), success: true }
+	}
+
+	/// Append a result from an individual method to the batch response.
+	pub fn append(&mut self, response: &MethodResponse) {
+		if !response.success {
+			self.success = false;
+		}
+
+		self.result.push_str(&response.result);
+		self.result.push(',');
+	}
+
+	/// Finish the batch response
+	pub fn finish(mut self) -> BatchResponse {
+		if self.result.len() == 1 {
+			panic!("Batch response needs at least one item");
+		}
+
+		self.result.pop();
+		self.result.push(']');
+		BatchResponse { result: self.result, success: self.success }
+	}
+}
+
+#[derive(Debug)]
+pub struct BatchResponse {
+	pub result: String,
+	pub success: bool,
+}
+
+impl BatchResponse {
 	pub fn error(id: Id, err: impl Into<ErrorObject<'static>>) -> Self {
 		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap();
 		Self { result, success: false }

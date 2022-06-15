@@ -40,13 +40,16 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{
-	collect_batch_response, prepare_error, BoundedSubscriptions, MethodResponse, MethodSink,
+	collect_batch_response, prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse,
+	MethodSink,
 };
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_types::error::{reject_too_big_request, reject_too_many_subscriptions};
 use jsonrpsee_types::Params;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
@@ -248,8 +251,19 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 			tracing::debug!("Accepting new connection: {}", conn_id);
 			let key = {
 				let req = server.receive_request().await?;
-				let host_check = cfg.allowed_hosts.verify("Host", Some(req.headers().host));
-				let origin_check = cfg.allowed_origins.verify("Origin", req.headers().origin);
+
+				let host = std::str::from_utf8(req.headers().host)
+					.map_err(|_e| Error::HttpHeaderRejected("Host", "Invalid UTF-8".to_string()))?;
+				let origin = req.headers().origin.and_then(|h| {
+					let res = std::str::from_utf8(h).ok();
+					if res.is_none() {
+						tracing::warn!("Origin header invalid UTF-8; treated as no Origin header");
+					}
+					res
+				});
+
+				let host_check = cfg.access_control.verify_host(host);
+				let origin_check = cfg.access_control.verify_origin(origin, host);
 
 				host_check.and(origin_check).map(|()| req.key())
 			};
@@ -259,11 +273,12 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 					let accept = Response::Accept { key, protocol: None };
 					server.send_response(&accept).await?;
 				}
-				Err(error) => {
+				Err(err) => {
+					tracing::warn!("Rejected connection: {:?}", err);
 					let reject = Response::Reject { status_code: 403 };
 					server.send_response(&reject).await?;
 
-					return Err(error);
+					return Err(err);
 				}
 			}
 
@@ -400,7 +415,7 @@ async fn background_task(
 							current,
 							maximum
 						);
-						sink.send_error(Id::Null, ErrorCode::OversizedRequest.into());
+						sink.send_error(Id::Null, reject_too_big_request(max_request_body_size));
 						continue;
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
@@ -420,260 +435,72 @@ async fn background_task(
 		let request_start = middleware.on_request(remote_addr, &headers);
 
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
-
 		match first_non_whitespace {
 			Some(b'{') => {
-				if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-					tracing::debug!("recv method call={}", req.method);
-					tracing::trace!("recv: req={:?}", req);
+				let data = std::mem::take(&mut data);
+				let sink = sink.clone();
+				let resources = &resources;
+				let methods = &methods;
+				let bounded_subscriptions = bounded_subscriptions.clone();
+				let id_provider = &*id_provider;
 
-					let id = req.id.clone();
-					let params = Params::new(req.params.map(|params| params.get()));
+				let fut = async move {
+					let call = CallData {
+						conn_id,
+						resources,
+						max_response_body_size,
+						methods,
+						bounded_subscriptions,
+						sink: &sink,
+						id_provider,
+						middleware,
+						request_start,
+					};
 
-					middleware.on_call(&req.method, params.clone());
-
-					match methods.method_with_name(&req.method) {
-						None => {
-							let result = MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound));
-							complete_call(&req.method, request_start, result, middleware, &sink);
-						}
-						Some((name, method)) => match &method.inner() {
-							MethodKind::Sync(callback) => match method.claim(name, &resources) {
-								Ok(guard) => {
-									let result = (callback)(id, params, max_request_body_size as usize);
-									complete_call(&req.method, request_start, result, middleware, &sink);
-								}
-								Err(err) => {
-									tracing::error!(
-										"[Methods::execute_with_resources] failed to lock resources: {:?}",
-										err
-									);
-									let result =
-										MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy));
-									complete_call(&req.method, request_start, result, middleware, &sink);
-								}
-							},
-							MethodKind::Async(callback) => match method.claim(name, &resources) {
-								Ok(guard) => {
-									let sink = sink.clone();
-									let id = id.into_owned();
-									let params = params.into_owned();
-
-									let fut = async move {
-										let result = (callback)(
-											id,
-											params,
-											conn_id,
-											max_response_body_size as usize,
-											Some(guard),
-										)
-										.await;
-										complete_call(name, request_start, result, middleware, &sink);
-									};
-
-									method_executors.add(fut.boxed());
-								}
-								Err(err) => {
-									tracing::error!(
-										"[Methods::execute_with_resources] failed to lock resources: {:?}",
-										err
-									);
-									let result =
-										MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy));
-									complete_call(&req.method, request_start, result, middleware, &sink);
-								}
-							},
-							MethodKind::Subscription(callback) => match method.claim(&req.method, &resources) {
-								Ok(guard) => {
-									let result = if let Some(cn) = bounded_subscriptions.acquire() {
-										let conn_state =
-											ConnState { conn_id, close_notify: cn, id_provider: &*id_provider };
-										callback(id, params, &sink, conn_state).await
-									} else {
-										MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy))
-									};
-									complete_call(&req.method, request_start, result, middleware, &sink);
-								}
-								Err(err) => {
-									tracing::error!(
-										"[Methods::execute_with_resources] failed to lock resources: {:?}",
-										err
-									);
-									let result =
-										MethodResponse::error(req.id, ErrorObject::from(ErrorCode::ServerIsBusy));
-									complete_call(&req.method, request_start, result, middleware, &sink);
-								}
-							},
-							MethodKind::Unsubscription(callback) => {
-								// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
-								let result = callback(id, params, conn_id);
-								complete_call(&req.method, request_start, result, middleware, &sink);
-							}
-						},
-					}
-				} else {
-					let (id, code) = prepare_error(&data);
-					sink.send_error(id, code.into());
+					let response = process_single_request(data, call).await;
+					middleware.on_response(&response.result, request_start);
+					let _ = sink.send_raw(response.result);
 				}
+				.boxed();
+
+				method_executors.add(fut);
+			}
+			Some(b'[') if !batch_requests_supported => {
+				let response = MethodResponse::error(
+					Id::Null,
+					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+				);
+				middleware.on_response(&response.result, request_start);
+				let _ = sink.send_raw(response.result);
 			}
 			Some(b'[') => {
 				// Make sure the following variables are not moved into async closure below.
-				let d = std::mem::take(&mut data);
 				let resources = &resources;
 				let methods = &methods;
+				let bounded_subscriptions = bounded_subscriptions.clone();
 				let sink = sink.clone();
 				let id_provider = id_provider.clone();
-				let bounded_subscriptions2 = bounded_subscriptions.clone();
+				let data = std::mem::take(&mut data);
 
 				let fut = async move {
-					// Batch responses must be sent back as a single message so we read the results from each
-					// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
-					// complete batch response back to the client over `tx`.
+					let response = process_batch_request(Batch {
+						data,
+						call: CallData {
+							conn_id,
+							resources,
+							max_response_body_size,
+							methods,
+							bounded_subscriptions,
+							sink: &sink,
+							id_provider: &*id_provider,
+							middleware,
+							request_start,
+						},
+					})
+					.await;
 
-					if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&d) {
-						tracing::debug!("recv batch len={}", batch.len());
-						tracing::trace!("recv: batch={:?}", batch);
-						if !batch_requests_supported {
-							sink.send_error(
-								Id::Null,
-								ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
-							);
-							middleware.on_response("", request_start);
-						} else if !batch.is_empty() {
-							let batch = batch.into_iter().map(|req| {
-								(
-									req,
-									methods.clone(),
-									resources.clone(),
-									sink.clone(),
-									bounded_subscriptions2.clone(),
-									id_provider.clone(),
-								)
-							});
-
-							let batch_stream = futures_util::stream::iter(batch);
-
-							let mut response = batch_stream
-								.fold(
-									String::from("["),
-									|mut response, (req, methods, resources, sink, bounded_sub, id_provider)| async move {
-										let id = req.id.clone();
-										let params = Params::new(req.params.map(|params| params.get()));
-										let name = &req.method;
-
-										let mr = match methods.method_with_name(name) {
-											None => MethodResponse::error(
-												req.id,
-												ErrorObject::from(ErrorCode::MethodNotFound),
-											),
-											Some((name, method_callback)) => match &method_callback.inner() {
-												MethodKind::Sync(callback) => {
-													match method_callback.claim(name, &resources) {
-														Ok(guard) => {
-															(callback)(id, params, max_response_body_size as usize)
-														}
-														Err(err) => {
-															tracing::error!(
-													"[Methods::execute_with_resources] failed to lock resources: {:?}",
-													err
-												);
-
-															MethodResponse::error(
-																req.id,
-																ErrorObject::from(ErrorCode::ServerIsBusy),
-															)
-														}
-													}
-												}
-												MethodKind::Async(callback) => {
-													match method_callback.claim(&req.method, &resources) {
-														Ok(guard) => {
-															let id = id.into_owned();
-															let params = params.into_owned();
-
-															(callback)(
-																id,
-																params,
-																conn_id,
-																max_response_body_size as usize,
-																Some(guard),
-															)
-															.await
-														}
-														Err(err) => {
-															tracing::error!(
-											"[Methods::execute_with_resources] failed to lock resources: {:?}",
-											err
-											);
-															MethodResponse::error(
-																req.id,
-																ErrorObject::from(ErrorCode::ServerIsBusy),
-															)
-														}
-													}
-												}
-												MethodKind::Subscription(callback) => {
-													match method_callback.claim(&req.method, &resources) {
-														Ok(guard) => {
-															if let Some(cn) = bounded_sub.acquire() {
-																let conn_state = ConnState {
-																	conn_id,
-																	close_notify: cn,
-																	id_provider: &*id_provider,
-																};
-																callback(id, params, &sink, conn_state).await
-															} else {
-																MethodResponse::error(
-																	req.id,
-																	ErrorObject::from(ErrorCode::ServerIsBusy),
-																)
-															}
-														}
-														Err(err) => {
-															tracing::error!(
-											"[Methods::execute_with_resources] failed to lock resources: {:?}",
-											err
-											);
-
-															MethodResponse::error(
-																req.id,
-																ErrorObject::from(ErrorCode::ServerIsBusy),
-															)
-														}
-													}
-												}
-												MethodKind::Unsubscription(callback) => {
-													// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
-													callback(id, params, conn_id)
-												}
-											},
-										};
-
-										response.push_str(&mr.result);
-										response.push_str(",");
-
-										response
-									},
-								)
-								.await;
-
-							response.pop();
-							response.push(']');
-
-							if let Err(err) = sink.send_raw(response) {
-								tracing::warn!("Error sending batch response to the client: {:?}", err)
-							} else {
-								middleware.on_response("", request_start);
-							}
-						} else {
-							sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
-							middleware.on_response("", request_start);
-						}
-					} else {
-						let (id, code) = prepare_error(&d);
-						sink.send_error(id, code.into());
-						middleware.on_response("", request_start);
-					}
+					middleware.on_response(&response.result, request_start);
+					let _ = sink.send_raw(response.result);
 				};
 
 				method_executors.add(Box::pin(fut));
@@ -694,26 +521,6 @@ async fn background_task(
 	result
 }
 
-#[derive(Debug, Clone)]
-enum AllowedValue {
-	Any,
-	OneOf(Box<[String]>),
-}
-
-impl AllowedValue {
-	fn verify(&self, header: &str, value: Option<&[u8]>) -> Result<(), Error> {
-		if let (AllowedValue::OneOf(list), Some(value)) = (self, value) {
-			if !list.iter().any(|o| o.as_bytes() == value) {
-				let error = format!("{} denied: {}", header, String::from_utf8_lossy(value));
-				tracing::warn!("{}", error);
-				return Err(Error::Custom(error));
-			}
-		}
-
-		Ok(())
-	}
-}
-
 /// JSON-RPC Websocket server settings.
 #[derive(Debug, Clone)]
 struct Settings {
@@ -725,10 +532,8 @@ struct Settings {
 	max_connections: u64,
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
-	/// Policy by which to accept or deny incoming requests based on the `Origin` header.
-	allowed_origins: AllowedValue,
-	/// Policy by which to accept or deny incoming requests based on the `Host` header.
-	allowed_hosts: AllowedValue,
+	/// Access control based on HTTP headers
+	access_control: AccessControl,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
@@ -745,8 +550,7 @@ impl Default for Settings {
 			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
 			batch_requests_supported: true,
-			allowed_origins: AllowedValue::Any,
-			allowed_hosts: AllowedValue::Any,
+			access_control: AccessControl::default(),
 			tokio_runtime: None,
 			ping_interval: Duration::from_secs(60),
 		}
@@ -822,35 +626,6 @@ impl<M> Builder<M> {
 		Ok(self)
 	}
 
-	/// Set a list of allowed origins. During the handshake, the `Origin` header will be
-	/// checked against the list, connections without a matching origin will be denied.
-	/// Values should be hostnames with protocol.
-	///
-	/// ```rust
-	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
-	/// builder.set_allowed_origins(["https://example.com"]);
-	/// ```
-	///
-	/// By default allows any `Origin`.
-	///
-	/// Will return an error if `list` is empty. Use [`allow_all_origins`](Builder::allow_all_origins) to restore the
-	/// default.
-	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
-	where
-		List: IntoIterator<Item = Origin>,
-		Origin: Into<String>,
-	{
-		let list: Box<_> = list.into_iter().map(Into::into).collect();
-
-		if list.len() == 0 {
-			return Err(Error::EmptyAllowList("Origin"));
-		}
-
-		self.settings.allowed_origins = AllowedValue::OneOf(list);
-
-		Ok(self)
-	}
-
 	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
 	///
 	/// ```
@@ -878,49 +653,6 @@ impl<M> Builder<M> {
 	/// ```
 	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
 		Builder { settings: self.settings, resources: self.resources, middleware, id_provider: self.id_provider }
-	}
-
-	/// Restores the default behavior of allowing connections with `Origin` header
-	/// containing any value. This will undo any list set by [`set_allowed_origins`](Builder::set_allowed_origins).
-	pub fn allow_all_origins(mut self) -> Self {
-		self.settings.allowed_origins = AllowedValue::Any;
-		self
-	}
-
-	/// Set a list of allowed hosts. During the handshake, the `Host` header will be
-	/// checked against the list. Connections without a matching host will be denied.
-	/// Values should be hostnames without protocol.
-	///
-	/// ```rust
-	/// # let mut builder = jsonrpsee_ws_server::WsServerBuilder::default();
-	/// builder.set_allowed_hosts(["example.com"]);
-	/// ```
-	///
-	/// By default allows any `Host`.
-	///
-	/// Will return an error if `list` is empty. Use [`allow_all_hosts`](Builder::allow_all_hosts) to restore the
-	/// default.
-	pub fn set_allowed_hosts<Host, List>(mut self, list: List) -> Result<Self, Error>
-	where
-		List: IntoIterator<Item = Host>,
-		Host: Into<String>,
-	{
-		let list: Box<_> = list.into_iter().map(Into::into).collect();
-
-		if list.len() == 0 {
-			return Err(Error::EmptyAllowList("Host"));
-		}
-
-		self.settings.allowed_hosts = AllowedValue::OneOf(list);
-
-		Ok(self)
-	}
-
-	/// Restores the default behavior of allowing connections with `Host` header
-	/// containing any value. This will undo any list set by [`set_allowed_hosts`](Builder::set_allowed_hosts).
-	pub fn allow_all_hosts(mut self) -> Self {
-		self.settings.allowed_hosts = AllowedValue::Any;
-		self
 	}
 
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
@@ -977,6 +709,12 @@ impl<M> Builder<M> {
 		self
 	}
 
+	/// Sets access control settings.
+	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
+		self.settings.access_control = acl;
+		self
+	}
+
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
 	///
 	/// ```rust
@@ -1028,14 +766,150 @@ async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>
 	sender.flush().await.map_err(Into::into)
 }
 
-fn complete_call<M: Middleware>(
-	method: &str,
+#[derive(Debug, Clone)]
+struct Batch<'a, M: Middleware> {
+	data: Vec<u8>,
+	call: CallData<'a, M>,
+}
+
+#[derive(Debug, Clone)]
+struct CallData<'a, M: Middleware> {
+	conn_id: usize,
+	bounded_subscriptions: BoundedSubscriptions,
+	id_provider: &'a dyn IdProvider,
+	middleware: &'a M,
+	methods: &'a Methods,
+	max_response_body_size: u32,
+	resources: &'a Resources,
+	sink: &'a MethodSink,
 	request_start: M::Instant,
-	r: MethodResponse,
-	middleware: &M,
-	sink: &MethodSink,
-) -> bool {
-	middleware.on_result(method, r.success, request_start);
-	middleware.on_response(&r.result, request_start);
-	sink.send_raw(r.result).is_ok()
+}
+
+#[derive(Debug, Clone)]
+struct Call<'a, M: Middleware> {
+	params: Params<'a>,
+	name: &'a str,
+	call: CallData<'a, M>,
+	id: Id<'a>,
+}
+
+// Batch responses must be sent back as a single message so we read the results from each
+// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
+// complete batch response back to the client over `tx`.
+async fn process_batch_request<'a, M>(b: Batch<'a, M>) -> BatchResponse
+where
+	M: Middleware,
+{
+	let Batch { data, call } = b;
+
+	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
+		tracing::debug!("recv batch len={}", batch.len());
+		tracing::trace!("recv: batch={:?}", batch);
+		if !batch.is_empty() {
+			let batch = batch.into_iter().map(|req| (req, call.clone()));
+
+			let batch_stream = futures_util::stream::iter(batch);
+
+			let batch_response = batch_stream
+				.fold(BatchResponseBuilder::new(), |mut batch_response, (req, call)| async move {
+					let params = Params::new(req.params.map(|params| params.get()));
+
+					let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+
+					batch_response.append(&response);
+
+					batch_response
+				})
+				.await;
+
+			return batch_response.finish();
+		}
+	}
+
+	let (id, code) = prepare_error(&data);
+	BatchResponse::error(id, ErrorObject::from(code))
+}
+
+async fn process_single_request<'a, M: Middleware>(data: Vec<u8>, call: CallData<'a, M>) -> MethodResponse {
+	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
+		tracing::debug!("recv method call={}", req.method);
+		tracing::trace!("recv: req={:?}", req);
+		let params = Params::new(req.params.map(|params| params.get()));
+		let name = &req.method;
+		let id = req.id;
+
+		execute_call(Call { name, params, id, call }).await
+	} else {
+		let (id, code) = prepare_error(&data);
+		MethodResponse::error(id, ErrorObject::from(code))
+	}
+}
+
+async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> MethodResponse {
+	let Call { name, id, params, call } = c;
+	let CallData {
+		resources,
+		methods,
+		middleware,
+		max_response_body_size,
+		conn_id,
+		bounded_subscriptions,
+		id_provider,
+		sink,
+		request_start,
+	} = call;
+
+	middleware.on_call(name, params.clone());
+
+	let response = match methods.method_with_name(name) {
+		None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
+		Some((name, method)) => match &method.inner() {
+			MethodKind::Sync(callback) => match method.claim(name, &resources) {
+				Ok(guard) => {
+					let r = (callback)(id, params, max_response_body_size as usize);
+					drop(guard);
+					r
+				}
+				Err(err) => {
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+				}
+			},
+			MethodKind::Async(callback) => match method.claim(name, &resources) {
+				Ok(guard) => {
+					let id = id.into_owned();
+					let params = params.into_owned();
+
+					(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
+				}
+				Err(err) => {
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+				}
+			},
+			MethodKind::Subscription(callback) => match method.claim(name, resources) {
+				Ok(guard) => {
+					let r = if let Some(cn) = bounded_subscriptions.acquire() {
+						let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
+						callback(id, params, sink.clone(), conn_state).await
+					} else {
+						MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()))
+					};
+					drop(guard);
+					r
+				}
+				Err(err) => {
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+				}
+			},
+			MethodKind::Unsubscription(callback) => {
+				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
+				callback(id, params, conn_id)
+			}
+		},
+	};
+
+	middleware.on_result(name, response.success, request_start);
+	response
 }
