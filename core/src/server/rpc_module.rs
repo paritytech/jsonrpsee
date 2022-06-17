@@ -689,7 +689,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<MethodResourcesBuilder, Error>
 	where
 		Context: Send + Sync + 'static,
-		F: Fn(Params, PendingSubscription, Arc<Context>) -> Result<(), ErrorObjectOwned> + Send + Sync + 'static,
+		F: Fn(Params, PendingSubscription, Arc<Context>) -> Result<(), ErrorObject> + Send + Sync + 'static,
 	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
