@@ -384,6 +384,7 @@ impl Methods {
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
 	///         pending.accept().unwrap().send(&"one answer").unwrap();
+	/// 		Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#).await.unwrap();
 	///     let resp = serde_json::from_str::<Response<u64>>(&resp).unwrap();
@@ -445,6 +446,7 @@ impl Methods {
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
 	///         pending.accept().unwrap().send(&"one answer").unwrap();
+	/// 		Ok(())
 	///     }).unwrap();
 	///
 	///     let mut sub = module.subscribe("hi", EmptyParams::new()).await.unwrap();
@@ -674,6 +676,8 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         let sum = x + (*ctx);
 	///         let _ = sink.send(&sum);
 	///     });
+	///
+	/// 	Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription<F>(
@@ -685,7 +689,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<MethodResourcesBuilder, Error>
 	where
 		Context: Send + Sync + 'static,
-		F: Fn(Params, PendingSubscription, Arc<Context>) + Send + Sync + 'static,
+		F: Fn(Params, PendingSubscription, Arc<Context>) -> Result<(), ErrorObjectOwned> + Send + Sync + 'static,
 	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));
@@ -750,7 +754,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						claimed,
 					}));
 
-					callback(params, sink, ctx.clone());
+					let _ = callback(params, sink, ctx.clone());
 
 					true
 				})),
@@ -915,6 +919,7 @@ impl SubscriptionSink {
 	///            }
 	///         }
 	///     });
+	/// 	Ok(())
 	/// });
 	/// ```
 	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> SubscriptionClosed
@@ -987,6 +992,7 @@ impl SubscriptionSink {
 	///     let mut sink = pending.accept().unwrap();
 	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
 	///     tokio::spawn(async move { sink.pipe_from_stream(stream).await; });
+	/// 	Ok(())
 	/// });
 	/// ```
 	pub async fn pipe_from_stream<S, T>(&mut self, stream: S) -> SubscriptionClosed
