@@ -204,17 +204,14 @@ async fn subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
 			let mut stream_data = vec!['0', '1', '2'];
-			std::thread::spawn(move || {
+			tokio::spawn(async move {
+				let mut sink = pending.accept().await.unwrap();
+
 				while let Some(letter) = stream_data.pop() {
 					tracing::debug!("This is your friendly subscription sending data.");
 					let _ = sink.send(&letter);
-					std::thread::sleep(std::time::Duration::from_millis(500));
+					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 				}
 				let close = ErrorObject::borrowed(0, &"closed successfully", None);
 				sink.close(close.into_owned());
@@ -242,17 +239,17 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
+			tokio::spawn(async move {
+				let mut sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
 
-			std::thread::spawn(move || {
 				// make sure to only send one item
 				sink.send(&"lo").unwrap();
 				while !sink.is_closed() {
 					tracing::debug!("[test] Sink is open, sleeping");
-					std::thread::sleep(std::time::Duration::from_millis(500));
+					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 				}
 				// Get the close reason.
 				if !sink.send(&"lo").expect("str serializable; qed") {
@@ -301,11 +298,13 @@ async fn subscribing_without_server_bad_params() {
 				}
 			};
 
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-			sink.send(&p).unwrap();
+			tokio::spawn(async move {
+				let mut sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+				sink.send(&p).unwrap();
+			});
 		})
 		.unwrap();
 
@@ -321,16 +320,16 @@ async fn subscribe_unsubscribe_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);
 
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream).await;
+				tracing::info!("waiting for sub");
+				let mut sink = pending.accept().await.unwrap();
+				tracing::info!("sub ok");
+
+				let res = sink.pipe_from_stream(stream).await;
+				tracing::info!("subscription closed: {:?}", res);
 			});
 		})
 		.unwrap();
@@ -339,6 +338,8 @@ async fn subscribe_unsubscribe_without_server() {
 		let sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap();
 
 		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
+
+		assert!(!sub.is_closed());
 
 		// Unsubscribe should be valid.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);

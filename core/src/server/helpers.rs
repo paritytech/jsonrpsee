@@ -29,7 +29,6 @@ use std::sync::Arc;
 
 use crate::Error;
 use futures_channel::mpsc;
-use futures_util::StreamExt;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
@@ -186,24 +185,6 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	}
 }
 
-/// Read all the results of all method calls in a batch request from the ['Stream']. Format the result into a single
-/// `String` appropriately wrapped in `[`/`]`.
-pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> String {
-	let mut buf = String::with_capacity(2048);
-	buf.push('[');
-	let mut buf = rx
-		.fold(buf, |mut acc, response| async move {
-			acc.push_str(&response);
-			acc.push(',');
-			acc
-		})
-		.await;
-	// Remove trailing comma
-	buf.pop();
-	buf.push(']');
-	buf
-}
-
 /// A permitted subscription.
 #[derive(Debug)]
 pub struct SubscriptionPermit {
@@ -296,17 +277,19 @@ impl MethodResponse {
 		}
 	}
 
-	pub fn error(id: Id, err: impl Into<ErrorObject<'static>>) -> Self {
+	/// Create a `MethodResponse` from an error.
+	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
 		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap();
 		Self { result, success: false }
 	}
 }
 
+/// Builder to build a `BatchResponse`.
 #[derive(Debug)]
 pub struct BatchResponseBuilder {
-	/// Serialized response,
+	/// Formatted JSON-RPC response.
 	result: String,
-	/// Status indicates whether the call was successful or or.
+	/// Indicates whether the call was successful or not.
 	success: bool,
 }
 
@@ -338,13 +321,17 @@ impl BatchResponseBuilder {
 	}
 }
 
+/// Response to a batch request.
 #[derive(Debug)]
 pub struct BatchResponse {
+	/// Formatted JSON-RPC response.
 	pub result: String,
+	/// Indicates whether the call was successful or not.
 	pub success: bool,
 }
 
 impl BatchResponse {
+	/// Create a `BatchResponse` from an error.
 	pub fn error(id: Id, err: impl Into<ErrorObject<'static>>) -> Self {
 		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap();
 		Self { result, success: false }

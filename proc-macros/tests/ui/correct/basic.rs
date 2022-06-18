@@ -64,27 +64,33 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	fn sub(&self, pending: PendingSubscription) {
-		let mut sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return,
-		};
-		let _ = sink.send(&"Response_A");
-		let _ = sink.send(&"Response_B");
+		tokio::spawn(async move {
+			let mut sink = match pending.accept().await {
+				Some(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&"Response_A");
+			let _ = sink.send(&"Response_B");
+		});
 	}
 
 	fn sub_with_params(&self, pending: PendingSubscription, val: u32) {
-		let mut sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return,
-		};
-		let _ = sink.send(&val);
-		let _ = sink.send(&val);
+		tokio::spawn(async move {
+			let mut sink = match pending.accept().await {
+				Some(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&val);
+			let _ = sink.send(&val);
+		});
 	}
 
 	fn sub_with_override_notif_method(&self, pending: PendingSubscription) {
-		if let Some(mut sink) = pending.accept() {
-			let _ = sink.send(&1);
-		}
+		tokio::spawn(async move {
+			if let Some(mut sink) = pending.accept().await {
+				let _ = sink.send(&1);
+			}
+		});
 	}
 }
 

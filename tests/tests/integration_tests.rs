@@ -63,7 +63,6 @@ async fn ws_subscription_works() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn ws_subscription_with_input_works() {
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
@@ -354,8 +353,9 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, mut tx| {
-			let mut sink = pending.accept().unwrap();
 			tokio::spawn(async move {
+				let mut sink = pending.accept().await.unwrap();
+
 				let close_err = loop {
 					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
 						break ErrorObject::borrowed(0, &"Subscription terminated successfully", None);
@@ -505,12 +505,12 @@ async fn ws_server_limit_subs_per_conn_works() {
 
 	module
 		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
 			tokio::spawn(async move {
+				let mut sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
@@ -562,12 +562,12 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 	module
 		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
 			tokio::spawn(async move {
+				let mut sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 

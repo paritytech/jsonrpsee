@@ -95,9 +95,10 @@ impl<M> Builder<M> {
 	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
 	///
 	/// ```
-	/// use std::time::Instant;
+	/// use std::{time::Instant, net::SocketAddr};
 	///
 	/// use jsonrpsee_core::middleware::Middleware;
+	/// use jsonrpsee_core::HeaderMap;
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -106,7 +107,7 @@ impl<M> Builder<M> {
 	/// impl Middleware for MyMiddleware {
 	///     type Instant = Instant;
 	///
-	///     fn on_request(&self) -> Instant {
+	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> Instant {
 	///         Instant::now()
 	///     }
 	///

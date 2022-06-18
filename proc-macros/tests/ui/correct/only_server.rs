@@ -29,13 +29,15 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	fn sub(&self, pending: PendingSubscription) {
-		let mut sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return,
-		};
+		tokio::spawn(async move {
+			let mut sink = match pending.accept().await {
+				Some(sink) => sink,
+				_ => return,
+			};
 
-		let _ = sink.send(&"Response_A");
-		let _ = sink.send(&"Response_B");
+			let _ = sink.send(&"Response_A");
+			let _ = sink.send(&"Response_B");
+		});
 	}
 }
 

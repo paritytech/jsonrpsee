@@ -67,8 +67,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
-			let (idx, mut sink) = match (params.one(), pending.accept()) {
-				(Ok(idx), Some(sink)) => (idx, sink),
+			let idx = match params.one() {
+				Ok(idx) => idx,
 				_ => return,
 			};
 			let item = LETTERS.chars().nth(idx);
@@ -77,6 +77,11 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
+				let mut sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+
 				match sink.pipe_from_stream(stream).await {
 					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
@@ -92,8 +97,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.unwrap();
 	module
 		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
-			let (one, two, mut sink) = match (params.parse::<(usize, usize)>(), pending.accept()) {
-				(Ok((one, two)), Some(sink)) => (one, two, sink),
+			let (one, two) = match params.parse::<(usize, usize)>() {
+				Ok(res) => res,
 				_ => return,
 			};
 
@@ -103,6 +108,11 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
+				let mut sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+
 				match sink.pipe_from_stream(stream).await {
 					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {

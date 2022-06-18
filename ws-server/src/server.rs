@@ -34,7 +34,7 @@ use std::time::Duration;
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use crate::types::{Id, Request};
-use futures_channel::mpsc;
+use futures_channel::{mpsc, oneshot};
 use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
@@ -456,9 +456,13 @@ async fn background_task(
 						request_start,
 					};
 
-					let response = process_single_request(data, call).await;
+					let (response, maybe_sub) = process_single_request(data, call).await;
 					middleware.on_response(&response.result, request_start);
 					let _ = sink.send_raw(response.result);
+
+					if let Some(sub) = maybe_sub {
+						let _ = sub.send(());
+					}
 				}
 				.boxed();
 
@@ -628,9 +632,10 @@ impl<M> Builder<M> {
 	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
 	///
 	/// ```
-	/// use std::time::Instant;
+	/// use std::{time::Instant, net::SocketAddr};
 	///
 	/// use jsonrpsee_core::middleware::Middleware;
+	/// use jsonrpsee_core::HeaderMap;
 	/// use jsonrpsee_ws_server::WsServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -639,7 +644,7 @@ impl<M> Builder<M> {
 	/// impl Middleware for MyMiddleware {
 	///     type Instant = Instant;
 	///
-	///     fn on_request(&self) -> Instant {
+	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> Instant {
 	///         Instant::now()
 	///     }
 	///
@@ -813,7 +818,12 @@ where
 				.fold(BatchResponseBuilder::new(), |mut batch_response, (req, call)| async move {
 					let params = Params::new(req.params.map(|params| params.get()));
 
-					let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+					let (response, maybe_sub) =
+						execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+
+					if let Some(sub) = maybe_sub {
+						let _ = sub.send(());
+					}
 
 					batch_response.append(&response);
 
@@ -829,7 +839,10 @@ where
 	BatchResponse::error(id, ErrorObject::from(code))
 }
 
-async fn process_single_request<'a, M: Middleware>(data: Vec<u8>, call: CallData<'a, M>) -> MethodResponse {
+async fn process_single_request<'a, M: Middleware>(
+	data: Vec<u8>,
+	call: CallData<'a, M>,
+) -> (MethodResponse, Option<oneshot::Sender<()>>) {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		tracing::debug!("recv method call={}", req.method);
 		tracing::trace!("recv: req={:?}", req);
@@ -840,11 +853,19 @@ async fn process_single_request<'a, M: Middleware>(data: Vec<u8>, call: CallData
 		execute_call(Call { name, params, id, call }).await
 	} else {
 		let (id, code) = prepare_error(&data);
-		MethodResponse::error(id, ErrorObject::from(code))
+		(MethodResponse::error(id, ErrorObject::from(code)), None)
 	}
 }
 
-async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> MethodResponse {
+/// This a workaround the see whether it works
+///
+/// Essentially, the sender is used to indicate to the other side that call has been answered
+/// such that the subscription notifications are not allowed to start until `the sender` has ACK:ed
+/// that.
+///
+/// Otherwise it's possible that the subscription notifications could start before that the actual subscription
+/// response has been sent.
+async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> (MethodResponse, Option<oneshot::Sender<()>>) {
 	let Call { name, id, params, call } = c;
 	let CallData {
 		resources,
@@ -861,17 +882,17 @@ async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> MethodResponse {
 	middleware.on_call(name, params.clone());
 
 	let response = match methods.method_with_name(name) {
-		None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
+		None => (MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)), None),
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => match method.claim(name, &resources) {
 				Ok(guard) => {
 					let r = (callback)(id, params, max_response_body_size as usize);
 					drop(guard);
-					r
+					(r, None)
 				}
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+					(MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy)), None)
 				}
 			},
 			MethodKind::Async(callback) => match method.claim(name, &resources) {
@@ -879,36 +900,38 @@ async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> MethodResponse {
 					let id = id.into_owned();
 					let params = params.into_owned();
 
-					(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
+					((callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await, None)
 				}
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+					(MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy)), None)
 				}
 			},
 			MethodKind::Subscription(callback) => match method.claim(name, resources) {
 				Ok(guard) => {
 					let r = if let Some(cn) = bounded_subscriptions.acquire() {
 						let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
-						callback(id, params, sink.clone(), conn_state).await
+						let (subscribe_tx, subscribe_rx) = oneshot::channel();
+						let result = callback(id.clone(), params, sink.clone(), conn_state, subscribe_rx).await;
+						(result, Some(subscribe_tx))
 					} else {
-						MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()))
+						(MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max())), None)
 					};
 					drop(guard);
 					r
 				}
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+					(MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy)), None)
 				}
 			},
 			MethodKind::Unsubscription(callback) => {
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
-				callback(id, params, conn_id, max_response_body_size as usize)
+				(callback(id, params, conn_id, max_response_body_size as usize), None)
 			}
 		},
 	};
 
-	middleware.on_result(name, response.success, request_start);
+	middleware.on_result(name, response.0.success, request_start);
 	response
 }
