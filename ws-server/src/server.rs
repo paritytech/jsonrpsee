@@ -909,16 +909,15 @@ async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> (MethodResponse, Opt
 			},
 			MethodKind::Subscription(callback) => match method.claim(name, resources) {
 				Ok(guard) => {
-					let r = if let Some(cn) = bounded_subscriptions.acquire() {
+					if let Some(cn) = bounded_subscriptions.acquire() {
 						let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
 						let (subscribe_tx, subscribe_rx) = oneshot::channel();
-						let result = callback(id.clone(), params, sink.clone(), conn_state, subscribe_rx).await;
+						let result =
+							callback(id.clone(), params, sink.clone(), conn_state, subscribe_rx, Some(guard)).await;
 						(result, Some(subscribe_tx))
 					} else {
 						(MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max())), None)
-					};
-					drop(guard);
-					r
+					}
 				}
 				Err(err) => {
 					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
