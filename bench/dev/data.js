@@ -36,30 +36,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 185063,
-            "range": "± 15069",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 111479,
-            "range": "± 10775",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 181991,
-            "range": "± 13708",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 114682,
-            "range": "± 11241",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 140092,
             "range": "± 10863",
@@ -109,30 +85,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 166,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 130377,
-            "range": "± 5232",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 65957,
-            "range": "± 3089",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 129613,
-            "range": "± 5115",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 63827,
-            "range": "± 2121",
             "unit": "ns/iter"
           },
           {
@@ -188,30 +140,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 129259,
-            "range": "± 4457",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 64693,
-            "range": "± 2704",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 130574,
-            "range": "± 3184",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 65740,
-            "range": "± 2794",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 83338,
             "range": "± 4217",
@@ -261,30 +189,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 212,
             "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 175495,
-            "range": "± 28005",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 101948,
-            "range": "± 7731",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 177994,
-            "range": "± 41015",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 103827,
-            "range": "± 24482",
             "unit": "ns/iter"
           },
           {
@@ -340,30 +244,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 184105,
-            "range": "± 16855",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 127571,
-            "range": "± 95628",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 180858,
-            "range": "± 30324",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 130490,
-            "range": "± 20388",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 150480,
             "range": "± 16218",
@@ -413,30 +293,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 169,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 132186,
-            "range": "± 17459",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 65778,
-            "range": "± 2620",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 126540,
-            "range": "± 5696",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 67695,
-            "range": "± 2984",
             "unit": "ns/iter"
           },
           {
@@ -492,30 +348,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 193124,
-            "range": "± 20491",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 117470,
-            "range": "± 11366",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 183614,
-            "range": "± 13290",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 121938,
-            "range": "± 9476",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 143740,
             "range": "± 9541",
@@ -565,30 +397,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 143,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 135366,
-            "range": "± 11710",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 69620,
-            "range": "± 3659",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 133052,
-            "range": "± 8563",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 69052,
-            "range": "± 2913",
             "unit": "ns/iter"
           },
           {
@@ -644,30 +452,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 147452,
-            "range": "± 5411",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 77634,
-            "range": "± 3489",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 139367,
-            "range": "± 7478",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 78926,
-            "range": "± 3740",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 94023,
             "range": "± 2471",
@@ -717,30 +501,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 163,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 131067,
-            "range": "± 5306",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 64698,
-            "range": "± 2466",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 131056,
-            "range": "± 2675",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 65091,
-            "range": "± 1880",
             "unit": "ns/iter"
           },
           {
@@ -796,30 +556,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 160311,
-            "range": "± 12084",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 102178,
-            "range": "± 14722",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 164152,
-            "range": "± 26375",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 98777,
-            "range": "± 8525",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 130926,
             "range": "± 7617",
@@ -869,30 +605,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 202,
             "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 153258,
-            "range": "± 22569",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 78597,
-            "range": "± 7922",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 152570,
-            "range": "± 15893",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 82083,
-            "range": "± 8749",
             "unit": "ns/iter"
           },
           {
@@ -948,30 +660,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 183441,
-            "range": "± 28976",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 115646,
-            "range": "± 8823",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 174232,
-            "range": "± 25858",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 112309,
-            "range": "± 13259",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 137542,
             "range": "± 45003",
@@ -1021,30 +709,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 167,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 130164,
-            "range": "± 4050",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 64479,
-            "range": "± 1913",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 125655,
-            "range": "± 5268",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 64469,
-            "range": "± 1792",
             "unit": "ns/iter"
           },
           {
@@ -1100,30 +764,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 146603,
-            "range": "± 4533",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 74809,
-            "range": "± 3634",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 145727,
-            "range": "± 17814",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 76294,
-            "range": "± 1644",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 109270,
             "range": "± 15416",
@@ -1173,30 +813,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 178,
             "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 135036,
-            "range": "± 6242",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 68260,
-            "range": "± 4560",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 136674,
-            "range": "± 15073",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 67164,
-            "range": "± 2149",
             "unit": "ns/iter"
           },
           {
@@ -1252,30 +868,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 144956,
-            "range": "± 4900",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 74803,
-            "range": "± 2329",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 144237,
-            "range": "± 6013",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 75095,
-            "range": "± 2689",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 89082,
             "range": "± 3138",
@@ -1325,30 +917,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 205,
             "range": "± 13",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 145867,
-            "range": "± 14185",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 78740,
-            "range": "± 6725",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 149267,
-            "range": "± 18020",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 79212,
-            "range": "± 6012",
             "unit": "ns/iter"
           },
           {
@@ -1404,30 +972,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 131920,
-            "range": "± 2902",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 64821,
-            "range": "± 2890",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 130526,
-            "range": "± 3939",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 64354,
-            "range": "± 1457",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 83147,
             "range": "± 1984",
@@ -1477,30 +1021,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 219,
             "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 181606,
-            "range": "± 22619",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 104531,
-            "range": "± 12132",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 179859,
-            "range": "± 13369",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 104797,
-            "range": "± 22944",
             "unit": "ns/iter"
           },
           {
@@ -1556,30 +1076,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 171264,
-            "range": "± 19400",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 101837,
-            "range": "± 13285",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 174313,
-            "range": "± 11422",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 100462,
-            "range": "± 7074",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 132109,
             "range": "± 11435",
@@ -1629,30 +1125,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 186,
             "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 143889,
-            "range": "± 7910",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 76460,
-            "range": "± 1741",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 147077,
-            "range": "± 6991",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 75654,
-            "range": "± 2195",
             "unit": "ns/iter"
           },
           {
@@ -1708,30 +1180,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 177232,
-            "range": "± 13607",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 103460,
-            "range": "± 17520",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 176117,
-            "range": "± 17953",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 101821,
-            "range": "± 6331",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 133908,
             "range": "± 28561",
@@ -1781,30 +1229,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 167,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 132678,
-            "range": "± 16216",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 67637,
-            "range": "± 2797",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 133420,
-            "range": "± 3190",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 67133,
-            "range": "± 2885",
             "unit": "ns/iter"
           },
           {
@@ -1860,30 +1284,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 184547,
-            "range": "± 11804",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 111461,
-            "range": "± 7466",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 182153,
-            "range": "± 13207",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 111065,
-            "range": "± 12474",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 135372,
             "range": "± 40025",
@@ -1933,30 +1333,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 238,
             "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 178762,
-            "range": "± 16735",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 118061,
-            "range": "± 7920",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 184322,
-            "range": "± 16248",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 116695,
-            "range": "± 12088",
             "unit": "ns/iter"
           },
           {
@@ -2012,30 +1388,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 189251,
-            "range": "± 32684",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 112329,
-            "range": "± 15059",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 191091,
-            "range": "± 19331",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 111353,
-            "range": "± 14071",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 142797,
             "range": "± 20497",
@@ -2085,30 +1437,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 220,
             "range": "± 13",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 183653,
-            "range": "± 15937",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 113306,
-            "range": "± 10923",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 183433,
-            "range": "± 13369",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 111624,
-            "range": "± 8280",
             "unit": "ns/iter"
           },
           {
@@ -2164,30 +1492,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 173288,
-            "range": "± 23110",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 107331,
-            "range": "± 8183",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 164380,
-            "range": "± 18417",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 106929,
-            "range": "± 76643",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 137520,
             "range": "± 9100",
@@ -2237,30 +1541,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 212,
             "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 183923,
-            "range": "± 15990",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 113566,
-            "range": "± 9273",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 185125,
-            "range": "± 13267",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 110372,
-            "range": "± 9509",
             "unit": "ns/iter"
           },
           {
@@ -2316,30 +1596,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 200370,
-            "range": "± 11544",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 123994,
-            "range": "± 18983",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 202592,
-            "range": "± 11481",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 127560,
-            "range": "± 7774",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 148233,
             "range": "± 13570",
@@ -2389,30 +1645,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 228,
             "range": "± 13",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 192412,
-            "range": "± 98443",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 113256,
-            "range": "± 23660",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 194725,
-            "range": "± 15478",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 112112,
-            "range": "± 19614",
             "unit": "ns/iter"
           },
           {
@@ -2468,30 +1700,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 184630,
-            "range": "± 11368",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 112337,
-            "range": "± 7631",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 180003,
-            "range": "± 18763",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 111566,
-            "range": "± 7618",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 138388,
             "range": "± 13154",
@@ -2541,30 +1749,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 220,
             "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 187886,
-            "range": "± 15438",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 122871,
-            "range": "± 15822",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 189164,
-            "range": "± 14804",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 118803,
-            "range": "± 15909",
             "unit": "ns/iter"
           },
           {
@@ -2620,30 +1804,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 188271,
-            "range": "± 16792",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 119205,
-            "range": "± 10182",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 189252,
-            "range": "± 10840",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 122873,
-            "range": "± 8918",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 156573,
             "range": "± 30390",
@@ -2693,30 +1853,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 159,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 135257,
-            "range": "± 12587",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 68759,
-            "range": "± 3297",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 130509,
-            "range": "± 11880",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 63729,
-            "range": "± 2363",
             "unit": "ns/iter"
           },
           {
@@ -2772,30 +1908,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 162853,
-            "range": "± 14864",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 105376,
-            "range": "± 8220",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 163661,
-            "range": "± 12604",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 104000,
-            "range": "± 26619",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 136350,
             "range": "± 6171",
@@ -2845,30 +1957,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 167,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 133819,
-            "range": "± 12352",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 69875,
-            "range": "± 5497",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 115687,
-            "range": "± 13979",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 65416,
-            "range": "± 4409",
             "unit": "ns/iter"
           },
           {
@@ -2924,30 +2012,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 197575,
-            "range": "± 159330",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 114998,
-            "range": "± 19536",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 194035,
-            "range": "± 22099",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 120676,
-            "range": "± 146446",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 161104,
             "range": "± 119924",
@@ -2997,30 +2061,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 202,
             "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 163296,
-            "range": "± 20198",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 99554,
-            "range": "± 19296",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 175398,
-            "range": "± 13531",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 106140,
-            "range": "± 15255",
             "unit": "ns/iter"
           },
           {
@@ -3076,30 +2116,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 133385,
-            "range": "± 5123",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 67031,
-            "range": "± 2560",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 133950,
-            "range": "± 2888",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 66220,
-            "range": "± 2539",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 91643,
             "range": "± 1986",
@@ -3149,30 +2165,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 171,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 133301,
-            "range": "± 2644",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 66137,
-            "range": "± 2714",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 132646,
-            "range": "± 2799",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 65604,
-            "range": "± 2312",
             "unit": "ns/iter"
           },
           {
@@ -3228,30 +2220,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 135134,
-            "range": "± 8425",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 69695,
-            "range": "± 6700",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 135626,
-            "range": "± 4213",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 67407,
-            "range": "± 2111",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 91558,
             "range": "± 1786",
@@ -3301,30 +2269,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 199,
             "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 154184,
-            "range": "± 6502",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 73879,
-            "range": "± 3315",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 145753,
-            "range": "± 8862",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 80687,
-            "range": "± 6702",
             "unit": "ns/iter"
           },
           {
@@ -3380,30 +2324,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 132063,
-            "range": "± 12979",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 64585,
-            "range": "± 1512",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 134630,
-            "range": "± 2224",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 65558,
-            "range": "± 1989",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 88537,
             "range": "± 2770",
@@ -3453,30 +2373,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 213,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 164104,
-            "range": "± 6783",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 81777,
-            "range": "± 5918",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 162505,
-            "range": "± 7546",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 82982,
-            "range": "± 4056",
             "unit": "ns/iter"
           },
           {
@@ -3532,30 +2428,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 152684,
-            "range": "± 6665",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 73267,
-            "range": "± 2063",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 149763,
-            "range": "± 6024",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 73027,
-            "range": "± 2593",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 95857,
             "range": "± 2608",
@@ -3605,30 +2477,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 211,
             "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 150364,
-            "range": "± 9401",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 76456,
-            "range": "± 7781",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 156784,
-            "range": "± 6422",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 78867,
-            "range": "± 5083",
             "unit": "ns/iter"
           },
           {
@@ -3684,150 +2532,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 182686,
-            "range": "± 19041",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/2",
-            "value": 178902,
-            "range": "± 13608",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/5",
-            "value": 209202,
-            "range": "± 19593",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/10",
-            "value": 219418,
-            "range": "± 20754",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/50",
-            "value": 346894,
-            "range": "± 27621",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/100",
-            "value": 474121,
-            "range": "± 43500",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 116865,
-            "range": "± 28802",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/2",
-            "value": 129805,
-            "range": "± 21438",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/5",
-            "value": 136240,
-            "range": "± 10862",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/10",
-            "value": 159799,
-            "range": "± 11392",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/50",
-            "value": 274510,
-            "range": "± 22780",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/100",
-            "value": 412613,
-            "range": "± 32288",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 165509,
-            "range": "± 15627",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/2",
-            "value": 171754,
-            "range": "± 18609",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/5",
-            "value": 187771,
-            "range": "± 11845",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/10",
-            "value": 205655,
-            "range": "± 16500",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/50",
-            "value": 337494,
-            "range": "± 32239",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/100",
-            "value": 545412,
-            "range": "± 61211",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 114652,
-            "range": "± 13237",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/2",
-            "value": 128812,
-            "range": "± 9278",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/5",
-            "value": 140956,
-            "range": "± 9957",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/10",
-            "value": 170519,
-            "range": "± 10272",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/50",
-            "value": 348338,
-            "range": "± 40216",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/100",
-            "value": 514039,
-            "range": "± 68421",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 148637,
             "range": "± 10904",
@@ -3877,150 +2581,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 204,
             "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 173542,
-            "range": "± 17315",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/2",
-            "value": 182751,
-            "range": "± 7143",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/5",
-            "value": 189039,
-            "range": "± 10974",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/10",
-            "value": 207717,
-            "range": "± 22191",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/50",
-            "value": 342450,
-            "range": "± 31404",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/100",
-            "value": 497859,
-            "range": "± 52858",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 111551,
-            "range": "± 12136",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/2",
-            "value": 126047,
-            "range": "± 12828",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/5",
-            "value": 154260,
-            "range": "± 51035",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/10",
-            "value": 173667,
-            "range": "± 21133",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/50",
-            "value": 310433,
-            "range": "± 13394",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/100",
-            "value": 488307,
-            "range": "± 32448",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 183292,
-            "range": "± 11455",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/2",
-            "value": 190162,
-            "range": "± 43006",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/5",
-            "value": 194760,
-            "range": "± 15503",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/10",
-            "value": 215924,
-            "range": "± 10224",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/50",
-            "value": 356229,
-            "range": "± 24771",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/100",
-            "value": 535818,
-            "range": "± 57119",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 99940,
-            "range": "± 10404",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/2",
-            "value": 123332,
-            "range": "± 13805",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/5",
-            "value": 137047,
-            "range": "± 11098",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/10",
-            "value": 153887,
-            "range": "± 12058",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/50",
-            "value": 315956,
-            "range": "± 17319",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/100",
-            "value": 500394,
-            "range": "± 35959",
             "unit": "ns/iter"
           },
           {
@@ -4076,150 +2636,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 135456,
-            "range": "± 3578",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/2",
-            "value": 142419,
-            "range": "± 3960",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/5",
-            "value": 151536,
-            "range": "± 2742",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/10",
-            "value": 166636,
-            "range": "± 2646",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/50",
-            "value": 259350,
-            "range": "± 7252",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/100",
-            "value": 379254,
-            "range": "± 43402",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 66232,
-            "range": "± 2062",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/2",
-            "value": 84371,
-            "range": "± 3810",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/5",
-            "value": 95515,
-            "range": "± 14849",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/10",
-            "value": 113781,
-            "range": "± 3300",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/50",
-            "value": 233276,
-            "range": "± 59855",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/100",
-            "value": 375114,
-            "range": "± 22136",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 135540,
-            "range": "± 4236",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/2",
-            "value": 142844,
-            "range": "± 3551",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/5",
-            "value": 154450,
-            "range": "± 3102",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/10",
-            "value": 170135,
-            "range": "± 3450",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/50",
-            "value": 283547,
-            "range": "± 5492",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/100",
-            "value": 418838,
-            "range": "± 16894",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 67466,
-            "range": "± 2312",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/2",
-            "value": 85938,
-            "range": "± 2349",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/5",
-            "value": 96229,
-            "range": "± 2358",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/10",
-            "value": 116021,
-            "range": "± 3254",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/50",
-            "value": 245509,
-            "range": "± 3242",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/100",
-            "value": 407807,
-            "range": "± 18072",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 93639,
             "range": "± 3038",
@@ -4269,150 +2685,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 212,
             "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 154766,
-            "range": "± 8370",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/2",
-            "value": 165209,
-            "range": "± 6026",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/5",
-            "value": 175395,
-            "range": "± 4259",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/10",
-            "value": 194486,
-            "range": "± 2253",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/50",
-            "value": 306439,
-            "range": "± 6276",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/100",
-            "value": 440530,
-            "range": "± 11436",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 74667,
-            "range": "± 1893",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/2",
-            "value": 96891,
-            "range": "± 9736",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/5",
-            "value": 109037,
-            "range": "± 1688",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/10",
-            "value": 129737,
-            "range": "± 2788",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/50",
-            "value": 278142,
-            "range": "± 39552",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/100",
-            "value": 440746,
-            "range": "± 31610",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 154769,
-            "range": "± 6175",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/2",
-            "value": 168677,
-            "range": "± 7082",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/5",
-            "value": 182411,
-            "range": "± 2938",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/10",
-            "value": 201027,
-            "range": "± 3138",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/50",
-            "value": 332778,
-            "range": "± 4900",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/100",
-            "value": 496006,
-            "range": "± 16052",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 76987,
-            "range": "± 5610",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/2",
-            "value": 99217,
-            "range": "± 6471",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/5",
-            "value": 112548,
-            "range": "± 2807",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/10",
-            "value": 130845,
-            "range": "± 2854",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/50",
-            "value": 290287,
-            "range": "± 4374",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/100",
-            "value": 480997,
-            "range": "± 9712",
             "unit": "ns/iter"
           },
           {
@@ -4468,150 +2740,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 124432,
-            "range": "± 10927",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/2",
-            "value": 150382,
-            "range": "± 6557",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/5",
-            "value": 162547,
-            "range": "± 6740",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/10",
-            "value": 176665,
-            "range": "± 6743",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/50",
-            "value": 280142,
-            "range": "± 15832",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/100",
-            "value": 407960,
-            "range": "± 20130",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 68994,
-            "range": "± 7902",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/2",
-            "value": 90638,
-            "range": "± 11215",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/5",
-            "value": 98586,
-            "range": "± 4096",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/10",
-            "value": 113635,
-            "range": "± 5449",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/50",
-            "value": 250174,
-            "range": "± 13224",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/100",
-            "value": 388558,
-            "range": "± 17490",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 138940,
-            "range": "± 6569",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/2",
-            "value": 149876,
-            "range": "± 7010",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/5",
-            "value": 162244,
-            "range": "± 7738",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/10",
-            "value": 182698,
-            "range": "± 7110",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/50",
-            "value": 311927,
-            "range": "± 14760",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/100",
-            "value": 446503,
-            "range": "± 19100",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 68398,
-            "range": "± 3230",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/2",
-            "value": 93269,
-            "range": "± 4442",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/5",
-            "value": 102746,
-            "range": "± 4939",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/10",
-            "value": 117575,
-            "range": "± 5748",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/50",
-            "value": 257028,
-            "range": "± 14120",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/100",
-            "value": 429045,
-            "range": "± 16753",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 89886,
             "range": "± 4790",
@@ -4661,150 +2789,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 201,
             "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 181321,
-            "range": "± 48040",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/2",
-            "value": 181667,
-            "range": "± 32531",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/5",
-            "value": 190136,
-            "range": "± 34102",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/10",
-            "value": 210185,
-            "range": "± 22660",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/50",
-            "value": 329002,
-            "range": "± 78060",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/100",
-            "value": 464014,
-            "range": "± 19988",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 102926,
-            "range": "± 27629",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/2",
-            "value": 124754,
-            "range": "± 5349",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/5",
-            "value": 136612,
-            "range": "± 38521",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/10",
-            "value": 157499,
-            "range": "± 22401",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/50",
-            "value": 291984,
-            "range": "± 27165",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/100",
-            "value": 453508,
-            "range": "± 41274",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 174318,
-            "range": "± 21539",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/2",
-            "value": 178968,
-            "range": "± 6991",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/5",
-            "value": 191797,
-            "range": "± 11679",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/10",
-            "value": 206899,
-            "range": "± 14402",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/50",
-            "value": 336922,
-            "range": "± 40058",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/100",
-            "value": 503771,
-            "range": "± 66689",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 101732,
-            "range": "± 7314",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/2",
-            "value": 127269,
-            "range": "± 6343",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/5",
-            "value": 140071,
-            "range": "± 14809",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/10",
-            "value": 157174,
-            "range": "± 16641",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/50",
-            "value": 308876,
-            "range": "± 43829",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/100",
-            "value": 485329,
-            "range": "± 46050",
             "unit": "ns/iter"
           },
           {
@@ -4860,150 +2844,6 @@ window.BENCHMARK_DATA = {
             "unit": "ns/iter"
           },
           {
-            "name": "sync/http_round_trip",
-            "value": 149740,
-            "range": "± 48160",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/2",
-            "value": 188467,
-            "range": "± 17382",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/5",
-            "value": 199268,
-            "range": "± 14167",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/10",
-            "value": 215712,
-            "range": "± 19001",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/50",
-            "value": 338498,
-            "range": "± 25910",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/100",
-            "value": 492691,
-            "range": "± 50234",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 116263,
-            "range": "± 13123",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/2",
-            "value": 139977,
-            "range": "± 9512",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/5",
-            "value": 149292,
-            "range": "± 9190",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/10",
-            "value": 170446,
-            "range": "± 17083",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/50",
-            "value": 304736,
-            "range": "± 23710",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/100",
-            "value": 451895,
-            "range": "± 44569",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 155994,
-            "range": "± 17179",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/2",
-            "value": 193645,
-            "range": "± 10306",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/5",
-            "value": 202508,
-            "range": "± 14377",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/10",
-            "value": 222994,
-            "range": "± 12298",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/50",
-            "value": 359497,
-            "range": "± 25259",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/100",
-            "value": 544304,
-            "range": "± 62718",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 113816,
-            "range": "± 10846",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/2",
-            "value": 140035,
-            "range": "± 13697",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/5",
-            "value": 150796,
-            "range": "± 15949",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/10",
-            "value": 169116,
-            "range": "± 19710",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/50",
-            "value": 325085,
-            "range": "± 20934",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/100",
-            "value": 527265,
-            "range": "± 49652",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 149110,
             "range": "± 12588",
@@ -5053,150 +2893,6 @@ window.BENCHMARK_DATA = {
             "name": "jsonrpsee_types_v2_vec",
             "value": 175,
             "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_round_trip",
-            "value": 122695,
-            "range": "± 8215",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/2",
-            "value": 137253,
-            "range": "± 1869",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/5",
-            "value": 145059,
-            "range": "± 3941",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/10",
-            "value": 156061,
-            "range": "± 3221",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/50",
-            "value": 238922,
-            "range": "± 6391",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/http_batch_requests/100",
-            "value": 352951,
-            "range": "± 4544",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_round_trip",
-            "value": 61606,
-            "range": "± 2098",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/2",
-            "value": 83375,
-            "range": "± 3662",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/5",
-            "value": 95447,
-            "range": "± 3407",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/10",
-            "value": 113197,
-            "range": "± 4675",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/50",
-            "value": 229911,
-            "range": "± 3908",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "sync/ws_batch_requests/100",
-            "value": 359252,
-            "range": "± 6405",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_round_trip",
-            "value": 120519,
-            "range": "± 6465",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/2",
-            "value": 144407,
-            "range": "± 2290",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/5",
-            "value": 153553,
-            "range": "± 3068",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/10",
-            "value": 170462,
-            "range": "± 3851",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/50",
-            "value": 279128,
-            "range": "± 5567",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/http_batch_requests/100",
-            "value": 412837,
-            "range": "± 6635",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_round_trip",
-            "value": 65360,
-            "range": "± 1309",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/2",
-            "value": 85809,
-            "range": "± 2626",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/5",
-            "value": 98162,
-            "range": "± 3471",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/10",
-            "value": 114444,
-            "range": "± 3766",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/50",
-            "value": 243224,
-            "range": "± 2614",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "async/ws_batch_requests/100",
-            "value": 388568,
-            "range": "± 3309",
             "unit": "ns/iter"
           },
           {
