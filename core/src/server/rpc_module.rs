@@ -65,7 +65,16 @@ pub type AsyncMethod<'a> = Arc<
 >;
 /// Method callback for subscriptions.
 pub type SubscriptionMethod<'a> = Arc<
-	dyn Send + Sync + Fn(Id, Params, MethodSink, ConnState, oneshot::Receiver<()>, Option<ResourceGuard>) -> BoxFuture<'a, MethodResponse>,
+	dyn Send
+		+ Sync
+		+ Fn(
+			Id,
+			Params,
+			MethodSink,
+			ConnState,
+			oneshot::Receiver<()>,
+			Option<ResourceGuard>,
+		) -> BoxFuture<'a, MethodResponse>,
 >;
 // Method callback to unsubscribe.
 type UnsubscriptionMethod = Arc<dyn Send + Sync + Fn(Id, Params, ConnectionId, MaxResponseSize) -> MethodResponse>;
@@ -759,41 +768,42 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		let callback = {
 			self.methods.verify_and_insert(
 				subscribe_method_name,
-				MethodCallback::new_subscription(Arc::new(move |id, params, method_sink, conn, message_sent, claimed| {
-					let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: conn.id_provider.next_id() };
+				MethodCallback::new_subscription(Arc::new(
+					move |id, params, method_sink, conn, message_sent, claimed| {
+						let uniq_sub = SubscriptionKey { conn_id: conn.conn_id, sub_id: conn.id_provider.next_id() };
 
-					// response to the subscription call.
-					let (subscribe_call_tx, subscribe_call_rx) = oneshot::channel();
+						// response to the subscription call.
+						let (subscribe_call_tx, subscribe_call_rx) = oneshot::channel();
 
-					let pending_subscription = PendingSubscription(Some(InnerPendingSubscription {
-						sink: method_sink.clone(),
-						subscribe_call: subscribe_call_tx,
-						close_notify: Some(conn.close_notify),
-						method: notif_method_name,
-						subscribers: subscribers.clone(),
-						uniq_sub: uniq_sub.clone(),
-						id: id.clone().into_owned(),
-						message_sent,
-						claimed,
-					}));
+						let pending_subscription = PendingSubscription(Some(InnerPendingSubscription {
+							sink: method_sink,
+							subscribe_call: subscribe_call_tx,
+							close_notify: Some(conn.close_notify),
+							method: notif_method_name,
+							subscribers: subscribers.clone(),
+							uniq_sub,
+							id: id.clone().into_owned(),
+							message_sent,
+							claimed,
+						}));
 
-					// The end-user needs to accept/reject the `pending_subscription` to make any progress.
-					callback(params, pending_subscription, ctx.clone());
+						// The end-user needs to accept/reject the `pending_subscription` to make any progress.
+						callback(params, pending_subscription, ctx.clone());
 
-					let id = id.clone().into_owned();
+						let id = id.clone().into_owned();
 
-					let result = async move {
-						match subscribe_call_rx.await {
-							Ok(result) => result,
-							Err(_) => return MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
-						}
-					};
+						let result = async move {
+							match subscribe_call_rx.await {
+								Ok(result) => result,
+								Err(_) => MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError)),
+							}
+						};
 
-					Box::pin(result)
-				})),
+						Box::pin(result)
+					},
+				)),
 			)?
 		};
-
 
 		Ok(MethodResourcesBuilder { build: ResourceVec::new(), callback })
 	}
@@ -899,7 +909,7 @@ impl PendingSubscription {
 				uniq_sub,
 				subscribers,
 				unsubscribe: rx,
-				_claimed: claimed
+				_claimed: claimed,
 			});
 		}
 

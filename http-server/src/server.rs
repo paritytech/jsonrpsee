@@ -592,9 +592,9 @@ async fn process_validated_request(
 		let call = CallData {
 			conn_id: 0,
 			middleware: &middleware,
-			methods: &&methods,
+			methods: &methods,
 			max_response_body_size,
-			resources: &&resources,
+			resources: &resources,
 			request_start,
 		};
 		let response = process_single_request(body, call).await;
@@ -616,9 +616,9 @@ async fn process_validated_request(
 			call: CallData {
 				conn_id: 0,
 				middleware: &middleware,
-				methods: &&methods,
+				methods: &methods,
 				max_response_body_size,
-				resources: &&resources,
+				resources: &resources,
 				request_start,
 			},
 		})
@@ -697,7 +697,7 @@ struct Call<'a, M: Middleware> {
 // Batch responses must be sent back as a single message so we read the results from each
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
-async fn process_batch_request<'a, M>(b: Batch<'a, M>) -> BatchResponse
+async fn process_batch_request<M>(b: Batch<'_, M>) -> BatchResponse
 where
 	M: Middleware,
 {
@@ -742,7 +742,7 @@ where
 	BatchResponse::error(id, ErrorObject::from(code))
 }
 
-async fn process_single_request<'a, M: Middleware>(data: Vec<u8>, call: CallData<'a, M>) -> MethodResponse {
+async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		tracing::debug!("recv method call={}", req.method);
 		tracing::trace!("recv: req={:?}", req);
@@ -759,7 +759,7 @@ async fn process_single_request<'a, M: Middleware>(data: Vec<u8>, call: CallData
 	}
 }
 
-async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> MethodResponse {
+async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 	let Call { name, id, params, call } = c;
 	let CallData { resources, methods, middleware, max_response_body_size, conn_id, request_start } = call;
 
@@ -768,7 +768,7 @@ async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> MethodResponse {
 	let response = match methods.method_with_name(name) {
 		None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
 		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => match method.claim(name, &resources) {
+			MethodKind::Sync(callback) => match method.claim(name, resources) {
 				Ok(guard) => {
 					let r = (callback)(id, params, max_response_body_size as usize);
 					drop(guard);
@@ -779,7 +779,7 @@ async fn execute_call<'a, M: Middleware>(c: Call<'a, M>) -> MethodResponse {
 					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
 				}
 			},
-			MethodKind::Async(callback) => match method.claim(name, &resources) {
+			MethodKind::Async(callback) => match method.claim(name, resources) {
 				Ok(guard) => {
 					let id = id.into_owned();
 					let params = params.into_owned();

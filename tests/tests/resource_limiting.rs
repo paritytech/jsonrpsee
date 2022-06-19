@@ -27,6 +27,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use futures::StreamExt;
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -36,7 +37,8 @@ use jsonrpsee::types::error::CallError;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::{PendingSubscription, RpcModule};
-use tokio::time::sleep;
+use tokio::time::{interval, sleep};
+use tokio_stream::wrappers::IntervalStream;
 
 fn module_manual() -> Result<RpcModule<()>, Error> {
 	let mut module = RpcModule::new(());
@@ -65,10 +67,12 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 	// to get dropped. This is the equivalent of not having any resource limits (ie, sink is never used).
 	module
 		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
-			let mut _sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
+			tokio::spawn(async move {
+				let mut _sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+			});
 		})?
 		.resource("SUB", 3)?;
 
@@ -76,12 +80,12 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 	// and the subscription method gets limited.
 	module
 		.register_subscription("subscribe_hello_limit", "s_hello", "unsubscribe_hello_limit", move |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
 			tokio::spawn(async move {
+				let mut sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+
 				for val in 0..10 {
 					sink.send(&val).unwrap();
 					sleep(Duration::from_secs(1)).await;
@@ -123,23 +127,25 @@ fn module_macro() -> RpcModule<()> {
 
 	impl RpcServer for () {
 		fn sub_hello(&self, pending: PendingSubscription) {
-			let mut _sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
+			tokio::spawn(async move {
+				let mut _sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+			});
 		}
 
 		fn sub_hello_limit(&self, pending: PendingSubscription) {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
 			tokio::spawn(async move {
-				for val in 0..10 {
-					sink.send(&val).unwrap();
-					sleep(Duration::from_secs(1)).await;
-				}
+				let mut sink = match pending.accept().await {
+					Some(sink) => sink,
+					_ => return,
+				};
+
+				let interval = interval(Duration::from_secs(1));
+				let stream = IntervalStream::new(interval).map(move |_| 1);
+
+				sink.pipe_from_stream(stream).await;
 			});
 		}
 	}
@@ -218,17 +224,16 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 	assert_server_busy(fail_mem);
 
 	// If we issue multiple subscription requests at the same time from the same client,
-	// but the subscriptions immediately drop their sinks, no resources will obviously be held,
-	// and so there is no limit to how many can be executed.
-	let (pass1, pass2, pass3) = tokio::join!(
-		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
+	// but the subscriptions drop their sinks when the subscription has been accepted or rejected.
+	//
+	// Thus, we can't assume that all subscriptions drop their resources instantly anymore.
+	let (pass1, pass2) = tokio::join!(
 		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
 		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
 	);
 
 	assert!(pass1.is_ok());
 	assert!(pass2.is_ok());
-	assert!(pass3.is_ok());
 
 	// 3 CPU units (manually set for subscriptions) per call, so 3th call exceeds cap
 	let (pass1, pass2, fail) = tokio::join!(
