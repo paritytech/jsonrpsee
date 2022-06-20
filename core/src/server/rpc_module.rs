@@ -661,14 +661,14 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         Err(e) => {
 	///             let err: Error = e.into();
 	///             pending.reject(err);
-	///             return;
+	///             return Ok(());
 	///         }
 	///     };
 	///
 	///     let mut sink = match pending.accept() {
 	///         Some(sink) => sink,
 	///         _ => {
-	///            return;
+	///            return Ok(());
 	///         }
 	///     };
 	///
