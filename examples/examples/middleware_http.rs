@@ -39,20 +39,21 @@ struct Timings;
 impl middleware::Middleware for Timings {
 	type Instant = Instant;
 
-	fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> Self::Instant {
+	fn on_request(&self, remote_addr: SocketAddr, headers: &HeaderMap) -> Self::Instant {
+		println!("[Middleware::on_request] remote_addr {}, headers: {:?}", remote_addr, headers);
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str, _params: Params) {
-		println!("[Middleware::on_call] '{}'", name);
+	fn on_call(&self, name: &str, params: Params) {
+		println!("[Middleware::on_call] method: '{}', params: {:?}", name, params);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
 		println!("[Middleware::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
 	}
 
-	fn on_response(&self, _result: &str, started_at: Self::Instant) {
-		println!("[Middleware::on_response] time elapsed {:?}", started_at.elapsed());
+	fn on_response(&self, result: &str, started_at: Self::Instant) {
+		println!("[Middleware::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	}
 }
 
