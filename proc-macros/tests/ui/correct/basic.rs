@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
+use jsonrpsee::types::ReturnTypeSubscription;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::*;
@@ -63,28 +64,31 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	fn sub(&self, pending: PendingSubscription) {
+	fn sub(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
 		let mut sink = match pending.accept() {
 			Some(sink) => sink,
-			_ => return,
+			_ => return Ok(()),
 		};
 		let _ = sink.send(&"Response_A");
 		let _ = sink.send(&"Response_B");
+		Ok(())
 	}
 
-	fn sub_with_params(&self, pending: PendingSubscription, val: u32) {
+	fn sub_with_params(&self, pending: PendingSubscription, val: u32) -> ReturnTypeSubscription {
 		let mut sink = match pending.accept() {
 			Some(sink) => sink,
-			_ => return,
+			_ => return Ok(()),
 		};
 		let _ = sink.send(&val);
 		let _ = sink.send(&val);
+		Ok(())
 	}
 
-	fn sub_with_override_notif_method(&self, pending: PendingSubscription) {
+	fn sub_with_override_notif_method(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
 		if let Some(mut sink) = pending.accept() {
 			let _ = sink.send(&1);
 		}
+		Ok(())
 	}
 }
 

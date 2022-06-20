@@ -364,6 +364,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed(close_err).await.unwrap();
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -506,7 +507,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
 
 			tokio::spawn(async move {
@@ -520,6 +521,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 					_ => unreachable!(),
 				};
 			});
+			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();
@@ -563,7 +565,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
 
 			tokio::spawn(async move {
@@ -577,6 +579,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 					_ => unreachable!(),
 				};
 			});
+			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();

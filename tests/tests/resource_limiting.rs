@@ -33,6 +33,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::error::CallError;
+use jsonrpsee::types::ReturnTypeSubscription;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::{PendingSubscription, RpcModule};
@@ -67,8 +68,9 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
 			let mut _sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
+			Ok(())
 		})?
 		.resource("SUB", 3)?;
 
@@ -78,7 +80,7 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 		.register_subscription("subscribe_hello_limit", "s_hello", "unsubscribe_hello_limit", move |_, pending, _| {
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
 
 			tokio::spawn(async move {
@@ -87,6 +89,8 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 					sleep(Duration::from_secs(1)).await;
 				}
 			});
+
+			Ok(())
 		})?
 		.resource("SUB", 3)?;
 
@@ -122,17 +126,18 @@ fn module_macro() -> RpcModule<()> {
 	}
 
 	impl RpcServer for () {
-		fn sub_hello(&self, pending: PendingSubscription) {
+		fn sub_hello(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
 			let mut _sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
+			Ok(())
 		}
 
-		fn sub_hello_limit(&self, pending: PendingSubscription) {
+		fn sub_hello_limit(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
 
 			tokio::spawn(async move {
@@ -141,6 +146,8 @@ fn module_macro() -> RpcModule<()> {
 					sleep(Duration::from_secs(1)).await;
 				}
 			});
+
+			Ok(())
 		}
 	}
 

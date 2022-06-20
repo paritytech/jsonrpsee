@@ -52,6 +52,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 				}
 				std::thread::sleep(Duration::from_millis(50));
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -64,6 +65,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 				}
 				std::thread::sleep(Duration::from_millis(100));
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -71,7 +73,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 		.register_subscription("subscribe_add_one", "subscribe_add_one", "unsubscribe_add_one", |params, pending, _| {
 			let mut count = match params.one::<usize>() {
 				Ok(count) => count,
-				_ => return,
+				_ => return Ok(()),
 			};
 
 			let mut sink = pending.accept().unwrap();
@@ -83,6 +85,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 				}
 				std::thread::sleep(Duration::from_millis(100));
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -98,6 +101,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 				);
 				sink.close(err);
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -116,6 +120,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 					_ => unreachable!(),
 				}
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -141,6 +146,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 					_ => unreachable!(),
 				}
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -164,6 +170,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 						_ => unreachable!(),
 					}
 				});
+				Ok(())
 			},
 		)
 		.unwrap();
@@ -212,6 +219,7 @@ pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::m
 				let send_back = std::sync::Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
+			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();

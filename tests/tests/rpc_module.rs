@@ -70,7 +70,7 @@ fn flatten_rpc_modules() {
 fn rpc_context_modules_can_register_subscriptions() {
 	let cx = ();
 	let mut cxmodule = RpcModule::new(cx);
-	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| {}).unwrap();
+	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(())).unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -206,7 +206,7 @@ async fn subscribing_without_server() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
 
 			let mut stream_data = vec!['0', '1', '2'];
@@ -219,6 +219,7 @@ async fn subscribing_without_server() {
 				let close = ErrorObject::borrowed(0, &"closed successfully", None);
 				sink.close(close.into_owned());
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -244,7 +245,7 @@ async fn close_test_subscribing_without_server() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
 
 			std::thread::spawn(move || {
@@ -259,6 +260,7 @@ async fn close_test_subscribing_without_server() {
 					sink.close(SubscriptionClosed::RemotePeerAborted);
 				}
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -297,15 +299,16 @@ async fn subscribing_without_server_bad_params() {
 				Err(e) => {
 					let err: Error = e.into();
 					let _ = pending.reject(err);
-					return;
+					return Ok(());
 				}
 			};
 
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
 			sink.send(&p).unwrap();
+			Ok(())
 		})
 		.unwrap();
 
@@ -323,7 +326,7 @@ async fn subscribe_unsubscribe_without_server() {
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
 			let mut sink = match pending.accept() {
 				Some(sink) => sink,
-				_ => return,
+				_ => return Ok(()),
 			};
 
 			let interval = interval(Duration::from_millis(200));
@@ -332,6 +335,7 @@ async fn subscribe_unsubscribe_without_server() {
 			tokio::spawn(async move {
 				sink.pipe_from_stream(stream).await;
 			});
+			Ok(())
 		})
 		.unwrap();
 
