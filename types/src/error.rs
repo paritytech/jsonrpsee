@@ -81,7 +81,7 @@ impl<'a> fmt::Display for ErrorResponse<'a> {
 }
 
 /// The return type of the subscription's method.
-pub type ResultSubscription = Result<(), ErrorObjectOwned>;
+pub type ReturnTypeSubscription = Result<(), ErrorObjectOwned>;
 
 /// Owned variant of [`ErrorObject`].
 pub type ErrorObjectOwned = ErrorObject<'static>;

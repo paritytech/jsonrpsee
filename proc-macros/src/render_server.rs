@@ -76,8 +76,8 @@ impl RpcDescription {
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
 
-			// For ergonomic reasons, the server's subscription method should return `ResultSubscription`.
-			let return_ty = self.jrps_server_item(quote! { types::ResultSubscription });
+			// For ergonomic reasons, the server's subscription method should return `ReturnTypeSubscription`.
+			let return_ty = self.jrps_server_item(quote! { types::ReturnTypeSubscription });
 			let output: ReturnType = parse_quote! { -> #return_ty };
 			sub_sig.sig.output = output;
 
