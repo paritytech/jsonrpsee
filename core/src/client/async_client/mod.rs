@@ -451,7 +451,6 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 	) -> Result<(), Error> {
 		// Single response to a request.
 		if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
-			tracing::debug!("[backend]: recv method_call {:?}", single);
 			match process_single_response(manager, single, max_notifs_per_subscription) {
 				Ok(Some(unsub)) => {
 					stop_subscription(sender, manager, unsub).await;
@@ -462,42 +461,40 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 		}
 		// Subscription response.
 		else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(&raw) {
-			tracing::debug!("[backend]: recv subscription {:?}", response);
 			if let Err(Some(unsub)) = process_subscription_response(manager, response) {
 				let _ = stop_subscription(sender, manager, unsub).await;
 			}
 		}
 		// Subscription error response.
 		else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(&raw) {
-			tracing::debug!("[backend]: recv subscription closed {:?}", response);
 			let _ = process_subscription_close_response(manager, response);
 		}
 		// Incoming Notification
 		else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(&raw) {
-			tracing::debug!("[backend]: recv notification {:?}", notif);
 			let _ = process_notification(manager, notif);
 		}
 		// Batch response.
 		else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(&raw) {
-			tracing::debug!("[backend]: recv batch {:?}", batch);
 			if let Err(e) = process_batch_response(manager, batch) {
 				return Err(e);
 			}
 		}
 		// Error response
 		else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(&raw) {
-			tracing::debug!("[backend]: recv error response {:?}", err);
 			if let Err(e) = process_error_response(manager, err) {
 				return Err(e);
 			}
 		}
 		// Unparsable response
 		else {
-			tracing::debug!(
-				"[backend]: recv unparseable message: {:?}",
-				serde_json::from_slice::<serde_json::Value>(&raw)
-			);
-			return Err(Error::Custom("Unparsable response".into()));
+			let json = serde_json::from_slice::<serde_json::Value>(&raw);
+
+			let json_str = match json {
+				Ok(json) => serde_json::to_string(&json).expect("valid JSON; qed"),
+				Err(e) => e.to_string(),
+			};
+
+			return Err(Error::Custom(format!("Unparseable message: {}", json_str)));
 		}
 		Ok(())
 	}
@@ -542,7 +539,6 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 
 		Some(FrontToBack::Batch(batch)) => {
-			tracing::trace!("[backend]: client prepares to send batch request: {:?}", batch.raw);
 			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
 				tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
 				let _ = send_back.send(Err(Error::InvalidRequestId));
@@ -556,24 +552,18 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `notification` on the front-end
 		Some(FrontToBack::Notification(notif)) => {
-			tracing::trace!("[backend]: client prepares to send notification: {:?}", notif);
 			if let Err(e) = sender.send(notif).await {
 				tracing::warn!("[backend]: client notif failed: {:?}", e);
 			}
 		}
 		// User called `request` on the front-end
-		Some(FrontToBack::Request(request)) => {
-			tracing::trace!("[backend]: client prepares to send request={:?}", request);
-			match sender.send(request.raw).await {
-				Ok(_) => {
-					manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed")
-				}
-				Err(e) => {
-					tracing::warn!("[backend]: client request failed: {:?}", e);
-					let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
-				}
+		Some(FrontToBack::Request(request)) => match sender.send(request.raw).await {
+			Ok(_) => manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed"),
+			Err(e) => {
+				tracing::warn!("[backend]: client request failed: {:?}", e);
+				let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
 			}
-		}
+		},
 		// User called `subscribe` on the front-end.
 		Some(FrontToBack::Subscribe(sub)) => match sender.send(sub.raw).await {
 			Ok(_) => manager
@@ -603,7 +593,6 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User called `register_notification` on the front-end.
 		Some(FrontToBack::RegisterNotification(reg)) => {
-			tracing::trace!("[backend] registering notification handler: {:?}", reg.method);
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
 
 			if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
@@ -614,7 +603,6 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		}
 		// User dropped the notificationHandler for this method
 		Some(FrontToBack::UnregisterNotification(method)) => {
-			tracing::trace!("[backend] unregistering notification handler: {:?}", method);
 			let _ = manager.remove_notification_handler(method);
 		}
 	}
