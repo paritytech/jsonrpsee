@@ -32,7 +32,7 @@ use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::Token;
+use syn::{parse_quote, ReturnType, Token};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -75,6 +75,12 @@ impl RpcDescription {
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
+
+			// For ergonomic reasons, the server's subscription method should return `ResultSubscription`.
+			let return_ty = self.jrps_server_item(quote! { types::ResultSubscription });
+			let output: ReturnType = parse_quote! { -> #return_ty };
+			sub_sig.sig.output = output;
+
 			sub_sig.sig.inputs.insert(1, subscription_sink);
 			quote! {
 				#docs
@@ -325,7 +331,7 @@ impl RpcDescription {
 								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
 								#pending.reject(_e);
-								return;
+								return Ok(());
 							}
 						};
 					}
@@ -349,7 +355,7 @@ impl RpcDescription {
 								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
 								#pending.reject(_e);
-								return;
+								return Ok(());
 							}
 						};
 					}
@@ -400,7 +406,7 @@ impl RpcDescription {
 							#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
 							let _e: #err = e.into();
 							#pending.reject(_e);
-							return;
+							return Ok(());
 						}
 					};
 
