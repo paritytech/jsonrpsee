@@ -36,6 +36,7 @@ use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_server::AccessControlBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -493,7 +494,7 @@ async fn ws_batch_works() {
 #[tokio::test]
 async fn ws_server_limit_subs_per_conn_works() {
 	use futures::StreamExt;
-	use jsonrpsee::types::error::{CallError, SERVER_IS_BUSY_CODE, SERVER_IS_BUSY_MSG};
+	use jsonrpsee::types::error::{CallError, TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
 	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
@@ -537,11 +538,13 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let err1 = c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await;
 	let err2 = c1.subscribe::<usize>("subscribe_forever", None, "unsubscribe_forever").await;
 
+	let data = "\"Exceeded max limit of 10\"";
+
 	assert!(
-		matches!(err1, Err(Error::Call(CallError::Custom(err))) if err.code() == SERVER_IS_BUSY_CODE && err.message() == SERVER_IS_BUSY_MSG)
+		matches!(err1, Err(Error::Call(CallError::Custom(err))) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
 	);
 	assert!(
-		matches!(err2, Err(Error::Call(CallError::Custom(err))) if err.code() == SERVER_IS_BUSY_CODE && err.message() == SERVER_IS_BUSY_MSG)
+		matches!(err2, Err(Error::Call(CallError::Custom(err))) if err.code() == TOO_MANY_SUBSCRIPTIONS_CODE && err.message() == TOO_MANY_SUBSCRIPTIONS_MSG && err.data().unwrap().get() == data)
 	);
 }
 
@@ -768,4 +771,48 @@ async fn http_health_api_works() {
 	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
 	let out = String::from_utf8(bytes.to_vec()).unwrap();
 	assert_eq!(out.as_str(), "{\"health\":true}");
+}
+
+#[tokio::test]
+async fn ws_host_filtering_wildcard_works() {
+	use jsonrpsee::ws_server::*;
+
+	let acl = AccessControlBuilder::default()
+		.set_allowed_hosts(vec!["http://localhost:*", "http://127.0.0.1:*"])
+		.unwrap()
+		.build();
+
+	let server = WsServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let mut module = RpcModule::new(());
+	let addr = server.local_addr().unwrap();
+	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+
+	let _handle = server.start(module).unwrap();
+
+	let server_url = format!("ws://{}", addr);
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+
+	assert!(client.request::<String>("say_hello", None).await.is_ok());
+}
+
+#[tokio::test]
+async fn http_host_filtering_wildcard_works() {
+	use jsonrpsee::http_server::*;
+
+	let acl = AccessControlBuilder::default()
+		.set_allowed_hosts(vec!["http://localhost:*", "http://127.0.0.1:*"])
+		.unwrap()
+		.build();
+
+	let server = HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let mut module = RpcModule::new(());
+	let addr = server.local_addr().unwrap();
+	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+
+	let _handle = server.start(module).unwrap();
+
+	let server_url = format!("http://{}", addr);
+	let client = HttpClientBuilder::default().build(&server_url).unwrap();
+
+	assert!(client.request::<String>("say_hello", None).await.is_ok());
 }
