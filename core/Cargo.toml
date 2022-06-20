@@ -23,7 +23,6 @@ async-channel = { version = "1.6", optional = true }
 async-lock = { version = "2.4", optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
-
 tracing-futures = { version = "0.2", optional = true }
 rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
