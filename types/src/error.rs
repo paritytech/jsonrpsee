@@ -80,7 +80,7 @@ impl<'a> fmt::Display for ErrorResponse<'a> {
 	}
 }
 
-/// The return type of the subscription's method.
+/// The return type of the subscription's method for the rpc server implementation.
 pub type ReturnTypeSubscription = Result<(), ErrorObjectOwned>;
 
 /// Owned variant of [`ErrorObject`].

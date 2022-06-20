@@ -384,7 +384,7 @@ impl Methods {
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
 	///         pending.accept().unwrap().send(&"one answer").unwrap();
-	/// 		Ok(())
+	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#).await.unwrap();
 	///     let resp = serde_json::from_str::<Response<u64>>(&resp).unwrap();
@@ -446,7 +446,7 @@ impl Methods {
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
 	///         pending.accept().unwrap().send(&"one answer").unwrap();
-	/// 		Ok(())
+	///         Ok(())
 	///     }).unwrap();
 	///
 	///     let mut sub = module.subscribe("hi", EmptyParams::new()).await.unwrap();
@@ -677,7 +677,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         let _ = sink.send(&sum);
 	///     });
 	///
-	/// 	Ok(())
+	///     Ok(())
 	/// });
 	/// ```
 	pub fn register_subscription<F>(
@@ -919,7 +919,7 @@ impl SubscriptionSink {
 	///            }
 	///         }
 	///     });
-	/// 	Ok(())
+	///     Ok(())
 	/// });
 	/// ```
 	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> SubscriptionClosed
@@ -992,7 +992,7 @@ impl SubscriptionSink {
 	///     let mut sink = pending.accept().unwrap();
 	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
 	///     tokio::spawn(async move { sink.pipe_from_stream(stream).await; });
-	/// 	Ok(())
+	///     Ok(())
 	/// });
 	/// ```
 	pub async fn pipe_from_stream<S, T>(&mut self, stream: S) -> SubscriptionClosed
