@@ -37,6 +37,12 @@ use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
 
+fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
+}
+
 async fn server() -> (SocketAddr, ServerHandle) {
 	let server = HttpServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let ctx = TestContext;
@@ -85,7 +91,7 @@ async fn server() -> (SocketAddr, ServerHandle) {
 
 #[tokio::test]
 async fn single_method_call_works() {
-	let _ = env_logger::try_init();
+	init_logger();
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
@@ -99,7 +105,7 @@ async fn single_method_call_works() {
 
 #[tokio::test]
 async fn async_method_call_works() {
-	let _ = env_logger::try_init();
+	init_logger();
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
@@ -113,7 +119,7 @@ async fn async_method_call_works() {
 
 #[tokio::test]
 async fn invalid_single_method_call() {
-	let _ = env_logger::try_init();
+	init_logger();
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
 
@@ -192,7 +198,7 @@ async fn async_method_call_with_ok_context() {
 
 #[tokio::test]
 async fn valid_batched_method_calls() {
-	let _ = env_logger::try_init();
+	init_logger();
 
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
@@ -213,7 +219,7 @@ async fn valid_batched_method_calls() {
 
 #[tokio::test]
 async fn batched_notifications() {
-	let _ = env_logger::try_init();
+	init_logger();
 
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
@@ -227,7 +233,7 @@ async fn batched_notifications() {
 
 #[tokio::test]
 async fn invalid_batched_method_calls() {
-	let _ = env_logger::try_init();
+	init_logger();
 
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);
@@ -390,7 +396,7 @@ async fn can_register_modules() {
 
 #[tokio::test]
 async fn stop_works() {
-	let _ = env_logger::try_init();
+	init_logger();
 	let (_addr, server_handle) = server().with_default_timeout().await.unwrap();
 	assert!(matches!(server_handle.stop().unwrap().await, Ok(_)));
 }
@@ -399,7 +405,7 @@ async fn stop_works() {
 async fn run_forever() {
 	const TIMEOUT: Duration = Duration::from_millis(200);
 
-	let _ = env_logger::try_init();
+	init_logger();
 	let (_addr, server_handle) = server().with_default_timeout().await.unwrap();
 
 	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
