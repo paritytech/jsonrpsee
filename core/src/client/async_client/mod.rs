@@ -214,7 +214,7 @@ pub struct Client {
 	id_manager: RequestIdManager,
 	/// Max length for logging for requests and responses.
 	///
-	/// Entires bigger than this limit will be truncated.
+	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
 }
 
