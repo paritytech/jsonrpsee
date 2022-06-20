@@ -244,11 +244,11 @@ async fn proc_macros_generic_ws_client_api() {
 	assert_eq!(second_recv, "Response_B".to_string());
 
 	// Sub with params
-	/*let mut sub = client.sub_with_params(42).await.unwrap();
+	let mut sub = client.sub_with_params(42).await.unwrap();
 	let first_recv = sub.next().await.unwrap().unwrap();
 	assert_eq!(first_recv, 42);
 	let second_recv = sub.next().await.unwrap().unwrap();
-	assert_eq!(second_recv, 42);*/
+	assert_eq!(second_recv, 42);
 }
 
 #[tokio::test]

@@ -870,7 +870,6 @@ impl PendingSubscription {
 	///
 	/// Fails if the connection was closed
 	pub async fn accept(mut self) -> Option<SubscriptionSink> {
-		tracing::trace!("[PendingSubscription] accept");
 		let inner = self.0.take()?;
 
 		let InnerPendingSubscription {
@@ -889,31 +888,26 @@ impl PendingSubscription {
 		let success = response.success;
 
 		if subscribe_call.send(response).is_ok() && success {
-			tracing::trace!("[PendingSubscription] waiting for server to send the message");
 			let (tx, rx) = watch::channel(());
+
+			// mark the subscription is "active"
 			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), tx));
 
-			match message_sent.await {
-				Ok(_) => (),
-				// the connection was closed.
-				Err(_canceled) => {
-					subscribers.lock().remove(&uniq_sub);
-					return None;
-				}
+			if message_sent.await.is_ok() {
+				return Some(SubscriptionSink {
+					inner: sink,
+					close_notify,
+					method,
+					uniq_sub,
+					subscribers,
+					unsubscribe: rx,
+					_claimed: claimed,
+				});
+			} else {
+				subscribers.lock().remove(&uniq_sub);
 			}
-
-			return Some(SubscriptionSink {
-				inner: sink,
-				close_notify,
-				method,
-				uniq_sub,
-				subscribers,
-				unsubscribe: rx,
-				_claimed: claimed,
-			});
 		}
 
-		tracing::trace!("[PendingSubscription] call failed");
 		None
 	}
 }

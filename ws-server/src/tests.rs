@@ -368,9 +368,9 @@ async fn garbage_request_fails() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, parse_error(Id::Null));
 
-	/*let req = r#"[]"#;
+	let req = r#"[]"#;
 	let response = client.send_request_text(req).await.unwrap();
-	assert_eq!(response, invalid_request(Id::Null));*/
+	assert_eq!(response, invalid_request(Id::Null));
 
 	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = client.send_request_text(req).await.unwrap();

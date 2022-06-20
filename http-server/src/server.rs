@@ -730,9 +730,11 @@ where
 	}
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Notif>>(&data) {
-		if !batch.is_empty() {
-			return BatchResponse { result: "".to_string(), success: true };
-		}
+		return if !batch.is_empty() {
+			BatchResponse { result: "".to_string(), success: true }
+		} else {
+			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
+		};
 	}
 
 	// "If the batch rpc call itself fails to be recognized as an valid JSON or as an

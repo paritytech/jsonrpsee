@@ -846,7 +846,7 @@ where
 	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
 		tracing::debug!("recv batch len={}", batch.len());
 		tracing::trace!("recv: batch={:?}", batch);
-		if !batch.is_empty() {
+		return if !batch.is_empty() {
 			let batch = batch.into_iter().map(|req| (req, call.clone()));
 
 			let batch_stream = futures_util::stream::iter(batch);
@@ -869,7 +869,9 @@ where
 				.await;
 
 			return batch_response.finish();
-		}
+		} else {
+			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
+		};
 	}
 
 	let (id, code) = prepare_error(&data);
