@@ -156,6 +156,16 @@ impl<'a> From<ErrorCode> for ErrorObject<'a> {
 	}
 }
 
+impl<'a> From<CallError> for ErrorObject<'a> {
+	fn from(error: CallError) -> Self {
+		match error {
+			CallError::InvalidParams(e) => ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>),
+			CallError::Failed(e) => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>),
+			CallError::Custom(err) => err,
+		}
+	}
+}
+
 /// Parse error code.
 pub const PARSE_ERROR_CODE: i32 = -32700;
 /// Oversized request error code.
