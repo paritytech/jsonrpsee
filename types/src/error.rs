@@ -92,6 +92,24 @@ pub type ReturnTypeSubscription = Result<(), SubscriptionError>;
 #[derive(Debug)]
 pub struct SubscriptionError;
 
+impl From<anyhow::Error> for SubscriptionError {
+	fn from(_: anyhow::Error) -> Self {
+		SubscriptionError
+	}
+}
+
+impl From<CallError> for SubscriptionError {
+	fn from(_: CallError) -> Self {
+		SubscriptionError
+	}
+}
+
+impl<'a> From<ErrorObject<'a>> for SubscriptionError {
+	fn from(_: ErrorObject<'a>) -> Self {
+		SubscriptionError
+	}
+}
+
 /// Owned variant of [`ErrorObject`].
 pub type ErrorObjectOwned = ErrorObject<'static>;
 
