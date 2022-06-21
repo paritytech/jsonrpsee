@@ -168,20 +168,14 @@ mod rpc_impl {
 		}
 
 		fn sub(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 			let _ = sink.send(&"Response_A");
 			let _ = sink.send(&"Response_B");
 			Ok(())
 		}
 
 		fn sub_with_params(&self, pending: PendingSubscription, val: u32) -> ReturnTypeSubscription {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 			let _ = sink.send(&val);
 			let _ = sink.send(&val);
 			Ok(())
@@ -198,10 +192,7 @@ mod rpc_impl {
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
 		fn sub(&self, pending: PendingSubscription, _: String) -> ReturnTypeSubscription {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 			let _ = sink.send(&"hello");
 			Ok(())
 		}

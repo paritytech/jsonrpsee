@@ -505,10 +505,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 
 	module
 		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
@@ -563,10 +560,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 	module
 		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));

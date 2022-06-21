@@ -66,10 +66,7 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 	// to get dropped. This is the equivalent of not having any resource limits (ie, sink is never used).
 	module
 		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
-			let mut _sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut _sink = pending.accept()?;
 			Ok(())
 		})?
 		.resource("SUB", 3)?;
@@ -78,10 +75,7 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 	// and the subscription method gets limited.
 	module
 		.register_subscription("subscribe_hello_limit", "s_hello", "unsubscribe_hello_limit", move |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 
 			tokio::spawn(async move {
 				for val in 0..10 {
@@ -127,18 +121,12 @@ fn module_macro() -> RpcModule<()> {
 
 	impl RpcServer for () {
 		fn sub_hello(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
-			let mut _sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut _sink = pending.accept()?;
 			Ok(())
 		}
 
 		fn sub_hello_limit(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 
 			tokio::spawn(async move {
 				for val in 0..10 {

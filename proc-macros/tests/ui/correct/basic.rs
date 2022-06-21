@@ -65,27 +65,21 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	fn sub(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
-		let mut sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return Ok(()),
-		};
+		let mut sink = pending.accept()?;
 		let _ = sink.send(&"Response_A");
 		let _ = sink.send(&"Response_B");
 		Ok(())
 	}
 
 	fn sub_with_params(&self, pending: PendingSubscription, val: u32) -> ReturnTypeSubscription {
-		let mut sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return Ok(()),
-		};
+		let mut sink = pending.accept()?;
 		let _ = sink.send(&val);
 		let _ = sink.send(&val);
 		Ok(())
 	}
 
 	fn sub_with_override_notif_method(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
-		if let Some(mut sink) = pending.accept() {
+		if let Ok(mut sink) = pending.accept() {
 			let _ = sink.send(&1);
 		}
 		Ok(())

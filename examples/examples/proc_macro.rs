@@ -67,9 +67,8 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 		pending: PendingSubscription,
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> ReturnTypeSubscription {
-		if let Some(mut sink) = pending.accept() {
-			let _ = sink.send(&vec![[0; 32]]);
-		}
+		let mut sink = pending.accept()?;
+		let _ = sink.send(&vec![[0; 32]]);
 		Ok(())
 	}
 }

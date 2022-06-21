@@ -73,10 +73,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
 		let rx = BroadcastStream::new(tx.clone().subscribe());
-		let mut sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return Ok(()),
-		};
+		let mut sink = pending.accept()?;
 
 		tokio::spawn(async move {
 			match sink.pipe_from_try_stream(rx).await {

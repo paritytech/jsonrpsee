@@ -204,10 +204,7 @@ async fn subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 
 			let mut stream_data = vec!['0', '1', '2'];
 			std::thread::spawn(move || {
@@ -243,10 +240,7 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 
 			std::thread::spawn(move || {
 				// make sure to only send one item
@@ -303,10 +297,7 @@ async fn subscribing_without_server_bad_params() {
 				}
 			};
 
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 			sink.send(&p).unwrap();
 			Ok(())
 		})
@@ -324,10 +315,7 @@ async fn subscribe_unsubscribe_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return Ok(()),
-			};
+			let mut sink = pending.accept()?;
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);

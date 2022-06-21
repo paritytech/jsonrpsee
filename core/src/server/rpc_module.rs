@@ -665,12 +665,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         }
 	///     };
 	///
-	///     let mut sink = match pending.accept() {
-	///         Some(sink) => sink,
-	///         _ => {
-	///            return Ok(());
-	///         }
-	///     };
+	///     let mut sink = pending.accept()?;
 	///
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
