@@ -319,7 +319,7 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let err = self.jrps_server_item(quote! { core::Error });
-		let sub_err = self.jrps_server_item(quote! { types::SubscriptionError });
+		let sub_err = self.jrps_server_item(quote! { types::SubscriptionEmptyError });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {

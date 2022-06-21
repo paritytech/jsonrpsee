@@ -83,30 +83,30 @@ impl<'a> fmt::Display for ErrorResponse<'a> {
 /// The return type of the subscription's method for the rpc server implementation.
 ///
 /// **Note**: The error does not contain any data and is discarded on drop.
-pub type ReturnTypeSubscription = Result<(), SubscriptionError>;
+pub type ReturnTypeSubscription = Result<(), SubscriptionEmptyError>;
 
 /// The error returned by the subscription's method for the rpc server implementation.
 ///
 /// It contains no data, and neither is the error utilized. It provides an abstraction to make the
 /// API more ergonomic while handling errors that may occur during the subscription callback.
 #[derive(Debug)]
-pub struct SubscriptionError;
+pub struct SubscriptionEmptyError;
 
-impl From<anyhow::Error> for SubscriptionError {
+impl From<anyhow::Error> for SubscriptionEmptyError {
 	fn from(_: anyhow::Error) -> Self {
-		SubscriptionError
+		SubscriptionEmptyError
 	}
 }
 
-impl From<CallError> for SubscriptionError {
+impl From<CallError> for SubscriptionEmptyError {
 	fn from(_: CallError) -> Self {
-		SubscriptionError
+		SubscriptionEmptyError
 	}
 }
 
-impl<'a> From<ErrorObject<'a>> for SubscriptionError {
+impl<'a> From<ErrorObject<'a>> for SubscriptionEmptyError {
 	fn from(_: ErrorObject<'a>) -> Self {
-		SubscriptionError
+		SubscriptionEmptyError
 	}
 }
 
