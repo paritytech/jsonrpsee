@@ -319,6 +319,7 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let err = self.jrps_server_item(quote! { core::Error });
+		let sub_err = self.jrps_server_item(quote! { types::SubscriptionError });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -331,7 +332,7 @@ impl RpcDescription {
 								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
 								#pending.reject(_e);
-								return Ok(());
+								return Err(#sub_err);
 							}
 						};
 					}
@@ -355,7 +356,7 @@ impl RpcDescription {
 								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
 								#pending.reject(_e);
-								return Ok(());
+								return Err(#sub_err);
 							}
 						};
 					}
@@ -406,7 +407,7 @@ impl RpcDescription {
 							#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
 							let _e: #err = e.into();
 							#pending.reject(_e);
-							return Ok(());
+							return Err(#sub_err);
 						}
 					};
 
