@@ -42,8 +42,8 @@ use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, T
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned, SUBSCRIPTION_CLOSED_WITH_ERROR};
 use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
 use jsonrpsee_types::{
-	ErrorResponse, Id, Params, Request, Response, SubscriptionId as RpcSubscriptionId, SubscriptionPayload,
-	SubscriptionResponse,
+	ErrorResponse, Id, Params, Request, Response, ReturnTypeSubscription,
+	SubscriptionId as RpcSubscriptionId, SubscriptionPayload, SubscriptionResponse
 };
 use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
@@ -689,7 +689,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	) -> Result<MethodResourcesBuilder, Error>
 	where
 		Context: Send + Sync + 'static,
-		F: Fn(Params, PendingSubscription, Arc<Context>) -> Result<(), ErrorObject> + Send + Sync + 'static,
+		F: Fn(Params, PendingSubscription, Arc<Context>) -> ReturnTypeSubscription + Send + Sync + 'static,
 	{
 		if subscribe_method_name == unsubscribe_method_name {
 			return Err(Error::SubscriptionNameConflict(subscribe_method_name.into()));

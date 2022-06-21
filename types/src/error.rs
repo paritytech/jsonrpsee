@@ -81,7 +81,16 @@ impl<'a> fmt::Display for ErrorResponse<'a> {
 }
 
 /// The return type of the subscription's method for the rpc server implementation.
-pub type ReturnTypeSubscription = Result<(), ErrorObjectOwned>;
+///
+/// **Note**: The error does not contain any data and is discarded on drop.
+pub type ReturnTypeSubscription = Result<(), SubscriptionError>;
+
+/// The error returned by the subscription's method for the rpc server implementation.
+///
+/// It contains no data, and neither is the error utilized. It provides an abstraction to make the
+/// API more ergonomic while handling errors that may occur during the subscription callback.
+#[derive(Debug)]
+pub struct SubscriptionError;
 
 /// Owned variant of [`ErrorObject`].
 pub type ErrorObjectOwned = ErrorObject<'static>;
