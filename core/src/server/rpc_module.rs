@@ -829,6 +829,85 @@ impl PendingSubscription {
 			Err(SubscriptionEmptyError)
 		}
 	}
+
+	/// Accepts the subscription connection and wraps the [`SubscriptionSink::pipe_from_try_stream`] for
+	/// better ergonomics.
+	///
+	/// Returns `(Ok(sink), SubscriptionClosed)` if the connection was accepted successfully. The returned
+	/// sink can be used to send error notifications back.
+	///
+	/// Returns `(None, SubscriptionClosed::RemotePeerAborted)` if the connection was not accepted, or the
+	/// client disconnected while piping the stream.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionResult};
+	/// use jsonrpsee_core::error::{Error, SubscriptionClosed};
+	/// use jsonrpsee_types::ErrorObjectOwned;
+	/// use anyhow::anyhow;
+	///
+	/// let mut m = RpcModule::new(());
+	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
+	///     // let mut sink = pending.accept().unwrap();
+	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
+	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
+	///     // because after the `Err(_)` the stream is terminated.
+	///     tokio::spawn(async move {
+	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
+	///         // If we pipe messages to the sink, we can inspect why it ended:
+	///         match pending.pipe_from_try_stream(stream).await {
+	///            (Some(sink), SubscriptionClosed::Success) => {
+	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
+	///                sink.close(err_obj);
+	///            }
+	///            (Some(sink), SubscriptionClosed::Failed(e)) => {
+	///                sink.close(e);
+	///            }
+	///            // we don't want to send close reason when the client is unsubscribed or disconnected.
+	///            (_, SubscriptionClosed::RemotePeerAborted) | (None, _) => (),
+	///         }
+	///     });
+	///     Ok(())
+	/// });
+	/// ```
+	pub async fn pipe_from_try_stream<S, T, E>(self, stream: S) -> (Option<SubscriptionSink>, SubscriptionClosed)
+		where
+			S: TryStream<Ok = T, Error = E> + Unpin,
+			T: Serialize,
+			E: std::fmt::Display,
+	{
+		if let Ok(mut sink) = self.accept() {
+			let result = sink.pipe_from_try_stream(stream).await;
+			(Some(sink), result)
+		} else {
+			(None, SubscriptionClosed::RemotePeerAborted)
+		}
+	}
+
+	/// Similar to [`PendingSubscription::pipe_from_try_stream`] but it doesn't require the stream return `Result`.
+	///
+	/// # Examples
+	///
+	/// ```no_run
+	///
+	/// use jsonrpsee_core::server::rpc_module::RpcModule;
+	///
+	/// let mut m = RpcModule::new(());
+	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
+	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
+	///     tokio::spawn(async move { pending.pipe_from_stream(stream).await; });
+	///     Ok(())
+	/// });
+	/// ```
+	pub async fn pipe_from_stream<S, T>(self, stream: S) -> (Option<SubscriptionSink>, SubscriptionClosed)
+		where
+			S: Stream<Item = T> + Unpin,
+			T: Serialize,
+	{
+		self.pipe_from_try_stream::<_, _, Error>(stream.map(|item| Ok(item))).await
+	}
 }
 
 // When dropped it returns an [`InvalidParams`] error to the subscriber
