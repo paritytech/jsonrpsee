@@ -27,31 +27,34 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
+use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::rpc_params;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+	let filter = tracing_subscriber::EnvFilter::try_from_default_env()?
+		.add_directive("jsonrpsee[method_call{name = \"say_hello\"}]=trace".parse()?);
+	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
-	let addr = run_server().await?;
-	let url = format!("ws://{}", addr);
+	let (server_addr, _handle) = run_server().await?;
+	let url = format!("http://{}", server_addr);
 
-	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", None).await?;
-	tracing::info!("response: {:?}", response);
+	let client = HttpClientBuilder::default().build(url)?;
+	let params = rpc_params!(1_u64, 2, 3);
+	let response: Result<String, _> = client.request("say_hello", params).await;
+	tracing::info!("r: {:?}", response);
 
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
+	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
+
 	let addr = server.local_addr()?;
-	server.start(module)?;
-	Ok(addr)
+	let server_handle = server.start(module)?;
+	Ok((addr, server_handle))
 }

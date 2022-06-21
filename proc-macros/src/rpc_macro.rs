@@ -133,12 +133,21 @@ pub struct RpcSubscription {
 	pub signature: syn::TraitItemMethod,
 	pub aliases: Vec<String>,
 	pub unsubscribe_aliases: Vec<String>,
+	pub resources: Punctuated<Resource, Token![,]>,
 }
 
 impl RpcSubscription {
 	pub fn from_item(attr: syn::Attribute, mut sub: syn::TraitItemMethod) -> syn::Result<Self> {
-		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases] = AttributeMeta::parse(attr)?
-			.retain(["aliases", "item", "name", "param_kind", "unsubscribe", "unsubscribe_aliases"])?;
+		let [aliases, item, name, param_kind, unsubscribe, unsubscribe_aliases, resources] =
+			AttributeMeta::parse(attr)?.retain([
+				"aliases",
+				"item",
+				"name",
+				"param_kind",
+				"unsubscribe",
+				"unsubscribe_aliases",
+				"resources",
+			])?;
 
 		let aliases = parse_aliases(aliases)?;
 		let map = name?.value::<NameMapping>()?;
@@ -147,6 +156,7 @@ impl RpcSubscription {
 		let item = item?.value()?;
 		let param_kind = parse_param_kind(param_kind)?;
 		let unsubscribe_aliases = parse_aliases(unsubscribe_aliases)?;
+		let resources = optional(resources, Argument::group)?.unwrap_or_default();
 
 		let sig = sub.sig.clone();
 		let docs = extract_doc_comments(&sub.attrs);
@@ -183,6 +193,7 @@ impl RpcSubscription {
 			signature: sub,
 			aliases,
 			docs,
+			resources,
 		})
 	}
 }

@@ -31,11 +31,13 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
 use futures_util::io::{BufReader, BufWriter};
-use jsonrpsee_core::client::{CertificateStore, TransportReceiverT, TransportSenderT};
+use jsonrpsee_core::client::{CertificateStore, ReceivedMessage, TransportReceiverT, TransportSenderT};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_core::{async_trait, Cow};
-use soketto::connection;
+use soketto::connection::Error::Utf8;
+use soketto::data::ByteSlice125;
 use soketto::handshake::client::{Client as WsHandshakeClient, ServerResponse};
+use soketto::{connection, Data, Incoming};
 use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
@@ -189,8 +191,22 @@ impl TransportSenderT for Sender {
 	/// Sends out a request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	async fn send(&mut self, body: String) -> Result<(), Self::Error> {
-		tracing::debug!("send: {}", body);
+		tracing::trace!("send: {}", body);
 		self.inner.send_text(body).await?;
+		self.inner.flush().await?;
+		Ok(())
+	}
+
+	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
+	/// successfully sent.
+	async fn send_ping(&mut self) -> Result<(), Self::Error> {
+		tracing::debug!("send ping");
+		// Submit empty slice as "optional" parameter.
+		let slice: &[u8] = &[];
+		// Byte slice fails if the provided slice is larger than 125 bytes.
+		let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
+
+		self.inner.send_ping(byte_slice).await?;
 		self.inner.flush().await?;
 		Ok(())
 	}
@@ -206,11 +222,21 @@ impl TransportReceiverT for Receiver {
 	type Error = WsError;
 
 	/// Returns a `Future` resolving when the server sent us something back.
-	async fn receive(&mut self) -> Result<String, Self::Error> {
-		let mut message = Vec::new();
-		self.inner.receive_data(&mut message).await?;
-		let s = String::from_utf8(message).expect("Found invalid UTF-8");
-		Ok(s)
+	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
+		loop {
+			let mut message = Vec::new();
+			let recv = self.inner.receive(&mut message).await?;
+
+			match recv {
+				Incoming::Data(Data::Text(_)) => {
+					let s = String::from_utf8(message).map_err(|err| WsError::Connection(Utf8(err.utf8_error())))?;
+					break Ok(ReceivedMessage::Text(s));
+				}
+				Incoming::Data(Data::Binary(_)) => break Ok(ReceivedMessage::Bytes(message)),
+				Incoming::Pong(_) => break Ok(ReceivedMessage::Pong),
+				_ => continue,
+			}
+		}
 	}
 }
 

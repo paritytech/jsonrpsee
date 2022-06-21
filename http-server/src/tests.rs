@@ -275,10 +275,6 @@ async fn garbage_request_fails() {
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
 
-	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
-	let response = http_request(req.into(), uri.clone()).await.unwrap();
-	assert_eq!(response.body, parse_error(Id::Null));
-
 	let req = r#"{}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
@@ -295,10 +291,6 @@ async fn garbage_request_fails() {
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
 
-	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
-	let response = http_request(req.into(), uri.clone()).await.unwrap();
-	assert_eq!(response.body, parse_error(Id::Null));
-
 	let req = r#"[]"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, invalid_request(Id::Null));
@@ -306,6 +298,24 @@ async fn garbage_request_fails() {
 	let req = r#"[{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
 	let response = http_request(req.into(), uri.clone()).await.unwrap();
 	assert_eq!(response.body, parse_error(Id::Null));
+}
+
+#[tokio::test]
+async fn whitespace_is_not_significant() {
+	let (addr, _handle) = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+
+	let req = r#"         {"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	let expected = r#"{"jsonrpc":"2.0","result":3,"id":1}"#;
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, expected);
+
+	let req = r#" [{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}]"#;
+	let response = http_request(req.into(), uri.clone()).await.unwrap();
+	let expected = r#"[{"jsonrpc":"2.0","result":3,"id":1}]"#;
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, expected);
 }
 
 #[tokio::test]
@@ -420,7 +430,7 @@ async fn can_set_the_max_request_body_size() {
 	// Invalid: too long
 	let req = format!(r#"{{"jsonrpc":"2.0", "method":{}, "id":1}}"#, "a".repeat(100));
 	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
-	assert_eq!(response.body, oversized_request());
+	assert_eq!(response.body, oversized_request(100));
 
 	// Max request body size should not override the max response size
 	let req = r#"{"jsonrpc":"2.0", "method":"anything", "id":1}"#;

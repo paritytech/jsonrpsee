@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -48,15 +48,29 @@ jobs:
           command: clippy
           args: --all-targets
 
-      - name: Check rustdoc links
-        run: RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
+  check-docs:
+    name: Check rustdoc
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v3.0.2
+
+      - name: Install Rust nightly toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Check rustdoc
+        run: RUSTDOCFLAGS="--cfg docsrs --deny rustdoc::broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items --all-features
 
   check-code:
     name: Check
     runs-on: ubuntu-latest
     steps:
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -82,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -108,7 +122,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -134,7 +148,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v3.0.2
 
       - name: Install Rust stable toolchain
         uses: actions-rs/toolchain@v1.0.7
@@ -160,7 +174,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v3.0.2
 
     - name: Install
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh

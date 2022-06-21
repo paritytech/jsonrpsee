@@ -27,7 +27,8 @@
 use std::io;
 use std::sync::Arc;
 
-use crate::{to_json_raw_value, Error};
+use crate::tracing::tx_log_from_str;
+use crate::{Error};
 use futures_channel::mpsc;
 use futures_util::StreamExt;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
@@ -87,17 +88,19 @@ pub struct MethodSink {
 	tx: mpsc::UnboundedSender<String>,
 	/// Max response size in bytes for a executed call.
 	max_response_size: u32,
+	/// Max log length.
+	max_log_length: u32,
 }
 
 impl MethodSink {
 	/// Create a new `MethodSink` with unlimited response size
 	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {
-		MethodSink { tx, max_response_size: u32::MAX }
+		MethodSink { tx, max_response_size: u32::MAX, max_log_length: u32::MAX }
 	}
 
 	/// Create a new `MethodSink` with a limited response size
-	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32) -> Self {
-		MethodSink { tx, max_response_size }
+	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32, max_log_length: u32) -> Self {
+		MethodSink { tx, max_response_size, max_log_length }
 	}
 
 	/// Returns whether this channel is closed without needing a context.
@@ -119,8 +122,8 @@ impl MethodSink {
 				tracing::error!("Error serializing response: {:?}", err);
 
 				if err.is_io() {
-					let data = to_json_raw_value(&format!("Exceeded max limit {}", self.max_response_size)).ok();
-					let err = ErrorObject::borrowed(OVERSIZED_RESPONSE_CODE, &OVERSIZED_RESPONSE_MSG, data.as_deref());
+					let data = format!("Exceeded max limit of {}", self.max_response_size);
+					let err = ErrorObject::owned(OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, Some(data));
 					return self.send_error(id, err);
 				} else {
 					return self.send_error(id, ErrorCode::InternalError.into());
@@ -128,7 +131,9 @@ impl MethodSink {
 			}
 		};
 
-		if let Err(err) = self.tx.unbounded_send(json) {
+		tx_log_from_str(&json, self.max_log_length);
+
+		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
 			false
 		} else {
@@ -147,7 +152,9 @@ impl MethodSink {
 			}
 		};
 
-		if let Err(err) = self.tx.unbounded_send(json) {
+		tx_log_from_str(&json, self.max_log_length);
+
+		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
 		}
 
@@ -162,6 +169,7 @@ impl MethodSink {
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
 	pub fn send_raw(&self, raw_json: String) -> Result<(), mpsc::TrySendError<String>> {
+		tracing::trace!("send: {:?}", raw_json);
 		self.tx.unbounded_send(raw_json)
 	}
 
@@ -217,12 +225,17 @@ impl SubscriptionPermit {
 pub struct BoundedSubscriptions {
 	resource: Arc<Notify>,
 	guard: Arc<Semaphore>,
+	max: u32,
 }
 
 impl BoundedSubscriptions {
 	/// Create a new bounded subscription.
 	pub fn new(max_subscriptions: u32) -> Self {
-		Self { resource: Arc::new(Notify::new()), guard: Arc::new(Semaphore::new(max_subscriptions as usize)) }
+		Self {
+			resource: Arc::new(Notify::new()),
+			guard: Arc::new(Semaphore::new(max_subscriptions as usize)),
+			max: max_subscriptions,
+		}
 	}
 
 	/// Attempts to acquire a subscription slot.
@@ -233,6 +246,11 @@ impl BoundedSubscriptions {
 			.try_acquire_owned()
 			.ok()
 			.map(|p| SubscriptionPermit { _permit: p, resource: self.resource.clone() })
+	}
+
+	/// Get the maximum number of permitted subscriptions.
+	pub const fn max(&self) -> u32 {
+		self.max
 	}
 
 	/// Close all subscriptions.

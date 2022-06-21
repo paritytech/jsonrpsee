@@ -29,7 +29,8 @@ use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
 use jsonrpsee::core::error::SubscriptionClosed;
-use jsonrpsee::http_server::{AccessControl, HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::core::server::access_control::{AccessControl, AccessControlBuilder};
+use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
@@ -218,15 +219,23 @@ pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::m
 }
 
 pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
-	http_server_with_access_control(AccessControl::default()).await
+	http_server_with_access_control(AccessControlBuilder::default().build()).await
 }
 
 pub async fn http_server_with_access_control(acl: AccessControl) -> (SocketAddr, HttpServerHandle) {
-	let server = HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let server = HttpServerBuilder::default()
+		.set_access_control(acl)
+		.health_api("/health", "system_health")
+		.unwrap()
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 	module.register_method("notif", |_, _| Ok("")).unwrap();
+
+	module.register_method("system_health", |_, _| Ok(serde_json::json!({ "health": true }))).unwrap();
 
 	let handle = server.start(module).unwrap();
 	(addr, handle)

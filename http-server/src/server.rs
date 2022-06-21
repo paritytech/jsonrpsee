@@ -24,14 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::cmp;
 use std::future::Future;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use crate::response;
 use crate::response::{internal_error, malformed};
-use crate::{response, AccessControl};
 use futures_channel::mpsc;
 use futures_util::{future::join_all, stream::StreamExt, FutureExt};
 use hyper::header::{HeaderMap, HeaderValue};
@@ -41,18 +40,22 @@ use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
 use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
+use jsonrpsee_core::tracing::{rx_log_from_json, RpcTracing};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
 use tokio::net::{TcpListener, ToSocketAddrs};
+use tracing_futures::Instrument;
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
 pub struct Builder<M = ()> {
+	/// Access control based on HTTP headers.
 	access_control: AccessControl,
 	resources: Resources,
 	max_request_body_size: u32,
@@ -61,18 +64,22 @@ pub struct Builder<M = ()> {
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
+	max_log_length: u32,
+	health_api: Option<HealthApi>,
 }
 
 impl Default for Builder {
 	fn default() -> Self {
 		Self {
+			access_control: AccessControl::default(),
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
 			batch_requests_supported: true,
 			resources: Resources::default(),
-			access_control: AccessControl::default(),
 			tokio_runtime: None,
 			middleware: (),
+			max_log_length: 4096,
+			health_api: None,
 		}
 	}
 }
@@ -112,13 +119,15 @@ impl<M> Builder<M> {
 	/// ```
 	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
 		Builder {
+			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
-			access_control: self.access_control,
 			tokio_runtime: self.tokio_runtime,
 			middleware,
+			max_log_length: self.max_log_length,
+			health_api: self.health_api,
 		}
 	}
 
@@ -166,6 +175,23 @@ impl<M> Builder<M> {
 		self
 	}
 
+	/// Enable health endpoint.
+	/// Allows you to expose one of the methods under GET /<path> The method will be invoked with no parameters.
+	/// Error returned from the method will be converted to status 500 response.
+	/// Expects a tuple with (</path>, <rpc-method-name>).
+	///
+	/// Fails if the path is missing `/`.
+	pub fn health_api(mut self, path: impl Into<String>, method: impl Into<String>) -> Result<Self, Error> {
+		let path = path.into();
+
+		if !path.starts_with("/") {
+			return Err(Error::Custom(format!("Health endpoint path must start with `/` to work, got: {}", path)));
+		}
+
+		self.health_api = Some(HealthApi { path: path, method: method.into() });
+		Ok(self)
+	}
+
 	/// Finalizes the configuration of the server with customized TCP settings on the socket and on hyper.
 	///
 	/// ```rust
@@ -204,15 +230,17 @@ impl<M> Builder<M> {
 		local_addr: SocketAddr,
 	) -> Result<Server<M>, Error> {
 		Ok(Server {
+			access_control: self.access_control,
 			listener,
 			local_addr: Some(local_addr),
-			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			max_log_length: self.max_log_length,
+			health_api: self.health_api,
 		})
 	}
 
@@ -256,6 +284,8 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			max_log_length: self.max_log_length,
+			health_api: self.health_api,
 		})
 	}
 
@@ -290,8 +320,16 @@ impl<M> Builder<M> {
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
 			middleware: self.middleware,
+			max_log_length: self.max_log_length,
+			health_api: self.health_api,
 		})
 	}
+}
+
+#[derive(Debug, Clone)]
+struct HealthApi {
+	path: String,
+	method: String,
 }
 
 /// Handle used to run or stop the server.
@@ -336,15 +374,20 @@ pub struct Server<M = ()> {
 	max_request_body_size: u32,
 	/// Max response body size.
 	max_response_body_size: u32,
+	/// Max length for logging for request and response
+	///
+	/// Logs bigger than this limit will be truncated.
+	max_log_length: u32,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_supported: bool,
-	/// Access control
+	/// Access control.
 	access_control: AccessControl,
-	/// Tracker for currently used resources on the server
+	/// Tracker for currently used resources on the server.
 	resources: Resources,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	middleware: M,
+	health_api: Option<HealthApi>,
 }
 
 impl<M: Middleware> Server<M> {
@@ -357,32 +400,56 @@ impl<M: Middleware> Server<M> {
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
 		let max_response_body_size = self.max_response_body_size;
-		let access_control = self.access_control;
+		let max_log_length = self.max_log_length;
+		let acl = self.access_control;
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
 		let resources = self.resources;
 		let middleware = self.middleware;
 		let batch_requests_supported = self.batch_requests_supported;
 		let methods = methods.into().initialize_resources(&resources)?;
+		let health_api = self.health_api;
 
 		let make_service = make_service_fn(move |_| {
 			let methods = methods.clone();
-			let access_control = access_control.clone();
+			let acl = acl.clone();
 			let resources = resources.clone();
 			let middleware = middleware.clone();
+			let health_api = health_api.clone();
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
 					let methods = methods.clone();
-					let access_control = access_control.clone();
+					let acl = acl.clone();
 					let resources = resources.clone();
 					let middleware = middleware.clone();
+					let health_api = health_api.clone();
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
 					async move {
-						if let Err(e) = access_control_is_valid(&access_control, &request) {
-							return Ok::<_, HyperError>(e);
+						let keys = request.headers().keys().map(|k| k.as_str());
+						let cors_request_headers = http_helpers::get_cors_request_headers(request.headers());
+
+						let host = match http_helpers::read_header_value(request.headers(), "host") {
+							Some(origin) => origin,
+							None => return Ok(malformed()),
+						};
+						let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
+
+						if let Err(e) = acl.verify_host(host) {
+							tracing::warn!("Denied request: {:?}", e);
+							return Ok(response::host_not_allowed());
+						}
+
+						if let Err(e) = acl.verify_origin(maybe_origin, host) {
+							tracing::warn!("Denied request: {:?}", e);
+							return Ok(response::invalid_allow_origin());
+						}
+
+						if let Err(e) = acl.verify_headers(keys, cors_request_headers) {
+							tracing::warn!("Denied request: {:?}", e);
+							return Ok(response::invalid_allow_headers());
 						}
 
 						// Only `POST` and `OPTIONS` methods are allowed.
@@ -390,11 +457,12 @@ impl<M: Middleware> Server<M> {
 							// An OPTIONS request is a CORS preflight request. We've done our access check
 							// above so we just need to tell the browser that the request is OK.
 							Method::OPTIONS => {
-								let origin = match http_helpers::read_header_value(request.headers(), "origin") {
+								let origin = match maybe_origin {
 									Some(origin) => origin,
 									None => return Ok(malformed()),
 								};
-								let allowed_headers = access_control.allowed_headers().to_cors_header_value();
+
+								let allowed_headers = acl.allowed_headers().to_cors_header_value();
 								let allowed_header_bytes = allowed_headers.as_bytes();
 
 								let res = hyper::Response::builder()
@@ -421,6 +489,7 @@ impl<M: Middleware> Server<M> {
 									resources,
 									max_request_body_size,
 									max_response_body_size,
+									max_log_length,
 									batch_requests_supported,
 								)
 								.await?;
@@ -430,6 +499,19 @@ impl<M: Middleware> Server<M> {
 								}
 								Ok(res)
 							}
+							Method::GET => match health_api.as_ref() {
+								Some(health) if health.path.as_str() == request.uri().path() => {
+									process_health_request(
+										health,
+										middleware,
+										methods,
+										max_response_body_size,
+										max_log_length,
+									)
+									.await
+								}
+								_ => Ok(response::method_not_allowed()),
+							},
 							// Error scenarios:
 							Method::POST => Ok(response::unsupported_content_type()),
 							_ => Ok(response::method_not_allowed()),
@@ -467,23 +549,6 @@ fn return_origin_if_different_from_host(headers: &HeaderMap) -> Option<&HeaderVa
 	}
 }
 
-// Checks to that access control of the received request is the same as configured.
-fn access_control_is_valid(
-	access_control: &AccessControl,
-	request: &hyper::Request<hyper::Body>,
-) -> Result<(), hyper::Response<hyper::Body>> {
-	if access_control.deny_host(request) {
-		return Err(response::host_not_allowed());
-	}
-	if access_control.deny_cors_origin(request) {
-		return Err(response::invalid_allow_origin());
-	}
-	if access_control.deny_cors_header(request) {
-		return Err(response::invalid_allow_headers());
-	}
-	Ok(())
-}
-
 /// Checks that content type of received request is valid for JSON-RPC.
 fn content_type_is_json(request: &hyper::Request<hyper::Body>) -> bool {
 	is_json(request.headers().get("content-type"))
@@ -511,13 +576,14 @@ async fn process_validated_request(
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	max_log_length: u32,
 	batch_requests_supported: bool,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let (parts, body) = request.into_parts();
 
 	let (body, mut is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
 		Ok(r) => r,
-		Err(GenericTransportError::TooLarge) => return Ok(response::too_large()),
+		Err(GenericTransportError::TooLarge) => return Ok(response::too_large(max_request_body_size)),
 		Err(GenericTransportError::Malformed) => return Ok(response::malformed()),
 		Err(GenericTransportError::Inner(e)) => {
 			tracing::error!("Internal error reading request body: {}", e);
@@ -529,7 +595,7 @@ async fn process_validated_request(
 
 	// NOTE(niklasad1): it's a channel because it's needed for batch requests.
 	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
@@ -537,6 +603,11 @@ async fn process_validated_request(
 	if is_single {
 		if let Ok(req) = serde_json::from_slice::<Request>(&body) {
 			let method = req.method.as_ref();
+
+			let trace = RpcTracing::method_call(&req.method);
+			let _enter = trace.span().enter();
+
+			rx_log_from_json(&req, max_log_length);
 			middleware.on_call(method);
 
 			let id = req.id.clone();
@@ -562,8 +633,10 @@ async fn process_validated_request(
 					},
 					MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
 						Ok(guard) => {
-							let result =
-								(callback)(id.into_owned(), params.into_owned(), sink.clone(), 0, Some(guard)).await;
+							let result = (callback)(id.into_owned(), params.into_owned(), sink.clone(), 0, Some(guard))
+								.in_current_span()
+								.await;
+
 							result
 						}
 						Err(err) => {
@@ -580,7 +653,12 @@ async fn process_validated_request(
 				},
 			};
 			middleware.on_result(&req.method, result, request_start);
-		} else if let Ok(_req) = serde_json::from_slice::<Notif>(&body) {
+		} else if let Ok(req) = serde_json::from_slice::<Notif>(&body) {
+			let trace = RpcTracing::notification(&req.method);
+			let _enter = trace.span().enter();
+
+			rx_log_from_json(&req, max_log_length);
+
 			return Ok::<_, HyperError>(response::ok_response("".into()));
 		} else {
 			let (id, code) = prepare_error(&body);
@@ -588,6 +666,11 @@ async fn process_validated_request(
 		}
 	// Batch of requests or notifications
 	} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
+		let trace = RpcTracing::batch();
+		let _enter = trace.span().enter();
+
+		rx_log_from_json(&batch, max_log_length);
+
 		if !batch_requests_supported {
 			// Server was configured to not support batches.
 			is_single = true;
@@ -633,7 +716,7 @@ async fn process_validated_request(
 								let callback = callback.clone();
 
 								Some(async move {
-									let result = (callback)(id, params, sink, 0, Some(guard)).await;
+									let result = (callback)(id, params, sink, 0, Some(guard)).in_current_span().await;
 									middleware.on_result(name, result, request_start);
 								})
 							}
@@ -673,7 +756,7 @@ async fn process_validated_request(
 		is_single = true;
 		let (id, code) = prepare_error(&body);
 		sink.send_error(id, code.into());
-	}
+	};
 
 	// Closes the receiving half of a channel without dropping it. This prevents any further
 	// messages from being sent on the channel.
@@ -683,7 +766,59 @@ async fn process_validated_request(
 	} else {
 		collect_batch_response(rx).await
 	};
-	tracing::debug!("[service_fn] sending back: {:?}", &response[..cmp::min(response.len(), 1024)]);
+
 	middleware.on_response(request_start);
 	Ok(response::ok_response(response))
+}
+
+async fn process_health_request(
+	health_api: &HealthApi,
+	middleware: impl Middleware,
+	methods: Methods,
+	max_response_body_size: u32,
+	max_log_length: u32,
+) -> Result<hyper::Response<hyper::Body>, HyperError> {
+	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
+
+	let request_start = middleware.on_request();
+
+	let success = match methods.method_with_name(&health_api.method) {
+		None => false,
+		Some((name, method_callback)) => match method_callback.inner() {
+			MethodKind::Sync(callback) => {
+				let res = (callback)(Id::Number(0), Params::new(None), &sink);
+				middleware.on_result(name, res, request_start);
+				res
+			}
+			MethodKind::Async(callback) => {
+				let res = (callback)(Id::Number(0), Params::new(None), sink.clone(), 0, None).await;
+				middleware.on_result(name, res, request_start);
+				res
+			}
+
+			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
+				middleware.on_result(name, false, request_start);
+				false
+			}
+		},
+	};
+
+	let data = rx.next().await;
+	middleware.on_response(request_start);
+
+	match data {
+		Some(data) if success => {
+			#[derive(serde::Deserialize)]
+			struct RpcPayload<'a> {
+				#[serde(borrow)]
+				result: &'a serde_json::value::RawValue,
+			}
+
+			let payload: RpcPayload = serde_json::from_str(&data)
+				.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
+			Ok(response::ok_response(payload.result.to_string()))
+		}
+		_ => Ok(response::internal_error()),
+	}
 }

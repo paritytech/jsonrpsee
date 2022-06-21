@@ -48,6 +48,8 @@
 //! - **`client-ws-transport`** - Enables `ws` transport with TLS.
 //! - **`client-ws-transport-no-tls`** - Enables `ws` transport without TLS.
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 // Macros useful below, but not to be exposed outside of the crate.
 #[macro_use]
 mod macros;

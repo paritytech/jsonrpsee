@@ -5,7 +5,7 @@ use futures_util::sink::SinkExt;
 use futures_util::stream::{SplitSink, SplitStream, StreamExt};
 use gloo_net::websocket::{futures::WebSocket, Message, WebSocketError};
 use jsonrpsee_core::async_trait;
-use jsonrpsee_core::client::{TransportReceiverT, TransportSenderT};
+use jsonrpsee_core::client::{ReceivedMessage, TransportReceiverT, TransportSenderT};
 
 /// Web-sys transport error that can occur.
 #[derive(Debug, thiserror::Error)]
@@ -22,6 +22,9 @@ pub enum Error {
 	/// WebSocket error
 	#[error("WebSocket Error: {0:?}")]
 	WebSocket(WebSocketError),
+	/// Operation not supported
+	#[error("Operation not supported")]
+	NotSupported,
 }
 
 /// Sender.
@@ -52,6 +55,11 @@ impl TransportSenderT for Sender {
 		Ok(())
 	}
 
+	async fn send_ping(&mut self) -> Result<(), Self::Error> {
+		tracing::trace!("send ping - not implemented for wasm");
+		Err(Error::NotSupported)
+	}
+
 	async fn close(&mut self) -> Result<(), Error> {
 		Ok(())
 	}
@@ -61,17 +69,15 @@ impl TransportSenderT for Sender {
 impl TransportReceiverT for Receiver {
 	type Error = Error;
 
-	async fn receive(&mut self) -> Result<String, Self::Error> {
+	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error> {
 		match self.0.next().await {
 			Some(Ok(msg)) => {
 				tracing::trace!("rx: {:?}", msg);
 
-				let txt = match msg {
-					Message::Bytes(bytes) => String::from_utf8(bytes).expect("WebSocket message is valid utf8; qed"),
-					Message::Text(txt) => txt,
-				};
-
-				Ok(txt)
+				match msg {
+					Message::Bytes(bytes) => Ok(ReceivedMessage::Bytes(bytes)),
+					Message::Text(txt) => Ok(ReceivedMessage::Text(txt)),
+				}
 			}
 			Some(Err(err)) => Err(Error::WebSocket(err)),
 			None => Err(Error::SenderDisconnected),
