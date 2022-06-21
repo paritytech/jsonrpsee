@@ -48,6 +48,7 @@ use jsonrpsee_core::server::helpers::{
 };
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
+use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::{reject_too_big_request, reject_too_many_subscriptions};
@@ -59,6 +60,7 @@ use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use tracing_futures::Instrument;
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
@@ -149,7 +151,7 @@ impl<M: Middleware> Server<M> {
 						},
 					)));
 
-					tracing::info!("Accepting new connection, {}/{}", connections.count(), self.cfg.max_connections);
+					tracing::info!("Accepting new connection {}/{}", connections.count(), self.cfg.max_connections);
 
 					id = id.wrapping_add(1);
 				}
@@ -305,6 +307,7 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 				resources: resources.clone(),
 				max_request_body_size: cfg.max_request_body_size,
 				max_response_body_size: cfg.max_response_body_size,
+				max_log_length: cfg.max_log_length,
 				batch_requests_supported: cfg.batch_requests_supported,
 				bounded_subscriptions: BoundedSubscriptions::new(cfg.max_subscriptions_per_connection),
 				stop_server: stop_monitor.clone(),
@@ -331,6 +334,7 @@ struct BackgroundTask<'a, M> {
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
+	max_log_length: u32,
 	batch_requests_supported: bool,
 	bounded_subscriptions: BoundedSubscriptions,
 	stop_server: StopMonitor,
@@ -349,6 +353,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 		resources,
 		max_request_body_size,
 		max_response_body_size,
+		max_log_length,
 		batch_requests_supported,
 		bounded_subscriptions,
 		stop_server,
@@ -367,7 +372,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 	let bounded_subscriptions2 = bounded_subscriptions.clone();
 
 	let stop_server2 = stop_server.clone();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size);
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	middleware.on_connect();
 
@@ -442,7 +447,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
-						tracing::debug!("WS transport error: remote peer terminated the connection: {}", conn_id);
+						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
 						sink.close();
 						break Ok(());
 					}
@@ -466,8 +471,6 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 			};
 		};
 
-		tracing::debug!("recv {} bytes", data.len());
-
 		let request_start = middleware.on_request(remote_addr, &headers);
 
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
@@ -483,12 +486,12 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 				let fut = async move {
 					let call = CallData {
 						conn_id,
-						resources,
+						resources: &resources,
 						max_response_body_size,
-						methods,
+						methods: &methods,
 						bounded_subscriptions,
 						sink: &sink,
-						id_provider,
+						id_provider: &*id_provider,
 						middleware,
 						request_start,
 					};
@@ -539,6 +542,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 					})
 					.await;
 
+					tx_log_from_str(&response.result, max_log_length);
 					middleware.on_response(&response.result, request_start);
 					let _ = sink.send_raw(response.result);
 				};
@@ -572,6 +576,10 @@ struct Settings {
 	max_connections: u64,
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
+	/// Max length for logging for requests and responses
+	///
+	/// Logs bigger than this limit will be truncated.
+	max_log_length: u32,
 	/// Access control based on HTTP headers
 	access_control: AccessControl,
 	/// Whether batch requests are supported by this server or not.
@@ -587,6 +595,7 @@ impl Default for Settings {
 		Self {
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			max_response_body_size: TEN_MB_SIZE_BYTES,
+			max_log_length: 4096,
 			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
 			batch_requests_supported: true,
@@ -791,8 +800,6 @@ async fn send_ws_message(
 	sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>,
 	response: String,
 ) -> Result<(), Error> {
-	tracing::debug!("send {} bytes", response.len());
-	tracing::trace!("send: {}", response);
 	sender.send_text_owned(response).await?;
 	sender.flush().await.map_err(Into::into)
 }

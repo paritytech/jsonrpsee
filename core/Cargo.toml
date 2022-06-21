@@ -16,6 +16,7 @@ thiserror = "1"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 http = "0.2.7"
+tracing = "0.1"
 
 # optional deps
 arrayvec = { version = "0.7.1", optional = true }
@@ -23,7 +24,7 @@ async-channel = { version = "1.6", optional = true }
 async-lock = { version = "2.4", optional = true }
 futures-util = { version = "0.3.14", default-features = false, optional = true }
 hyper = { version = "0.14.10", default-features = false, features = ["stream"], optional = true }
-tracing = { version = "0.1", optional = true }
+tracing-futures = { version = "0.2", optional = true }
 rustc-hash = { version = "1", optional = true }
 rand = { version = "0.8", optional = true }
 soketto = { version = "0.7.1", optional = true }
@@ -43,7 +44,6 @@ server = [
 	"futures-util/alloc",
 	"globset",
 	"rustc-hash/std",
-	"tracing",
 	"parking_lot",
 	"rand",
 	"tokio/rt",
@@ -59,7 +59,7 @@ async-client = [
 	"tokio/macros",
 	"tokio/rt",
 	"tokio/sync",
-	"tracing",
+	"tracing-futures",
 	"futures-timer",
 ]
 async-wasm-client = [
@@ -67,8 +67,8 @@ async-wasm-client = [
 	"client",
 	"wasm-bindgen-futures",
 	"rustc-hash/std",
+	"tracing-futures",
 	"futures-timer/wasm-bindgen",
-	"tracing",
 ]
 
 [dev-dependencies]

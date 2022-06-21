@@ -45,8 +45,16 @@ use tokio_stream::wrappers::IntervalStream;
 
 mod helpers;
 
+fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
+}
+
 #[tokio::test]
 async fn ws_subscription_works() {
+	init_logger();
+
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -63,7 +71,40 @@ async fn ws_subscription_works() {
 }
 
 #[tokio::test]
+async fn ws_unsubscription_works() {
+	init_logger();
+
+	let (server_addr, _) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
+
+	let mut sub: Subscription<usize> = client.subscribe("subscribe_foo", None, "unsubscribe_foo").await.unwrap();
+
+	// It's technically possible to have race-conditions between the notifications and the unsubscribe message.
+	// So let's wait for the first notification and then unsubscribe.
+	let _item = sub.next().await.unwrap().unwrap();
+
+	sub.unsubscribe().await.unwrap();
+
+	let mut success = false;
+
+	// Wait until a slot is available, as only one concurrent call is allowed.
+	// Then when this finishes we know that unsubscribe call has been finished.
+	for _ in 0..30 {
+		if client.request::<String>("say_hello", rpc_params![]).await.is_ok() {
+			success = true;
+			break;
+		}
+		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+	}
+
+	assert!(success);
+}
+
+#[tokio::test]
 async fn ws_subscription_with_input_works() {
+	init_logger();
+
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -78,6 +119,8 @@ async fn ws_subscription_with_input_works() {
 
 #[tokio::test]
 async fn ws_method_call_works() {
+	init_logger();
+
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -87,6 +130,8 @@ async fn ws_method_call_works() {
 
 #[tokio::test]
 async fn ws_method_call_str_id_works() {
+	init_logger();
+
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().id_format(IdKind::String).build(&server_url).await.unwrap();
@@ -96,6 +141,8 @@ async fn ws_method_call_str_id_works() {
 
 #[tokio::test]
 async fn http_method_call_works() {
+	init_logger();
+
 	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
@@ -105,6 +152,8 @@ async fn http_method_call_works() {
 
 #[tokio::test]
 async fn http_method_call_str_id_works() {
+	init_logger();
+
 	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
@@ -114,6 +163,8 @@ async fn http_method_call_str_id_works() {
 
 #[tokio::test]
 async fn http_concurrent_method_call_limits_works() {
+	init_logger();
+
 	let (server_addr, _handle) = http_server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().max_concurrent_requests(1).build(&uri).unwrap();
@@ -127,6 +178,8 @@ async fn http_concurrent_method_call_limits_works() {
 
 #[tokio::test]
 async fn ws_subscription_several_clients() {
+	init_logger();
+
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -143,6 +196,8 @@ async fn ws_subscription_several_clients() {
 
 #[tokio::test]
 async fn ws_subscription_several_clients_with_drop() {
+	init_logger();
+
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -189,6 +244,8 @@ async fn ws_subscription_several_clients_with_drop() {
 
 #[tokio::test]
 async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
+	init_logger();
+
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -219,6 +276,8 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 
 #[tokio::test]
 async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
+	init_logger();
+
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = Arc::new(WsClientBuilder::default().max_concurrent_requests(2).build(&server_url).await.unwrap());
@@ -237,6 +296,8 @@ async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 
 #[tokio::test]
 async fn http_making_more_requests_than_allowed_should_not_deadlock() {
+	init_logger();
+
 	let (server_addr, _handle) = http_server().await;
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().max_concurrent_requests(2).build(&server_url).unwrap();
@@ -256,6 +317,8 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 
 #[tokio::test]
 async fn https_works() {
+	init_logger();
+
 	let client = HttpClientBuilder::default().build("https://kusama-rpc.polkadot.io:443").unwrap();
 	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
@@ -263,6 +326,8 @@ async fn https_works() {
 
 #[tokio::test]
 async fn wss_works() {
+	init_logger();
+
 	let client = WsClientBuilder::default().build("wss://kusama-rpc.polkadot.io:443").await.unwrap();
 	let response: String = client.request("system_chain", None).await.unwrap();
 	assert_eq!(&response, "Kusama");
@@ -270,18 +335,24 @@ async fn wss_works() {
 
 #[tokio::test]
 async fn ws_with_non_ascii_url_doesnt_hang_or_panic() {
+	init_logger();
+
 	let err = WsClientBuilder::default().build("wss://♥♥♥♥♥♥∀∂").await;
 	assert!(matches!(err, Err(Error::Transport(_))));
 }
 
 #[tokio::test]
 async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
+	init_logger();
+
 	let err = HttpClientBuilder::default().build("http://♥♥♥♥♥♥∀∂");
 	assert!(matches!(err, Err(Error::Transport(_))));
 }
 
 #[tokio::test]
 async fn ws_unsubscribe_releases_request_slots() {
+	init_logger();
+
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -294,10 +365,7 @@ async fn ws_unsubscribe_releases_request_slots() {
 
 #[tokio::test]
 async fn server_should_be_able_to_close_subscriptions() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+	init_logger();
 
 	let (server_addr, _) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
@@ -311,6 +379,8 @@ async fn server_should_be_able_to_close_subscriptions() {
 
 #[tokio::test]
 async fn ws_close_pending_subscription_when_server_terminated() {
+	init_logger();
+
 	let (server_addr, handle) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
@@ -344,6 +414,8 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 async fn ws_server_should_stop_subscription_after_client_drop() {
 	use futures::{channel::mpsc, SinkExt, StreamExt};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	init_logger();
 
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
@@ -386,6 +458,8 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 
 #[tokio::test]
 async fn ws_server_cancels_subscriptions_on_reset_conn() {
+	init_logger();
+
 	let (tx, rx) = mpsc::channel(1);
 	let server_url = format!("ws://{}", helpers::websocket_server_with_sleeping_subscription(tx).await);
 
@@ -406,6 +480,8 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 
 #[tokio::test]
 async fn ws_server_cancels_sub_stream_after_err() {
+	init_logger();
+
 	let (addr, _handle) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", addr);
 
@@ -420,6 +496,8 @@ async fn ws_server_cancels_sub_stream_after_err() {
 
 #[tokio::test]
 async fn ws_server_subscribe_with_stream() {
+	init_logger();
+
 	let (addr, _handle) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", addr);
 
@@ -448,6 +526,8 @@ async fn ws_server_subscribe_with_stream() {
 
 #[tokio::test]
 async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
+	init_logger();
+
 	let (tx, rx) = mpsc::channel(1);
 	let server_url = format!("ws://{}", helpers::websocket_server_with_sleeping_subscription(tx).await);
 
@@ -468,6 +548,8 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 
 #[tokio::test]
 async fn ws_server_pipe_from_stream_can_be_reused() {
+	init_logger();
+
 	let (addr, _handle) = websocket_server_with_subscription().await;
 	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
 	let sub = client.subscribe::<i32>("can_reuse_subscription", None, "u_can_reuse_subscription").await.unwrap();
@@ -479,6 +561,8 @@ async fn ws_server_pipe_from_stream_can_be_reused() {
 
 #[tokio::test]
 async fn ws_batch_works() {
+	init_logger();
+
 	let server_addr = websocket_server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -497,6 +581,8 @@ async fn ws_server_limit_subs_per_conn_works() {
 	use futures::StreamExt;
 	use jsonrpsee::types::error::{CallError, TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+
+	init_logger();
 
 	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
@@ -555,6 +641,8 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	use jsonrpsee::core::client::SubscriptionKind;
 	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
 
+	init_logger();
+
 	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
@@ -609,6 +697,8 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 async fn http_unsupported_methods_dont_work() {
 	use hyper::{Body, Client, Method, Request};
 
+	init_logger();
+
 	let (server_addr, _handle) = http_server().await;
 
 	let http_client = Client::new();
@@ -637,6 +727,8 @@ async fn http_unsupported_methods_dont_work() {
 #[tokio::test]
 async fn http_correct_content_type_required() {
 	use hyper::{Body, Client, Method, Request};
+
+	init_logger();
 
 	let (server_addr, _handle) = http_server().await;
 
@@ -680,6 +772,8 @@ async fn http_correct_content_type_required() {
 async fn http_cors_preflight_works() {
 	use hyper::{Body, Client, Method, Request};
 	use jsonrpsee::http_server::AccessControlBuilder;
+
+	init_logger();
 
 	let acl = AccessControlBuilder::new().set_allowed_origins(vec!["https://foo.com"]).unwrap().build();
 	let (server_addr, _handle) = http_server_with_access_control(acl).await;
@@ -744,6 +838,8 @@ fn comma_separated_header_values(headers: &hyper::HeaderMap, header: &str) -> Ve
 
 #[tokio::test]
 async fn ws_subscribe_with_bad_params() {
+	init_logger();
+
 	let (server_addr, _handle) = websocket_server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -758,6 +854,8 @@ async fn ws_subscribe_with_bad_params() {
 #[tokio::test]
 async fn http_health_api_works() {
 	use hyper::{Body, Client, Request};
+
+	init_logger();
 
 	let (server_addr, _handle) = http_server().await;
 
@@ -777,6 +875,8 @@ async fn http_health_api_works() {
 #[tokio::test]
 async fn ws_host_filtering_wildcard_works() {
 	use jsonrpsee::ws_server::*;
+
+	init_logger();
 
 	let acl = AccessControlBuilder::default()
 		.set_allowed_hosts(vec!["http://localhost:*", "http://127.0.0.1:*"])
@@ -799,6 +899,8 @@ async fn ws_host_filtering_wildcard_works() {
 #[tokio::test]
 async fn http_host_filtering_wildcard_works() {
 	use jsonrpsee::http_server::*;
+
+	init_logger();
 
 	let acl = AccessControlBuilder::default()
 		.set_allowed_hosts(vec!["http://localhost:*", "http://127.0.0.1:*"])

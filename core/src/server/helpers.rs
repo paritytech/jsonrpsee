@@ -27,7 +27,8 @@
 use std::io;
 use std::sync::Arc;
 
-use crate::Error;
+use crate::tracing::tx_log_from_str;
+use crate::{Error};
 use futures_channel::mpsc;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
@@ -86,17 +87,19 @@ pub struct MethodSink {
 	tx: mpsc::UnboundedSender<String>,
 	/// Max response size in bytes for a executed call.
 	max_response_size: u32,
+	/// Max log length.
+	max_log_length: u32,
 }
 
 impl MethodSink {
 	/// Create a new `MethodSink` with unlimited response size
 	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {
-		MethodSink { tx, max_response_size: u32::MAX }
+		MethodSink { tx, max_response_size: u32::MAX, max_log_length: u32::MAX }
 	}
 
 	/// Create a new `MethodSink` with a limited response size
-	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32) -> Self {
-		MethodSink { tx, max_response_size }
+	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32, max_log_length: u32) -> Self {
+		MethodSink { tx, max_response_size, max_log_length }
 	}
 
 	/// Returns whether this channel is closed without needing a context.
@@ -127,6 +130,8 @@ impl MethodSink {
 			}
 		};
 
+		tx_log_from_str(&json, self.max_log_length);
+
 		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
 			false
@@ -145,6 +150,8 @@ impl MethodSink {
 				return false;
 			}
 		};
+
+		tx_log_from_str(&json, self.max_log_length);
 
 		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
