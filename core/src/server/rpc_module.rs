@@ -856,23 +856,21 @@ impl PendingSubscription {
 	///     tokio::spawn(async move {
 	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
 	///         // If we pipe messages to the sink, we can inspect why it ended:
-	///         match pending.pipe_from_try_stream(stream).await {
-	///            (Some(sink), SubscriptionClosed::Success) => {
-	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
-	///                sink.close(err_obj);
-	///            }
-	///            (Some(sink), SubscriptionClosed::Failed(e)) => {
-	///                sink.close(e);
-	///            }
-	///            // we don't want to send close reason when the client is unsubscribed or disconnected.
-	///            (Some(_sink), SubscriptionClosed::RemotePeerAborted) => (),
-	///            (None, _) => (),
-	///         }
+	///         pending
+	///             .pipe_from_stream(stream)
+	///             .await
+	///             .on_success(|sink| {
+	///                 let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
+	///                 sink.close(err_obj);
+	///             })
+	///             .on_failure(|sink, err| {
+	///                 sink.close(err);
+	///             })
 	///     });
 	///     Ok(())
 	/// });
 	/// ```
-	pub async fn pipe_from_try_stream<S, T, E>(self, stream: S) -> (Option<SubscriptionSink>, SubscriptionClosed)
+	pub async fn pipe_from_try_stream<S, T, E>(self, stream: S) -> PipeFromStreamResult
 		where
 			S: TryStream<Ok = T, Error = E> + Unpin,
 			T: Serialize,
@@ -880,9 +878,13 @@ impl PendingSubscription {
 	{
 		if let Ok(mut sink) = self.accept() {
 			let result = sink.pipe_from_try_stream(stream).await;
-			(Some(sink), result)
+			match result {
+				SubscriptionClosed::Success => PipeFromStreamResult::Success(sink),
+				SubscriptionClosed::Failed(error) => PipeFromStreamResult::Failure(sink, error),
+				SubscriptionClosed::RemotePeerAborted => PipeFromStreamResult::RemotePeerAborted,
+			}
 		} else {
-			(None, SubscriptionClosed::RemotePeerAborted)
+			PipeFromStreamResult::RemotePeerAborted
 		}
 	}
 
@@ -901,7 +903,7 @@ impl PendingSubscription {
 	///     Ok(())
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T>(self, stream: S) -> (Option<SubscriptionSink>, SubscriptionClosed)
+	pub async fn pipe_from_stream<S, T>(self, stream: S) -> PipeFromStreamResult
 		where
 			S: Stream<Item = T> + Unpin,
 			T: Serialize,
@@ -916,6 +918,55 @@ impl Drop for PendingSubscription {
 		if let Some(inner) = self.0.take() {
 			let InnerPendingSubscription { sink, id, .. } = inner;
 			sink.send_error(id, ErrorCode::InvalidParams.into());
+		}
+	}
+}
+
+/// The result obtain from calling [`PendingSubscription::pipe_from_try_stream`] that
+/// can be utilized to execute specific operations depending on the result.
+#[derive(Debug)]
+pub enum PipeFromStreamResult {
+	/// The connection was accepted and the pipe returned [`SubscriptionClosed::Success`].
+	Success(SubscriptionSink),
+	/// The connection was accepted and the pipe returned [`SubscriptionClosed::Failed`]
+	/// with the provided error.
+	Failure(SubscriptionSink, ErrorObjectOwned),
+	/// The remote peer closed the connection or called the unsubscribe method.
+	RemotePeerAborted,
+}
+
+impl PipeFromStreamResult {
+	/// Callback that will run the provided function if the result is [`PipeFromStreamResult::Success`].
+	/// After the function runs a new [`PipeFromStreamResult::RemotePeerAborted`] is returned.
+	///
+	/// Otherwise, it leaves the object untouched.
+	pub fn on_success<F>(self, func: F) -> PipeFromStreamResult
+		where
+			F: FnOnce(SubscriptionSink) -> (),
+	{
+		match self {
+			PipeFromStreamResult::Success(sink) => {
+				func(sink);
+				PipeFromStreamResult::RemotePeerAborted
+			}
+			_ => self
+		}
+	}
+
+	/// Callback that will run the provided function if the result is [`PipeFromStreamResult::Failure`].
+	/// After the function runs a new [`PipeFromStreamResult::RemotePeerAborted`] is returned.
+	///
+	/// Otherwise, it leaves the object untouched.
+	pub fn on_failure<F>(self, func: F) -> PipeFromStreamResult
+		where
+			F: FnOnce(SubscriptionSink, ErrorObjectOwned) -> (),
+	{
+		match self {
+			PipeFromStreamResult::Failure(sink, error) => {
+				func(sink, error);
+				PipeFromStreamResult::RemotePeerAborted
+			}
+			_ => self
 		}
 	}
 }

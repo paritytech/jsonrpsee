@@ -99,19 +99,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				match pending.pipe_from_stream(stream).await {
-					// Send close notification when subscription stream failed.
-					(Some(sink), SubscriptionClosed::Failed(err)) => {
-						sink.close(err);
-					}
-					// Don't send close notification because the stream should run forever.
-					(Some(_sink), SubscriptionClosed::Success) => (),
-					// Don't send close because the client has already disconnected after accepting the
-					// `PendingSubscription`
-					(Some(_sink), SubscriptionClosed::RemotePeerAborted) => (),
-					// Client has disconnected before accepting the `PendingSubscription`.
-					(None, _) => (),
-				};
+				pending.pipe_from_stream(stream).await.on_failure(|sink, err| {
+					sink.close(err);
+				})
 			});
 
 			Ok(())
