@@ -77,7 +77,7 @@ impl RpcDescription {
 			let mut sub_sig = sub.signature.clone();
 
 			// For ergonomic reasons, the server's subscription method should return `ReturnTypeSubscription`.
-			let return_ty = self.jrps_server_item(quote! { types::ReturnTypeSubscription });
+			let return_ty = self.jrps_server_item(quote! { types::SubscriptionResult });
 			let output: ReturnType = parse_quote! { -> #return_ty };
 			sub_sig.sig.output = output;
 

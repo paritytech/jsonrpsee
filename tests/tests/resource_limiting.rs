@@ -33,7 +33,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::error::CallError;
-use jsonrpsee::types::ReturnTypeSubscription;
+use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::{PendingSubscription, RpcModule};
@@ -120,12 +120,12 @@ fn module_macro() -> RpcModule<()> {
 	}
 
 	impl RpcServer for () {
-		fn sub_hello(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
+		fn sub_hello(&self, pending: PendingSubscription) -> SubscriptionResult {
 			let mut _sink = pending.accept()?;
 			Ok(())
 		}
 
-		fn sub_hello_limit(&self, pending: PendingSubscription) -> ReturnTypeSubscription {
+		fn sub_hello_limit(&self, pending: PendingSubscription) -> SubscriptionResult {
 			let mut sink = pending.accept()?;
 
 			tokio::spawn(async move {
