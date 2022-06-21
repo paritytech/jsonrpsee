@@ -182,7 +182,7 @@ macro_rules! rpc_params {
 }
 
 /// Subscription kind
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum SubscriptionKind {
 	/// Get notifications based on Subscription ID.
@@ -202,7 +202,7 @@ pub struct Subscription<Notif> {
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Callback kind.
-	kind: SubscriptionKind,
+	kind: Option<SubscriptionKind>,
 	/// Marker in order to pin the `Notif` parameter.
 	marker: PhantomData<Notif>,
 }
@@ -218,12 +218,25 @@ impl<Notif> Subscription<Notif> {
 		notifs_rx: mpsc::Receiver<JsonValue>,
 		kind: SubscriptionKind,
 	) -> Self {
-		Self { to_back, notifs_rx, kind, marker: PhantomData }
+		Self { to_back, notifs_rx, kind: Some(kind), marker: PhantomData }
 	}
 
 	/// Return the subscription type and, if applicable, ID.
 	pub fn kind(&self) -> &SubscriptionKind {
-		&self.kind
+		self.kind.as_ref().expect("only None after unsubscribe; qed")
+	}
+
+	/// Unsubscribe and consume the subscription.
+	pub async fn unsubscribe(mut self) -> Result<(), Error> {
+		let msg = match self.kind.take().expect("only None after unsubscribe; qed") {
+			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
+			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
+		};
+		self.to_back.send(msg).await?;
+
+		// wait until notif channel is closed then the subscription was closed.
+		while self.notifs_rx.next().await.is_some() {}
+		Ok(())
 	}
 }
 
@@ -338,11 +351,11 @@ impl<Notif> Drop for Subscription<Notif> {
 		// the channel's buffer will be full.
 		// However, when a notification arrives, the background task will realize that the channel
 		// to the `Callback` has been closed.
-		let kind = std::mem::replace(&mut self.kind, SubscriptionKind::Subscription(SubscriptionId::Num(0)));
 
-		let msg = match kind {
-			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
-			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
+		let msg = match self.kind.take() {
+			Some(SubscriptionKind::Method(notif)) => FrontToBack::UnregisterNotification(notif),
+			Some(SubscriptionKind::Subscription(sub_id)) => FrontToBack::SubscriptionClosed(sub_id),
+			None => return,
 		};
 		let _ = self.to_back.send(msg).now_or_never();
 	}
