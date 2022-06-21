@@ -42,7 +42,7 @@ use futures_util::{future::BoxFuture, FutureExt, Stream, StreamExt, TryStream, T
 use jsonrpsee_types::error::{CallError, ErrorCode, ErrorObject, ErrorObjectOwned, SUBSCRIPTION_CLOSED_WITH_ERROR};
 use jsonrpsee_types::response::{SubscriptionError, SubscriptionPayloadError};
 use jsonrpsee_types::{
-	ErrorResponse, Id, Params, Request, Response, ReturnTypeSubscription,
+	ErrorResponse, Id, Params, Request, Response, ReturnTypeSubscription, SubscriptionEmptyError,
 	SubscriptionId as RpcSubscriptionId, SubscriptionPayload, SubscriptionResponse
 };
 use parking_lot::Mutex;
@@ -821,17 +821,17 @@ impl PendingSubscription {
 	/// Attempt to accept the subscription and respond the subscription method call.
 	///
 	/// Fails if the connection was closed
-	pub fn accept(mut self) -> Option<SubscriptionSink> {
-		let inner = self.0.take()?;
+	pub fn accept(mut self) -> Result<SubscriptionSink, SubscriptionEmptyError> {
+		let inner = self.0.take().ok_or(SubscriptionEmptyError)?;
 
 		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id, claimed } = inner;
 
 		if sink.send_response(id, &uniq_sub.sub_id) {
 			let (tx, rx) = watch::channel(());
 			subscribers.lock().insert(uniq_sub.clone(), (sink.clone(), tx));
-			Some(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, unsubscribe: rx, _claimed: claimed })
+			Ok(SubscriptionSink { inner: sink, close_notify, method, uniq_sub, subscribers, unsubscribe: rx, _claimed: claimed })
 		} else {
-			None
+			Err(SubscriptionEmptyError)
 		}
 	}
 }
