@@ -88,13 +88,14 @@ async fn ws_unsubscription_works() {
 
 	let mut success = false;
 
-	// wait until the next slot is opened, as only one concurrent call is allowed.
+	// Wait until a slot is available, as only one concurrent call is allowed.
+	// Then when this finishes we know that unsubscribe call has been finished.
 	for _ in 0..30 {
 		if client.request::<String>("say_hello", rpc_params![]).await.is_ok() {
 			success = true;
 			break;
 		}
-		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 	}
 
 	assert!(success);
