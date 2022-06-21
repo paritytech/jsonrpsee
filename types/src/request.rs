@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 
 /// JSON-RPC request object as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Request<'a> {
 	/// JSON-RPC version.
