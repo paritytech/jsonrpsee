@@ -15,7 +15,7 @@ jsonrpsee-types = { path = "../types", version = "0.14.0" }
 thiserror = "1"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-tracing = "0.1"
+tracing = "0.1.34"
 
 # optional deps
 arrayvec = { version = "0.7.1", optional = true }
