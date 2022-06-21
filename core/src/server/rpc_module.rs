@@ -866,7 +866,7 @@ impl PendingSubscription {
 	///                sink.close(e);
 	///            }
 	///            // we don't want to send close reason when the client is unsubscribed or disconnected.
-	///            (_, SubscriptionClosed::RemotePeerAborted) | (None, _) => (),
+	///            (Some(_sink), SubscriptionClosed::RemotePeerAborted) | (None, _) => (),
 	///         }
 	///     });
 	///     Ok(())

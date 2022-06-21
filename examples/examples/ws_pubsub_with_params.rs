@@ -92,7 +92,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module
 		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
 			let (one, two) = params.parse::<(usize, usize)>()?;
-			let mut sink = pending.accept()?;
 
 			let item = &LETTERS[one..two];
 
@@ -100,15 +99,18 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				match sink.pipe_from_stream(stream).await {
+				match pending.pipe_from_stream(stream).await {
 					// Send close notification when subscription stream failed.
-					SubscriptionClosed::Failed(err) => {
+					(Some(sink), SubscriptionClosed::Failed(err)) => {
 						sink.close(err);
 					}
 					// Don't send close notification because the stream should run forever.
-					SubscriptionClosed::Success => (),
-					// Don't send close because the client has already disconnected.
-					SubscriptionClosed::RemotePeerAborted => (),
+					(Some(_sink), SubscriptionClosed::Success) => (),
+					// Don't send close because the client has already disconnected after accepting the
+					// `PendingSubscription`
+					(Some(_sink), SubscriptionClosed::RemotePeerAborted) => (),
+					// Client has disconnected before accepting the `PendingSubscription`.
+					(None, _) => (),
 				};
 			});
 
