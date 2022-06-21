@@ -87,7 +87,7 @@ pub struct ConnState<'a> {
 
 /// Outcome of a successful terminated subscription.
 #[derive(Debug)]
-pub enum SubscriptionResult {
+pub enum InnerSubscriptionResult {
 	/// The subscription stream was executed successfully.
 	Success,
 	/// The subscription was aborted by the remote peer.
@@ -843,7 +843,7 @@ impl PendingSubscription {
 	///
 	/// ```no_run
 	///
-	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionResult};
+	/// use jsonrpsee_core::server::rpc_module::RpcModule;
 	/// use jsonrpsee_core::error::{Error, SubscriptionClosed};
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	/// use anyhow::anyhow;
@@ -968,7 +968,7 @@ impl SubscriptionSink {
 	///
 	/// ```no_run
 	///
-	/// use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionResult};
+	/// use jsonrpsee_core::server::rpc_module::RpcModule;
 	/// use jsonrpsee_core::error::{Error, SubscriptionClosed};
 	/// use jsonrpsee_types::ErrorObjectOwned;
 	/// use anyhow::anyhow;
