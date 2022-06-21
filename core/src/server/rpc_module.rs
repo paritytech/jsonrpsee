@@ -850,7 +850,6 @@ impl PendingSubscription {
 	///
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
-	///     // let mut sink = pending.accept().unwrap();
 	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
 	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
 	///     // because after the `Err(_)` the stream is terminated.
