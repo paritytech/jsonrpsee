@@ -749,6 +749,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						claimed,
 					}));
 
+					// The callback returns an empty `SubscriptionError` for improved API ergonomics.
 					let _ = callback(params, sink, ctx.clone());
 
 					true
