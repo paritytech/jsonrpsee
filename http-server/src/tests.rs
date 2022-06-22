@@ -353,6 +353,17 @@ async fn invalid_request_object() {
 }
 
 #[tokio::test]
+async fn unknown_field_is_ok() {
+	let (addr, _handle) = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1,"is_not_request_object":1}"#;
+	let response = http_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, ok_response(JsonValue::String("lo".to_owned()), Id::Num(1)));
+}
+
+#[tokio::test]
 async fn notif_works() {
 	let (addr, _handle) = server().with_default_timeout().await.unwrap();
 	let uri = to_http_uri(addr);

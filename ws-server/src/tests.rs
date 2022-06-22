@@ -502,6 +502,16 @@ async fn invalid_request_object() {
 }
 
 #[tokio::test]
+async fn unknown_field_is_ok() {
+	let addr = server().await;
+	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
+
+	let req = r#"{"jsonrpc":"2.0","method":"say_hello","id":1,"is_not_request_object":1}"#;
+	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, ok_response(JsonValue::String("hello".to_owned()), Id::Num(1)));
+}
+
+#[tokio::test]
 async fn register_methods_works() {
 	let mut module = RpcModule::new(());
 	assert!(module.register_method("say_hello", |_, _| Ok("lo")).is_ok());
