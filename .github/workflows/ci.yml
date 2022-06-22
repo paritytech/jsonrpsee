@@ -105,17 +105,14 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install cargo-nextest
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          version: 0.9
-
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.4.0
 
-      - name: Cargo nextest
-        run: cargo nextest run --workspace
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+          args: --workspace
 
   tests_macos:
     name: Run tests macos
@@ -131,17 +128,14 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install cargo-nextest
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          version: 0.9
-
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.4.0
 
-      - name: Cargo nextest
-        run: cargo nextest run --workspace
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+          args: --workspace
 
   tests_windows:
     name: Run tests Windows
@@ -157,17 +151,14 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install cargo-nextest
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          version: 0.9
-
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1.4.0
 
-      - name: Cargo nextest
-        run: cargo nextest run --workspace
+      - name: Cargo test
+        uses: actions-rs/cargo@v1.0.3
+        with:
+          command: test
+          args: --workspace
 
   wasm_tests:
     name: Test wasm
