@@ -880,8 +880,8 @@ impl PendingSubscription {
 		if let Ok(mut sink) = self.accept() {
 			let result = sink.pipe_from_try_stream(stream).await;
 			match result {
-				SubscriptionClosed::Success => PipeFromStreamResult::Success(sink),
-				SubscriptionClosed::Failed(error) => PipeFromStreamResult::Failure(sink, error),
+				SubscriptionClosed::Success => PipeFromStreamResult::Success(Some(sink)),
+				SubscriptionClosed::Failed(error) => PipeFromStreamResult::Failure(Some((sink, error))),
 				SubscriptionClosed::RemotePeerAborted => PipeFromStreamResult::RemotePeerAborted,
 			}
 		} else {
@@ -928,15 +928,12 @@ impl Drop for PendingSubscription {
 #[derive(Debug)]
 pub enum PipeFromStreamResult {
 	/// The connection was accepted and the pipe returned [`SubscriptionClosed::Success`].
-	Success(SubscriptionSink),
+	Success(Option<SubscriptionSink>),
 	/// The connection was accepted and the pipe returned [`SubscriptionClosed::Failed`]
 	/// with the provided error.
-	Failure(SubscriptionSink, ErrorObjectOwned),
+	Failure(Option<(SubscriptionSink, ErrorObjectOwned)>),
 	/// The remote peer closed the connection or called the unsubscribe method.
 	RemotePeerAborted,
-	/// The result was consumed by one of the registered callbacks:
-	/// [`PipeFromStreamResult::on_success`], or [`PipeFromStreamResult::on_failure`].
-	ResultConsumed,
 }
 
 impl PipeFromStreamResult {
@@ -949,9 +946,9 @@ impl PipeFromStreamResult {
 			F: FnOnce(SubscriptionSink) -> (),
 	{
 		match self {
-			PipeFromStreamResult::Success(sink) => {
+			PipeFromStreamResult::Success(Some(sink)) => {
 				func(sink);
-				PipeFromStreamResult::ResultConsumed
+				PipeFromStreamResult::Success(None)
 			}
 			_ => self
 		}
@@ -966,9 +963,9 @@ impl PipeFromStreamResult {
 			F: FnOnce(SubscriptionSink, ErrorObjectOwned) -> (),
 	{
 		match self {
-			PipeFromStreamResult::Failure(sink, error) => {
+			PipeFromStreamResult::Failure(Some((sink, error))) => {
 				func(sink, error);
-				PipeFromStreamResult::ResultConsumed
+				PipeFromStreamResult::Failure(None)
 			}
 			_ => self
 		}
