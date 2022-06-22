@@ -34,7 +34,6 @@ use serde::{Deserialize, Serialize};
 
 /// JSON-RPC successful response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
 pub struct Response<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
