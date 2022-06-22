@@ -38,7 +38,7 @@ Support `WebSocket` and `HTTP` transports for both client and server.
 
 ## Roadmap
 
-See [tracking issue for next stable release (0.9)](https://github.com/paritytech/jsonrpsee/issues/670)
+See [our tracking milestone](https://github.com/paritytech/jsonrpsee/milestone/2) for the upcoming stable v1.0 release.
 
 ## Users
 

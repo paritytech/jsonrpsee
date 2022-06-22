@@ -84,7 +84,7 @@ pub(crate) fn process_subscription_response(
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => {
-			tracing::error!("Subscription ID: {:?} is not an active subscription", sub_id);
+			tracing::warn!("Subscription ID: {:?} is not an active subscription", sub_id);
 			return Err(None);
 		}
 	};
@@ -100,7 +100,7 @@ pub(crate) fn process_subscription_response(
 			}
 		},
 		None => {
-			tracing::error!("Subscription ID: {:?} is not an active subscription", sub_id);
+			tracing::warn!("Subscription ID: {:?} is not an active subscription", sub_id);
 			Err(None)
 		}
 	}
