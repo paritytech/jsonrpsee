@@ -34,7 +34,6 @@ use serde_json::value::RawValue;
 
 /// JSON-RPC request object as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
 pub struct Request<'a> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
@@ -67,7 +66,6 @@ pub struct InvalidRequest<'a> {
 /// JSON-RPC notification (a request object without a request ID) as defined in the
 /// [spec](https://www.jsonrpc.org/specification#request-object).
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
 pub struct Notification<'a, T> {
 	/// JSON-RPC version.
 	pub jsonrpc: TwoPointZero,
