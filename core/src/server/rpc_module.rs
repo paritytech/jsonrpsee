@@ -858,7 +858,7 @@ impl PendingSubscription {
 	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
 	///         // If we pipe messages to the sink, we can inspect why it ended:
 	///         pending
-	///             .pipe_from_stream(stream)
+	///             .pipe_from_try_stream(stream)
 	///             .await
 	///             .on_success(|sink| {
 	///                 let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();

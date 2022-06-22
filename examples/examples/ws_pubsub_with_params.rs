@@ -29,7 +29,6 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use jsonrpsee::core::client::SubscriptionClientT;
-use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
@@ -68,23 +67,16 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
 			let idx = params.one()?;
-			let mut sink = pending.accept()?;
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				match sink.pipe_from_stream(stream).await {
+				pending.pipe_from_stream(stream).await.on_failure(|sink, err| {
 					// Send close notification when subscription stream failed.
-					SubscriptionClosed::Failed(err) => {
-						sink.close(err);
-					}
-					// Don't send close notification because the stream should run forever.
-					SubscriptionClosed::Success => (),
-					// Don't send close because the client has already disconnected.
-					SubscriptionClosed::RemotePeerAborted => (),
-				};
+					sink.close(err);
+				});
 			});
 			Ok(())
 		})
