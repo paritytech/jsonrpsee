@@ -34,7 +34,7 @@ use std::time::Duration;
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use crate::types::{Id, Request};
-use futures_channel::{mpsc, oneshot};
+use futures_channel::mpsc;
 use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
@@ -47,7 +47,9 @@ use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
 use jsonrpsee_core::server::resource_limiting::Resources;
-use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
+use jsonrpsee_core::server::rpc_module::{
+	pending_subscription_channel, ConnState, ConnectionId, MethodKind, Methods, PendingSubscriptionCallTx,
+};
 use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
@@ -497,12 +499,12 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 						request_start,
 					};
 
-					let (response, maybe_sub) = process_single_request(data, call).await;
+					let (response, maybe_pending_sub_tx) = process_single_request(data, call).await;
 					middleware.on_response(&response.result, request_start);
 					let _ = sink.send_raw(response.result);
 
-					if let Some(sub) = maybe_sub {
-						let _ = sub.send(());
+					if let Some(pending_sub_tx) = maybe_pending_sub_tx {
+						pending_sub_tx.accept();
 					}
 				}
 				.boxed();
@@ -863,11 +865,11 @@ where
 				.fold(BatchResponseBuilder::new(), |mut batch_response, (req, call)| async move {
 					let params = Params::new(req.params.map(|params| params.get()));
 
-					let (response, maybe_sub) =
+					let (response, maybe_pending_sub_tx) =
 						execute_call(Call { name: &req.method, params, id: req.id, call }).await;
 
-					if let Some(sub) = maybe_sub {
-						let _ = sub.send(());
+					if let Some(pending_sub_tx) = maybe_pending_sub_tx {
+						pending_sub_tx.accept();
 					}
 
 					batch_response.append(&response);
@@ -889,7 +891,7 @@ where
 async fn process_single_request<M: Middleware>(
 	data: Vec<u8>,
 	call: CallData<'_, M>,
-) -> (MethodResponse, Option<oneshot::Sender<()>>) {
+) -> (MethodResponse, Option<PendingSubscriptionCallTx>) {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let params = Params::new(req.params.map(|params| params.get()));
 		let name = &req.method;
@@ -902,15 +904,12 @@ async fn process_single_request<M: Middleware>(
 	}
 }
 
-/// This a workaround the see whether it works
+/// Execute a call which returns result of the call with a additional sink
+/// to fire a signal once the subscription call has been answered.
 ///
-/// Essentially, the sender is used to indicate to the other side that call has been answered
-/// such that the subscription notifications are not allowed to start until `the sender` has ACK:ed
-/// that.
-///
-/// Otherwise it's possible that the subscription notifications could start before that the actual subscription
-/// response has been sent.
-async fn execute_call<M: Middleware>(c: Call<'_, M>) -> (MethodResponse, Option<oneshot::Sender<()>>) {
+/// Returns `(MethodResponse, None)` on every call that isn't a subscription
+/// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
+async fn execute_call<M: Middleware>(c: Call<'_, M>) -> (MethodResponse, Option<PendingSubscriptionCallTx>) {
 	let Call { name, id, params, call } = c;
 	let CallData {
 		resources,
@@ -957,10 +956,10 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> (MethodResponse, Option<
 				Ok(guard) => {
 					if let Some(cn) = bounded_subscriptions.acquire() {
 						let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
-						let (subscribe_tx, subscribe_rx) = oneshot::channel();
+						let (pending_sub_tx, pending_sub_rx) = pending_subscription_channel();
 						let result =
-							callback(id.clone(), params, sink.clone(), conn_state, subscribe_rx, Some(guard)).await;
-						(result, Some(subscribe_tx))
+							callback(id.clone(), params, sink.clone(), conn_state, pending_sub_rx, Some(guard)).await;
+						(result, Some(pending_sub_tx))
 					} else {
 						(MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max())), None)
 					}
