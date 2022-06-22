@@ -56,7 +56,7 @@ pub(crate) mod visitor;
 /// - For subscription methods:
 ///   - There will be one additional argument inserted right after `&self`: `subscription_sink: PendingSubscription`.
 ///   It should be used accept or reject a pending subscription.
-///   - The return type of the subscription method is `ReturnTypeSubscription` for improved ergonomics.
+///   - The return type of the subscription method is `SubscriptionResult` for improved ergonomics.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
 /// a new name. For the `Foo` trait, server trait will be named `FooServer`, and client,
