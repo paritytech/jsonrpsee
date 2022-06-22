@@ -934,6 +934,9 @@ pub enum PipeFromStreamResult {
 	Failure(SubscriptionSink, ErrorObjectOwned),
 	/// The remote peer closed the connection or called the unsubscribe method.
 	RemotePeerAborted,
+	/// The result was consumed by one of the registered callbacks:
+	/// [`PipeFromStreamResult::on_success`], or [`PipeFromStreamResult::on_failure`].
+	ResultConsumed,
 }
 
 impl PipeFromStreamResult {
@@ -948,7 +951,7 @@ impl PipeFromStreamResult {
 		match self {
 			PipeFromStreamResult::Success(sink) => {
 				func(sink);
-				PipeFromStreamResult::RemotePeerAborted
+				PipeFromStreamResult::ResultConsumed
 			}
 			_ => self
 		}
@@ -965,7 +968,7 @@ impl PipeFromStreamResult {
 		match self {
 			PipeFromStreamResult::Failure(sink, error) => {
 				func(sink, error);
-				PipeFromStreamResult::RemotePeerAborted
+				PipeFromStreamResult::ResultConsumed
 			}
 			_ => self
 		}
