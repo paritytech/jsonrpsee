@@ -488,6 +488,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 						conn_id,
 						resources: &resources,
 						max_response_body_size,
+						max_log_length,
 						methods: &methods,
 						bounded_subscriptions,
 						sink: &sink,
@@ -532,6 +533,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 							conn_id,
 							resources,
 							max_response_body_size,
+							max_log_length,
 							methods,
 							bounded_subscriptions,
 							sink: &sink,
@@ -828,6 +830,7 @@ struct CallData<'a, M: Middleware> {
 	middleware: &'a M,
 	methods: &'a Methods,
 	max_response_body_size: u32,
+	max_log_length: u32,
 	resources: &'a Resources,
 	sink: &'a MethodSink,
 	request_start: M::Instant,
@@ -851,8 +854,6 @@ where
 	let Batch { data, call } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
-		tracing::debug!("recv batch len={}", batch.len());
-		tracing::trace!("recv: batch={:?}", batch);
 		return if !batch.is_empty() {
 			let batch = batch.into_iter().map(|req| (req, call.clone()));
 
@@ -890,8 +891,6 @@ async fn process_single_request<M: Middleware>(
 	call: CallData<'_, M>,
 ) -> (MethodResponse, Option<oneshot::Sender<()>>) {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-		tracing::debug!("recv method call={}", req.method);
-		tracing::trace!("recv: req={:?}", req);
 		let params = Params::new(req.params.map(|params| params.get()));
 		let name = &req.method;
 		let id = req.id;
@@ -918,6 +917,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> (MethodResponse, Option<
 		methods,
 		middleware,
 		max_response_body_size,
+		max_log_length,
 		conn_id,
 		bounded_subscriptions,
 		id_provider,

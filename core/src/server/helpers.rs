@@ -28,7 +28,7 @@ use std::io;
 use std::sync::Arc;
 
 use crate::tracing::tx_log_from_str;
-use crate::{Error};
+use crate::Error;
 use futures_channel::mpsc;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
@@ -107,39 +107,6 @@ impl MethodSink {
 		self.tx.is_closed()
 	}
 
-	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
-	/// an error will be sent instead.
-	pub fn send_response(&self, id: Id, result: impl Serialize) -> bool {
-		let mut writer = BoundedWriter::new(self.max_response_size as usize);
-
-		let json = match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
-			Ok(_) => {
-				// Safety - serde_json does not emit invalid UTF-8.
-				unsafe { String::from_utf8_unchecked(writer.into_bytes()) }
-			}
-			Err(err) => {
-				tracing::error!("Error serializing response: {:?}", err);
-
-				if err.is_io() {
-					let data = format!("Exceeded max limit of {}", self.max_response_size);
-					let err = ErrorObject::owned(OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, Some(data));
-					return self.send_error(id, err);
-				} else {
-					return self.send_error(id, ErrorCode::InternalError.into());
-				}
-			}
-		};
-
-		tx_log_from_str(&json, self.max_log_length);
-
-		if let Err(err) = self.send_raw(json) {
-			tracing::warn!("Error sending response {:?}", err);
-			false
-		} else {
-			true
-		}
-	}
-
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
 		let json = match serde_json::to_string(&ErrorResponse::borrowed(error, id)) {
@@ -167,9 +134,9 @@ impl MethodSink {
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
-	pub fn send_raw(&self, raw_json: String) -> Result<(), mpsc::TrySendError<String>> {
-		tracing::trace!("send: {:?}", raw_json);
-		self.tx.unbounded_send(raw_json)
+	pub fn send_raw(&self, json: String) -> Result<(), mpsc::TrySendError<String>> {
+		tx_log_from_str(&json, self.max_log_length);
+		self.tx.unbounded_send(json)
 	}
 
 	/// Close the channel for any further messages.
@@ -248,9 +215,9 @@ impl BoundedSubscriptions {
 /// Represent the response to method call.
 #[derive(Debug)]
 pub struct MethodResponse {
-	/// Serialized response,
+	/// Serialized JSON-RPC response,
 	pub result: String,
-	/// Status indicates whether the call was successful or or.
+	/// Indicates whether the call was successful or not.
 	pub success: bool,
 }
 
@@ -294,7 +261,7 @@ impl MethodResponse {
 /// Builder to build a `BatchResponse`.
 #[derive(Debug)]
 pub struct BatchResponseBuilder {
-	/// Formatted JSON-RPC response.
+	/// Serialized JSON-RPC response,
 	result: String,
 	/// Indicates whether the call was successful or not.
 	success: bool,
