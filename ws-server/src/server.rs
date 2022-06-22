@@ -501,6 +501,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 
 					let (response, maybe_pending_sub_tx) = process_single_request(data, call).await;
 					middleware.on_response(&response.result, request_start);
+
 					let _ = sink.send_raw(response.result);
 
 					if let Some(pending_sub_tx) = maybe_pending_sub_tx {
@@ -858,15 +859,17 @@ where
 	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
 		return if !batch.is_empty() {
 			let batch = batch.into_iter().map(|req| (req, call.clone()));
-
 			let batch_stream = futures_util::stream::iter(batch);
+
+			let trace = RpcTracing::batch();
+			let _enter = trace.span().enter();
 
 			let batch_response = batch_stream
 				.fold(BatchResponseBuilder::new(), |mut batch_response, (req, call)| async move {
 					let params = Params::new(req.params.map(|params| params.get()));
 
 					let (response, maybe_pending_sub_tx) =
-						execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+						execute_call(Call { name: &req.method, params, id: req.id, call }).in_current_span().await;
 
 					if let Some(pending_sub_tx) = maybe_pending_sub_tx {
 						pending_sub_tx.accept();
@@ -893,11 +896,16 @@ async fn process_single_request<M: Middleware>(
 	call: CallData<'_, M>,
 ) -> (MethodResponse, Option<PendingSubscriptionCallTx>) {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
+		let trace = RpcTracing::method_call(&req.method);
+		let _enter = trace.span().enter();
+
+		rx_log_from_json(&req, call.max_log_length);
+
 		let params = Params::new(req.params.map(|params| params.get()));
 		let name = &req.method;
 		let id = req.id;
 
-		execute_call(Call { name, params, id, call }).await
+		execute_call(Call { name, params, id, call }).in_current_span().await
 	} else {
 		let (id, code) = prepare_error(&data);
 		(MethodResponse::error(id, ErrorObject::from(code)), None)
@@ -976,6 +984,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> (MethodResponse, Option<
 		},
 	};
 
+	tx_log_from_str(&response.0.result, max_log_length);
 	middleware.on_result(name, response.0.success, request_start);
 	response
 }

@@ -46,7 +46,7 @@ use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
 use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, RpcTracing};
+use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str, RpcTracing};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
@@ -654,12 +654,19 @@ async fn process_health_request<M: Middleware>(
 	request_start: M::Instant,
 	max_log_length: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
+	let trace = RpcTracing::method_call(&health_api.method);
+	let _enter = trace.span().enter();
+
+	tx_log_from_str("HTTP health API", max_log_length);
+
 	let response = match methods.method_with_name(&health_api.method) {
 		None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
 		Some((_name, method_callback)) => match method_callback.inner() {
 			MethodKind::Sync(callback) => (callback)(Id::Number(0), Params::new(None), max_response_body_size as usize),
 			MethodKind::Async(callback) => {
-				(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None).await
+				(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None)
+					.in_current_span()
+					.await
 			}
 
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
@@ -668,6 +675,7 @@ async fn process_health_request<M: Middleware>(
 		},
 	};
 
+	rx_log_from_str(&response.result, max_log_length);
 	middleware.on_result(&health_api.method, response.success, request_start);
 	middleware.on_response(&response.result, request_start);
 
@@ -726,6 +734,9 @@ where
 
 			let batch_stream = futures_util::stream::iter(batch);
 
+			let trace = RpcTracing::batch();
+			let _enter = trace.span().enter();
+
 			let batch_response = batch_stream
 				.fold(BatchResponseBuilder::new(), |mut batch_response, (req, call)| async move {
 					let params = Params::new(req.params.map(|params| params.get()));
@@ -736,6 +747,7 @@ where
 
 					batch_response
 				})
+				.in_current_span()
 				.await;
 
 			batch_response.finish()
@@ -761,12 +773,22 @@ where
 
 async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
+		let trace = RpcTracing::method_call(&req.method);
+		let _enter = trace.span().enter();
+
+		rx_log_from_json(&req, call.max_log_length);
+
 		let params = Params::new(req.params.map(|params| params.get()));
 		let name = &req.method;
 		let id = req.id;
 
-		execute_call(Call { name, params, id, call }).await
-	} else if let Ok(_req) = serde_json::from_slice::<Notif>(&data) {
+		execute_call(Call { name, params, id, call }).in_current_span().await
+	} else if let Ok(req) = serde_json::from_slice::<Notif>(&data) {
+		let trace = RpcTracing::notification(&req.method);
+		let _enter = trace.span().enter();
+
+		rx_log_from_json(&req, call.max_log_length);
+
 		MethodResponse { result: String::new(), success: true }
 	} else {
 		let (id, code) = prepare_error(&data);
@@ -814,6 +836,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 		},
 	};
 
+	tx_log_from_str(&response.result, max_log_length);
 	middleware.on_result(name, response.success, request_start);
 	response
 }
