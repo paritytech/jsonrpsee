@@ -220,15 +220,22 @@ pub struct RpcDescription {
 	pub(crate) methods: Vec<RpcMethod>,
 	/// List of RPC subscriptions defined in the trait.
 	pub(crate) subscriptions: Vec<RpcSubscription>,
+	/// Optional user defined trait bounds for the client implementation.
+	pub(crate) client_bounds: Option<Punctuated<syn::WherePredicate, Token![,]>>,
+	/// Optional user defined trait bounds for the server implementation.
+	pub(crate) server_bounds: Option<Punctuated<syn::WherePredicate, Token![,]>>,
 }
 
 impl RpcDescription {
 	pub fn from_item(attr: Attribute, mut item: syn::ItemTrait) -> syn::Result<Self> {
-		let [client, server, namespace] = AttributeMeta::parse(attr)?.retain(["client", "server", "namespace"])?;
+		let [client, server, namespace, client_bounds, server_bounds] =
+			AttributeMeta::parse(attr)?.retain(["client", "server", "namespace", "client_bounds", "server_bounds"])?;
 
 		let needs_server = optional(server, Argument::flag)?.is_some();
 		let needs_client = optional(client, Argument::flag)?.is_some();
 		let namespace = optional(namespace, Argument::string)?;
+		let client_bounds = optional(client_bounds, Argument::group::<syn::WherePredicate>)?;
+		let server_bounds = optional(server_bounds, Argument::group::<syn::WherePredicate>)?;
 
 		if !needs_server && !needs_client {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
@@ -313,6 +320,8 @@ impl RpcDescription {
 			trait_def: item,
 			methods,
 			subscriptions,
+			client_bounds,
+			server_bounds,
 		})
 	}
 
