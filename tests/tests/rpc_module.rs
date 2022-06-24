@@ -315,13 +315,11 @@ async fn subscribe_unsubscribe_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let mut sink = pending.accept()?;
-
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);
 
 			tokio::spawn(async move {
-				sink.pipe_from_stream(stream).await;
+				pending.pipe_from_stream(stream).await;
 			});
 			Ok(())
 		})

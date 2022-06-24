@@ -34,6 +34,7 @@ use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;
+use jsonrpsee::core::server::rpc_module::PipeFromStreamResult;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::AccessControlBuilder;
@@ -546,6 +547,7 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 	assert_eq!(rx_len, 10);
 }
 
+// TODO(lexnv): pipe from stream cannot be reused without having `SubscriptionSink::pipe_from_stream` public.
 #[tokio::test]
 async fn ws_server_pipe_from_stream_can_be_reused() {
 	init_logger();
@@ -591,18 +593,16 @@ async fn ws_server_limit_subs_per_conn_works() {
 
 	module
 		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
-			let mut sink = pending.accept()?;
-
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-				match sink.pipe_from_stream(stream).await {
-					SubscriptionClosed::Success => {
-						sink.close(SubscriptionClosed::Success);
-					}
+				match pending.pipe_from_stream(stream).await.on_success(|sink| {
+					sink.close(SubscriptionClosed::Success);
+				}) {
+					PipeFromStreamResult::Success(None) => (),
 					_ => unreachable!(),
-				};
+				}
 			});
 			Ok(())
 		})
@@ -648,16 +648,12 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 	module
 		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
-			let mut sink = pending.accept()?;
-
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-				match sink.pipe_from_stream(stream).await {
-					SubscriptionClosed::RemotePeerAborted => {
-						sink.close(SubscriptionClosed::RemotePeerAborted);
-					}
+				match pending.pipe_from_stream(stream).await {
+					PipeFromStreamResult::RemotePeerAborted => (),
 					_ => unreachable!(),
 				};
 			});
