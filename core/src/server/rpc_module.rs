@@ -1103,34 +1103,6 @@ impl SubscriptionSink {
 		}
 	}
 
-	/// Similar to [`SubscriptionSink::pipe_from_try_stream`] but it doesn't require the stream return `Result`.
-	///
-	/// Warning: it's possible to pass in a stream that returns `Result` if `Result: Serialize` is satisfied
-	/// but it won't cancel the stream when an error occurs. If you want the stream to be canceled when an
-	/// error occurs use [`SubscriptionSink::pipe_from_try_stream`] instead.
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	///
-	/// use jsonrpsee_core::server::rpc_module::RpcModule;
-	///
-	/// let mut m = RpcModule::new(());
-	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
-	///     let mut sink = pending.accept().unwrap();
-	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
-	///     tokio::spawn(async move { sink.pipe_from_stream(stream).await; });
-	///     Ok(())
-	/// });
-	/// ```
-	async fn pipe_from_stream<S, T>(&mut self, stream: S) -> SubscriptionClosed
-	where
-		S: Stream<Item = T> + Unpin,
-		T: Serialize,
-	{
-		self.pipe_from_try_stream::<_, _, Error>(stream.map(|item| Ok(item))).await
-	}
-
 	/// Returns whether the subscription is closed.
 	pub fn is_closed(&self) -> bool {
 		self.inner.is_closed() || self.close_notify.is_none() || !self.is_active_subscription()
