@@ -44,6 +44,12 @@ macro_rules! assert_type {
 	}};
 }
 
+fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
+}
+
 #[test]
 fn rpc_modules_with_different_contexts_can_be_merged() {
 	let cx = Vec::<u8>::new();
@@ -201,6 +207,8 @@ async fn calling_method_without_server_using_proc_macro() {
 
 #[tokio::test]
 async fn subscribing_without_server() {
+	init_logger();
+
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
