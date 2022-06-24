@@ -939,8 +939,8 @@ pub enum PipeFromStreamResult {
 }
 
 impl PipeFromStreamResult {
-	/// Callback that will run the provided function if the result is [`PipeFromStreamResult::Success`].
-	/// After the function runs a new [`PipeFromStreamResult::RemotePeerAborted`] is returned.
+	/// Callback that will run the provided function if the result is [`PipeFromStreamResult::Success(Some(_))`].
+	/// After the function runs a new [`PipeFromStreamResult::Success(None)`] is returned.
 	///
 	/// Otherwise, it leaves the object untouched.
 	pub fn on_success<F>(self, func: F) -> PipeFromStreamResult
@@ -956,8 +956,8 @@ impl PipeFromStreamResult {
 		}
 	}
 
-	/// Callback that will run the provided function if the result is [`PipeFromStreamResult::Failure`].
-	/// After the function runs a new [`PipeFromStreamResult::RemotePeerAborted`] is returned.
+	/// Callback that will run the provided function if the result is [`PipeFromStreamResult::Failure(Some(_))`].
+	/// After the function runs a new [`PipeFromStreamResult::Failure(None)`] is returned.
 	///
 	/// Otherwise, it leaves the object untouched.
 	pub fn on_failure<F>(self, func: F) -> PipeFromStreamResult
@@ -1028,24 +1028,22 @@ impl SubscriptionSink {
 	///
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
-	///     let mut sink = pending.accept().unwrap();
 	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
 	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
 	///     // because after the `Err(_)` the stream is terminated.
 	///     tokio::spawn(async move {
 	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
 	///         // If we pipe messages to the sink, we can inspect why it ended:
-	///         match sink.pipe_from_try_stream(stream).await {
-	///            SubscriptionClosed::Success => {
-	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
-	///                sink.close(err_obj);
-	///            }
-	///            // we don't want to send close reason when the client is unsubscribed or disconnected.
-	///            SubscriptionClosed::RemotePeerAborted => (),
-	///            SubscriptionClosed::Failed(e) => {
-	///                sink.close(e);
-	///            }
-	///         }
+	///         pending
+	///             .pipe_from_try_stream(stream)
+	///             .await
+	///             .on_success(|sink| {
+	///                 let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
+	///                 sink.close(err_obj);
+	///             })
+	///             .on_failure(|sink, err| {
+	///                 sink.close(err);
+	///             })
 	///     });
 	///     Ok(())
 	/// });
