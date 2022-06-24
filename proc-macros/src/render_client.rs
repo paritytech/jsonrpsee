@@ -156,6 +156,7 @@ impl RpcDescription {
 			});
 			match param_kind {
 				ParamKind::Map => {
+					let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
 					// Extract parameter names.
 					let param_names = extract_param_names(&signature.sig);
 					// Combine parameter names and values into tuples.
@@ -165,7 +166,7 @@ impl RpcDescription {
 						quote! { (#param, #value) }
 					});
 					quote! {
-						Some(types::ParamsSer::Map(
+						Some(#jsonrpsee::types::ParamsSer::Map(
 							std::collections::BTreeMap::<&str, #serde_json::Value>::from(
 								[#(#params),*]
 								)

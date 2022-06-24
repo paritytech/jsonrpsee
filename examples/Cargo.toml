@@ -10,7 +10,7 @@ publish = false
 anyhow = "1"
 futures = "0.3"
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
-tracing = "0.1"
+tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 tokio = { version = "1.16", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
