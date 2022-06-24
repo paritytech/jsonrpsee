@@ -234,8 +234,8 @@ impl RpcDescription {
 		let needs_server = optional(server, Argument::flag)?.is_some();
 		let needs_client = optional(client, Argument::flag)?.is_some();
 		let namespace = optional(namespace, Argument::string)?;
-		let client_bounds = optional(client_bounds, Argument::group::<syn::WherePredicate>)?;
-		let server_bounds = optional(server_bounds, Argument::group::<syn::WherePredicate>)?;
+		let client_bounds = optional(client_bounds, Argument::group)?;
+		let server_bounds = optional(server_bounds, Argument::group)?;
 
 		if !needs_server && !needs_client {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
