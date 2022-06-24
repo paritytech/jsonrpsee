@@ -239,10 +239,7 @@ async fn subscribing_without_server() {
 
 #[tokio::test]
 async fn close_test_subscribing_without_server() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+	init_logger();
 
 	let mut module = RpcModule::new(());
 	module
