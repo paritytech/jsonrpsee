@@ -241,6 +241,20 @@ impl RpcDescription {
 			return Err(syn::Error::new_spanned(&item.ident, "Either 'server' or 'client' attribute must be applied"));
 		}
 
+		if client_bounds.is_some() && !needs_client {
+			return Err(syn::Error::new_spanned(
+				&item.ident,
+				"Attribute 'client' must be specified with 'client_bounds'",
+			));
+		}
+
+		if server_bounds.is_some() && !needs_server {
+			return Err(syn::Error::new_spanned(
+				&item.ident,
+				"Attribute 'server' must be specified with 'server_bounds'",
+			));
+		}
+
 		let jsonrpsee_client_path = crate::helpers::find_jsonrpsee_client_crate().ok();
 		let jsonrpsee_server_path = crate::helpers::find_jsonrpsee_server_crate().ok();
 
