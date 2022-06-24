@@ -144,6 +144,10 @@ pub(crate) mod visitor;
 ///   implementation's methods conveniently.
 /// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
 ///   method `spam`, the resulting method name will be `foo_spam`.
+/// - `server_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the server
+///   implementation.
+/// - `client_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the client
+///   implementation.
 ///
 /// **Trait requirements:**
 ///
@@ -287,7 +291,7 @@ pub(crate) mod visitor;
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
 ///         fn sub_override_notif_method(&self, pending: PendingSubscription) {
-///             let mut sink = pending.accept().unwrap();     
+///             let mut sink = pending.accept().unwrap();
 ///             tokio::spawn(async move {
 ///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
 ///                 sink.pipe_from_stream(stream).await;
