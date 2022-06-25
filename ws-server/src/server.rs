@@ -486,10 +486,10 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 				let fut = async move {
 					let call = CallData {
 						conn_id,
-						resources: &resources,
+						resources,
 						max_response_body_size,
 						max_log_length,
-						methods: &methods,
+						methods,
 						bounded_subscriptions,
 						sink: &sink,
 						id_provider: &*id_provider,

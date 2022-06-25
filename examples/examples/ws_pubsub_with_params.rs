@@ -106,13 +106,12 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
 
 			tokio::spawn(async move {
-				let sink = match pending.accept() {
-					Some(sink) => sink,
-					_ => return,
-				};
-
 				match sink.pipe_from_stream(stream).await {
 					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {

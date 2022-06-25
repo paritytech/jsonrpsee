@@ -259,7 +259,7 @@ impl MethodResponse {
 }
 
 /// Builder to build a `BatchResponse`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BatchResponseBuilder {
 	/// Serialized JSON-RPC response,
 	result: String,

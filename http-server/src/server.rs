@@ -425,7 +425,7 @@ impl<M: Middleware> Server<M> {
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
-					let request_start = middleware.on_request(remote_addr, &request.headers());
+					let request_start = middleware.on_request(remote_addr, request.headers());
 
 					let methods = methods.clone();
 					let acl = acl.clone();
@@ -490,7 +490,7 @@ impl<M: Middleware> Server<M> {
 							// to be read in a browser.
 							Method::POST if content_type_is_json(&request) => {
 								let origin = return_origin_if_different_from_host(request.headers()).cloned();
-								let mut res = process_validated_request(
+								let mut res = process_validated_request(ProcessValidatedRequest {
 									request,
 									middleware,
 									methods,
@@ -500,7 +500,7 @@ impl<M: Middleware> Server<M> {
 									max_log_length,
 									batch_requests_supported,
 									request_start,
-								)
+								})
 								.await?;
 
 								if let Some(origin) = origin {
@@ -578,8 +578,7 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 	}
 }
 
-/// Process a verified request, it implies a POST request with content type JSON.
-async fn process_validated_request<M: Middleware>(
+struct ProcessValidatedRequest<M: Middleware> {
 	request: hyper::Request<hyper::Body>,
 	middleware: M,
 	methods: Methods,
@@ -589,7 +588,24 @@ async fn process_validated_request<M: Middleware>(
 	max_log_length: u32,
 	batch_requests_supported: bool,
 	request_start: M::Instant,
+}
+
+/// Process a verified request, it implies a POST request with content type JSON.
+async fn process_validated_request<M: Middleware>(
+	input: ProcessValidatedRequest<M>,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
+	let ProcessValidatedRequest {
+		request,
+		middleware,
+		methods,
+		resources,
+		max_request_body_size,
+		max_response_body_size,
+		max_log_length,
+		batch_requests_supported,
+		request_start,
+	} = input;
+
 	let (parts, body) = request.into_parts();
 
 	let (body, is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
