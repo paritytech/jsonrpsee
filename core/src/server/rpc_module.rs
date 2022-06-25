@@ -392,9 +392,7 @@ impl Methods {
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
-	///         tokio::spawn(async move {
-	///           pending.accept().await.unwrap().send(&"one answer").unwrap();
-	///         });
+	///         pending.accept().unwrap().send(&"one answer").unwrap();
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#).await.unwrap();
 	///     let resp = serde_json::from_str::<Response<u64>>(&resp.result).unwrap();
@@ -464,9 +462,7 @@ impl Methods {
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
-	///        tokio::spawn(async move {
-	///            pending.accept().await.unwrap().send(&"one answer").unwrap();
-	///        });
+	///        pending.accept().unwrap().send(&"one answer").unwrap();
 	///     }).unwrap();
 	///
 	///     let mut sub = module.subscribe("hi", EmptyParams::new()).await.unwrap();
@@ -691,13 +687,11 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	///         }
 	///     };
 	///
-	///     tokio::spawn(async move {
-	///         // Only fails in the connection is closed.
-	///         let mut sink = pending.accept().await.unwrap();
+	///     // Only fails in the connection is closed.
+	///     let sink = pending.accept().unwrap();
 	///
-	///         let sum = x + (*ctx);
-	///         let _ = sink.send(&sum);
-	///     });
+	///     let sum = x + (*ctx);
+	///     let _ = sink.send(&sum);
 	/// });
 	/// ```
 	pub fn register_subscription<F>(
@@ -864,7 +858,7 @@ impl PendingSubscription {
 	/// Attempt to accept the subscription and respond the subscription method call.
 	///
 	/// Fails if the connection was closed
-	pub async fn accept(mut self) -> Option<SubscriptionSink> {
+	pub fn accept(mut self) -> Option<SubscriptionSink> {
 		let inner = self.0.take()?;
 
 		let InnerPendingSubscription { sink, close_notify, method, uniq_sub, subscribers, id, subscribe_call, claimed } =
@@ -936,7 +930,7 @@ impl SubscriptionSink {
 	/// Returns `Ok(false)` if the sink was closed (either because the subscription was closed or the connection was terminated)
 	/// Return `Err(err)` if the message could not be serialized.
 	///
-	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<bool, serde_json::Error> {
+	pub fn send<T: Serialize>(&self, result: &T) -> Result<bool, serde_json::Error> {
 		// only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Ok(false);
@@ -965,13 +959,12 @@ impl SubscriptionSink {
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
 	///
-	///
 	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
 	///     // because after the `Err(_)` the stream is terminated.
 	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
+	///     let sink = pending.accept().unwrap();
 	///
 	///     tokio::spawn(async move {
-	///         let mut sink = pending.accept().await.unwrap();
 	///
 	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
 	///         // If we pipe messages to the sink, we can inspect why it ended:
@@ -989,7 +982,7 @@ impl SubscriptionSink {
 	///     });
 	/// });
 	/// ```
-	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> SubscriptionClosed
+	pub async fn pipe_from_try_stream<S, T, E>(&self, mut stream: S) -> SubscriptionClosed
 	where
 		S: TryStream<Ok = T, Error = E> + Unpin,
 		T: Serialize,
@@ -1056,14 +1049,15 @@ impl SubscriptionSink {
 	///
 	/// let mut m = RpcModule::new(());
 	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
+	///     let sink = pending.accept().unwrap();
+	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
+	///
 	///     tokio::spawn(async move {
-	///         let mut sink = pending.accept().await.unwrap();
-	///         let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
 	///         sink.pipe_from_stream(stream).await;
 	///      });
 	/// });
 	/// ```
-	pub async fn pipe_from_stream<S, T>(&mut self, stream: S) -> SubscriptionClosed
+	pub async fn pipe_from_stream<S, T>(&self, stream: S) -> SubscriptionClosed
 	where
 		S: Stream<Item = T> + Unpin,
 		T: Serialize,

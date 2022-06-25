@@ -75,7 +75,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		let rx = BroadcastStream::new(tx.clone().subscribe());
 
 		tokio::spawn(async move {
-			let mut sink = match pending.accept().await {
+			let sink = match pending.accept() {
 				Some(sink) => sink,
 				_ => return,
 			};

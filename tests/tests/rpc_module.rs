@@ -213,9 +213,13 @@ async fn subscribing_without_server() {
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
 			let mut stream_data = vec!['0', '1', '2'];
-			tokio::spawn(async move {
-				let mut sink = pending.accept().await.unwrap();
 
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			tokio::spawn(async move {
 				while let Some(letter) = stream_data.pop() {
 					tracing::debug!("This is your friendly subscription sending data.");
 					let _ = sink.send(&letter);
@@ -244,12 +248,12 @@ async fn close_test_subscribing_without_server() {
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			tokio::spawn(async move {
-				let mut sink = match pending.accept().await {
-					Some(sink) => sink,
-					_ => return,
-				};
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
 
+			tokio::spawn(async move {
 				// make sure to only send one item
 				sink.send(&"lo").unwrap();
 				while !sink.is_closed() {
@@ -272,7 +276,6 @@ async fn close_test_subscribing_without_server() {
 
 	// Close the subscription to ensure it doesn't return any items.
 	my_sub.close();
-	tracing::info!("[test] closed first sub");
 
 	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
@@ -303,13 +306,12 @@ async fn subscribing_without_server_bad_params() {
 				}
 			};
 
-			tokio::spawn(async move {
-				let mut sink = match pending.accept().await {
-					Some(sink) => sink,
-					_ => return,
-				};
-				sink.send(&p).unwrap();
-			});
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+
+			sink.send(&p).unwrap();
 		})
 		.unwrap();
 
@@ -328,13 +330,13 @@ async fn subscribe_unsubscribe_without_server() {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);
 
-			tokio::spawn(async move {
-				tracing::info!("waiting for sub");
-				let mut sink = pending.accept().await.unwrap();
-				tracing::info!("sub ok");
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
 
-				let res = sink.pipe_from_stream(stream).await;
-				tracing::info!("subscription closed: {:?}", res);
+			tokio::spawn(async move {
+				sink.pipe_from_stream(stream).await;
 			});
 		})
 		.unwrap();

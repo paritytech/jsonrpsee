@@ -287,9 +287,10 @@ pub(crate) mod visitor;
 ///         // The stream API can be used to pipe items from the underlying stream
 ///         // as subscription responses.
 ///         fn sub_override_notif_method(&self, pending: PendingSubscription) {
+///             let sink = pending.accept().unwrap();  
+///             let stream = futures_util::stream::iter(["one", "two", "three"]);
+///
 ///             tokio::spawn(async move {
-///                 let mut sink = pending.accept().await.unwrap();  
-///                 let stream = futures_util::stream::iter(["one", "two", "three"]);
 ///                 sink.pipe_from_stream(stream).await;
 ///             });
 ///         }
@@ -298,11 +299,9 @@ pub(crate) mod visitor;
 ///         // but for simplicity of the example we will only send two values and then close
 ///         // the subscription.
 ///         fn sub(&self, pending: PendingSubscription) {
-///             tokio::spawn(async move {
-///                 let mut sink = pending.accept().await.unwrap();  
-///                 let _ = sink.send(&"Response_A");
-///                 let _ = sink.send(&"Response_B");
-///             });
+///             let sink = pending.accept().unwrap();  
+///             let _ = sink.send(&"Response_A");
+///             let _ = sink.send(&"Response_B");
 ///         }
 ///     }
 /// }

@@ -77,7 +77,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let mut sink = match pending.accept().await {
+				let sink = match pending.accept() {
 					Some(sink) => sink,
 					_ => return,
 				};
@@ -108,7 +108,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let mut sink = match pending.accept().await {
+				let sink = match pending.accept() {
 					Some(sink) => sink,
 					_ => return,
 				};

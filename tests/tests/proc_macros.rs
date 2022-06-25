@@ -167,25 +167,21 @@ mod rpc_impl {
 		}
 
 		fn sub(&self, pending: PendingSubscription) {
-			tokio::spawn(async move {
-				let mut sink = match pending.accept().await {
-					Some(sink) => sink,
-					_ => return,
-				};
-				let _ = sink.send(&"Response_A");
-				let _ = sink.send(&"Response_B");
-			});
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&"Response_A");
+			let _ = sink.send(&"Response_B");
 		}
 
 		fn sub_with_params(&self, pending: PendingSubscription, val: u32) {
-			tokio::spawn(async move {
-				let mut sink = match pending.accept().await {
-					Some(sink) => sink,
-					_ => return,
-				};
-				let _ = sink.send(&val);
-				let _ = sink.send(&val);
-			});
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&val);
+			let _ = sink.send(&val);
 		}
 	}
 
@@ -199,13 +195,11 @@ mod rpc_impl {
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
 		fn sub(&self, pending: PendingSubscription, _: String) {
-			tokio::spawn(async move {
-				let mut sink = match pending.accept().await {
-					Some(sink) => sink,
-					_ => return,
-				};
-				let _ = sink.send(&"hello");
-			});
+			let sink = match pending.accept() {
+				Some(sink) => sink,
+				_ => return,
+			};
+			let _ = sink.send(&"hello");
 		}
 	}
 }
