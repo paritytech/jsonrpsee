@@ -120,8 +120,8 @@ async fn server_with_handles() -> (SocketAddr, ServerHandle) {
 		})
 		.unwrap();
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
-			let sink = pending.accept()?;
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
+			sink.accept()?;
 			std::thread::spawn(move || loop {
 				let _ = &sink;
 				std::thread::sleep(std::time::Duration::from_secs(30));
@@ -678,8 +678,8 @@ async fn custom_subscription_id_works() {
 	let addr = server.local_addr().unwrap();
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
-			let sink = pending.accept()?;
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
+			sink.accept()?;
 
 			std::thread::spawn(move || loop {
 				let _ = &sink;

@@ -71,19 +71,19 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	std::thread::spawn(move || produce_items(tx2));
 
-	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
+	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, mut sink, _| {
 		let rx = BroadcastStream::new(tx.clone().subscribe());
 
 		tokio::spawn(async move {
-			pending
-				.pipe_from_try_stream(rx)
-				.await
-				.on_success(|sink| {
+			match sink.pipe_from_try_stream(rx).await {
+				SubscriptionClosed::Success => {
 					sink.close(SubscriptionClosed::Success);
-				})
-				.on_failure(|sink, err| {
+				}
+				SubscriptionClosed::RemotePeerAborted => (),
+				SubscriptionClosed::Failed(err) => {
 					sink.close(err);
-				});
+				}
+			};
 		});
 		Ok(())
 	})?;

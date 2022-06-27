@@ -30,7 +30,7 @@ use jsonrpsee::core::{async_trait, client::Subscription, Error};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{PendingSubscription, WsServerBuilder, WsServerHandle};
+use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder, WsServerHandle};
 
 type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;
@@ -64,10 +64,9 @@ impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
 	// Note that the server's subscription method must return `SubscriptionResult`.
 	fn subscribe_storage(
 		&self,
-		pending: PendingSubscription,
+		mut sink: SubscriptionSink,
 		_keys: Option<Vec<ExampleStorageKey>>,
 	) -> SubscriptionResult {
-		let mut sink = pending.accept()?;
 		let _ = sink.send(&vec![[0; 32]]);
 		Ok(())
 	}

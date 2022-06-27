@@ -80,11 +80,6 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 					}
 					_ => (),
 				};
-				//
-				// sink.pipe_from_stream(stream).await.on_failure(|sink, err| {
-				// 	// Send close notification when subscription stream failed.
-				// 	sink.close(err);
-				// });
 			});
 			Ok(())
 		})

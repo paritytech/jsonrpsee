@@ -34,7 +34,6 @@ use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;
-use jsonrpsee::core::server::rpc_module::PipeFromStreamResult;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::AccessControlBuilder;
@@ -425,8 +424,8 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, mut tx| {
-			let mut sink = pending.accept().unwrap();
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
+			sink.accept().unwrap();
 			tokio::spawn(async move {
 				let close_err = loop {
 					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
@@ -547,7 +546,6 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 	assert_eq!(rx_len, 10);
 }
 
-// TODO(lexnv): pipe from stream cannot be reused without having `SubscriptionSink::pipe_from_stream` public.
 #[tokio::test]
 async fn ws_server_pipe_from_stream_can_be_reused() {
 	init_logger();
@@ -592,17 +590,17 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, mut sink, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-				match pending.pipe_from_stream(stream).await.on_success(|sink| {
-					sink.close(SubscriptionClosed::Success);
-				}) {
-					PipeFromStreamResult::Success(None) => (),
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::Success => {
+						sink.close(SubscriptionClosed::Success);
+					}
 					_ => unreachable!(),
-				}
+				};
 			});
 			Ok(())
 		})
@@ -647,13 +645,15 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, mut sink, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
 
-				match pending.pipe_from_stream(stream).await {
-					PipeFromStreamResult::RemotePeerAborted => (),
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::RemotePeerAborted => {
+						sink.close(SubscriptionClosed::RemotePeerAborted);
+					}
 					_ => unreachable!(),
 				};
 			});
