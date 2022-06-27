@@ -92,7 +92,7 @@ cfg_types! {
 }
 
 cfg_server! {
-	pub use jsonrpsee_core::server::rpc_module::{PendingSubscription, RpcModule, SubscriptionSink};
+	pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
 }
 
 cfg_client_or_server! {
