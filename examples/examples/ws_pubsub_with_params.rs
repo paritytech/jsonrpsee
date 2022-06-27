@@ -29,6 +29,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use jsonrpsee::core::client::SubscriptionClientT;
+use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
@@ -65,7 +66,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {
 			let idx = params.one()?;
 			let item = LETTERS.chars().nth(idx);
 
@@ -73,16 +74,23 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				pending.pipe_from_stream(stream).await.on_failure(|sink, err| {
-					// Send close notification when subscription stream failed.
-					sink.close(err);
-				});
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::Failed(err) => {
+						sink.close(err);
+					}
+					_ => (),
+				};
+				//
+				// sink.pipe_from_stream(stream).await.on_failure(|sink, err| {
+				// 	// Send close notification when subscription stream failed.
+				// 	sink.close(err);
+				// });
 			});
 			Ok(())
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, mut sink, _| {
 			let (one, two) = params.parse::<(usize, usize)>()?;
 
 			let item = &LETTERS[one..two];
@@ -91,9 +99,12 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				pending.pipe_from_stream(stream).await.on_failure(|sink, err| {
-					sink.close(err);
-				})
+				match sink.pipe_from_stream(stream).await {
+					SubscriptionClosed::Failed(err) => {
+						sink.close(err);
+					}
+					_ => (),
+				};
 			});
 
 			Ok(())

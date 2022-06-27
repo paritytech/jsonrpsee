@@ -44,7 +44,7 @@ mod rpc_impl {
 	use jsonrpsee::core::{async_trait, RpcResult};
 	use jsonrpsee::proc_macros::rpc;
 	use jsonrpsee::types::SubscriptionResult;
-	use jsonrpsee::PendingSubscription;
+	use jsonrpsee::SubscriptionSink;
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
@@ -167,8 +167,8 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		fn sub(&self, pending: PendingSubscription) -> SubscriptionResult {
-			let mut sink = pending.accept()?;
+		fn sub(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
+			let mut sink = sink.accept()?;
 			let _ = sink.send(&"Response_A");
 			let _ = sink.send(&"Response_B");
 			Ok(())

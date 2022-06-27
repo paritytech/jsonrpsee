@@ -36,7 +36,7 @@ use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
-use jsonrpsee::{PendingSubscription, RpcModule};
+use jsonrpsee::{RpcModule, SubscriptionSink};
 use tokio::time::sleep;
 
 fn module_manual() -> Result<RpcModule<()>, Error> {
@@ -65,8 +65,8 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 	// Drop the `SubscriptionSink` to cause the internal `ResourceGuard` allocated per subscription call
 	// to get dropped. This is the equivalent of not having any resource limits (ie, sink is never used).
 	module
-		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
-			let mut _sink = pending.accept()?;
+		.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, mut sink, _| {
+			sink.accept()?;
 			Ok(())
 		})?
 		.resource("SUB", 3)?;
@@ -74,11 +74,10 @@ fn module_manual() -> Result<RpcModule<()>, Error> {
 	// Keep the `SubscriptionSink` alive for a bit to validate that `ResourceGuard` is alive
 	// and the subscription method gets limited.
 	module
-		.register_subscription("subscribe_hello_limit", "s_hello", "unsubscribe_hello_limit", move |_, pending, _| {
-			let mut sink = pending.accept()?;
-
+		.register_subscription("subscribe_hello_limit", "s_hello", "unsubscribe_hello_limit", move |_, mut sink, _| {
 			tokio::spawn(async move {
 				for val in 0..10 {
+					// Sink is accepted on the first `send` call.
 					sink.send(&val).unwrap();
 					sleep(Duration::from_secs(1)).await;
 				}
@@ -120,14 +119,12 @@ fn module_macro() -> RpcModule<()> {
 	}
 
 	impl RpcServer for () {
-		fn sub_hello(&self, pending: PendingSubscription) -> SubscriptionResult {
-			let mut _sink = pending.accept()?;
+		fn sub_hello(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
+			sink.accept()?;
 			Ok(())
 		}
 
-		fn sub_hello_limit(&self, pending: PendingSubscription) -> SubscriptionResult {
-			let mut sink = pending.accept()?;
-
+		fn sub_hello_limit(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 			tokio::spawn(async move {
 				for val in 0..10 {
 					sink.send(&val).unwrap();

@@ -71,7 +71,7 @@ impl RpcDescription {
 
 		let subscriptions = self.subscriptions.iter().map(|sub| {
 			let docs = &sub.docs;
-			let subscription_sink_ty = self.jrps_server_item(quote! { PendingSubscription });
+			let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();

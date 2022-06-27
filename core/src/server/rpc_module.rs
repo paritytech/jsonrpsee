@@ -382,8 +382,8 @@ impl Methods {
 	///     use futures_util::StreamExt;
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
-	///         pending.accept().unwrap().send(&"one answer").unwrap();
+	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
+	///         sink.send(&"one answer").unwrap();
 	///         Ok(())
 	///     }).unwrap();
 	///     let (resp, mut stream) = module.raw_json_request(r#"{"jsonrpc":"2.0","method":"hi","id":0}"#).await.unwrap();
@@ -444,8 +444,8 @@ impl Methods {
 	///     use jsonrpsee::{RpcModule, types::EmptyParams};
 	///
 	///     let mut module = RpcModule::new(());
-	///     module.register_subscription("hi", "hi", "goodbye", |_, pending, _| {
-	///         pending.accept().unwrap().send(&"one answer").unwrap();
+	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
+	///         sink.send(&"one answer").unwrap();
 	///         Ok(())
 	///     }).unwrap();
 	///
@@ -655,18 +655,16 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	/// use jsonrpsee_core::Error;
 	///
 	/// let mut ctx = RpcModule::new(99_usize);
-	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, pending, ctx| {
+	/// ctx.register_subscription("sub", "notif_name", "unsub", |params, mut sink, ctx| {
 	///     let x = match params.one::<usize>() {
 	///         Ok(x) => x,
 	///         Err(e) => {
 	///             let err: Error = e.into();
-	///             pending.reject(err);
+	///             sink.reject(err);
 	///             return Ok(());
 	///         }
 	///     };
-	///
-	///     let mut sink = pending.accept()?;
-	///
+	///     // Sink is accepted on the first `send` call.
 	///     std::thread::spawn(move || {
 	///         let sum = x + (*ctx);
 	///         let _ = sink.send(&sum);
@@ -971,23 +969,24 @@ impl SubscriptionSink {
 	/// use anyhow::anyhow;
 	///
 	/// let mut m = RpcModule::new(());
-	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
+	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
 	///     let stream = futures_util::stream::iter(vec![Ok(1_u32), Ok(2), Err("error on the stream")]);
 	///     // This will return send `[Ok(1_u32), Ok(2_u32), Err(Error::SubscriptionClosed))]` to the subscriber
 	///     // because after the `Err(_)` the stream is terminated.
 	///     tokio::spawn(async move {
 	///         // jsonrpsee doesn't send an error notification unless `close` is explicitly called.
 	///         // If we pipe messages to the sink, we can inspect why it ended:
-	///         pending
-	///             .pipe_from_try_stream(stream)
-	///             .await
-	///             .on_success(|sink| {
-	///                 let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
-	///                 sink.close(err_obj);
-	///             })
-	///             .on_failure(|sink, err| {
-	///                 sink.close(err);
-	///             })
+	///         match sink.pipe_from_try_stream(stream).await {
+	///            SubscriptionClosed::Success => {
+	///                let err_obj: ErrorObjectOwned = SubscriptionClosed::Success.into();
+	///                sink.close(err_obj);
+	///            }
+	///            // we don't want to send close reason when the client is unsubscribed or disconnected.
+	///            SubscriptionClosed::RemotePeerAborted => (),
+	///            SubscriptionClosed::Failed(e) => {
+	///                sink.close(e);
+	///            }
+	///         }
 	///     });
 	///     Ok(())
 	/// });
@@ -1073,8 +1072,7 @@ impl SubscriptionSink {
 	/// use jsonrpsee_core::server::rpc_module::RpcModule;
 	///
 	/// let mut m = RpcModule::new(());
-	/// m.register_subscription("sub", "_", "unsub", |params, pending, _| {
-	///     let mut sink = pending.accept().unwrap();
+	/// m.register_subscription("sub", "_", "unsub", |params, mut sink, _| {
 	///     let stream = futures_util::stream::iter(vec![1_usize, 2, 3]);
 	///     tokio::spawn(async move { sink.pipe_from_stream(stream).await; });
 	///     Ok(())
