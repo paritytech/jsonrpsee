@@ -1009,7 +1009,7 @@ impl SubscriptionSink {
 
 	/// Attempt to accept the subscription and respond the subscription method call.
 	///
-	/// Fails if the connection was closed
+	/// Fails if the connection was closed, or if called multiple times.
 	pub fn accept(&mut self) -> Result<(), SubscriptionEmptyError> {
 		let id = self.id.take().ok_or(SubscriptionEmptyError)?;
 
@@ -1023,6 +1023,11 @@ impl SubscriptionSink {
 		}
 	}
 
+	/// Accepts the subscription if previously not accepted.
+	fn maybe_accept(&mut self) {
+		let _ = self.accept();
+	}
+
 	/// Send a message back to subscribers.
 	///
 	/// Returns `Ok(true)` if the message could be send
@@ -1030,6 +1035,8 @@ impl SubscriptionSink {
 	/// Return `Err(err)` if the message could not be serialized.
 	///
 	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<bool, serde_json::Error> {
+		self.maybe_accept();
+
 		// only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Ok(false);
@@ -1083,6 +1090,8 @@ impl SubscriptionSink {
 		T: Serialize,
 		E: std::fmt::Display,
 	{
+		self.maybe_accept();
+
 		let conn_closed = match self.close_notify.as_ref().map(|cn| cn.handle()) {
 			Some(cn) => cn,
 			None => {
