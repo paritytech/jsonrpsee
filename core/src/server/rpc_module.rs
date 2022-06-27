@@ -1288,7 +1288,10 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		if self.is_active_subscription() {
+		// Subscription was never accepted.
+		if let Ok(id) = self.state.id() {
+			self.inner.send_error(id, ErrorCode::InvalidParams.into());
+		} else if self.is_active_subscription() {
 			self.subscribers.lock().remove(&self.uniq_sub);
 		}
 	}
