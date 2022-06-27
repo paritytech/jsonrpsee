@@ -1077,7 +1077,7 @@ impl SubscriptionSink {
 	///     Ok(())
 	/// });
 	/// ```
-	async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> SubscriptionClosed
+	pub async fn pipe_from_try_stream<S, T, E>(&mut self, mut stream: S) -> SubscriptionClosed
 	where
 		S: TryStream<Ok = T, Error = E> + Unpin,
 		T: Serialize,
