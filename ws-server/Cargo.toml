@@ -23,7 +23,6 @@ tracing-futures = "0.2.5"
 tokio-stream = "0.1.7"
 http = "0.2.7"
 
-
 [dev-dependencies]
 anyhow = "1"
 jsonrpsee-test-utils = { path = "../test-utils" }
