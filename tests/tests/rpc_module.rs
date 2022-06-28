@@ -30,7 +30,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject};
+use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 use tokio::time::interval;
@@ -360,7 +360,6 @@ async fn empty_subscription_without_server() {
 		.unwrap();
 
 	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
-
 	assert!(
 		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("Invalid params") && e.code() == ErrorCode::InvalidParams.code())
 	);
@@ -368,20 +367,65 @@ async fn empty_subscription_without_server() {
 
 #[tokio::test]
 async fn rejected_subscription_without_server() {
-	// Specialized JSON-RPC server error for rejected purposes.
-	const ERROR: i32 = -32090;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
-			let err = ErrorObject::borrowed(ERROR, &"rejected", None);
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
 			sink.reject(err.into_owned())?;
 			Ok(())
 		})
 		.unwrap();
 
 	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
-
 	assert!(
-		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == ERROR)
+		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
+	);
+}
+
+#[tokio::test]
+async fn accepted_twice_subscription_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+			let res = sink.accept();
+			assert!(matches!(res, Ok(())));
+
+			let res = sink.accept();
+			assert!(matches!(res, Err(_)));
+
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let res = sink.reject(err.into_owned());
+			assert!(matches!(res, Err(_)));
+
+			Ok(())
+		})
+		.unwrap();
+
+	let _ = module.subscribe("my_sub", EmptyParams::new()).await.expect("Subscription should not fail");
+}
+
+#[tokio::test]
+async fn reject_twice_subscription_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let res = sink.reject(err.into_owned());
+			assert!(matches!(res, Ok(())));
+
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let res = sink.reject(err.into_owned());
+			assert!(matches!(res, Err(_)));
+
+			let res = sink.accept();
+			assert!(matches!(res, Err(_)));
+
+			Ok(())
+		})
+		.unwrap();
+
+	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+	assert!(
+		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
 	);
 }
