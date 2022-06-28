@@ -27,9 +27,8 @@
 use std::net::SocketAddr;
 use std::time::Instant;
 
-use jsonrpsee::core::HeaderMap;
-use jsonrpsee::core::{client::ClientT, middleware};
-use jsonrpsee::types::Params;
+use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{self, Headers, Params};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
@@ -39,7 +38,7 @@ struct Timings;
 impl middleware::WsMiddleware for Timings {
 	type Instant = Instant;
 
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &HeaderMap) {
+	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
 		println!("[Middleware::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
 	}
 

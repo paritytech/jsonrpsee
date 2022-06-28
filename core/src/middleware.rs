@@ -26,9 +26,10 @@
 
 //! Middleware for `jsonrpsee` servers.
 
-use http::HeaderMap;
-use jsonrpsee_types::Params;
 use std::net::SocketAddr;
+
+pub use http::HeaderMap as Headers;
+pub use jsonrpsee_types::Params;
 
 /// Defines a middleware specifically for HTTP requests with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
@@ -41,7 +42,7 @@ pub trait HttpMiddleware: Send + Sync + Clone + 'static {
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
 
 	/// Called when a new JSON-RPC request comes to the server.
-	fn on_request(&self, remote_addr: SocketAddr, headers: &HeaderMap) -> Self::Instant;
+	fn on_request(&self, remote_addr: SocketAddr, headers: &Headers) -> Self::Instant;
 
 	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
 	fn on_call(&self, method_name: &str, params: Params);
@@ -64,7 +65,7 @@ pub trait WsMiddleware: Send + Sync + Clone + 'static {
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
 
 	/// Called when a new client connects
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &http::HeaderMap);
+	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers);
 
 	/// Called when a new JSON-RPC request comes to the server.
 	fn on_request(&self) -> Self::Instant;
@@ -85,7 +86,7 @@ pub trait WsMiddleware: Send + Sync + Clone + 'static {
 impl HttpMiddleware for () {
 	type Instant = ();
 
-	fn on_request(&self, _: std::net::SocketAddr, _: &http::HeaderMap) -> Self::Instant {}
+	fn on_request(&self, _: std::net::SocketAddr, _: &Headers) -> Self::Instant {}
 
 	fn on_call(&self, _: &str, _: Params) {}
 
@@ -97,7 +98,7 @@ impl HttpMiddleware for () {
 impl WsMiddleware for () {
 	type Instant = ();
 
-	fn on_connect(&self, _: std::net::SocketAddr, _: &http::HeaderMap) {}
+	fn on_connect(&self, _: std::net::SocketAddr, _: &Headers) {}
 
 	fn on_request(&self) -> Self::Instant {}
 
@@ -117,7 +118,7 @@ where
 {
 	type Instant = (A::Instant, B::Instant);
 
-	fn on_connect(&self, remote_addr: std::net::SocketAddr, headers: &http::HeaderMap) {
+	fn on_connect(&self, remote_addr: std::net::SocketAddr, headers: &Headers) {
 		(self.0.on_connect(remote_addr, headers), self.1.on_connect(remote_addr, headers));
 	}
 
@@ -152,7 +153,7 @@ where
 {
 	type Instant = (A::Instant, B::Instant);
 
-	fn on_request(&self, remote_addr: std::net::SocketAddr, headers: &HeaderMap) -> Self::Instant {
+	fn on_request(&self, remote_addr: std::net::SocketAddr, headers: &Headers) -> Self::Instant {
 		(self.0.on_request(remote_addr, headers), self.1.on_request(remote_addr, headers))
 	}
 

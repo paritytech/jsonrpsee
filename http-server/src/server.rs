@@ -101,9 +101,7 @@ impl<M> Builder<M> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::middleware::HttpMiddleware;
-	/// use jsonrpsee_core::HeaderMap;
-	/// use jsonrpsee_types::Params;
+	/// use jsonrpsee_core::middleware::{HttpMiddleware, Headers, Params};
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -114,7 +112,7 @@ impl<M> Builder<M> {
 	///
 	///     // Called once the HTTP request is received, it may be a single JSON-RPC call
 	///     // or batch.
-	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> Instant {
+	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Instant {
 	///         Instant::now()
 	///     }
 	///     

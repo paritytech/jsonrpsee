@@ -27,11 +27,10 @@
 use std::net::SocketAddr;
 use std::time::Instant;
 
-use jsonrpsee::core::HeaderMap;
-use jsonrpsee::core::{client::ClientT, middleware};
+use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{self, Headers, Params};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
-use jsonrpsee::types::Params;
 
 #[derive(Clone)]
 struct Timings;
@@ -39,7 +38,7 @@ struct Timings;
 impl middleware::HttpMiddleware for Timings {
 	type Instant = Instant;
 
-	fn on_request(&self, remote_addr: SocketAddr, headers: &HeaderMap) -> Self::Instant {
+	fn on_request(&self, remote_addr: SocketAddr, headers: &Headers) -> Self::Instant {
 		println!("[Middleware::on_request] remote_addr {}, headers: {:?}", remote_addr, headers);
 		Instant::now()
 	}
