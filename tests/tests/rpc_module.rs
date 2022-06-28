@@ -368,10 +368,12 @@ async fn empty_subscription_without_server() {
 
 #[tokio::test]
 async fn rejected_subscription_without_server() {
+	// Specialized JSON-RPC server error for rejected purposes.
+	const ERROR: i32 = -32090;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
-			let err = ErrorObject::borrowed(0, &"rejected", None);
+			let err = ErrorObject::borrowed(ERROR, &"rejected", None);
 			sink.reject(err.into_owned())?;
 			Ok(())
 		})
@@ -379,5 +381,7 @@ async fn rejected_subscription_without_server() {
 
 	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
 
-	assert!(matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == 0));
+	assert!(
+		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == ERROR)
+	);
 }
