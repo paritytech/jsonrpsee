@@ -775,55 +775,6 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 }
 
-/// The result obtain from calling [`PendingSubscription::pipe_from_try_stream`] that
-/// can be utilized to execute specific operations depending on the result.
-#[derive(Debug)]
-pub enum PipeFromStreamResult {
-	/// The connection was accepted and the pipe returned [`SubscriptionClosed::Success`].
-	Success(Option<SubscriptionSink>),
-	/// The connection was accepted and the pipe returned [`SubscriptionClosed::Failed`]
-	/// with the provided error.
-	Failure(Option<(SubscriptionSink, ErrorObjectOwned)>),
-	/// The remote peer closed the connection or called the unsubscribe method.
-	RemotePeerAborted,
-}
-
-impl PipeFromStreamResult {
-	/// Callback that will run the provided function if the result is [`PipeFromStreamResult::Success(Some(_))`].
-	/// After the function runs a new [`PipeFromStreamResult::Success(None)`] is returned.
-	///
-	/// Otherwise, it leaves the object untouched.
-	pub fn on_success<F>(self, func: F) -> PipeFromStreamResult
-		where
-			F: FnOnce(SubscriptionSink) -> (),
-	{
-		match self {
-			PipeFromStreamResult::Success(Some(sink)) => {
-				func(sink);
-				PipeFromStreamResult::Success(None)
-			}
-			_ => self
-		}
-	}
-
-	/// Callback that will run the provided function if the result is [`PipeFromStreamResult::Failure(Some(_))`].
-	/// After the function runs a new [`PipeFromStreamResult::Failure(None)`] is returned.
-	///
-	/// Otherwise, it leaves the object untouched.
-	pub fn on_failure<F>(self, func: F) -> PipeFromStreamResult
-		where
-			F: FnOnce(SubscriptionSink, ErrorObjectOwned) -> (),
-	{
-		match self {
-			PipeFromStreamResult::Failure(Some((sink, error))) => {
-				func(sink, error);
-				PipeFromStreamResult::Failure(None)
-			}
-			_ => self
-		}
-	}
-}
-
 /// The state of the [`SubscriptionSink`].
 #[derive(Debug)]
 enum SubscriptionSinkState {
