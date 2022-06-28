@@ -348,3 +348,36 @@ async fn subscribe_unsubscribe_without_server() {
 
 	futures::future::join(sub1, sub2).await;
 }
+
+#[tokio::test]
+async fn empty_subscription_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut _sink, _| {
+			// Sink was never accepted or rejected. Expected to return `InvalidParams`.
+			Ok(())
+		})
+		.unwrap();
+
+	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+
+	assert!(
+		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("Invalid params") && e.code() == ErrorCode::InvalidParams.code())
+	);
+}
+
+#[tokio::test]
+async fn rejected_subscription_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+			let err = ErrorObject::borrowed(0, &"rejected", None);
+			sink.reject(err.into_owned())?;
+			Ok(())
+		})
+		.unwrap();
+
+	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+
+	assert!(matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == 0));
+}
