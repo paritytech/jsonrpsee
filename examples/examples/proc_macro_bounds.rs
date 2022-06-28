@@ -50,10 +50,10 @@ impl Config for ExampleHash {
 ///
 /// Explicitly, specify client and server bounds to handle the `Serialize` and `DeserializeOwned` cases
 /// just for the `Conf::hash` part.
-#[rpc(server, client, namespace = "foo", client_bounds(Conf::Hash: jsonrpsee::core::DeserializeOwned), server_bounds(Conf::Hash: jsonrpsee::core::Serialize))]
-pub trait Rpc<Conf: Config> {
+#[rpc(server, client, namespace = "foo", client_bounds(T::Hash: jsonrpsee::core::DeserializeOwned), server_bounds(T::Hash: jsonrpsee::core::Serialize))]
+pub trait Rpc<T: Config> {
 	#[method(name = "bar")]
-	fn method(&self) -> Result<Conf::Hash, Error>;
+	fn method(&self) -> Result<T::Hash, Error>;
 }
 
 pub struct RpcServerImpl;

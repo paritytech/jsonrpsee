@@ -63,7 +63,7 @@ impl RpcDescription {
 				#(#sub_impls)*
 			}
 
-			impl<T #(,#type_idents)*> #trait_name #type_generics for T where T: #super_trait #(,#where_clause)* {}
+			impl<TypeJsonRpseeInteral #(,#type_idents)*> #trait_name #type_generics for TypeJsonRpseeInteral where TypeJsonRpseeInteral: #super_trait #(,#where_clause)* {}
 		};
 
 		Ok(trait_impl)
