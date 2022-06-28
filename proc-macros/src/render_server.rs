@@ -331,7 +331,7 @@ impl RpcDescription {
 							Err(e) => {
 								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
-								#pending.reject(_e);
+								#pending.reject(_e)?;
 								return Err(#sub_err);
 							}
 						};
@@ -355,7 +355,7 @@ impl RpcDescription {
 							Err(e) => {
 								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
-								#pending.reject(_e);
+								#pending.reject(_e)?;
 								return Err(#sub_err);
 							}
 						};
@@ -406,7 +406,7 @@ impl RpcDescription {
 						Err(e) => {
 							#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
 							let _e: #err = e.into();
-							#pending.reject(_e);
+							#pending.reject(_e)?;
 							return Err(#sub_err);
 						}
 					};
