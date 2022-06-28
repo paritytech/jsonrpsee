@@ -36,7 +36,7 @@ use jsonrpsee::types::Params;
 #[derive(Clone)]
 struct Timings;
 
-impl middleware::Middleware for Timings {
+impl middleware::HttpMiddleware for Timings {
 	type Instant = Instant;
 
 	fn on_request(&self, remote_addr: SocketAddr, headers: &HeaderMap) -> Self::Instant {

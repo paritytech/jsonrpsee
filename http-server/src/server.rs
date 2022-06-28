@@ -40,7 +40,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
-use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::middleware::HttpMiddleware as Middleware;
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
 use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
@@ -101,22 +101,38 @@ impl<M> Builder<M> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::middleware::Middleware;
+	/// use jsonrpsee_core::middleware::HttpMiddleware;
 	/// use jsonrpsee_core::HeaderMap;
+	/// use jsonrpsee_types::Params;
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware;
 	///
-	/// impl Middleware for MyMiddleware {
+	/// impl HttpMiddleware for MyMiddleware {
 	///     type Instant = Instant;
 	///
+	///     // Called once the HTTP request is received, it may be a single JSON-RPC call
+	///     // or batch.
 	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> Instant {
 	///         Instant::now()
 	///     }
+	///     
+	///     // Called once a single JSON-RPC method call is processed, it may be called multiple times
+	///     // on batches.
+	///     fn on_call(&self, method_name: &str, params: Params) {
+	///         println!("Call to method: '{}' params: {:?}", method_name, params);
+	///     }
 	///
-	///     fn on_result(&self, name: &str, success: bool, started_at: Instant) {
-	///         println!("Call to '{}' took {:?}", name, started_at.elapsed());
+	///     // Called once a single JSON-RPC call is completed, it may be called multiple times
+	///     // on batches.
+	///     fn on_result(&self, method_name: &str, success: bool, started_at: Instant) {
+	///         println!("Call to '{}' took {:?}", method_name, started_at.elapsed());
+	///     }
+	///
+	/// 	// Called the entire JSON-RPC is completed, called on once for both single calls or batches.
+	///     fn on_response(&self, result: &str, started_at: Instant) {
+	///         println!("complete JSON-RPC response: {}, took: {:?}", result, started_at.elapsed());
 	///     }
 	/// }
 	///

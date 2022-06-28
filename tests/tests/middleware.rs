@@ -30,7 +30,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use hyper::HeaderMap;
-use jsonrpsee::core::{client::ClientT, middleware::Middleware, Error};
+use jsonrpsee::core::middleware::{HttpMiddleware, WsMiddleware};
+use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
@@ -55,15 +56,15 @@ struct CounterInner {
 	calls: HashMap<String, (u32, Vec<u32>)>,
 }
 
-impl Middleware for Counter {
+impl WsMiddleware for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 
-	fn on_connect(&self) {
+	fn on_connect(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) {
 		self.inner.lock().unwrap().connections.0 += 1;
 	}
 
-	fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> u32 {
+	fn on_request(&self) -> u32 {
 		let mut inner = self.inner.lock().unwrap();
 		let n = inner.requests.0;
 
@@ -89,8 +90,39 @@ impl Middleware for Counter {
 		self.inner.lock().unwrap().requests.1 += 1;
 	}
 
-	fn on_disconnect(&self) {
+	fn on_disconnect(&self, _remote_addr: SocketAddr) {
 		self.inner.lock().unwrap().connections.1 += 1;
+	}
+}
+
+impl HttpMiddleware for Counter {
+	/// Auto-incremented id of the call
+	type Instant = u32;
+
+	fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> u32 {
+		let mut inner = self.inner.lock().unwrap();
+		let n = inner.requests.0;
+
+		inner.requests.0 += 1;
+
+		n
+	}
+
+	fn on_call(&self, name: &str, _params: Params) {
+		let mut inner = self.inner.lock().unwrap();
+		let entry = inner.calls.entry(name.into()).or_insert((0, Vec::new()));
+
+		entry.0 += 1;
+	}
+
+	fn on_result(&self, name: &str, success: bool, n: u32) {
+		if success {
+			self.inner.lock().unwrap().calls.get_mut(name).unwrap().1.push(n);
+		}
+	}
+
+	fn on_response(&self, _result: &str, _: u32) {
+		self.inner.lock().unwrap().requests.1 += 1;
 	}
 }
 

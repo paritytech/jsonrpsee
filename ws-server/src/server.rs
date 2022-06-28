@@ -41,7 +41,7 @@ use futures_util::stream::StreamExt;
 use http::header::{HOST, ORIGIN};
 use http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::middleware::WsMiddleware as Middleware;
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
@@ -252,7 +252,7 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 		}
 		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor, middleware, id_provider } => {
 			tracing::debug!("Accepting new connection: {}", conn_id);
-			let key_and_headers = {
+			let key = {
 				let req = server.receive_request().await?;
 
 				let host = std::str::from_utf8(req.headers().host)
@@ -268,10 +268,10 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 				let host_check = cfg.access_control.verify_host(host);
 				let origin_check = cfg.access_control.verify_origin(origin, host);
 
-				host_check.and(origin_check).map(|()| {
-					let key = req.key();
+				let mut headers = HeaderMap::new();
 
-					let mut headers = HeaderMap::new();
+				let key = host_check.and(origin_check).map(|()| {
+					let key = req.key();
 
 					if let Ok(val) = HeaderValue::from_str(host) {
 						headers.insert(HOST, val);
@@ -281,15 +281,18 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 						headers.insert(ORIGIN, val);
 					}
 
-					(key, headers)
-				})
+					key
+				});
+
+				middleware.on_connect(remote_addr, &headers);
+
+				key
 			};
 
-			let headers = match key_and_headers {
-				Ok((key, headers)) => {
+			match key {
+				Ok(key) => {
 					let accept = Response::Accept { key, protocol: None };
 					server.send_response(&accept).await?;
-					headers
 				}
 				Err(err) => {
 					tracing::warn!("Rejected connection: {:?}", err);
@@ -315,7 +318,6 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 				id_provider,
 				ping_interval: cfg.ping_interval,
 				remote_addr,
-				headers,
 			}))
 			.await;
 
@@ -342,7 +344,6 @@ struct BackgroundTask<'a, M> {
 	id_provider: Arc<dyn IdProvider>,
 	ping_interval: Duration,
 	remote_addr: SocketAddr,
-	headers: HeaderMap,
 }
 
 async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<(), Error> {
@@ -361,7 +362,6 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 		id_provider,
 		ping_interval,
 		remote_addr,
-		headers,
 	} = input;
 
 	// And we can finally transition to a websocket background_task.
@@ -373,8 +373,6 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 
 	let stop_server2 = stop_server.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
-
-	middleware.on_connect();
 
 	// Send results back to the client.
 	tokio::spawn(async move {
@@ -471,7 +469,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 			};
 		};
 
-		let request_start = middleware.on_request(remote_addr, &headers);
+		let request_start = middleware.on_request();
 
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
 		match first_non_whitespace {
@@ -559,7 +557,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 		}
 	};
 
-	middleware.on_disconnect();
+	middleware.on_disconnect(remote_addr);
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
