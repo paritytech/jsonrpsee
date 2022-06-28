@@ -253,7 +253,7 @@ impl MethodResponse {
 
 	/// Create a `MethodResponse` from an error.
 	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
-		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap();
+		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).expect("valid JSON; qed");
 		Self { result, success: false }
 	}
 }
