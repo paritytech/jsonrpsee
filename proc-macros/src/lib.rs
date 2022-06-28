@@ -54,8 +54,8 @@ pub(crate) mod visitor;
 /// - The trait will have one additional (already implemented) method, `into_rpc`, which turns any object that
 ///   implements the server trait into an `RpcModule`.
 /// - For subscription methods:
-///   - There will be one additional argument inserted right after `&self`: `subscription_sink: PendingSubscription`.
-///   It should be used accept or reject a pending subscription.
+///   - There will be one additional argument inserted right after `&self`: `subscription_sink: SubscriptionSink`.
+///   It should be used to accept or reject a subscription and send data back to subscribers.
 ///   - The return type of the subscription method is `SubscriptionResult` for improved ergonomics.
 ///
 /// Since this macro can generate up to two traits, both server and client traits will have
@@ -100,7 +100,7 @@ pub(crate) mod visitor;
 ///     fn sync_method(&self) -> String;
 ///
 ///     // Note that `subscription_sink` and `SubscriptionResult` were added automatically.
-///     fn sub(&self, subscription_sink: PendingSubscription) -> SubscriptionResult;
+///     fn sub(&self, subscription_sink: SubscriptionResult) -> SubscriptionResult;
 ///
 ///     fn into_rpc(self) -> Result<Self, jsonrpsee::core::Error> {
 ///         // Actual implementation stripped, but inside we will create
