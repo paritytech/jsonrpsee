@@ -110,6 +110,21 @@ impl<'a> From<ErrorObject<'a>> for SubscriptionEmptyError {
 	}
 }
 
+impl From<SubscriptionAcceptRejectError> for SubscriptionEmptyError {
+	fn from(_: SubscriptionAcceptRejectError) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+/// The error returned while accepting or rejecting a subscription.
+#[derive(Debug)]
+pub enum SubscriptionAcceptRejectError {
+	/// The method was already called.
+	AlreadyCalled,
+	/// The remote peer closed the connection or called the unsubscribe method.
+	RemotePeerAborted,
+}
+
 /// Owned variant of [`ErrorObject`].
 pub type ErrorObjectOwned = ErrorObject<'static>;
 
