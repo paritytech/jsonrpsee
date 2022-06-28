@@ -832,23 +832,6 @@ impl SubscriptionSink {
 		}
 	}
 
-	/// Accepts the subscription if previously not accepted.
-	///
-	/// Fails if the accept function fails internally, or if the subscription was rejected.
-	fn maybe_accept(&mut self) -> Result<(), SubscriptionAcceptRejectError> {
-		// Pending subscription.
-		if self.id.is_some() {
-			return self.accept();
-		}
-
-		// Subscription accepted.
-		if self.unsubscribe.is_some() {
-			Ok(())
-		} else {
-			Err(SubscriptionAcceptRejectError::RemotePeerAborted)
-		}
-	}
-
 	/// Send a message back to subscribers.
 	///
 	/// Returns
@@ -858,9 +841,10 @@ impl SubscriptionSink {
 	/// - `Err(err)` if the message could not be serialized.
 	pub fn send<T: Serialize>(&mut self, result: &T) -> Result<bool, serde_json::Error> {
 		// Cannot accept the subscription.
-		if self.maybe_accept().is_err() {
+		if let Err(SubscriptionAcceptRejectError::RemotePeerAborted) = self.accept() {
 			return Ok(false);
 		}
+
 		// Only possible to trigger when the connection is dropped.
 		if self.is_closed() {
 			return Ok(false);
@@ -915,7 +899,7 @@ impl SubscriptionSink {
 		T: Serialize,
 		E: std::fmt::Display,
 	{
-		if self.maybe_accept().is_err() {
+		if let Err(SubscriptionAcceptRejectError::RemotePeerAborted) = self.accept() {
 			return SubscriptionClosed::RemotePeerAborted;
 		}
 
