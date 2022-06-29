@@ -792,7 +792,8 @@ pub struct SubscriptionSink {
 	subscribers: Subscribers,
 	/// Unique subscription.
 	uniq_sub: SubscriptionKey,
-	/// Id of the subscription.
+	/// Id of the `subscription call` (i.e. not the same as subscription id) which is used 
+	/// to reply to subscription method call and must only be used once. 
 	///
 	/// *Note*: Having some value means the subscription was not accepted or rejected yet.
 	id: Option<Id<'static>>,
