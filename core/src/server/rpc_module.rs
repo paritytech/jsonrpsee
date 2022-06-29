@@ -1049,7 +1049,10 @@ impl SubscriptionSink {
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
 		if let Some(id) = self.id.take() {
-			// Subscription was never accepted / rejected.
+			// Subscription was never accepted / rejected. As such,
+			// we default to assuming that the params were invalid,
+			// because that's how the previous PendingSubscription logic 
+			// worked.
 			self.inner.send_error(id, ErrorCode::InvalidParams.into());
 		} else if self.is_active_subscription() {
 			self.subscribers.lock().remove(&self.uniq_sub);
