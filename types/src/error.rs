@@ -80,6 +80,51 @@ impl<'a> fmt::Display for ErrorResponse<'a> {
 	}
 }
 
+/// The return type of the subscription's method for the rpc server implementation.
+///
+/// **Note**: The error does not contain any data and is discarded on drop.
+pub type SubscriptionResult = Result<(), SubscriptionEmptyError>;
+
+/// The error returned by the subscription's method for the rpc server implementation.
+///
+/// It contains no data, and neither is the error utilized. It provides an abstraction to make the
+/// API more ergonomic while handling errors that may occur during the subscription callback.
+#[derive(Debug)]
+pub struct SubscriptionEmptyError;
+
+impl From<anyhow::Error> for SubscriptionEmptyError {
+	fn from(_: anyhow::Error) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+impl From<CallError> for SubscriptionEmptyError {
+	fn from(_: CallError) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+impl<'a> From<ErrorObject<'a>> for SubscriptionEmptyError {
+	fn from(_: ErrorObject<'a>) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+impl From<SubscriptionAcceptRejectError> for SubscriptionEmptyError {
+	fn from(_: SubscriptionAcceptRejectError) -> Self {
+		SubscriptionEmptyError
+	}
+}
+
+/// The error returned while accepting or rejecting a subscription.
+#[derive(Debug)]
+pub enum SubscriptionAcceptRejectError {
+	/// The method was already called.
+	AlreadyCalled,
+	/// The remote peer closed the connection or called the unsubscribe method.
+	RemotePeerAborted,
+}
+
 /// Owned variant of [`ErrorObject`].
 pub type ErrorObjectOwned = ErrorObject<'static>;
 
@@ -153,6 +198,16 @@ impl<'a> PartialEq for ErrorObject<'a> {
 impl<'a> From<ErrorCode> for ErrorObject<'a> {
 	fn from(code: ErrorCode) -> Self {
 		Self { code, message: code.message().into(), data: None }
+	}
+}
+
+impl<'a> From<CallError> for ErrorObject<'a> {
+	fn from(error: CallError) -> Self {
+		match error {
+			CallError::InvalidParams(e) => ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>),
+			CallError::Failed(e) => ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>),
+			CallError::Custom(err) => err,
+		}
 	}
 }
 

@@ -66,11 +66,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
-			let (idx, mut sink) = match (params.one(), pending.accept()) {
-				(Ok(idx), Some(sink)) => (idx, sink),
-				_ => return,
-			};
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {
+			let idx = params.one()?;
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
@@ -78,24 +75,18 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 			tokio::spawn(async move {
 				match sink.pipe_from_stream(stream).await {
-					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
 						sink.close(err);
 					}
-					// Don't send close notification because the stream should run forever.
-					SubscriptionClosed::Success => (),
-					// Don't send close because the client has already disconnected.
-					SubscriptionClosed::RemotePeerAborted => (),
+					_ => (),
 				};
 			});
+			Ok(())
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
-			let (one, two, mut sink) = match (params.parse::<(usize, usize)>(), pending.accept()) {
-				(Ok((one, two)), Some(sink)) => (one, two, sink),
-				_ => return,
-			};
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, mut sink, _| {
+			let (one, two) = params.parse::<(usize, usize)>()?;
 
 			let item = &LETTERS[one..two];
 
@@ -104,16 +95,14 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 			tokio::spawn(async move {
 				match sink.pipe_from_stream(stream).await {
-					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
 						sink.close(err);
 					}
-					// Don't send close notification because the stream should run forever.
-					SubscriptionClosed::Success => (),
-					// Don't send close because the client has already disconnected.
-					SubscriptionClosed::RemotePeerAborted => (),
+					_ => (),
 				};
 			});
+
+			Ok(())
 		})
 		.unwrap();
 

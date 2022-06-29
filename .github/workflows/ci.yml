@@ -92,7 +92,7 @@ jobs:
         run: cargo hack check --workspace --each-feature --all-targets
 
   tests_ubuntu:
-    name: Run nextests on Ubuntu
+    name: Run tests Ubuntu
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
