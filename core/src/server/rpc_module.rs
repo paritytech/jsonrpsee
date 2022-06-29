@@ -753,7 +753,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					// The callback returns an empty `SubscriptionError` for improved API ergonomics.
 					if let Err(err) = callback(params, sink, ctx.clone()) {
-						tracing::warn!("subscribe call `{}` failed with err={:?}", subscribe_method_name, err);
+						tracing::warn!("subscribe call `{}` failed", subscribe_method_name);
 					}
 
 					true
