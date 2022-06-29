@@ -752,7 +752,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 
 					// The callback returns an empty `SubscriptionError` for improved API ergonomics.
-					if let Err(err) = callback(params, sink, ctx.clone()) {
+					if let Err(_) = callback(params, sink, ctx.clone()) {
 						tracing::warn!("subscribe call `{}` failed", subscribe_method_name);
 					}
 
@@ -779,6 +779,9 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 	}
 }
 
+/// Returns once the unsubscribe method has been called.
+type UnsubscribeCall = Option<watch::Receiver<()>>;
+
 /// Represents a single subscription.
 #[derive(Debug)]
 pub struct SubscriptionSink {
@@ -792,15 +795,13 @@ pub struct SubscriptionSink {
 	subscribers: Subscribers,
 	/// Unique subscription.
 	uniq_sub: SubscriptionKey,
-	/// Id of the `subscription call` (i.e. not the same as subscription id) which is used 
-	/// to reply to subscription method call and must only be used once. 
+	/// Id of the `subscription call` (i.e. not the same as subscription id) which is used
+	/// to reply to subscription method call and must only be used once.
 	///
 	/// *Note*: Having some value means the subscription was not accepted or rejected yet.
 	id: Option<Id<'static>>,
-	/// Returns when the unsubscribe method has been called.
-	///
-	/// *Note*: Have some values means the subscription was accepted.
-	unsubscribe: Option<watch::Receiver<()>>,
+	/// Having some value means the subscription was accepted.
+	unsubscribe: UnsubscribeCall,
 	/// Claimed resources.
 	_claimed: Option<ResourceGuard>,
 }
@@ -1052,8 +1053,8 @@ impl SubscriptionSink {
 
 impl Drop for SubscriptionSink {
 	fn drop(&mut self) {
-		// Subscription was never accepted.
 		if let Some(id) = self.id.take() {
+			// Subscription was never accepted / rejected.
 			self.inner.send_error(id, ErrorCode::InvalidParams.into());
 		} else if self.is_active_subscription() {
 			self.subscribers.lock().remove(&self.uniq_sub);
