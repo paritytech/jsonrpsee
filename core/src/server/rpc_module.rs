@@ -907,21 +907,16 @@ impl SubscriptionSink {
 
 		let conn_closed = match self.close_notify.as_ref().map(|cn| cn.handle()) {
 			Some(cn) => cn,
-			None => {
-				return SubscriptionClosed::RemotePeerAborted;
-			}
+			None => return SubscriptionClosed::RemotePeerAborted,
 		};
 
 		let mut sub_closed = match self.unsubscribe.as_ref() {
 			Some(rx) => rx.clone(),
-			_ => {
-				let err = ErrorObject::owned(
+			_ => return SubscriptionClosed::Failed(ErrorObject::owned(
 					INTERNAL_ERROR_CODE,
 					"Unsubscribe watcher not set after accepting the subscription".to_string(),
 					None::<()>
-				);
-				return SubscriptionClosed::Failed(err);
-			}
+				)),
 		};
 
 		let sub_closed_fut = sub_closed.changed();
