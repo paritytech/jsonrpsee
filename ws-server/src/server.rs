@@ -38,6 +38,7 @@ use futures_channel::mpsc;
 use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
+use futures_util::TryStreamExt;
 use http::header::{HOST, ORIGIN};
 use http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
@@ -884,26 +885,31 @@ where
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
 		return if !batch.is_empty() {
-			let batch = batch.into_iter().map(|req| (req, call.clone()));
+			let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
 			let batch_stream = futures_util::stream::iter(batch);
 
 			let trace = RpcTracing::batch();
 			let _enter = trace.span().enter();
+			let max_response_size = call.max_response_body_size;
 
 			let batch_response = batch_stream
-				.fold(BatchResponseBuilder::new(), |mut batch_response, (req, call)| async move {
-					let params = Params::new(req.params.map(|params| params.get()));
+				.try_fold(
+					BatchResponseBuilder::new_with_limit(max_response_size as usize),
+					|batch_response, (req, call)| async move {
+						let params = Params::new(req.params.map(|params| params.get()));
 
-					let response =
-						execute_call(Call { name: &req.method, params, id: req.id, call }).in_current_span().await;
+						let response =
+							execute_call(Call { name: &req.method, params, id: req.id, call }).in_current_span().await;
 
-					batch_response.append(response.as_inner());
-
-					batch_response
-				})
+						batch_response.append(response.as_inner())
+					},
+				)
 				.await;
 
-			return batch_response.finish();
+			return match batch_response {
+				Ok(batch) => batch.finish(),
+				Err(batch_err) => batch_err,
+			};
 		} else {
 			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
 		};

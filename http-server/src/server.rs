@@ -32,7 +32,8 @@ use std::task::{Context, Poll};
 use crate::response;
 use crate::response::{internal_error, malformed};
 use futures_channel::mpsc;
-use futures_util::{stream::StreamExt, FutureExt};
+use futures_util::future::FutureExt;
+use futures_util::stream::{StreamExt, TryStreamExt};
 use hyper::header::{HeaderMap, HeaderValue};
 use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
@@ -759,30 +760,32 @@ where
 	let Batch { data, call } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
-		return if !batch.is_empty() {
-			let batch = batch.into_iter().map(|req| (req, call.clone()));
+		let max_response_size = call.max_response_body_size;
+		let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
 
-			let batch_stream = futures_util::stream::iter(batch);
+		let batch_stream = futures_util::stream::iter(batch);
 
-			let trace = RpcTracing::batch();
-			let _enter = trace.span().enter();
+		let trace = RpcTracing::batch();
+		let _enter = trace.span().enter();
 
-			let batch_response = batch_stream
-				.fold(BatchResponseBuilder::new(), |mut batch_response, (req, call)| async move {
+		let batch_response = batch_stream
+			.try_fold(
+				BatchResponseBuilder::new_with_limit(max_response_size as usize),
+				|batch_response, (req, call)| async move {
 					let params = Params::new(req.params.map(|params| params.get()));
 
 					let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
 
-					batch_response.append(&response);
+					let batch = batch_response.append(&response);
+					batch
+				},
+			)
+			.in_current_span()
+			.await;
 
-					batch_response
-				})
-				.in_current_span()
-				.await;
-
-			batch_response.finish()
-		} else {
-			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
+		return match batch_response {
+			Ok(batch) => batch.finish(),
+			Err(batch_err) => batch_err,
 		};
 	}
 

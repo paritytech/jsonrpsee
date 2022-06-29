@@ -263,35 +263,43 @@ impl MethodResponse {
 pub struct BatchResponseBuilder {
 	/// Serialized JSON-RPC response,
 	result: String,
-	/// Indicates whether the call was successful or not.
-	success: bool,
+	/// Max limit for the batch
+	max_response_size: usize,
 }
 
 impl BatchResponseBuilder {
-	/// Create a new batch response builder.
-	pub fn new() -> Self {
-		Self { result: String::from("["), success: true }
+	/// Create a new batch response builder with limit.
+	pub fn new_with_limit(limit: usize) -> Self {
+		Self { result: String::from("["), max_response_size: limit }
 	}
 
 	/// Append a result from an individual method to the batch response.
-	pub fn append(&mut self, response: &MethodResponse) {
-		if !response.success {
-			self.success = false;
-		}
+	///
+	/// Fails if the max limit is exceeded and returns to error response to
+	/// return early in order to not process method call responses which are thrown away anyway.
+	pub fn append(mut self, response: &MethodResponse) -> Result<Self, BatchResponse> {
+		// `,` will occupy one extra byte for each entry
+		// on the last item the `,` is replaced by `]`.
+		let len = response.result.len() + self.result.len() + 1;
 
-		self.result.push_str(&response.result);
-		self.result.push(',');
+		if len > self.max_response_size {
+			Err(BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest)))
+		} else {
+			self.result.push_str(&response.result);
+			self.result.push(',');
+			Ok(self)
+		}
 	}
 
 	/// Finish the batch response
 	pub fn finish(mut self) -> BatchResponse {
 		if self.result.len() == 1 {
-			panic!("Batch response needs at least one item");
+			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
+		} else {
+			self.result.pop();
+			self.result.push(']');
+			BatchResponse { result: self.result, success: true }
 		}
-
-		self.result.pop();
-		self.result.push(']');
-		BatchResponse { result: self.result, success: self.success }
 	}
 }
 
@@ -316,7 +324,7 @@ impl BatchResponse {
 mod tests {
 	use crate::server::helpers::BoundedSubscriptions;
 
-	use super::{BoundedWriter, Id, Response};
+	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, Response};
 
 	#[test]
 	fn bounded_serializer_work() {
@@ -346,5 +354,55 @@ mod tests {
 		assert!(subs.acquire().is_none());
 		handles.swap_remove(0);
 		assert!(subs.acquire().is_some());
+	}
+
+	#[test]
+	fn batch_with_single_works() {
+		let method = MethodResponse::response(Id::Number(1), "a", usize::MAX);
+		assert_eq!(method.result.len(), 37);
+
+		// Recall a batch appends two bytes for the `[]`.
+		let batch = BatchResponseBuilder::new_with_limit(39).append(&method).unwrap().finish();
+
+		assert!(batch.success);
+		assert_eq!(batch.result, r#"[{"jsonrpc":"2.0","result":"a","id":1}]"#.to_string())
+	}
+
+	#[test]
+	fn batch_with_multiple_works() {
+		let m1 = MethodResponse::response(Id::Number(1), "a", usize::MAX);
+		assert_eq!(m1.result.len(), 37);
+
+		// Recall a batch appends two bytes for the `[]` and one byte for `,` to append a method call.
+		// so it should be 2 + (37 * n) + (n-1)
+		let limit = 2 + (37 * 2) + 1;
+		let batch = BatchResponseBuilder::new_with_limit(limit).append(&m1).unwrap().append(&m1).unwrap().finish();
+
+		assert!(batch.success);
+		assert_eq!(
+			batch.result,
+			r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#.to_string()
+		)
+	}
+
+	#[test]
+	fn batch_empty_err() {
+		let batch = BatchResponseBuilder::new_with_limit(1024).finish();
+
+		assert!(!batch.success);
+		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
+		assert_eq!(batch.result, exp_err);
+	}
+
+	#[test]
+	fn batch_too_big() {
+		let method = MethodResponse::response(Id::Number(1), "a".repeat(28), 128);
+		assert_eq!(method.result.len(), 64);
+
+		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
+
+		assert!(!batch.success);
+		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
+		assert_eq!(batch.result, exp_err);
 	}
 }

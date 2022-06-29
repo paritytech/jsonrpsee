@@ -234,6 +234,28 @@ async fn can_set_the_max_response_body_size() {
 }
 
 #[tokio::test]
+async fn can_set_the_max_response_size_to_batch() {
+	init_logger();
+
+	let addr = "127.0.0.1:0";
+	// Set the max response body size to 100 bytes
+	let server = WsServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("anything", |_p, _cx| Ok("a".repeat(51))).unwrap();
+	let addr = server.local_addr().unwrap();
+	let handle = server.start(module).unwrap();
+
+	let mut client = WebSocketTestClient::new(addr).await.unwrap();
+
+	// Two response will end up in a response bigger than 100 bytes.
+	let req = r#"[{"jsonrpc":"2.0", "method":"anything", "id":1},{"jsonrpc":"2.0", "method":"anything", "id":2}]"#;
+	let response = client.send_request_text(req).await.unwrap();
+	assert_eq!(response, invalid_request(Id::Null));
+
+	handle.stop().unwrap();
+}
+
+#[tokio::test]
 async fn can_set_max_connections() {
 	let addr = "127.0.0.1:0";
 	// Server that accepts max 2 connections

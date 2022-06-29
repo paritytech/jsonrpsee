@@ -477,6 +477,25 @@ async fn can_set_the_max_response_size() {
 }
 
 #[tokio::test]
+async fn can_set_the_max_response_size_to_batch() {
+	let addr = "127.0.0.1:0";
+	// Set the max response size to 100 bytes
+	let server = HttpServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let mut module = RpcModule::new(());
+	module.register_method("anything", |_p, _cx| Ok("a".repeat(51))).unwrap();
+	let addr = server.local_addr().unwrap();
+	let uri = to_http_uri(addr);
+	let handle = server.start(module).unwrap();
+
+	// Two response will end up in a response of 102 bytes which is too big.
+	let req = r#"[{"jsonrpc":"2.0", "method":"anything", "id":1},{"jsonrpc":"2.0", "method":"anything", "id":2}]"#;
+	let response = http_request(req.into(), uri.clone()).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.body, invalid_request(Id::Null));
+
+	handle.stop().unwrap();
+}
+
+#[tokio::test]
 async fn disabled_batches() {
 	let addr = "127.0.0.1:0";
 	// Disable batches support.
