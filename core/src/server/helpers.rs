@@ -271,7 +271,10 @@ pub struct BatchResponseBuilder {
 impl BatchResponseBuilder {
 	/// Create a new batch response builder with limit.
 	pub fn new_with_limit(limit: usize) -> Self {
-		Self { result: String::from("["), max_response_size: limit }
+		let mut initial = String::with_capacity(2048);
+		initial.push('[');
+
+		Self { result: initial, max_response_size: limit }
 	}
 
 	/// Append a result from an individual method to the batch response.
