@@ -122,9 +122,10 @@ impl MethodSink {
 
 		if let Err(err) = self.send_raw(json) {
 			tracing::warn!("Error sending response {:?}", err);
+			false
+		} else {
+			true
 		}
-
-		false
 	}
 
 	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client

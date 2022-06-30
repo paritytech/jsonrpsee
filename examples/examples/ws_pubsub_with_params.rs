@@ -66,63 +66,43 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, pending, _| {
-			let idx = match params.one() {
-				Ok(idx) => idx,
-				_ => return,
-			};
+		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {
+			let idx = params.one()?;
 			let item = LETTERS.chars().nth(idx);
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				let sink = match pending.accept() {
-					Some(sink) => sink,
-					_ => return,
-				};
-
 				match sink.pipe_from_stream(stream).await {
-					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
 						sink.close(err);
 					}
-					// Don't send close notification because the stream should run forever.
-					SubscriptionClosed::Success => (),
-					// Don't send close because the client has already disconnected.
-					SubscriptionClosed::RemotePeerAborted => (),
+					_ => (),
 				};
 			});
+			Ok(())
 		})
 		.unwrap();
 	module
-		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, pending, _| {
-			let (one, two) = match params.parse::<(usize, usize)>() {
-				Ok(res) => res,
-				_ => return,
-			};
+		.register_subscription("sub_params_two", "params_two", "unsub_params_two", |params, mut sink, _| {
+			let (one, two) = params.parse::<(usize, usize)>()?;
 
 			let item = &LETTERS[one..two];
 
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| item);
-			let sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
 
 			tokio::spawn(async move {
 				match sink.pipe_from_stream(stream).await {
-					// Send close notification when subscription stream failed.
 					SubscriptionClosed::Failed(err) => {
 						sink.close(err);
 					}
-					// Don't send close notification because the stream should run forever.
-					SubscriptionClosed::Success => (),
-					// Don't send close because the client has already disconnected.
-					SubscriptionClosed::RemotePeerAborted => (),
+					_ => (),
 				};
 			});
+
+			Ok(())
 		})
 		.unwrap();
 

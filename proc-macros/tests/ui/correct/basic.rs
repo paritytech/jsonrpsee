@@ -5,8 +5,9 @@ use std::net::SocketAddr;
 use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
+use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::ws_server::{PendingSubscription, WsServerBuilder};
+use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -63,28 +64,21 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	fn sub(&self, pending: PendingSubscription) {
-		let sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return,
-		};
+	fn sub(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 		let _ = sink.send(&"Response_A");
 		let _ = sink.send(&"Response_B");
+		Ok(())
 	}
 
-	fn sub_with_params(&self, pending: PendingSubscription, val: u32) {
-		let sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return,
-		};
+	fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> SubscriptionResult {
 		let _ = sink.send(&val);
 		let _ = sink.send(&val);
+		Ok(())
 	}
 
-	fn sub_with_override_notif_method(&self, pending: PendingSubscription) {
-		if let Some(sink) = pending.accept() {
-			let _ = sink.send(&1);
-		}
+	fn sub_with_override_notif_method(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
+		let _ = sink.send(&1);
+		Ok(())
 	}
 }
 

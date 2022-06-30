@@ -71,13 +71,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	std::thread::spawn(move || produce_items(tx2));
 
-	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, pending, _| {
+	module.register_subscription("subscribe_hello", "s_hello", "unsubscribe_hello", move |_, mut sink, _| {
 		let rx = BroadcastStream::new(tx.clone().subscribe());
-
-		let sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return,
-		};
 
 		tokio::spawn(async move {
 			match sink.pipe_from_try_stream(rx).await {
@@ -90,6 +85,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 				}
 			};
 		});
+		Ok(())
 	})?;
 	let addr = server.local_addr()?;
 	server.start(module)?;

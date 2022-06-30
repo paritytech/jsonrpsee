@@ -424,12 +424,8 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, mut tx| {
-			let sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, mut tx| {
+			sink.accept().unwrap();
 			tokio::spawn(async move {
 				let close_err = loop {
 					if !sink.send(&1_usize).expect("usize can be serialized; qed") {
@@ -440,6 +436,7 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 				let send_back = Arc::make_mut(&mut tx);
 				send_back.feed(close_err).await.unwrap();
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -593,12 +590,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
-			let sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, mut sink, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
@@ -610,6 +602,7 @@ async fn ws_server_limit_subs_per_conn_works() {
 					_ => unreachable!(),
 				};
 			});
+			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();
@@ -652,12 +645,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	let mut module = RpcModule::new(());
 
 	module
-		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, pending, _| {
-			let sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
+		.register_subscription("subscribe_forever", "n", "unsubscribe_forever", |_, mut sink, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).map(move |_| 0_usize);
@@ -669,6 +657,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 					_ => unreachable!(),
 				};
 			});
+			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();

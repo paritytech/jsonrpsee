@@ -2,7 +2,8 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::ws_server::{PendingSubscription, WsServerBuilder};
+use jsonrpsee::types::SubscriptionResult;
+use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
 
 #[rpc(server)]
 pub trait Rpc {
@@ -28,14 +29,12 @@ impl RpcServer for RpcServerImpl {
 		Ok(10u16)
 	}
 
-	fn sub(&self, pending: PendingSubscription) {
-		let sink = match pending.accept() {
-			Some(sink) => sink,
-			_ => return,
-		};
+	fn sub(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
+		sink.accept()?;
 
 		let _ = sink.send(&"Response_A");
 		let _ = sink.send(&"Response_B");
+		Ok(())
 	}
 }
 

@@ -277,7 +277,7 @@ impl RpcDescription {
 					if !matches!(method.sig.output, syn::ReturnType::Default) {
 						return Err(syn::Error::new_spanned(
 							&method,
-							"Subscription methods must not return anything; the error must send via subscription via either `PendingSubscription::reject` or `SubscripionSink::close`",
+							"Subscription methods must not return anything; the error must send via subscription via either `SubscriptionSink::reject` or `SubscriptionSink::close`",
 						));
 					}
 

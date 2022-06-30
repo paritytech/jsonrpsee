@@ -30,7 +30,7 @@ use std::time::Duration;
 use futures::StreamExt;
 use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
-use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject};
+use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
 use jsonrpsee::types::{EmptyParams, Params};
 use serde::{Deserialize, Serialize};
 use tokio::time::interval;
@@ -76,7 +76,7 @@ fn flatten_rpc_modules() {
 fn rpc_context_modules_can_register_subscriptions() {
 	let cx = ();
 	let mut cxmodule = RpcModule::new(cx);
-	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| {}).unwrap();
+	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(())).unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
 	assert!(cxmodule.method("goodbye").is_some());
@@ -211,13 +211,9 @@ async fn subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 			let mut stream_data = vec!['0', '1', '2'];
-
-			let sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
+			sink.accept()?;
 
 			tokio::spawn(async move {
 				while let Some(letter) = stream_data.pop() {
@@ -228,6 +224,7 @@ async fn subscribing_without_server() {
 				let close = ErrorObject::borrowed(0, &"closed successfully", None);
 				sink.close(close.into_owned());
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -247,11 +244,8 @@ async fn close_test_subscribing_without_server() {
 
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
-			let sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+			sink.accept()?;
 
 			tokio::spawn(async move {
 				// make sure to only send one item
@@ -265,6 +259,7 @@ async fn close_test_subscribing_without_server() {
 					sink.close(SubscriptionClosed::RemotePeerAborted);
 				}
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -296,22 +291,19 @@ async fn close_test_subscribing_without_server() {
 async fn subscribing_without_server_bad_params() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |params, pending, _| {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |params, mut sink, _| {
 			let p = match params.one::<String>() {
 				Ok(p) => p,
 				Err(e) => {
 					let err: Error = e.into();
-					let _ = pending.reject(err);
-					return;
+					let _ = sink.reject(err);
+					return Ok(());
 				}
 			};
 
-			let sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
-
+			sink.accept()?;
 			sink.send(&p).unwrap();
+			Ok(())
 		})
 		.unwrap();
 
@@ -326,18 +318,14 @@ async fn subscribing_without_server_bad_params() {
 async fn subscribe_unsubscribe_without_server() {
 	let mut module = RpcModule::new(());
 	module
-		.register_subscription("my_sub", "my_sub", "my_unsub", |_, pending, _| {
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 			let interval = interval(Duration::from_millis(200));
 			let stream = IntervalStream::new(interval).map(move |_| 1);
-
-			let sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
 
 			tokio::spawn(async move {
 				sink.pipe_from_stream(stream).await;
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -365,4 +353,85 @@ async fn subscribe_unsubscribe_without_server() {
 	let sub2 = subscribe_and_assert(&module);
 
 	futures::future::join(sub1, sub2).await;
+}
+
+#[tokio::test]
+async fn empty_subscription_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut _sink, _| {
+			// Sink was never accepted or rejected. Expected to return `InvalidParams`.
+			Ok(())
+		})
+		.unwrap();
+
+	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+	assert!(
+		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("Invalid params") && e.code() == ErrorCode::InvalidParams.code())
+	);
+}
+
+#[tokio::test]
+async fn rejected_subscription_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			sink.reject(err.into_owned())?;
+			Ok(())
+		})
+		.unwrap();
+
+	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+	assert!(
+		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
+	);
+}
+
+#[tokio::test]
+async fn accepted_twice_subscription_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+			let res = sink.accept();
+			assert!(matches!(res, Ok(())));
+
+			let res = sink.accept();
+			assert!(matches!(res, Err(_)));
+
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let res = sink.reject(err.into_owned());
+			assert!(matches!(res, Err(_)));
+
+			Ok(())
+		})
+		.unwrap();
+
+	let _ = module.subscribe("my_sub", EmptyParams::new()).await.expect("Subscription should not fail");
+}
+
+#[tokio::test]
+async fn reject_twice_subscription_without_server() {
+	let mut module = RpcModule::new(());
+	module
+		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let res = sink.reject(err.into_owned());
+			assert!(matches!(res, Ok(())));
+
+			let err = ErrorObject::borrowed(PARSE_ERROR_CODE, &"rejected", None);
+			let res = sink.reject(err.into_owned());
+			assert!(matches!(res, Err(_)));
+
+			let res = sink.accept();
+			assert!(matches!(res, Err(_)));
+
+			Ok(())
+		})
+		.unwrap();
+
+	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+	assert!(
+		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
+	);
 }
