@@ -145,6 +145,10 @@ pub(crate) mod visitor;
 ///   implementation's methods conveniently.
 /// - `namespace`: add a prefix to all the methods and subscriptions in this RPC. For example, with namespace `foo` and
 ///   method `spam`, the resulting method name will be `foo_spam`.
+/// - `server_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the server
+///   implementation.
+/// - `client_bounds`: replace *all* auto-generated trait bounds with the user-defined ones for the client
+///   implementation.
 ///
 /// **Trait requirements:**
 ///

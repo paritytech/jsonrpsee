@@ -30,7 +30,7 @@ use crate::visitor::{FindAllParams, FindSubscriptionParams};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
-use syn::{parse_quote, punctuated::Punctuated, visit::Visit, Token};
+use syn::{parse_quote, punctuated::Punctuated, token::Comma, visit::Visit, Token, WherePredicate};
 
 /// Search for client-side `jsonrpsee` in `Cargo.toml`.
 pub(crate) fn find_jsonrpsee_client_crate() -> Result<proc_macro2::TokenStream, syn::Error> {
@@ -91,9 +91,20 @@ pub(crate) fn generate_where_clause(
 	item_trait: &syn::ItemTrait,
 	sub_tys: &[syn::Type],
 	is_client: bool,
+	bounds: Option<&Punctuated<WherePredicate, Comma>>,
 ) -> Vec<syn::WherePredicate> {
 	let visitor = visit_trait(item_trait, sub_tys);
 	let additional_where_clause = item_trait.generics.where_clause.clone();
+
+	if let Some(custom_bounds) = bounds {
+		let mut bounds = additional_where_clause
+			.map(|where_clause| where_clause.predicates.into_iter().collect())
+			.unwrap_or(Vec::new());
+
+		bounds.extend(custom_bounds.iter().cloned());
+
+		return bounds;
+	}
 
 	item_trait
 		.generics

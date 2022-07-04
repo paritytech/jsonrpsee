@@ -36,7 +36,7 @@ impl RpcDescription {
 		let sub_tys: Vec<syn::Type> = self.subscriptions.clone().into_iter().map(|s| s.item).collect();
 
 		let trait_name = quote::format_ident!("{}Client", &self.trait_def.ident);
-		let where_clause = generate_where_clause(&self.trait_def, &sub_tys, true);
+		let where_clause = generate_where_clause(&self.trait_def, &sub_tys, true, self.client_bounds.as_ref());
 		let type_idents = self.trait_def.generics.type_params().collect::<Vec<&TypeParam>>();
 		let (impl_generics, type_generics, _) = self.trait_def.generics.split_for_impl();
 
@@ -63,7 +63,7 @@ impl RpcDescription {
 				#(#sub_impls)*
 			}
 
-			impl<T #(,#type_idents)*> #trait_name #type_generics for T where T: #super_trait #(,#where_clause)* {}
+			impl<TypeJsonRpseeInteral #(,#type_idents)*> #trait_name #type_generics for TypeJsonRpseeInteral where TypeJsonRpseeInteral: #super_trait #(,#where_clause)* {}
 		};
 
 		Ok(trait_impl)
