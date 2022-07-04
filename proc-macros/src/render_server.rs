@@ -32,7 +32,7 @@ use crate::helpers::{generate_where_clause, is_option};
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
 use syn::punctuated::Punctuated;
-use syn::Token;
+use syn::{parse_quote, ReturnType, Token};
 
 impl RpcDescription {
 	pub(super) fn render_server(&self) -> Result<TokenStream2, syn::Error> {
@@ -71,10 +71,16 @@ impl RpcDescription {
 
 		let subscriptions = self.subscriptions.iter().map(|sub| {
 			let docs = &sub.docs;
-			let subscription_sink_ty = self.jrps_server_item(quote! { PendingSubscription });
+			let subscription_sink_ty = self.jrps_server_item(quote! { SubscriptionSink });
 			// Add `SubscriptionSink` as the second input parameter to the signature.
 			let subscription_sink: syn::FnArg = syn::parse_quote!(subscription_sink: #subscription_sink_ty);
 			let mut sub_sig = sub.signature.clone();
+
+			// For ergonomic reasons, the server's subscription method should return `SubscriptionResult`.
+			let return_ty = self.jrps_server_item(quote! { types::SubscriptionResult });
+			let output: ReturnType = parse_quote! { -> #return_ty };
+			sub_sig.sig.output = output;
+
 			sub_sig.sig.inputs.insert(1, subscription_sink);
 			quote! {
 				#docs
@@ -209,7 +215,7 @@ impl RpcDescription {
 				let resources = handle_resource_limits(&sub.resources);
 
 				handle_register_result(quote! {
-					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, subscription_sink, context| {
+					rpc.register_subscription(#rpc_sub_name, #rpc_notif_name, #rpc_unsub_name, |params, mut subscription_sink, context| {
 						#parsing
 						context.as_ref().#rust_method_name(subscription_sink, #params_seq)
 					})
@@ -313,6 +319,7 @@ impl RpcDescription {
 		let params_fields = quote! { #(#params_fields_seq),* };
 		let tracing = self.jrps_server_item(quote! { tracing });
 		let err = self.jrps_server_item(quote! { core::Error });
+		let sub_err = self.jrps_server_item(quote! { types::SubscriptionEmptyError });
 
 		// Code to decode sequence of parameters from a JSON array.
 		let decode_array = {
@@ -324,8 +331,8 @@ impl RpcDescription {
 							Err(e) => {
 								#tracing::error!(concat!("Error parsing optional \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
-								#pending.reject(_e);
-								return;
+								#pending.reject(_e)?;
+								return Err(#sub_err);
 							}
 						};
 					}
@@ -348,8 +355,8 @@ impl RpcDescription {
 							Err(e) => {
 								#tracing::error!(concat!("Error parsing \"", stringify!(#name), "\" as \"", stringify!(#ty), "\": {:?}"), e);
 								let _e: #err = e.into();
-								#pending.reject(_e);
-								return;
+								#pending.reject(_e)?;
+								return Err(#sub_err);
 							}
 						};
 					}
@@ -399,8 +406,8 @@ impl RpcDescription {
 						Err(e) => {
 							#tracing::error!("Failed to parse JSON-RPC params as object: {}", e);
 							let _e: #err = e.into();
-							#pending.reject(_e);
-							return;
+							#pending.reject(_e)?;
+							return Err(#sub_err);
 						}
 					};
 

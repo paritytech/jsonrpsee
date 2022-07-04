@@ -43,7 +43,8 @@ use serde_json::json;
 mod rpc_impl {
 	use jsonrpsee::core::{async_trait, RpcResult};
 	use jsonrpsee::proc_macros::rpc;
-	use jsonrpsee::PendingSubscription;
+	use jsonrpsee::types::SubscriptionResult;
+	use jsonrpsee::SubscriptionSink;
 
 	#[rpc(client, server, namespace = "foo")]
 	pub trait Rpc {
@@ -166,22 +167,16 @@ mod rpc_impl {
 			Ok(10u16)
 		}
 
-		fn sub(&self, pending: PendingSubscription) {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
+		fn sub(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 			let _ = sink.send(&"Response_A");
 			let _ = sink.send(&"Response_B");
+			Ok(())
 		}
 
-		fn sub_with_params(&self, pending: PendingSubscription, val: u32) {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
+		fn sub_with_params(&self, mut sink: SubscriptionSink, val: u32) -> SubscriptionResult {
 			let _ = sink.send(&val);
 			let _ = sink.send(&val);
+			Ok(())
 		}
 	}
 
@@ -194,12 +189,9 @@ mod rpc_impl {
 
 	#[async_trait]
 	impl OnlyGenericSubscriptionServer<String, String> for RpcServerImpl {
-		fn sub(&self, pending: PendingSubscription, _: String) {
-			let mut sink = match pending.accept() {
-				Some(sink) => sink,
-				_ => return,
-			};
+		fn sub(&self, mut sink: SubscriptionSink, _: String) -> SubscriptionResult {
 			let _ = sink.send(&"hello");
+			Ok(())
 		}
 	}
 }

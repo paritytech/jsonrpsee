@@ -44,51 +44,58 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
 	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, pending, _| {
-			let mut sink = pending.accept().unwrap();
+		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
+			// Explicit call to accept.
+			sink.accept().unwrap();
 			std::thread::spawn(move || loop {
 				if let Ok(false) = sink.send(&"hello from subscription") {
 					break;
 				}
 				std::thread::sleep(Duration::from_millis(50));
 			});
+			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, pending, _| {
-			let mut sink = pending.accept().unwrap();
+		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
 			std::thread::spawn(move || loop {
+				// Implicit call to accept for the first send.
 				if let Ok(false) = sink.send(&1337_usize) {
 					break;
 				}
 				std::thread::sleep(Duration::from_millis(100));
 			});
+			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_add_one", "subscribe_add_one", "unsubscribe_add_one", |params, pending, _| {
-			let mut count = match params.one::<usize>() {
-				Ok(count) => count,
-				_ => return,
-			};
+		.register_subscription(
+			"subscribe_add_one",
+			"subscribe_add_one",
+			"unsubscribe_add_one",
+			|params, mut sink, _| {
+				let mut count = match params.one::<usize>() {
+					Ok(count) => count,
+					_ => return Ok(()),
+				};
 
-			let mut sink = pending.accept().unwrap();
-
-			std::thread::spawn(move || loop {
-				count = count.wrapping_add(1);
-				if let Err(_) | Ok(false) = sink.send(&count) {
-					break;
-				}
-				std::thread::sleep(Duration::from_millis(100));
-			});
-		})
+				std::thread::spawn(move || loop {
+					count = count.wrapping_add(1);
+					if let Err(_) | Ok(false) = sink.send(&count) {
+						break;
+					}
+					std::thread::sleep(Duration::from_millis(100));
+				});
+				Ok(())
+			},
+		)
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, pending, _| {
-			let sink = pending.accept().unwrap();
+		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
+			sink.accept().unwrap();
 			std::thread::spawn(move || {
 				std::thread::sleep(Duration::from_secs(1));
 				let err = ErrorObject::owned(
@@ -98,13 +105,12 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 				);
 				sink.close(err);
 			});
+			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, pending, _| {
-			let mut sink = pending.accept().unwrap();
-
+		.register_subscription("subscribe_5_ints", "n", "unsubscribe_5_ints", |_, mut sink, _| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_millis(50));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
@@ -116,13 +122,12 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 					_ => unreachable!(),
 				}
 			});
+			Ok(())
 		})
 		.unwrap();
 
 	module
-		.register_subscription("can_reuse_subscription", "n", "u_can_reuse_subscription", |_, pending, _| {
-			let mut sink = pending.accept().unwrap();
-
+		.register_subscription("can_reuse_subscription", "n", "u_can_reuse_subscription", |_, mut sink, _| {
 			tokio::spawn(async move {
 				let stream1 = IntervalStream::new(interval(Duration::from_millis(50)))
 					.zip(futures::stream::iter(1..=5))
@@ -141,6 +146,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 					_ => unreachable!(),
 				}
 			});
+			Ok(())
 		})
 		.unwrap();
 
@@ -149,12 +155,10 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 			"subscribe_with_err_on_stream",
 			"n",
 			"unsubscribe_with_err_on_stream",
-			move |_, pending, _| {
-				let mut sink = pending.accept().unwrap();
-
+			move |_, mut sink, _| {
 				let err: &'static str = "error on the stream";
 
-				// create stream that produce an error which will cancel the subscription.
+				// Create stream that produce an error which will cancel the subscription.
 				let stream = futures::stream::iter(vec![Ok(1_u32), Err(err), Ok(2), Ok(3)]);
 				tokio::spawn(async move {
 					match sink.pipe_from_try_stream(stream).await {
@@ -164,6 +168,7 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 						_ => unreachable!(),
 					}
 				});
+				Ok(())
 			},
 		)
 		.unwrap();
@@ -201,9 +206,7 @@ pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::m
 	let mut module = RpcModule::new(tx);
 
 	module
-		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, pending, mut tx| {
-			let mut sink = pending.accept().unwrap();
-
+		.register_subscription("subscribe_sleep", "n", "unsubscribe_sleep", |_, mut sink, mut tx| {
 			tokio::spawn(async move {
 				let interval = interval(Duration::from_secs(60 * 60));
 				let stream = IntervalStream::new(interval).zip(futures::stream::iter(1..=5)).map(|(_, c)| c);
@@ -212,6 +215,7 @@ pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::m
 				let send_back = std::sync::Arc::make_mut(&mut tx);
 				send_back.send(()).await.unwrap();
 			});
+			Ok(())
 		})
 		.unwrap();
 	server.start(module).unwrap();
