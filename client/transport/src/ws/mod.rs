@@ -59,33 +59,32 @@ pub struct Receiver {
 
 /// Builder for a WebSocket transport [`Sender`] and ['Receiver`] pair.
 #[derive(Debug)]
-pub struct WsTransportClientBuilder<'a> {
+pub struct WsTransportClientBuilder {
 	/// What certificate store to use
 	pub certificate_store: CertificateStore,
 	/// Timeout for the connection.
 	pub connection_timeout: Duration,
-	/// Custom headers to pass during the HTTP handshake. If `None`, no
-	/// custom header is passed.
-	pub headers: Vec<Header<'a>>,
+	/// Custom headers to pass during the HTTP handshake.
+	pub headers: http::HeaderMap,
 	/// Max payload size
 	pub max_request_body_size: u32,
 	/// Max number of redirections.
 	pub max_redirections: usize,
 }
 
-impl<'a> Default for WsTransportClientBuilder<'a> {
+impl Default for WsTransportClientBuilder {
 	fn default() -> Self {
 		Self {
 			certificate_store: CertificateStore::Native,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			connection_timeout: Duration::from_secs(10),
-			headers: Vec::new(),
+			headers: http::HeaderMap::new(),
 			max_redirections: 5,
 		}
 	}
 }
 
-impl<'a> WsTransportClientBuilder<'a> {
+impl WsTransportClientBuilder {
 	/// Set whether to use system certificates (default is native).
 	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
 		self.certificate_store = certificate_store;
@@ -107,8 +106,8 @@ impl<'a> WsTransportClientBuilder<'a> {
 	/// Set a custom header passed to the server during the handshake (default is none).
 	///
 	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
-	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
-		self.headers.push(Header { name, value: value.as_bytes() });
+	pub fn set_headers(mut self, headers: http::HeaderMap) -> Self {
+		self.headers = headers;
 		self
 	}
 
@@ -240,7 +239,7 @@ impl TransportReceiverT for Receiver {
 	}
 }
 
-impl<'a> WsTransportClientBuilder<'a> {
+impl WsTransportClientBuilder {
 	/// Try to establish the connection.
 	pub async fn build(self, uri: Uri) -> Result<(Sender, Receiver), WsHandshakeError> {
 		let target: Target = uri.try_into()?;
@@ -289,7 +288,13 @@ impl<'a> WsTransportClientBuilder<'a> {
 					&target.path_and_query,
 				);
 
-				client.set_headers(&self.headers);
+				let headers: Vec<_> = self
+					.headers
+					.iter()
+					.map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() })
+					.collect();
+
+				client.set_headers(&headers);
 
 				// Perform the initial handshake.
 				match client.handshake().await {

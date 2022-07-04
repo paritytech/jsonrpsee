@@ -42,7 +42,7 @@ pub use jsonrpsee_types as types;
 
 use std::time::Duration;
 
-use jsonrpsee_client_transport::ws::{Header, InvalidUri, Uri, WsTransportClientBuilder};
+use jsonrpsee_client_transport::ws::{InvalidUri, Uri, WsTransportClientBuilder};
 use jsonrpsee_core::client::{CertificateStore, ClientBuilder, IdKind};
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 
@@ -68,20 +68,20 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 ///
 /// ```
 #[derive(Clone, Debug)]
-pub struct WsClientBuilder<'a> {
+pub struct WsClientBuilder {
 	certificate_store: CertificateStore,
 	max_request_body_size: u32,
 	request_timeout: Duration,
 	connection_timeout: Duration,
 	ping_interval: Option<Duration>,
-	headers: Vec<Header<'a>>,
+	headers: http::HeaderMap,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
 	id_kind: IdKind,
 }
 
-impl<'a> Default for WsClientBuilder<'a> {
+impl Default for WsClientBuilder {
 	fn default() -> Self {
 		Self {
 			certificate_store: CertificateStore::Native,
@@ -89,7 +89,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
 			ping_interval: None,
-			headers: Vec::new(),
+			headers: http::HeaderMap::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,
@@ -98,7 +98,7 @@ impl<'a> Default for WsClientBuilder<'a> {
 	}
 }
 
-impl<'a> WsClientBuilder<'a> {
+impl WsClientBuilder {
 	/// See documentation [`WsTransportClientBuilder::certificate_store`] (default is native).
 	pub fn certificate_store(mut self, certificate_store: CertificateStore) -> Self {
 		self.certificate_store = certificate_store;
@@ -129,9 +129,9 @@ impl<'a> WsClientBuilder<'a> {
 		self
 	}
 
-	/// See documentation [`WsTransportClientBuilder::add_header`] (default is none).
-	pub fn add_header(mut self, name: &'a str, value: &'a str) -> Self {
-		self.headers.push(Header { name, value: value.as_bytes() });
+	/// See documentation [`WsTransportClientBuilder::set_headers`] (default is none).
+	pub fn set_headers(mut self, headers: http::HeaderMap) -> Self {
+		self.headers = headers;
 		self
 	}
 
