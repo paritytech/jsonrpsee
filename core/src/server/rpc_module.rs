@@ -850,10 +850,7 @@ impl SubscriptionSink {
 
 		let err = MethodResponse::error(id, err.into());
 
-		let ws_send = self.inner.send_raw(err.result.clone()).is_ok();
-		let middleware_call = subscribe_call.send(err).is_ok();
-
-		if ws_send && middleware_call {
+		if self.answer_subscription(err, subscribe_call) {
 			Ok(())
 		} else {
 			Err(SubscriptionAcceptRejectError::RemotePeerAborted)
@@ -869,10 +866,9 @@ impl SubscriptionSink {
 		let response = MethodResponse::response(id, &self.uniq_sub.sub_id, self.inner.max_response_size() as usize);
 		let success = response.success;
 
-		let ws_send = self.inner.send_raw(response.result.clone()).is_ok();
-		let middleware_call = subscribe_call.send(response).is_ok();
+		let sent = self.answer_subscription(response, subscribe_call);
 
-		if ws_send && middleware_call && success {
+		if sent && success {
 			let (tx, rx) = watch::channel(());
 			self.subscribers.lock().insert(self.uniq_sub.clone(), (self.inner.clone(), tx));
 			self.unsubscribe = Some(rx);
@@ -1050,6 +1046,13 @@ impl SubscriptionSink {
 		}
 	}
 
+	fn answer_subscription(&self, response: MethodResponse, subscribe_call: oneshot::Sender<MethodResponse>) -> bool {
+		let ws_send = self.inner.send_raw(response.result.clone()).is_ok();
+		let middleware_call = subscribe_call.send(response).is_ok();
+
+		ws_send && middleware_call
+	}
+
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {
 		serde_json::to_string(&SubscriptionResponse::new(
 			self.method.into(),
@@ -1107,9 +1110,7 @@ impl Drop for SubscriptionSink {
 			// because that's how the previous PendingSubscription logic
 			// worked.
 			let err = MethodResponse::error(id, ErrorObject::from(ErrorCode::InvalidParams));
-
-			let _ws_send = self.inner.send_raw(err.result.clone()).is_ok();
-			let _middleware_call = subscribe_call.send(err).is_ok();
+			self.answer_subscription(err, subscribe_call);
 		} else if self.is_active_subscription() {
 			self.subscribers.lock().remove(&self.uniq_sub);
 		}
