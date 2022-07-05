@@ -93,7 +93,18 @@ impl HttpTransportClient {
 				return Err(Error::Url(err.into()));
 			}
 		};
-		Ok(Self { target, client, max_request_body_size, max_log_length, headers })
+
+		// Cache request headers: 2 default headers, followed by user custom headers.
+		// Maintain order for headers in case of duplicate keys:
+		// https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.2
+		let mut cached_headers = http::HeaderMap::with_capacity(2 + headers.len());
+		cached_headers.insert(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
+		cached_headers.insert(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
+		for (key, value) in headers.iter() {
+			cached_headers.insert(key, value.clone());
+		}
+
+		Ok(Self { target, client, max_request_body_size, max_log_length, headers: cached_headers })
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
@@ -103,15 +114,8 @@ impl HttpTransportClient {
 			return Err(Error::RequestTooLarge);
 		}
 
-		let mut req = hyper::Request::post(&self.target)
-			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
-			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
-		// Extend request with custom headers.
-		if let Some(req_headers) = req.headers_mut() {
-			for (key, value) in &self.headers {
-				req_headers.append(key, value.clone());
-			}
-		}
+		let mut req = hyper::Request::post(&self.target);
+		req.headers_mut().map(|headers| *headers = self.headers.clone());
 		let req = req.body(From::from(body)).expect("URI and request headers are valid; qed");
 
 		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
