@@ -57,8 +57,10 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 /// #[tokio::main]
 /// async fn main() {
 ///     // build client
+///     let mut headers = http::HeaderMap::new();
+///     headers.insert("Any-Header-You-Like", http::HeaderValue::from_static("42"));
 ///     let client = WsClientBuilder::default()
-///          .add_header("Any-Header-You-Like", "42")
+///          .set_headers(headers)
 ///          .build("wss://localhost:443")
 ///          .await
 ///          .unwrap();
