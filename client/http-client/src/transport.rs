@@ -48,6 +48,8 @@ pub struct HttpTransportClient {
 	///
 	/// Logs bigger than this limit will be truncated.
 	max_log_length: u32,
+	/// Custom headers to pass with every request.
+	headers: Option<http::HeaderMap>,
 }
 
 impl HttpTransportClient {
@@ -57,6 +59,7 @@ impl HttpTransportClient {
 		max_request_body_size: u32,
 		cert_store: CertificateStore,
 		max_log_length: u32,
+		headers: Option<http::HeaderMap>,
 	) -> Result<Self, Error> {
 		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.port_u16().is_none() {
@@ -90,7 +93,7 @@ impl HttpTransportClient {
 				return Err(Error::Url(err.into()));
 			}
 		};
-		Ok(Self { target, client, max_request_body_size, max_log_length })
+		Ok(Self { target, client, max_request_body_size, max_log_length, headers })
 	}
 
 	async fn inner_send(&self, body: String) -> Result<hyper::Response<hyper::Body>, Error> {
@@ -100,11 +103,16 @@ impl HttpTransportClient {
 			return Err(Error::RequestTooLarge);
 		}
 
-		let req = hyper::Request::post(&self.target)
+		let mut req = hyper::Request::post(&self.target)
 			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
-			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
-			.body(From::from(body))
-			.expect("URI and request headers are valid; qed");
+			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
+		// Extend request with custom headers.
+		if let (Some(header_map), Some(req_headers)) = (&self.headers, req.headers_mut()) {
+			for (key, value) in header_map {
+				req_headers.append(key, value.clone());
+			}
+		}
+		let req = req.body(From::from(body)).expect("URI and request headers are valid; qed");
 
 		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
 		if response.status().is_success() {

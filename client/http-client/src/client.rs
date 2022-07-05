@@ -47,6 +47,7 @@ pub struct HttpClientBuilder {
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
 	max_log_length: u32,
+	headers: Option<http::HeaderMap>,
 }
 
 impl HttpClientBuilder {
@@ -88,11 +89,24 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Set a custom header passed to the server with every request (default is none).
+	///
+	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
+	pub fn set_headers(mut self, headers: http::HeaderMap) -> Self {
+		self.headers = Some(headers);
+		self
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
-		let transport =
-			HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store, self.max_log_length)
-				.map_err(|e| Error::Transport(e.into()))?;
+		let transport = HttpTransportClient::new(
+			target,
+			self.max_request_body_size,
+			self.certificate_store,
+			self.max_log_length,
+			self.headers,
+		)
+		.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
 			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests, self.id_kind)),
@@ -110,6 +124,7 @@ impl Default for HttpClientBuilder {
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
+			headers: None,
 		}
 	}
 }
