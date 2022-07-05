@@ -65,7 +65,7 @@ pub struct WsTransportClientBuilder {
 	/// Timeout for the connection.
 	pub connection_timeout: Duration,
 	/// Custom headers to pass during the HTTP handshake.
-	pub headers: Option<http::HeaderMap>,
+	pub headers: http::HeaderMap,
 	/// Max payload size
 	pub max_request_body_size: u32,
 	/// Max number of redirections.
@@ -78,7 +78,7 @@ impl Default for WsTransportClientBuilder {
 			certificate_store: CertificateStore::Native,
 			max_request_body_size: TEN_MB_SIZE_BYTES,
 			connection_timeout: Duration::from_secs(10),
-			headers: None,
+			headers: http::HeaderMap::new(),
 			max_redirections: 5,
 		}
 	}
@@ -107,7 +107,7 @@ impl WsTransportClientBuilder {
 	///
 	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
 	pub fn set_headers(mut self, headers: http::HeaderMap) -> Self {
-		self.headers = Some(headers);
+		self.headers = headers;
 		self
 	}
 
@@ -288,16 +288,11 @@ impl WsTransportClientBuilder {
 					&target.path_and_query,
 				);
 
-				let headers: Vec<_> = if let Some(header_map) = &self.headers {
-					header_map
-						.iter()
-						.map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() })
-						.collect()
-				} else {
-					// Avoid defaults when `http:HeaderMap` is added to `soketto`.
-					Default::default()
-				};
-
+				let headers: Vec<_> = self
+					.headers
+					.iter()
+					.map(|(key, value)| Header { name: key.as_str(), value: value.as_bytes() })
+					.collect();
 				client.set_headers(&headers);
 
 				// Perform the initial handshake.

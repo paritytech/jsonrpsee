@@ -74,7 +74,7 @@ pub struct WsClientBuilder {
 	request_timeout: Duration,
 	connection_timeout: Duration,
 	ping_interval: Option<Duration>,
-	headers: Option<http::HeaderMap>,
+	headers: http::HeaderMap,
 	max_concurrent_requests: usize,
 	max_notifs_per_subscription: usize,
 	max_redirections: usize,
@@ -89,7 +89,7 @@ impl Default for WsClientBuilder {
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
 			ping_interval: None,
-			headers: None,
+			headers: http::HeaderMap::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,
@@ -131,7 +131,7 @@ impl WsClientBuilder {
 
 	/// See documentation [`WsTransportClientBuilder::set_headers`] (default is none).
 	pub fn set_headers(mut self, headers: http::HeaderMap) -> Self {
-		self.headers = Some(headers);
+		self.headers = headers;
 		self
 	}
 

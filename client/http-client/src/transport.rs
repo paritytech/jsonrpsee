@@ -49,7 +49,7 @@ pub struct HttpTransportClient {
 	/// Logs bigger than this limit will be truncated.
 	max_log_length: u32,
 	/// Custom headers to pass with every request.
-	headers: Option<http::HeaderMap>,
+	headers: http::HeaderMap,
 }
 
 impl HttpTransportClient {
@@ -59,7 +59,7 @@ impl HttpTransportClient {
 		max_request_body_size: u32,
 		cert_store: CertificateStore,
 		max_log_length: u32,
-		headers: Option<http::HeaderMap>,
+		headers: http::HeaderMap,
 	) -> Result<Self, Error> {
 		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.port_u16().is_none() {
@@ -107,8 +107,8 @@ impl HttpTransportClient {
 			.header(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON))
 			.header(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
 		// Extend request with custom headers.
-		if let (Some(header_map), Some(req_headers)) = (&self.headers, req.headers_mut()) {
-			for (key, value) in header_map {
+		if let Some(req_headers) = req.headers_mut() {
+			for (key, value) in &self.headers {
 				req_headers.append(key, value.clone());
 			}
 		}
@@ -206,40 +206,67 @@ mod tests {
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err = HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native, 80, None).unwrap_err();
+		let err =
+			HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native, 80, http::HeaderMap::new())
+				.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[cfg(feature = "tls")]
 	#[test]
 	fn https_works() {
-		let client =
-			HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80, None).unwrap();
+		let client = HttpTransportClient::new(
+			"https://localhost:9933",
+			80,
+			CertificateStore::Native,
+			80,
+			http::HeaderMap::new(),
+		)
+		.unwrap();
 		assert_target(&client, "localhost", "https", "/", 9933, 80);
 	}
 
 	#[cfg(not(feature = "tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
-		let err =
-			HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80, None).unwrap_err();
+		let err = HttpTransportClient::new(
+			"https://localhost:9933",
+			80,
+			CertificateStore::Native,
+			80,
+			http::HeaderMap::new(),
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[test]
 	fn faulty_port() {
-		let err = HttpTransportClient::new("http://localhost:-43", 80, CertificateStore::Native, 80, None).unwrap_err();
-		assert!(matches!(err, Error::Url(_)));
 		let err =
-			HttpTransportClient::new("http://localhost:-99999", 80, CertificateStore::Native, 80, None).unwrap_err();
+			HttpTransportClient::new("http://localhost:-43", 80, CertificateStore::Native, 80, http::HeaderMap::new())
+				.unwrap_err();
+		assert!(matches!(err, Error::Url(_)));
+		let err = HttpTransportClient::new(
+			"http://localhost:-99999",
+			80,
+			CertificateStore::Native,
+			80,
+			http::HeaderMap::new(),
+		)
+		.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[test]
 	fn url_with_path_works() {
-		let client =
-			HttpTransportClient::new("http://localhost:9944/my-special-path", 1337, CertificateStore::Native, 80, None)
-				.unwrap();
+		let client = HttpTransportClient::new(
+			"http://localhost:9944/my-special-path",
+			1337,
+			CertificateStore::Native,
+			80,
+			http::HeaderMap::new(),
+		)
+		.unwrap();
 		assert_target(&client, "localhost", "http", "/my-special-path", 9944, 1337);
 	}
 
@@ -250,7 +277,7 @@ mod tests {
 			u32::MAX,
 			CertificateStore::WebPki,
 			80,
-			None,
+			http::HeaderMap::new(),
 		)
 		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my?name1=value1&name2=value2", 9999, u32::MAX);
@@ -258,16 +285,23 @@ mod tests {
 
 	#[test]
 	fn url_with_fragment_is_ignored() {
-		let client =
-			HttpTransportClient::new("http://127.0.0.1:9944/my.htm#ignore", 999, CertificateStore::Native, 80, None)
-				.unwrap();
+		let client = HttpTransportClient::new(
+			"http://127.0.0.1:9944/my.htm#ignore",
+			999,
+			CertificateStore::Native,
+			80,
+			http::HeaderMap::new(),
+		)
+		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my.htm", 9944, 999);
 	}
 
 	#[tokio::test]
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
-		let client = HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki, 99, None).unwrap();
+		let client =
+			HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki, 99, http::HeaderMap::new())
+				.unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
 		let body = "a".repeat(81);

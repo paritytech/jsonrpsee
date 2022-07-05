@@ -47,7 +47,7 @@ pub struct HttpClientBuilder {
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
 	max_log_length: u32,
-	headers: Option<http::HeaderMap>,
+	headers: http::HeaderMap,
 }
 
 impl HttpClientBuilder {
@@ -93,7 +93,7 @@ impl HttpClientBuilder {
 	///
 	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
 	pub fn set_headers(mut self, headers: http::HeaderMap) -> Self {
-		self.headers = Some(headers);
+		self.headers = headers;
 		self
 	}
 
@@ -124,7 +124,7 @@ impl Default for HttpClientBuilder {
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
-			headers: None,
+			headers: http::HeaderMap::new(),
 		}
 	}
 }
