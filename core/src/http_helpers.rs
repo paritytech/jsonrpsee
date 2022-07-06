@@ -112,7 +112,7 @@ pub fn get_cors_request_headers<'a>(headers: &'a hyper::header::HeaderMap) -> im
 	read_header_values(headers, ACCESS_CONTROL_REQUEST_HEADERS)
 		.iter()
 		.filter_map(|val| val.to_str().ok())
-		.flat_map(|val| val.split(","))
+		.flat_map(|val| val.split(','))
 		// The strings themselves might contain leading and trailing whitespaces
 		.map(|s| s.trim())
 }

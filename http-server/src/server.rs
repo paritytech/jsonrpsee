@@ -116,7 +116,7 @@ impl<M> Builder<M> {
 	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Instant {
 	///         Instant::now()
 	///     }
-	///     
+	///
 	///     // Called once a single JSON-RPC method call is processed, it may be called multiple times
 	///     // on batches.
 	///     fn on_call(&self, method_name: &str, params: Params) {
@@ -129,7 +129,7 @@ impl<M> Builder<M> {
 	///         println!("Call to '{}' took {:?}", method_name, started_at.elapsed());
 	///     }
 	///
-	/// 	// Called the entire JSON-RPC is completed, called on once for both single calls or batches.
+	///     // Called the entire JSON-RPC is completed, called on once for both single calls or batches.
 	///     fn on_response(&self, result: &str, started_at: Instant) {
 	///         println!("complete JSON-RPC response: {}, took: {:?}", result, started_at.elapsed());
 	///     }
@@ -204,11 +204,11 @@ impl<M> Builder<M> {
 	pub fn health_api(mut self, path: impl Into<String>, method: impl Into<String>) -> Result<Self, Error> {
 		let path = path.into();
 
-		if !path.starts_with("/") {
+		if !path.starts_with('/') {
 			return Err(Error::Custom(format!("Health endpoint path must start with `/` to work, got: {}", path)));
 		}
 
-		self.health_api = Some(HealthApi { path: path, method: method.into() });
+		self.health_api = Some(HealthApi { path, method: method.into() });
 		Ok(self)
 	}
 
@@ -776,8 +776,7 @@ where
 
 					let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
 
-					let batch = batch_response.append(&response);
-					batch
+					batch_response.append(&response)
 				},
 			)
 			.in_current_span()
