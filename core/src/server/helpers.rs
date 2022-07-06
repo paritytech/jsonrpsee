@@ -28,9 +28,8 @@ use std::io;
 use std::sync::Arc;
 
 use crate::tracing::tx_log_from_str;
-use crate::{Error};
+use crate::Error;
 use futures_channel::mpsc;
-use futures_util::StreamExt;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, ErrorResponse, OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG};
 use jsonrpsee_types::{Id, InvalidRequest, Response};
 use serde::Serialize;
@@ -108,39 +107,6 @@ impl MethodSink {
 		self.tx.is_closed()
 	}
 
-	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
-	/// an error will be sent instead.
-	pub fn send_response(&self, id: Id, result: impl Serialize) -> bool {
-		let mut writer = BoundedWriter::new(self.max_response_size as usize);
-
-		let json = match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
-			Ok(_) => {
-				// Safety - serde_json does not emit invalid UTF-8.
-				unsafe { String::from_utf8_unchecked(writer.into_bytes()) }
-			}
-			Err(err) => {
-				tracing::error!("Error serializing response: {:?}", err);
-
-				if err.is_io() {
-					let data = format!("Exceeded max limit of {}", self.max_response_size);
-					let err = ErrorObject::owned(OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, Some(data));
-					return self.send_error(id, err);
-				} else {
-					return self.send_error(id, ErrorCode::InternalError.into());
-				}
-			}
-		};
-
-		tx_log_from_str(&json, self.max_log_length);
-
-		if let Err(err) = self.send_raw(json) {
-			tracing::warn!("Error sending response {:?}", err);
-			false
-		} else {
-			true
-		}
-	}
-
 	/// Send a JSON-RPC error to the client
 	pub fn send_error(&self, id: Id, error: ErrorObject) -> bool {
 		let json = match serde_json::to_string(&ErrorResponse::borrowed(error, id)) {
@@ -169,14 +135,19 @@ impl MethodSink {
 
 	/// Send a raw JSON-RPC message to the client, `MethodSink` does not check verify the validity
 	/// of the JSON being sent.
-	pub fn send_raw(&self, raw_json: String) -> Result<(), mpsc::TrySendError<String>> {
-		tracing::trace!("send: {:?}", raw_json);
-		self.tx.unbounded_send(raw_json)
+	pub fn send_raw(&self, json: String) -> Result<(), mpsc::TrySendError<String>> {
+		tx_log_from_str(&json, self.max_log_length);
+		self.tx.unbounded_send(json)
 	}
 
 	/// Close the channel for any further messages.
 	pub fn close(&self) {
 		self.tx.close_channel();
+	}
+
+	/// Get the maximum number of permitted subscriptions.
+	pub const fn max_response_size(&self) -> u32 {
+		self.max_response_size
 	}
 }
 
@@ -187,24 +158,6 @@ pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 		Ok(InvalidRequest { id }) => (id, ErrorCode::InvalidRequest),
 		Err(_) => (Id::Null, ErrorCode::ParseError),
 	}
-}
-
-/// Read all the results of all method calls in a batch request from the ['Stream']. Format the result into a single
-/// `String` appropriately wrapped in `[`/`]`.
-pub async fn collect_batch_response(rx: mpsc::UnboundedReceiver<String>) -> String {
-	let mut buf = String::with_capacity(2048);
-	buf.push('[');
-	let mut buf = rx
-		.fold(buf, |mut acc, response| async move {
-			acc.push_str(&response);
-			acc.push(',');
-			acc
-		})
-		.await;
-	// Remove trailing comma
-	buf.pop();
-	buf.push(']');
-	buf
 }
 
 /// A permitted subscription.
@@ -260,11 +213,122 @@ impl BoundedSubscriptions {
 	}
 }
 
+/// Represent the response to method call.
+#[derive(Debug)]
+pub struct MethodResponse {
+	/// Serialized JSON-RPC response,
+	pub result: String,
+	/// Indicates whether the call was successful or not.
+	pub success: bool,
+}
+
+impl MethodResponse {
+	/// Send a JSON-RPC response to the client. If the serialization of `result` exceeds `max_response_size`,
+	/// an error will be sent instead.
+	pub fn response(id: Id, result: impl Serialize, max_response_size: usize) -> Self {
+		let mut writer = BoundedWriter::new(max_response_size);
+
+		match serde_json::to_writer(&mut writer, &Response::new(result, id.clone())) {
+			Ok(_) => {
+				// Safety - serde_json does not emit invalid UTF-8.
+				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
+				Self { result, success: true }
+			}
+			Err(err) => {
+				tracing::error!("Error serializing response: {:?}", err);
+
+				if err.is_io() {
+					let data = format!("Exceeded max limit of {}", max_response_size);
+					let err = ErrorObject::owned(OVERSIZED_RESPONSE_CODE, OVERSIZED_RESPONSE_MSG, Some(data));
+					let result = serde_json::to_string(&ErrorResponse::borrowed(err, id)).unwrap();
+
+					Self { result, success: false }
+				} else {
+					let result =
+						serde_json::to_string(&ErrorResponse::borrowed(ErrorCode::InternalError.into(), id)).unwrap();
+					Self { result, success: false }
+				}
+			}
+		}
+	}
+
+	/// Create a `MethodResponse` from an error.
+	pub fn error<'a>(id: Id, err: impl Into<ErrorObject<'a>>) -> Self {
+		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).expect("valid JSON; qed");
+		Self { result, success: false }
+	}
+}
+
+/// Builder to build a `BatchResponse`.
+#[derive(Debug, Default)]
+pub struct BatchResponseBuilder {
+	/// Serialized JSON-RPC response,
+	result: String,
+	/// Max limit for the batch
+	max_response_size: usize,
+}
+
+impl BatchResponseBuilder {
+	/// Create a new batch response builder with limit.
+	pub fn new_with_limit(limit: usize) -> Self {
+		let mut initial = String::with_capacity(2048);
+		initial.push('[');
+
+		Self { result: initial, max_response_size: limit }
+	}
+
+	/// Append a result from an individual method to the batch response.
+	///
+	/// Fails if the max limit is exceeded and returns to error response to
+	/// return early in order to not process method call responses which are thrown away anyway.
+	pub fn append(mut self, response: &MethodResponse) -> Result<Self, BatchResponse> {
+		// `,` will occupy one extra byte for each entry
+		// on the last item the `,` is replaced by `]`.
+		let len = response.result.len() + self.result.len() + 1;
+
+		if len > self.max_response_size {
+			Err(BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest)))
+		} else {
+			self.result.push_str(&response.result);
+			self.result.push(',');
+			Ok(self)
+		}
+	}
+
+	/// Finish the batch response
+	pub fn finish(mut self) -> BatchResponse {
+		if self.result.len() == 1 {
+			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
+		} else {
+			self.result.pop();
+			self.result.push(']');
+			BatchResponse { result: self.result, success: true }
+		}
+	}
+}
+
+/// Response to a batch request.
+#[derive(Debug)]
+pub struct BatchResponse {
+	/// Formatted JSON-RPC response.
+	pub result: String,
+	/// Indicates whether the call was successful or not.
+	pub success: bool,
+}
+
+impl BatchResponse {
+	/// Create a `BatchResponse` from an error.
+	pub fn error(id: Id, err: impl Into<ErrorObject<'static>>) -> Self {
+		let result = serde_json::to_string(&ErrorResponse::borrowed(err.into(), id)).unwrap();
+		Self { result, success: false }
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use crate::server::helpers::BoundedSubscriptions;
 
-	use super::{BoundedWriter, Id, Response};
+	use super::{BatchResponseBuilder, BoundedWriter, Id, MethodResponse, Response};
 
 	#[test]
 	fn bounded_serializer_work() {
@@ -294,5 +358,55 @@ mod tests {
 		assert!(subs.acquire().is_none());
 		handles.swap_remove(0);
 		assert!(subs.acquire().is_some());
+	}
+
+	#[test]
+	fn batch_with_single_works() {
+		let method = MethodResponse::response(Id::Number(1), "a", usize::MAX);
+		assert_eq!(method.result.len(), 37);
+
+		// Recall a batch appends two bytes for the `[]`.
+		let batch = BatchResponseBuilder::new_with_limit(39).append(&method).unwrap().finish();
+
+		assert!(batch.success);
+		assert_eq!(batch.result, r#"[{"jsonrpc":"2.0","result":"a","id":1}]"#.to_string())
+	}
+
+	#[test]
+	fn batch_with_multiple_works() {
+		let m1 = MethodResponse::response(Id::Number(1), "a", usize::MAX);
+		assert_eq!(m1.result.len(), 37);
+
+		// Recall a batch appends two bytes for the `[]` and one byte for `,` to append a method call.
+		// so it should be 2 + (37 * n) + (n-1)
+		let limit = 2 + (37 * 2) + 1;
+		let batch = BatchResponseBuilder::new_with_limit(limit).append(&m1).unwrap().append(&m1).unwrap().finish();
+
+		assert!(batch.success);
+		assert_eq!(
+			batch.result,
+			r#"[{"jsonrpc":"2.0","result":"a","id":1},{"jsonrpc":"2.0","result":"a","id":1}]"#.to_string()
+		)
+	}
+
+	#[test]
+	fn batch_empty_err() {
+		let batch = BatchResponseBuilder::new_with_limit(1024).finish();
+
+		assert!(!batch.success);
+		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
+		assert_eq!(batch.result, exp_err);
+	}
+
+	#[test]
+	fn batch_too_big() {
+		let method = MethodResponse::response(Id::Number(1), "a".repeat(28), 128);
+		assert_eq!(method.result.len(), 64);
+
+		let batch = BatchResponseBuilder::new_with_limit(63).append(&method).unwrap_err();
+
+		assert!(!batch.success);
+		let exp_err = r#"{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}"#;
+		assert_eq!(batch.result, exp_err);
 	}
 }

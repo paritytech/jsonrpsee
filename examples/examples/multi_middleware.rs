@@ -30,8 +30,9 @@ use std::net::SocketAddr;
 use std::process::Command;
 use std::time::Instant;
 
-use jsonrpsee::core::{client::ClientT, middleware};
+use jsonrpsee::core::{client::ClientT, middleware, middleware::Headers};
 use jsonrpsee::rpc_params;
+use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
@@ -39,14 +40,18 @@ use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 #[derive(Clone)]
 struct Timings;
 
-impl middleware::Middleware for Timings {
+impl middleware::WsMiddleware for Timings {
 	type Instant = Instant;
+
+	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
+		println!("[Timings::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+	}
 
 	fn on_request(&self) -> Self::Instant {
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str) {
+	fn on_call(&self, name: &str, _params: Params) {
 		println!("[Timings] They called '{}'", name);
 	}
 
@@ -54,8 +59,12 @@ impl middleware::Middleware for Timings {
 		println!("[Timings] call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
 		println!("[Timings] Response duration {:?}", started_at.elapsed());
+	}
+
+	fn on_disconnect(&self, remote_addr: SocketAddr) {
+		println!("[Timings::on_disconnect] remote_addr: {}", remote_addr);
 	}
 }
 
@@ -78,18 +87,36 @@ impl ThreadWatcher {
 	}
 }
 
-impl middleware::Middleware for ThreadWatcher {
+impl middleware::WsMiddleware for ThreadWatcher {
 	type Instant = isize;
+
+	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
+		println!("[ThreadWatcher::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+	}
+
+	fn on_call(&self, _method: &str, _params: Params) {
+		let threads = Self::count_threads();
+		println!("[ThreadWatcher::on_call] Threads running on the machine at the start of a call: {}", threads);
+	}
 
 	fn on_request(&self) -> Self::Instant {
 		let threads = Self::count_threads();
-		println!("[ThreadWatcher] Threads running on the machine at the start of a call: {}", threads);
+		println!("[ThreadWatcher::on_request] Threads running on the machine at the start of a call: {}", threads);
 		threads as isize
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
+	fn on_result(&self, _name: &str, _succees: bool, started_at: Self::Instant) {
 		let current_nr_threads = Self::count_threads() as isize;
-		println!("[ThreadWatcher] Request started {} threads", current_nr_threads - started_at);
+		println!("[ThreadWatcher::on_result] {} threads", current_nr_threads - started_at);
+	}
+
+	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+		let current_nr_threads = Self::count_threads() as isize;
+		println!("[ThreadWatcher::on_response] {} threads", current_nr_threads - started_at);
+	}
+
+	fn on_disconnect(&self, remote_addr: SocketAddr) {
+		println!("[ThreadWatcher::on_disconnect] remote_addr: {}", remote_addr);
 	}
 }
 

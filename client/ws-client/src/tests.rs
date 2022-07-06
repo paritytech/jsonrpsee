@@ -205,7 +205,7 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 		client.subscribe_to_method("test").with_default_timeout().await.unwrap().unwrap();
 
 	// don't poll the notification stream for 2 seconds, should be full now.
-	std::thread::sleep(std::time::Duration::from_secs(2));
+	tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
 	// Capacity is `num_sender` + `capacity`
 	for _ in 0..5 {
@@ -244,6 +244,11 @@ async fn batch_request_out_of_order_response() {
 
 #[tokio::test]
 async fn is_connected_works() {
+	tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init()
+		.expect("setting default subscriber failed");
+
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),
 		ok_response(JsonValue::String("foo".into()), Id::Num(99_u64)),
@@ -254,9 +259,11 @@ async fn is_connected_works() {
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	assert!(client.is_connected());
+
 	client.request::<String>("say_hello", None).with_default_timeout().await.unwrap().unwrap_err();
+
 	// give the background thread some time to terminate.
-	std::thread::sleep(std::time::Duration::from_millis(100));
+	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 	assert!(!client.is_connected())
 }
 
@@ -295,7 +302,6 @@ fn assert_error_response(err: Error, exp: ErrorObjectOwned) {
 
 #[tokio::test]
 async fn redirections() {
-	let _ = env_logger::try_init();
 	let expected = "abc 123";
 	let server = WebSocketTestServer::with_hardcoded_response(
 		"127.0.0.1:0".parse().unwrap(),

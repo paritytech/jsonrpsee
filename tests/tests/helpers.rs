@@ -45,13 +45,11 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 
 	module
 		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
-			// Explicit call to accept.
-			sink.accept().unwrap();
-			std::thread::spawn(move || loop {
-				if let Ok(false) = sink.send(&"hello from subscription") {
-					break;
-				}
-				std::thread::sleep(Duration::from_millis(50));
+			let interval = interval(Duration::from_millis(50));
+			let stream = IntervalStream::new(interval).map(move |_| &"hello from subscription");
+
+			tokio::spawn(async move {
+				sink.pipe_from_stream(stream).await;
 			});
 			Ok(())
 		})
@@ -59,12 +57,11 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 
 	module
 		.register_subscription("subscribe_foo", "subscribe_foo", "unsubscribe_foo", |_, mut sink, _| {
-			std::thread::spawn(move || loop {
-				// Implicit call to accept for the first send.
-				if let Ok(false) = sink.send(&1337_usize) {
-					break;
-				}
-				std::thread::sleep(Duration::from_millis(100));
+			let interval = interval(Duration::from_millis(100));
+			let stream = IntervalStream::new(interval).map(move |_| 1337_usize);
+
+			tokio::spawn(async move {
+				sink.pipe_from_stream(stream).await;
 			});
 			Ok(())
 		})
@@ -76,17 +73,14 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 			"subscribe_add_one",
 			"unsubscribe_add_one",
 			|params, mut sink, _| {
-				let mut count = match params.one::<usize>() {
-					Ok(count) => count,
-					_ => return Ok(()),
-				};
+				let count = params.one::<usize>().map(|c| c.wrapping_add(1))?;
 
-				std::thread::spawn(move || loop {
-					count = count.wrapping_add(1);
-					if let Err(_) | Ok(false) = sink.send(&count) {
-						break;
-					}
-					std::thread::sleep(Duration::from_millis(100));
+				let wrapping_counter = futures::stream::iter((count..).cycle());
+				let interval = interval(Duration::from_millis(100));
+				let stream = IntervalStream::new(interval).zip(wrapping_counter).map(move |(_, c)| c);
+
+				tokio::spawn(async move {
+					sink.pipe_from_stream(stream).await;
 				});
 				Ok(())
 			},
@@ -96,8 +90,9 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 	module
 		.register_subscription("subscribe_noop", "subscribe_noop", "unsubscribe_noop", |_, mut sink, _| {
 			sink.accept().unwrap();
-			std::thread::spawn(move || {
-				std::thread::sleep(Duration::from_secs(1));
+
+			tokio::spawn(async move {
+				tokio::time::sleep(Duration::from_secs(1)).await;
 				let err = ErrorObject::owned(
 					SUBSCRIPTION_CLOSED_WITH_ERROR,
 					"Server closed the stream because it was lazy",

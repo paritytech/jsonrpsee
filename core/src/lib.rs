@@ -39,9 +39,6 @@ pub mod error;
 /// Traits
 pub mod traits;
 
-/// Middleware trait and implementation.
-pub mod middleware;
-
 cfg_http_helpers! {
 	pub mod http_helpers;
 }
@@ -49,6 +46,7 @@ cfg_http_helpers! {
 cfg_server! {
 	pub mod id_providers;
 	pub mod server;
+	pub mod middleware;
 }
 
 cfg_client! {

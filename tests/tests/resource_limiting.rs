@@ -27,6 +27,7 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use futures::StreamExt;
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -37,7 +38,8 @@ use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::{RpcModule, SubscriptionSink};
-use tokio::time::sleep;
+use tokio::time::{interval, sleep};
+use tokio_stream::wrappers::IntervalStream;
 
 fn module_manual() -> Result<RpcModule<()>, Error> {
 	let mut module = RpcModule::new(());
@@ -126,10 +128,10 @@ fn module_macro() -> RpcModule<()> {
 
 		fn sub_hello_limit(&self, mut sink: SubscriptionSink) -> SubscriptionResult {
 			tokio::spawn(async move {
-				for val in 0..10 {
-					sink.send(&val).unwrap();
-					sleep(Duration::from_secs(1)).await;
-				}
+				let interval = interval(Duration::from_secs(1));
+				let stream = IntervalStream::new(interval).map(move |_| 1);
+
+				sink.pipe_from_stream(stream).await;
 			});
 
 			Ok(())
@@ -210,17 +212,16 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 	assert_server_busy(fail_mem);
 
 	// If we issue multiple subscription requests at the same time from the same client,
-	// but the subscriptions immediately drop their sinks, no resources will obviously be held,
-	// and so there is no limit to how many can be executed.
-	let (pass1, pass2, pass3) = tokio::join!(
-		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
+	// but the subscriptions drop their sinks when the subscription has been accepted or rejected.
+	//
+	// Thus, we can't assume that all subscriptions drop their resources instantly anymore.
+	let (pass1, pass2) = tokio::join!(
 		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
 		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
 	);
 
 	assert!(pass1.is_ok());
 	assert!(pass2.is_ok());
-	assert!(pass3.is_ok());
 
 	// 3 CPU units (manually set for subscriptions) per call, so 3th call exceeds cap
 	let (pass1, pass2, fail) = tokio::join!(

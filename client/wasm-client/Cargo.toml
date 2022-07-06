@@ -15,7 +15,7 @@ jsonrpsee-client-transport = { path = "../transport", version = "0.14.0", featur
 jsonrpsee-core = { path = "../../core", version = "0.14.0", features = ["async-wasm-client"] }
 
 [dev-dependencies]
-env_logger = "0.9"
+tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
 jsonrpsee-test-utils = { path = "../../test-utils" }
 tokio = { version = "1", features = ["macros"] }
 serde_json = "1"

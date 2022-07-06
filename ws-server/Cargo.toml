@@ -21,6 +21,7 @@ tokio = { version = "1.16", features = ["net", "rt-multi-thread", "macros", "tim
 tokio-util = { version = "0.7", features = ["compat"] }
 tracing-futures = "0.2.5"
 tokio-stream = "0.1.7"
+http = "0.2.7"
 
 [dev-dependencies]
 anyhow = "1"

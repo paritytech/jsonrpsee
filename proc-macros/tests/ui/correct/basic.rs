@@ -3,9 +3,9 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
-use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
+use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
 

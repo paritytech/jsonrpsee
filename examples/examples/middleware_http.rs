@@ -27,30 +27,32 @@
 use std::net::SocketAddr;
 use std::time::Instant;
 
-use jsonrpsee::core::{client::ClientT, middleware};
+use jsonrpsee::core::client::ClientT;
+use jsonrpsee::core::middleware::{self, Headers, Params};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 
 #[derive(Clone)]
 struct Timings;
 
-impl middleware::Middleware for Timings {
+impl middleware::HttpMiddleware for Timings {
 	type Instant = Instant;
 
-	fn on_request(&self) -> Self::Instant {
+	fn on_request(&self, remote_addr: SocketAddr, headers: &Headers) -> Self::Instant {
+		println!("[Middleware::on_request] remote_addr {}, headers: {:?}", remote_addr, headers);
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str) {
-		println!("[Middleware::on_call] '{}'", name);
+	fn on_call(&self, name: &str, params: Params) {
+		println!("[Middleware::on_call] method: '{}', params: {:?}", name, params);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
 		println!("[Middleware::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
 	}
 
-	fn on_response(&self, started_at: Self::Instant) {
-		println!("[Middleware::on_response] time elapsed {:?}", started_at.elapsed());
+	fn on_response(&self, result: &str, started_at: Self::Instant) {
+		println!("[Middleware::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	}
 }
 

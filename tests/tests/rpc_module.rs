@@ -44,6 +44,12 @@ macro_rules! assert_type {
 	}};
 }
 
+fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
+}
+
 #[test]
 fn rpc_modules_with_different_contexts_can_be_merged() {
 	let cx = Vec::<u8>::new();
@@ -201,17 +207,19 @@ async fn calling_method_without_server_using_proc_macro() {
 
 #[tokio::test]
 async fn subscribing_without_server() {
+	init_logger();
+
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
+			let mut stream_data = vec!['0', '1', '2'];
 			sink.accept()?;
 
-			let mut stream_data = vec!['0', '1', '2'];
-			std::thread::spawn(move || {
+			tokio::spawn(async move {
 				while let Some(letter) = stream_data.pop() {
 					tracing::debug!("This is your friendly subscription sending data.");
 					let _ = sink.send(&letter);
-					std::thread::sleep(std::time::Duration::from_millis(500));
+					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 				}
 				let close = ErrorObject::borrowed(0, &"closed successfully", None);
 				sink.close(close.into_owned());
@@ -232,22 +240,19 @@ async fn subscribing_without_server() {
 
 #[tokio::test]
 async fn close_test_subscribing_without_server() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+	init_logger();
 
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("my_sub", "my_sub", "my_unsub", |_, mut sink, _| {
 			sink.accept()?;
 
-			std::thread::spawn(move || {
+			tokio::spawn(async move {
 				// make sure to only send one item
 				sink.send(&"lo").unwrap();
 				while !sink.is_closed() {
 					tracing::debug!("[test] Sink is open, sleeping");
-					std::thread::sleep(std::time::Duration::from_millis(500));
+					tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 				}
 				// Get the close reason.
 				if !sink.send(&"lo").expect("str serializable; qed") {
@@ -266,7 +271,6 @@ async fn close_test_subscribing_without_server() {
 
 	// Close the subscription to ensure it doesn't return any items.
 	my_sub.close();
-	tracing::info!("[test] closed first sub");
 
 	// The first subscription was not closed using the unsubscribe method and
 	// it will be treated as the connection was closed.
@@ -330,17 +334,19 @@ async fn subscribe_unsubscribe_without_server() {
 
 		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
 
+		assert!(!sub.is_closed());
+
 		// Unsubscribe should be valid.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
-		let (response, _) = module.raw_json_request(&unsub_req).await.unwrap();
+		let (resp, _) = module.raw_json_request(&unsub_req).await.unwrap();
 
-		assert_eq!(response, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
+		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":true,"id":1}"#);
 
 		// Unsubscribe already performed; should be error.
 		let unsub_req = format!("{{\"jsonrpc\":\"2.0\",\"method\":\"my_unsub\",\"params\":[{}],\"id\":1}}", ser_id);
-		let (response, _) = module.raw_json_request(&unsub_req).await.unwrap();
+		let (resp, _) = module.raw_json_request(&unsub_req).await.unwrap();
 
-		assert_eq!(response, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
+		assert_eq!(resp.result, r#"{"jsonrpc":"2.0","result":false,"id":1}"#);
 	}
 
 	let sub1 = subscribe_and_assert(&module);

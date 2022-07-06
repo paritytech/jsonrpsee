@@ -32,25 +32,30 @@ use std::task::{Context, Poll};
 use crate::response;
 use crate::response::{internal_error, malformed};
 use futures_channel::mpsc;
-use futures_util::{future::join_all, stream::StreamExt, FutureExt};
+use futures_util::future::FutureExt;
+use futures_util::stream::{StreamExt, TryStreamExt};
 use hyper::header::{HeaderMap, HeaderValue};
+use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
-use jsonrpsee_core::middleware::Middleware;
+use jsonrpsee_core::middleware::HttpMiddleware as Middleware;
 use jsonrpsee_core::server::access_control::AccessControl;
-use jsonrpsee_core::server::helpers::{collect_batch_response, prepare_error, MethodSink};
+use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
+use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, RpcTracing};
+use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str, RpcTracing};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tracing_futures::Instrument;
+
+type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
@@ -95,23 +100,38 @@ impl<M> Builder<M> {
 	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
 	///
 	/// ```
-	/// use std::time::Instant;
+	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::middleware::Middleware;
+	/// use jsonrpsee_core::middleware::{HttpMiddleware, Headers, Params};
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware;
 	///
-	/// impl Middleware for MyMiddleware {
+	/// impl HttpMiddleware for MyMiddleware {
 	///     type Instant = Instant;
 	///
-	///     fn on_request(&self) -> Instant {
+	///     // Called once the HTTP request is received, it may be a single JSON-RPC call
+	///     // or batch.
+	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Instant {
 	///         Instant::now()
 	///     }
+	///     
+	///     // Called once a single JSON-RPC method call is processed, it may be called multiple times
+	///     // on batches.
+	///     fn on_call(&self, method_name: &str, params: Params) {
+	///         println!("Call to method: '{}' params: {:?}", method_name, params);
+	///     }
 	///
-	///     fn on_result(&self, name: &str, success: bool, started_at: Instant) {
-	///         println!("Call to '{}' took {:?}", name, started_at.elapsed());
+	///     // Called once a single JSON-RPC call is completed, it may be called multiple times
+	///     // on batches.
+	///     fn on_result(&self, method_name: &str, success: bool, started_at: Instant) {
+	///         println!("Call to '{}' took {:?}", method_name, started_at.elapsed());
+	///     }
+	///
+	/// 	// Called the entire JSON-RPC is completed, called on once for both single calls or batches.
+	///     fn on_response(&self, result: &str, started_at: Instant) {
+	///         println!("complete JSON-RPC response: {}, took: {:?}", result, started_at.elapsed());
 	///     }
 	/// }
 	///
@@ -410,7 +430,8 @@ impl<M: Middleware> Server<M> {
 		let methods = methods.into().initialize_resources(&resources)?;
 		let health_api = self.health_api;
 
-		let make_service = make_service_fn(move |_| {
+		let make_service = make_service_fn(move |conn: &AddrStream| {
+			let remote_addr = conn.remote_addr();
 			let methods = methods.clone();
 			let acl = acl.clone();
 			let resources = resources.clone();
@@ -419,6 +440,8 @@ impl<M: Middleware> Server<M> {
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
+					let request_start = middleware.on_request(remote_addr, request.headers());
+
 					let methods = methods.clone();
 					let acl = acl.clone();
 					let resources = resources.clone();
@@ -482,7 +505,7 @@ impl<M: Middleware> Server<M> {
 							// to be read in a browser.
 							Method::POST if content_type_is_json(&request) => {
 								let origin = return_origin_if_different_from_host(request.headers()).cloned();
-								let mut res = process_validated_request(
+								let mut res = process_validated_request(ProcessValidatedRequest {
 									request,
 									middleware,
 									methods,
@@ -491,7 +514,8 @@ impl<M: Middleware> Server<M> {
 									max_response_body_size,
 									max_log_length,
 									batch_requests_supported,
-								)
+									request_start,
+								})
 								.await?;
 
 								if let Some(origin) = origin {
@@ -506,6 +530,7 @@ impl<M: Middleware> Server<M> {
 										middleware,
 										methods,
 										max_response_body_size,
+										request_start,
 										max_log_length,
 									)
 									.await
@@ -568,20 +593,37 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 	}
 }
 
-/// Process a verified request, it implies a POST request with content type JSON.
-async fn process_validated_request(
+struct ProcessValidatedRequest<M: Middleware> {
 	request: hyper::Request<hyper::Body>,
-	middleware: impl Middleware,
+	middleware: M,
 	methods: Methods,
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
 	max_log_length: u32,
 	batch_requests_supported: bool,
+	request_start: M::Instant,
+}
+
+/// Process a verified request, it implies a POST request with content type JSON.
+async fn process_validated_request<M: Middleware>(
+	input: ProcessValidatedRequest<M>,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
+	let ProcessValidatedRequest {
+		request,
+		middleware,
+		methods,
+		resources,
+		max_request_body_size,
+		max_response_body_size,
+		max_log_length,
+		batch_requests_supported,
+		request_start,
+	} = input;
+
 	let (parts, body) = request.into_parts();
 
-	let (body, mut is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
+	let (body, is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
 		Ok(r) => r,
 		Err(GenericTransportError::TooLarge) => return Ok(response::too_large(max_request_body_size)),
 		Err(GenericTransportError::Malformed) => return Ok(response::malformed()),
@@ -591,234 +633,243 @@ async fn process_validated_request(
 		}
 	};
 
-	let request_start = middleware.on_request();
-
-	// NOTE(niklasad1): it's a channel because it's needed for batch requests.
-	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
-
-	type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
-
 	// Single request or notification
 	if is_single {
-		if let Ok(req) = serde_json::from_slice::<Request>(&body) {
-			let method = req.method.as_ref();
-
-			let trace = RpcTracing::method_call(&req.method);
-			let _enter = trace.span().enter();
-
-			rx_log_from_json(&req, max_log_length);
-			middleware.on_call(method);
-
-			let id = req.id.clone();
-			let params = Params::new(req.params.map(|params| params.get()));
-
-			let result = match methods.method_with_name(method) {
-				None => {
-					sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-					false
-				}
-				Some((name, method_callback)) => match method_callback.inner() {
-					MethodKind::Sync(callback) => match method_callback.claim(&req.method, &resources) {
-						Ok(guard) => {
-							let result = (callback)(id, params, &sink);
-							drop(guard);
-							result
-						}
-						Err(err) => {
-							tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-							sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-							false
-						}
-					},
-					MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
-						Ok(guard) => {
-							let result = (callback)(id.into_owned(), params.into_owned(), sink.clone(), 0, Some(guard))
-								.in_current_span()
-								.await;
-
-							result
-						}
-						Err(err) => {
-							tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-							sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-							false
-						}
-					},
-					MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-						tracing::error!("Subscriptions not supported on HTTP");
-						sink.send_error(req.id, ErrorCode::InternalError.into());
-						false
-					}
-				},
-			};
-			middleware.on_result(&req.method, result, request_start);
-		} else if let Ok(req) = serde_json::from_slice::<Notif>(&body) {
-			let trace = RpcTracing::notification(&req.method);
-			let _enter = trace.span().enter();
-
-			rx_log_from_json(&req, max_log_length);
-
-			return Ok::<_, HyperError>(response::ok_response("".into()));
-		} else {
-			let (id, code) = prepare_error(&body);
-			sink.send_error(id, code.into());
-		}
+		let call = CallData {
+			conn_id: 0,
+			middleware: &middleware,
+			methods: &methods,
+			max_response_body_size,
+			max_log_length,
+			resources: &resources,
+			request_start,
+		};
+		let response = process_single_request(body, call).await;
+		middleware.on_response(&response.result, request_start);
+		Ok(response::ok_response(response.result))
+	}
 	// Batch of requests or notifications
-	} else if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&body) {
-		let trace = RpcTracing::batch();
-		let _enter = trace.span().enter();
-
-		rx_log_from_json(&batch, max_log_length);
-
-		if !batch_requests_supported {
-			// Server was configured to not support batches.
-			is_single = true;
-			sink.send_error(
-				Id::Null,
-				ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
-			);
-		} else if !batch.is_empty() {
-			let middleware = &middleware;
-
-			join_all(batch.into_iter().filter_map(move |req| {
-				let id = req.id.clone();
-				let params = Params::new(req.params.map(|params| params.get()));
-
-				match methods.method_with_name(&req.method) {
-					None => {
-						sink.send_error(req.id, ErrorCode::MethodNotFound.into());
-						None
-					}
-					Some((name, method_callback)) => match method_callback.inner() {
-						MethodKind::Sync(callback) => match method_callback.claim(name, &resources) {
-							Ok(guard) => {
-								let result = (callback)(id, params, &sink);
-								middleware.on_result(name, result, request_start);
-								drop(guard);
-								None
-							}
-							Err(err) => {
-								tracing::error!(
-									"[Methods::execute_with_resources] failed to lock resources: {:?}",
-									err
-								);
-								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-								middleware.on_result(name, false, request_start);
-								None
-							}
-						},
-						MethodKind::Async(callback) => match method_callback.claim(name, &resources) {
-							Ok(guard) => {
-								let sink = sink.clone();
-								let id = id.into_owned();
-								let params = params.into_owned();
-								let callback = callback.clone();
-
-								Some(async move {
-									let result = (callback)(id, params, sink, 0, Some(guard)).in_current_span().await;
-									middleware.on_result(name, result, request_start);
-								})
-							}
-							Err(err) => {
-								tracing::error!(
-									"[Methods::execute_with_resources] failed to lock resources: {:?}",
-									err
-								);
-								sink.send_error(req.id, ErrorCode::ServerIsBusy.into());
-								middleware.on_result(name, false, request_start);
-								None
-							}
-						},
-						MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-							tracing::error!("Subscriptions not supported on HTTP");
-							sink.send_error(req.id, ErrorCode::InternalError.into());
-							middleware.on_result(&req.method, false, request_start);
-							None
-						}
-					},
-				}
-			}))
-			.await;
-		} else {
-			// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
-			// Array with at least one value, the response from the Server MUST be a single
-			// Response object." – The Spec.
-			is_single = true;
-			sink.send_error(Id::Null, ErrorCode::InvalidRequest.into());
-		}
-	} else if let Ok(_batch) = serde_json::from_slice::<Vec<Notif>>(&body) {
-		return Ok(response::ok_response("".into()));
-	} else {
-		// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
-		// Array with at least one value, the response from the Server MUST be a single
-		// Response object." – The Spec.
-		is_single = true;
-		let (id, code) = prepare_error(&body);
-		sink.send_error(id, code.into());
-	};
-
-	// Closes the receiving half of a channel without dropping it. This prevents any further
-	// messages from being sent on the channel.
-	rx.close();
-	let response = if is_single {
-		rx.next().await.expect("Sender is still alive managed by us above; qed")
-	} else {
-		collect_batch_response(rx).await
-	};
-
-	middleware.on_response(request_start);
-	Ok(response::ok_response(response))
+	else if !batch_requests_supported {
+		let err = MethodResponse::error(
+			Id::Null,
+			ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+		);
+		middleware.on_response(&err.result, request_start);
+		Ok(response::ok_response(err.result))
+	}
+	// Batch of requests or notifications
+	else {
+		let response = process_batch_request(Batch {
+			data: body,
+			call: CallData {
+				conn_id: 0,
+				middleware: &middleware,
+				methods: &methods,
+				max_response_body_size,
+				max_log_length,
+				resources: &resources,
+				request_start,
+			},
+		})
+		.await;
+		middleware.on_response(&response.result, request_start);
+		Ok(response::ok_response(response.result))
+	}
 }
 
-async fn process_health_request(
+async fn process_health_request<M: Middleware>(
 	health_api: &HealthApi,
-	middleware: impl Middleware,
+	middleware: M,
 	methods: Methods,
 	max_response_body_size: u32,
+	request_start: M::Instant,
 	max_log_length: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
-	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
+	let trace = RpcTracing::method_call(&health_api.method);
+	let _enter = trace.span().enter();
 
-	let request_start = middleware.on_request();
+	tx_log_from_str("HTTP health API", max_log_length);
 
-	let success = match methods.method_with_name(&health_api.method) {
-		None => false,
-		Some((name, method_callback)) => match method_callback.inner() {
-			MethodKind::Sync(callback) => {
-				let res = (callback)(Id::Number(0), Params::new(None), &sink);
-				middleware.on_result(name, res, request_start);
-				res
-			}
+	let response = match methods.method_with_name(&health_api.method) {
+		None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
+		Some((_name, method_callback)) => match method_callback.inner() {
+			MethodKind::Sync(callback) => (callback)(Id::Number(0), Params::new(None), max_response_body_size as usize),
 			MethodKind::Async(callback) => {
-				let res = (callback)(Id::Number(0), Params::new(None), sink.clone(), 0, None).await;
-				middleware.on_result(name, res, request_start);
-				res
+				(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None)
+					.in_current_span()
+					.await
 			}
 
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				middleware.on_result(name, false, request_start);
-				false
+				MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
 			}
 		},
 	};
 
-	let data = rx.next().await;
-	middleware.on_response(request_start);
+	rx_log_from_str(&response.result, max_log_length);
+	middleware.on_result(&health_api.method, response.success, request_start);
+	middleware.on_response(&response.result, request_start);
 
-	match data {
-		Some(data) if success => {
-			#[derive(serde::Deserialize)]
-			struct RpcPayload<'a> {
-				#[serde(borrow)]
-				result: &'a serde_json::value::RawValue,
-			}
-
-			let payload: RpcPayload = serde_json::from_str(&data)
-				.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
-			Ok(response::ok_response(payload.result.to_string()))
+	if response.success {
+		#[derive(serde::Deserialize)]
+		struct RpcPayload<'a> {
+			#[serde(borrow)]
+			result: &'a serde_json::value::RawValue,
 		}
-		_ => Ok(response::internal_error()),
+
+		let payload: RpcPayload = serde_json::from_str(&response.result)
+			.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
+		Ok(response::ok_response(payload.result.to_string()))
+	} else {
+		Ok(response::internal_error())
 	}
+}
+
+#[derive(Debug, Clone)]
+struct Batch<'a, M: Middleware> {
+	data: Vec<u8>,
+	call: CallData<'a, M>,
+}
+
+#[derive(Debug, Clone)]
+struct CallData<'a, M: Middleware> {
+	conn_id: usize,
+	middleware: &'a M,
+	methods: &'a Methods,
+	max_response_body_size: u32,
+	max_log_length: u32,
+	resources: &'a Resources,
+	request_start: M::Instant,
+}
+
+#[derive(Debug, Clone)]
+struct Call<'a, M: Middleware> {
+	params: Params<'a>,
+	name: &'a str,
+	call: CallData<'a, M>,
+	id: Id<'a>,
+}
+
+// Batch responses must be sent back as a single message so we read the results from each
+// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
+// complete batch response back to the client over `tx`.
+async fn process_batch_request<M>(b: Batch<'_, M>) -> BatchResponse
+where
+	M: Middleware,
+{
+	let Batch { data, call } = b;
+
+	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
+		let max_response_size = call.max_response_body_size;
+		let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
+
+		let batch_stream = futures_util::stream::iter(batch);
+
+		let trace = RpcTracing::batch();
+		let _enter = trace.span().enter();
+
+		let batch_response = batch_stream
+			.try_fold(
+				BatchResponseBuilder::new_with_limit(max_response_size as usize),
+				|batch_response, (req, call)| async move {
+					let params = Params::new(req.params.map(|params| params.get()));
+
+					let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+
+					let batch = batch_response.append(&response);
+					batch
+				},
+			)
+			.in_current_span()
+			.await;
+
+		return match batch_response {
+			Ok(batch) => batch.finish(),
+			Err(batch_err) => batch_err,
+		};
+	}
+
+	if let Ok(batch) = serde_json::from_slice::<Vec<Notif>>(&data) {
+		return if !batch.is_empty() {
+			BatchResponse { result: "".to_string(), success: true }
+		} else {
+			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
+		};
+	}
+
+	// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
+	// Array with at least one value, the response from the Server MUST be a single
+	// Response object." – The Spec.
+	let (id, code) = prepare_error(&data);
+	BatchResponse::error(id, ErrorObject::from(code))
+}
+
+async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
+	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
+		let trace = RpcTracing::method_call(&req.method);
+		let _enter = trace.span().enter();
+
+		rx_log_from_json(&req, call.max_log_length);
+
+		let params = Params::new(req.params.map(|params| params.get()));
+		let name = &req.method;
+		let id = req.id;
+
+		execute_call(Call { name, params, id, call }).in_current_span().await
+	} else if let Ok(req) = serde_json::from_slice::<Notif>(&data) {
+		let trace = RpcTracing::notification(&req.method);
+		let _enter = trace.span().enter();
+
+		rx_log_from_json(&req, call.max_log_length);
+
+		MethodResponse { result: String::new(), success: true }
+	} else {
+		let (id, code) = prepare_error(&data);
+		MethodResponse::error(id, ErrorObject::from(code))
+	}
+}
+
+async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
+	let Call { name, id, params, call } = c;
+	let CallData { resources, methods, middleware, max_response_body_size, max_log_length, conn_id, request_start } =
+		call;
+
+	middleware.on_call(name, params.clone());
+
+	let response = match methods.method_with_name(name) {
+		None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
+		Some((name, method)) => match &method.inner() {
+			MethodKind::Sync(callback) => match method.claim(name, resources) {
+				Ok(guard) => {
+					let r = (callback)(id, params, max_response_body_size as usize);
+					drop(guard);
+					r
+				}
+				Err(err) => {
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+				}
+			},
+			MethodKind::Async(callback) => match method.claim(name, resources) {
+				Ok(guard) => {
+					let id = id.into_owned();
+					let params = params.into_owned();
+
+					(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
+				}
+				Err(err) => {
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+				}
+			},
+			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
+				tracing::error!("Subscriptions not supported on HTTP");
+				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
+			}
+		},
+	};
+
+	tx_log_from_str(&response.result, max_log_length);
+	middleware.on_result(name, response.success, request_start);
+	response
 }

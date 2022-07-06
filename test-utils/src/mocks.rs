@@ -28,7 +28,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use futures_channel::mpsc::{self, Receiver, Sender};
+use futures_channel::mpsc;
 use futures_channel::oneshot;
 use futures_util::future::FutureExt;
 use futures_util::io::{BufReader, BufWriter};
@@ -151,7 +151,7 @@ pub enum ServerMode {
 /// JSONRPC v2 dummy WebSocket server that sends a hardcoded response.
 pub struct WebSocketTestServer {
 	local_addr: SocketAddr,
-	exit: Sender<()>,
+	exit: mpsc::UnboundedSender<()>,
 }
 
 impl WebSocketTestServer {
@@ -160,7 +160,7 @@ impl WebSocketTestServer {
 	pub async fn with_hardcoded_response(sockaddr: SocketAddr, response: String) -> Self {
 		let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
-		let (tx, rx) = mpsc::channel::<()>(4);
+		let (tx, rx) = mpsc::unbounded();
 		tokio::spawn(server_backend(listener, rx, ServerMode::Response(response)));
 
 		Self { local_addr, exit: tx }
@@ -169,16 +169,15 @@ impl WebSocketTestServer {
 	// Spawns a dummy `JSONRPC v2` WebSocket server that sends out a pre-configured `hardcoded notification` for every
 	// connection.
 	pub async fn with_hardcoded_notification(sockaddr: SocketAddr, notification: String) -> Self {
-		let (tx, rx) = mpsc::channel::<()>(1);
+		let (tx, rx) = mpsc::unbounded();
 		let (addr_tx, addr_rx) = oneshot::channel();
 
-		std::thread::spawn(move || {
-			let rt = tokio::runtime::Runtime::new().unwrap();
-			let listener = rt.block_on(tokio::net::TcpListener::bind(sockaddr)).unwrap();
+		tokio::spawn(async move {
+			let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 			let local_addr = listener.local_addr().unwrap();
 
 			addr_tx.send(local_addr).unwrap();
-			rt.block_on(server_backend(listener, rx, ServerMode::Notification(notification)));
+			server_backend(listener, rx, ServerMode::Notification(notification)).await
 		});
 
 		let local_addr = addr_rx.await.unwrap();
@@ -197,7 +196,7 @@ impl WebSocketTestServer {
 	) -> Self {
 		let listener = tokio::net::TcpListener::bind(sockaddr).await.unwrap();
 		let local_addr = listener.local_addr().unwrap();
-		let (tx, rx) = mpsc::channel::<()>(4);
+		let (tx, rx) = mpsc::unbounded();
 		tokio::spawn(server_backend(listener, rx, ServerMode::Subscription { subscription_id, subscription_response }));
 
 		Self { local_addr, exit: tx }
@@ -212,7 +211,7 @@ impl WebSocketTestServer {
 	}
 }
 
-async fn server_backend(listener: tokio::net::TcpListener, mut exit: Receiver<()>, mode: ServerMode) {
+async fn server_backend(listener: tokio::net::TcpListener, mut exit: mpsc::UnboundedReceiver<()>, mode: ServerMode) {
 	let mut connections = Vec::new();
 
 	loop {
@@ -224,7 +223,7 @@ async fn server_backend(listener: tokio::net::TcpListener, mut exit: Receiver<()
 			_ = exit_fut => break,
 			conn = conn_fut => {
 				if let Ok((stream, _)) = conn {
-					let (tx, rx) = mpsc::channel::<()>(4);
+					let (tx, rx) = mpsc::unbounded();
 					let handle = tokio::spawn(connection_task(stream, mode.clone(), rx));
 					connections.push((handle, tx));
 				}
@@ -241,7 +240,7 @@ async fn server_backend(listener: tokio::net::TcpListener, mut exit: Receiver<()
 	}
 }
 
-async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut exit: Receiver<()>) {
+async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut exit: mpsc::UnboundedReceiver<()>) {
 	let mut server = Server::new(socket.compat());
 
 	let key = match server.receive_request().await {
@@ -280,11 +279,13 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 					ServerMode::Subscription { subscription_response, .. } => {
 						if let Err(e) = sender.send_text(&subscription_response).await {
 							tracing::warn!("send response to subscription: {:?}", e);
+							break;
 						}
 					},
 					ServerMode::Notification(n) => {
 						if let Err(e) = sender.send_text(&n).await {
 							tracing::warn!("send notification: {:?}", e);
+							break;
 						}
 					},
 					_ => {}
@@ -298,15 +299,19 @@ async fn connection_task(socket: tokio::net::TcpStream, mode: ServerMode, mut ex
 						ServerMode::Response(r) => {
 							if let Err(e) = sender.send_text(&r).await {
 								tracing::warn!("send response to request error: {:?}", e);
+								break;
 							}
 						},
 						ServerMode::Subscription { subscription_id, .. } => {
 							if let Err(e) = sender.send_text(&subscription_id).await {
 								tracing::warn!("send subscription id error: {:?}", e);
+								break;
 							}
 						},
 						_ => {}
 					}
+				} else {
+					break;
 				}
 			}
 			_ = next_exit => break,

@@ -1,8 +1,8 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, RpcResult};
-use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
 
 #[rpc(server)]
