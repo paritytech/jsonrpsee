@@ -100,8 +100,10 @@ impl HttpTransportClient {
 		let mut cached_headers = http::HeaderMap::with_capacity(2 + headers.len());
 		cached_headers.insert(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
 		cached_headers.insert(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
-		for (key, value) in headers.iter() {
-			cached_headers.insert(key, value.clone());
+		for (key, value) in headers.into_iter() {
+			if let Some(key) = key {
+				cached_headers.insert(key, value);
+			}
 		}
 
 		Ok(Self { target, client, max_request_body_size, max_log_length, headers: cached_headers })
