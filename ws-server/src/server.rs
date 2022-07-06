@@ -436,7 +436,11 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 					match receiver.receive(&mut data).await? {
 						soketto::Incoming::Data(d) => break Ok(d),
 						soketto::Incoming::Pong(_) => tracing::debug!("recv pong"),
-						_ => continue,
+						soketto::Incoming::Closed(_) => {
+							// The closing reason is already logged by `soketto` trace log level.
+							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
+							break Err(SokettoError::Closed);
+						}
 					}
 				}
 			};
@@ -461,7 +465,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::warn!("WS error: {}; terminate connection {}", err, conn_id);
+						tracing::debug!("WS error: {}; terminate connection {}", err, conn_id);
 						sink.close();
 						break Err(err.into());
 					}
