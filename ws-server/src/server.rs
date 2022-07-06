@@ -395,7 +395,7 @@ async fn background_task(
 						soketto::Incoming::Data(d) => break Ok(d),
 						soketto::Incoming::Pong(_) => tracing::debug!("recv pong"),
 						soketto::Incoming::Closed(_) => {
-							// The closing reason is already logged by `sokketo` trace log level.
+							// The closing reason is already logged by `soketto` trace log level.
 							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
 							break Err(SokettoError::Closed);
 						}
