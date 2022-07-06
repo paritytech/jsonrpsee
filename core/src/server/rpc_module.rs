@@ -769,7 +769,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let (tx, rx) = oneshot::channel();
 
 					let sink = SubscriptionSink {
-						inner: method_sink.clone(),
+						inner: method_sink,
 						close_notify: Some(conn.close_notify),
 						method: notif_method_name,
 						subscribers: subscribers.clone(),
@@ -780,7 +780,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					};
 
 					// The callback returns a `SubscriptionResult` for better ergonomics and is not propagated further.
-					if let Err(_) = callback(params, sink, ctx.clone()) {
+					if callback(params, sink, ctx.clone()).is_err() {
 						tracing::warn!("subscribe call `{}` failed", subscribe_method_name);
 					}
 

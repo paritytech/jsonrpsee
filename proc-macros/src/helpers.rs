@@ -97,9 +97,9 @@ pub(crate) fn generate_where_clause(
 	let additional_where_clause = item_trait.generics.where_clause.clone();
 
 	if let Some(custom_bounds) = bounds {
-		let mut bounds = additional_where_clause
+		let mut bounds: Vec<_> = additional_where_clause
 			.map(|where_clause| where_clause.predicates.into_iter().collect())
-			.unwrap_or(Vec::new());
+			.unwrap_or_default();
 
 		bounds.extend(custom_bounds.iter().cloned());
 

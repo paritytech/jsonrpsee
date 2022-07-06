@@ -450,7 +450,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 		max_notifs_per_subscription: usize,
 	) -> Result<(), Error> {
 		// Single response to a request.
-		if let Ok(single) = serde_json::from_slice::<Response<_>>(&raw) {
+		if let Ok(single) = serde_json::from_slice::<Response<_>>(raw) {
 			match process_single_response(manager, single, max_notifs_per_subscription) {
 				Ok(Some(unsub)) => {
 					stop_subscription(sender, manager, unsub).await;
@@ -460,34 +460,34 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			}
 		}
 		// Subscription response.
-		else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(&raw) {
+		else if let Ok(response) = serde_json::from_slice::<SubscriptionResponse<_>>(raw) {
 			if let Err(Some(unsub)) = process_subscription_response(manager, response) {
-				let _ = stop_subscription(sender, manager, unsub).await;
+				stop_subscription(sender, manager, unsub).await;
 			}
 		}
 		// Subscription error response.
-		else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(&raw) {
+		else if let Ok(response) = serde_json::from_slice::<SubscriptionError<_>>(raw) {
 			let _ = process_subscription_close_response(manager, response);
 		}
 		// Incoming Notification
-		else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(&raw) {
+		else if let Ok(notif) = serde_json::from_slice::<Notification<_>>(raw) {
 			let _ = process_notification(manager, notif);
 		}
 		// Batch response.
-		else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(&raw) {
+		else if let Ok(batch) = serde_json::from_slice::<Vec<Response<_>>>(raw) {
 			if let Err(e) = process_batch_response(manager, batch) {
 				return Err(e);
 			}
 		}
 		// Error response
-		else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(&raw) {
+		else if let Ok(err) = serde_json::from_slice::<ErrorResponse>(raw) {
 			if let Err(e) = process_error_response(manager, err) {
 				return Err(e);
 			}
 		}
 		// Unparsable response
 		else {
-			let json = serde_json::from_slice::<serde_json::Value>(&raw);
+			let json = serde_json::from_slice::<serde_json::Value>(raw);
 
 			let json_str = match json {
 				Ok(json) => serde_json::to_string(&json).expect("valid JSON; qed"),
@@ -519,7 +519,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 		}
 	}
 
-	return Ok(());
+	Ok(())
 }
 
 /// Handle frontend messages.

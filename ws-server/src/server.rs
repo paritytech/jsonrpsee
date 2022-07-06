@@ -697,27 +697,27 @@ impl<M> Builder<M> {
 	///     type Instant = Instant;
 	///
 	///     fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-	///         println!("[MyMiddleware::on_call] remote_addr: {}, headers: {:?}", remote_addr, headers);
+	///          println!("[MyMiddleware::on_call] remote_addr: {}, headers: {:?}", remote_addr, headers);
 	///     }
 	///
 	///     fn on_request(&self) -> Self::Instant {
-	///         Instant::now()
+	///          Instant::now()
 	///     }
 	///
 	///     fn on_call(&self, method_name: &str, params: Params) {
-	///	        println!("[MyMiddleware::on_call] method: '{}' params: {:?}", method_name, params);
+	///          println!("[MyMiddleware::on_call] method: '{}' params: {:?}", method_name, params);
 	///     }
 	///
 	///     fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant) {
-	///	        println!("[MyMiddleware::on_result] '{}', worked? {}, time elapsed {:?}", method_name, success, started_at.elapsed());
+	///          println!("[MyMiddleware::on_result] '{}', worked? {}, time elapsed {:?}", method_name, success, started_at.elapsed());
 	///     }
 	///
 	///     fn on_response(&self, result: &str, started_at: Self::Instant) {
-	///		    println!("[MyMiddleware::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+	///          println!("[MyMiddleware::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	///     }
 	///
 	///     fn on_disconnect(&self, remote_addr: SocketAddr) {
-	///	        println!("[MyMiddleware::on_disconnect] remote_addr: {}", remote_addr);
+	///          println!("[MyMiddleware::on_disconnect] remote_addr: {}", remote_addr);
 	///     }
 	/// }
 	///
