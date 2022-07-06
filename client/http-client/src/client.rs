@@ -39,6 +39,29 @@ use serde::de::DeserializeOwned;
 use tracing_futures::Instrument;
 
 /// Http Client Builder.
+///
+/// # Examples
+///
+/// ```no_run
+///
+/// use jsonrpsee_http_client::HttpClientBuilder;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     // Build custom headers used for every submitted request.
+///     let mut headers = http::HeaderMap::new();
+///     headers.insert("Any-Header-You-Like", http::HeaderValue::from_static("42"));
+///
+///     // Build client
+///     let client = HttpClientBuilder::default()
+///          .set_headers(headers)
+///          .build("wss://localhost:443")
+///          .unwrap();
+///
+///     // use client....
+/// }
+///
+/// ```
 #[derive(Debug)]
 pub struct HttpClientBuilder {
 	max_request_body_size: u32,

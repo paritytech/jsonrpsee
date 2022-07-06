@@ -56,9 +56,11 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     // build client
+///     // Build custom headers used during the handshake process.
 ///     let mut headers = http::HeaderMap::new();
 ///     headers.insert("Any-Header-You-Like", http::HeaderValue::from_static("42"));
+///
+///     // Build client
 ///     let client = WsClientBuilder::default()
 ///          .set_headers(headers)
 ///          .build("wss://localhost:443")
