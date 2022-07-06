@@ -424,7 +424,7 @@ async fn background_task(
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::warn!("WS error: {}; terminate connection {}", err, conn_id);
+						tracing::debug!("WS error: {}; terminate connection {}", err, conn_id);
 						sink.close();
 						break Err(err.into());
 					}
