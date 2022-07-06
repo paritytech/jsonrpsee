@@ -394,7 +394,12 @@ async fn background_task(
 					match receiver.receive(&mut data).await? {
 						soketto::Incoming::Data(d) => break Ok(d),
 						soketto::Incoming::Pong(_) => tracing::debug!("recv pong"),
-						_ => continue,
+						soketto::Incoming::Closed(reason) => {
+							// Log the close reason for debugging purposes and return the `Closed` error
+							// to avoid logging unnecessary warnings on clean shutdown.
+							tracing::debug!("WS transport: connection: {} closed with reason: {:?} ", conn_id, reason);
+							break Err(SokettoError::Closed);
+						}
 					}
 				}
 			};
