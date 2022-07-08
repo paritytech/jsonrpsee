@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use hyper::HeaderMap;
-use jsonrpsee::core::middleware::{HttpMiddleware, WsMiddleware};
+use jsonrpsee::core::middleware::{HttpMiddleware, MethodKind, WsMiddleware};
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
@@ -73,7 +73,7 @@ impl WsMiddleware for Counter {
 		n
 	}
 
-	fn on_call(&self, name: &str, _params: Params) {
+	fn on_call(&self, name: &str, _params: Params, _kind: MethodKind) {
 		let mut inner = self.inner.lock().unwrap();
 		let entry = inner.calls.entry(name.into()).or_insert((0, Vec::new()));
 
@@ -108,7 +108,7 @@ impl HttpMiddleware for Counter {
 		n
 	}
 
-	fn on_call(&self, name: &str, _params: Params) {
+	fn on_call(&self, name: &str, _params: Params, _kind: MethodKind) {
 		let mut inner = self.inner.lock().unwrap();
 		let entry = inner.calls.entry(name.into()).or_insert((0, Vec::new()));
 

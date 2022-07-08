@@ -42,7 +42,7 @@ use futures_util::TryStreamExt;
 use http::header::{HOST, ORIGIN};
 use http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::WsMiddleware as Middleware;
+use jsonrpsee_core::middleware::{self, WsMiddleware as Middleware};
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
@@ -687,7 +687,7 @@ impl<M> Builder<M> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::middleware::{WsMiddleware, Headers, Params};
+	/// use jsonrpsee_core::middleware::{WsMiddleware, Headers, MethodKind, Params};
 	/// use jsonrpsee_ws_server::WsServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -704,8 +704,8 @@ impl<M> Builder<M> {
 	///          Instant::now()
 	///     }
 	///
-	///     fn on_call(&self, method_name: &str, params: Params) {
-	///          println!("[MyMiddleware::on_call] method: '{}' params: {:?}", method_name, params);
+	///     fn on_call(&self, method_name: &str, params: Params, kind: MethodKind) {
+	///          println!("[MyMiddleware::on_call] method: '{}' params: {:?}, kind: {:?}", method_name, params, kind);
 	///     }
 	///
 	///     fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant) {
@@ -961,59 +961,73 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResult {
 		request_start,
 	} = call;
 
-	middleware.on_call(name, params.clone());
-
 	let response = match methods.method_with_name(name) {
 		None => {
+			middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
 			MethodResult::SendAndMiddleware(response)
 		}
 		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => match method.claim(name, resources) {
-				Ok(guard) => {
-					let r = (callback)(id, params, max_response_body_size as usize);
-					drop(guard);
-					MethodResult::SendAndMiddleware(r)
-				}
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-					MethodResult::SendAndMiddleware(response)
-				}
-			},
-			MethodKind::Async(callback) => match method.claim(name, resources) {
-				Ok(guard) => {
-					let id = id.into_owned();
-					let params = params.into_owned();
+			MethodKind::Sync(callback) => {
+				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
 
-					let response = (callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
-					MethodResult::SendAndMiddleware(response)
-				}
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-					MethodResult::SendAndMiddleware(response)
-				}
-			},
-			MethodKind::Subscription(callback) => match method.claim(name, resources) {
-				Ok(guard) => {
-					if let Some(cn) = bounded_subscriptions.acquire() {
-						let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
-						let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
-						MethodResult::JustMiddleware(response)
-					} else {
-						let response =
-							MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
+				match method.claim(name, resources) {
+					Ok(guard) => {
+						let r = (callback)(id, params, max_response_body_size as usize);
+						drop(guard);
+						MethodResult::SendAndMiddleware(r)
+					}
+					Err(err) => {
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
 						MethodResult::SendAndMiddleware(response)
 					}
 				}
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-					MethodResult::SendAndMiddleware(response)
+			}
+			MethodKind::Async(callback) => {
+				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+
+				match method.claim(name, resources) {
+					Ok(guard) => {
+						let id = id.into_owned();
+						let params = params.into_owned();
+
+						let response =
+							(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
+						MethodResult::SendAndMiddleware(response)
+					}
+					Err(err) => {
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+						MethodResult::SendAndMiddleware(response)
+					}
 				}
-			},
+			}
+			MethodKind::Subscription(callback) => {
+				middleware.on_call(name, params.clone(), middleware::MethodKind::Subscription);
+
+				match method.claim(name, resources) {
+					Ok(guard) => {
+						if let Some(cn) = bounded_subscriptions.acquire() {
+							let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
+							let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
+							MethodResult::JustMiddleware(response)
+						} else {
+							let response =
+								MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
+							MethodResult::SendAndMiddleware(response)
+						}
+					}
+					Err(err) => {
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+						MethodResult::SendAndMiddleware(response)
+					}
+				}
+			}
 			MethodKind::Unsubscription(callback) => {
+				middleware.on_call(name, params.clone(), middleware::MethodKind::Unsubscription);
+
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);
 				MethodResult::SendAndMiddleware(result)

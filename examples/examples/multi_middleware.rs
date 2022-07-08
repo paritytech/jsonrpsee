@@ -30,6 +30,7 @@ use std::net::SocketAddr;
 use std::process::Command;
 use std::time::Instant;
 
+use jsonrpsee::core::middleware::MethodKind;
 use jsonrpsee::core::{client::ClientT, middleware, middleware::Headers};
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::Params;
@@ -51,8 +52,8 @@ impl middleware::WsMiddleware for Timings {
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str, _params: Params) {
-		println!("[Timings] They called '{}'", name);
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		println!("[Timings:on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
@@ -94,7 +95,7 @@ impl middleware::WsMiddleware for ThreadWatcher {
 		println!("[ThreadWatcher::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
 	}
 
-	fn on_call(&self, _method: &str, _params: Params) {
+	fn on_call(&self, _method: &str, _params: Params, _kind: MethodKind) {
 		let threads = Self::count_threads();
 		println!("[ThreadWatcher::on_call] Threads running on the machine at the start of a call: {}", threads);
 	}

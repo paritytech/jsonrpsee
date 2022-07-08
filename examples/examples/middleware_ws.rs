@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{self, Headers, Params};
+use jsonrpsee::core::middleware::{self, Headers, MethodKind, Params};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
@@ -47,8 +47,8 @@ impl middleware::WsMiddleware for Timings {
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str, params: Params) {
-		println!("[Middleware::on_call] method: '{}' params: {:?}", name, params);
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		println!("[Middleware::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
