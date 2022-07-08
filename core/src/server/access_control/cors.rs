@@ -224,41 +224,42 @@ pub(super) fn get_cors_allow_origin(
 	allowed: &Option<Vec<AllowOrigin>>,
 	host: Option<&str>,
 ) -> AllowCors<AllowOrigin> {
-	match origin {
-		None => AllowCors::NotRequired,
-		Some(ref origin) => {
-			if let Some(host) = host {
-				// Request initiated from the same server.
-				if origin.ends_with(host) {
-					// Additional check
-					let origin = Origin::parse(origin);
-					if &*origin.host == host {
-						return AllowCors::NotRequired;
-					}
-				}
-			}
+	let origin = match origin {
+		Some(origin) => origin,
+		// Early return if the origin is not present.
+		None => return AllowCors::NotRequired,
+	};
 
-			match allowed.as_ref() {
-				None if *origin == "null" => AllowCors::Ok(AllowOrigin::Null),
-				None => AllowCors::Ok(AllowOrigin::Origin(Origin::parse(origin))),
-				Some(allowed) if *origin == "null" => allowed
-					.iter()
-					.find(|cors| **cors == AllowOrigin::Null)
-					.cloned()
-					.map(AllowCors::Ok)
-					.unwrap_or(AllowCors::Invalid),
-				Some(allowed) => allowed
-					.iter()
-					.find(|cors| match **cors {
-						AllowOrigin::Any => true,
-						AllowOrigin::Origin(ref val) if val.matches(origin) => true,
-						_ => false,
-					})
-					.map(|_| AllowOrigin::Origin(Origin::parse(origin)))
-					.map(AllowCors::Ok)
-					.unwrap_or(AllowCors::Invalid),
+	// Check if the request initiated from the same server.
+	if let Some(host) = host {
+		// Quick check to avoid `Origin::parse` if possible.
+		if origin.ends_with(host) {
+			let origin = Origin::parse(origin);
+			if &*origin.host == host {
+				return AllowCors::NotRequired;
 			}
 		}
+	}
+
+	match allowed.as_ref() {
+		None if origin == "null" => AllowCors::Ok(AllowOrigin::Null),
+		None => AllowCors::Ok(AllowOrigin::Origin(Origin::parse(origin))),
+		Some(allowed) if origin == "null" => allowed
+			.iter()
+			.find(|cors| **cors == AllowOrigin::Null)
+			.cloned()
+			.map(AllowCors::Ok)
+			.unwrap_or(AllowCors::Invalid),
+		Some(allowed) => allowed
+			.iter()
+			.find(|cors| match **cors {
+				AllowOrigin::Any => true,
+				AllowOrigin::Origin(ref val) if val.matches(origin) => true,
+				_ => false,
+			})
+			.map(|_| AllowOrigin::Origin(Origin::parse(origin)))
+			.map(AllowCors::Ok)
+			.unwrap_or(AllowCors::Invalid),
 	}
 }
 
