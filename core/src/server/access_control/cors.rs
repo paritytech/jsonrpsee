@@ -278,7 +278,7 @@ pub(crate) fn get_cors_allow_headers<T: AsRef<str>, O, F: Fn(T) -> O>(
 	if let AllowHeaders::Only(only) = cors_allow_headers {
 		let are_all_allowed = headers.all(|header| {
 			let name = &Ascii::new(header.as_ref());
-			only.iter().any(|h| Ascii::new(&*h) == name) || ALWAYS_ALLOWED_HEADERS.contains(name)
+			only.iter().any(|h| Ascii::new(&*h) == name) || DEFAULT_ALLOWED_HEADERS.contains(name)
 		});
 
 		if !are_all_allowed {
@@ -298,7 +298,7 @@ pub(crate) fn get_cors_allow_headers<T: AsRef<str>, O, F: Fn(T) -> O>(
 				.filter(|header| {
 					let name = &Ascii::new(header.as_ref());
 					filtered = true;
-					only.iter().any(|h| Ascii::new(&*h) == name) || ALWAYS_ALLOWED_HEADERS.contains(name)
+					only.iter().any(|h| Ascii::new(&*h) == name) || DEFAULT_ALLOWED_HEADERS.contains(name)
 				})
 				.map(to_result)
 				.collect();
@@ -319,8 +319,8 @@ pub(crate) fn get_cors_allow_headers<T: AsRef<str>, O, F: Fn(T) -> O>(
 }
 
 lazy_static! {
-	/// Returns headers which are always allowed.
-	static ref ALWAYS_ALLOWED_HEADERS: HashSet<Ascii<&'static str>> = {
+	/// The following header are always allowed regardless of specified control access.
+	static ref DEFAULT_ALLOWED_HEADERS: HashSet<Ascii<&'static str>> = {
 		let mut hs = HashSet::new();
 		// CORS safelisted: https://developer.mozilla.org/en-US/docs/Glossary/CORS-safelisted_request_header
 		hs.insert(Ascii::new("Accept"));
