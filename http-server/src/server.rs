@@ -489,9 +489,9 @@ impl<M: Middleware> Server<M> {
 								let allowed_header_bytes = allowed_headers.as_bytes();
 
 								let res = hyper::Response::builder()
-									.header("access-control-allow-origin", origin)
-									.header("access-control-allow-methods", "POST")
-									.header("access-control-allow-headers", allowed_header_bytes)
+									.header(hyper::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
+									.header(hyper::http::header::ACCESS_CONTROL_ALLOW_METHODS, "POST")
+									.header(hyper::http::header::ACCESS_CONTROL_ALLOW_HEADERS, allowed_header_bytes)
 									.body(hyper::Body::empty())
 									.unwrap_or_else(|e| {
 										tracing::error!("Error forming preflight response: {}", e);
