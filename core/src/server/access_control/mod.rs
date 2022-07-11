@@ -43,7 +43,6 @@ impl AccessControl {
 	///
 	/// header_name: all keys of the header in the request
 	/// cors_request_headers: values of `access-control-request-headers` headers.
-	///
 	pub fn verify_headers<T, I, II>(&self, header_names: I, cors_request_headers: II) -> Result<(), Error>
 	where
 		T: AsRef<str>,

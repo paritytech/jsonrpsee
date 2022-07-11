@@ -322,13 +322,18 @@ lazy_static! {
 	/// Returns headers which are always allowed.
 	static ref ALWAYS_ALLOWED_HEADERS: HashSet<Ascii<&'static str>> = {
 		let mut hs = HashSet::new();
+		// CORS safelisted: https://developer.mozilla.org/en-US/docs/Glossary/CORS-safelisted_request_header
 		hs.insert(Ascii::new("Accept"));
 		hs.insert(Ascii::new("Accept-Language"));
-		hs.insert(Ascii::new("Access-Control-Request-Headers"));
 		hs.insert(Ascii::new("Content-Language"));
 		hs.insert(Ascii::new("Content-Type"));
-		hs.insert(Ascii::new("Host"));
+
+		// CORS preflight request: https://developer.mozilla.org/en-US/docs/Glossary/Preflight_request
 		hs.insert(Ascii::new("Origin"));
+		hs.insert(Ascii::new("Access-Control-Request-Headers"));
+		hs.insert(Ascii::new("Access-Control-Request-Method"));
+
+		hs.insert(Ascii::new("Host"));
 		hs.insert(Ascii::new("Content-Length"));
 		hs.insert(Ascii::new("Connection"));
 		hs.insert(Ascii::new("User-Agent"));
