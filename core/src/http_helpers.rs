@@ -106,7 +106,7 @@ pub fn read_header_values<'a>(
 }
 
 /// Get the header values from the `access-control-request-headers` header.
-pub fn get_cors_request_headers<'a>(headers: &'a hyper::header::HeaderMap) -> impl Iterator<Item = &str> {
+pub fn get_cors_request_headers(headers: &hyper::header::HeaderMap) -> impl Iterator<Item=&str> {
 	const ACCESS_CONTROL_REQUEST_HEADERS: &str = "access-control-request-headers";
 
 	read_header_values(headers, ACCESS_CONTROL_REQUEST_HEADERS)
