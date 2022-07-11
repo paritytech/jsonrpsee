@@ -274,7 +274,7 @@ pub(crate) fn get_cors_allow_headers<T: AsRef<str>, O, F: Fn(T) -> O>(
 	cors_allow_headers: &AllowHeaders,
 	to_result: F,
 ) -> AllowCors<Vec<O>> {
-	// Check if the header fields which were sent in the request are allowed
+	// When CORS headers are strictly filtered, the provided request headers must match exactly the filtering CORS list.
 	if let AllowHeaders::Only(only) = cors_allow_headers {
 		let are_all_allowed = headers.all(|header| {
 			let name = &Ascii::new(header.as_ref());
