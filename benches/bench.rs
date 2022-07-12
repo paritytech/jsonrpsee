@@ -90,6 +90,7 @@ trait RequestBencher {
 		round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		http_concurrent_conn_calls(&rt, crit, &url, "http_concurrent_conn_calls", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "http_batch_requests", Self::REQUEST_TYPE);
+		http_custom_headers_round_trip(&rt, crit, &url, "http_custom_headers_round_trip", Self::REQUEST_TYPE);
 	}
 
 	fn websocket_benches(crit: &mut Criterion) {
@@ -307,4 +308,26 @@ fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str
 		});
 	}
 	group.finish();
+}
+
+/// Bench `round_trip` with different header sizes.
+fn http_custom_headers_round_trip(
+	rt: &TokioRuntime,
+	crit: &mut Criterion,
+	url: &str,
+	name: &str,
+	request: RequestType,
+) {
+	// 1 KiB = 1024 bytes
+	const KIB: usize = 1024;
+
+	for header_size in [1 * KIB, 2 * KIB, 8 * KIB] {
+		let mut headers = HeaderMap::new();
+		headers.insert("key", "A".repeat(header_size).parse().unwrap());
+
+		let client = Arc::new(http_client(url, headers));
+		let bench_name = format!("{}/{}", name, header_size);
+
+		round_trip(rt, crit, client, &bench_name, request);
+	}
 }
