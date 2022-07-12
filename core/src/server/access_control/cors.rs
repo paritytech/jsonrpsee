@@ -335,10 +335,10 @@ lazy_static! {
 
 		// All requests must have a valid "Host" value that is filtered internally.
 		hs.insert(Ascii::new("Host"));
-		// "Content-Length" is capped by `max_request_body_size` (Default: 10 MB)
+		// "Content-Length" is capped by `max_request_body_size` (Default: 10 MB).
 		hs.insert(Ascii::new("Content-Length"));
 		// Set by various tools: (ie `User-Agent: curl/7.79.1`).
-		hs.insert(Ascii::new("Connection"));
+		hs.insert(Ascii::new("User-Agent"));
 		hs
 	};
 }
