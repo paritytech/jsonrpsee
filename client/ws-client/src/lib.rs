@@ -40,6 +40,7 @@ mod tests;
 pub use jsonrpsee_core::client::Client as WsClient;
 pub use jsonrpsee_types as types;
 
+pub use http::{HeaderMap, HeaderValue};
 use std::time::Duration;
 
 use jsonrpsee_client_transport::ws::{InvalidUri, Uri, WsTransportClientBuilder};
@@ -52,13 +53,13 @@ use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 ///
 /// ```no_run
 ///
-/// use jsonrpsee_ws_client::WsClientBuilder;
+/// use jsonrpsee_ws_client::{WsClientBuilder, HeaderMap, HeaderValue};
 ///
 /// #[tokio::main]
 /// async fn main() {
 ///     // Build custom headers used during the handshake process.
-///     let mut headers = http::HeaderMap::new();
-///     headers.insert("Any-Header-You-Like", http::HeaderValue::from_static("42"));
+///     let mut headers = HeaderMap::new();
+///     headers.insert("Any-Header-You-Like", HeaderValue::from_static("42"));
 ///
 ///     // Build client
 ///     let client = WsClientBuilder::default()
@@ -93,7 +94,7 @@ impl Default for WsClientBuilder {
 			request_timeout: Duration::from_secs(60),
 			connection_timeout: Duration::from_secs(10),
 			ping_interval: None,
-			headers: http::HeaderMap::new(),
+			headers: HeaderMap::new(),
 			max_concurrent_requests: 256,
 			max_notifs_per_subscription: 1024,
 			max_redirections: 5,

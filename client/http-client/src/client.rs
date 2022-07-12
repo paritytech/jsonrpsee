@@ -45,8 +45,7 @@ use tracing_futures::Instrument;
 ///
 /// ```no_run
 ///
-/// use jsonrpsee_http_client::HttpClientBuilder;
-/// use hyper::http::{HeaderMap, HeaderValue};
+/// use jsonrpsee_http_client::{HttpClientBuilder, HeaderMap, HeaderValue};
 ///
 /// #[tokio::main]
 /// async fn main() {

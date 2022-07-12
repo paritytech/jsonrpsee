@@ -7,7 +7,7 @@
 // the JSON-RPC request id to a value that might have already been used.
 
 use hyper::client::{Client, HttpConnector};
-use hyper::http::HeaderMap;
+use hyper::http::{HeaderMap, HeaderValue};
 use hyper::Uri;
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
@@ -99,8 +99,8 @@ impl HttpTransportClient {
 		// Maintain order for headers in case of duplicate keys:
 		// https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.2
 		let mut cached_headers = HeaderMap::with_capacity(2 + headers.len());
-		cached_headers.insert(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
-		cached_headers.insert(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
+		cached_headers.insert(hyper::header::CONTENT_TYPE, HeaderValue::from_static(CONTENT_TYPE_JSON));
+		cached_headers.insert(hyper::header::ACCEPT, HeaderValue::from_static(CONTENT_TYPE_JSON));
 		for (key, value) in headers.into_iter() {
 			if let Some(key) = key {
 				cached_headers.insert(key, value);

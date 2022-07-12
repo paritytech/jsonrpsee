@@ -42,7 +42,7 @@ use stream::EitherStream;
 use thiserror::Error;
 use tokio::net::TcpStream;
 
-pub use http::{uri::InvalidUri, Uri};
+pub use http::{uri::InvalidUri, HeaderMap, HeaderValue, Uri};
 pub use soketto::handshake::client::Header;
 
 /// Sending end of WebSocket transport.
