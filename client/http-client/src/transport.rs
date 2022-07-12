@@ -194,7 +194,7 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::{CertificateStore, Error, HttpTransportClient};
+	use super::*;
 
 	fn assert_target(
 		client: &HttpTransportClient,
@@ -213,54 +213,37 @@ mod tests {
 
 	#[test]
 	fn invalid_http_url_rejected() {
-		let err =
-			HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native, 80, http::HeaderMap::new())
-				.unwrap_err();
+		let err = HttpTransportClient::new("ws://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
+			.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[cfg(feature = "tls")]
 	#[test]
 	fn https_works() {
-		let client = HttpTransportClient::new(
-			"https://localhost:9933",
-			80,
-			CertificateStore::Native,
-			80,
-			http::HeaderMap::new(),
-		)
-		.unwrap();
+		let client =
+			HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
+				.unwrap();
 		assert_target(&client, "localhost", "https", "/", 9933, 80);
 	}
 
 	#[cfg(not(feature = "tls"))]
 	#[test]
 	fn https_fails_without_tls_feature() {
-		let err = HttpTransportClient::new(
-			"https://localhost:9933",
-			80,
-			CertificateStore::Native,
-			80,
-			http::HeaderMap::new(),
-		)
-		.unwrap_err();
+		let err =
+			HttpTransportClient::new("https://localhost:9933", 80, CertificateStore::Native, 80, HeaderMap::new())
+				.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
 	#[test]
 	fn faulty_port() {
-		let err =
-			HttpTransportClient::new("http://localhost:-43", 80, CertificateStore::Native, 80, http::HeaderMap::new())
-				.unwrap_err();
+		let err = HttpTransportClient::new("http://localhost:-43", 80, CertificateStore::Native, 80, HeaderMap::new())
+			.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
-		let err = HttpTransportClient::new(
-			"http://localhost:-99999",
-			80,
-			CertificateStore::Native,
-			80,
-			http::HeaderMap::new(),
-		)
-		.unwrap_err();
+		let err =
+			HttpTransportClient::new("http://localhost:-99999", 80, CertificateStore::Native, 80, HeaderMap::new())
+				.unwrap_err();
 		assert!(matches!(err, Error::Url(_)));
 	}
 
@@ -271,7 +254,7 @@ mod tests {
 			1337,
 			CertificateStore::Native,
 			80,
-			http::HeaderMap::new(),
+			HeaderMap::new(),
 		)
 		.unwrap();
 		assert_target(&client, "localhost", "http", "/my-special-path", 9944, 1337);
@@ -284,7 +267,7 @@ mod tests {
 			u32::MAX,
 			CertificateStore::WebPki,
 			80,
-			http::HeaderMap::new(),
+			HeaderMap::new(),
 		)
 		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my?name1=value1&name2=value2", 9999, u32::MAX);
@@ -297,7 +280,7 @@ mod tests {
 			999,
 			CertificateStore::Native,
 			80,
-			http::HeaderMap::new(),
+			HeaderMap::new(),
 		)
 		.unwrap();
 		assert_target(&client, "127.0.0.1", "http", "/my.htm", 9944, 999);
@@ -307,7 +290,7 @@ mod tests {
 	async fn request_limit_works() {
 		let eighty_bytes_limit = 80;
 		let client =
-			HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki, 99, http::HeaderMap::new())
+			HttpTransportClient::new("http://localhost:9933", 80, CertificateStore::WebPki, 99, HeaderMap::new())
 				.unwrap();
 		assert_eq!(client.max_request_body_size, eighty_bytes_limit);
 
