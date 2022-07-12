@@ -5,6 +5,7 @@ use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
 use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee::http_client::HeaderMap;
 use jsonrpsee::types::{Id, ParamsSer, RequestSer};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
@@ -85,7 +86,7 @@ trait RequestBencher {
 	fn http_benches(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
 		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
-		let client = Arc::new(http_client(&url));
+		let client = Arc::new(http_client(&url, HeaderMap::new()));
 		round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		http_concurrent_conn_calls(&rt, crit, &url, "http_concurrent_conn_calls", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "http_batch_requests", Self::REQUEST_TYPE);
@@ -293,7 +294,7 @@ fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str
 	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
-				|| (0..conns).map(|_| http_client(url)),
+				|| (0..conns).map(|_| http_client(url, HeaderMap::new())),
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {

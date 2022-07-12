@@ -1,4 +1,4 @@
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee::http_client::{HeaderMap, HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 pub(crate) const SYNC_FAST_CALL: &str = "fast_call";
@@ -181,10 +181,11 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module
 }
 
-pub(crate) fn http_client(url: &str) -> HttpClient {
+pub(crate) fn http_client(url: &str, headers: HeaderMap) -> HttpClient {
 	HttpClientBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.max_concurrent_requests(1024 * 1024)
+		.set_headers(headers)
 		.build(url)
 		.unwrap()
 }
