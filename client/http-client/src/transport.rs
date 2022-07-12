@@ -7,6 +7,7 @@
 // the JSON-RPC request id to a value that might have already been used.
 
 use hyper::client::{Client, HttpConnector};
+use hyper::http::HeaderMap;
 use hyper::Uri;
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::error::GenericTransportError;
@@ -49,7 +50,7 @@ pub struct HttpTransportClient {
 	/// Logs bigger than this limit will be truncated.
 	max_log_length: u32,
 	/// Custom headers to pass with every request.
-	headers: http::HeaderMap,
+	headers: HeaderMap,
 }
 
 impl HttpTransportClient {
@@ -59,7 +60,7 @@ impl HttpTransportClient {
 		max_request_body_size: u32,
 		cert_store: CertificateStore,
 		max_log_length: u32,
-		headers: http::HeaderMap,
+		headers: HeaderMap,
 	) -> Result<Self, Error> {
 		let target: Uri = target.as_ref().parse().map_err(|e| Error::Url(format!("Invalid URL: {}", e)))?;
 		if target.port_u16().is_none() {
@@ -97,7 +98,7 @@ impl HttpTransportClient {
 		// Cache request headers: 2 default headers, followed by user custom headers.
 		// Maintain order for headers in case of duplicate keys:
 		// https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.2
-		let mut cached_headers = http::HeaderMap::with_capacity(2 + headers.len());
+		let mut cached_headers = HeaderMap::with_capacity(2 + headers.len());
 		cached_headers.insert(hyper::header::CONTENT_TYPE, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
 		cached_headers.insert(hyper::header::ACCEPT, hyper::header::HeaderValue::from_static(CONTENT_TYPE_JSON));
 		for (key, value) in headers.into_iter() {

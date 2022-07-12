@@ -30,6 +30,7 @@ use std::time::Duration;
 use crate::transport::HttpTransportClient;
 use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response};
 use async_trait::async_trait;
+use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
 use jsonrpsee_core::tracing::RpcTracing;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
@@ -70,7 +71,7 @@ pub struct HttpClientBuilder {
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
 	max_log_length: u32,
-	headers: http::HeaderMap,
+	headers: HeaderMap,
 }
 
 impl HttpClientBuilder {
@@ -115,7 +116,7 @@ impl HttpClientBuilder {
 	/// Set a custom header passed to the server with every request (default is none).
 	///
 	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
-	pub fn set_headers(mut self, headers: http::HeaderMap) -> Self {
+	pub fn set_headers(mut self, headers: HeaderMap) -> Self {
 		self.headers = headers;
 		self
 	}
@@ -147,7 +148,7 @@ impl Default for HttpClientBuilder {
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
-			headers: http::HeaderMap::new(),
+			headers: HeaderMap::new(),
 		}
 	}
 }
