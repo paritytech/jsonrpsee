@@ -43,7 +43,7 @@ impl AccessControl {
 	///
 	/// header_name: all keys of the header in the request
 	/// cors_request_headers: values of `access-control-request-headers` headers.
-	pub fn verify_headers<T, I, II>(&self, header_names: I, cors_request_headers: II) -> Result<(), Error>
+	pub fn verify_headers<T, I, II>(&self, header_names: I, cors_request_headers: II) -> Result<AllowHeaders, Error>
 	where
 		T: AsRef<str>,
 		I: Iterator<Item = T>,
@@ -52,13 +52,13 @@ impl AccessControl {
 		let header =
 			cors::get_cors_allow_headers(header_names, cors_request_headers, &self.allowed_headers, |name| name);
 
-		if let cors::AllowCors::Invalid = header {
-			Err(Error::HttpHeaderRejected(
+		match header {
+			cors::AllowCors::Invalid => Err(Error::HttpHeaderRejected(
 				"access-control-request-headers",
 				"<too inefficient to displayed; use wireshark or something similar to find the header values>".into(),
-			))
-		} else {
-			Ok(())
+			)),
+			cors::AllowCors::NotRequired => Ok(AllowHeaders::Any),
+			cors::AllowCors::Ok(headers) => Ok(AllowHeaders::Only(headers.into_iter().map(|h| h.as_ref().to_owned()).collect())),
 		}
 	}
 

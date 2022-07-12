@@ -470,10 +470,13 @@ impl<M: Middleware> Server<M> {
 							return Ok(response::invalid_allow_origin());
 						}
 
-						if let Err(e) = acl.verify_headers(keys, cors_request_headers) {
-							tracing::warn!("Denied request: {:?}", e);
-							return Ok(response::invalid_allow_headers());
-						}
+						let allowed_headers = match acl.verify_headers(keys, cors_request_headers) {
+							Ok(allowed_headers) => allowed_headers,
+							Err(e) => {
+								tracing::warn!("Denied request: {:?}", e);
+								return Ok(response::invalid_allow_headers());
+							}
+						};
 
 						// Only `POST` and `OPTIONS` methods are allowed.
 						match *request.method() {
@@ -485,7 +488,7 @@ impl<M: Middleware> Server<M> {
 									None => return Ok(malformed()),
 								};
 
-								let allowed_headers = acl.allowed_headers().to_cors_header_value();
+								let allowed_headers = allowed_headers.to_cors_header_value();
 								let allowed_header_bytes = allowed_headers.as_bytes();
 
 								let res = hyper::Response::builder()
