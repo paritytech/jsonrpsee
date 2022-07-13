@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::helpers::{ws_handshake, KIB};
 use criterion::*;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
@@ -101,6 +102,7 @@ trait RequestBencher {
 		ws_concurrent_conn_calls(&rt, crit, &url, "ws_concurrent_conn_calls", Self::REQUEST_TYPE);
 		ws_concurrent_conn_subs(&rt, crit, &url, "ws_concurrent_conn_subs", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "ws_batch_requests", Self::REQUEST_TYPE);
+		ws_custom_headers_handshake(&rt, crit, &url, "ws_custom_headers_handshake", Self::REQUEST_TYPE);
 	}
 
 	fn subscriptions(crit: &mut Criterion) {
@@ -318,9 +320,6 @@ fn http_custom_headers_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	// 1 KiB = 1024 bytes
-	const KIB: usize = 1024;
-
 	for header_size in [1 * KIB, 2 * KIB, 8 * KIB] {
 		let mut headers = HeaderMap::new();
 		headers.insert("key", "A".repeat(header_size).parse().unwrap());
@@ -330,4 +329,22 @@ fn http_custom_headers_round_trip(
 
 		round_trip(rt, crit, client, &bench_name, request);
 	}
+}
+
+/// Bench WS handshake with different header sizes.
+fn ws_custom_headers_handshake(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
+	let mut group = crit.benchmark_group(request.group_name(name));
+	for header_size in [0 * KIB, 1 * KIB, 2 * KIB, 4 * KIB] {
+		group.bench_function(format!("{}", header_size), |b| {
+			b.to_async(rt).iter(|| async move {
+				let mut headers = HeaderMap::new();
+				if header_size != 0 {
+					headers.insert("key", "A".repeat(header_size).parse().unwrap());
+				}
+
+				ws_handshake(url, headers).await;
+			})
+		});
+	}
+	group.finish();
 }
