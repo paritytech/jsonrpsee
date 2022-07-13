@@ -30,6 +30,7 @@ use std::time::Duration;
 use crate::transport::HttpTransportClient;
 use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response};
 use async_trait::async_trait;
+use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
 use jsonrpsee_core::tracing::RpcTracing;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
@@ -39,6 +40,29 @@ use serde::de::DeserializeOwned;
 use tracing_futures::Instrument;
 
 /// Http Client Builder.
+///
+/// # Examples
+///
+/// ```no_run
+///
+/// use jsonrpsee_http_client::{HttpClientBuilder, HeaderMap, HeaderValue};
+///
+/// #[tokio::main]
+/// async fn main() {
+///     // Build custom headers used for every submitted request.
+///     let mut headers = HeaderMap::new();
+///     headers.insert("Any-Header-You-Like", HeaderValue::from_static("42"));
+///
+///     // Build client
+///     let client = HttpClientBuilder::default()
+///          .set_headers(headers)
+///          .build("wss://localhost:443")
+///          .unwrap();
+///
+///     // use client....
+/// }
+///
+/// ```
 #[derive(Debug)]
 pub struct HttpClientBuilder {
 	max_request_body_size: u32,
@@ -47,6 +71,7 @@ pub struct HttpClientBuilder {
 	certificate_store: CertificateStore,
 	id_kind: IdKind,
 	max_log_length: u32,
+	headers: HeaderMap,
 }
 
 impl HttpClientBuilder {
@@ -88,11 +113,24 @@ impl HttpClientBuilder {
 		self
 	}
 
+	/// Set a custom header passed to the server with every request (default is none).
+	///
+	/// The caller is responsible for checking that the headers do not conflict or are duplicated.
+	pub fn set_headers(mut self, headers: HeaderMap) -> Self {
+		self.headers = headers;
+		self
+	}
+
 	/// Build the HTTP client with target to connect to.
 	pub fn build(self, target: impl AsRef<str>) -> Result<HttpClient, Error> {
-		let transport =
-			HttpTransportClient::new(target, self.max_request_body_size, self.certificate_store, self.max_log_length)
-				.map_err(|e| Error::Transport(e.into()))?;
+		let transport = HttpTransportClient::new(
+			target,
+			self.max_request_body_size,
+			self.certificate_store,
+			self.max_log_length,
+			self.headers,
+		)
+		.map_err(|e| Error::Transport(e.into()))?;
 		Ok(HttpClient {
 			transport,
 			id_manager: Arc::new(RequestIdManager::new(self.max_concurrent_requests, self.id_kind)),
@@ -110,6 +148,7 @@ impl Default for HttpClientBuilder {
 			certificate_store: CertificateStore::Native,
 			id_kind: IdKind::Number,
 			max_log_length: 4096,
+			headers: HeaderMap::new(),
 		}
 	}
 }
