@@ -320,7 +320,7 @@ fn http_custom_headers_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	for header_size in [1 * KIB, 2 * KIB, 8 * KIB] {
+	for header_size in [KIB, 2 * KIB, 8 * KIB] {
 		let mut headers = HeaderMap::new();
 		headers.insert("key", "A".repeat(header_size).parse().unwrap());
 
@@ -334,7 +334,7 @@ fn http_custom_headers_round_trip(
 /// Bench WS handshake with different header sizes.
 fn ws_custom_headers_handshake(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
-	for header_size in [0, 1 * KIB, 2 * KIB, 4 * KIB] {
+	for header_size in [0, KIB, 2 * KIB, 4 * KIB] {
 		group.bench_function(format!("{}", header_size), |b| {
 			b.to_async(rt).iter(|| async move {
 				let mut headers = HeaderMap::new();
