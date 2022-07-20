@@ -41,7 +41,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
-use jsonrpsee_core::middleware::HttpMiddleware as Middleware;
+use jsonrpsee_core::middleware::{self, HttpMiddleware as Middleware};
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
 use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
@@ -102,7 +102,7 @@ impl<M> Builder<M> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::middleware::{HttpMiddleware, Headers, Params};
+	/// use jsonrpsee_core::middleware::{HttpMiddleware, Headers, MethodKind, Params};
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
@@ -119,8 +119,8 @@ impl<M> Builder<M> {
 	///
 	///     // Called once a single JSON-RPC method call is processed, it may be called multiple times
 	///     // on batches.
-	///     fn on_call(&self, method_name: &str, params: Params) {
-	///         println!("Call to method: '{}' params: {:?}", method_name, params);
+	///     fn on_call(&self, method_name: &str, params: Params, kind: MethodKind) {
+	///         println!("Call to method: '{}' params: {:?}, kind: {}", method_name, params, kind);
 	///     }
 	///
 	///     // Called once a single JSON-RPC call is completed, it may be called multiple times
@@ -833,35 +833,44 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 	let CallData { resources, methods, middleware, max_response_body_size, max_log_length, conn_id, request_start } =
 		call;
 
-	middleware.on_call(name, params.clone());
-
 	let response = match methods.method_with_name(name) {
-		None => MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound)),
+		None => {
+			middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
+			MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))
+		}
 		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => match method.claim(name, resources) {
-				Ok(guard) => {
-					let r = (callback)(id, params, max_response_body_size as usize);
-					drop(guard);
-					r
-				}
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
-				}
-			},
-			MethodKind::Async(callback) => match method.claim(name, resources) {
-				Ok(guard) => {
-					let id = id.into_owned();
-					let params = params.into_owned();
+			MethodKind::Sync(callback) => {
+				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
 
-					(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
+				match method.claim(name, resources) {
+					Ok(guard) => {
+						let r = (callback)(id, params, max_response_body_size as usize);
+						drop(guard);
+						r
+					}
+					Err(err) => {
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+					}
 				}
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+			}
+			MethodKind::Async(callback) => {
+				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				match method.claim(name, resources) {
+					Ok(guard) => {
+						let id = id.into_owned();
+						let params = params.into_owned();
+
+						(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
+					}
+					Err(err) => {
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
+					}
 				}
-			},
+			}
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
+				middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
 				tracing::error!("Subscriptions not supported on HTTP");
 				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
 			}
