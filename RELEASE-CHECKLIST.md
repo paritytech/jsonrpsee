@@ -30,14 +30,14 @@ We also assume that ongoing work done is being merged directly to the `master` b
     provide something like `[+] Latest release tag: v0.14.0` ). Then group the PRs into "Fixed", "Added" and "Changed" sections,
     and make any other adjustments that you feel are necessary for clarity.
 
-6.  Commit any of the above changes to the release branch and open a PR in GitHub with a base of `master`. Name the branch something
+5.  Commit any of the above changes to the release branch and open a PR in GitHub with a base of `master`. Name the branch something
     like `chore(release): v0.15.0`.
 
-7.  Once the branch has been reviewed and passes CI, merge it.
+6.  Once the branch has been reviewed and passes CI, merge it.
 
-8.  Now, we're ready to publish the release to crates.io. Run `./scripts/publish.sh` to publish all crates in the correct order.
+7.  Now, we're ready to publish the release to crates.io. Run `./scripts/publish.sh` to publish all crates in the correct order.
 
-9.  If the release was successful, tag the commit that we released in the `master` branch with the
+8.  If the release was successful, tag the commit that we released in the `master` branch with the
     version that we just released, for example:
 
     ```
