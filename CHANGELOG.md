@@ -11,7 +11,7 @@ v0.15.0 is a breaking release. The main changes are:
 - It's now possible to apply resource limits to subscriptions as well as regular calls.
 - We now allow trait bounds to be overridden in the proc macros. See `examples/examples/proc_macro_bounds.rs` for examples.
 - We've tidied up the subscription API, removing the `PendingSink` concept (you can still manually accept or reject a sink, but otherwise it'll be accepted automatically if you send a message down it) ([#799](https://github.com/paritytech/jsonrpsee/pull/799)).
-- Our logging `Middleware` trait has been split into `HttpMiddleware` and `WsMiddleware` to better capture the differences between the two. if you use custom middleware, you'll need to implement one or the other trait on it depending on your used transport method ([#793](https://github.com/paritytech/jsonrpsee/pull/793)).
+- Our logging `Middleware` trait has been split into `HttpMiddleware` and `WsMiddleware` to better capture the differences between the two. if you use custom middleware, you'll need to implement one or the other trait on it depending on your used transport method ([#793](https://github.com/paritytech/jsonrpsee/pull/793)). We also provide params and the method type to middleware calls now, too ([#820](https://github.com/paritytech/jsonrpsee/pull/820)).
 - We've consistified the API for setting headers across HTTP and WS clients ([#799](https://github.com/paritytech/jsonrpsee/pull/814)).
 
 Here's the full list of changes:
@@ -40,6 +40,7 @@ Here's the full list of changes:
 - chore(deps): update pprof requirement from 0.9 to 0.10 [#810](https://github.com/paritytech/jsonrpsee/pull/810)
 - Return error from subscription callbacks [#799](https://github.com/paritytech/jsonrpsee/pull/799)
 - middleware refactoring [#793](https://github.com/paritytech/jsonrpsee/pull/793)
+- feat(middleware): expose type of the method call [#820](https://github.com/paritytech/jsonrpsee/pull/820)
 - Uniform API for custom headers between clients [#814](https://github.com/paritytech/jsonrpsee/pull/814)
 - Update links to client directories. [#822](https://github.com/paritytech/jsonrpsee/pull/822)
 
