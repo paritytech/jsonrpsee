@@ -412,7 +412,10 @@ struct RPSeeSvcData<M> {
 
 impl<M: Middleware> RPSeeSvcData<M> {
 	/// Default behavior for RPSee handling of requests.
-	pub async fn handle_request(self, request: hyper::Request<hyper::Body>) -> Result<hyper::Response<hyper::Body>, HyperError> {
+	pub async fn handle_request(
+		self,
+		request: hyper::Request<hyper::Body>,
+	) -> Result<hyper::Response<hyper::Body>, HyperError> {
 		let RPSeeSvcData {
 			remote_addr,
 			methods,
@@ -524,6 +527,30 @@ impl<M: Middleware> RPSeeSvcData<M> {
 			Method::POST => Ok(response::unsupported_content_type()),
 			_ => Ok(response::method_not_allowed()),
 		}
+	}
+}
+
+/// JsonRPSee service compatible with `tower`.
+///
+/// # Note
+/// This is similar to [`hyper::service::service_fn`].
+pub struct RPSeeServerSvc<M> {
+	inner: RPSeeSvcData<M>,
+}
+
+impl<M: Middleware> hyper::service::Service<hyper::Request<hyper::Body>> for RPSeeServerSvc<M> {
+	type Response = hyper::Response<hyper::Body>;
+	type Error = hyper::Error;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+	/// Opens door for back pressure implementation.
+	fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
+		let data = self.inner.clone();
+		Box::pin(data.handle_request(request))
 	}
 }
 
