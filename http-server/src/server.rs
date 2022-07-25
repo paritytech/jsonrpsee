@@ -611,6 +611,26 @@ impl<M: Middleware> Server<M> {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
 	}
 
+	/// Returns a service that can be utilised with `tower` compatible crates.
+	pub fn to_service(self, methods: impl Into<Methods>) -> Result<RPSeeServerMakeSvc<M>, Error> {
+		let methods = methods.into().initialize_resources(&self.resources)?;
+
+		Ok(RPSeeServerMakeSvc {
+			inner: RPSeeSvcData {
+				remote_addr: None,
+				methods,
+				acl: self.access_control,
+				resources: self.resources,
+				middleware: self.middleware,
+				health_api: self.health_api,
+				max_request_body_size: self.max_response_body_size,
+				max_response_body_size: self.max_response_body_size,
+				max_log_length: self.max_log_length,
+				batch_requests_supported: self.batch_requests_supported,
+			},
+		})
+	}
+
 	/// Start the server.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
