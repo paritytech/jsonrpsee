@@ -383,6 +383,33 @@ impl Future for ServerHandle {
 	}
 }
 
+/// Data required by the server to expose the a tower service.
+#[derive(Debug, Clone)]
+struct RPSeeSvcData<M> {
+	/// Remote server address.
+	remote_addr: Option<SocketAddr>,
+	/// Registered server methods.
+	methods: Methods,
+	/// Access control.
+	acl: AccessControl,
+	/// Tracker for currently used resources on the server.
+	resources: Resources,
+	/// User provided middleware.
+	middleware: M,
+	/// Health API.
+	health_api: Option<HealthApi>,
+	/// Max request body size.
+	max_request_body_size: u32,
+	/// Max response body size.
+	max_response_body_size: u32,
+	/// Max length for logging for request and response
+	///
+	/// Logs bigger than this limit will be truncated.
+	max_log_length: u32,
+	/// Whether batch requests are supported by this server or not.
+	batch_requests_supported: bool,
+}
+
 /// An HTTP JSON RPC server.
 #[derive(Debug)]
 pub struct Server<M = ()> {
