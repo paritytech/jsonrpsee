@@ -251,7 +251,7 @@ impl<M> Builder<M> {
 	) -> Result<Server<M>, Error> {
 		Ok(Server {
 			access_control: self.access_control,
-			listener,
+			listener: Some(listener),
 			local_addr: Some(local_addr),
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
@@ -295,7 +295,7 @@ impl<M> Builder<M> {
 		let listener = hyper::Server::from_tcp(listener)?;
 
 		Ok(Server {
-			listener,
+			listener: Some(listener),
 			local_addr,
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
@@ -331,7 +331,7 @@ impl<M> Builder<M> {
 		let listener = hyper::Server::from_tcp(listener)?.tcp_nodelay(true);
 
 		Ok(Server {
-			listener,
+			listener: Some(listener),
 			local_addr,
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
@@ -343,6 +343,23 @@ impl<M> Builder<M> {
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		})
+	}
+
+	/// Pre-build the server as is.
+	pub fn pre_build(self) -> Server<M> {
+		Server {
+			listener: None,
+			local_addr: None,
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
+			middleware: self.middleware,
+			max_log_length: self.max_log_length,
+			health_api: self.health_api,
+		}
 	}
 }
 
@@ -582,7 +599,7 @@ impl<T, M: Clone + Send + 'static> hyper::service::Service<T> for RPSeeServerMak
 #[derive(Debug)]
 pub struct Server<M = ()> {
 	/// Hyper server.
-	listener: HyperBuilder<AddrIncoming>,
+	listener: Option<HyperBuilder<AddrIncoming>>,
 	/// Local address
 	local_addr: Option<SocketAddr>,
 	/// Max request body size.
@@ -767,7 +784,8 @@ impl<M: Middleware> Server<M> {
 		};
 
 		let handle = rt.spawn(async move {
-			let server = listener.serve(make_service);
+			// TODO: Hande unwrap.
+			let server = listener.unwrap().serve(make_service);
 			let _ = server.with_graceful_shutdown(async move { rx.next().await.map_or((), |_| ()) }).await;
 		});
 
