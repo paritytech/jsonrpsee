@@ -554,6 +554,30 @@ impl<M: Middleware> hyper::service::Service<hyper::Request<hyper::Body>> for RPS
 	}
 }
 
+/// JsonRPSee service compatible with `tower`.
+///
+/// # Note
+/// This is similar to [`hyper::service::make_service_fn`].
+pub struct RPSeeServerMakeSvc<M> {
+	inner: RPSeeSvcData<M>,
+}
+
+impl<T, M: Clone + Send + 'static> hyper::service::Service<T> for RPSeeServerMakeSvc<M> {
+	type Response = RPSeeServerSvc<M>;
+	type Error = hyper::Error;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+	fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn call(&mut self, _connection: T) -> Self::Future {
+		let inner = self.inner.clone();
+		let fut = async move { Ok(RPSeeServerSvc { inner }) };
+		Box::pin(fut)
+	}
+}
+
 /// An HTTP JSON RPC server.
 #[derive(Debug)]
 pub struct Server<M = ()> {
