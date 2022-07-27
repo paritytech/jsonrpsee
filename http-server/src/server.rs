@@ -631,10 +631,10 @@ impl<M: Middleware> Server<M> {
 	}
 
 	/// Returns a service that can be utilised with `tower` compatible crates.
-	pub fn to_service(self, methods: impl Into<Methods>) -> Result<RPSeeServerMakeSvc<M>, Error> {
+	pub fn to_service(self, methods: impl Into<Methods>) -> Result<RPSeeServerSvc<M>, Error> {
 		let methods = methods.into().initialize_resources(&self.resources)?;
 
-		Ok(RPSeeServerMakeSvc {
+		Ok(RPSeeServerSvc {
 			inner: RPSeeSvcData {
 				remote_addr: None,
 				methods,

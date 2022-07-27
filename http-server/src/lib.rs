@@ -38,7 +38,9 @@ pub mod response;
 pub use jsonrpsee_core::server::access_control::{AccessControl, AccessControlBuilder};
 pub use jsonrpsee_core::server::rpc_module::RpcModule;
 pub use jsonrpsee_types as types;
-pub use server::{Builder as HttpServerBuilder, Server as HttpServer, ServerHandle as HttpServerHandle};
+pub use server::{
+	Builder as HttpServerBuilder, RPSeeServerSvc, Server as HttpServer, ServerHandle as HttpServerHandle,
+};
 pub use tracing;
 
 #[cfg(test)]

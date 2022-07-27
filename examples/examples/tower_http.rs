@@ -24,16 +24,25 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use hyper::body::Bytes;
+use hyper::service::make_service_fn;
 use hyper::Server;
+use std::convert::Infallible;
+use std::future::Future;
 use std::iter::once;
+use std::marker::PhantomData;
 use std::net::SocketAddr;
-use std::time::Instant;
-use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::time::{Duration, Instant};
+use tower_http::sensitive_headers::{SetSensitiveRequestHeaders, SetSensitiveRequestHeadersLayer};
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::middleware::{self, Headers, Params};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, RpcModule};
+use jsonrpsee::http_server::{HttpServerBuilder, RPSeeServerSvc, RpcModule};
 
 #[derive(Clone)]
 struct Timings;
@@ -80,23 +89,43 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("lo"))?;
-
-	println!("[run_server]: Creating RPC service");
-	let rpc_service = HttpServerBuilder::new().set_middleware(Timings).pre_build().to_service(module);
-
-	println!("[run_server]: Tower builder");
-	let service_builder = tower::ServiceBuilder::new()
-		// Mark the `Authorization` request header as sensitive so it doesn't show in logs
-		.layer(SetSensitiveRequestHeadersLayer::new(once(hyper::header::AUTHORIZATION)))
-		.service(rpc_service);
-
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9935));
 
-	println!("[run_server]: Bind server");
+	let make_service = make_service_fn(move |_| {
+		async move {
+			let mut module = RpcModule::new(());
+			module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 
-	tokio::spawn(async move { Server::bind(&addr).serve(service_builder) });
+			println!("[run_server]: Creating RPC service");
+			let rpc_svc = HttpServerBuilder::new().set_middleware(Timings).pre_build().to_service(module).unwrap();
+
+			println!("[run_server]: Tower builder");
+			let tower_svc = tower::ServiceBuilder::new()
+				// Add high level tracing/logging to all requests
+				.layer(
+					TraceLayer::new_for_http()
+						.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
+							tracing::trace!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")
+						})
+						.make_span_with(DefaultMakeSpan::new().include_headers(true))
+						.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
+				)
+				// Mark the `Authorization` request header as sensitive so it doesn't show in logs
+				.layer(SetSensitiveRequestHeadersLayer::new(once(hyper::header::AUTHORIZATION)))
+				.timeout(Duration::from_secs(2))
+				.service(rpc_svc);
+
+			Ok::<_, Infallible>(tower_svc)
+		}
+	});
+
+	tokio::spawn(async move {
+		println!("[run_server]: Bind server");
+		Server::bind(&addr).serve(make_service).await
+	});
+
+	// Race with server start / client connect present in all examples
+	tokio::time::sleep(Duration::from_secs(5)).await;
 
 	Ok(addr)
 }
