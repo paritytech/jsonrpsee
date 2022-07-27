@@ -38,7 +38,7 @@ use hyper::header::{HeaderMap, HeaderValue};
 use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Error as HyperError, Method};
+use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
 use jsonrpsee_core::middleware::{self, HttpMiddleware as Middleware};
@@ -429,7 +429,7 @@ struct RPSeeSvcData<M> {
 
 impl<M: Middleware> RPSeeSvcData<M> {
 	/// Default behavior for RPSee handling of requests.
-	pub async fn handle_request(
+	async fn handle_request(
 		self,
 		request: hyper::Request<hyper::Body>,
 	) -> Result<hyper::Response<hyper::Body>, HyperError> {
@@ -551,6 +551,7 @@ impl<M: Middleware> RPSeeSvcData<M> {
 ///
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].
+#[derive(Debug)]
 pub struct RPSeeServerSvc<M> {
 	inner: RPSeeSvcData<M>,
 }
@@ -575,6 +576,7 @@ impl<M: Middleware> hyper::service::Service<hyper::Request<hyper::Body>> for RPS
 ///
 /// # Note
 /// This is similar to [`hyper::service::make_service_fn`].
+#[derive(Debug)]
 pub struct RPSeeServerMakeSvc<M> {
 	inner: RPSeeSvcData<M>,
 }
