@@ -346,11 +346,11 @@ impl<M> Builder<M> {
 	}
 
 	/// Returns a service that can be utilised with `tower` compatible crates.
-	pub fn to_service(self, methods: impl Into<Methods>) -> Result<RPSeeServerSvc<M>, Error> {
+	pub fn to_service(self, methods: impl Into<Methods>) -> Result<TowerService<M>, Error> {
 		let methods = methods.into().initialize_resources(&self.resources)?;
 
-		Ok(RPSeeServerSvc {
-			inner: RPSeeSvcData {
+		Ok(TowerService {
+			inner: TowerServiceData {
 				remote_addr: None,
 				methods,
 				acl: self.access_control,
@@ -405,7 +405,7 @@ impl Future for ServerHandle {
 
 /// Data required by the server to expose the a tower service.
 #[derive(Debug, Clone)]
-struct RPSeeSvcData<M> {
+struct TowerServiceData<M> {
 	/// Remote server address.
 	remote_addr: Option<SocketAddr>,
 	/// Registered server methods.
@@ -430,13 +430,13 @@ struct RPSeeSvcData<M> {
 	batch_requests_supported: bool,
 }
 
-impl<M: Middleware> RPSeeSvcData<M> {
+impl<M: Middleware> TowerServiceData<M> {
 	/// Default behavior for RPSee handling of requests.
 	async fn handle_request(
 		self,
 		request: hyper::Request<hyper::Body>,
 	) -> Result<hyper::Response<hyper::Body>, HyperError> {
-		let RPSeeSvcData {
+		let TowerServiceData {
 			remote_addr,
 			methods,
 			acl,
@@ -555,11 +555,11 @@ impl<M: Middleware> RPSeeSvcData<M> {
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].
 #[derive(Debug)]
-pub struct RPSeeServerSvc<M> {
-	inner: RPSeeSvcData<M>,
+pub struct TowerService<M> {
+	inner: TowerServiceData<M>,
 }
 
-impl<M: Middleware> hyper::service::Service<hyper::Request<hyper::Body>> for RPSeeServerSvc<M> {
+impl<M: Middleware> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<M> {
 	type Response = hyper::Response<hyper::Body>;
 	type Error = hyper::Error;
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
