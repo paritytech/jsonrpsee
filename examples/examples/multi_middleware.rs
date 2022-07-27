@@ -56,8 +56,8 @@ impl middleware::WsMiddleware for Timings {
 		println!("[Timings:on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
-	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("[Timings] call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		println!("[Timings] call={}, worked? {}, duration {:?}", name, success, started_at.elapsed());
 	}
 
 	fn on_response(&self, _result: &str, started_at: Self::Instant) {
