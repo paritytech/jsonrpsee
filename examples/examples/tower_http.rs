@@ -81,6 +81,9 @@ async fn main() -> anyhow::Result<()> {
 	let _response: Result<String, _> = client.request("unknown_method", None).await;
 	let _ = client.request::<String>("say_hello", None).await?;
 
+	// Make the same request again.
+	let _ = client.request::<String>("say_hello", None).await?;
+
 	Ok(())
 }
 
