@@ -345,21 +345,24 @@ impl<M> Builder<M> {
 		})
 	}
 
-	/// Pre-build the server as is.
-	pub fn pre_build(self) -> Server<M> {
-		Server {
-			listener: None,
-			local_addr: None,
-			access_control: self.access_control,
-			max_request_body_size: self.max_request_body_size,
-			max_response_body_size: self.max_response_body_size,
-			batch_requests_supported: self.batch_requests_supported,
-			resources: self.resources,
-			tokio_runtime: self.tokio_runtime,
-			middleware: self.middleware,
-			max_log_length: self.max_log_length,
-			health_api: self.health_api,
-		}
+	/// Returns a service that can be utilised with `tower` compatible crates.
+	pub fn to_service(self, methods: impl Into<Methods>) -> Result<RPSeeServerSvc<M>, Error> {
+		let methods = methods.into().initialize_resources(&self.resources)?;
+
+		Ok(RPSeeServerSvc {
+			inner: RPSeeSvcData {
+				remote_addr: None,
+				methods,
+				acl: self.access_control,
+				resources: self.resources,
+				middleware: self.middleware,
+				health_api: self.health_api,
+				max_request_body_size: self.max_response_body_size,
+				max_response_body_size: self.max_response_body_size,
+				max_log_length: self.max_log_length,
+				batch_requests_supported: self.batch_requests_supported,
+			},
+		})
 	}
 }
 
@@ -603,26 +606,6 @@ impl<M: Middleware> Server<M> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
-	}
-
-	/// Returns a service that can be utilised with `tower` compatible crates.
-	pub fn to_service(self, methods: impl Into<Methods>) -> Result<RPSeeServerSvc<M>, Error> {
-		let methods = methods.into().initialize_resources(&self.resources)?;
-
-		Ok(RPSeeServerSvc {
-			inner: RPSeeSvcData {
-				remote_addr: None,
-				methods,
-				acl: self.access_control,
-				resources: self.resources,
-				middleware: self.middleware,
-				health_api: self.health_api,
-				max_request_body_size: self.max_response_body_size,
-				max_response_body_size: self.max_response_body_size,
-				max_log_length: self.max_log_length,
-				batch_requests_supported: self.batch_requests_supported,
-			},
-		})
 	}
 
 	/// Start the server.

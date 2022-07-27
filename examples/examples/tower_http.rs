@@ -96,7 +96,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 
 			println!("[run_server]: Creating RPC service");
-			let rpc_svc = HttpServerBuilder::new().set_middleware(Timings).pre_build().to_service(module).unwrap();
+			let rpc_svc = HttpServerBuilder::new().set_middleware(Timings).to_service(module).unwrap();
 
 			println!("[run_server]: Tower builder");
 			let tower_svc = tower::ServiceBuilder::new()
