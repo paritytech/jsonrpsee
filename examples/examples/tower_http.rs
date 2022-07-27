@@ -28,21 +28,17 @@ use hyper::body::Bytes;
 use hyper::service::make_service_fn;
 use hyper::Server;
 use std::convert::Infallible;
-use std::future::Future;
 use std::iter::once;
-use std::marker::PhantomData;
 use std::net::SocketAddr;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
-use tower_http::sensitive_headers::{SetSensitiveRequestHeaders, SetSensitiveRequestHeadersLayer};
+use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::middleware::{self, Headers, Params};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, RPSeeServerSvc, RpcModule};
+use jsonrpsee::http_server::{HttpServerBuilder, RpcModule};
 
 #[derive(Clone)]
 struct Timings;
