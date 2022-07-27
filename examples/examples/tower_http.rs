@@ -28,14 +28,12 @@ use hyper::Server;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::time::Instant;
-use tokio::net::TcpListener;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
-use tower_http::trace::TraceLayer;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::middleware::{self, Headers, Params};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::http_server::{HttpServerBuilder, RpcModule};
 
 #[derive(Clone)]
 struct Timings;
@@ -97,7 +95,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9935));
 
 	println!("[run_server]: Bind server");
-	tokio::spawn(async move { Server::bind(&addr).serve(service_builder).expect("server error") });
+
+	tokio::spawn(async move { Server::bind(&addr).serve(service_builder) });
 
 	Ok(addr)
 }
