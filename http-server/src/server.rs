@@ -686,11 +686,9 @@ async fn process_health_request<M: Middleware>(
 	max_log_length: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let trace = RpcTracing::method_call(&health_api.method);
-	let _enter = trace.span().enter();
-
-	tx_log_from_str("HTTP health API", max_log_length);
-
-	let response = match methods.method_with_name(&health_api.method) {
+	let response = async {
+		tx_log_from_str("HTTP health API", max_log_length);
+		match methods.method_with_name(&health_api.method) {
 		None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
 		Some((_name, method_callback)) => match method_callback.inner() {
 			MethodKind::Sync(callback) => (callback)(Id::Number(0), Params::new(None), max_response_body_size as usize),
@@ -704,7 +702,7 @@ async fn process_health_request<M: Middleware>(
 				MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
 			}
 		},
-	};
+	}}.instrument(trace.into_span()).await;
 
 	rx_log_from_str(&response.result, max_log_length);
 	middleware.on_result(&health_api.method, response.success, request_start);
@@ -766,21 +764,18 @@ where
 		let batch_stream = futures_util::stream::iter(batch);
 
 		let trace = RpcTracing::batch();
-		let _enter = trace.span().enter();
-
-		let batch_response = batch_stream
-			.try_fold(
-				BatchResponseBuilder::new_with_limit(max_response_size as usize),
-				|batch_response, (req, call)| async move {
-					let params = Params::new(req.params.map(|params| params.get()));
-
-					let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
-
-					batch_response.append(&response)
-				},
-			)
-			.in_current_span()
-			.await;
+		let batch_response = async{
+			batch_stream
+				.try_fold(
+					BatchResponseBuilder::new_with_limit(max_response_size as usize),
+					|batch_response, (req, call)| async move {
+						let params = Params::new(req.params.map(|params| params.get()));
+						let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+						batch_response.append(&response)
+					},
+				)
+				.await
+		}.instrument(trace.into_span()).await;
 
 		return match batch_response {
 			Ok(batch) => batch.finish(),
@@ -806,15 +801,13 @@ where
 async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
-		let _enter = trace.span().enter();
-
-		rx_log_from_json(&req, call.max_log_length);
-
-		let params = Params::new(req.params.map(|params| params.get()));
-		let name = &req.method;
-		let id = req.id;
-
-		execute_call(Call { name, params, id, call }).in_current_span().await
+		async{
+			rx_log_from_json(&req, call.max_log_length);
+			let params = Params::new(req.params.map(|params| params.get()));
+			let name = &req.method;
+			let id = req.id;
+			execute_call(Call { name, params, id, call }).await
+		}.instrument(trace.into_span()).await
 	} else if let Ok(req) = serde_json::from_slice::<Notif>(&data) {
 		let trace = RpcTracing::notification(&req.method);
 		let _enter = trace.span().enter();
