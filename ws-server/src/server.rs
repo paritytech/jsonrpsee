@@ -893,7 +893,7 @@ where
 
 async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResult {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-		let trace = RpcTracing::method_call(&req.method, &req.id);
+		let trace = RpcTracing::method_call(&req.method);
 		let _enter = trace.span().enter();
 
 		rx_log_from_json(&req, call.max_log_length);

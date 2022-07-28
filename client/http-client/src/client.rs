@@ -189,7 +189,7 @@ impl ClientT for HttpClient {
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
 		let request = RequestSer::new(&id, method, params);
-		let trace = RpcTracing::method_call(method, &id);
+		let trace = RpcTracing::method_call(method);
 		let _enter = trace.span().enter();
 
 		let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
