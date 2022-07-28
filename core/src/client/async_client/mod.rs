@@ -269,7 +269,7 @@ impl ClientT for Client {
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
-		let trace = RpcTracing::method_call(method);
+		let trace = RpcTracing::method_call(method, &id);
 		let _enter = trace.span().enter();
 
 		let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
@@ -363,10 +363,11 @@ impl SubscriptionClientT for Client {
 
 		let guard = self.id_manager.next_request_ids(2)?;
 		let mut ids: Vec<Id> = guard.inner();
-		let trace = RpcTracing::method_call(subscribe_method);
+		let id = ids[0].clone();
+
+		let trace = RpcTracing::method_call(subscribe_method, &id);
 		let _enter = trace.span().enter();
 
-		let id = ids[0].clone();
 
 		let raw = serde_json::to_string(&RequestSer::new(&id, subscribe_method, params)).map_err(Error::ParseError)?;
 

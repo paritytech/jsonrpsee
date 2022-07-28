@@ -685,7 +685,8 @@ async fn process_health_request<M: Middleware>(
 	request_start: M::Instant,
 	max_log_length: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
-	let trace = RpcTracing::method_call(&health_api.method);
+	let id = Id::Number(100);
+	let trace = RpcTracing::method_call(&health_api.method, &id);
 	let _enter = trace.span().enter();
 
 	tx_log_from_str("HTTP health API", max_log_length);
@@ -805,7 +806,7 @@ where
 
 async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-		let trace = RpcTracing::method_call(&req.method);
+		let trace = RpcTracing::method_call(&req.method, &req.id);
 		let _enter = trace.span().enter();
 
 		rx_log_from_json(&req, call.max_log_length);

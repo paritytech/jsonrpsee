@@ -1,5 +1,6 @@
 use serde::Serialize;
 use tracing::Level;
+use jsonrpsee_types::Id;
 
 #[derive(Debug)]
 /// Wrapper over [`tracing::Span`] to trace individual method calls, notifications and similar.
@@ -9,8 +10,8 @@ impl RpcTracing {
 	/// Create a `method_call` tracing target.
 	///
 	/// To enable this you need to call `RpcTracing::method_call("some_method").span().enable()`.
-	pub fn method_call(method: &str) -> Self {
-		Self(tracing::span!(tracing::Level::DEBUG, "method_call", %method))
+	pub fn method_call(method: &str, id:&Id) -> Self {
+		Self(tracing::span!(tracing::Level::DEBUG, "method_call", %method, id =? id))
 	}
 
 	/// Create a `notification` tracing target.
