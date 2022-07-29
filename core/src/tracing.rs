@@ -31,11 +31,6 @@ impl RpcTracing {
 	pub fn span(&self) -> &tracing::Span {
 		&self.0
 	}
-
-	/// Get the inner span.
-	pub fn into_span(self) -> tracing::Span {
-		self.0
-	}
 }
 
 /// Helper for writing trace logs from str.

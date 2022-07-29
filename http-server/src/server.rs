@@ -686,41 +686,39 @@ async fn process_health_request<M: Middleware>(
 	max_log_length: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let trace = RpcTracing::method_call(&health_api.method);
-	let response = async {
+	async {
 		tx_log_from_str("HTTP health API", max_log_length);
-		match methods.method_with_name(&health_api.method) {
-		None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
-		Some((_name, method_callback)) => match method_callback.inner() {
-			MethodKind::Sync(callback) => (callback)(Id::Number(0), Params::new(None), max_response_body_size as usize),
-			MethodKind::Async(callback) => {
-				(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None)
-					.in_current_span()
-					.await
+		let response = match methods.method_with_name(&health_api.method) {
+			None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
+			Some((_name, method_callback)) => match method_callback.inner() {
+				MethodKind::Sync(callback) => (callback)(Id::Number(0), Params::new(None), max_response_body_size as usize),
+				MethodKind::Async(callback) => {
+					(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None).await
+				}
+				MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
+					MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
+				}
+			},
+		};
+
+		rx_log_from_str(&response.result, max_log_length);
+		middleware.on_result(&health_api.method, response.success, request_start);
+		middleware.on_response(&response.result, request_start);
+
+		if response.success {
+			#[derive(serde::Deserialize)]
+			struct RpcPayload<'a> {
+				#[serde(borrow)]
+				result: &'a serde_json::value::RawValue,
 			}
 
-			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
-			}
-		},
-	}}.instrument(trace.into_span()).await;
-
-	rx_log_from_str(&response.result, max_log_length);
-	middleware.on_result(&health_api.method, response.success, request_start);
-	middleware.on_response(&response.result, request_start);
-
-	if response.success {
-		#[derive(serde::Deserialize)]
-		struct RpcPayload<'a> {
-			#[serde(borrow)]
-			result: &'a serde_json::value::RawValue,
+			let payload: RpcPayload = serde_json::from_str(&response.result)
+				.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
+			Ok(response::ok_response(payload.result.to_string()))
+		} else {
+			Ok(response::internal_error())
 		}
-
-		let payload: RpcPayload = serde_json::from_str(&response.result)
-			.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
-		Ok(response::ok_response(payload.result.to_string()))
-	} else {
-		Ok(response::internal_error())
-	}
+	}.instrument(trace.span().clone()).await
 }
 
 #[derive(Debug, Clone)]
@@ -764,8 +762,8 @@ where
 		let batch_stream = futures_util::stream::iter(batch);
 
 		let trace = RpcTracing::batch();
-		let batch_response = async{
-			batch_stream
+		return async {
+			let batch_response = batch_stream
 				.try_fold(
 					BatchResponseBuilder::new_with_limit(max_response_size as usize),
 					|batch_response, (req, call)| async move {
@@ -774,13 +772,13 @@ where
 						batch_response.append(&response)
 					},
 				)
-				.await
-		}.instrument(trace.into_span()).await;
+				.await;
 
-		return match batch_response {
-			Ok(batch) => batch.finish(),
-			Err(batch_err) => batch_err,
-		};
+			match batch_response {
+				Ok(batch) => batch.finish(),
+				Err(batch_err) => batch_err,
+			}
+		}.instrument(trace.span().clone()).await;
 	}
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Notif>>(&data) {
@@ -801,13 +799,13 @@ where
 async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
-		async{
+		async {
 			rx_log_from_json(&req, call.max_log_length);
 			let params = Params::new(req.params.map(|params| params.get()));
 			let name = &req.method;
 			let id = req.id;
 			execute_call(Call { name, params, id, call }).await
-		}.instrument(trace.into_span()).await
+		}.instrument(trace.span().clone()).await
 	} else if let Ok(req) = serde_json::from_slice::<Notif>(&data) {
 		let trace = RpcTracing::notification(&req.method);
 		let _enter = trace.span().enter();
