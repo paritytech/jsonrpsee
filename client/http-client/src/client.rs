@@ -178,7 +178,9 @@ impl ClientT for HttpClient {
 				Err(_) => Err(Error::RequestTimeout),
 				Ok(Err(e)) => Err(Error::Transport(e.into())),
 			}
-		}.instrument(trace.span().clone()).await
+		}
+		.instrument(trace.span().clone())
+		.await
 	}
 
 	/// Perform a request towards the server.
@@ -218,7 +220,9 @@ impl ClientT for HttpClient {
 			} else {
 				Err(Error::InvalidRequestId)
 			}
-		}.instrument(trace.span().clone()).await
+		}
+		.instrument(trace.span().clone())
+		.await
 	}
 
 	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
@@ -241,9 +245,8 @@ impl ClientT for HttpClient {
 				request_set.insert(&ids[pos], pos);
 			}
 
-			let fut = self
-				.transport
-				.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+			let fut =
+				self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
 
 			let body = match tokio::time::timeout(self.request_timeout, fut).await {
 				Ok(Ok(body)) => body,
@@ -267,7 +270,9 @@ impl ClientT for HttpClient {
 				responses[pos] = rp.result
 			}
 			Ok(responses)
-		}.instrument(trace.span().clone()).await
+		}
+		.instrument(trace.span().clone())
+		.await
 	}
 }
 

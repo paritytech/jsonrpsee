@@ -691,7 +691,9 @@ async fn process_health_request<M: Middleware>(
 		let response = match methods.method_with_name(&health_api.method) {
 			None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
 			Some((_name, method_callback)) => match method_callback.inner() {
-				MethodKind::Sync(callback) => (callback)(Id::Number(0), Params::new(None), max_response_body_size as usize),
+				MethodKind::Sync(callback) => {
+					(callback)(Id::Number(0), Params::new(None), max_response_body_size as usize)
+				}
 				MethodKind::Async(callback) => {
 					(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None).await
 				}
@@ -718,7 +720,9 @@ async fn process_health_request<M: Middleware>(
 		} else {
 			Ok(response::internal_error())
 		}
-	}.instrument(trace.span().clone()).await
+	}
+	.instrument(trace.span().clone())
+	.await
 }
 
 #[derive(Debug, Clone)]
@@ -778,7 +782,9 @@ where
 				Ok(batch) => batch.finish(),
 				Err(batch_err) => batch_err,
 			}
-		}.instrument(trace.span().clone()).await;
+		}
+		.instrument(trace.span().clone())
+		.await;
 	}
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Notif>>(&data) {
@@ -805,7 +811,9 @@ async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_,
 			let name = &req.method;
 			let id = req.id;
 			execute_call(Call { name, params, id, call }).await
-		}.instrument(trace.span().clone()).await
+		}
+		.instrument(trace.span().clone())
+		.await
 	} else if let Ok(req) = serde_json::from_slice::<Notif>(&data) {
 		let trace = RpcTracing::notification(&req.method);
 		let _enter = trace.span().enter();

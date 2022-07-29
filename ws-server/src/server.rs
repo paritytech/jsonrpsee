@@ -870,10 +870,7 @@ where
 						BatchResponseBuilder::new_with_limit(max_response_size as usize),
 						|batch_response, (req, call)| async move {
 							let params = Params::new(req.params.map(|params| params.get()));
-
-							let response =
-								execute_call(Call { name: &req.method, params, id: req.id, call }).await;
-
+							let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
 							batch_response.append(response.as_inner())
 						},
 					)
@@ -883,7 +880,9 @@ where
 					Ok(batch) => batch.finish(),
 					Err(batch_err) => batch_err,
 				}
-			}.instrument(trace.span().clone()).await
+			}
+			.instrument(trace.span().clone())
+			.await;
 		} else {
 			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
 		};
@@ -904,8 +903,10 @@ async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_,
 			let name = &req.method;
 			let id = req.id;
 
-			execute_call(Call { name, params, id, call }).in_current_span().await
-		}.instrument(trace.span().clone()).await
+			execute_call(Call { name, params, id, call }).await
+		}
+		.instrument(trace.span().clone())
+		.await
 	} else {
 		let (id, code) = prepare_error(&data);
 		MethodResult::SendAndMiddleware(MethodResponse::error(id, ErrorObject::from(code)))
