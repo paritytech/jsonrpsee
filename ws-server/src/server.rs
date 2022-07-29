@@ -861,27 +861,28 @@ where
 			let batch_stream = futures_util::stream::iter(batch);
 
 			let trace = RpcTracing::batch();
-			let _enter = trace.span().enter();
-			let max_response_size = call.max_response_body_size;
 
-			let batch_response = batch_stream
-				.try_fold(
-					BatchResponseBuilder::new_with_limit(max_response_size as usize),
-					|batch_response, (req, call)| async move {
-						let params = Params::new(req.params.map(|params| params.get()));
+			return async {
+				let max_response_size = call.max_response_body_size;
 
-						let response =
-							execute_call(Call { name: &req.method, params, id: req.id, call }).in_current_span().await;
+				let batch_response = batch_stream
+					.try_fold(
+						BatchResponseBuilder::new_with_limit(max_response_size as usize),
+						|batch_response, (req, call)| async move {
+							let params = Params::new(req.params.map(|params| params.get()));
+							let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+							batch_response.append(response.as_inner())
+						},
+					)
+					.await;
 
-						batch_response.append(response.as_inner())
-					},
-				)
-				.await;
-
-			return match batch_response {
-				Ok(batch) => batch.finish(),
-				Err(batch_err) => batch_err,
-			};
+				match batch_response {
+					Ok(batch) => batch.finish(),
+					Err(batch_err) => batch_err,
+				}
+			}
+			.instrument(trace.into_span())
+			.await;
 		} else {
 			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
 		};
@@ -894,15 +895,18 @@ where
 async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResult {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
-		let _enter = trace.span().enter();
 
-		rx_log_from_json(&req, call.max_log_length);
+		async {
+			rx_log_from_json(&req, call.max_log_length);
 
-		let params = Params::new(req.params.map(|params| params.get()));
-		let name = &req.method;
-		let id = req.id;
+			let params = Params::new(req.params.map(|params| params.get()));
+			let name = &req.method;
+			let id = req.id;
 
-		execute_call(Call { name, params, id, call }).in_current_span().await
+			execute_call(Call { name, params, id, call }).await
+		}
+		.instrument(trace.into_span())
+		.await
 	} else {
 		let (id, code) = prepare_error(&data);
 		MethodResult::SendAndMiddleware(MethodResponse::error(id, ErrorObject::from(code)))
