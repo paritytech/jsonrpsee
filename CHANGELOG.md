@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog].
 
 ## [v0.15.1] - 2022-07-29
 
-v0.15.1 is release that fixes incorrect tracing.
+This release fixes some incorrect tracing spans.
 
 ### [Fixed]
 -  [Bug Fix] - Incorrect trace caused by use of Span::enter in asynchronous code [#835](https://github.com/paritytech/jsonrpsee/pull/835)
