@@ -179,7 +179,7 @@ impl ClientT for HttpClient {
 				Ok(Err(e)) => Err(Error::Transport(e.into())),
 			}
 		}
-		.instrument(trace.span().clone())
+		.instrument(trace.into_span())
 		.await
 	}
 
@@ -221,7 +221,7 @@ impl ClientT for HttpClient {
 				Err(Error::InvalidRequestId)
 			}
 		}
-		.instrument(trace.span().clone())
+		.instrument(trace.into_span())
 		.await
 	}
 
@@ -271,7 +271,7 @@ impl ClientT for HttpClient {
 			}
 			Ok(responses)
 		}
-		.instrument(trace.span().clone())
+		.instrument(trace.into_span())
 		.await
 	}
 }

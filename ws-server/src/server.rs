@@ -881,7 +881,7 @@ where
 					Err(batch_err) => batch_err,
 				}
 			}
-			.instrument(trace.span().clone())
+			.instrument(trace.into_span())
 			.await;
 		} else {
 			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
@@ -905,7 +905,7 @@ async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_,
 
 			execute_call(Call { name, params, id, call }).await
 		}
-		.instrument(trace.span().clone())
+		.instrument(trace.into_span())
 		.await
 	} else {
 		let (id, code) = prepare_error(&data);

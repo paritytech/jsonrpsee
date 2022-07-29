@@ -260,7 +260,7 @@ impl ClientT for Client {
                 Either::Left((Err(_), _)) => Err(self.read_error_from_backend().await),
                 Either::Right((_, _)) => Err(Error::RequestTimeout),
             }
-        }.instrument(trace.span().clone()).await
+        }.instrument(trace.into_span()).await
     }
 
 	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
@@ -296,7 +296,7 @@ impl ClientT for Client {
             rx_log_from_json(&Response::new(&json_value, id), self.max_log_length);
 
             serde_json::from_value(json_value).map_err(Error::ParseError)
-        }.instrument(trace.span().clone()).await
+        }.instrument(trace.into_span()).await
     }
 
 	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
@@ -340,7 +340,7 @@ impl ClientT for Client {
             let values: Result<_, _> =
                 json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
             Ok(values?)
-        }.instrument(trace.span().clone()).await
+        }.instrument(trace.into_span()).await
 	}
 }
 
@@ -402,7 +402,7 @@ impl SubscriptionClientT for Client {
             rx_log_from_json(&Response::new(&sub_id, id), self.max_log_length);
 
             Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
-        }.instrument(trace.span().clone()).await
+        }.instrument(trace.into_span()).await
     }
 
 	/// Subscribe to a specific method.

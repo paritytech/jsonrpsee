@@ -721,7 +721,7 @@ async fn process_health_request<M: Middleware>(
 			Ok(response::internal_error())
 		}
 	}
-	.instrument(trace.span().clone())
+	.instrument(trace.into_span())
 	.await
 }
 
@@ -783,7 +783,7 @@ where
 				Err(batch_err) => batch_err,
 			}
 		}
-		.instrument(trace.span().clone())
+		.instrument(trace.into_span())
 		.await;
 	}
 
@@ -812,12 +812,12 @@ async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_,
 			let id = req.id;
 			execute_call(Call { name, params, id, call }).await
 		}
-		.instrument(trace.span().clone())
+		.instrument(trace.into_span())
 		.await
 	} else if let Ok(req) = serde_json::from_slice::<Notif>(&data) {
 		let trace = RpcTracing::notification(&req.method);
-		let _enter = trace.span().enter();
-
+		let span = trace.into_span();
+		let _enter = span.enter();
 		rx_log_from_json(&req, call.max_log_length);
 
 		MethodResponse { result: String::new(), success: true }
