@@ -23,7 +23,6 @@ use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
-use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::{
@@ -158,7 +157,7 @@ impl ClientBuilder {
 		S: TransportSenderT + Send,
 		R: TransportReceiverT + Send,
 	{
-		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
+		let (to_back, from_front) = tokio::sync::mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 		let ping_interval = self.ping_interval;
@@ -204,7 +203,7 @@ impl ClientBuilder {
 #[derive(Debug)]
 pub struct Client {
 	/// Channel to send requests to the background task.
-	to_back: mpsc::Sender<FrontToBack>,
+	to_back: tokio::sync::mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Mutex<ErrorFromBack>,
@@ -232,11 +231,15 @@ impl Client {
 		*err_lock = next_state;
 		err
 	}
-}
 
-impl Drop for Client {
-	fn drop(&mut self) {
-		self.to_back.close_channel();
+	/// Completes when the client is disconnected or the client's background task encountered an error.
+	/// If the client is already disconnected, the future produced by this method will complete immediately.
+	///
+	/// # Cancel safety
+	///
+	/// This method is cancel safe.
+	pub async fn notify_on_disconnect(&self) {
+		self.to_back.closed().await;
 	}
 }
 
@@ -252,8 +255,9 @@ impl ClientT for Client {
             let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
             tx_log_from_str(&raw, self.max_log_length);
 
-            let mut sender = self.to_back.clone();
+            let sender = self.to_back.clone();
             let fut = sender.send(FrontToBack::Notification(raw));
+            futures_util::pin_mut!(fut);
 
             match future::select(fut, Delay::new(self.request_timeout)).await {
                 Either::Left((Ok(()), _)) => Ok(()),
@@ -617,7 +621,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 async fn background_task<S, R>(
 	mut sender: S,
 	receiver: R,
-	mut frontend: mpsc::Receiver<FrontToBack>,
+	frontend: tokio::sync::mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 	ping_interval: Option<Duration>,
@@ -633,10 +637,12 @@ async fn background_task<S, R>(
 	});
 	futures_util::pin_mut!(backend_event);
 
+	let mut frontend_stream = tokio_stream::wrappers::ReceiverStream::new(frontend);
+
 	// Place frontend and backend messages into their own select.
 	// This implies that either messages are received (both front or backend),
 	// or the submitted ping timer expires (if provided).
-	let next_frontend = frontend.next();
+	let next_frontend = frontend_stream.next();
 	let next_backend = backend_event.next();
 	let mut message_fut = future::select(next_frontend, next_backend);
 
@@ -662,7 +668,7 @@ async fn background_task<S, R>(
 					break;
 				}
 				// Advance frontend, save backend.
-				message_fut = future::select(frontend.next(), backend);
+				message_fut = future::select(frontend_stream.next(), backend);
 			}
 			// Message received from the backend.
 			Either::Left((Either::Right((backend_value, frontend)), _)) => {
