@@ -166,6 +166,10 @@ async fn calling_method_without_server_using_proc_macro() {
 		/// Async method.
 		#[method(name = "revolution")]
 		async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> Result<String, Error>;
+
+		/// Async method with option.
+		#[method(name = "can_have_options")]
+		async fn can_have_options(&self, x: usize) -> Result<Option<String>, Error>;
 	}
 
 	struct CoolServerImpl;
@@ -182,6 +186,14 @@ async fn calling_method_without_server_using_proc_macro() {
 
 		async fn can_have_any_name(&self, beverage: Beverage, some_bytes: Vec<u8>) -> Result<String, Error> {
 			Ok(format!("drink: {:?}, phases: {:?}", beverage, some_bytes))
+		}
+
+		async fn can_have_options(&self, x: usize) -> Result<Option<String>, Error> {
+			match x {
+				0 => Ok(Some("one".to_string())),
+				1 => Ok(None),
+				_ => Err(Error::Custom("too big number".to_string())),
+			}
 		}
 	}
 	let module = CoolServerImpl.into_rpc();
@@ -203,6 +215,20 @@ async fn calling_method_without_server_using_proc_macro() {
 	// Call async method with params and context
 	let result: String = module.call("revolution", (Beverage { ice: true }, vec![1, 2, 3])).await.unwrap();
 	assert_eq!(&result, "drink: Beverage { ice: true }, phases: [1, 2, 3]");
+
+	// Call async method with option which is `Some`
+	let result: Option<String> = module.call("can_have_options", vec![0]).await.unwrap();
+	assert_eq!(result, Some("one".to_string()));
+
+	// Call async method with option which is `None`
+	let result: Option<String> = module.call("can_have_options", vec![1]).await.unwrap();
+	assert_eq!(result, None);
+
+	// Call async method with option which should `Err`.
+	let err = module.call::<_, Option<String>>("can_have_options", vec![2]).await.unwrap_err();
+	assert!(matches!(err,
+		Error::Call(CallError::Custom(err)) if err.message() == "Custom error: too big number"
+	));
 }
 
 #[tokio::test]
