@@ -11,7 +11,6 @@ use crate::client::{
 use crate::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
 
 use core::time::Duration;
-use std::sync::Arc;
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
@@ -32,7 +31,6 @@ use jsonrpsee_types::{
 	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
-use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
 use super::{FrontToBack, IdKind, RequestIdManager};
@@ -164,20 +162,9 @@ impl ClientBuilder {
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 		let ping_interval = self.ping_interval;
-		let notify_on_close = Arc::new(Notify::new());
-		let notify_on_close_back = notify_on_close.clone();
 
 		tokio::spawn(async move {
-			background_task(
-				sender,
-				receiver,
-				from_front,
-				err_tx,
-				max_notifs_per_subscription,
-				ping_interval,
-				notify_on_close_back,
-			)
-			.await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, ping_interval).await;
 		});
 		Client {
 			to_back,
@@ -185,7 +172,6 @@ impl ClientBuilder {
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
-			notify: notify_on_close,
 		}
 	}
 
@@ -230,8 +216,6 @@ pub struct Client {
 	///
 	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
-	/// Notify when the client is disconnected or encountered an error.
-	notify: Arc<Notify>,
 }
 
 impl Client {
@@ -247,16 +231,6 @@ impl Client {
 		let (next_state, err) = from_back.read_error().await;
 		*err_lock = next_state;
 		err
-	}
-
-	/// Completes when the client is disconnected or the client's background task encountered an error.
-	///
-	/// # Cancel safety
-	///
-	/// This method is cancel safe. Once the client is disconnected, it stays disconnected forever and all
-	/// future calls to this method will return immediately.
-	pub async fn notify_on_disconnect(&self) {
-		self.notify.notified().await;
 	}
 }
 
@@ -647,7 +621,6 @@ async fn background_task<S, R>(
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 	ping_interval: Option<Duration>,
-	notify_on_close: Arc<Notify>,
 ) where
 	S: TransportSenderT,
 	R: TransportReceiverT,
@@ -719,7 +692,6 @@ async fn background_task<S, R>(
 			}
 		};
 	}
-	notify_on_close.notify_waiters();
 	// Send close message to the server.
 	let _ = sender.close().await;
 }
