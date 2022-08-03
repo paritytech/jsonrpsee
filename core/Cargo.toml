@@ -52,7 +52,7 @@ server = [
 	"unicase",
 	"http",
 ]
-client = ["futures-util/sink", "futures-channel/sink", "futures-channel/std"]
+client = ["futures-util/sink", "futures-channel/sink", "futures-channel/std", "tokio/sync"]
 async-client = [
 	"async-lock",
 	"client",
