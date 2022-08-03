@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use hyper::HeaderMap;
-use jsonrpsee::core::middleware::{HttpMiddleware, MethodKind, WsMiddleware};
+use jsonrpsee::core::metrics::{HttpMetrics, MethodKind, WsMetrics};
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
@@ -56,7 +56,7 @@ struct CounterInner {
 	calls: HashMap<String, (u32, Vec<u32>)>,
 }
 
-impl WsMiddleware for Counter {
+impl WsMetrics for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 
@@ -95,7 +95,7 @@ impl WsMiddleware for Counter {
 	}
 }
 
-impl HttpMiddleware for Counter {
+impl HttpMetrics for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 

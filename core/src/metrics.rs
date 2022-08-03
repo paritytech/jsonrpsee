@@ -57,12 +57,12 @@ impl std::fmt::Display for MethodKind {
 	}
 }
 
-/// Defines a middleware specifically for HTTP requests with callbacks during the RPC request life-cycle.
+/// Defines RPC metrics specifically for HTTP requests with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
 /// See [`HttpServerBuilder::set_middleware`](../../jsonrpsee_http_server/struct.HttpServerBuilder.html#method.set_middleware) method
 /// for examples.
-pub trait HttpMiddleware: Send + Sync + Clone + 'static {
+pub trait HttpMetrics: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware
 	/// measures time, if at all, is entirely up to the implementation.
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
@@ -80,12 +80,12 @@ pub trait HttpMiddleware: Send + Sync + Clone + 'static {
 	fn on_response(&self, result: &str, _started_at: Self::Instant);
 }
 
-/// Defines a middleware specifically for WebSocket connections with callbacks during the RPC request life-cycle.
+/// Defines RPC metrics specifically for WebSocket connections with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
 /// See the [`WsServerBuilder::set_middleware`](../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.set_middleware)
 /// for examples.
-pub trait WsMiddleware: Send + Sync + Clone + 'static {
+pub trait WsMetrics: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware
 	/// measures time, if at all, is entirely up to the implementation.
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
@@ -109,7 +109,7 @@ pub trait WsMiddleware: Send + Sync + Clone + 'static {
 	fn on_disconnect(&self, remote_addr: std::net::SocketAddr);
 }
 
-impl HttpMiddleware for () {
+impl HttpMetrics for () {
 	type Instant = ();
 
 	fn on_request(&self, _: std::net::SocketAddr, _: &Headers) -> Self::Instant {}
@@ -121,7 +121,7 @@ impl HttpMiddleware for () {
 	fn on_response(&self, _: &str, _: Self::Instant) {}
 }
 
-impl WsMiddleware for () {
+impl WsMetrics for () {
 	type Instant = ();
 
 	fn on_connect(&self, _: std::net::SocketAddr, _: &Headers) {}
@@ -137,10 +137,10 @@ impl WsMiddleware for () {
 	fn on_disconnect(&self, _: std::net::SocketAddr) {}
 }
 
-impl<A, B> WsMiddleware for (A, B)
+impl<A, B> WsMetrics for (A, B)
 where
-	A: WsMiddleware,
-	B: WsMiddleware,
+	A: WsMetrics,
+	B: WsMetrics,
 {
 	type Instant = (A::Instant, B::Instant);
 
@@ -172,10 +172,10 @@ where
 	}
 }
 
-impl<A, B> HttpMiddleware for (A, B)
+impl<A, B> HttpMetrics for (A, B)
 where
-	A: HttpMiddleware,
-	B: HttpMiddleware,
+	A: HttpMetrics,
+	B: HttpMetrics,
 {
 	type Instant = (A::Instant, B::Instant);
 

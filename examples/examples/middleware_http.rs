@@ -28,14 +28,14 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{self, Headers, MethodKind, Params};
+use jsonrpsee::core::metrics::{self, Headers, MethodKind, Params};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 
 #[derive(Clone)]
 struct Timings;
 
-impl middleware::HttpMiddleware for Timings {
+impl metrics::HttpMetrics for Timings {
 	type Instant = Instant;
 
 	fn on_request(&self, remote_addr: SocketAddr, headers: &Headers) -> Self::Instant {

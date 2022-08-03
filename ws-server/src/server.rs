@@ -42,7 +42,7 @@ use futures_util::TryStreamExt;
 use http::header::{HOST, ORIGIN};
 use http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::{self, WsMiddleware as Middleware};
+use jsonrpsee_core::metrics::{self, WsMetrics as Middleware};
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
@@ -655,13 +655,13 @@ impl<M> Builder<M> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::middleware::{WsMiddleware, Headers, MethodKind, Params};
+	/// use jsonrpsee_core::metrics::{WsMetrics, Headers, MethodKind, Params};
 	/// use jsonrpsee_ws_server::WsServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware;
 	///
-	/// impl WsMiddleware for MyMiddleware {
+	/// impl WsMetrics for MyMiddleware {
 	///     type Instant = Instant;
 	///
 	///     fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
@@ -935,13 +935,13 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResult {
 
 	let response = match methods.method_with_name(name) {
 		None => {
-			middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
+			middleware.on_call(name, params.clone(), metrics::MethodKind::Unknown);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
 			MethodResult::SendAndMiddleware(response)
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				middleware.on_call(name, params.clone(), metrics::MethodKind::MethodCall);
 
 				match method.claim(name, resources) {
 					Ok(guard) => {
@@ -957,7 +957,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResult {
 				}
 			}
 			MethodKind::Async(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				middleware.on_call(name, params.clone(), metrics::MethodKind::MethodCall);
 
 				match method.claim(name, resources) {
 					Ok(guard) => {
@@ -976,7 +976,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResult {
 				}
 			}
 			MethodKind::Subscription(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::Subscription);
+				middleware.on_call(name, params.clone(), metrics::MethodKind::Subscription);
 
 				match method.claim(name, resources) {
 					Ok(guard) => {
@@ -998,7 +998,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResult {
 				}
 			}
 			MethodKind::Unsubscription(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::Unsubscription);
+				middleware.on_call(name, params.clone(), metrics::MethodKind::Unsubscription);
 
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);

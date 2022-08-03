@@ -41,7 +41,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
-use jsonrpsee_core::middleware::{self, HttpMiddleware as Middleware};
+use jsonrpsee_core::metrics::{self, HttpMetrics as Middleware};
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
 use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
@@ -102,13 +102,13 @@ impl<M> Builder<M> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::middleware::{HttpMiddleware, Headers, MethodKind, Params};
+	/// use jsonrpsee_core::metrics::{HttpMetrics, Headers, MethodKind, Params};
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyMiddleware;
 	///
-	/// impl HttpMiddleware for MyMiddleware {
+	/// impl HttpMetrics for MyMiddleware {
 	///     type Instant = Instant;
 	///
 	///     // Called once the HTTP request is received, it may be a single JSON-RPC call
@@ -834,12 +834,12 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 
 	let response = match methods.method_with_name(name) {
 		None => {
-			middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
+			middleware.on_call(name, params.clone(), metrics::MethodKind::Unknown);
 			MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				middleware.on_call(name, params.clone(), metrics::MethodKind::MethodCall);
 
 				match method.claim(name, resources) {
 					Ok(guard) => {
@@ -854,7 +854,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 				}
 			}
 			MethodKind::Async(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				middleware.on_call(name, params.clone(), metrics::MethodKind::MethodCall);
 				match method.claim(name, resources) {
 					Ok(guard) => {
 						let id = id.into_owned();
@@ -869,7 +869,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 				}
 			}
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
+				middleware.on_call(name, params.clone(), metrics::MethodKind::Unknown);
 				tracing::error!("Subscriptions not supported on HTTP");
 				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
 			}
