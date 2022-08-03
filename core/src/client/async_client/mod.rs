@@ -203,7 +203,7 @@ impl ClientBuilder {
 #[derive(Debug)]
 pub struct Client {
 	/// Channel to send requests to the background task.
-	to_back: tokio::sync::mpsc::Sender<FrontToBack>,
+	to_back: tokio::sync::mpsc::Sender<Option<FrontToBack>>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Mutex<ErrorFromBack>,
@@ -243,6 +243,16 @@ impl Client {
 	}
 }
 
+impl Drop for Client {
+	fn drop(&mut self) {
+		// The `to_back` is cloned to create subscriptions.
+		// The tokio's channel is closed when all senders are dropped.
+		// Best effort to close the chanel by sending `None`, however this
+		// is not guaranteed to happen (ie, channel is full).
+		let _ = self.to_back.send(None).now_or_never();
+	}
+}
+
 #[async_trait]
 impl ClientT for Client {
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
@@ -256,7 +266,7 @@ impl ClientT for Client {
             tx_log_from_str(&raw, self.max_log_length);
 
             let sender = self.to_back.clone();
-            let fut = sender.send(FrontToBack::Notification(raw));
+            let fut = sender.send(Some(FrontToBack::Notification(raw)));
             futures_util::pin_mut!(fut);
 
             match future::select(fut, Delay::new(self.request_timeout)).await {
@@ -283,7 +293,7 @@ impl ClientT for Client {
             if self
                 .to_back
                 .clone()
-                .send(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) }))
+                .send(Some(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) })))
                 .await
                 .is_err()
             {
@@ -325,7 +335,7 @@ impl ClientT for Client {
             if self
                 .to_back
                 .clone()
-                .send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
+                .send(Some(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx })))
                 .await
                 .is_err()
             {
@@ -382,13 +392,13 @@ impl SubscriptionClientT for Client {
             if self
                 .to_back
                 .clone()
-                .send(FrontToBack::Subscribe(SubscriptionMessage {
+                .send(Some(FrontToBack::Subscribe(SubscriptionMessage {
                     raw,
                     subscribe_id: ids.swap_remove(0),
                     unsubscribe_id: ids.swap_remove(0),
                     unsubscribe_method: unsubscribe_method.to_owned(),
                     send_back: send_back_tx,
-                }))
+                })))
                 .await
                 .is_err()
             {
@@ -418,10 +428,10 @@ impl SubscriptionClientT for Client {
 		if self
 			.to_back
 			.clone()
-			.send(FrontToBack::RegisterNotification(RegisterNotificationMessage {
+			.send(Some(FrontToBack::RegisterNotification(RegisterNotificationMessage {
 				send_back: send_back_tx,
 				method: method.to_owned(),
-			}))
+			})))
 			.await
 			.is_err()
 		{
@@ -621,7 +631,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 async fn background_task<S, R>(
 	mut sender: S,
 	receiver: R,
-	frontend: tokio::sync::mpsc::Receiver<FrontToBack>,
+	frontend: tokio::sync::mpsc::Receiver<Option<FrontToBack>>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 	ping_interval: Option<Duration>,
@@ -668,6 +678,13 @@ async fn background_task<S, R>(
 		match future::select(message_fut, submit_ping).await {
 			// Message received from the frontend.
 			Either::Left((Either::Left((frontend_value, backend)), _)) => {
+				// Client dropped the connection
+				let frontend_value = if let Some(value) = frontend_value {
+					value
+				} else {
+					break;
+				};
+
 				if let Err(err) =
 					handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription)
 						.await

@@ -197,7 +197,7 @@ pub enum SubscriptionKind {
 #[derive(Debug)]
 pub struct Subscription<Notif> {
 	/// Channel to send requests to the background task.
-	to_back: tokio::sync::mpsc::Sender<FrontToBack>,
+	to_back: tokio::sync::mpsc::Sender<Option<FrontToBack>>,
 	/// Channel from which we receive notifications from the server, as encoded `JsonValue`s.
 	notifs_rx: mpsc::Receiver<JsonValue>,
 	/// Callback kind.
@@ -213,7 +213,7 @@ impl<Notif> std::marker::Unpin for Subscription<Notif> {}
 impl<Notif> Subscription<Notif> {
 	/// Create a new subscription.
 	pub fn new(
-		to_back: tokio::sync::mpsc::Sender<FrontToBack>,
+		to_back: tokio::sync::mpsc::Sender<Option<FrontToBack>>,
 		notifs_rx: mpsc::Receiver<JsonValue>,
 		kind: SubscriptionKind,
 	) -> Self {
@@ -231,7 +231,7 @@ impl<Notif> Subscription<Notif> {
 			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
 			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
 		};
-		self.to_back.send(msg).await?;
+		self.to_back.send(Some(msg)).await?;
 
 		// wait until notif channel is closed then the subscription was closed.
 		while self.notifs_rx.next().await.is_some() {}
@@ -356,7 +356,7 @@ impl<Notif> Drop for Subscription<Notif> {
 			Some(SubscriptionKind::Subscription(sub_id)) => FrontToBack::SubscriptionClosed(sub_id),
 			None => return,
 		};
-		let _ = self.to_back.send(msg).now_or_never();
+		let _ = self.to_back.send(Some(msg)).now_or_never();
 	}
 }
 
