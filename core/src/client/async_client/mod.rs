@@ -238,7 +238,7 @@ impl Client {
 	/// # Cancel safety
 	///
 	/// This method is cancel safe.
-	pub async fn notify_on_disconnect(&self) {
+	pub async fn on_disconnect(&self) {
 		self.to_back.closed().await;
 	}
 }
