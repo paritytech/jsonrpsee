@@ -637,12 +637,21 @@ async fn background_task<S, R>(
 	});
 	futures_util::pin_mut!(backend_event);
 
-	let mut frontend_stream = tokio_stream::wrappers::ReceiverStream::new(frontend);
+	let frontend_event = futures_util::stream::unfold(frontend, |mut frontend| async {
+		let res = frontend.recv().await;
+		if let Some(res) = res {
+			Some((res, frontend))
+		} else {
+			None
+		}
+	});
+	futures_util::pin_mut!(frontend_event);
+
 
 	// Place frontend and backend messages into their own select.
 	// This implies that either messages are received (both front or backend),
 	// or the submitted ping timer expires (if provided).
-	let next_frontend = frontend_stream.next();
+	let next_frontend = frontend_event.next();
 	let next_backend = backend_event.next();
 	let mut message_fut = future::select(next_frontend, next_backend);
 
@@ -668,7 +677,7 @@ async fn background_task<S, R>(
 					break;
 				}
 				// Advance frontend, save backend.
-				message_fut = future::select(frontend_stream.next(), backend);
+				message_fut = future::select(frontend_event.next(), backend);
 			}
 			// Message received from the backend.
 			Either::Left((Either::Right((backend_value, frontend)), _)) => {
