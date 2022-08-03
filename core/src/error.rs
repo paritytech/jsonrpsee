@@ -26,6 +26,8 @@
 
 use std::fmt;
 
+use tokio::sync::mpsc::error::SendError as TokioSendError;
+
 use jsonrpsee_types::error::{
 	CallError, ErrorObject, ErrorObjectOwned, CALL_EXECUTION_FAILED_CODE, INVALID_PARAMS_CODE, SUBSCRIPTION_CLOSED,
 	UNKNOWN_ERROR_CODE,
@@ -65,7 +67,7 @@ pub enum Error {
 	Transport(#[source] anyhow::Error),
 	/// Frontend/backend channel error.
 	#[error("Frontend/backend channel error: {0}")]
-	Internal(#[from] futures_channel::mpsc::SendError),
+	Internal(#[from] InternalError),
 	/// Invalid response,
 	#[error("Invalid response: {0}")]
 	InvalidResponse(Mismatch<String>),
@@ -132,6 +134,31 @@ pub enum Error {
 	/// Not implemented for HTTP clients.
 	#[error("Not implemented")]
 	HttpNotImplemented,
+}
+
+impl<T> From<TokioSendError<T>> for Error {
+	fn from(_: TokioSendError<T>) -> Self {
+		// This error can originate during a `send` call on the client's
+		// `to_back: tokio::sync::mpsc::Sender<FrontToBack>` (channel to communicate between
+		// frontend -> backend).
+		//
+		// The tokio's `SendError<T>` is plainly a wrapper over T.
+		//
+		// The error wraps the value passed to `send`.
+		// Tokio's `send` can only fail if the receive half of the channel is closed
+		// (either `close` was called, or the receiver was dropped).
+		Error::Internal(InternalError::Disconnected)
+	}
+}
+
+impl From<futures_channel::mpsc::SendError> for Error {
+	fn from(err: futures_channel::mpsc::SendError) -> Self {
+		if err.is_full() {
+			Error::Internal(InternalError::Full)
+		} else {
+			Error::Internal(InternalError::Disconnected)
+		}
+	}
 }
 
 impl Error {
@@ -229,3 +256,27 @@ impl From<hyper::Error> for Error {
 		Error::Transport(hyper_err.into())
 	}
 }
+
+/// Internal error for the frontend/backend channel.
+#[derive(Debug)]
+pub enum InternalError {
+	/// The channel is full.
+	Full,
+	/// The other part of the channel closed the connection.
+	Disconnected,
+}
+
+impl fmt::Display for InternalError {
+	fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			fmt,
+			"{}",
+			match self {
+				InternalError::Full => "no available capacity",
+				InternalError::Disconnected => "channel closed",
+			}
+		)
+	}
+}
+
+impl std::error::Error for InternalError {}

@@ -231,8 +231,7 @@ impl<Notif> Subscription<Notif> {
 			SubscriptionKind::Method(notif) => FrontToBack::UnregisterNotification(notif),
 			SubscriptionKind::Subscription(sub_id) => FrontToBack::SubscriptionClosed(sub_id),
 		};
-		// TODO: fix unwrap.
-		self.to_back.send(msg).await.unwrap();
+		self.to_back.send(msg).await?;
 
 		// wait until notif channel is closed then the subscription was closed.
 		while self.notifs_rx.next().await.is_some() {}

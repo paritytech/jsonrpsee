@@ -138,7 +138,7 @@ pub(crate) fn process_notification(manager: &mut RequestManager, notif: Notifica
 			Err(err) => {
 				tracing::error!("Error sending notification, dropping handler for {:?} error: {:?}", notif.method, err);
 				let _ = manager.remove_notification_handler(notif.method.into_owned());
-				Err(Error::Internal(err.into_send_error()))
+				Err(err.into_send_error().into())
 			}
 		},
 		None => {
