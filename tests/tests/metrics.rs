@@ -159,7 +159,7 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 	let server = HttpServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
-		.set_middleware(counter)
+		.set_metrics(counter)
 		.build("127.0.0.1:0")
 		.await?;
 
@@ -170,7 +170,7 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 }
 
 #[tokio::test]
-async fn ws_server_middleware() {
+async fn ws_server_metrics() {
 	let counter = Counter::default();
 	let (server_addr, server_handle) = websocket_server(test_module(), counter.clone()).await.unwrap();
 
@@ -201,7 +201,7 @@ async fn ws_server_middleware() {
 }
 
 #[tokio::test]
-async fn http_server_middleware() {
+async fn http_server_metrics() {
 	let counter = Counter::default();
 	let (server_addr, server_handle) = http_server(test_module(), counter.clone()).await.unwrap();
 
