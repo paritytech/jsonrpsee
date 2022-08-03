@@ -182,7 +182,7 @@ impl ClientBuilder {
 		S: TransportSenderT,
 		R: TransportReceiverT,
 	{
-		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
+		let (to_back, from_front) = tokio::sync::mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 
