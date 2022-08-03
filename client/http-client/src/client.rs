@@ -32,12 +32,11 @@ use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Re
 use async_trait::async_trait;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
-use jsonrpsee_core::tracing::RpcTracing;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
-use tracing_futures::Instrument;
+use tracing::instrument;
 
 /// Http Client Builder.
 ///
@@ -166,24 +165,21 @@ pub struct HttpClient {
 
 #[async_trait]
 impl ClientT for HttpClient {
+	#[instrument(name = "notification", skip(self, params))]
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
-		let trace = RpcTracing::notification(method);
-		async {
-			let notif = serde_json::to_string(&NotificationSer::new(method, params)).map_err(Error::ParseError)?;
+		let notif = serde_json::to_string(&NotificationSer::new(method, params)).map_err(Error::ParseError)?;
 
-			let fut = self.transport.send(notif);
+		let fut = self.transport.send(notif);
 
-			match tokio::time::timeout(self.request_timeout, fut).await {
-				Ok(Ok(ok)) => Ok(ok),
-				Err(_) => Err(Error::RequestTimeout),
-				Ok(Err(e)) => Err(Error::Transport(e.into())),
-			}
+		match tokio::time::timeout(self.request_timeout, fut).await {
+			Ok(Ok(ok)) => Ok(ok),
+			Err(_) => Err(Error::RequestTimeout),
+			Ok(Err(e)) => Err(Error::Transport(e.into())),
 		}
-		.instrument(trace.into_span())
-		.await
 	}
 
 	/// Perform a request towards the server.
+	#[instrument(name = "method_call", skip(self, params))]
 	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
@@ -191,94 +187,84 @@ impl ClientT for HttpClient {
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
 		let request = RequestSer::new(&id, method, params);
-		let trace = RpcTracing::method_call(method);
+		let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
 
-		async {
-			let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
-
-			let fut = self.transport.send_and_read_body(raw);
-			let body = match tokio::time::timeout(self.request_timeout, fut).await {
-				Ok(Ok(body)) => body,
-				Err(_e) => {
-					return Err(Error::RequestTimeout);
-				}
-				Ok(Err(e)) => {
-					return Err(Error::Transport(e.into()));
-				}
-			};
-
-			let response: Response<_> = match serde_json::from_slice(&body) {
-				Ok(response) => response,
-				Err(_) => {
-					let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-					return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
-				}
-			};
-
-			if response.id == id {
-				Ok(response.result)
-			} else {
-				Err(Error::InvalidRequestId)
+		let fut = self.transport.send_and_read_body(raw);
+		let body = match tokio::time::timeout(self.request_timeout, fut).await {
+			Ok(Ok(body)) => body,
+			Err(_e) => {
+				return Err(Error::RequestTimeout);
 			}
+			Ok(Err(e)) => {
+				return Err(Error::Transport(e.into()));
+			}
+		};
+
+		let response: Response<_> = match serde_json::from_slice(&body) {
+			Ok(response) => response,
+			Err(_) => {
+				let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+				return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
+			}
+		};
+
+		if response.id == id {
+			Ok(response.result)
+		} else {
+			Err(Error::InvalidRequestId)
 		}
-		.instrument(trace.into_span())
-		.await
 	}
 
+	#[instrument(name = "batch", skip(self, batch))]
 	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
 		let guard = self.id_manager.next_request_ids(batch.len())?;
 		let ids: Vec<Id> = guard.inner();
-		let trace = RpcTracing::batch();
 
-		async {
-			let mut batch_request = Vec::with_capacity(batch.len());
-			// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
-			let mut ordered_requests = Vec::with_capacity(batch.len());
-			let mut request_set = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
+		let mut batch_request = Vec::with_capacity(batch.len());
+		// NOTE(niklasad1): `ID` is not necessarily monotonically increasing.
+		let mut ordered_requests = Vec::with_capacity(batch.len());
+		let mut request_set = FxHashMap::with_capacity_and_hasher(batch.len(), Default::default());
 
-			for (pos, (method, params)) in batch.into_iter().enumerate() {
-				batch_request.push(RequestSer::new(&ids[pos], method, params));
-				ordered_requests.push(&ids[pos]);
-				request_set.insert(&ids[pos], pos);
-			}
-
-			let fut =
-				self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
-
-			let body = match tokio::time::timeout(self.request_timeout, fut).await {
-				Ok(Ok(body)) => body,
-				Err(_e) => return Err(Error::RequestTimeout),
-				Ok(Err(e)) => return Err(Error::Transport(e.into())),
-			};
-
-			let rps: Vec<Response<_>> =
-				serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
-					Ok(e) => Error::Call(CallError::Custom(e.error_object().clone().into_owned())),
-					Err(e) => Error::ParseError(e),
-				})?;
-
-			// NOTE: `R::default` is placeholder and will be replaced in loop below.
-			let mut responses = vec![R::default(); ordered_requests.len()];
-			for rp in rps {
-				let pos = match request_set.get(&rp.id) {
-					Some(pos) => *pos,
-					None => return Err(Error::InvalidRequestId),
-				};
-				responses[pos] = rp.result
-			}
-			Ok(responses)
+		for (pos, (method, params)) in batch.into_iter().enumerate() {
+			batch_request.push(RequestSer::new(&ids[pos], method, params));
+			ordered_requests.push(&ids[pos]);
+			request_set.insert(&ids[pos], pos);
 		}
-		.instrument(trace.into_span())
-		.await
+
+		let fut = self.transport.send_and_read_body(serde_json::to_string(&batch_request).map_err(Error::ParseError)?);
+
+		let body = match tokio::time::timeout(self.request_timeout, fut).await {
+			Ok(Ok(body)) => body,
+			Err(_e) => return Err(Error::RequestTimeout),
+			Ok(Err(e)) => return Err(Error::Transport(e.into())),
+		};
+
+		let rps: Vec<Response<_>> =
+			serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
+				Ok(e) => Error::Call(CallError::Custom(e.error_object().clone().into_owned())),
+				Err(e) => Error::ParseError(e),
+			})?;
+
+		// NOTE: `R::default` is placeholder and will be replaced in loop below.
+		let mut responses = vec![R::default(); ordered_requests.len()];
+		for rp in rps {
+			let pos = match request_set.get(&rp.id) {
+				Some(pos) => *pos,
+				None => return Err(Error::InvalidRequestId),
+			};
+			responses[pos] = rp.result
+		}
+		Ok(responses)
 	}
 }
 
 #[async_trait]
 impl SubscriptionClientT for HttpClient {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	#[instrument(name = "subscription", skip(self, _params))]
 	async fn subscribe<'a, N>(
 		&self,
 		_subscribe_method: &'a str,
@@ -292,6 +278,7 @@ impl SubscriptionClientT for HttpClient {
 	}
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
+	#[instrument(name = "subscribe_method", skip(self))]
 	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,

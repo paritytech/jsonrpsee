@@ -62,6 +62,7 @@ use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use tracing::instrument;
 use tracing_futures::Instrument;
 
 /// Default maximum connections allowed.
@@ -849,6 +850,7 @@ impl MethodResult {
 // Batch responses must be sent back as a single message so we read the results from each
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
+#[instrument(name = "batch", skip(b))]
 async fn process_batch_request<M>(b: Batch<'_, M>) -> BatchResponse
 where
 	M: Middleware,
@@ -860,29 +862,23 @@ where
 			let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
 			let batch_stream = futures_util::stream::iter(batch);
 
-			let trace = RpcTracing::batch();
+			let max_response_size = call.max_response_body_size;
 
-			return async {
-				let max_response_size = call.max_response_body_size;
+			let batch_response = batch_stream
+				.try_fold(
+					BatchResponseBuilder::new_with_limit(max_response_size as usize),
+					|batch_response, (req, call)| async move {
+						let params = Params::new(req.params.map(|params| params.get()));
+						let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+						batch_response.append(response.as_inner())
+					},
+				)
+				.await;
 
-				let batch_response = batch_stream
-					.try_fold(
-						BatchResponseBuilder::new_with_limit(max_response_size as usize),
-						|batch_response, (req, call)| async move {
-							let params = Params::new(req.params.map(|params| params.get()));
-							let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
-							batch_response.append(response.as_inner())
-						},
-					)
-					.await;
-
-				match batch_response {
-					Ok(batch) => batch.finish(),
-					Err(batch_err) => batch_err,
-				}
+			match batch_response {
+				Ok(batch) => batch.finish(),
+				Err(batch_err) => batch_err,
 			}
-			.instrument(trace.into_span())
-			.await;
 		} else {
 			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
 		};
@@ -895,18 +891,13 @@ where
 async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResult {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
+		rx_log_from_json(&req, call.max_log_length);
 
-		async {
-			rx_log_from_json(&req, call.max_log_length);
+		let params = Params::new(req.params.map(|params| params.get()));
+		let name = &req.method;
+		let id = req.id;
 
-			let params = Params::new(req.params.map(|params| params.get()));
-			let name = &req.method;
-			let id = req.id;
-
-			execute_call(Call { name, params, id, call }).await
-		}
-		.instrument(trace.into_span())
-		.await
+		execute_call(Call { name, params, id, call }).instrument(trace.into_span()).await
 	} else {
 		let (id, code) = prepare_error(&data);
 		MethodResult::SendAndMiddleware(MethodResponse::error(id, ErrorObject::from(code)))
