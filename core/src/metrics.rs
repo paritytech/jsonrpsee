@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Middleware for `jsonrpsee` servers.
+//! Metrics for `jsonrpsee` servers.
 
 use std::net::SocketAddr;
 
@@ -60,10 +60,10 @@ impl std::fmt::Display for MethodKind {
 /// Defines RPC metrics specifically for HTTP requests with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
-/// See [`HttpServerBuilder::set_middleware`](../../jsonrpsee_http_server/struct.HttpServerBuilder.html#method.set_middleware) method
+/// See [`HttpServerBuilder::set_metrics`](../../jsonrpsee_http_server/struct.HttpServerBuilder.html#method.set_metrics) method
 /// for examples.
 pub trait HttpMetrics: Send + Sync + Clone + 'static {
-	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware
+	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the trait
 	/// measures time, if at all, is entirely up to the implementation.
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
 
@@ -83,10 +83,10 @@ pub trait HttpMetrics: Send + Sync + Clone + 'static {
 /// Defines RPC metrics specifically for WebSocket connections with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
-/// See the [`WsServerBuilder::set_middleware`](../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.set_middleware)
+/// See the [`WsServerBuilder::set_metrics`](../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.set_metrics)
 /// for examples.
 pub trait WsMetrics: Send + Sync + Clone + 'static {
-	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the middleware
+	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the trait
 	/// measures time, if at all, is entirely up to the implementation.
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
 

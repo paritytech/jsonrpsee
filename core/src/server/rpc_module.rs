@@ -432,7 +432,7 @@ impl Methods {
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
 				let res = (cb)(id, params, sink.clone(), conn_state, None).await;
 
-				// This message is not used because it's used for middleware so we discard in other to
+				// This message is not used because it's used for metrics so we discard in other to
 				// not read once this is used for subscriptions.
 				//
 				// The same information is part of `res` above.
@@ -1045,9 +1045,9 @@ impl SubscriptionSink {
 
 	fn answer_subscription(&self, response: MethodResponse, subscribe_call: oneshot::Sender<MethodResponse>) -> bool {
 		let ws_send = self.inner.send_raw(response.result.clone()).is_ok();
-		let middleware_call = subscribe_call.send(response).is_ok();
+		let metrics_call = subscribe_call.send(response).is_ok();
 
-		ws_send && middleware_call
+		ws_send && metrics_call
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {

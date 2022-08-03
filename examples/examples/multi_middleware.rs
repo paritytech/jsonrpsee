@@ -37,7 +37,7 @@ use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
-/// Example middleware to measure call execution time.
+/// Example metrics to measure call execution time.
 #[derive(Clone)]
 struct Timings;
 
@@ -69,7 +69,7 @@ impl metrics::WsMetrics for Timings {
 	}
 }
 
-/// Example middleware to keep a watch on the number of total threads started in the system.
+/// Example metrics to keep a watch on the number of total threads started in the system.
 #[derive(Clone)]
 struct ThreadWatcher;
 

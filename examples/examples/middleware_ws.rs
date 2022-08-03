@@ -39,28 +39,28 @@ impl metrics::WsMetrics for Timings {
 	type Instant = Instant;
 
 	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-		println!("[Middleware::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+		println!("[Metrics::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
 	}
 
 	fn on_request(&self) -> Self::Instant {
-		println!("[Middleware::on_request]");
+		println!("[Metrics::on_request]");
 		Instant::now()
 	}
 
 	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
-		println!("[Middleware::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
+		println!("[Metrics::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("[Middleware::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
+		println!("[Metrics::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
 	}
 
 	fn on_response(&self, result: &str, started_at: Self::Instant) {
-		println!("[Middleware::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+		println!("[Metrics::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	}
 
 	fn on_disconnect(&self, remote_addr: SocketAddr) {
-		println!("[Middleware::on_disconnect] remote_addr: {}", remote_addr);
+		println!("[Metrics::on_disconnect] remote_addr: {}", remote_addr);
 	}
 }
 
