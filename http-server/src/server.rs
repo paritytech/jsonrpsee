@@ -507,7 +507,7 @@ impl<M: Metrics> Server<M> {
 								let origin = return_origin_if_different_from_host(request.headers()).cloned();
 								let mut res = process_validated_request(ProcessValidatedRequest {
 									request,
-									metrics: metrics,
+									metrics,
 									methods,
 									resources,
 									max_request_body_size,
