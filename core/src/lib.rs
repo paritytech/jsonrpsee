@@ -46,7 +46,7 @@ cfg_http_helpers! {
 cfg_server! {
 	pub mod id_providers;
 	pub mod server;
-	pub mod middleware;
+	pub mod logger;
 }
 
 cfg_client! {

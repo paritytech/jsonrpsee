@@ -41,7 +41,7 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
-use jsonrpsee_core::middleware::{self, HttpMiddleware as Middleware};
+use jsonrpsee_core::logger::{self, HttpLogger as Logger};
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
 use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
@@ -59,7 +59,7 @@ type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
-pub struct Builder<M = ()> {
+pub struct Builder<L = ()> {
 	/// Access control based on HTTP headers.
 	access_control: AccessControl,
 	resources: Resources,
@@ -68,7 +68,7 @@ pub struct Builder<M = ()> {
 	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
-	middleware: M,
+	logger: L,
 	max_log_length: u32,
 	health_api: Option<HealthApi>,
 }
@@ -82,7 +82,7 @@ impl Default for Builder {
 			batch_requests_supported: true,
 			resources: Resources::default(),
 			tokio_runtime: None,
-			middleware: (),
+			logger: (),
 			max_log_length: 4096,
 			health_api: None,
 		}
@@ -96,24 +96,25 @@ impl Builder {
 	}
 }
 
-impl<M> Builder<M> {
-	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
+impl<L> Builder<L> {
+	/// Add a logger to the builder [`Logger`](../jsonrpsee_core/logger/trait.Logger.html).
 	///
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
+	/// use hyper::Request;
 	///
-	/// use jsonrpsee_core::middleware::{HttpMiddleware, Headers, MethodKind, Params};
+	/// use jsonrpsee_core::logger::{HttpLogger, Headers, MethodKind, Params};
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
-	/// struct MyMiddleware;
+	/// struct MyLogger;
 	///
-	/// impl HttpMiddleware for MyMiddleware {
+	/// impl HttpLogger for MyLogger {
 	///     type Instant = Instant;
 	///
 	///     // Called once the HTTP request is received, it may be a single JSON-RPC call
 	///     // or batch.
-	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Instant {
+	///     fn on_request(&self, _remote_addr: SocketAddr, _request: &Request<hyper::Body>) -> Instant {
 	///         Instant::now()
 	///     }
 	///
@@ -135,9 +136,9 @@ impl<M> Builder<M> {
 	///     }
 	/// }
 	///
-	/// let builder = HttpServerBuilder::new().set_middleware(MyMiddleware);
+	/// let builder = HttpServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
+	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<T> {
 		Builder {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
@@ -145,7 +146,7 @@ impl<M> Builder<M> {
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
-			middleware,
+			logger,
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		}
@@ -248,7 +249,7 @@ impl<M> Builder<M> {
 		self,
 		listener: hyper::server::Builder<AddrIncoming>,
 		local_addr: SocketAddr,
-	) -> Result<Server<M>, Error> {
+	) -> Result<Server<L>, Error> {
 		Ok(Server {
 			access_control: self.access_control,
 			listener,
@@ -258,7 +259,7 @@ impl<M> Builder<M> {
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
-			middleware: self.middleware,
+			logger: self.logger,
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		})
@@ -288,7 +289,7 @@ impl<M> Builder<M> {
 	///   let server = HttpServerBuilder::new().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<M>, Error> {
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<L>, Error> {
 		let listener = listener.into();
 		let local_addr = listener.local_addr().ok();
 
@@ -303,7 +304,7 @@ impl<M> Builder<M> {
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
-			middleware: self.middleware,
+			logger: self.logger,
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		})
@@ -324,7 +325,7 @@ impl<M> Builder<M> {
 	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).await.is_ok());
 	/// }
 	/// ```
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<L>, Error> {
 		let listener = TcpListener::bind(addrs).await?.into_std()?;
 
 		let local_addr = listener.local_addr().ok();
@@ -339,7 +340,7 @@ impl<M> Builder<M> {
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
-			middleware: self.middleware,
+			logger: self.logger,
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
 		})
@@ -385,7 +386,7 @@ impl Future for ServerHandle {
 
 /// An HTTP JSON RPC server.
 #[derive(Debug)]
-pub struct Server<M = ()> {
+pub struct Server<L = ()> {
 	/// Hyper server.
 	listener: HyperBuilder<AddrIncoming>,
 	/// Local address
@@ -406,11 +407,11 @@ pub struct Server<M = ()> {
 	resources: Resources,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
-	middleware: M,
+	logger: L,
 	health_api: Option<HealthApi>,
 }
 
-impl<M: Middleware> Server<M> {
+impl<L: Logger> Server<L> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
@@ -425,7 +426,7 @@ impl<M: Middleware> Server<M> {
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
 		let resources = self.resources;
-		let middleware = self.middleware;
+		let logger = self.logger;
 		let batch_requests_supported = self.batch_requests_supported;
 		let methods = methods.into().initialize_resources(&resources)?;
 		let health_api = self.health_api;
@@ -435,17 +436,17 @@ impl<M: Middleware> Server<M> {
 			let methods = methods.clone();
 			let acl = acl.clone();
 			let resources = resources.clone();
-			let middleware = middleware.clone();
+			let logger = logger.clone();
 			let health_api = health_api.clone();
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
-					let request_start = middleware.on_request(remote_addr, request.headers());
+					let request_start = logger.on_request(remote_addr, &request);
 
 					let methods = methods.clone();
 					let acl = acl.clone();
 					let resources = resources.clone();
-					let middleware = middleware.clone();
+					let logger = logger.clone();
 					let health_api = health_api.clone();
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
@@ -507,7 +508,7 @@ impl<M: Middleware> Server<M> {
 								let origin = return_origin_if_different_from_host(request.headers()).cloned();
 								let mut res = process_validated_request(ProcessValidatedRequest {
 									request,
-									middleware,
+									logger,
 									methods,
 									resources,
 									max_request_body_size,
@@ -527,7 +528,7 @@ impl<M: Middleware> Server<M> {
 								Some(health) if health.path.as_str() == request.uri().path() => {
 									process_health_request(
 										health,
-										middleware,
+										logger,
 										methods,
 										max_response_body_size,
 										request_start,
@@ -593,25 +594,25 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 	}
 }
 
-struct ProcessValidatedRequest<M: Middleware> {
+struct ProcessValidatedRequest<L: Logger> {
 	request: hyper::Request<hyper::Body>,
-	middleware: M,
+	logger: L,
 	methods: Methods,
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
 	max_log_length: u32,
 	batch_requests_supported: bool,
-	request_start: M::Instant,
+	request_start: L::Instant,
 }
 
 /// Process a verified request, it implies a POST request with content type JSON.
-async fn process_validated_request<M: Middleware>(
-	input: ProcessValidatedRequest<M>,
+async fn process_validated_request<L: Logger>(
+	input: ProcessValidatedRequest<L>,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let ProcessValidatedRequest {
 		request,
-		middleware,
+		logger,
 		methods,
 		resources,
 		max_request_body_size,
@@ -637,7 +638,7 @@ async fn process_validated_request<M: Middleware>(
 	if is_single {
 		let call = CallData {
 			conn_id: 0,
-			middleware: &middleware,
+			logger: &logger,
 			methods: &methods,
 			max_response_body_size,
 			max_log_length,
@@ -645,7 +646,7 @@ async fn process_validated_request<M: Middleware>(
 			request_start,
 		};
 		let response = process_single_request(body, call).await;
-		middleware.on_response(&response.result, request_start);
+		logger.on_response(&response.result, request_start);
 		Ok(response::ok_response(response.result))
 	}
 	// Batch of requests or notifications
@@ -654,7 +655,7 @@ async fn process_validated_request<M: Middleware>(
 			Id::Null,
 			ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 		);
-		middleware.on_response(&err.result, request_start);
+		logger.on_response(&err.result, request_start);
 		Ok(response::ok_response(err.result))
 	}
 	// Batch of requests or notifications
@@ -663,7 +664,7 @@ async fn process_validated_request<M: Middleware>(
 			data: body,
 			call: CallData {
 				conn_id: 0,
-				middleware: &middleware,
+				logger: &logger,
 				methods: &methods,
 				max_response_body_size,
 				max_log_length,
@@ -672,17 +673,17 @@ async fn process_validated_request<M: Middleware>(
 			},
 		})
 		.await;
-		middleware.on_response(&response.result, request_start);
+		logger.on_response(&response.result, request_start);
 		Ok(response::ok_response(response.result))
 	}
 }
 
-async fn process_health_request<M: Middleware>(
+async fn process_health_request<L: Logger>(
 	health_api: &HealthApi,
-	middleware: M,
+	logger: L,
 	methods: Methods,
 	max_response_body_size: u32,
-	request_start: M::Instant,
+	request_start: L::Instant,
 	max_log_length: u32,
 ) -> Result<hyper::Response<hyper::Body>, HyperError> {
 	let trace = RpcTracing::method_call(&health_api.method);
@@ -704,8 +705,8 @@ async fn process_health_request<M: Middleware>(
 		};
 
 		rx_log_from_str(&response.result, max_log_length);
-		middleware.on_result(&health_api.method, response.success, request_start);
-		middleware.on_response(&response.result, request_start);
+		logger.on_result(&health_api.method, response.success, request_start);
+		logger.on_response(&response.result, request_start);
 
 		if response.success {
 			#[derive(serde::Deserialize)]
@@ -726,36 +727,36 @@ async fn process_health_request<M: Middleware>(
 }
 
 #[derive(Debug, Clone)]
-struct Batch<'a, M: Middleware> {
+struct Batch<'a, L: Logger> {
 	data: Vec<u8>,
-	call: CallData<'a, M>,
+	call: CallData<'a, L>,
 }
 
 #[derive(Debug, Clone)]
-struct CallData<'a, M: Middleware> {
+struct CallData<'a, L: Logger> {
 	conn_id: usize,
-	middleware: &'a M,
+	logger: &'a L,
 	methods: &'a Methods,
 	max_response_body_size: u32,
 	max_log_length: u32,
 	resources: &'a Resources,
-	request_start: M::Instant,
+	request_start: L::Instant,
 }
 
 #[derive(Debug, Clone)]
-struct Call<'a, M: Middleware> {
+struct Call<'a, L: Logger> {
 	params: Params<'a>,
 	name: &'a str,
-	call: CallData<'a, M>,
+	call: CallData<'a, L>,
 	id: Id<'a>,
 }
 
 // Batch responses must be sent back as a single message so we read the results from each
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
-async fn process_batch_request<M>(b: Batch<'_, M>) -> BatchResponse
+async fn process_batch_request<L>(b: Batch<'_, L>) -> BatchResponse
 where
-	M: Middleware,
+	L: Logger,
 {
 	let Batch { data, call } = b;
 
@@ -802,7 +803,7 @@ where
 	BatchResponse::error(id, ErrorObject::from(code))
 }
 
-async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
+async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
 		async {
@@ -827,19 +828,18 @@ async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_,
 	}
 }
 
-async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
+async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 	let Call { name, id, params, call } = c;
-	let CallData { resources, methods, middleware, max_response_body_size, max_log_length, conn_id, request_start } =
-		call;
+	let CallData { resources, methods, logger, max_response_body_size, max_log_length, conn_id, request_start } = call;
 
 	let response = match methods.method_with_name(name) {
 		None => {
-			middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
+			logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
 			MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
 
 				match method.claim(name, resources) {
 					Ok(guard) => {
@@ -854,7 +854,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 				}
 			}
 			MethodKind::Async(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
 				match method.claim(name, resources) {
 					Ok(guard) => {
 						let id = id.into_owned();
@@ -869,7 +869,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 				}
 			}
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
+				logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
 				tracing::error!("Subscriptions not supported on HTTP");
 				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
 			}
@@ -877,6 +877,6 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 	};
 
 	tx_log_from_str(&response.result, max_log_length);
-	middleware.on_result(name, response.success, request_start);
+	logger.on_result(name, response.success, request_start);
 	response
 }
