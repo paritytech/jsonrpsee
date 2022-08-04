@@ -51,6 +51,7 @@ server = [
 	"lazy_static",
 	"unicase",
 	"http",
+	"hyper",
 ]
 client = ["futures-util/sink", "futures-channel/sink", "futures-channel/std"]
 async-client = [
