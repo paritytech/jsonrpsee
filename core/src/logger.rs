@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Metrics for `jsonrpsee` servers.
+//! Logger for `jsonrpsee` servers.
 
 use std::net::SocketAddr;
 
@@ -59,12 +59,12 @@ impl std::fmt::Display for MethodKind {
 	}
 }
 
-/// Defines RPC metrics specifically for HTTP requests with callbacks during the RPC request life-cycle.
+/// Defines a logger specifically for HTTP requests with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
-/// See [`HttpServerBuilder::set_metrics`](../../jsonrpsee_http_server/struct.HttpServerBuilder.html#method.set_metrics) method
+/// See [`HttpServerBuilder::set_logger`](../../jsonrpsee_http_server/struct.HttpServerBuilder.html#method.set_logger) method
 /// for examples.
-pub trait HttpMetrics: Send + Sync + Clone + 'static {
+pub trait HttpLogger: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the trait
 	/// measures time, if at all, is entirely up to the implementation.
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
@@ -82,12 +82,12 @@ pub trait HttpMetrics: Send + Sync + Clone + 'static {
 	fn on_response(&self, result: &str, _started_at: Self::Instant);
 }
 
-/// Defines RPC metrics specifically for WebSocket connections with callbacks during the RPC request life-cycle.
+/// Defines a logger specifically for WebSocket connections with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
-/// See the [`WsServerBuilder::set_metrics`](../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.set_metrics)
+/// See the [`WsServerBuilder::set_logger`](../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.set_logger)
 /// for examples.
-pub trait WsMetrics: Send + Sync + Clone + 'static {
+pub trait WsLogger: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the trait
 	/// measures time, if at all, is entirely up to the implementation.
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
@@ -111,7 +111,7 @@ pub trait WsMetrics: Send + Sync + Clone + 'static {
 	fn on_disconnect(&self, remote_addr: std::net::SocketAddr);
 }
 
-impl HttpMetrics for () {
+impl HttpLogger for () {
 	type Instant = ();
 
 	fn on_request(&self, _: std::net::SocketAddr, _: &Request<Body>) -> Self::Instant {}
@@ -123,7 +123,7 @@ impl HttpMetrics for () {
 	fn on_response(&self, _: &str, _: Self::Instant) {}
 }
 
-impl WsMetrics for () {
+impl WsLogger for () {
 	type Instant = ();
 
 	fn on_connect(&self, _: std::net::SocketAddr, _: &Headers) {}
@@ -139,10 +139,10 @@ impl WsMetrics for () {
 	fn on_disconnect(&self, _: std::net::SocketAddr) {}
 }
 
-impl<A, B> WsMetrics for (A, B)
+impl<A, B> WsLogger for (A, B)
 where
-	A: WsMetrics,
-	B: WsMetrics,
+	A: WsLogger,
+	B: WsLogger,
 {
 	type Instant = (A::Instant, B::Instant);
 
@@ -174,10 +174,10 @@ where
 	}
 }
 
-impl<A, B> HttpMetrics for (A, B)
+impl<A, B> HttpLogger for (A, B)
 where
-	A: HttpMetrics,
-	B: HttpMetrics,
+	A: HttpLogger,
+	B: HttpLogger,
 {
 	type Instant = (A::Instant, B::Instant);
 

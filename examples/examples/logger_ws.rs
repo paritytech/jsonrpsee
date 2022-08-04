@@ -28,39 +28,39 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::metrics::{self, Headers, MethodKind, Params};
+use jsonrpsee::core::logger::{self, Headers, MethodKind, Params};
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 #[derive(Clone)]
 struct Timings;
 
-impl metrics::WsMetrics for Timings {
+impl logger::WsLogger for Timings {
 	type Instant = Instant;
 
 	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-		println!("[Metrics::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+		println!("[Logger::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
 	}
 
 	fn on_request(&self) -> Self::Instant {
-		println!("[Metrics::on_request]");
+		println!("[Logger::on_request]");
 		Instant::now()
 	}
 
 	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
-		println!("[Metrics::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
+		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("[Metrics::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
+		println!("[Logger::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
 	}
 
 	fn on_response(&self, result: &str, started_at: Self::Instant) {
-		println!("[Metrics::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	}
 
 	fn on_disconnect(&self, remote_addr: SocketAddr) {
-		println!("[Metrics::on_disconnect] remote_addr: {}", remote_addr);
+		println!("[Logger::on_disconnect] remote_addr: {}", remote_addr);
 	}
 }
 
@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = WsServerBuilder::new().set_metrics(Timings).build("127.0.0.1:0").await?;
+	let server = WsServerBuilder::new().set_Logger(Timings).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;

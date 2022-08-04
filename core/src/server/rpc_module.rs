@@ -1045,9 +1045,9 @@ impl SubscriptionSink {
 
 	fn answer_subscription(&self, response: MethodResponse, subscribe_call: oneshot::Sender<MethodResponse>) -> bool {
 		let ws_send = self.inner.send_raw(response.result.clone()).is_ok();
-		let metrics_call = subscribe_call.send(response).is_ok();
+		let logger_call = subscribe_call.send(response).is_ok();
 
-		ws_send && metrics_call
+		ws_send && logger_call
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {

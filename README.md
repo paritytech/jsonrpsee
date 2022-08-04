@@ -32,7 +32,7 @@ Support `WebSocket` and `HTTP` transports for both client and server.
 - [WebSocket](./examples/examples/ws.rs)
 - [WebSocket pubsub](./examples/examples/ws_pubsub_broadcast.rs)
 - [API generation with proc macro](./examples/examples/proc_macro.rs)
-- [Metrics](./examples/examples/multi_metrics.rs)
+- [Logger](./examples/examples/multi_logger.rs)
 - [CORS server](./examples/examples/cors_server.rs)
 - [Core client](./examples/examples/core_client.rs)
 
