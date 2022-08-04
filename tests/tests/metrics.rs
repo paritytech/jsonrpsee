@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use hyper::HeaderMap;
-use jsonrpsee::core::logger::{HttpLogger, MethodKind, Request, Body, WsLogger};
+use jsonrpsee::core::logger::{Body, HttpLogger, MethodKind, Request, WsLogger};
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
