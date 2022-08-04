@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::logger::{self, Headers, MethodKind, Params};
+use jsonrpsee::core::logger::{self, Body, MethodKind, Params, Request};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 
@@ -38,8 +38,8 @@ struct Timings;
 impl logger::HttpLogger for Timings {
 	type Instant = Instant;
 
-	fn on_request(&self, remote_addr: SocketAddr, headers: &Headers) -> Self::Instant {
-		println!("[Logger::on_request] remote_addr {}, headers: {:?}", remote_addr, headers);
+	fn on_request(&self, remote_addr: SocketAddr, request: &Request<Body>) -> Self::Instant {
+		println!("[Logger::on_request] remote_addr {}, request: {:?}", remote_addr, request);
 		Instant::now()
 	}
 

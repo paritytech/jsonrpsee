@@ -30,7 +30,7 @@ use std::net::SocketAddr;
 
 pub use http::request::Request;
 pub use http::HeaderMap as Headers;
-use hyper::Body;
+pub use hyper::Body;
 pub use jsonrpsee_types::Params;
 
 /// The type JSON-RPC v2 call, it can be a subscription, method call or unknown.
