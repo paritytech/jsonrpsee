@@ -440,7 +440,7 @@ impl<M: Metrics> Server<M> {
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
-					let request_start = metrics.on_request(remote_addr, request.headers());
+					let request_start = metrics.on_request(remote_addr, &request);
 
 					let methods = methods.clone();
 					let acl = acl.clone();

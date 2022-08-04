@@ -28,7 +28,9 @@
 
 use std::net::SocketAddr;
 
+pub use http::request::Request;
 pub use http::HeaderMap as Headers;
+use hyper::Body;
 pub use jsonrpsee_types::Params;
 
 /// The type JSON-RPC v2 call, it can be a subscription, method call or unknown.
@@ -68,7 +70,7 @@ pub trait HttpMetrics: Send + Sync + Clone + 'static {
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
 
 	/// Called when a new JSON-RPC request comes to the server.
-	fn on_request(&self, remote_addr: SocketAddr, headers: &Headers) -> Self::Instant;
+	fn on_request(&self, remote_addr: SocketAddr, request: &Request<Body>) -> Self::Instant;
 
 	/// Called on each JSON-RPC method call, batch requests will trigger `on_call` multiple times.
 	fn on_call(&self, method_name: &str, params: Params, kind: MethodKind);
@@ -112,7 +114,7 @@ pub trait WsMetrics: Send + Sync + Clone + 'static {
 impl HttpMetrics for () {
 	type Instant = ();
 
-	fn on_request(&self, _: std::net::SocketAddr, _: &Headers) -> Self::Instant {}
+	fn on_request(&self, _: std::net::SocketAddr, _: &Request<Body>) -> Self::Instant {}
 
 	fn on_call(&self, _: &str, _: Params, _: MethodKind) {}
 
@@ -179,8 +181,8 @@ where
 {
 	type Instant = (A::Instant, B::Instant);
 
-	fn on_request(&self, remote_addr: std::net::SocketAddr, headers: &Headers) -> Self::Instant {
-		(self.0.on_request(remote_addr, headers), self.1.on_request(remote_addr, headers))
+	fn on_request(&self, remote_addr: std::net::SocketAddr, request: &Request<Body>) -> Self::Instant {
+		(self.0.on_request(remote_addr, request), self.1.on_request(remote_addr, request))
 	}
 
 	fn on_call(&self, method_name: &str, params: Params, kind: MethodKind) {
