@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use hyper::HeaderMap;
-use jsonrpsee::core::logger::{HttpLogger, MethodKind, WsLogger};
+use jsonrpsee::core::logger::{HttpLogger, MethodKind, Request, Body, WsLogger};
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
@@ -99,7 +99,7 @@ impl HttpLogger for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 
-	fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> u32 {
+	fn on_request(&self, _remote_addr: SocketAddr, _request: &Request<Body>) -> u32 {
 		let mut inner = self.inner.lock().unwrap();
 		let n = inner.requests.0;
 
