@@ -492,7 +492,7 @@ async fn ws_server_notify_client_on_disconnect() {
 	// after the server shutdowns (A).
 	tokio::time::sleep(Duration::from_secs(5)).await;
 
-	// Make sure the `on_disconnect` method did not returned before stopping the server.
+	// Make sure the `on_disconnect` method did not return before stopping the server.
 	assert_eq!(dis_rx.try_recv().unwrap(), None);
 
 	server_handle.stop().unwrap().await;
