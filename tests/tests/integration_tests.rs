@@ -467,6 +467,7 @@ async fn ws_server_notify_client_on_disconnect() {
 
 	let (up_tx, up_rx) = oneshot::channel();
 	let (dis_tx, mut dis_rx) = oneshot::channel();
+	let (multiple_tx, multiple_rx) = oneshot::channel();
 
 	tokio::spawn(async move {
 		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -480,6 +481,11 @@ async fn ws_server_notify_client_on_disconnect() {
 
 		// Signal disconnect finished.
 		dis_tx.send(()).unwrap();
+
+		// Call `on_disconnect` a few more times to ensure it does not block.
+		client.on_disconnect().await;
+		client.on_disconnect().await;
+		multiple_tx.send(()).unwrap();
 	});
 
 	// Ensure the client validated the server and is waiting for the disconnect.
@@ -498,7 +504,10 @@ async fn ws_server_notify_client_on_disconnect() {
 	server_handle.stop().unwrap().await;
 
 	// The `on_disconnect()` method returned.
-	dis_rx.await.unwrap();
+	let _ = dis_rx.await.unwrap();
+
+	// Multiple `on_disconnect()` calls did not block.
+	let _ = multiple_rx.await.unwrap();
 }
 
 #[tokio::test]
