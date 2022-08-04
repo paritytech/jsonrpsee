@@ -511,6 +511,24 @@ async fn ws_server_notify_client_on_disconnect() {
 }
 
 #[tokio::test]
+async fn ws_server_notify_client_on_disconnect_with_closed_server() {
+	init_logger();
+
+	let (server_addr, server_handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	// Validate server is up.
+	client.request::<String>("say_hello", None).await.unwrap();
+
+	// Stop the server.
+	server_handle.stop().unwrap().await;
+
+	// Ensure `on_disconnect` returns when the call is made after the server is closed.
+	client.on_disconnect().await;
+}
+
+#[tokio::test]
 async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	init_logger();
 
