@@ -11,6 +11,7 @@ use crate::client::{
 use crate::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
 
 use core::time::Duration;
+use std::sync::Arc;
 use helpers::{
 	build_unsubscribe_message, call_with_timeout, process_batch_response, process_error_response, process_notification,
 	process_single_response, process_subscription_response, stop_subscription,
@@ -23,6 +24,7 @@ use async_trait::async_trait;
 use futures_channel::{mpsc, oneshot};
 use futures_timer::Delay;
 use futures_util::future::{self, Either, Fuse};
+use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::{
@@ -30,6 +32,7 @@ use jsonrpsee_types::{
 	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
+use tokio::sync::Notify;
 use tracing_futures::Instrument;
 
 use super::{FrontToBack, IdKind, RequestIdManager};
@@ -157,13 +160,24 @@ impl ClientBuilder {
 		S: TransportSenderT + Send,
 		R: TransportReceiverT + Send,
 	{
-		let (to_back, from_front) = tokio::sync::mpsc::channel(self.max_concurrent_requests);
+		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 		let ping_interval = self.ping_interval;
+		let notify_on_close = Arc::new(Notify::new());
+		let notify_on_close_back = notify_on_close.clone();
 
 		tokio::spawn(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, ping_interval).await;
+			background_task(
+				sender,
+				receiver,
+				from_front,
+				err_tx,
+				max_notifs_per_subscription,
+				ping_interval,
+				notify_on_close_back,
+			)
+			.await;
 		});
 		Client {
 			to_back,
@@ -171,6 +185,7 @@ impl ClientBuilder {
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
+			notify: notify_on_close,
 		}
 	}
 
@@ -182,7 +197,7 @@ impl ClientBuilder {
 		S: TransportSenderT,
 		R: TransportReceiverT,
 	{
-		let (to_back, from_front) = tokio::sync::mpsc::channel(self.max_concurrent_requests);
+		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 
@@ -203,7 +218,7 @@ impl ClientBuilder {
 #[derive(Debug)]
 pub struct Client {
 	/// Channel to send requests to the background task.
-	to_back: tokio::sync::mpsc::Sender<Option<FrontToBack>>,
+	to_back: mpsc::Sender<FrontToBack>,
 	/// If the background thread terminates the error is sent to this channel.
 	// NOTE(niklasad1): This is a Mutex to circumvent that the async fns takes immutable references.
 	error: Mutex<ErrorFromBack>,
@@ -215,6 +230,8 @@ pub struct Client {
 	///
 	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
+	/// Notify when the client is disconnected or encountered an error.
+	notify: Arc<Notify>,
 }
 
 impl Client {
@@ -233,23 +250,19 @@ impl Client {
 	}
 
 	/// Completes when the client is disconnected or the client's background task encountered an error.
-	/// If the client is already disconnected, the future produced by this method will complete immediately.
 	///
 	/// # Cancel safety
 	///
-	/// This method is cancel safe.
-	pub async fn on_disconnect(&self) {
-		self.to_back.closed().await;
+	/// This method is cancel safe. Once the client is disconnected, it stays disconnected forever and all
+	/// future calls to this method will return immediately.
+	pub async fn notify_on_disconnect(&self) {
+		self.notify.notified().await;
 	}
 }
 
 impl Drop for Client {
 	fn drop(&mut self) {
-		// The `to_back` is cloned to create subscriptions.
-		// The tokio's channel is closed when all senders are dropped.
-		// Best effort to close the chanel by sending `None`, however this
-		// is not guaranteed to happen (ie, channel is full).
-		let _ = self.to_back.send(None).now_or_never();
+		self.to_back.close_channel();
 	}
 }
 
@@ -265,9 +278,8 @@ impl ClientT for Client {
             let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
             tx_log_from_str(&raw, self.max_log_length);
 
-            let sender = self.to_back.clone();
-            let fut = sender.send(Some(FrontToBack::Notification(raw)));
-            futures_util::pin_mut!(fut);
+            let mut sender = self.to_back.clone();
+            let fut = sender.send(FrontToBack::Notification(raw));
 
             match future::select(fut, Delay::new(self.request_timeout)).await {
                 Either::Left((Ok(()), _)) => Ok(()),
@@ -293,7 +305,7 @@ impl ClientT for Client {
             if self
                 .to_back
                 .clone()
-                .send(Some(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) })))
+                .send(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) }))
                 .await
                 .is_err()
             {
@@ -335,7 +347,7 @@ impl ClientT for Client {
             if self
                 .to_back
                 .clone()
-                .send(Some(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx })))
+                .send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
                 .await
                 .is_err()
             {
@@ -392,13 +404,13 @@ impl SubscriptionClientT for Client {
             if self
                 .to_back
                 .clone()
-                .send(Some(FrontToBack::Subscribe(SubscriptionMessage {
+                .send(FrontToBack::Subscribe(SubscriptionMessage {
                     raw,
                     subscribe_id: ids.swap_remove(0),
                     unsubscribe_id: ids.swap_remove(0),
                     unsubscribe_method: unsubscribe_method.to_owned(),
                     send_back: send_back_tx,
-                })))
+                }))
                 .await
                 .is_err()
             {
@@ -428,10 +440,10 @@ impl SubscriptionClientT for Client {
 		if self
 			.to_back
 			.clone()
-			.send(Some(FrontToBack::RegisterNotification(RegisterNotificationMessage {
+			.send(FrontToBack::RegisterNotification(RegisterNotificationMessage {
 				send_back: send_back_tx,
 				method: method.to_owned(),
-			})))
+			}))
 			.await
 			.is_err()
 		{
@@ -631,10 +643,11 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 async fn background_task<S, R>(
 	mut sender: S,
 	receiver: R,
-	frontend: tokio::sync::mpsc::Receiver<Option<FrontToBack>>,
+	mut frontend: mpsc::Receiver<FrontToBack>,
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 	ping_interval: Option<Duration>,
+	notify_on_close: Arc<Notify>,
 ) where
 	S: TransportSenderT,
 	R: TransportReceiverT,
@@ -647,21 +660,10 @@ async fn background_task<S, R>(
 	});
 	futures_util::pin_mut!(backend_event);
 
-	let frontend_event = futures_util::stream::unfold(frontend, |mut frontend| async {
-		let res = frontend.recv().await;
-		if let Some(res) = res {
-			Some((res, frontend))
-		} else {
-			None
-		}
-	});
-	futures_util::pin_mut!(frontend_event);
-
-
 	// Place frontend and backend messages into their own select.
 	// This implies that either messages are received (both front or backend),
 	// or the submitted ping timer expires (if provided).
-	let next_frontend = frontend_event.next();
+	let next_frontend = frontend.next();
 	let next_backend = backend_event.next();
 	let mut message_fut = future::select(next_frontend, next_backend);
 
@@ -678,13 +680,6 @@ async fn background_task<S, R>(
 		match future::select(message_fut, submit_ping).await {
 			// Message received from the frontend.
 			Either::Left((Either::Left((frontend_value, backend)), _)) => {
-				// Client dropped the connection
-				let frontend_value = if let Some(value) = frontend_value {
-					value
-				} else {
-					break;
-				};
-
 				if let Err(err) =
 					handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription)
 						.await
@@ -694,7 +689,7 @@ async fn background_task<S, R>(
 					break;
 				}
 				// Advance frontend, save backend.
-				message_fut = future::select(frontend_event.next(), backend);
+				message_fut = future::select(frontend.next(), backend);
 			}
 			// Message received from the backend.
 			Either::Left((Either::Right((backend_value, frontend)), _)) => {
@@ -724,6 +719,7 @@ async fn background_task<S, R>(
 			}
 		};
 	}
+	notify_on_close.notify_waiters();
 	// Send close message to the server.
 	let _ = sender.close().await;
 }
