@@ -41,6 +41,10 @@ use jsonrpsee::core::logger::{self, Params, Request};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, RpcModule};
 
+/// Define a custom logging mechanism to detect the time passed
+/// between receiving the request and proving the response.
+///
+/// The implementation relies upon [logger::HttpLogger].
 #[derive(Clone)]
 struct Timings;
 
@@ -74,7 +78,6 @@ async fn main() -> anyhow::Result<()> {
 
 	let addr = run_server().await?;
 	let url = format!("http://{}", addr);
-	println!("[main]: URL {:?}", url);
 
 	let client = HttpClientBuilder::default().build(&url)?;
 	let response: String = client.request("say_hello", None).await?;
@@ -82,26 +85,22 @@ async fn main() -> anyhow::Result<()> {
 	let _response: Result<String, _> = client.request("unknown_method", None).await;
 	let _ = client.request::<String>("say_hello", None).await?;
 
-	// Make the same request again.
-	let _ = client.request::<String>("say_hello", None).await?;
-
 	Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let addr = SocketAddr::from(([127, 0, 0, 1], 9935));
-
+	// Construct a custom service for handling the RPC requests.
 	let make_service = make_service_fn(move |conn: &AddrStream| {
 		let remote_addr = conn.remote_addr();
 		async move {
 			let mut module = RpcModule::new(());
 			module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 
-			println!("[run_server]: Creating RPC service");
-
+			// Obtain the tower service relying on the RPC implementation.
+			// NOTE: RPC's logger can be chained with tower.
 			let rpc_svc = HttpServerBuilder::new().set_logger(Timings).to_service(module, remote_addr).unwrap();
 
-			println!("[run_server]: Tower builder");
+			// Chain multiple tower compatible layers on top of the RPC's service.
 			let tower_svc = tower::ServiceBuilder::new()
 				// Add high level tracing/logging to all requests
 				.layer(
@@ -121,10 +120,8 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		}
 	});
 
-	tokio::spawn(async move {
-		println!("[run_server]: Bind server");
-		Server::bind(&addr).serve(make_service).await
-	});
+	let addr = SocketAddr::from(([127, 0, 0, 1], 9935));
+	tokio::spawn(async move { Server::bind(&addr).serve(make_service).await });
 
 	// Race with server start / client connect present in all examples
 	tokio::time::sleep(Duration::from_secs(5)).await;
