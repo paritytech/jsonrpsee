@@ -42,7 +42,7 @@ use futures_util::TryStreamExt;
 use http::header::{HOST, ORIGIN};
 use http::{HeaderMap, HeaderValue};
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::middleware::WsMiddleware as Middleware;
+use jsonrpsee_core::logger::{self, WsLogger as Logger};
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
@@ -56,6 +56,7 @@ use jsonrpsee_types::error::{reject_too_big_request, reject_too_many_subscriptio
 use jsonrpsee_types::Params;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
+use soketto::handshake::WebSocketKey;
 use soketto::handshake::{server::Response, Server as SokettoServer};
 use soketto::Sender;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -67,16 +68,16 @@ use tracing_futures::Instrument;
 const MAX_CONNECTIONS: u64 = 100;
 
 /// A WebSocket JSON RPC server.
-pub struct Server<M> {
+pub struct Server<L> {
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
 	resources: Resources,
-	middleware: M,
+	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 }
 
-impl<M> std::fmt::Debug for Server<M> {
+impl<L> std::fmt::Debug for Server<L> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Server")
 			.field("listener", &self.listener)
@@ -88,7 +89,7 @@ impl<M> std::fmt::Debug for Server<M> {
 	}
 }
 
-impl<M: Middleware> Server<M> {
+impl<L: Logger> Server<L> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
@@ -115,7 +116,7 @@ impl<M: Middleware> Server<M> {
 	async fn start_inner(self, methods: Methods) {
 		let stop_monitor = self.stop_monitor;
 		let resources = self.resources;
-		let middleware = self.middleware;
+		let logger = self.logger;
 
 		let mut id = 0;
 		let mut connections = FutureDriver::default();
@@ -147,7 +148,7 @@ impl<M: Middleware> Server<M> {
 							resources: &resources,
 							cfg,
 							stop_monitor: &stop_monitor,
-							middleware: middleware.clone(),
+							logger: logger.clone(),
 							id_provider,
 						},
 					)));
@@ -217,7 +218,7 @@ where
 	}
 }
 
-enum HandshakeResponse<'a, M> {
+enum HandshakeResponse<'a, L> {
 	Reject {
 		status_code: u16,
 	},
@@ -227,12 +228,12 @@ enum HandshakeResponse<'a, M> {
 		resources: &'a Resources,
 		cfg: &'a Settings,
 		stop_monitor: &'a StopMonitor,
-		middleware: M,
+		logger: L,
 		id_provider: Arc<dyn IdProvider>,
 	},
 }
 
-async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_, M>) -> Result<(), Error> {
+async fn handshake<L: Logger>(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_, L>) -> Result<(), Error> {
 	let remote_addr = socket.peer_addr()?;
 
 	// For each incoming background_task we perform a handshake.
@@ -251,47 +252,14 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 
 			Ok(())
 		}
-		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor, middleware, id_provider } => {
+		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor, logger, id_provider } => {
 			tracing::debug!("Accepting new connection: {}", conn_id);
-			let key = {
-				let req = server.receive_request().await?;
 
-				let host = std::str::from_utf8(req.headers().host)
-					.map_err(|_e| Error::HttpHeaderRejected("Host", "Invalid UTF-8".to_string()))?;
-				let origin = req.headers().origin.and_then(|h| {
-					let res = std::str::from_utf8(h).ok();
-					if res.is_none() {
-						tracing::warn!("Origin header invalid UTF-8; treated as no Origin header");
-					}
-					res
-				});
+			let key_and_headers = get_key_and_headers(&mut server, cfg).await;
 
-				let host_check = cfg.access_control.verify_host(host);
-				let origin_check = cfg.access_control.verify_origin(origin, host);
-
-				let mut headers = HeaderMap::new();
-
-				let key = host_check.and(origin_check).map(|()| {
-					let key = req.key();
-
-					if let Ok(val) = HeaderValue::from_str(host) {
-						headers.insert(HOST, val);
-					}
-
-					if let Some(Ok(val)) = origin.map(HeaderValue::from_str) {
-						headers.insert(ORIGIN, val);
-					}
-
-					key
-				});
-
-				middleware.on_connect(remote_addr, &headers);
-
-				key
-			};
-
-			match key {
-				Ok(key) => {
+			match key_and_headers {
+				Ok((key, headers)) => {
+					logger.on_connect(remote_addr, &headers);
 					let accept = Response::Accept { key, protocol: None };
 					server.send_response(&accept).await?;
 				}
@@ -315,7 +283,7 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 				batch_requests_supported: cfg.batch_requests_supported,
 				bounded_subscriptions: BoundedSubscriptions::new(cfg.max_subscriptions_per_connection),
 				stop_server: stop_monitor.clone(),
-				middleware,
+				logger: logger,
 				id_provider,
 				ping_interval: cfg.ping_interval,
 				remote_addr,
@@ -330,7 +298,7 @@ async fn handshake<M: Middleware>(socket: tokio::net::TcpStream, mode: Handshake
 	}
 }
 
-struct BackgroundTask<'a, M> {
+struct BackgroundTask<'a, L> {
 	server: SokettoServer<'a, BufReader<BufWriter<Compat<tokio::net::TcpStream>>>>,
 	conn_id: ConnectionId,
 	methods: Methods,
@@ -341,13 +309,13 @@ struct BackgroundTask<'a, M> {
 	batch_requests_supported: bool,
 	bounded_subscriptions: BoundedSubscriptions,
 	stop_server: StopMonitor,
-	middleware: M,
+	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 	ping_interval: Duration,
 	remote_addr: SocketAddr,
 }
 
-async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<(), Error> {
+async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), Error> {
 	let BackgroundTask {
 		server,
 		conn_id,
@@ -359,7 +327,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 		batch_requests_supported,
 		bounded_subscriptions,
 		stop_server,
-		middleware,
+		logger,
 		id_provider,
 		ping_interval,
 		remote_addr,
@@ -423,7 +391,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
-	let middleware = &middleware;
+	let logger = &logger;
 
 	let result = loop {
 		data.clear();
@@ -474,7 +442,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 			};
 		};
 
-		let request_start = middleware.on_request();
+		let request_start = logger.on_request();
 
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
 		match first_non_whitespace {
@@ -496,16 +464,16 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 						bounded_subscriptions,
 						sink: &sink,
 						id_provider: &*id_provider,
-						middleware,
+						logger: logger,
 						request_start,
 					};
 
 					match process_single_request(data, call).await {
-						MethodResult::JustMiddleware(r) => {
-							middleware.on_response(&r.result, request_start);
+						MethodResult::JustLogger(r) => {
+							logger.on_response(&r.result, request_start);
 						}
-						MethodResult::SendAndMiddleware(r) => {
-							middleware.on_response(&r.result, request_start);
+						MethodResult::SendAndLogger(r) => {
+							logger.on_response(&r.result, request_start);
 							let _ = sink.send_raw(r.result);
 						}
 					};
@@ -519,7 +487,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 					Id::Null,
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 				);
-				middleware.on_response(&response.result, request_start);
+				logger.on_response(&response.result, request_start);
 				let _ = sink.send_raw(response.result);
 			}
 			Some(b'[') => {
@@ -543,14 +511,14 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 							bounded_subscriptions,
 							sink: &sink,
 							id_provider: &*id_provider,
-							middleware,
+							logger: logger,
 							request_start,
 						},
 					})
 					.await;
 
 					tx_log_from_str(&response.result, max_log_length);
-					middleware.on_response(&response.result, request_start);
+					logger.on_response(&response.result, request_start);
 					let _ = sink.send_raw(response.result);
 				};
 
@@ -562,7 +530,7 @@ async fn background_task<M: Middleware>(input: BackgroundTask<'_, M>) -> Result<
 		}
 	};
 
-	middleware.on_disconnect(remote_addr);
+	logger.on_disconnect(remote_addr);
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
@@ -615,10 +583,10 @@ impl Default for Settings {
 
 /// Builder to configure and create a JSON-RPC Websocket server
 #[derive(Debug)]
-pub struct Builder<M = ()> {
+pub struct Builder<L = ()> {
 	settings: Settings,
 	resources: Resources,
-	middleware: M,
+	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 }
 
@@ -627,7 +595,7 @@ impl Default for Builder {
 		Builder {
 			settings: Settings::default(),
 			resources: Resources::default(),
-			middleware: (),
+			logger: (),
 			id_provider: Arc::new(RandomIntegerIdProvider),
 		}
 	}
@@ -640,7 +608,7 @@ impl Builder {
 	}
 }
 
-impl<M> Builder<M> {
+impl<L> Builder<L> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -682,49 +650,49 @@ impl<M> Builder<M> {
 		Ok(self)
 	}
 
-	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
+	/// Add a logger to the builder [`Logger`](../jsonrpsee_core/logger/trait.Logger.html).
 	///
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::middleware::{WsMiddleware, Headers, Params};
+	/// use jsonrpsee_core::logger::{WsLogger, Headers, MethodKind, Params};
 	/// use jsonrpsee_ws_server::WsServerBuilder;
 	///
 	/// #[derive(Clone)]
-	/// struct MyMiddleware;
+	/// struct MyLogger;
 	///
-	/// impl WsMiddleware for MyMiddleware {
+	/// impl WsLogger for MyLogger {
 	///     type Instant = Instant;
 	///
 	///     fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-	///          println!("[MyMiddleware::on_call] remote_addr: {}, headers: {:?}", remote_addr, headers);
+	///          println!("[MyLogger::on_call] remote_addr: {}, headers: {:?}", remote_addr, headers);
 	///     }
 	///
 	///     fn on_request(&self) -> Self::Instant {
 	///          Instant::now()
 	///     }
 	///
-	///     fn on_call(&self, method_name: &str, params: Params) {
-	///          println!("[MyMiddleware::on_call] method: '{}' params: {:?}", method_name, params);
+	///     fn on_call(&self, method_name: &str, params: Params, kind: MethodKind) {
+	///          println!("[MyLogger::on_call] method: '{}' params: {:?}, kind: {:?}", method_name, params, kind);
 	///     }
 	///
 	///     fn on_result(&self, method_name: &str, success: bool, started_at: Self::Instant) {
-	///          println!("[MyMiddleware::on_result] '{}', worked? {}, time elapsed {:?}", method_name, success, started_at.elapsed());
+	///          println!("[MyLogger::on_result] '{}', worked? {}, time elapsed {:?}", method_name, success, started_at.elapsed());
 	///     }
 	///
 	///     fn on_response(&self, result: &str, started_at: Self::Instant) {
-	///          println!("[MyMiddleware::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+	///          println!("[MyLogger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	///     }
 	///
 	///     fn on_disconnect(&self, remote_addr: SocketAddr) {
-	///          println!("[MyMiddleware::on_disconnect] remote_addr: {}", remote_addr);
+	///          println!("[MyLogger::on_disconnect] remote_addr: {}", remote_addr);
 	///     }
 	/// }
 	///
-	/// let builder = WsServerBuilder::new().set_middleware(MyMiddleware);
+	/// let builder = WsServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
-		Builder { settings: self.settings, resources: self.resources, middleware, id_provider: self.id_provider }
+	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<T> {
+		Builder { settings: self.settings, resources: self.resources, logger, id_provider: self.id_provider }
 	}
 
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
@@ -803,7 +771,7 @@ impl<M> Builder<M> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<L>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
@@ -812,7 +780,7 @@ impl<M> Builder<M> {
 			cfg: self.settings,
 			stop_monitor,
 			resources,
-			middleware: self.middleware,
+			logger: self.logger,
 			id_provider: self.id_provider,
 		})
 	}
@@ -837,43 +805,43 @@ async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>
 }
 
 #[derive(Debug, Clone)]
-struct Batch<'a, M: Middleware> {
+struct Batch<'a, L: Logger> {
 	data: Vec<u8>,
-	call: CallData<'a, M>,
+	call: CallData<'a, L>,
 }
 
 #[derive(Debug, Clone)]
-struct CallData<'a, M: Middleware> {
+struct CallData<'a, L: Logger> {
 	conn_id: usize,
 	bounded_subscriptions: BoundedSubscriptions,
 	id_provider: &'a dyn IdProvider,
-	middleware: &'a M,
+	logger: &'a L,
 	methods: &'a Methods,
 	max_response_body_size: u32,
 	max_log_length: u32,
 	resources: &'a Resources,
 	sink: &'a MethodSink,
-	request_start: M::Instant,
+	request_start: L::Instant,
 }
 
 #[derive(Debug, Clone)]
-struct Call<'a, M: Middleware> {
+struct Call<'a, L: Logger> {
 	params: Params<'a>,
 	name: &'a str,
-	call: CallData<'a, M>,
+	call: CallData<'a, L>,
 	id: Id<'a>,
 }
 
 enum MethodResult {
-	JustMiddleware(MethodResponse),
-	SendAndMiddleware(MethodResponse),
+	JustLogger(MethodResponse),
+	SendAndLogger(MethodResponse),
 }
 
 impl MethodResult {
 	fn as_inner(&self) -> &MethodResponse {
 		match &self {
-			Self::JustMiddleware(r) => r,
-			Self::SendAndMiddleware(r) => r,
+			Self::JustLogger(r) => r,
+			Self::SendAndLogger(r) => r,
 		}
 	}
 }
@@ -881,9 +849,9 @@ impl MethodResult {
 // Batch responses must be sent back as a single message so we read the results from each
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
-async fn process_batch_request<M>(b: Batch<'_, M>) -> BatchResponse
+async fn process_batch_request<L>(b: Batch<'_, L>) -> BatchResponse
 where
-	M: Middleware,
+	L: Logger,
 {
 	let Batch { data, call } = b;
 
@@ -893,27 +861,28 @@ where
 			let batch_stream = futures_util::stream::iter(batch);
 
 			let trace = RpcTracing::batch();
-			let _enter = trace.span().enter();
-			let max_response_size = call.max_response_body_size;
 
-			let batch_response = batch_stream
-				.try_fold(
-					BatchResponseBuilder::new_with_limit(max_response_size as usize),
-					|batch_response, (req, call)| async move {
-						let params = Params::new(req.params.map(|params| params.get()));
+			return async {
+				let max_response_size = call.max_response_body_size;
 
-						let response =
-							execute_call(Call { name: &req.method, params, id: req.id, call }).in_current_span().await;
+				let batch_response = batch_stream
+					.try_fold(
+						BatchResponseBuilder::new_with_limit(max_response_size as usize),
+						|batch_response, (req, call)| async move {
+							let params = Params::new(req.params.map(|params| params.get()));
+							let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
+							batch_response.append(response.as_inner())
+						},
+					)
+					.await;
 
-						batch_response.append(response.as_inner())
-					},
-				)
-				.await;
-
-			return match batch_response {
-				Ok(batch) => batch.finish(),
-				Err(batch_err) => batch_err,
-			};
+				match batch_response {
+					Ok(batch) => batch.finish(),
+					Err(batch_err) => batch_err,
+				}
+			}
+			.instrument(trace.into_span())
+			.await;
 		} else {
 			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
 		};
@@ -923,21 +892,24 @@ where
 	BatchResponse::error(id, ErrorObject::from(code))
 }
 
-async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResult {
+async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
-		let _enter = trace.span().enter();
 
-		rx_log_from_json(&req, call.max_log_length);
+		async {
+			rx_log_from_json(&req, call.max_log_length);
 
-		let params = Params::new(req.params.map(|params| params.get()));
-		let name = &req.method;
-		let id = req.id;
+			let params = Params::new(req.params.map(|params| params.get()));
+			let name = &req.method;
+			let id = req.id;
 
-		execute_call(Call { name, params, id, call }).in_current_span().await
+			execute_call(Call { name, params, id, call }).await
+		}
+		.instrument(trace.into_span())
+		.await
 	} else {
 		let (id, code) = prepare_error(&data);
-		MethodResult::SendAndMiddleware(MethodResponse::error(id, ErrorObject::from(code)))
+		MethodResult::SendAndLogger(MethodResponse::error(id, ErrorObject::from(code)))
 	}
 }
 
@@ -946,12 +918,12 @@ async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_,
 ///
 /// Returns `(MethodResponse, None)` on every call that isn't a subscription
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
-async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResult {
+async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 	let Call { name, id, params, call } = c;
 	let CallData {
 		resources,
 		methods,
-		middleware,
+		logger,
 		max_response_body_size,
 		max_log_length,
 		conn_id,
@@ -961,62 +933,76 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResult {
 		request_start,
 	} = call;
 
-	middleware.on_call(name, params.clone());
-
 	let response = match methods.method_with_name(name) {
 		None => {
+			logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
-			MethodResult::SendAndMiddleware(response)
+			MethodResult::SendAndLogger(response)
 		}
 		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => match method.claim(name, resources) {
-				Ok(guard) => {
-					let r = (callback)(id, params, max_response_body_size as usize);
-					drop(guard);
-					MethodResult::SendAndMiddleware(r)
-				}
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-					MethodResult::SendAndMiddleware(response)
-				}
-			},
-			MethodKind::Async(callback) => match method.claim(name, resources) {
-				Ok(guard) => {
-					let id = id.into_owned();
-					let params = params.into_owned();
+			MethodKind::Sync(callback) => {
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
 
-					let response = (callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
-					MethodResult::SendAndMiddleware(response)
-				}
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-					MethodResult::SendAndMiddleware(response)
-				}
-			},
-			MethodKind::Subscription(callback) => match method.claim(name, resources) {
-				Ok(guard) => {
-					if let Some(cn) = bounded_subscriptions.acquire() {
-						let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
-						let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
-						MethodResult::JustMiddleware(response)
-					} else {
-						let response =
-							MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
-						MethodResult::SendAndMiddleware(response)
+				match method.claim(name, resources) {
+					Ok(guard) => {
+						let r = (callback)(id, params, max_response_body_size as usize);
+						drop(guard);
+						MethodResult::SendAndLogger(r)
+					}
+					Err(err) => {
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+						MethodResult::SendAndLogger(response)
 					}
 				}
-				Err(err) => {
-					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
-					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-					MethodResult::SendAndMiddleware(response)
+			}
+			MethodKind::Async(callback) => {
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
+
+				match method.claim(name, resources) {
+					Ok(guard) => {
+						let id = id.into_owned();
+						let params = params.into_owned();
+
+						let response =
+							(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
+						MethodResult::SendAndLogger(response)
+					}
+					Err(err) => {
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+						MethodResult::SendAndLogger(response)
+					}
 				}
-			},
+			}
+			MethodKind::Subscription(callback) => {
+				logger.on_call(name, params.clone(), logger::MethodKind::Subscription);
+
+				match method.claim(name, resources) {
+					Ok(guard) => {
+						if let Some(cn) = bounded_subscriptions.acquire() {
+							let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
+							let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
+							MethodResult::JustLogger(response)
+						} else {
+							let response =
+								MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
+							MethodResult::SendAndLogger(response)
+						}
+					}
+					Err(err) => {
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+						MethodResult::SendAndLogger(response)
+					}
+				}
+			}
 			MethodKind::Unsubscription(callback) => {
+				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription);
+
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);
-				MethodResult::SendAndMiddleware(result)
+				MethodResult::SendAndLogger(result)
 			}
 		},
 	};
@@ -1024,6 +1010,45 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResult {
 	let r = response.as_inner();
 
 	rx_log_from_str(&r.result, max_log_length);
-	middleware.on_result(name, r.success, request_start);
+	logger.on_result(name, r.success, request_start);
 	response
+}
+
+/// Helper to fetch the `WebSocketKey` and `Headers` from the WebSocket handshake.
+async fn get_key_and_headers(
+	server: &mut SokettoServer<'_, BufReader<BufWriter<Compat<TcpStream>>>>,
+	cfg: &Settings,
+) -> Result<(WebSocketKey, HeaderMap), Error> {
+	let req = server.receive_request().await?;
+
+	tracing::trace!("Connection request: {:?}", req);
+
+	let host = std::str::from_utf8(req.headers().host).map_err(|e| Error::HttpHeaderRejected("Host", e.to_string()))?;
+
+	let origin = req.headers().origin.and_then(|h| {
+		let res = std::str::from_utf8(h).ok();
+		if res.is_none() {
+			tracing::warn!("Origin header invalid UTF-8; treated as no Origin header");
+		}
+		res
+	});
+
+	let host_check = cfg.access_control.verify_host(host);
+	let origin_check = cfg.access_control.verify_origin(origin, host);
+
+	let mut headers = HeaderMap::new();
+
+	host_check.and(origin_check).map(|()| {
+		let key = req.key();
+
+		if let Ok(val) = HeaderValue::from_str(host) {
+			headers.insert(HOST, val);
+		}
+
+		if let Some(Ok(val)) = origin.map(HeaderValue::from_str) {
+			headers.insert(ORIGIN, val);
+		}
+
+		(key, headers)
+	})
 }

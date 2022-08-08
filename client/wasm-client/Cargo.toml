@@ -1,6 +1,6 @@
 [package]
 name = "jsonrpsee-wasm-client"
-version = "0.14.0"
+version = "0.15.1"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WASM client for JSON-RPC"
 edition = "2021"
@@ -10,9 +10,9 @@ homepage = "https://github.com/paritytech/jsonrpsee"
 documentation = "https://docs.rs/jsonrpsee-ws-client"
 
 [dependencies]
-jsonrpsee-types = { path = "../../types", version = "0.14.0" }
-jsonrpsee-client-transport = { path = "../transport", version = "0.14.0", features = ["web"] }
-jsonrpsee-core = { path = "../../core", version = "0.14.0", features = ["async-wasm-client"] }
+jsonrpsee-types = { path = "../../types", version = "0.15.1" }
+jsonrpsee-client-transport = { path = "../transport", version = "0.15.1", features = ["web"] }
+jsonrpsee-core = { path = "../../core", version = "0.15.1", features = ["async-wasm-client"] }
 
 [dev-dependencies]
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }

@@ -4,7 +4,52 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
-## [Unreleased]
+## [v0.15.1] - 2022-07-29
+
+This release fixes some incorrect tracing spans.
+
+### [Fixed]
+-  [Bug Fix] - Incorrect trace caused by use of Span::enter in asynchronous code [#835](https://github.com/paritytech/jsonrpsee/pull/835)
+
+## [v0.15.0] - 2022-07-20
+
+v0.15.0 is a breaking release. The main changes are:
+
+- It's now possible to apply resource limits to subscriptions as well as regular calls.
+- We now allow trait bounds to be overridden in the proc macros. See `examples/examples/proc_macro_bounds.rs` for examples.
+- We've tidied up the subscription API, removing the `PendingSink` concept (you can still manually accept or reject a sink, but otherwise it'll be accepted automatically if you send a message down it) ([#799](https://github.com/paritytech/jsonrpsee/pull/799)).
+- Our logging `Middleware` trait has been split into `HttpMiddleware` and `WsMiddleware` to better capture the differences between the two. if you use custom middleware, you'll need to implement one or the other trait on it depending on your used transport method ([#793](https://github.com/paritytech/jsonrpsee/pull/793)). We also provide params and the method type to middleware calls now, too ([#820](https://github.com/paritytech/jsonrpsee/pull/820)).
+- We've consistified the API for setting headers across HTTP and WS clients ([#799](https://github.com/paritytech/jsonrpsee/pull/814)).
+
+Here's the full list of changes:
+
+### [Fixed]
+
+- Fix client generation with param_kind = map [#805](https://github.com/paritytech/jsonrpsee/pull/805)
+- ws-server: Handle soketto::Incoming::Closed frames [#815](https://github.com/paritytech/jsonrpsee/pull/815)
+- fix(ws server): reply HTTP 403 on all failed conns [#819](https://github.com/paritytech/jsonrpsee/pull/819)
+- fix clippy [#817](https://github.com/paritytech/jsonrpsee/pull/817)
+
+### [Added]
+
+- Add resource limiting for Subscriptions [#786](https://github.com/paritytech/jsonrpsee/pull/786)
+- feat(logging): add tracing span per JSON-RPC call [#722](https://github.com/paritytech/jsonrpsee/pull/722)
+- feat(clients): add explicit unsubscribe API [#789](https://github.com/paritytech/jsonrpsee/pull/789)
+- Allow trait bounds to be overridden in macro [#808](https://github.com/paritytech/jsonrpsee/pull/808)
+
+### [Changed]
+
+- Point to a new v1.0 milestone in the README.md [#801](https://github.com/paritytech/jsonrpsee/pull/801)
+- chore(deps): upgrade tracing v0.1.34 [#800](https://github.com/paritytech/jsonrpsee/pull/800)
+- Replace cargo-nextest with cargo-test for running tests [#802](https://github.com/paritytech/jsonrpsee/pull/802)
+- Remove deny_unknown_fields from Request and Response [#803](https://github.com/paritytech/jsonrpsee/pull/803)
+- substrate-subxt -> subxt [#807](https://github.com/paritytech/jsonrpsee/pull/807)
+- chore(deps): update pprof requirement from 0.9 to 0.10 [#810](https://github.com/paritytech/jsonrpsee/pull/810)
+- Return error from subscription callbacks [#799](https://github.com/paritytech/jsonrpsee/pull/799)
+- middleware refactoring [#793](https://github.com/paritytech/jsonrpsee/pull/793)
+- feat(middleware): expose type of the method call [#820](https://github.com/paritytech/jsonrpsee/pull/820)
+- Uniform API for custom headers between clients [#814](https://github.com/paritytech/jsonrpsee/pull/814)
+- Update links to client directories. [#822](https://github.com/paritytech/jsonrpsee/pull/822)
 
 ## [v0.14.0] - 2022-06-14
 

@@ -24,23 +24,24 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! Example showing how to add multiple middlewares to the same server.
+//! Example showing how to add multiple loggers to the same server.
 
 use std::net::SocketAddr;
 use std::process::Command;
 use std::time::Instant;
 
-use jsonrpsee::core::{client::ClientT, middleware, middleware::Headers};
+use jsonrpsee::core::logger::MethodKind;
+use jsonrpsee::core::{client::ClientT, logger, logger::Headers};
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
-/// Example middleware to measure call execution time.
+/// Example logger to measure call execution time.
 #[derive(Clone)]
 struct Timings;
 
-impl middleware::WsMiddleware for Timings {
+impl logger::WsLogger for Timings {
 	type Instant = Instant;
 
 	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
@@ -51,8 +52,8 @@ impl middleware::WsMiddleware for Timings {
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str, _params: Params) {
-		println!("[Timings] They called '{}'", name);
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		println!("[Timings:on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
@@ -68,7 +69,7 @@ impl middleware::WsMiddleware for Timings {
 	}
 }
 
-/// Example middleware to keep a watch on the number of total threads started in the system.
+/// Example logger to keep a watch on the number of total threads started in the system.
 #[derive(Clone)]
 struct ThreadWatcher;
 
@@ -87,14 +88,14 @@ impl ThreadWatcher {
 	}
 }
 
-impl middleware::WsMiddleware for ThreadWatcher {
+impl logger::WsLogger for ThreadWatcher {
 	type Instant = isize;
 
 	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
 		println!("[ThreadWatcher::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
 	}
 
-	fn on_call(&self, _method: &str, _params: Params) {
+	fn on_call(&self, _method: &str, _params: Params, _kind: MethodKind) {
 		let threads = Self::count_threads();
 		println!("[ThreadWatcher::on_call] Threads running on the machine at the start of a call: {}", threads);
 	}
@@ -141,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = WsServerBuilder::new().set_middleware((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
+	let server = WsServerBuilder::new().set_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	module.register_method("thready", |params, _| {

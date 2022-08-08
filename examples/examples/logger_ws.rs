@@ -28,31 +28,39 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{self, Headers, Params};
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::core::logger::{self, Headers, MethodKind, Params};
+use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 #[derive(Clone)]
 struct Timings;
 
-impl middleware::HttpMiddleware for Timings {
+impl logger::WsLogger for Timings {
 	type Instant = Instant;
 
-	fn on_request(&self, remote_addr: SocketAddr, headers: &Headers) -> Self::Instant {
-		println!("[Middleware::on_request] remote_addr {}, headers: {:?}", remote_addr, headers);
+	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
+		println!("[Logger::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+	}
+
+	fn on_request(&self) -> Self::Instant {
+		println!("[Logger::on_request]");
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str, params: Params) {
-		println!("[Middleware::on_call] method: '{}', params: {:?}", name, params);
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
 	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("[Middleware::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
+		println!("[Logger::on_result] '{}', worked? {}, time elapsed {:?}", name, succeess, started_at.elapsed());
 	}
 
 	fn on_response(&self, result: &str, started_at: Self::Instant) {
-		println!("[Middleware::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+	}
+
+	fn on_disconnect(&self, remote_addr: SocketAddr) {
+		println!("[Logger::on_disconnect] remote_addr: {}", remote_addr);
 	}
 }
 
@@ -63,10 +71,10 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let (addr, _handle) = run_server().await?;
-	let url = format!("http://{}", addr);
+	let addr = run_server().await?;
+	let url = format!("ws://{}", addr);
 
-	let client = HttpClientBuilder::default().build(&url)?;
+	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", None).await?;
 	println!("response: {:?}", response);
 	let _response: Result<String, _> = client.request("unknown_method", None).await;
@@ -75,11 +83,11 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let server = HttpServerBuilder::new().set_middleware(Timings).build("127.0.0.1:0").await?;
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let server = WsServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
-	let server_handle = server.start(module)?;
-	Ok((addr, server_handle))
+	server.start(module)?;
+	Ok(addr)
 }

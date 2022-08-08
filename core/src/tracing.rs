@@ -28,8 +28,8 @@ impl RpcTracing {
 	}
 
 	/// Get the inner span.
-	pub fn span(&self) -> &tracing::Span {
-		&self.0
+	pub fn into_span(self) -> tracing::Span {
+		self.0
 	}
 }
 
