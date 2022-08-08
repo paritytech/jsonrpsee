@@ -320,14 +320,22 @@ fn http_custom_headers_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	for header_size in [KIB, 2 * KIB, 8 * KIB] {
+	let method_name = request.methods()[0];
+
+	for header_size in [0, KIB, 5 * KIB, 25 * KIB, 100 * KIB] {
 		let mut headers = HeaderMap::new();
-		headers.insert("key", "A".repeat(header_size).parse().unwrap());
+		if header_size != 0 {
+			headers.insert("key", "A".repeat(header_size).parse().unwrap());
+		}
 
 		let client = Arc::new(http_client(url, headers));
-		let bench_name = format!("{}/{}", name, header_size);
+		let bench_name = format!("{}/{}kb", name, header_size / KIB);
 
-		round_trip(rt, crit, client, &bench_name, request);
+		crit.bench_function(&request.group_name(&bench_name), |b| {
+			b.to_async(rt).iter(|| async {
+				black_box(client.request::<String>(method_name, None).await.unwrap());
+			})
+		});
 	}
 }
 
@@ -335,7 +343,7 @@ fn http_custom_headers_round_trip(
 fn ws_custom_headers_handshake(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
 	let mut group = crit.benchmark_group(request.group_name(name));
 	for header_size in [0, KIB, 2 * KIB, 4 * KIB] {
-		group.bench_function(format!("{}", header_size), |b| {
+		group.bench_function(format!("{}kb", header_size / KIB), |b| {
 			b.to_async(rt).iter(|| async move {
 				let mut headers = HeaderMap::new();
 				if header_size != 0 {
