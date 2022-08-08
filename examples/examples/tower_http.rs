@@ -31,6 +31,7 @@ use std::convert::Infallible;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
+use hyper::server::conn::AddrStream;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
@@ -90,13 +91,15 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	let addr = SocketAddr::from(([127, 0, 0, 1], 9935));
 
-	let make_service = make_service_fn(move |_| {
+	let make_service = make_service_fn(move |conn: &AddrStream| {
+		let remote_addr = conn.remote_addr();
 		async move {
 			let mut module = RpcModule::new(());
 			module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 
 			println!("[run_server]: Creating RPC service");
-			let rpc_svc = HttpServerBuilder::new().set_middleware(Timings).to_service(module).unwrap();
+
+			let rpc_svc = HttpServerBuilder::new().set_middleware(Timings).to_service(module, remote_addr).unwrap();
 
 			println!("[run_server]: Tower builder");
 			let tower_svc = tower::ServiceBuilder::new()
