@@ -25,43 +25,43 @@
 // DEALINGS IN THE SOFTWARE.
 
 use hyper::body::Bytes;
+use hyper::server::conn::AddrStream;
 use hyper::service::make_service_fn;
-use hyper::Server;
+use hyper::{Body, Server};
 use std::convert::Infallible;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
-use hyper::server::conn::AddrStream;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::middleware::{self, Headers, Params};
+use jsonrpsee::core::logger::{self, Params, Request};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, RpcModule};
 
 #[derive(Clone)]
 struct Timings;
 
-impl middleware::HttpMiddleware for Timings {
+impl logger::HttpLogger for Timings {
 	type Instant = Instant;
 
-	fn on_request(&self, remote_addr: SocketAddr, headers: &Headers) -> Self::Instant {
-		println!("[Middleware::on_request] remote_addr {}, headers: {:?}", remote_addr, headers);
+	fn on_request(&self, remote_addr: SocketAddr, request: &Request<Body>) -> Self::Instant {
+		println!("[Logger::on_request] remote_addr {}, request: {:?}", remote_addr, request);
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str, params: Params, kind: middleware::MethodKind) {
-		println!("[Middleware::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
+	fn on_call(&self, name: &str, params: Params, kind: logger::MethodKind) {
+		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
 	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
-		println!("[Middleware::on_result] '{}', worked? {}, time elapsed {:?}", name, success, started_at.elapsed());
+		println!("[Logger::on_result] '{}', worked? {}, time elapsed {:?}", name, success, started_at.elapsed());
 	}
 
 	fn on_response(&self, result: &str, started_at: Self::Instant) {
-		println!("[Middleware::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	}
 }
 
@@ -99,7 +99,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 			println!("[run_server]: Creating RPC service");
 
-			let rpc_svc = HttpServerBuilder::new().set_middleware(Timings).to_service(module, remote_addr).unwrap();
+			let rpc_svc = HttpServerBuilder::new().set_logger(Timings).to_service(module, remote_addr).unwrap();
 
 			println!("[run_server]: Tower builder");
 			let tower_svc = tower::ServiceBuilder::new()

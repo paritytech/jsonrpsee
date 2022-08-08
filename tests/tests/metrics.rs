@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use hyper::HeaderMap;
-use jsonrpsee::core::middleware::{HttpMiddleware, MethodKind, WsMiddleware};
+use jsonrpsee::core::logger::{Body, HttpLogger, MethodKind, Request, WsLogger};
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
@@ -56,7 +56,7 @@ struct CounterInner {
 	calls: HashMap<String, (u32, Vec<u32>)>,
 }
 
-impl WsMiddleware for Counter {
+impl WsLogger for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 
@@ -95,11 +95,11 @@ impl WsMiddleware for Counter {
 	}
 }
 
-impl HttpMiddleware for Counter {
+impl HttpLogger for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 
-	fn on_request(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) -> u32 {
+	fn on_request(&self, _remote_addr: SocketAddr, _request: &Request<Body>) -> u32 {
 		let mut inner = self.inner.lock().unwrap();
 		let n = inner.requests.0;
 
@@ -145,7 +145,7 @@ async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<(So
 	let server = WsServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
-		.set_middleware(counter)
+		.set_logger(counter)
 		.build("127.0.0.1:0")
 		.await?;
 
@@ -159,7 +159,7 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 	let server = HttpServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
-		.set_middleware(counter)
+		.set_logger(counter)
 		.build("127.0.0.1:0")
 		.await?;
 
@@ -170,7 +170,7 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 }
 
 #[tokio::test]
-async fn ws_server_middleware() {
+async fn ws_server_logger() {
 	let counter = Counter::default();
 	let (server_addr, server_handle) = websocket_server(test_module(), counter.clone()).await.unwrap();
 
@@ -201,7 +201,7 @@ async fn ws_server_middleware() {
 }
 
 #[tokio::test]
-async fn http_server_middleware() {
+async fn http_server_logger() {
 	let counter = Counter::default();
 	let (server_addr, server_handle) = http_server(test_module(), counter.clone()).await.unwrap();
 

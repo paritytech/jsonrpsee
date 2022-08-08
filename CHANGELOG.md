@@ -4,6 +4,13 @@ The format is based on [Keep a Changelog].
 
 [Keep a Changelog]: http://keepachangelog.com/en/1.0.0/
 
+## [v0.15.1] - 2022-07-29
+
+This release fixes some incorrect tracing spans.
+
+### [Fixed]
+-  [Bug Fix] - Incorrect trace caused by use of Span::enter in asynchronous code [#835](https://github.com/paritytech/jsonrpsee/pull/835)
+
 ## [v0.15.0] - 2022-07-20
 
 v0.15.0 is a breaking release. The main changes are:

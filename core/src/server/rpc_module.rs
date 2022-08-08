@@ -367,17 +367,14 @@ impl Methods {
 		tracing::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
 		let (resp, _, _) = self.inner_call(req).await;
 
-		let res = match serde_json::from_str::<Response<T>>(&resp.result) {
-			Ok(res) => Ok(res.result),
-			Err(e) => {
-				if let Ok(err) = serde_json::from_str::<ErrorResponse>(&resp.result) {
-					Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())))
-				} else {
-					Err(e.into())
-				}
+		if resp.success {
+			serde_json::from_str::<Response<T>>(&resp.result).map(|r| r.result).map_err(Into::into)
+		} else {
+			match serde_json::from_str::<ErrorResponse>(&resp.result) {
+				Ok(err) => Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned()))),
+				Err(e) => Err(e.into()),
 			}
-		};
-		res
+		}
 	}
 
 	/// Make a request (JSON-RPC method call or subscription) by using raw JSON.
@@ -435,7 +432,7 @@ impl Methods {
 				let conn_state = ConnState { conn_id: 0, close_notify, id_provider: &RandomIntegerIdProvider };
 				let res = (cb)(id, params, sink.clone(), conn_state, None).await;
 
-				// This message is not used because it's used for middleware so we discard in other to
+				// This message is not used because it's used for metrics so we discard in other to
 				// not read once this is used for subscriptions.
 				//
 				// The same information is part of `res` above.
@@ -1048,9 +1045,9 @@ impl SubscriptionSink {
 
 	fn answer_subscription(&self, response: MethodResponse, subscribe_call: oneshot::Sender<MethodResponse>) -> bool {
 		let ws_send = self.inner.send_raw(response.result.clone()).is_ok();
-		let middleware_call = subscribe_call.send(response).is_ok();
+		let logger_call = subscribe_call.send(response).is_ok();
 
-		ws_send && middleware_call
+		ws_send && logger_call
 	}
 
 	fn build_message<T: Serialize>(&self, result: &T) -> Result<String, serde_json::Error> {
