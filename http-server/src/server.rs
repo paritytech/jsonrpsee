@@ -351,7 +351,7 @@ impl<L: Clone> Builder<L> {
 		let methods = methods.into().initialize_resources(&self.resources)?;
 
 		Ok(TowerService {
-			inner: TowerServiceData {
+			inner: ServiceData {
 				remote_addr: addr,
 				methods,
 				acl: self.access_control.clone(),
@@ -404,9 +404,9 @@ impl Future for ServerHandle {
 	}
 }
 
-/// Data required by the server to expose the a tower service.
+/// Data required by the server to handle requests.
 #[derive(Debug, Clone)]
-struct TowerServiceData<L> {
+struct ServiceData<L> {
 	/// Remote server address.
 	remote_addr: SocketAddr,
 	/// Registered server methods.
@@ -431,13 +431,13 @@ struct TowerServiceData<L> {
 	batch_requests_supported: bool,
 }
 
-impl<L: Logger> TowerServiceData<L> {
-	/// Default behavior for RPSee handling of requests.
+impl<L: Logger> ServiceData<L> {
+	/// Default behavior for handling the RPC requests.
 	async fn handle_request(
 		self,
 		request: hyper::Request<hyper::Body>,
 	) -> Result<hyper::Response<hyper::Body>, HyperError> {
-		let TowerServiceData {
+		let ServiceData {
 			remote_addr,
 			methods,
 			acl,
@@ -551,7 +551,7 @@ impl<L: Logger> TowerServiceData<L> {
 /// This is similar to [`hyper::service::service_fn`].
 #[derive(Debug)]
 pub struct TowerService<L> {
-	inner: TowerServiceData<L>,
+	inner: ServiceData<L>,
 }
 
 impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<L> {
@@ -619,7 +619,7 @@ impl<L: Logger> Server<L> {
 
 		let make_service = make_service_fn(move |conn: &AddrStream| {
 			let service = TowerService {
-				inner: TowerServiceData {
+				inner: ServiceData {
 					remote_addr: conn.remote_addr(),
 					methods: methods.clone(),
 					acl: acl.clone(),
