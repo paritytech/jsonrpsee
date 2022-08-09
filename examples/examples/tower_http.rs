@@ -25,10 +25,7 @@
 // DEALINGS IN THE SOFTWARE.
 
 use hyper::body::Bytes;
-use hyper::server::conn::AddrStream;
-use hyper::service::make_service_fn;
-use hyper::{Body, Server};
-use std::convert::Infallible;
+use hyper::Body;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -39,7 +36,7 @@ use tower_http::LatencyUnit;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::logger::{self, Params, Request};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, RpcModule};
+use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 
 /// Define a custom logging mechanism to detect the time passed
 /// between receiving the request and proving the response.
@@ -76,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let addr = run_server().await?;
+	let (addr, _handler) = run_server().await?;
 	let url = format!("http://{}", addr);
 
 	let client = HttpClientBuilder::default().build(&url)?;
@@ -88,43 +85,29 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
-	// Construct a custom service for handling the RPC requests.
-	let make_service = make_service_fn(move |conn: &AddrStream| {
-		let remote_addr = conn.remote_addr();
-		async move {
-			let mut module = RpcModule::new(());
-			module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
+	// Custom tower service to handle the RPC requests
+	let builder = tower::ServiceBuilder::new()
+		// Add high level tracing/logging to all requests
+		.layer(
+			TraceLayer::new_for_http()
+				.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
+					tracing::trace!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")
+				})
+				.make_span_with(DefaultMakeSpan::new().include_headers(true))
+				.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
+		)
+		// Mark the `Authorization` request header as sensitive so it doesn't show in logs
+		.layer(SetSensitiveRequestHeadersLayer::new(once(hyper::header::AUTHORIZATION)))
+		.timeout(Duration::from_secs(2));
 
-			// Obtain the tower service relying on the RPC implementation.
-			// NOTE: RPC's logger can be chained with tower.
-			let rpc_svc = HttpServerBuilder::new().set_logger(Timings).to_service(module, remote_addr).unwrap();
+	let server = HttpServerBuilder::new().set_logger(Timings).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let addr = server.local_addr()?;
 
-			// Chain multiple tower compatible layers on top of the RPC's service.
-			let tower_svc = tower::ServiceBuilder::new()
-				// Add high level tracing/logging to all requests
-				.layer(
-					TraceLayer::new_for_http()
-						.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
-							tracing::trace!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")
-						})
-						.make_span_with(DefaultMakeSpan::new().include_headers(true))
-						.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
-				)
-				// Mark the `Authorization` request header as sensitive so it doesn't show in logs
-				.layer(SetSensitiveRequestHeadersLayer::new(once(hyper::header::AUTHORIZATION)))
-				.timeout(Duration::from_secs(2))
-				.service(rpc_svc);
+	let mut module = RpcModule::new(());
+	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 
-			Ok::<_, Infallible>(tower_svc)
-		}
-	});
+	let handler = server.start_with_builder(module, builder)?;
 
-	let addr = SocketAddr::from(([127, 0, 0, 1], 9935));
-	tokio::spawn(async move { Server::bind(&addr).serve(make_service).await });
-
-	// Race with server start / client connect present in all examples
-	tokio::time::sleep(Duration::from_secs(5)).await;
-
-	Ok(addr)
+	Ok((addr, handler))
 }
