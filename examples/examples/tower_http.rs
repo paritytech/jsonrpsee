@@ -24,47 +24,19 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! This example sets a custom tower service middleware to the RPC implementation.
+
 use hyper::body::Bytes;
-use hyper::Body;
 use std::iter::once;
 use std::net::SocketAddr;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::logger::{self, Params, Request};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
-
-/// Define a custom logging mechanism to detect the time passed
-/// between receiving the request and proving the response.
-///
-/// The implementation relies upon [logger::HttpLogger].
-#[derive(Clone)]
-struct Timings;
-
-impl logger::HttpLogger for Timings {
-	type Instant = Instant;
-
-	fn on_request(&self, remote_addr: SocketAddr, request: &Request<Body>) -> Self::Instant {
-		println!("[Logger::on_request] remote_addr {}, request: {:?}", remote_addr, request);
-		Instant::now()
-	}
-
-	fn on_call(&self, name: &str, params: Params, kind: logger::MethodKind) {
-		println!("[Logger::on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
-	}
-
-	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
-		println!("[Logger::on_result] '{}', worked? {}, time elapsed {:?}", name, success, started_at.elapsed());
-	}
-
-	fn on_response(&self, result: &str, started_at: Self::Instant) {
-		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
-	}
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -87,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 	// Custom tower service to handle the RPC requests
-	let builder = tower::ServiceBuilder::new()
+	let service_builder = tower::ServiceBuilder::new()
 		// Add high level tracing/logging to all requests
 		.layer(
 			TraceLayer::new_for_http()
@@ -101,13 +73,15 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 		.layer(SetSensitiveRequestHeadersLayer::new(once(hyper::header::AUTHORIZATION)))
 		.timeout(Duration::from_secs(2));
 
-	let server = HttpServerBuilder::new().set_logger(Timings).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	let server =
+		HttpServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+
 	let addr = server.local_addr()?;
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
 
-	let handler = server.start_with_builder(module, builder)?;
+	let handler = server.start(module)?;
 
 	Ok((addr, handler))
 }
