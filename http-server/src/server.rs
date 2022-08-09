@@ -597,7 +597,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 	//
 	// The following associated type is required by the `impl<B, U, L: Logger> Server<B, L>` bounds.
 	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B: Identity`).
-	type Error = Box<(dyn StdError + Send + Sync + 'static)>;
+	type Error = Box<dyn StdError + Send + Sync + 'static>;
 
 	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
