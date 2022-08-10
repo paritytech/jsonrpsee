@@ -141,6 +141,14 @@ impl<'a> Params<'a> {
 	pub fn into_owned(self) -> Params<'static> {
 		Params(self.0.map(|s| Cow::owned(s.into_owned())))
 	}
+
+	/// Return the byte length of the underlying data.
+	pub fn len(&self) -> usize {
+		match self.0 {
+			Some(ref cow) => cow.len(),
+			None => 0,
+		}
+	}
 }
 
 /// An `Iterator`-like parser for a sequence of [`Params`].
@@ -463,8 +471,10 @@ mod test {
 		let none = Params::new(None);
 		assert!(none.sequence().next::<u64>().is_err());
 		assert!(none.parse::<Option<u64>>().is_ok());
+		assert_eq!(none.len(), 0);
 
 		let array_params = Params::new(Some("[1, 2, 3]"));
+		assert_eq!(array_params.len(), 9);
 		let arr: Result<[u64; 3], _> = array_params.parse();
 		assert!(arr.is_ok());
 
@@ -476,10 +486,12 @@ mod test {
 		assert!(seq.next::<u64>().is_err());
 
 		let array_one = Params::new(Some("[1]"));
+		assert_eq!(array_one.len(), 3);
 		let one: Result<u64, _> = array_one.one();
 		assert!(one.is_ok());
 
 		let object_params = Params::new(Some(r#"{"beef":99,"dinner":0}"#));
+		assert_eq!(object_params.len(), 22);
 		let obj: Result<JsonValue, _> = object_params.parse();
 		assert!(obj.is_ok());
 	}
