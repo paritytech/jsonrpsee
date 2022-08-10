@@ -128,6 +128,7 @@ impl ops::Deref for Origin {
 
 /// Origins allowed to access
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum AllowOrigin {
 	/// Specific origin.
 	Origin(Origin),

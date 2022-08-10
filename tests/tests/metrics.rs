@@ -217,14 +217,16 @@ async fn http_server_logger() {
 
 	assert!(client.request::<String>("unknown_method", None).await.is_err());
 
-	let inner = counter.inner.lock().unwrap();
-
-	assert_eq!(inner.requests, (5, 5));
-	assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
-	assert_eq!(inner.calls["unknown_method"], (2, vec![]));
+	{
+		let inner = counter.inner.lock().unwrap();
+		assert_eq!(inner.requests, (5, 5));
+		assert_eq!(inner.calls["say_hello"], (3, vec![0, 2, 3]));
+		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
+	}
 
 	server_handle.stop().unwrap().await.unwrap();
 
 	// HTTP server doesn't track connections
+	let inner = counter.inner.lock().unwrap();
 	assert_eq!(inner.connections, (0, 0));
 }
