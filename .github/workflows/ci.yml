@@ -46,7 +46,7 @@ jobs:
         uses: actions-rs/cargo@v1.0.3
         with:
           command: clippy
-          args: --all-targets
+          args: --all-targets -- -D warnings
 
   check-docs:
     name: Check rustdoc
