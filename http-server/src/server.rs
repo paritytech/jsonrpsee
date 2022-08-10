@@ -54,8 +54,8 @@ use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
-use std::error::Error as StdError;
 use serde_json::value::RawValue;
+use std::error::Error as StdError;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tower::layer::util::Identity;
 use tower::Layer;
