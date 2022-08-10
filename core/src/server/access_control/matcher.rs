@@ -32,7 +32,7 @@ use tracing::warn;
 /// Pattern that can be matched to string.
 pub(crate) trait Pattern {
 	/// Returns true if given string matches the pattern.
-	fn matches<T: AsRef<str>>(&self, other: T) -> bool;
+	fn matches<'a, T: AsRef<str> + PartialEq<&'a str>>(&self, other: T) -> bool;
 }
 
 #[derive(Clone)]
@@ -53,7 +53,7 @@ impl Matcher {
 }
 
 impl Pattern for Matcher {
-	fn matches<T: AsRef<str>>(&self, other: T) -> bool {
+	fn matches<'a, T: AsRef<str> + PartialEq<&'a str>>(&self, other: T) -> bool {
 		let s = other.as_ref();
 		match self.0 {
 			Some(ref matcher) => matcher.is_match(s),

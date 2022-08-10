@@ -1,22 +1,19 @@
 //! Access control based on HTTP headers
 
-pub mod cors;
+pub mod origin;
 pub mod host;
 mod matcher;
 
-pub use cors::{AllowHeaders, AllowOrigin, Origin};
-pub use host::{AllowHosts, Host};
+pub use origin::{AllowOrigins, OriginType};
+pub use host::{Host, AllowHosts};
 
 use crate::Error;
-
-use self::cors::get_cors_allow_origin;
 
 /// Define access on control on HTTP layer.
 #[derive(Clone, Debug)]
 pub struct AccessControl {
 	allowed_hosts: AllowHosts,
-	allowed_origins: Option<Vec<AllowOrigin>>,
-	allowed_headers: AllowHeaders,
+	allowed_origins: AllowOrigins,
 }
 
 impl AccessControl {
@@ -32,46 +29,13 @@ impl AccessControl {
 	/// `host` is the return value from the `host header`
 	/// `origin` is the value from the `origin header`.
 	pub fn verify_origin(&self, origin: Option<&str>, host: &str) -> Result<(), Error> {
-		if let cors::AllowCors::Invalid = get_cors_allow_origin(origin, &self.allowed_origins, Some(host)) {
-			Err(Error::HttpHeaderRejected("origin", origin.unwrap_or("<missing>").into()))
-		} else {
-			Ok(())
-		}
-	}
-
-	/// Validate incoming request by CORS(`access-control-request-headers`).
-	///
-	/// header_name: all keys of the header in the request
-	/// cors_request_headers: values of `access-control-request-headers` headers.
-	///
-	pub fn verify_headers<T, I, II>(&self, header_names: I, cors_request_headers: II) -> Result<(), Error>
-	where
-		T: AsRef<str>,
-		I: Iterator<Item = T>,
-		II: Iterator<Item = T>,
-	{
-		let header =
-			cors::get_cors_allow_headers(header_names, cors_request_headers, &self.allowed_headers, |name| name);
-
-		if let cors::AllowCors::Invalid = header {
-			Err(Error::HttpHeaderRejected(
-				"access-control-request-headers",
-				"<too inefficient to displayed; use wireshark or something similar to find the header values>".into(),
-			))
-		} else {
-			Ok(())
-		}
-	}
-
-	/// Return the allowed headers we've set
-	pub fn allowed_headers(&self) -> &AllowHeaders {
-		&self.allowed_headers
+		self.allowed_origins.verify(origin, host)
 	}
 }
 
 impl Default for AccessControl {
 	fn default() -> Self {
-		Self { allowed_hosts: AllowHosts::Any, allowed_origins: None, allowed_headers: AllowHeaders::Any }
+		Self { allowed_hosts: AllowHosts::Any, allowed_origins: AllowOrigins::Any }
 	}
 }
 
@@ -79,13 +43,12 @@ impl Default for AccessControl {
 #[derive(Debug)]
 pub struct AccessControlBuilder {
 	allowed_hosts: AllowHosts,
-	allowed_origins: Option<Vec<AllowOrigin>>,
-	allowed_headers: AllowHeaders,
+	allowed_origins: AllowOrigins,
 }
 
 impl Default for AccessControlBuilder {
 	fn default() -> Self {
-		Self { allowed_hosts: AllowHosts::Any, allowed_origins: None, allowed_headers: AllowHeaders::Any }
+		Self { allowed_hosts: AllowHosts::Any, allowed_origins: AllowOrigins::Any }
 	}
 }
 
@@ -103,13 +66,7 @@ impl AccessControlBuilder {
 
 	/// Allow all origins.
 	pub fn allow_all_origins(mut self) -> Self {
-		self.allowed_origins = None;
-		self
-	}
-
-	/// Allow all headers.
-	pub fn allow_all_headers(mut self) -> Self {
-		self.allowed_headers = AllowHeaders::Any;
+		self.allowed_origins = AllowOrigins::Any;
 		self
 	}
 
@@ -137,27 +94,11 @@ impl AccessControlBuilder {
 		List: IntoIterator<Item = Origin>,
 		Origin: Into<String>,
 	{
-		let allowed_origins: Vec<AllowOrigin> = list.into_iter().map(Into::into).map(Into::into).collect();
+		let allowed_origins: Vec<OriginType> = list.into_iter().map(Into::into).map(Into::into).collect();
 		if allowed_origins.is_empty() {
 			return Err(Error::EmptyAllowList("Origin"));
 		}
-		self.allowed_origins = Some(allowed_origins);
-		Ok(self)
-	}
-
-	/// Configure allowed CORS headers.
-	///
-	/// Default - allow all.
-	pub fn set_allowed_headers<Header, List>(mut self, list: List) -> Result<Self, Error>
-	where
-		List: IntoIterator<Item = Header>,
-		Header: Into<String>,
-	{
-		let allowed_headers: Vec<String> = list.into_iter().map(Into::into).collect();
-		if allowed_headers.is_empty() {
-			return Err(Error::EmptyAllowList("Header"));
-		}
-		self.allowed_headers = AllowHeaders::Only(allowed_headers);
+		self.allowed_origins = AllowOrigins::Only(allowed_origins);
 		Ok(self)
 	}
 
@@ -166,7 +107,6 @@ impl AccessControlBuilder {
 		AccessControl {
 			allowed_hosts: self.allowed_hosts,
 			allowed_origins: self.allowed_origins,
-			allowed_headers: self.allowed_headers,
 		}
 	}
 }
