@@ -487,9 +487,6 @@ impl<L: Logger> ServiceData<L> {
 
 		let request_start = logger.on_request(remote_addr, &request);
 
-		let keys = request.headers().keys().map(|k| k.as_str());
-		let cors_request_headers = http_helpers::get_cors_request_headers(request.headers());
-
 		let host = match http_helpers::read_header_value(request.headers(), "host") {
 			Some(origin) => origin,
 			None => return Ok(malformed()),
@@ -506,11 +503,6 @@ impl<L: Logger> ServiceData<L> {
 			return Ok(response::invalid_allow_origin());
 		}
 
-		if let Err(e) = acl.verify_headers(keys, cors_request_headers) {
-			tracing::warn!("Denied request: {:?}", e);
-			return Ok(response::invalid_allow_headers());
-		}
-
 		// Only `POST` and `OPTIONS` methods are allowed.
 		match *request.method() {
 			// An OPTIONS request is a CORS preflight request. We've done our access check
@@ -521,13 +513,10 @@ impl<L: Logger> ServiceData<L> {
 					None => return Ok(malformed()),
 				};
 
-				let allowed_headers = acl.allowed_headers().to_cors_header_value();
-				let allowed_header_bytes = allowed_headers.as_bytes();
-
 				let res = hyper::Response::builder()
 					.header("access-control-allow-origin", origin)
 					.header("access-control-allow-methods", "POST")
-					.header("access-control-allow-headers", allowed_header_bytes)
+					.header("access-control-allow-headers", "*".as_bytes())
 					.body(hyper::Body::empty())
 					.unwrap_or_else(|e| {
 						tracing::error!("Error forming preflight response: {}", e);

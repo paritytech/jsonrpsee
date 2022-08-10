@@ -65,15 +65,6 @@ pub fn invalid_allow_origin() -> hyper::Response<hyper::Body> {
     )
 }
 
-/// Create a text/plain response for invalid CORS "Allow-*" headers.
-pub fn invalid_allow_headers() -> hyper::Response<hyper::Body> {
-	from_template(
-        hyper::StatusCode::FORBIDDEN,
-        "Requested headers are not allowed for CORS. CORS headers would not be sent and any side-effects were cancelled as well.\n".to_owned(),
-		TEXT,
-    )
-}
-
 /// Create a json response for oversized requests (413)
 pub fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
 	let error = serde_json::to_string(&ErrorResponse::borrowed(reject_too_big_request(limit), Id::Null))
