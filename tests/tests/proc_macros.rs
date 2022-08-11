@@ -314,8 +314,8 @@ async fn multiple_blocking_calls_overlap() {
 		assert_eq!(result.unwrap(), 42);
 	}
 
-	// Each request takes 50ms, added 10ms margin for scheduling
-	assert!(elapsed < Duration::from_millis(60), "Expected less than 60ms, got {:?}", elapsed);
+	// Each request takes 50ms, added 50ms margin for scheduling
+	assert!(elapsed < Duration::from_millis(100), "Expected less than 100ms, got {:?}", elapsed);
 }
 
 #[tokio::test]
