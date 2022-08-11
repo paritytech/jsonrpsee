@@ -142,7 +142,7 @@ impl<'a> Params<'a> {
 		Params(self.0.map(|s| Cow::owned(s.into_owned())))
 	}
 
-	/// Return the byte length of the underlying data.
+	/// Return the length of underlying JSON string in number of bytes.
 	pub fn len_bytes(&self) -> usize {
 		match self.0 {
 			Some(ref cow) => cow.len(),
