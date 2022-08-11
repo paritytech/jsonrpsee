@@ -243,104 +243,110 @@ impl Drop for Client {
 #[async_trait]
 impl ClientT for Client {
 	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
-        // NOTE: we use this to guard against max number of concurrent requests.
-        let _req_id = self.id_manager.next_request_id()?;
-        let notif = NotificationSer::new(method, params);
-        let trace = RpcTracing::batch();
+		// NOTE: we use this to guard against max number of concurrent requests.
+		let _req_id = self.id_manager.next_request_id()?;
+		let notif = NotificationSer::new(method, params);
+		let trace = RpcTracing::batch();
 
-        async {
-            let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
-            tx_log_from_str(&raw, self.max_log_length);
+		async {
+			let raw = serde_json::to_string(&notif).map_err(Error::ParseError)?;
+			tx_log_from_str(&raw, self.max_log_length);
 
-            let mut sender = self.to_back.clone();
-            let fut = sender.send(FrontToBack::Notification(raw));
+			let mut sender = self.to_back.clone();
+			let fut = sender.send(FrontToBack::Notification(raw));
 
-            match future::select(fut, Delay::new(self.request_timeout)).await {
-                Either::Left((Ok(()), _)) => Ok(()),
-                Either::Left((Err(_), _)) => Err(self.read_error_from_backend().await),
-                Either::Right((_, _)) => Err(Error::RequestTimeout),
-            }
-        }.instrument(trace.into_span()).await
-    }
+			match future::select(fut, Delay::new(self.request_timeout)).await {
+				Either::Left((Ok(()), _)) => Ok(()),
+				Either::Left((Err(_), _)) => Err(self.read_error_from_backend().await),
+				Either::Right((_, _)) => Err(Error::RequestTimeout),
+			}
+		}
+		.instrument(trace.into_span())
+		.await
+	}
 
 	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
-    {
-        let (send_back_tx, send_back_rx) = oneshot::channel();
-        let guard = self.id_manager.next_request_id()?;
-        let id = guard.inner();
-        let trace = RpcTracing::method_call(method);
+	{
+		let (send_back_tx, send_back_rx) = oneshot::channel();
+		let guard = self.id_manager.next_request_id()?;
+		let id = guard.inner();
+		let trace = RpcTracing::method_call(method);
 
-        async {
-            let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
-            tx_log_from_str(&raw, self.max_log_length);
+		async {
+			let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
+			tx_log_from_str(&raw, self.max_log_length);
 
-            if self
-                .to_back
-                .clone()
-                .send(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) }))
-                .await
-                .is_err()
-            {
-                return Err(self.read_error_from_backend().await);
-            }
+			if self
+				.to_back
+				.clone()
+				.send(FrontToBack::Request(RequestMessage { raw, id: id.clone(), send_back: Some(send_back_tx) }))
+				.await
+				.is_err()
+			{
+				return Err(self.read_error_from_backend().await);
+			}
 
-            let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-            let json_value = match res {
-                Ok(Ok(v)) => v,
-                Ok(Err(err)) => return Err(err),
-                Err(_) => return Err(self.read_error_from_backend().await),
-            };
+			let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+			let json_value = match res {
+				Ok(Ok(v)) => v,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => return Err(self.read_error_from_backend().await),
+			};
 
-            rx_log_from_json(&Response::new(&json_value, id), self.max_log_length);
+			rx_log_from_json(&Response::new(&json_value, id), self.max_log_length);
 
-            serde_json::from_value(json_value).map_err(Error::ParseError)
-        }.instrument(trace.into_span()).await
-    }
+			serde_json::from_value(json_value).map_err(Error::ParseError)
+		}
+		.instrument(trace.into_span())
+		.await
+	}
 
 	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
-    {
-        let trace = RpcTracing::batch();
-        async {
+	{
+		let trace = RpcTracing::batch();
+		async {
 			let guard = self.id_manager.next_request_ids(batch.len())?;
 			let batch_ids: Vec<Id> = guard.inner();
 			let mut batches = Vec::with_capacity(batch.len());
 			for (idx, (method, params)) in batch.into_iter().enumerate() {
-                batches.push(RequestSer::new(&batch_ids[idx], method, params));
-            }
+				batches.push(RequestSer::new(&batch_ids[idx], method, params));
+			}
 
-            let (send_back_tx, send_back_rx) = oneshot::channel();
+			let (send_back_tx, send_back_rx) = oneshot::channel();
 
-            let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
+			let raw = serde_json::to_string(&batches).map_err(Error::ParseError)?;
 
-            tx_log_from_str(&raw, self.max_log_length);
+			tx_log_from_str(&raw, self.max_log_length);
 
-            if self
-                .to_back
-                .clone()
-                .send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
-                .await
-                .is_err()
-            {
-                return Err(self.read_error_from_backend().await);
-            }
+			if self
+				.to_back
+				.clone()
+				.send(FrontToBack::Batch(BatchMessage { raw, ids: batch_ids, send_back: send_back_tx }))
+				.await
+				.is_err()
+			{
+				return Err(self.read_error_from_backend().await);
+			}
 
-            let res = call_with_timeout(self.request_timeout, send_back_rx).await;
-            let json_values = match res {
-                Ok(Ok(v)) => v,
-                Ok(Err(err)) => return Err(err),
-                Err(_) => return Err(self.read_error_from_backend().await),
-            };
+			let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+			let json_values = match res {
+				Ok(Ok(v)) => v,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => return Err(self.read_error_from_backend().await),
+			};
 
-            rx_log_from_json(&json_values, self.max_log_length);
+			rx_log_from_json(&json_values, self.max_log_length);
 
-            let values: Result<_, _> =
-                json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
-            Ok(values?)
-        }.instrument(trace.into_span()).await
+			let values: Result<_, _> =
+				json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
+			Ok(values?)
+		}
+		.instrument(trace.into_span())
+		.await
 	}
 }
 
@@ -358,52 +364,55 @@ impl SubscriptionClientT for Client {
 	) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
-    {
-        if subscribe_method == unsubscribe_method {
-            return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
-        }
+	{
+		if subscribe_method == unsubscribe_method {
+			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
+		}
 
-        let guard = self.id_manager.next_request_ids(2)?;
-        let mut ids: Vec<Id> = guard.inner();
-        let trace = RpcTracing::method_call(subscribe_method);
+		let guard = self.id_manager.next_request_ids(2)?;
+		let mut ids: Vec<Id> = guard.inner();
+		let trace = RpcTracing::method_call(subscribe_method);
 
-        async {
-            let id = ids[0].clone();
+		async {
+			let id = ids[0].clone();
 
-            let raw = serde_json::to_string(&RequestSer::new(&id, subscribe_method, params)).map_err(Error::ParseError)?;
+			let raw =
+				serde_json::to_string(&RequestSer::new(&id, subscribe_method, params)).map_err(Error::ParseError)?;
 
-            tx_log_from_str(&raw, self.max_log_length);
+			tx_log_from_str(&raw, self.max_log_length);
 
-            let (send_back_tx, send_back_rx) = oneshot::channel();
-            if self
-                .to_back
-                .clone()
-                .send(FrontToBack::Subscribe(SubscriptionMessage {
-                    raw,
-                    subscribe_id: ids.swap_remove(0),
-                    unsubscribe_id: ids.swap_remove(0),
-                    unsubscribe_method: unsubscribe_method.to_owned(),
-                    send_back: send_back_tx,
-                }))
-                .await
-                .is_err()
-            {
-                return Err(self.read_error_from_backend().await);
-            }
+			let (send_back_tx, send_back_rx) = oneshot::channel();
+			if self
+				.to_back
+				.clone()
+				.send(FrontToBack::Subscribe(SubscriptionMessage {
+					raw,
+					subscribe_id: ids.swap_remove(0),
+					unsubscribe_id: ids.swap_remove(0),
+					unsubscribe_method: unsubscribe_method.to_owned(),
+					send_back: send_back_tx,
+				}))
+				.await
+				.is_err()
+			{
+				return Err(self.read_error_from_backend().await);
+			}
 
-            let res = call_with_timeout(self.request_timeout, send_back_rx).await;
+			let res = call_with_timeout(self.request_timeout, send_back_rx).await;
 
-            let (notifs_rx, sub_id) = match res {
-                Ok(Ok(val)) => val,
-                Ok(Err(err)) => return Err(err),
-                Err(_) => return Err(self.read_error_from_backend().await),
-            };
+			let (notifs_rx, sub_id) = match res {
+				Ok(Ok(val)) => val,
+				Ok(Err(err)) => return Err(err),
+				Err(_) => return Err(self.read_error_from_backend().await),
+			};
 
-            rx_log_from_json(&Response::new(&sub_id, id), self.max_log_length);
+			rx_log_from_json(&Response::new(&sub_id, id), self.max_log_length);
 
-            Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
-        }.instrument(trace.into_span()).await
-    }
+			Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
+		}
+		.instrument(trace.into_span())
+		.await
+	}
 
 	/// Subscribe to a specific method.
 	async fn subscribe_to_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
@@ -683,7 +692,7 @@ async fn background_task<S, R>(
 			}
 			// Submit ping interval was triggered if enabled.
 			Either::Right((_, next_message_fut)) => {
-				if let Err(e) = sender.send_ping().await {
+				if let Err(e) = sender.optional_send_ping().await {
 					tracing::warn!("[backend]: client send ping failed: {:?}", e);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
 					break;
@@ -693,5 +702,5 @@ async fn background_task<S, R>(
 		};
 	}
 	// Send close message to the server.
-	let _ = sender.close().await;
+	let _ = sender.optional_close().await;
 }
