@@ -132,7 +132,7 @@ pub trait TransportSenderT: MaybeSend + 'static {
 	/// Send.
 	async fn send(&mut self, msg: String) -> Result<(), Self::Error>;
 
-	/// This is optional because it's most likely on relevant for WebSocket transports only.
+	/// This is optional because it's most likely relevant for WebSocket transports only.
 	/// You should only implement this is your transport supports sending periodic pings.
 	///
 	/// Send ping frame (opcode of 0x9).
