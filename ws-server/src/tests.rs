@@ -148,21 +148,21 @@ async fn server_with_context() -> SocketAddr {
 
 	rpc_module
 		.register_method("should_err", |_p, ctx| {
-			let _ = ctx.err().map_err(CallError::Failed)?;
+			ctx.err().map_err(CallError::Failed)?;
 			Ok("err")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_method("should_ok", |_p, ctx| {
-			let _ = ctx.ok().map_err(CallError::Failed)?;
+			ctx.ok().map_err(CallError::Failed)?;
 			Ok("ok")
 		})
 		.unwrap();
 
 	rpc_module
 		.register_async_method("should_ok_async", |_p, ctx| async move {
-			let _ = ctx.ok().map_err(CallError::Failed)?;
+			ctx.ok().map_err(CallError::Failed)?;
 			// Call some async function inside.
 			Ok(futures_util::future::ready("ok!").await)
 		})
@@ -170,7 +170,7 @@ async fn server_with_context() -> SocketAddr {
 
 	rpc_module
 		.register_async_method("err_async", |_p, ctx| async move {
-			let _ = ctx.ok().map_err(CallError::Failed)?;
+			ctx.ok().map_err(CallError::Failed)?;
 			// Async work that returns an error
 			futures_util::future::err::<(), _>(anyhow!("nah").into()).await
 		})

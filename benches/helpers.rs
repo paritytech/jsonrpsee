@@ -1,4 +1,5 @@
-use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
+use jsonrpsee::http_client::{HeaderMap, HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 pub(crate) const SYNC_FAST_CALL: &str = "fast_call";
@@ -12,6 +13,9 @@ pub(crate) const UNSUB_METHOD_NAME: &str = "unsub";
 
 pub(crate) const SYNC_METHODS: [&str; 3] = [SYNC_FAST_CALL, SYNC_MEM_CALL, SYNC_SLOW_CALL];
 pub(crate) const ASYNC_METHODS: [&str; 3] = [SYNC_FAST_CALL, SYNC_MEM_CALL, SYNC_SLOW_CALL];
+
+// 1 KiB = 1024 bytes
+pub(crate) const KIB: usize = 1024;
 
 /// Run jsonrpc HTTP server for benchmarks.
 #[cfg(feature = "jsonrpc-crate")]
@@ -160,9 +164,9 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module.register_method(SYNC_FAST_CALL, |_, _| Ok("lo")).unwrap();
 	module.register_async_method(ASYNC_FAST_CALL, |_, _| async { Ok("lo") }).unwrap();
 
-	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(1 * 1024 * 1024))).unwrap();
+	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(1024 * 1024))).unwrap();
 
-	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(1 * 1024 * 1024)) }).unwrap();
+	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(1024 * 1024)) }).unwrap();
 
 	module
 		.register_method(SYNC_SLOW_CALL, |_, _| {
@@ -181,10 +185,11 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module
 }
 
-pub(crate) fn http_client(url: &str) -> HttpClient {
+pub(crate) fn http_client(url: &str, headers: HeaderMap) -> HttpClient {
 	HttpClientBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.max_concurrent_requests(1024 * 1024)
+		.set_headers(headers)
 		.build(url)
 		.unwrap()
 }
@@ -196,4 +201,9 @@ pub(crate) async fn ws_client(url: &str) -> WsClient {
 		.build(url)
 		.await
 		.unwrap()
+}
+
+pub(crate) async fn ws_handshake(url: &str, headers: HeaderMap) {
+	let uri: Uri = url.parse().unwrap();
+	WsTransportClientBuilder::default().max_request_body_size(u32::MAX).set_headers(headers).build(uri).await.unwrap();
 }
