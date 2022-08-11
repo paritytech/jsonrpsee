@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use jsonrpsee_v0_15::client_transport::ws::{Uri, WsTransportClientBuilder};
 use jsonrpsee_v0_15::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee_v0_15::ws_client::{WsClient, WsClientBuilder};
@@ -19,6 +17,9 @@ pub(crate) const UNSUB_METHOD_NAME: &str = "unsub";
 
 pub(crate) const SYNC_METHODS: [&str; 3] = [SYNC_FAST_CALL, SYNC_MEM_CALL, SYNC_SLOW_CALL];
 pub(crate) const ASYNC_METHODS: [&str; 3] = [SYNC_FAST_CALL, SYNC_MEM_CALL, SYNC_SLOW_CALL];
+
+// 1 KiB = 1024 bytes
+pub(crate) const KIB: usize = 1024;
 
 /// Run jsonrpc HTTP server for benchmarks.
 #[cfg(feature = "jsonrpc-crate")]
@@ -188,10 +189,11 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module
 }
 
-pub(crate) fn http_client(url: &str) -> HttpClient {
+pub(crate) fn http_client(url: &str, headers: HeaderMap) -> HttpClient {
 	HttpClientBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.max_concurrent_requests(1024 * 1024)
+		.set_headers(headers)
 		.build(url)
 		.unwrap()
 }
@@ -203,4 +205,9 @@ pub(crate) async fn ws_client(url: &str) -> WsClient {
 		.build(url)
 		.await
 		.unwrap()
+}
+
+pub(crate) async fn ws_handshake(url: &str, headers: HeaderMap) {
+	let uri: Uri = url.parse().unwrap();
+	WsTransportClientBuilder::default().max_request_body_size(u32::MAX).set_headers(headers).build(uri).await.unwrap();
 }
