@@ -207,16 +207,19 @@ impl ClientT for HttpClient {
 				}
 			};
 
-			let response: Response<_> = match serde_json::from_slice(&body) {
-				Ok(response) => response,
-				Err(_) => {
-					let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-					return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
-				}
-			};
+			let response: Response<serde_json::Value> =
+				match serde_json::from_slice::<Response<serde_json::Value>>(&body) {
+					Ok(response) => response,
+					Err(_) => {
+						let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+						return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
+					}
+				};
+
+			let result = serde_json::from_value(response.result).map_err(Error::ParseError)?;
 
 			if response.id == id {
-				Ok(response.result)
+				Ok(result)
 			} else {
 				Err(Error::InvalidRequestId)
 			}
@@ -254,7 +257,7 @@ impl ClientT for HttpClient {
 				Ok(Err(e)) => return Err(Error::Transport(e.into())),
 			};
 
-			let rps: Vec<Response<_>> =
+			let rps: Vec<Response<serde_json::Value>> =
 				serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
 					Ok(e) => Error::Call(CallError::Custom(e.error_object().clone().into_owned())),
 					Err(e) => Error::ParseError(e),
@@ -267,7 +270,8 @@ impl ClientT for HttpClient {
 					Some(pos) => *pos,
 					None => return Err(Error::InvalidRequestId),
 				};
-				responses[pos] = rp.result
+				let result = serde_json::from_value(rp.result).map_err(Error::ParseError)?;
+				responses[pos] = result;
 			}
 			Ok(responses)
 		}
