@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
+use crate::helpers::{ws_handshake, KIB};
 use criterion::*;
 use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
 use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee::http_client::HeaderMap;
 use jsonrpsee::types::{Id, ParamsSer, RequestSer};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
@@ -85,10 +87,11 @@ trait RequestBencher {
 	fn http_benches(crit: &mut Criterion) {
 		let rt = TokioRuntime::new().unwrap();
 		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
-		let client = Arc::new(http_client(&url));
+		let client = Arc::new(http_client(&url, HeaderMap::new()));
 		round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
 		http_concurrent_conn_calls(&rt, crit, &url, "http_concurrent_conn_calls", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "http_batch_requests", Self::REQUEST_TYPE);
+		http_custom_headers_round_trip(&rt, crit, &url, "http_custom_headers_round_trip", Self::REQUEST_TYPE);
 	}
 
 	fn websocket_benches(crit: &mut Criterion) {
@@ -99,6 +102,7 @@ trait RequestBencher {
 		ws_concurrent_conn_calls(&rt, crit, &url, "ws_concurrent_conn_calls", Self::REQUEST_TYPE);
 		ws_concurrent_conn_subs(&rt, crit, &url, "ws_concurrent_conn_subs", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "ws_batch_requests", Self::REQUEST_TYPE);
+		ws_custom_headers_handshake(&rt, crit, &url, "ws_custom_headers_handshake", Self::REQUEST_TYPE);
 	}
 
 	fn subscriptions(crit: &mut Criterion) {
@@ -293,7 +297,7 @@ fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str
 	for conns in [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
 		group.bench_function(format!("{}", conns), |b| {
 			b.to_async(rt).iter_with_setup(
-				|| (0..conns).map(|_| http_client(url)),
+				|| (0..conns).map(|_| http_client(url, HeaderMap::new())),
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
@@ -303,6 +307,51 @@ fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str
 					join_all(tasks).await;
 				},
 			)
+		});
+	}
+	group.finish();
+}
+
+/// Bench `round_trip` with different header sizes.
+fn http_custom_headers_round_trip(
+	rt: &TokioRuntime,
+	crit: &mut Criterion,
+	url: &str,
+	name: &str,
+	request: RequestType,
+) {
+	let method_name = request.methods()[0];
+
+	for header_size in [0, KIB, 5 * KIB, 25 * KIB, 100 * KIB] {
+		let mut headers = HeaderMap::new();
+		if header_size != 0 {
+			headers.insert("key", "A".repeat(header_size).parse().unwrap());
+		}
+
+		let client = Arc::new(http_client(url, headers));
+		let bench_name = format!("{}/{}kb", name, header_size / KIB);
+
+		crit.bench_function(&request.group_name(&bench_name), |b| {
+			b.to_async(rt).iter(|| async {
+				black_box(client.request::<String>(method_name, None).await.unwrap());
+			})
+		});
+	}
+}
+
+/// Bench WS handshake with different header sizes.
+fn ws_custom_headers_handshake(rt: &TokioRuntime, crit: &mut Criterion, url: &str, name: &str, request: RequestType) {
+	let mut group = crit.benchmark_group(request.group_name(name));
+	for header_size in [0, KIB, 2 * KIB, 4 * KIB] {
+		group.bench_function(format!("{}kb", header_size / KIB), |b| {
+			b.to_async(rt).iter(|| async move {
+				let mut headers = HeaderMap::new();
+				if header_size != 0 {
+					headers.insert("key", "A".repeat(header_size).parse().unwrap());
+				}
+
+				ws_handshake(url, headers).await;
+			})
 		});
 	}
 	group.finish();
