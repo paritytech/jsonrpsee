@@ -186,22 +186,22 @@ mod tests {
 
 	#[test]
 	fn should_reject_if_header_not_on_the_list() {
-		assert!((AllowHosts::Only(vec![].into())).verify("parity.io").is_err());
+		assert!((AllowHosts::Only(vec![])).verify("parity.io").is_err());
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list() {
-		assert!((AllowHosts::Only(vec!["parity.io".into()].into())).verify("parity.io").is_ok());
+		assert!((AllowHosts::Only(vec!["parity.io".into()])).verify("parity.io").is_ok());
 	}
 
 	#[test]
 	fn should_accept_if_on_the_list_with_port() {
-		assert!((AllowHosts::Only(vec!["parity.io:443".into()].into())).verify("parity.io:443").is_ok());
-		assert!((AllowHosts::Only(vec!["parity.io".into()].into())).verify("parity.io:443").is_err());
+		assert!((AllowHosts::Only(vec!["parity.io:443".into()])).verify("parity.io:443").is_ok());
+		assert!((AllowHosts::Only(vec!["parity.io".into()])).verify("parity.io:443").is_err());
 	}
 
 	#[test]
 	fn should_support_wildcards() {
-		assert!((AllowHosts::Only(vec!["*.web3.site:*".into()].into())).verify("parity.web3.site:8180").is_ok());
+		assert!((AllowHosts::Only(vec!["*.web3.site:*".into()])).verify("parity.web3.site:8180").is_ok());
 	}
 }

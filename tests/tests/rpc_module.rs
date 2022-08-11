@@ -74,8 +74,7 @@ fn flatten_rpc_modules() {
 
 #[test]
 fn rpc_context_modules_can_register_subscriptions() {
-	let cx = ();
-	let mut cxmodule = RpcModule::new(cx);
+	let mut cxmodule = RpcModule::new(());
 	cxmodule.register_subscription("hi", "hi", "goodbye", |_, _, _| Ok(())).unwrap();
 
 	assert!(cxmodule.method("hi").is_some());
