@@ -143,7 +143,7 @@ impl<'a> Params<'a> {
 	}
 
 	/// Return the byte length of the underlying data.
-	pub fn len(&self) -> usize {
+	pub fn len_bytes(&self) -> usize {
 		match self.0 {
 			Some(ref cow) => cow.len(),
 			None => 0,
