@@ -441,6 +441,7 @@ impl<L: Logger> Server<L> {
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
+					tracing::trace!("{:?}", request);
 					let request_start = logger.on_request(remote_addr, &request);
 
 					let methods = methods.clone();
