@@ -42,11 +42,11 @@ jobs:
           command: fmt
           args: --all -- --check
 
-      - name: Cargo clippy
-        uses: actions-rs/cargo@v1.0.3
+      - name: Check clippy
+        uses: actions-rs/clippy-check@v1
         with:
-          command: clippy
-          args: --all-targets -- -D warnings
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all-features
 
   check-docs:
     name: Check rustdoc
