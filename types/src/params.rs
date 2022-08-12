@@ -486,7 +486,7 @@ mod test {
 		assert!(seq.next::<u64>().is_err());
 
 		let array_one = Params::new(Some("[1]"));
-		assert_eq!(array_one.len(), 3);
+		assert_eq!(array_one.len_bytes(), 3);
 		let one: Result<u64, _> = array_one.one();
 		assert!(one.is_ok());
 
