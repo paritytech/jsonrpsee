@@ -638,7 +638,6 @@ impl<B, L> Server<B, L> {
 }
 
 // Required trait bounds for the middleware service.
-// TODO: consider introducing a marker trait for this.
 impl<B, U, L> Server<B, L>
 where
 	L: Logger,
