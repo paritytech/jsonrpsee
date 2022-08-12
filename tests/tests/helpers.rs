@@ -36,6 +36,7 @@ use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
+use tower_http::cors::CorsLayer;
 
 pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle) {
 	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
@@ -218,12 +219,15 @@ pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::m
 }
 
 pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
-	http_server_with_access_control(AccessControlBuilder::default().build()).await
+	http_server_with_access_control(AccessControlBuilder::default().build(), CorsLayer::default()).await
 }
 
-pub async fn http_server_with_access_control(acl: AccessControl) -> (SocketAddr, HttpServerHandle) {
+pub async fn http_server_with_access_control(acl: AccessControl, cors: CorsLayer) -> (SocketAddr, HttpServerHandle) {
+	let middleware = tower::ServiceBuilder::new().layer(cors);
+
 	let server = HttpServerBuilder::default()
 		.set_access_control(acl)
+		.set_middleware(middleware)
 		.health_api("/health", "system_health")
 		.unwrap()
 		.build("127.0.0.1:0")

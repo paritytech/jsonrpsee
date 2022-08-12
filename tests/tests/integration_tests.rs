@@ -32,6 +32,7 @@ use std::time::Duration;
 
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
 use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
+use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::{Error, JsonValue};
@@ -42,6 +43,7 @@ use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
+use tower_http::cors::CorsLayer;
 
 mod helpers;
 
@@ -768,7 +770,11 @@ async fn http_cors_preflight_works() {
 	init_logger();
 
 	let acl = AccessControlBuilder::new().set_allowed_origins(vec!["https://foo.com"]).unwrap().build();
-	let (server_addr, _handle) = http_server_with_access_control(acl).await;
+	let cors = CorsLayer::new()
+		.allow_methods([Method::POST])
+		.allow_origin("https://foo.com".parse::<HeaderValue>().unwrap())
+		.allow_headers([hyper::header::CONTENT_TYPE]);
+	let (server_addr, _handle) = http_server_with_access_control(acl, cors).await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
