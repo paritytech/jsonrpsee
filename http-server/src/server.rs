@@ -643,8 +643,18 @@ pub struct Server<B = Identity, L = ()> {
 	service_builder: tower::ServiceBuilder<B>,
 }
 
-impl<B, U, L: Logger> Server<B, L>
+impl<B, L> Server<B, L> {
+	/// Returns socket address to which the server is bound.
+	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
+		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
+	}
+}
+
+// Required trait bounds for the middleware service.
+// TODO: consider introducing a marker trait for this.
+impl<B, U, L> Server<B, L>
 where
+	L: Logger,
 	B: Layer<TowerService<L>> + Send + 'static,
 	<B as Layer<TowerService<L>>>::Service: Send
 		+ Service<
@@ -657,11 +667,6 @@ where
 	<U as HttpBody>::Error: Send + Sync + StdError,
 	<U as HttpBody>::Data: Send,
 {
-	/// Returns socket address to which the server is bound.
-	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
-		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
-	}
-
 	/// Start the server.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
