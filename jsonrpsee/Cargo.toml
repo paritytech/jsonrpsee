@@ -39,7 +39,7 @@ client = ["http-client", "ws-client", "wasm-client", "client-ws-transport", "cli
 client-core = ["jsonrpsee-core/client"]
 server = ["http-server", "ws-server", "server-core"]
 server-core = ["jsonrpsee-core/server"]
-full = ["client", "server"]
+full = ["client", "server", "macros"]
 
 [package.metadata.docs.rs]
 all-features = true
