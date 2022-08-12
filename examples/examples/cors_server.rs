@@ -73,10 +73,17 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	// RPC access control that allows all hosts.
-	let acl = AccessControlBuilder::new().allow_all_hosts().build();
+	// RPC access control that allows all hosts and all origins.
+	// Note: the access control does not modify the response headers,
+	// it only acts as a filter.
+	// If you need the ORIGIN header to be mirrored back in the response,
+	// please use the CORS layer.
+	let acl = AccessControlBuilder::new().allow_all_hosts().allow_all_origins().build();
 
 	// Add a CORS middleware for handling HTTP requests.
+	// This middleware does affect the response, including appropriate
+	// headers to satisfy CORS. Because any origins are allowed, the
+	// "Access-Control-Allow-Origin: *" header is appended to the response.
 	let cors = CorsLayer::new()
 		// Allow `POST` when accessing the resource
 		.allow_methods([Method::POST])
@@ -85,6 +92,10 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 		.allow_headers([hyper::header::CONTENT_TYPE]);
 	let middleware = tower::ServiceBuilder::new().layer(cors);
 
+	// The RPC exposes the access control for filtering and the middleware for
+	// modifying requests / responses. These features are independent of one another
+	// and can also be used separately.
+	// In this example, we use both features.
 	let server = HttpServerBuilder::default()
 		.set_access_control(acl)
 		.set_middleware(middleware)
