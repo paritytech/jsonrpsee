@@ -474,7 +474,7 @@ mod test {
 		assert_eq!(none.len(), 0);
 
 		let array_params = Params::new(Some("[1, 2, 3]"));
-		assert_eq!(array_params.len(), 9);
+		assert_eq!(array_params.len_bytes(), 9);
 		let arr: Result<[u64; 3], _> = array_params.parse();
 		assert!(arr.is_ok());
 
