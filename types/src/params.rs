@@ -491,7 +491,7 @@ mod test {
 		assert!(one.is_ok());
 
 		let object_params = Params::new(Some(r#"{"beef":99,"dinner":0}"#));
-		assert_eq!(object_params.len(), 22);
+		assert_eq!(object_params.len_bytes(), 22);
 		let obj: Result<JsonValue, _> = object_params.parse();
 		assert!(obj.is_ok());
 	}
