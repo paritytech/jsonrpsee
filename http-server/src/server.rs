@@ -585,9 +585,6 @@ pub struct TowerService<L> {
 impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<L> {
 	type Response = hyper::Response<hyper::Body>;
 
-	// NOTE(lexnv): The `handle_request` method returns `Result<_, Infallible>`.
-	// This is because the RPC service will always return a valid HTTP response (ie return `Ok(_)`).
-	//
 	// The following associated type is required by the `impl<B, U, L: Logger> Server<B, L>` bounds.
 	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B: Identity`).
 	type Error = Box<dyn StdError + Send + Sync + 'static>;
@@ -604,7 +601,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 		// Note that `handle_request` will never return error.
 		// The dummy error is set in place to satisfy the server's trait bounds regarding the
 		// `tower::ServiceBuilder` and the error will never be mapped.
-		Box::pin(data.handle_request(request).map(|res| Ok(res)))
+		Box::pin(data.handle_request(request).map(Ok))
 	}
 }
 
