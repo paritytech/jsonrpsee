@@ -147,7 +147,8 @@ where
 	type Instant = (A::Instant, B::Instant);
 
 	fn on_connect(&self, remote_addr: std::net::SocketAddr, headers: &Headers) {
-		(self.0.on_connect(remote_addr, headers), self.1.on_connect(remote_addr, headers));
+		self.0.on_connect(remote_addr, headers);
+		self.1.on_connect(remote_addr, headers);
 	}
 
 	fn on_request(&self) -> Self::Instant {
@@ -170,7 +171,8 @@ where
 	}
 
 	fn on_disconnect(&self, remote_addr: std::net::SocketAddr) {
-		(self.0.on_disconnect(remote_addr), self.1.on_disconnect(remote_addr));
+		self.0.on_disconnect(remote_addr);
+		self.1.on_disconnect(remote_addr);
 	}
 }
 

@@ -136,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
 	println!("response: {:?}", response);
 	let _response: Result<String, _> = client.request("unknown_method", None).await;
 	let _ = client.request::<String>("say_hello", None).await?;
-	let _ = client.request::<()>("thready", rpc_params![4]).await?;
+	client.request::<()>("thready", rpc_params![4]).await?;
 
 	Ok(())
 }

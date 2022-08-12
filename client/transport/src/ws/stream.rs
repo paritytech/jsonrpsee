@@ -40,6 +40,7 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 /// Stream to represent either a unencrypted or encrypted socket stream.
 #[pin_project(project = EitherStreamProj)]
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum EitherStream {
 	/// Unencrypted socket stream.
 	Plain(#[pin] TcpStream),
