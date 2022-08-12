@@ -136,7 +136,7 @@ pub trait TransportSenderT: MaybeSend + 'static {
 	/// You should only implement this is your transport supports sending periodic pings.
 	///
 	/// Send ping frame (opcode of 0x9).
-	async fn optional_send_ping(&mut self) -> Result<(), Self::Error> {
+	async fn send_ping(&mut self) -> Result<(), Self::Error> {
 		Ok(())
 	}
 
@@ -144,7 +144,7 @@ pub trait TransportSenderT: MaybeSend + 'static {
 	/// You should only implement this is your transport supports sending periodic pings.
 	///
 	/// Send customized close message.
-	async fn optional_close(&mut self) -> Result<(), Self::Error> {
+	async fn close(&mut self) -> Result<(), Self::Error> {
 		Ok(())
 	}
 }

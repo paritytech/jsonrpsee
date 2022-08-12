@@ -198,7 +198,7 @@ impl TransportSenderT for Sender {
 
 	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
-	async fn optional_send_ping(&mut self) -> Result<(), Self::Error> {
+	async fn send_ping(&mut self) -> Result<(), Self::Error> {
 		tracing::debug!("send ping");
 		// Submit empty slice as "optional" parameter.
 		let slice: &[u8] = &[];
@@ -211,7 +211,7 @@ impl TransportSenderT for Sender {
 	}
 
 	/// Send a close message and close the connection.
-	async fn optional_close(&mut self) -> Result<(), WsError> {
+	async fn close(&mut self) -> Result<(), WsError> {
 		self.inner.close().await.map_err(Into::into)
 	}
 }

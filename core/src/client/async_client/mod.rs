@@ -341,8 +341,10 @@ impl ClientT for Client {
 
 			rx_log_from_json(&json_values, self.max_log_length);
 
-            json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect()
-        }.instrument(trace.into_span()).await
+			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect()
+		}
+		.instrument(trace.into_span())
+		.await
 	}
 }
 
@@ -688,7 +690,7 @@ async fn background_task<S, R>(
 			}
 			// Submit ping interval was triggered if enabled.
 			Either::Right((_, next_message_fut)) => {
-				if let Err(e) = sender.optional_send_ping().await {
+				if let Err(e) = sender.send_ping().await {
 					tracing::warn!("[backend]: client send ping failed: {:?}", e);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
 					break;
@@ -698,5 +700,5 @@ async fn background_task<S, R>(
 		};
 	}
 	// Send close message to the server.
-	let _ = sender.optional_close().await;
+	let _ = sender.close().await;
 }
