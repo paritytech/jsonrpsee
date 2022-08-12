@@ -558,9 +558,6 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		let data = self.inner.clone();
-		// Note that `handle_request` will never return error.
-		// The dummy error is set in place to satisfy the server's trait bounds regarding the
-		// `tower::ServiceBuilder` and the error will never be mapped.
 		Box::pin(data.handle_request(request).map(Ok))
 	}
 }
@@ -601,7 +598,6 @@ impl<B, L> Server<B, L> {
 }
 
 // Required trait bounds for the middleware service.
-// TODO: consider introducing a marker trait for this.
 impl<B, U, L> Server<B, L>
 where
 	L: Logger,
