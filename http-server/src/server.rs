@@ -598,7 +598,6 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		let data = self.inner.clone();
-		// `tower::ServiceBuilder` and the error will never be mapped.
 		Box::pin(data.handle_request(request).map(Ok))
 	}
 }
