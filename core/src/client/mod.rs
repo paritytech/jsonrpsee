@@ -141,7 +141,7 @@ pub trait TransportSenderT: MaybeSend + 'static {
 	}
 
 	/// This is optional because it's most likely relevant for WebSocket transports only.
-	/// You should only implement this is your transport supports sending periodic pings.
+	/// You should only implement this is your transport supports being closed.
 	///
 	/// Send customized close message.
 	async fn optional_close(&mut self) -> Result<(), Self::Error> {
