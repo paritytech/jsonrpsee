@@ -471,7 +471,7 @@ mod test {
 		let none = Params::new(None);
 		assert!(none.sequence().next::<u64>().is_err());
 		assert!(none.parse::<Option<u64>>().is_ok());
-		assert_eq!(none.len(), 0);
+		assert_eq!(none.len_bytes(), 0);
 
 		let array_params = Params::new(Some("[1, 2, 3]"));
 		assert_eq!(array_params.len_bytes(), 9);
