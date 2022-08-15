@@ -4,7 +4,7 @@ pub mod origin;
 pub mod host;
 mod matcher;
 
-pub use origin::{AllowOrigins, OriginType};
+pub use origin::{AllowOrigins, Origin};
 pub use host::{Host, AllowHosts};
 
 use crate::Error;
@@ -89,12 +89,12 @@ impl AccessControlBuilder {
 	/// Configure allowed origins.
 	///
 	/// Default - allow all.
-	pub fn set_allowed_origins<Origin, List>(mut self, list: List) -> Result<Self, Error>
+	pub fn set_allowed_origins<O, List>(mut self, list: List) -> Result<Self, Error>
 	where
-		List: IntoIterator<Item = Origin>,
-		Origin: Into<String>,
+		List: IntoIterator<Item = O>,
+		O: Into<String>,
 	{
-		let allowed_origins: Vec<OriginType> = list.into_iter().map(Into::into).map(Into::into).collect();
+		let allowed_origins: Vec<Origin> = list.into_iter().map(Into::into).map(Into::into).collect();
 		if allowed_origins.is_empty() {
 			return Err(Error::EmptyAllowList("Origin"));
 		}

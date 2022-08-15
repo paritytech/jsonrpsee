@@ -45,25 +45,25 @@ pub enum OriginProtocol {
 
 /// Request Origin
 #[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub struct Origin {
+pub struct InnerOrigin {
 	protocol: OriginProtocol,
 	host: Host,
 	host_with_proto: String,
 	matcher: Matcher,
 }
 
-impl<T: AsRef<str>> From<T> for Origin {
+impl<T: AsRef<str>> From<T> for InnerOrigin {
 	fn from(origin: T) -> Self {
-		Origin::parse(origin.as_ref())
+		InnerOrigin::parse(origin.as_ref())
 	}
 }
 
-impl Origin {
+impl InnerOrigin {
 	fn with_host(protocol: OriginProtocol, host: Host) -> Self {
 		let host_with_proto = Self::host_with_proto(&protocol, &host);
 		let matcher = Matcher::new(&host_with_proto);
 
-		Origin { protocol, host, host_with_proto, matcher }
+		InnerOrigin { protocol, host, host_with_proto, matcher }
 	}
 
 	/// Creates new origin given protocol, hostname and port parts.
@@ -94,7 +94,7 @@ impl Origin {
 			Some(other) => OriginProtocol::Custom(other),
 		};
 
-		Origin::with_host(protocol, hostname)
+		InnerOrigin::with_host(protocol, hostname)
 	}
 
 	fn host_with_proto(protocol: &OriginProtocol, host: &Host) -> String {
@@ -110,13 +110,13 @@ impl Origin {
 	}
 }
 
-impl Pattern for Origin {
+impl Pattern for InnerOrigin {
 	fn matches<T: AsRef<str>>(&self, other: T) -> bool {
 		self.matcher.matches(other)
 	}
 }
 
-impl ops::Deref for Origin {
+impl ops::Deref for InnerOrigin {
 	type Target = str;
 	fn deref(&self) -> &Self::Target {
 		&self.host_with_proto
@@ -126,31 +126,31 @@ impl ops::Deref for Origin {
 /// Origin type allowed to access.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum OriginType {
+pub enum Origin {
 	/// Specific origin.
-	Origin(Origin),
+	Origin(InnerOrigin),
 	/// Null origin (file:///, sandboxed iframe).
 	Null,
 	/// Allow all origins i.e, the literal value "*" which is regarded as a wildcard.
 	Wildcard,
 }
 
-impl Pattern for OriginType {
+impl Pattern for Origin {
 	fn matches<T: AsRef<str>>(&self, other: T) -> bool {
 		if other.as_ref() == "null"  {
-			return *self == OriginType::Null;
+			return *self == Origin::Null;
 		}
 
 		match self {
-			OriginType::Wildcard => true,
-			OriginType::Null => false,
-			OriginType::Origin(ref origin) => origin.matches(other),
+			Origin::Wildcard => true,
+			Origin::Null => false,
+			Origin::Origin(ref origin) => origin.matches(other),
 		}
 	}
 }
 
 
-impl fmt::Display for OriginType {
+impl fmt::Display for Origin {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(
 			f,
@@ -164,7 +164,7 @@ impl fmt::Display for OriginType {
 	}
 }
 
-impl<T: Into<String>> From<T> for OriginType {
+impl<T: Into<String>> From<T> for Origin {
 	fn from(s: T) -> Self {
 		match s.into().as_str() {
 			"all" | "*" | "any" => Self::Wildcard,
@@ -180,7 +180,7 @@ pub enum AllowOrigins {
 	/// Allow all origins (no filter).
 	Any,
 	/// Allow only specified origins.
-	Only(Vec<OriginType>),
+	Only(Vec<Origin>),
 }
 
 impl AllowOrigins {
@@ -195,7 +195,7 @@ impl AllowOrigins {
 		// Requests initiated from the same server are allowed.
 		if origin.ends_with(host) {
 			// Additional check
-			let origin = Origin::parse(origin);
+			let origin = InnerOrigin::parse(origin);
 			if &*origin.host == host {
 				return Ok(());
 			}
@@ -223,20 +223,20 @@ mod tests {
 	fn should_parse_origin() {
 		use self::OriginProtocol::*;
 
-		assert_eq!(Origin::parse("http://parity.io"), Origin::new(Http, "parity.io", None));
-		assert_eq!(Origin::parse("https://parity.io:8443"), Origin::new(Https, "parity.io", Some(8443)));
+		assert_eq!(InnerOrigin::parse("http://parity.io"), InnerOrigin::new(Http, "parity.io", None));
+		assert_eq!(InnerOrigin::parse("https://parity.io:8443"), InnerOrigin::new(Https, "parity.io", Some(8443)));
 		assert_eq!(
-			Origin::parse("chrome-extension://124.0.0.1"),
-			Origin::new(Custom("chrome-extension".into()), "124.0.0.1", None)
+			InnerOrigin::parse("chrome-extension://124.0.0.1"),
+			InnerOrigin::new(Custom("chrome-extension".into()), "124.0.0.1", None)
 		);
-		assert_eq!(Origin::parse("parity.io/somepath"), Origin::new(Http, "parity.io", None));
-		assert_eq!(Origin::parse("127.0.0.1:8545/somepath"), Origin::new(Http, "127.0.0.1", Some(8545)));
+		assert_eq!(InnerOrigin::parse("parity.io/somepath"), InnerOrigin::new(Http, "parity.io", None));
+		assert_eq!(InnerOrigin::parse("127.0.0.1:8545/somepath"), InnerOrigin::new(Http, "127.0.0.1", Some(8545)));
 	}
 
 	#[test]
 	fn should_not_allow_partially_matching_origin() {
-		let origin1 = Origin::parse("http://subdomain.somedomain.io");
-		let origin2 = Origin::parse("http://somedomain.io:8080");
+		let origin1 = InnerOrigin::parse("http://subdomain.somedomain.io");
+		let origin2 = InnerOrigin::parse("http://somedomain.io:8080");
 		let host = Host::parse("http://somedomain.io");
 
 		let origin1 = Some(&*origin1);
@@ -250,7 +250,7 @@ mod tests {
 
 	#[test]
 	fn should_allow_origins_that_matches_hosts() {
-		let origin = Origin::parse("http://127.0.0.1:8080");
+		let origin = InnerOrigin::parse("http://127.0.0.1:8080");
 		let host = Host::parse("http://127.0.0.1:8080");
 
 		let origin = Some(&*origin);
@@ -281,7 +281,7 @@ mod tests {
 	fn should_allow_for_empty_origin() {
 		let origin = None;
 		let host = "";
-		let allow_origins = AllowOrigins::Only(vec![OriginType::Origin("http://ethereum.org".into())]);
+		let allow_origins = AllowOrigins::Only(vec![Origin::Origin("http://ethereum.org".into())]);
 
 		assert!(allow_origins.verify(origin, host).is_ok());
 	}
@@ -299,7 +299,7 @@ mod tests {
 	fn should_deny_for_different_origin() {
 		let origin = Some("http://parity.io");
 		let host = "";
-		let allow_origins = AllowOrigins::Only(vec![OriginType::Origin("http://ethereum.org".into())]);
+		let allow_origins = AllowOrigins::Only(vec![Origin::Origin("http://ethereum.org".into())]);
 
 		assert!(allow_origins.verify(origin, host).is_err());
 	}
@@ -308,7 +308,7 @@ mod tests {
 	fn should_allow_for_any() {
 		let origin = Some("http://parity.io");
 		let host = "";
-		let allow_origins = AllowOrigins::Only(vec![OriginType::Wildcard]);
+		let allow_origins = AllowOrigins::Only(vec![Origin::Wildcard]);
 
 		assert!(allow_origins.verify(origin, host).is_ok());
 	}
@@ -317,7 +317,7 @@ mod tests {
 	fn should_allow_if_origin_is_not_defined() {
 		let origin = None;
 		let host = "";
-		let allow_origins = AllowOrigins::Only(vec![OriginType::Null]);
+		let allow_origins = AllowOrigins::Only(vec![Origin::Null]);
 
 		assert!(allow_origins.verify(origin, host).is_ok());
 	}
@@ -326,7 +326,7 @@ mod tests {
 	fn should_allow_if_origin_is_null() {
 		let origin = Some("null");
 		let host = "";
-		let allow_origins = AllowOrigins::Only(vec![OriginType::Null]);
+		let allow_origins = AllowOrigins::Only(vec![Origin::Null]);
 
 		assert!(allow_origins.verify(origin, host).is_ok());
 	}
@@ -337,8 +337,8 @@ mod tests {
 		let host = "";
 
 		let allow_origins = AllowOrigins::Only(vec![
-			OriginType::Origin("http://ethereum.org".into()),
-			OriginType::Origin("http://parity.io".into()),
+			Origin::Origin("http://ethereum.org".into()),
+			Origin::Origin("http://parity.io".into()),
 		]);
 
 		assert!(allow_origins.verify(origin, host).is_ok());
@@ -351,7 +351,7 @@ mod tests {
 		let origin3 = Some("chrome-extension://test");
 		let host = "";
 		let allow_origins =
-			AllowOrigins::Only(vec![OriginType::Origin("http://*.io".into()), OriginType::Origin("chrome-extension://*".into())]);
+			AllowOrigins::Only(vec![Origin::Origin("http://*.io".into()), Origin::Origin("chrome-extension://*".into())]);
 
 		assert!(allow_origins.verify(origin1, host).is_ok());
 		assert!(allow_origins.verify(origin2, host).is_err());
