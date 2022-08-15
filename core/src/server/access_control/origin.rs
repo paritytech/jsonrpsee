@@ -131,7 +131,7 @@ pub enum OriginType {
 	Origin(Origin),
 	/// Null origin (file:///, sandboxed iframe)
 	Null,
-	/// Any non-null origin.
+	/// Allow all origins i.e, the literal value "*" which is regarded as a wildcard
 	AnyNonNull,
 }
 
