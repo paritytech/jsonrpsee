@@ -124,6 +124,7 @@ impl ops::Deref for Origin {
 }
 
 /// Origin type allowed to access.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OriginType {
 	/// Specific origin.
@@ -203,7 +204,7 @@ impl AllowOrigins {
 		match self {
 			AllowOrigins::Any => return Ok(()),
 			AllowOrigins::Only(list) => {
-				if list.iter().find(|allowed_origin| allowed_origin.matches(*origin)).is_none() {
+				if !list.iter().any(|allowed_origin| allowed_origin.matches(*origin)) {
 					return Err(Error::HttpHeaderRejected("origin", origin.to_string()));
 				}
 			}
