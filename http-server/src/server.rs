@@ -493,7 +493,7 @@ impl<L: Logger> ServiceData<L> {
 
 		if let Err(e) = acl.verify_origin(maybe_origin, host) {
 			tracing::warn!("Denied request: {:?}", e);
-			return response::invalid_allow_origin();
+			return response::origin_rejected(maybe_origin);
 		}
 
 		// Only the `POST` method is allowed.
