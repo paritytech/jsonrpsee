@@ -129,10 +129,10 @@ impl ops::Deref for Origin {
 pub enum OriginType {
 	/// Specific origin.
 	Origin(Origin),
-	/// Null origin (file:///, sandboxed iframe)
+	/// Null origin (file:///, sandboxed iframe).
 	Null,
-	/// Allow all origins i.e, the literal value "*" which is regarded as a wildcard
-	AnyNonNull,
+	/// Allow all origins i.e, the literal value "*" which is regarded as a wildcard.
+	Wildcard,
 }
 
 impl Pattern for OriginType {
@@ -142,7 +142,7 @@ impl Pattern for OriginType {
 		}
 
 		match self {
-			OriginType::AnyNonNull => true,
+			OriginType::Wildcard => true,
 			OriginType::Null => false,
 			OriginType::Origin(ref origin) => origin.matches(other),
 		}
@@ -156,7 +156,7 @@ impl fmt::Display for OriginType {
 			f,
 			"{}",
 			match *self {
-				Self::AnyNonNull => "*",
+				Self::Wildcard => "*",
 				Self::Null => "null",
 				Self::Origin(ref val) => val,
 			}
@@ -167,7 +167,7 @@ impl fmt::Display for OriginType {
 impl<T: Into<String>> From<T> for OriginType {
 	fn from(s: T) -> Self {
 		match s.into().as_str() {
-			"all" | "*" | "any" => Self::AnyNonNull,
+			"all" | "*" | "any" => Self::Wildcard,
 			"null" => Self::Null,
 			origin => Self::Origin(origin.into()),
 		}
@@ -308,7 +308,7 @@ mod tests {
 	fn should_allow_for_any() {
 		let origin = Some("http://parity.io");
 		let host = "";
-		let allow_origins = AllowOrigins::Only(vec![OriginType::AnyNonNull]);
+		let allow_origins = AllowOrigins::Only(vec![OriginType::Wildcard]);
 
 		assert!(allow_origins.verify(origin, host).is_ok());
 	}
