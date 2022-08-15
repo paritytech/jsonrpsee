@@ -111,7 +111,7 @@ impl Origin {
 }
 
 impl Pattern for Origin {
-	fn matches<'a, T: AsRef<str> + PartialEq<&'a str>>(&self, other: T) -> bool {
+	fn matches<T: AsRef<str>>(&self, other: T) -> bool {
 		self.matcher.matches(other)
 	}
 }
@@ -135,7 +135,7 @@ pub enum OriginType {
 }
 
 impl Pattern for OriginType {
-	fn matches<'a, T: AsRef<str> + PartialEq<&'a str>>(&self, other: T) -> bool {
+	fn matches<T: AsRef<str>>(&self, other: T) -> bool {
 		if other.as_ref() == "null"  {
 			return *self == OriginType::Null;
 		}

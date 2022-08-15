@@ -127,7 +127,7 @@ impl Host {
 }
 
 impl Pattern for Host {
-	fn matches<'a, T: AsRef<str> + PartialEq<&'a str>>(&self, other: T) -> bool {
+	fn matches<T: AsRef<str>>(&self, other: T) -> bool {
 		self.matcher.matches(other)
 	}
 }
