@@ -126,12 +126,12 @@ impl<L: Logger> Server<L> {
 			match connections.select_with(&mut incoming).await {
 				Ok((socket, _addr)) => {
 					if let Err(e) = socket.set_nodelay(true) {
-						tracing::error!("Could not set NODELAY on socket: {:?}", e);
+						tracing::warn!("Could not set NODELAY on socket: {:?}", e);
 						continue;
 					}
 
 					if connections.count() >= self.cfg.max_connections as usize {
-						tracing::warn!("Too many connections. Try again in a while.");
+						tracing::warn!("Too many connections. Please try again later.");
 						connections.add(Box::pin(handshake(socket, HandshakeResponse::Reject { status_code: 429 })));
 						continue;
 					}
@@ -264,7 +264,7 @@ async fn handshake<L: Logger>(socket: tokio::net::TcpStream, mode: HandshakeResp
 					server.send_response(&accept).await?;
 				}
 				Err(err) => {
-					tracing::warn!("Rejected connection: {:?}", err);
+					tracing::warn!("Rejected connection: {} error: {:?}", conn_id, err);
 					let reject = Response::Reject { status_code: 403 };
 					server.send_response(&reject).await?;
 
@@ -360,7 +360,7 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 				Either::Left((Some(response), ping)) => {
 					// If websocket message send fail then terminate the connection.
 					if let Err(err) = send_ws_message(&mut sender, response).await {
-						tracing::warn!("WS send error: {}; terminate connection", err);
+						tracing::error!("Terminate connection: WS send error: {}", err);
 						break;
 					}
 					rx_item = rx.next();
@@ -372,7 +372,7 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 				// Handle timer intervals.
 				Either::Right((_, next_rx)) => {
 					if let Err(err) = send_ws_ping(&mut sender).await {
-						tracing::warn!("WS send ping error: {}; terminate connection", err);
+						tracing::error!("Terminate connection: WS send ping error: {}", err);
 						break;
 					}
 					rx_item = next_rx;
@@ -403,7 +403,7 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 				loop {
 					match receiver.receive(&mut data).await? {
 						soketto::Incoming::Data(d) => break Ok(d),
-						soketto::Incoming::Pong(_) => tracing::debug!("recv pong"),
+						soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
 						soketto::Incoming::Closed(_) => {
 							// The closing reason is already logged by `soketto` trace log level.
 							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
@@ -418,7 +418,7 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
-						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
+						tracing::debug!("WS transport: Remote peer terminated the connection: {}", conn_id);
 						sink.close();
 						break Ok(());
 					}
@@ -433,7 +433,7 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::debug!("WS error: {}; terminate connection {}", err, conn_id);
+						tracing::debug!("Terminate connection {}: WS error: {}", conn_id, err);
 						sink.close();
 						break Err(err.into());
 					}
@@ -795,7 +795,7 @@ async fn send_ws_message(
 }
 
 async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>) -> Result<(), Error> {
-	tracing::debug!("send ping");
+	tracing::debug!("Send ping");
 	// Submit empty slice as "optional" parameter.
 	let slice: &[u8] = &[];
 	// Byte slice fails if the provided slice is larger than 125 bytes.

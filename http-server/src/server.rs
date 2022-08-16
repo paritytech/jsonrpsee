@@ -487,12 +487,12 @@ impl<L: Logger> ServiceData<L> {
 		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
 
 		if let Err(e) = acl.verify_host(host) {
-			tracing::warn!("Denied request: {:?}", e);
+			tracing::warn!("Denied request: {}", e);
 			return response::host_not_allowed();
 		}
 
 		if let Err(e) = acl.verify_origin(maybe_origin, host) {
-			tracing::warn!("Denied request: {:?}", e);
+			tracing::warn!("Denied request: {}", e);
 			return response::origin_rejected(maybe_origin);
 		}
 

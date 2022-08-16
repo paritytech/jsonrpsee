@@ -542,7 +542,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 
 	match message {
 		Some(Ok(ReceivedMessage::Pong)) => {
-			tracing::debug!("Received pong frame");
+			tracing::debug!("Received pong");
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
