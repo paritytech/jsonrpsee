@@ -936,7 +936,7 @@ async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 						r
 					}
 					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
 						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
 					}
 				}
@@ -951,7 +951,7 @@ async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 						(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
 					}
 					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
 						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
 					}
 				}

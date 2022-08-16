@@ -424,7 +424,7 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 					}
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
 						tracing::warn!(
-							"WS transport error: outgoing message is too big error ({} bytes, max is {})",
+							"WS transport error: Request length: {} exceeded max limit: {} bytes",
 							current,
 							maximum
 						);
@@ -433,7 +433,7 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 					}
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					MonitoredError::Selector(err) => {
-						tracing::debug!("Terminate connection {}: WS error: {}", conn_id, err);
+						tracing::error!("Terminate connection {}: WS error: {}", conn_id, err);
 						sink.close();
 						break Err(err.into());
 					}
@@ -950,7 +950,7 @@ async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 						MethodResult::SendAndLogger(r)
 					}
 					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
 						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
 						MethodResult::SendAndLogger(response)
 					}
@@ -969,7 +969,7 @@ async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 						MethodResult::SendAndLogger(response)
 					}
 					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
 						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
 						MethodResult::SendAndLogger(response)
 					}
@@ -991,7 +991,7 @@ async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 						}
 					}
 					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
 						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
 						MethodResult::SendAndLogger(response)
 					}
