@@ -83,7 +83,7 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 /// Sink that is used to send back the result to the server for a specific method.
 #[derive(Clone, Debug)]
 pub struct MethodSink {
-	/// Channel sender
+	/// Channel sender.
 	tx: mpsc::UnboundedSender<String>,
 	/// Max response size in bytes for a executed call.
 	max_response_size: u32,
@@ -92,12 +92,12 @@ pub struct MethodSink {
 }
 
 impl MethodSink {
-	/// Create a new `MethodSink` with unlimited response size
+	/// Create a new `MethodSink` with unlimited response size.
 	pub fn new(tx: mpsc::UnboundedSender<String>) -> Self {
 		MethodSink { tx, max_response_size: u32::MAX, max_log_length: u32::MAX }
 	}
 
-	/// Create a new `MethodSink` with a limited response size
+	/// Create a new `MethodSink` with a limited response size.
 	pub fn new_with_limit(tx: mpsc::UnboundedSender<String>, max_response_size: u32, max_log_length: u32) -> Self {
 		MethodSink { tx, max_response_size, max_log_length }
 	}
@@ -112,7 +112,7 @@ impl MethodSink {
 		let json = match serde_json::to_string(&ErrorResponse::borrowed(error, id)) {
 			Ok(json) => json,
 			Err(err) => {
-				tracing::error!("Error serializing error message: {:?}", err);
+				tracing::error!("Error serializing response: {:?}", err);
 
 				return false;
 			}
@@ -128,7 +128,7 @@ impl MethodSink {
 		}
 	}
 
-	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client
+	/// Helper for sending the general purpose `Error` as a JSON-RPC errors to the client.
 	pub fn send_call_error(&self, id: Id, err: Error) -> bool {
 		self.send_error(id, err.into())
 	}
