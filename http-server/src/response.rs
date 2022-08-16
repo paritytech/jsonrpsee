@@ -56,22 +56,13 @@ pub fn method_not_allowed() -> hyper::Response<hyper::Body> {
 	)
 }
 
-/// Create a text/plain response for invalid CORS "Origin" headers.
-pub fn invalid_allow_origin() -> hyper::Response<hyper::Body> {
+/// Create a text/plain response for rejected "Origin" headers.
+pub fn origin_rejected(origin: Option<&str>) -> hyper::Response<hyper::Body> {
 	from_template(
-        hyper::StatusCode::FORBIDDEN,
-        "Origin of the request is not whitelisted. CORS headers would not be sent and any side-effects were cancelled as well.\n".to_owned(),
+		hyper::StatusCode::FORBIDDEN,
+		format!("Origin: `{}` is not whitelisted.\n", origin.unwrap_or("")),
 		TEXT,
-    )
-}
-
-/// Create a text/plain response for invalid CORS "Allow-*" headers.
-pub fn invalid_allow_headers() -> hyper::Response<hyper::Body> {
-	from_template(
-        hyper::StatusCode::FORBIDDEN,
-        "Requested headers are not allowed for CORS. CORS headers would not be sent and any side-effects were cancelled as well.\n".to_owned(),
-		TEXT,
-    )
+	)
 }
 
 /// Create a json response for oversized requests (413)

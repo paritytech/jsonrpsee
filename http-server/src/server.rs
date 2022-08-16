@@ -30,12 +30,10 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::response;
-use crate::response::{internal_error, malformed};
 use futures_channel::mpsc;
 use futures_util::future::FutureExt;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use hyper::body::HttpBody;
-use hyper::header::{HeaderMap, HeaderValue};
 use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, Service};
@@ -482,12 +480,9 @@ impl<L: Logger> ServiceData<L> {
 
 		let request_start = logger.on_request(remote_addr, &request);
 
-		let keys = request.headers().keys().map(|k| k.as_str());
-		let cors_request_headers = http_helpers::get_cors_request_headers(request.headers());
-
 		let host = match http_helpers::read_header_value(request.headers(), "host") {
 			Some(origin) => origin,
-			None => return malformed(),
+			None => return response::malformed(),
 		};
 		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
 
@@ -498,43 +493,13 @@ impl<L: Logger> ServiceData<L> {
 
 		if let Err(e) = acl.verify_origin(maybe_origin, host) {
 			tracing::warn!("Denied request: {:?}", e);
-			return response::invalid_allow_origin();
+			return response::origin_rejected(maybe_origin);
 		}
 
-		if let Err(e) = acl.verify_headers(keys, cors_request_headers) {
-			tracing::warn!("Denied request: {:?}", e);
-			return response::invalid_allow_headers();
-		}
-
-		// Only `POST` and `OPTIONS` methods are allowed.
+		// Only the `POST` method is allowed.
 		match *request.method() {
-			// An OPTIONS request is a CORS preflight request. We've done our access check
-			// above so we just need to tell the browser that the request is OK.
-			Method::OPTIONS => {
-				let origin = match maybe_origin {
-					Some(origin) => origin,
-					None => return malformed(),
-				};
-
-				let allowed_headers = acl.allowed_headers().to_cors_header_value();
-				let allowed_header_bytes = allowed_headers.as_bytes();
-
-				hyper::Response::builder()
-					.header("access-control-allow-origin", origin)
-					.header("access-control-allow-methods", "POST")
-					.header("access-control-allow-headers", allowed_header_bytes)
-					.body(hyper::Body::empty())
-					.unwrap_or_else(|e| {
-						tracing::error!("Error forming preflight response: {}", e);
-						internal_error()
-					})
-			}
-			// The actual request. If it's a CORS request we need to remember to add
-			// the access-control-allow-origin header (despite preflight) to allow it
-			// to be read in a browser.
 			Method::POST if content_type_is_json(&request) => {
-				let origin = return_origin_if_different_from_host(request.headers()).cloned();
-				let mut res = process_validated_request(ProcessValidatedRequest {
+				process_validated_request(ProcessValidatedRequest {
 					request,
 					logger,
 					methods,
@@ -545,12 +510,7 @@ impl<L: Logger> ServiceData<L> {
 					batch_requests_supported,
 					request_start,
 				})
-				.await;
-
-				if let Some(origin) = origin {
-					res.headers_mut().insert("access-control-allow-origin", origin);
-				}
-				res
+				.await
 			}
 			Method::GET => match health_api.as_ref() {
 				Some(health) if health.path.as_str() == request.uri().path() => {
@@ -702,20 +662,6 @@ where
 		});
 
 		Ok(ServerHandle { handle: Some(handle), stop_sender: tx })
-	}
-}
-
-// Checks the origin and host headers. If they both exist, return the origin if it does not match the host.
-// If one of them doesn't exist (origin most probably), or they are identical, return None.
-fn return_origin_if_different_from_host(headers: &HeaderMap) -> Option<&HeaderValue> {
-	if let (Some(origin), Some(host)) = (headers.get("origin"), headers.get("host")) {
-		if origin != host {
-			Some(origin)
-		} else {
-			None
-		}
-	} else {
-		None
 	}
 }
 
