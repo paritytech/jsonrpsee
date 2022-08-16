@@ -573,27 +573,27 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 	match message {
 		FrontToBack::Batch(batch) => {
 			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
-				tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
+				tracing::warn!("[backend]: Batch request already pending: {:?}", batch.ids);
 				let _ = send_back.send(Err(Error::InvalidRequestId));
 				return;
 			}
 
 			if let Err(e) = sender.send(batch.raw).await {
-				tracing::warn!("[backend]: client batch request failed: {:?}", e);
+				tracing::warn!("[backend]: Batch request failed: {:?}", e);
 				manager.complete_pending_batch(batch.ids);
 			}
 		}
 		// User called `notification` on the front-end
 		FrontToBack::Notification(notif) => {
 			if let Err(e) = sender.send(notif).await {
-				tracing::warn!("[backend]: client notif failed: {:?}", e);
+				tracing::warn!("[backend]: Notification failed: {:?}", e);
 			}
 		}
 		// User called `request` on the front-end
 		FrontToBack::Request(request) => match sender.send(request.raw).await {
 			Ok(_) => manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed"),
 			Err(e) => {
-				tracing::warn!("[backend]: client request failed: {:?}", e);
+				tracing::warn!("[backend]: Request failed: {:?}", e);
 				let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
 			}
 		},
@@ -608,13 +608,13 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				)
 				.expect("Request ID unused checked above; qed"),
 			Err(e) => {
-				tracing::warn!("[backend]: client subscription failed: {:?}", e);
+				tracing::warn!("[backend]: Subscription failed: {:?}", e);
 				let _ = sub.send_back.send(Err(Error::Transport(e.into())));
 			}
 		},
 		// User dropped a subscription.
 		FrontToBack::SubscriptionClosed(sub_id) => {
-			tracing::trace!("Closing subscription: {:?}", sub_id);
+			tracing::trace!("[backend]: Closing subscription: {:?}", sub_id);
 			// NOTE: The subscription may have been closed earlier if
 			// the channel was full or disconnected.
 			if let Some(unsub) = manager
@@ -634,7 +634,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
 			}
 		}
-		// User dropped the notificationHandler for this method
+		// User dropped the NotificationHandler for this method
 		FrontToBack::UnregisterNotification(method) => {
 			let _ = manager.remove_notification_handler(method);
 		}
@@ -687,7 +687,7 @@ async fn background_task<S, R>(
 				} else {
 					// User dropped the sender side of the channel.
 					// There is nothing to do just terminate.
-					tracing::debug!("[backend]: frontend receiver dropped");
+					tracing::debug!("[backend]: Frontend receiver dropped");
 					break;
 				};
 
