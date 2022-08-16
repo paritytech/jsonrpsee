@@ -33,7 +33,7 @@
 //! The `jsonrpsee` crate composes JSON-RPC functionality behind optional feature
 //! flags to provide for client and server communication over specific protocols.
 //! There are no default features, all functionality must be opted in to accordingly.
-//! The following features are avaliable.
+//! The following features are available.
 //!
 //! - **`http-client`** - JSON-RPC client functionality over HTTP protocol.
 //! - **`http-server`** - JSON-RPC server functionality over HTTP protocol.
@@ -41,12 +41,15 @@
 //! - **`ws-client`** - JSON-RPC client functionality over WebSocket protocol.
 //! - **`ws-server`** - JSON-RPC server functionality over WebSocket protocol.
 //! - **`macros`** - JSON-RPC API generation convenience by derive macros.
-//! - **`client`** - Enables `http-client` and `ws-client` features.
-//! - **`server`** - Enables `http-server` and `ws-server` features.
-//! - **`full`** - Enables `client`, `server` and `macros` features.
+//! - **`client-core`** - Enables minimal client features to generate the RPC API without transports.
+//! - **`client`** - Enables all client features including transports.
+//! - **`server-core`** - Enables minimal server features to generate the RPC API without transports.
+//! - **`server`** - Enables all server features including transports.
+//! - **`full`** - Enables all features.
 //! - **`async-client`** - Enables the async client without any transport.
 //! - **`client-ws-transport`** - Enables `ws` transport with TLS.
 //! - **`client-ws-transport-no-tls`** - Enables `ws` transport without TLS.
+//! - **`client-web-transport`** - Enables `websys` transport.
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 

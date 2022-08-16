@@ -34,14 +34,15 @@ use crate::response::{internal_error, malformed};
 use futures_channel::mpsc;
 use futures_util::future::FutureExt;
 use futures_util::stream::{StreamExt, TryStreamExt};
+use hyper::body::HttpBody;
 use hyper::header::{HeaderMap, HeaderValue};
 use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Error as HyperError, Method};
+use hyper::service::{make_service_fn, Service};
+use hyper::{Body, Error as HyperError, Method};
 use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
-use jsonrpsee_core::middleware::{self, HttpMiddleware as Middleware};
+use jsonrpsee_core::logger::{self, HttpLogger as Logger};
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
 use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
@@ -52,15 +53,18 @@ use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
+use std::error::Error as StdError;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tracing::instrument;
+use tower::layer::util::Identity;
+use tower::Layer;
 use tracing_futures::Instrument;
 
 type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
-pub struct Builder<M = ()> {
+pub struct Builder<B = Identity, L = ()> {
 	/// Access control based on HTTP headers.
 	access_control: AccessControl,
 	resources: Resources,
@@ -69,9 +73,10 @@ pub struct Builder<M = ()> {
 	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
-	middleware: M,
+	logger: L,
 	max_log_length: u32,
 	health_api: Option<HealthApi>,
+	service_builder: tower::ServiceBuilder<B>,
 }
 
 impl Default for Builder {
@@ -83,9 +88,10 @@ impl Default for Builder {
 			batch_requests_supported: true,
 			resources: Resources::default(),
 			tokio_runtime: None,
-			middleware: (),
+			logger: (),
 			max_log_length: 4096,
 			health_api: None,
+			service_builder: tower::ServiceBuilder::new(),
 		}
 	}
 }
@@ -97,24 +103,27 @@ impl Builder {
 	}
 }
 
-impl<M> Builder<M> {
-	/// Add a middleware to the builder [`Middleware`](../jsonrpsee_core/middleware/trait.Middleware.html).
+impl<B, L> Builder<B, L> {
+	/// Add a logger to the builder [`Logger`](../jsonrpsee_core/logger/trait.Logger.html).
+	///
+	/// # Examples
 	///
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
+	/// use hyper::Request;
 	///
-	/// use jsonrpsee_core::middleware::{HttpMiddleware, Headers, MethodKind, Params};
+	/// use jsonrpsee_core::logger::{HttpLogger, Headers, MethodKind, Params};
 	/// use jsonrpsee_http_server::HttpServerBuilder;
 	///
 	/// #[derive(Clone)]
-	/// struct MyMiddleware;
+	/// struct MyLogger;
 	///
-	/// impl HttpMiddleware for MyMiddleware {
+	/// impl HttpLogger for MyLogger {
 	///     type Instant = Instant;
 	///
 	///     // Called once the HTTP request is received, it may be a single JSON-RPC call
 	///     // or batch.
-	///     fn on_request(&self, _remote_addr: SocketAddr, _headers: &Headers) -> Instant {
+	///     fn on_request(&self, _remote_addr: SocketAddr, _request: &Request<hyper::Body>) -> Instant {
 	///         Instant::now()
 	///     }
 	///
@@ -136,9 +145,9 @@ impl<M> Builder<M> {
 	///     }
 	/// }
 	///
-	/// let builder = HttpServerBuilder::new().set_middleware(MyMiddleware);
+	/// let builder = HttpServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_middleware<T: Middleware>(self, middleware: T) -> Builder<T> {
+	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<B, T> {
 		Builder {
 			access_control: self.access_control,
 			max_request_body_size: self.max_request_body_size,
@@ -146,9 +155,10 @@ impl<M> Builder<M> {
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
-			middleware,
+			logger,
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
+			service_builder: self.service_builder,
 		}
 	}
 
@@ -213,7 +223,48 @@ impl<M> Builder<M> {
 		Ok(self)
 	}
 
+	/// Configure a custom [`tower::ServiceBuilder`] middleware for composing layers to be applied to the RPC service.
+	///
+	/// Default: No tower layers are applied to the RPC service.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	///
+	/// use std::time::Duration;
+	/// use std::net::SocketAddr;
+	/// use jsonrpsee_http_server::HttpServerBuilder;
+	///
+	/// #[tokio::main]
+	/// async fn main() {
+	///     let builder = tower::ServiceBuilder::new()
+	///         .timeout(Duration::from_secs(2));
+	///
+	///     let server = HttpServerBuilder::new()
+	///         .set_middleware(builder)
+	///         .build("127.0.0.1:0".parse::<SocketAddr>().unwrap())
+	///         .await
+	///         .unwrap();
+	/// }
+	/// ```
+	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> Builder<T, L> {
+		Builder {
+			access_control: self.access_control,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			batch_requests_supported: self.batch_requests_supported,
+			resources: self.resources,
+			tokio_runtime: self.tokio_runtime,
+			logger: self.logger,
+			max_log_length: self.max_log_length,
+			health_api: self.health_api,
+			service_builder,
+		}
+	}
+
 	/// Finalizes the configuration of the server with customized TCP settings on the socket and on hyper.
+	///
+	/// # Examples
 	///
 	/// ```rust
 	/// use jsonrpsee_http_server::HttpServerBuilder;
@@ -249,7 +300,7 @@ impl<M> Builder<M> {
 		self,
 		listener: hyper::server::Builder<AddrIncoming>,
 		local_addr: SocketAddr,
-	) -> Result<Server<M>, Error> {
+	) -> Result<Server<B, L>, Error> {
 		Ok(Server {
 			access_control: self.access_control,
 			listener,
@@ -259,9 +310,10 @@ impl<M> Builder<M> {
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
-			middleware: self.middleware,
+			logger: self.logger,
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
+			service_builder: self.service_builder,
 		})
 	}
 
@@ -289,7 +341,7 @@ impl<M> Builder<M> {
 	///   let server = HttpServerBuilder::new().build_from_tcp(socket).unwrap();
 	/// }
 	/// ```
-	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<M>, Error> {
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<B, L>, Error> {
 		let listener = listener.into();
 		let local_addr = listener.local_addr().ok();
 
@@ -304,9 +356,10 @@ impl<M> Builder<M> {
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
-			middleware: self.middleware,
+			logger: self.logger,
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
+			service_builder: self.service_builder,
 		})
 	}
 
@@ -325,7 +378,7 @@ impl<M> Builder<M> {
 	///   assert!(jsonrpsee_http_server::HttpServerBuilder::default().build(addrs).await.is_ok());
 	/// }
 	/// ```
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<M>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
 		let listener = TcpListener::bind(addrs).await?.into_std()?;
 
 		let local_addr = listener.local_addr().ok();
@@ -340,9 +393,10 @@ impl<M> Builder<M> {
 			batch_requests_supported: self.batch_requests_supported,
 			resources: self.resources,
 			tokio_runtime: self.tokio_runtime,
-			middleware: self.middleware,
+			logger: self.logger,
 			max_log_length: self.max_log_length,
 			health_api: self.health_api,
+			service_builder: self.service_builder,
 		})
 	}
 }
@@ -384,9 +438,174 @@ impl Future for ServerHandle {
 	}
 }
 
+/// Data required by the server to handle requests.
+#[derive(Debug, Clone)]
+struct ServiceData<L> {
+	/// Remote server address.
+	remote_addr: SocketAddr,
+	/// Registered server methods.
+	methods: Methods,
+	/// Access control.
+	acl: AccessControl,
+	/// Tracker for currently used resources on the server.
+	resources: Resources,
+	/// User provided logger.
+	logger: L,
+	/// Health API.
+	health_api: Option<HealthApi>,
+	/// Max request body size.
+	max_request_body_size: u32,
+	/// Max response body size.
+	max_response_body_size: u32,
+	/// Max length for logging for request and response
+	///
+	/// Logs bigger than this limit will be truncated.
+	max_log_length: u32,
+	/// Whether batch requests are supported by this server or not.
+	batch_requests_supported: bool,
+}
+
+impl<L: Logger> ServiceData<L> {
+	/// Default behavior for handling the RPC requests.
+	async fn handle_request(self, request: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {
+		let ServiceData {
+			remote_addr,
+			methods,
+			acl,
+			resources,
+			logger,
+			health_api,
+			max_request_body_size,
+			max_response_body_size,
+			max_log_length,
+			batch_requests_supported,
+		} = self;
+
+		let request_start = logger.on_request(remote_addr, &request);
+
+		let keys = request.headers().keys().map(|k| k.as_str());
+		let cors_request_headers = http_helpers::get_cors_request_headers(request.headers());
+
+		let host = match http_helpers::read_header_value(request.headers(), "host") {
+			Some(origin) => origin,
+			None => return malformed(),
+		};
+		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
+
+		if let Err(e) = acl.verify_host(host) {
+			tracing::warn!("Denied request: {:?}", e);
+			return response::host_not_allowed();
+		}
+
+		if let Err(e) = acl.verify_origin(maybe_origin, host) {
+			tracing::warn!("Denied request: {:?}", e);
+			return response::invalid_allow_origin();
+		}
+
+		if let Err(e) = acl.verify_headers(keys, cors_request_headers) {
+			tracing::warn!("Denied request: {:?}", e);
+			return response::invalid_allow_headers();
+		}
+
+		// Only `POST` and `OPTIONS` methods are allowed.
+		match *request.method() {
+			// An OPTIONS request is a CORS preflight request. We've done our access check
+			// above so we just need to tell the browser that the request is OK.
+			Method::OPTIONS => {
+				let origin = match maybe_origin {
+					Some(origin) => origin,
+					None => return malformed(),
+				};
+
+				let allowed_headers = acl.allowed_headers().to_cors_header_value();
+				let allowed_header_bytes = allowed_headers.as_bytes();
+
+				hyper::Response::builder()
+					.header("access-control-allow-origin", origin)
+					.header("access-control-allow-methods", "POST")
+					.header("access-control-allow-headers", allowed_header_bytes)
+					.body(hyper::Body::empty())
+					.unwrap_or_else(|e| {
+						tracing::error!("Error forming preflight response: {}", e);
+						internal_error()
+					})
+			}
+			// The actual request. If it's a CORS request we need to remember to add
+			// the access-control-allow-origin header (despite preflight) to allow it
+			// to be read in a browser.
+			Method::POST if content_type_is_json(&request) => {
+				let origin = return_origin_if_different_from_host(request.headers()).cloned();
+				let mut res = process_validated_request(ProcessValidatedRequest {
+					request,
+					logger,
+					methods,
+					resources,
+					max_request_body_size,
+					max_response_body_size,
+					max_log_length,
+					batch_requests_supported,
+					request_start,
+				})
+				.await;
+
+				if let Some(origin) = origin {
+					res.headers_mut().insert("access-control-allow-origin", origin);
+				}
+				res
+			}
+			Method::GET => match health_api.as_ref() {
+				Some(health) if health.path.as_str() == request.uri().path() => {
+					process_health_request(
+						health,
+						logger,
+						methods,
+						max_response_body_size,
+						request_start,
+						max_log_length,
+					)
+					.await
+				}
+				_ => response::method_not_allowed(),
+			},
+			// Error scenarios:
+			Method::POST => response::unsupported_content_type(),
+			_ => response::method_not_allowed(),
+		}
+	}
+}
+
+/// JsonRPSee service compatible with `tower`.
+///
+/// # Note
+/// This is similar to [`hyper::service::service_fn`].
+#[derive(Debug)]
+pub struct TowerService<L> {
+	inner: ServiceData<L>,
+}
+
+impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<L> {
+	type Response = hyper::Response<hyper::Body>;
+
+	// The following associated type is required by the `impl<B, U, L: Logger> Server<B, L>` bounds.
+	// It satisfies the server's bounds when the `tower::ServiceBuilder<B>` is not set (ie `B: Identity`).
+	type Error = Box<dyn StdError + Send + Sync + 'static>;
+
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+	/// Opens door for back pressure implementation.
+	fn poll_ready(&mut self, _: &mut Context) -> Poll<Result<(), Self::Error>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
+		let data = self.inner.clone();
+		Box::pin(data.handle_request(request).map(Ok))
+	}
+}
+
 /// An HTTP JSON RPC server.
 #[derive(Debug)]
-pub struct Server<M = ()> {
+pub struct Server<B = Identity, L = ()> {
 	/// Hyper server.
 	listener: HyperBuilder<AddrIncoming>,
 	/// Local address
@@ -407,16 +626,34 @@ pub struct Server<M = ()> {
 	resources: Resources,
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
-	middleware: M,
+	logger: L,
 	health_api: Option<HealthApi>,
+	service_builder: tower::ServiceBuilder<B>,
 }
 
-impl<M: Middleware> Server<M> {
+impl<B, L> Server<B, L> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.local_addr.ok_or_else(|| Error::Custom("Local address not found".into()))
 	}
+}
 
+// Required trait bounds for the middleware service.
+impl<B, U, L> Server<B, L>
+where
+	L: Logger,
+	B: Layer<TowerService<L>> + Send + 'static,
+	<B as Layer<TowerService<L>>>::Service: Send
+		+ Service<
+			hyper::Request<Body>,
+			Response = hyper::Response<U>,
+			Error = Box<(dyn StdError + Send + Sync + 'static)>,
+		>,
+	<<B as Layer<TowerService<L>>>::Service as Service<hyper::Request<Body>>>::Future: Send,
+	U: HttpBody + Send + 'static,
+	<U as HttpBody>::Error: Send + Sync + StdError,
+	<U as HttpBody>::Data: Send,
+{
 	/// Start the server.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let max_request_body_size = self.max_request_body_size;
@@ -426,125 +663,32 @@ impl<M: Middleware> Server<M> {
 		let (tx, mut rx) = mpsc::channel(1);
 		let listener = self.listener;
 		let resources = self.resources;
-		let middleware = self.middleware;
+		let logger = self.logger;
 		let batch_requests_supported = self.batch_requests_supported;
 		let methods = methods.into().initialize_resources(&resources)?;
 		let health_api = self.health_api;
 
 		let make_service = make_service_fn(move |conn: &AddrStream| {
-			let remote_addr = conn.remote_addr();
-			let methods = methods.clone();
-			let acl = acl.clone();
-			let resources = resources.clone();
-			let middleware = middleware.clone();
-			let health_api = health_api.clone();
+			let service = TowerService {
+				inner: ServiceData {
+					remote_addr: conn.remote_addr(),
+					methods: methods.clone(),
+					acl: acl.clone(),
+					resources: resources.clone(),
+					logger: logger.clone(),
+					health_api: health_api.clone(),
+					max_request_body_size,
+					max_response_body_size,
+					max_log_length,
+					batch_requests_supported,
+				},
+			};
 
-			async move {
-				Ok::<_, HyperError>(service_fn(move |request| {
-					let request_start = middleware.on_request(remote_addr, request.headers());
+			let server = self.service_builder.service(service);
 
-					let methods = methods.clone();
-					let acl = acl.clone();
-					let resources = resources.clone();
-					let middleware = middleware.clone();
-					let health_api = health_api.clone();
-
-					// Run some validation on the http request, then read the body and try to deserialize it into one of
-					// two cases: a single RPC request or a batch of RPC requests.
-					async move {
-						let keys = request.headers().keys().map(|k| k.as_str());
-						let cors_request_headers = http_helpers::get_cors_request_headers(request.headers());
-
-						let host = match http_helpers::read_header_value(request.headers(), "host") {
-							Some(origin) => origin,
-							None => return Ok(malformed()),
-						};
-						let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
-
-						if let Err(e) = acl.verify_host(host) {
-							tracing::warn!("Denied request: {:?}", e);
-							return Ok(response::host_not_allowed());
-						}
-
-						if let Err(e) = acl.verify_origin(maybe_origin, host) {
-							tracing::warn!("Denied request: {:?}", e);
-							return Ok(response::invalid_allow_origin());
-						}
-
-						if let Err(e) = acl.verify_headers(keys, cors_request_headers) {
-							tracing::warn!("Denied request: {:?}", e);
-							return Ok(response::invalid_allow_headers());
-						}
-
-						// Only `POST` and `OPTIONS` methods are allowed.
-						match *request.method() {
-							// An OPTIONS request is a CORS preflight request. We've done our access check
-							// above so we just need to tell the browser that the request is OK.
-							Method::OPTIONS => {
-								let origin = match maybe_origin {
-									Some(origin) => origin,
-									None => return Ok(malformed()),
-								};
-
-								let allowed_headers = acl.allowed_headers().to_cors_header_value();
-								let allowed_header_bytes = allowed_headers.as_bytes();
-
-								let res = hyper::Response::builder()
-									.header("access-control-allow-origin", origin)
-									.header("access-control-allow-methods", "POST")
-									.header("access-control-allow-headers", allowed_header_bytes)
-									.body(hyper::Body::empty())
-									.unwrap_or_else(|e| {
-										tracing::error!("Error forming preflight response: {}", e);
-										internal_error()
-									});
-
-								Ok(res)
-							}
-							// The actual request. If it's a CORS request we need to remember to add
-							// the access-control-allow-origin header (despite preflight) to allow it
-							// to be read in a browser.
-							Method::POST if content_type_is_json(&request) => {
-								let origin = return_origin_if_different_from_host(request.headers()).cloned();
-								let mut res = process_validated_request(ProcessValidatedRequest {
-									request,
-									middleware,
-									methods,
-									resources,
-									max_request_body_size,
-									max_response_body_size,
-									max_log_length,
-									batch_requests_supported,
-									request_start,
-								})
-								.await?;
-
-								if let Some(origin) = origin {
-									res.headers_mut().insert("access-control-allow-origin", origin);
-								}
-								Ok(res)
-							}
-							Method::GET => match health_api.as_ref() {
-								Some(health) if health.path.as_str() == request.uri().path() => {
-									process_health_request(
-										health,
-										middleware,
-										methods,
-										max_response_body_size,
-										request_start,
-										max_log_length,
-									)
-									.await
-								}
-								_ => Ok(response::method_not_allowed()),
-							},
-							// Error scenarios:
-							Method::POST => Ok(response::unsupported_content_type()),
-							_ => Ok(response::method_not_allowed()),
-						}
-					}
-				}))
-			}
+			// For every request the `TowerService` is calling into `ServiceData::handle_request`
+			// where the RPSee bare implementation resides.
+			async move { Ok::<_, HyperError>(server) }
 		});
 
 		let rt = match self.tokio_runtime.take() {
@@ -594,25 +738,23 @@ fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
 	}
 }
 
-struct ProcessValidatedRequest<M: Middleware> {
+struct ProcessValidatedRequest<L: Logger> {
 	request: hyper::Request<hyper::Body>,
-	middleware: M,
+	logger: L,
 	methods: Methods,
 	resources: Resources,
 	max_request_body_size: u32,
 	max_response_body_size: u32,
 	max_log_length: u32,
 	batch_requests_supported: bool,
-	request_start: M::Instant,
+	request_start: L::Instant,
 }
 
 /// Process a verified request, it implies a POST request with content type JSON.
-async fn process_validated_request<M: Middleware>(
-	input: ProcessValidatedRequest<M>,
-) -> Result<hyper::Response<hyper::Body>, HyperError> {
+async fn process_validated_request<L: Logger>(input: ProcessValidatedRequest<L>) -> hyper::Response<hyper::Body> {
 	let ProcessValidatedRequest {
 		request,
-		middleware,
+		logger,
 		methods,
 		resources,
 		max_request_body_size,
@@ -626,11 +768,11 @@ async fn process_validated_request<M: Middleware>(
 
 	let (body, is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
 		Ok(r) => r,
-		Err(GenericTransportError::TooLarge) => return Ok(response::too_large(max_request_body_size)),
-		Err(GenericTransportError::Malformed) => return Ok(response::malformed()),
+		Err(GenericTransportError::TooLarge) => return response::too_large(max_request_body_size),
+		Err(GenericTransportError::Malformed) => return response::malformed(),
 		Err(GenericTransportError::Inner(e)) => {
 			tracing::error!("Internal error reading request body: {}", e);
-			return Ok(response::internal_error());
+			return response::internal_error();
 		}
 	};
 
@@ -638,7 +780,7 @@ async fn process_validated_request<M: Middleware>(
 	if is_single {
 		let call = CallData {
 			conn_id: 0,
-			middleware: &middleware,
+			logger: &logger,
 			methods: &methods,
 			max_response_body_size,
 			max_log_length,
@@ -646,8 +788,8 @@ async fn process_validated_request<M: Middleware>(
 			request_start,
 		};
 		let response = process_single_request(body, call).await;
-		middleware.on_response(&response.result, request_start);
-		Ok(response::ok_response(response.result))
+		logger.on_response(&response.result, request_start);
+		response::ok_response(response.result)
 	}
 	// Batch of requests or notifications
 	else if !batch_requests_supported {
@@ -655,8 +797,8 @@ async fn process_validated_request<M: Middleware>(
 			Id::Null,
 			ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 		);
-		middleware.on_response(&err.result, request_start);
-		Ok(response::ok_response(err.result))
+		logger.on_response(&err.result, request_start);
+		response::ok_response(err.result)
 	}
 	// Batch of requests or notifications
 	else {
@@ -664,7 +806,7 @@ async fn process_validated_request<M: Middleware>(
 			data: body,
 			call: CallData {
 				conn_id: 0,
-				middleware: &middleware,
+				logger: &logger,
 				methods: &methods,
 				max_response_body_size,
 				max_log_length,
@@ -673,20 +815,20 @@ async fn process_validated_request<M: Middleware>(
 			},
 		})
 		.await;
-		middleware.on_response(&response.result, request_start);
-		Ok(response::ok_response(response.result))
+		logger.on_response(&response.result, request_start);
+		response::ok_response(response.result)
 	}
 }
 
-#[instrument(name = "health_api", skip(middleware, methods, max_response_body_size, request_start, max_log_length))]
-async fn process_health_request<M: Middleware>(
+#[instrument(name = "health_api", skip(logger, methods, max_response_body_size, request_start, max_log_length))]
+async fn process_health_request<L: Logger>(
 	health_api: &HealthApi,
-	middleware: M,
+	logger: L,
 	methods: Methods,
 	max_response_body_size: u32,
-	request_start: M::Instant,
+	request_start: L::Instant,
 	max_log_length: u32,
-) -> Result<hyper::Response<hyper::Body>, HyperError> {
+) -> hyper::Response<hyper::Body> {
 	tx_log_from_str("HTTP health API", max_log_length);
 	let response = match methods.method_with_name(&health_api.method) {
 		None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
@@ -702,8 +844,8 @@ async fn process_health_request<M: Middleware>(
 	};
 
 	rx_log_from_str(&response.result, max_log_length);
-	middleware.on_result(&health_api.method, response.success, request_start);
-	middleware.on_response(&response.result, request_start);
+	logger.on_result(&health_api.method, response.success, request_start);
+	logger.on_response(&response.result, request_start);
 
 	if response.success {
 		#[derive(serde::Deserialize)]
@@ -714,34 +856,34 @@ async fn process_health_request<M: Middleware>(
 
 		let payload: RpcPayload = serde_json::from_str(&response.result)
 			.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
-		Ok(response::ok_response(payload.result.to_string()))
+		response::ok_response(payload.result.to_string())
 	} else {
-		Ok(response::internal_error())
+		response::internal_error()
 	}
 }
 
 #[derive(Debug, Clone)]
-struct Batch<'a, M: Middleware> {
+struct Batch<'a, L: Logger> {
 	data: Vec<u8>,
-	call: CallData<'a, M>,
+	call: CallData<'a, L>,
 }
 
 #[derive(Debug, Clone)]
-struct CallData<'a, M: Middleware> {
+struct CallData<'a, L: Logger> {
 	conn_id: usize,
-	middleware: &'a M,
+	logger: &'a L,
 	methods: &'a Methods,
 	max_response_body_size: u32,
 	max_log_length: u32,
 	resources: &'a Resources,
-	request_start: M::Instant,
+	request_start: L::Instant,
 }
 
 #[derive(Debug, Clone)]
-struct Call<'a, M: Middleware> {
+struct Call<'a, L: Logger> {
 	params: Params<'a>,
 	name: &'a str,
-	call: CallData<'a, M>,
+	call: CallData<'a, L>,
 	id: Id<'a>,
 }
 
@@ -749,9 +891,9 @@ struct Call<'a, M: Middleware> {
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
 #[instrument(name = "batch", skip(b))]
-async fn process_batch_request<M>(b: Batch<'_, M>) -> BatchResponse
+async fn process_batch_request<L>(b: Batch<'_, L>) -> BatchResponse
 where
-	M: Middleware,
+	L: Logger,
 {
 	let Batch { data, call } = b;
 
@@ -793,7 +935,7 @@ where
 	BatchResponse::error(id, ErrorObject::from(code))
 }
 
-async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
+async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
 		rx_log_from_json(&req, call.max_log_length);
@@ -815,19 +957,18 @@ async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_,
 	}
 }
 
-async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
+async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 	let Call { name, id, params, call } = c;
-	let CallData { resources, methods, middleware, max_response_body_size, max_log_length, conn_id, request_start } =
-		call;
+	let CallData { resources, methods, logger, max_response_body_size, max_log_length, conn_id, request_start } = call;
 
 	let response = match methods.method_with_name(name) {
 		None => {
-			middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
+			logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
 			MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
 
 				match method.claim(name, resources) {
 					Ok(guard) => {
@@ -842,7 +983,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 				}
 			}
 			MethodKind::Async(callback) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::MethodCall);
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
 				match method.claim(name, resources) {
 					Ok(guard) => {
 						let id = id.into_owned();
@@ -857,7 +998,7 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 				}
 			}
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				middleware.on_call(name, params.clone(), middleware::MethodKind::Unknown);
+				logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
 				tracing::error!("Subscriptions not supported on HTTP");
 				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
 			}
@@ -865,6 +1006,6 @@ async fn execute_call<M: Middleware>(c: Call<'_, M>) -> MethodResponse {
 	};
 
 	tx_log_from_str(&response.result, max_log_length);
-	middleware.on_result(name, response.success, request_start);
+	logger.on_result(name, response.success, request_start);
 	response
 }

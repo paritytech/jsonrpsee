@@ -146,9 +146,9 @@ impl Error {
 	}
 }
 
-impl Into<ErrorObjectOwned> for Error {
-	fn into(self) -> ErrorObjectOwned {
-		match self {
+impl From<Error> for ErrorObjectOwned {
+	fn from(err: Error) -> Self {
+		match err {
 			Error::Call(CallError::Custom(err)) => err,
 			Error::Call(CallError::InvalidParams(e)) => {
 				ErrorObject::owned(INVALID_PARAMS_CODE, e.to_string(), None::<()>)
@@ -156,7 +156,7 @@ impl Into<ErrorObjectOwned> for Error {
 			Error::Call(CallError::Failed(e)) => {
 				ErrorObject::owned(CALL_EXECUTION_FAILED_CODE, e.to_string(), None::<()>)
 			}
-			_ => ErrorObject::owned(UNKNOWN_ERROR_CODE, self.to_string(), None::<()>),
+			_ => ErrorObject::owned(UNKNOWN_ERROR_CODE, err.to_string(), None::<()>),
 		}
 	}
 }
@@ -173,18 +173,18 @@ pub enum SubscriptionClosed {
 	Failed(ErrorObject<'static>),
 }
 
-impl Into<ErrorObjectOwned> for SubscriptionClosed {
-	fn into(self) -> ErrorObjectOwned {
-		match self {
-			Self::RemotePeerAborted => {
+impl From<SubscriptionClosed> for ErrorObjectOwned {
+	fn from(err: SubscriptionClosed) -> Self {
+		match err {
+			SubscriptionClosed::RemotePeerAborted => {
 				ErrorObject::owned(SUBSCRIPTION_CLOSED, "Subscription was closed by the remote peer", None::<()>)
 			}
-			Self::Success => ErrorObject::owned(
+			SubscriptionClosed::Success => ErrorObject::owned(
 				SUBSCRIPTION_CLOSED,
 				"Subscription was completed by the server successfully",
 				None::<()>,
 			),
-			Self::Failed(err) => err,
+			SubscriptionClosed::Failed(err) => err,
 		}
 	}
 }

@@ -682,7 +682,7 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 
 	// This should not hit any limits, and unsubscription should have worked:
 	assert!(res.is_ok(), "Unsubscription method was successfully called");
-	assert_eq!(res.unwrap(), true, "Unsubscription was successful");
+	assert!(res.unwrap(), "Unsubscription was successful");
 }
 
 #[tokio::test]
@@ -711,9 +711,7 @@ async fn http_unsupported_methods_dont_work() {
 	for verb in [Method::GET, Method::PUT, Method::PATCH, Method::DELETE] {
 		assert!(req_is_client_error(verb).await);
 	}
-	for verb in [Method::POST] {
-		assert!(!req_is_client_error(verb).await);
-	}
+	assert!(!req_is_client_error(Method::POST).await);
 }
 
 #[tokio::test]

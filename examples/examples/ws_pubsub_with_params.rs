@@ -74,12 +74,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				match sink.pipe_from_stream(stream).await {
-					SubscriptionClosed::Failed(err) => {
-						sink.close(err);
-					}
-					_ => (),
-				};
+				if let SubscriptionClosed::Failed(err) = sink.pipe_from_stream(stream).await {
+					sink.close(err);
+				}
 			});
 			Ok(())
 		})
@@ -94,12 +91,9 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 			let stream = IntervalStream::new(interval).map(move |_| item);
 
 			tokio::spawn(async move {
-				match sink.pipe_from_stream(stream).await {
-					SubscriptionClosed::Failed(err) => {
-						sink.close(err);
-					}
-					_ => (),
-				};
+				if let SubscriptionClosed::Failed(err) = sink.pipe_from_stream(stream).await {
+					sink.close(err);
+				}
 			});
 
 			Ok(())

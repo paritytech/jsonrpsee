@@ -54,15 +54,6 @@ impl TransportSenderT for Sender {
 		self.0.send(Message::Text(msg)).await.map_err(|e| Error::WebSocket(e))?;
 		Ok(())
 	}
-
-	async fn send_ping(&mut self) -> Result<(), Self::Error> {
-		tracing::trace!("send ping - not implemented for wasm");
-		Err(Error::NotSupported)
-	}
-
-	async fn close(&mut self) -> Result<(), Error> {
-		Ok(())
-	}
 }
 
 #[async_trait(?Send)]
