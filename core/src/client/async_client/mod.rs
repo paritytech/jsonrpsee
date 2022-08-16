@@ -542,7 +542,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 
 	match message {
 		Some(Ok(ReceivedMessage::Pong)) => {
-			tracing::debug!("recv pong");
+			tracing::debug!("Received pong frame");
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
@@ -551,11 +551,9 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
 		}
 		Some(Err(e)) => {
-			tracing::error!("Error: {:?} terminating client", e);
 			return Err(Error::Transport(e.into()));
 		}
 		None => {
-			tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
 			return Err(Error::Custom("WebSocket receiver dropped".into()));
 		}
 	}
@@ -707,7 +705,7 @@ async fn background_task<S, R>(
 				)
 				.await
 				{
-					tracing::warn!("{:?}", err);
+					tracing::error!("[backend]: {}", err);
 					let _ = front_error.send(err);
 					break;
 				}
@@ -716,8 +714,8 @@ async fn background_task<S, R>(
 			}
 			// Submit ping interval was triggered if enabled.
 			Either::Right((_, next_message_fut)) => {
-				if let Err(e) = sender.send_ping().await {
-					tracing::warn!("[backend]: client send ping failed: {:?}", e);
+				if let Err(err) = sender.send_ping().await {
+					tracing::error!("[backend]: Could not send ping frame: {}", err);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
 					break;
 				}
@@ -725,6 +723,7 @@ async fn background_task<S, R>(
 			}
 		};
 	}
+
 	// Wake the `on_disconnect` method.
 	let _ = on_close.send(());
 	// Send close message to the server.
