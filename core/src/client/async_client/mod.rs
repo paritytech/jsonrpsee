@@ -162,9 +162,19 @@ impl ClientBuilder {
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 		let ping_interval = self.ping_interval;
+		let (on_close_tx, on_close_rx) = oneshot::channel();
 
 		tokio::spawn(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, ping_interval).await;
+			background_task(
+				sender,
+				receiver,
+				from_front,
+				err_tx,
+				max_notifs_per_subscription,
+				ping_interval,
+				on_close_tx,
+			)
+			.await;
 		});
 		Client {
 			to_back,
@@ -172,6 +182,7 @@ impl ClientBuilder {
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
+			notify: Mutex::new(Some(on_close_rx)),
 		}
 	}
 
@@ -186,9 +197,10 @@ impl ClientBuilder {
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
+		let (on_close_tx, on_close_rx) = oneshot::channel();
 
 		wasm_bindgen_futures::spawn_local(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None).await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None, on_close_tx).await;
 		});
 		Client {
 			to_back,
@@ -196,6 +208,7 @@ impl ClientBuilder {
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
+			notify: Mutex::new(Some(on_close_rx)),
 		}
 	}
 }
@@ -216,6 +229,10 @@ pub struct Client {
 	///
 	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
+	/// Notify when the client is disconnected or encountered an error.
+	// NOTE: Similar to error, the async fns use immutable references. The `Receiver` is wrapped
+	// into `Option` to ensure the `on_disconnect` awaits only once.
+	notify: Mutex<Option<oneshot::Receiver<()>>>,
 }
 
 impl Client {
@@ -231,6 +248,20 @@ impl Client {
 		let (next_state, err) = from_back.read_error().await;
 		*err_lock = next_state;
 		err
+	}
+
+	/// Completes when the client is disconnected or the client's background task encountered an error.
+	/// If the client is already disconnected, the future produced by this method will complete immediately.
+	///
+	/// # Cancel safety
+	///
+	/// This method is cancel safe.
+	pub async fn on_disconnect(&self) {
+		// Wait until the `background_task` exits.
+		let mut notify_lock = self.notify.lock().await;
+		if let Some(notify) = notify_lock.take() {
+			let _ = notify.await;
+		}
 	}
 }
 
@@ -628,6 +659,7 @@ async fn background_task<S, R>(
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 	ping_interval: Option<Duration>,
+	on_close: oneshot::Sender<()>,
 ) where
 	S: TransportSenderT,
 	R: TransportReceiverT,
@@ -699,6 +731,8 @@ async fn background_task<S, R>(
 			}
 		};
 	}
+	// Wake the `on_disconnect` method.
+	let _ = on_close.send(());
 	// Send close message to the server.
 	let _ = sender.close().await;
 }

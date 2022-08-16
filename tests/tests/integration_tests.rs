@@ -459,6 +459,78 @@ async fn ws_server_should_stop_subscription_after_client_drop() {
 }
 
 #[tokio::test]
+async fn ws_server_notify_client_on_disconnect() {
+	use futures::channel::oneshot;
+
+	init_logger();
+
+	let (server_addr, server_handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let (up_tx, up_rx) = oneshot::channel();
+	let (dis_tx, mut dis_rx) = oneshot::channel();
+	let (multiple_tx, multiple_rx) = oneshot::channel();
+
+	tokio::spawn(async move {
+		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+		// Validate server is up.
+		client.request::<String>("say_hello", None).await.unwrap();
+
+		// Signal client is waiting for the server to disconnect.
+		up_tx.send(()).unwrap();
+
+		client.on_disconnect().await;
+
+		// Signal disconnect finished.
+		dis_tx.send(()).unwrap();
+
+		// Call `on_disconnect` a few more times to ensure it does not block.
+		client.on_disconnect().await;
+		client.on_disconnect().await;
+		multiple_tx.send(()).unwrap();
+	});
+
+	// Ensure the client validated the server and is waiting for the disconnect.
+	up_rx.await.unwrap();
+
+	// Let A = dis_rx try_recv and server stop
+	//     B = client on_disconnect
+	//
+	// Precautionary wait to ensure that a buggy `on_disconnect` (B) cannot be called
+	// after the server shutdowns (A).
+	tokio::time::sleep(Duration::from_secs(5)).await;
+
+	// Make sure the `on_disconnect` method did not return before stopping the server.
+	assert_eq!(dis_rx.try_recv().unwrap(), None);
+
+	server_handle.stop().unwrap().await;
+
+	// The `on_disconnect()` method returned.
+	let _ = dis_rx.await.unwrap();
+
+	// Multiple `on_disconnect()` calls did not block.
+	let _ = multiple_rx.await.unwrap();
+}
+
+#[tokio::test]
+async fn ws_server_notify_client_on_disconnect_with_closed_server() {
+	init_logger();
+
+	let (server_addr, server_handle) = websocket_server_with_subscription().await;
+	let server_url = format!("ws://{}", server_addr);
+
+	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+	// Validate server is up.
+	client.request::<String>("say_hello", None).await.unwrap();
+
+	// Stop the server.
+	server_handle.stop().unwrap().await;
+
+	// Ensure `on_disconnect` returns when the call is made after the server is closed.
+	client.on_disconnect().await;
+}
+
+#[tokio::test]
 async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	init_logger();
 
