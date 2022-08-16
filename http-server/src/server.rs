@@ -55,9 +55,9 @@ use jsonrpsee_types::{Id, Notification, Params, Request};
 use serde_json::value::RawValue;
 use std::error::Error as StdError;
 use tokio::net::{TcpListener, ToSocketAddrs};
-use tracing::instrument;
 use tower::layer::util::Identity;
 use tower::Layer;
+use tracing::instrument;
 use tracing_futures::Instrument;
 
 type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
