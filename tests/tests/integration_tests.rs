@@ -506,10 +506,10 @@ async fn ws_server_notify_client_on_disconnect() {
 	server_handle.stop().unwrap().await;
 
 	// The `on_disconnect()` method returned.
-	let _ = dis_rx.await.unwrap();
+	dis_rx.await.unwrap();
 
 	// Multiple `on_disconnect()` calls did not block.
-	let _ = multiple_rx.await.unwrap();
+	multiple_rx.await.unwrap();
 }
 
 #[tokio::test]
