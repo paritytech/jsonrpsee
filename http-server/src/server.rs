@@ -597,6 +597,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 	}
 
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
+		tracing::trace!("{:?}", request);
 		let data = self.inner.clone();
 		Box::pin(data.handle_request(request).map(Ok))
 	}
