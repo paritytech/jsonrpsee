@@ -164,9 +164,9 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module.register_method(SYNC_FAST_CALL, |_, _| Ok("lo")).unwrap();
 	module.register_async_method(ASYNC_FAST_CALL, |_, _| async { Ok("lo") }).unwrap();
 
-	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(1 * 1024 * 1024))).unwrap();
+	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(1024 * 1024))).unwrap();
 
-	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(1 * 1024 * 1024)) }).unwrap();
+	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(1024 * 1024)) }).unwrap();
 
 	module
 		.register_method(SYNC_SLOW_CALL, |_, _| {

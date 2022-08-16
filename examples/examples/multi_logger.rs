@@ -56,8 +56,8 @@ impl logger::WsLogger for Timings {
 		println!("[Timings:on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
-	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("[Timings] call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+		println!("[Timings] call={}, worked? {}, duration {:?}", name, success, started_at.elapsed());
 	}
 
 	fn on_response(&self, _result: &str, started_at: Self::Instant) {
@@ -136,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
 	println!("response: {:?}", response);
 	let _response: Result<String, _> = client.request("unknown_method", None).await;
 	let _ = client.request::<String>("say_hello", None).await?;
-	let _ = client.request::<()>("thready", rpc_params![4]).await?;
+	client.request::<()>("thready", rpc_params![4]).await?;
 
 	Ok(())
 }

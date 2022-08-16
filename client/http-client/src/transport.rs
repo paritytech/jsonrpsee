@@ -118,7 +118,9 @@ impl HttpTransportClient {
 		}
 
 		let mut req = hyper::Request::post(&self.target);
-		req.headers_mut().map(|headers| *headers = self.headers.clone());
+		if let Some(headers) = req.headers_mut() {
+			*headers = self.headers.clone();
+		}
 		let req = req.body(From::from(body)).expect("URI and request headers are valid; qed");
 
 		let response = self.client.request(req).await.map_err(|e| Error::Http(Box::new(e)))?;
