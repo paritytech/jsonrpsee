@@ -576,7 +576,8 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 		// User dropped the sender side of the channel.
 		// There is nothing to do just terminate.
 		None => {
-			return Err(Error::Custom("[backend]: frontend dropped; terminate client".into()));
+			tracing::debug!("[backend]: frontend dropped; terminate client");
+			return Ok(());
 		}
 
 		Some(FrontToBack::Batch(batch)) => {
