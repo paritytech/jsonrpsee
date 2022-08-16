@@ -331,9 +331,7 @@ impl ClientT for Client {
 
 		rx_log_from_json(&json_values, self.max_log_length);
 
-		let values: Result<_, _> =
-			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect();
-		Ok(values?)
+		json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect()
 	}
 }
 
