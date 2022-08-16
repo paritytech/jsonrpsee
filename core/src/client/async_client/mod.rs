@@ -564,27 +564,18 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 }
 
 /// Handle frontend messages.
-///
-/// Returns an error if the main background loop should be terminated.
 async fn handle_frontend_messages<S: TransportSenderT>(
-	message: Option<FrontToBack>,
+	message: FrontToBack,
 	manager: &mut RequestManager,
 	sender: &mut S,
 	max_notifs_per_subscription: usize,
-) -> Result<(), Error> {
+) {
 	match message {
-		// User dropped the sender side of the channel.
-		// There is nothing to do just terminate.
-		None => {
-			tracing::debug!("[backend]: frontend dropped; terminate client");
-			return Ok(());
-		}
-
-		Some(FrontToBack::Batch(batch)) => {
+		FrontToBack::Batch(batch) => {
 			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
 				tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
 				let _ = send_back.send(Err(Error::InvalidRequestId));
-				return Ok(());
+				return;
 			}
 
 			if let Err(e) = sender.send(batch.raw).await {
@@ -593,13 +584,13 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			}
 		}
 		// User called `notification` on the front-end
-		Some(FrontToBack::Notification(notif)) => {
+		FrontToBack::Notification(notif) => {
 			if let Err(e) = sender.send(notif).await {
 				tracing::warn!("[backend]: client notif failed: {:?}", e);
 			}
 		}
 		// User called `request` on the front-end
-		Some(FrontToBack::Request(request)) => match sender.send(request.raw).await {
+		FrontToBack::Request(request) => match sender.send(request.raw).await {
 			Ok(_) => manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed"),
 			Err(e) => {
 				tracing::warn!("[backend]: client request failed: {:?}", e);
@@ -607,7 +598,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			}
 		},
 		// User called `subscribe` on the front-end.
-		Some(FrontToBack::Subscribe(sub)) => match sender.send(sub.raw).await {
+		FrontToBack::Subscribe(sub) => match sender.send(sub.raw).await {
 			Ok(_) => manager
 				.insert_pending_subscription(
 					sub.subscribe_id,
@@ -622,7 +613,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			}
 		},
 		// User dropped a subscription.
-		Some(FrontToBack::SubscriptionClosed(sub_id)) => {
+		FrontToBack::SubscriptionClosed(sub_id) => {
 			tracing::trace!("Closing subscription: {:?}", sub_id);
 			// NOTE: The subscription may have been closed earlier if
 			// the channel was full or disconnected.
@@ -634,7 +625,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			}
 		}
 		// User called `register_notification` on the front-end.
-		Some(FrontToBack::RegisterNotification(reg)) => {
+		FrontToBack::RegisterNotification(reg) => {
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
 
 			if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
@@ -644,12 +635,10 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			}
 		}
 		// User dropped the notificationHandler for this method
-		Some(FrontToBack::UnregisterNotification(method)) => {
+		FrontToBack::UnregisterNotification(method) => {
 			let _ = manager.remove_notification_handler(method);
 		}
 	}
-
-	Ok(())
 }
 
 /// Function being run in the background that processes messages from the frontend.
@@ -693,14 +682,18 @@ async fn background_task<S, R>(
 		match future::select(message_fut, submit_ping).await {
 			// Message received from the frontend.
 			Either::Left((Either::Left((frontend_value, backend)), _)) => {
-				if let Err(err) =
-					handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription)
-						.await
-				{
-					tracing::warn!("{:?}", err);
-					let _ = front_error.send(err);
+				let frontend_value = if let Some(value) = frontend_value {
+					value
+				} else {
+					// User dropped the sender side of the channel.
+					// There is nothing to do just terminate.
+					tracing::debug!("[backend]: frontend receiver dropped");
 					break;
-				}
+				};
+
+				handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription)
+					.await;
+
 				// Advance frontend, save backend.
 				message_fut = future::select(frontend.next(), backend);
 			}
