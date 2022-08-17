@@ -207,7 +207,7 @@ impl ClientT for HttpClient {
 				}
 			};
 
-			// NOTE: it's decoded first `JsonRawValue` and then to `R` below to get
+			// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 			// a better error message if `R` couldn't be decoded.
 			let response: Response<&JsonRawValue> = match serde_json::from_slice(&body) {
 				Ok(response) => response,
