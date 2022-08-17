@@ -33,7 +33,7 @@ use async_trait::async_trait;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
 use jsonrpsee_core::tracing::RpcTracing;
-use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{Error, JsonRawValue, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
@@ -207,16 +207,17 @@ impl ClientT for HttpClient {
 				}
 			};
 
-			let response: Response<serde_json::Value> =
-				match serde_json::from_slice::<Response<serde_json::Value>>(&body) {
-					Ok(response) => response,
-					Err(_) => {
-						let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
-						return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
-					}
-				};
+			// NOTE: it's decoded first `JsonRawValue` and then to `R` below to get
+			// a better error message if `R` couldn't be decoded.
+			let response: Response<&JsonRawValue> = match serde_json::from_slice(&body) {
+				Ok(response) => response,
+				Err(_) => {
+					let err: ErrorResponse = serde_json::from_slice(&body).map_err(Error::ParseError)?;
+					return Err(Error::Call(CallError::Custom(err.error_object().clone().into_owned())));
+				}
+			};
 
-			let result = serde_json::from_value(response.result).map_err(Error::ParseError)?;
+			let result = serde_json::from_str(response.result.get()).map_err(Error::ParseError)?;
 
 			if response.id == id {
 				Ok(result)
@@ -257,7 +258,9 @@ impl ClientT for HttpClient {
 				Ok(Err(e)) => return Err(Error::Transport(e.into())),
 			};
 
-			let rps: Vec<Response<serde_json::Value>> =
+			// NOTE: it's decoded first `JsonRawValue` and then to `R` below to get
+			// a better error message if `R` couldn't be decoded.
+			let rps: Vec<Response<&JsonRawValue>> =
 				serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
 					Ok(e) => Error::Call(CallError::Custom(e.error_object().clone().into_owned())),
 					Err(e) => Error::ParseError(e),
@@ -270,7 +273,7 @@ impl ClientT for HttpClient {
 					Some(pos) => *pos,
 					None => return Err(Error::InvalidRequestId),
 				};
-				let result = serde_json::from_value(rp.result).map_err(Error::ParseError)?;
+				let result = serde_json::from_str(rp.result.get()).map_err(Error::ParseError)?;
 				responses[pos] = result;
 			}
 			Ok(responses)
