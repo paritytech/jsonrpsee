@@ -84,7 +84,7 @@ pub(crate) fn process_subscription_response(
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => {
-			tracing::warn!("Subscription ID: {:?} is not an active subscription", sub_id);
+			tracing::warn!("Subscription {:?} is not active", sub_id);
 			return Err(None);
 		}
 	};
@@ -100,7 +100,7 @@ pub(crate) fn process_subscription_response(
 			}
 		},
 		None => {
-			tracing::warn!("Subscription ID: {:?} is not an active subscription", sub_id);
+			tracing::warn!("Subscription {:?} is not active", sub_id);
 			Err(None)
 		}
 	}
@@ -118,7 +118,7 @@ pub(crate) fn process_subscription_close_response(
 	let request_id = match manager.get_request_id_by_subscription_id(&sub_id) {
 		Some(request_id) => request_id,
 		None => {
-			tracing::error!("The server tried to close down an invalid subscription: {:?}", sub_id);
+			tracing::error!("The server tried to close an invalid subscription: {:?}", sub_id);
 			return Err(Error::InvalidSubscriptionId);
 		}
 	};

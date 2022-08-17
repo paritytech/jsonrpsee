@@ -364,7 +364,7 @@ impl Methods {
 	) -> Result<T, Error> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(method.into(), Some(&params), Id::Number(0));
-		tracing::trace!("[Methods::call] Calling method: {:?}, params: {:?}", method, params);
+		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _, _) = self.inner_call(req).await;
 
 		if resp.success {
@@ -406,10 +406,10 @@ impl Methods {
 	/// ```
 	pub async fn raw_json_request(
 		&self,
-		call: &str,
+		request: &str,
 	) -> Result<(MethodResponse, mpsc::UnboundedReceiver<String>), Error> {
-		tracing::trace!("[Methods::raw_json_request] {:?}", call);
-		let req: Request = serde_json::from_str(call)?;
+		tracing::trace!("[Methods::raw_json_request] Request: {:?}", request);
+		let req: Request = serde_json::from_str(request)?;
 		let (resp, rx, _) = self.inner_call(req).await;
 		Ok((resp, rx))
 	}
@@ -424,7 +424,7 @@ impl Methods {
 		let close_notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 		let notify = bounded_subs.acquire().expect("u32::MAX permits is sufficient; qed");
 
-		let result = match self.method(&req.method).map(|c| &c.callback) {
+		let response = match self.method(&req.method).map(|c| &c.callback) {
 			None => MethodResponse::error(req.id, ErrorObject::from(ErrorCode::MethodNotFound)),
 			Some(MethodKind::Sync(cb)) => (cb)(id, params, usize::MAX),
 			Some(MethodKind::Async(cb)) => (cb)(id.into_owned(), params.into_owned(), 0, usize::MAX, None).await,
@@ -443,9 +443,9 @@ impl Methods {
 			Some(MethodKind::Unsubscription(cb)) => (cb)(id, params, 0, usize::MAX),
 		};
 
-		tracing::trace!("[Methods::inner_call]: method: `{}` result: {:?}", req.method, result);
+		tracing::trace!("[Methods::inner_call] Method: {}, response: {:?}", req.method, response);
 
-		(result, rx_sink, notify)
+		(response, rx_sink, notify)
 	}
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
@@ -477,11 +477,9 @@ impl Methods {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), Some(&params), Id::Number(0));
 
-		tracing::trace!("[Methods::subscribe] Calling subscription method: {:?}, params: {:?}", sub_method, params);
+		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 
 		let (response, rx, close_notify) = self.inner_call(req).await;
-
-		tracing::trace!("[Methods::subscribe] response {:?}", response);
 
 		let subscription_response = match serde_json::from_str::<Response<RpcSubscriptionId>>(&response.result) {
 			Ok(r) => r,
@@ -728,7 +726,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 						Ok(sub_id) => sub_id,
 						Err(_) => {
 							tracing::warn!(
-								"unsubscribe call '{}' failed: couldn't parse subscription id={:?} request id={:?}",
+								"Unsubscribe call `{}` failed: couldn't parse subscription id={:?} request id={:?}",
 								unsubscribe_method_name,
 								params,
 								id
@@ -743,7 +741,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					if !result {
 						tracing::warn!(
-							"unsubscribe call `{}` subscription key={:?} not an active subscription",
+							"Unsubscribe call `{}` subscription key={:?} not an active subscription",
 							unsubscribe_method_name,
 							key,
 						);
@@ -778,7 +776,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 
 					// The callback returns a `SubscriptionResult` for better ergonomics and is not propagated further.
 					if callback(params, sink, ctx.clone()).is_err() {
-						tracing::warn!("subscribe call `{}` failed", subscribe_method_name);
+						tracing::warn!("Subscribe call `{}` failed", subscribe_method_name);
 					}
 
 					let id = id.clone().into_owned();
