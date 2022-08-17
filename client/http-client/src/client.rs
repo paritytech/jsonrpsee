@@ -258,7 +258,7 @@ impl ClientT for HttpClient {
 				Ok(Err(e)) => return Err(Error::Transport(e.into())),
 			};
 
-			// NOTE: it's decoded first `JsonRawValue` and then to `R` below to get
+			// NOTE: it's decoded first to `JsonRawValue` and then to `R` below to get
 			// a better error message if `R` couldn't be decoded.
 			let rps: Vec<Response<&JsonRawValue>> =
 				serde_json::from_slice(&body).map_err(|_| match serde_json::from_slice::<ErrorResponse>(&body) {
