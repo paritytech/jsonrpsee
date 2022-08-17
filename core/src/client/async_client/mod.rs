@@ -554,7 +554,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			return Err(Error::Transport(e.into()));
 		}
 		None => {
-			return Err(Error::Custom("WebSocket receiver dropped".into()));
+			return Err(Error::Custom("TransportReceiver dropped".into()));
 		}
 	}
 
