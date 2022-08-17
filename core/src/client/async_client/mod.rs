@@ -685,7 +685,7 @@ async fn background_task<S, R>(
 				} else {
 					// User dropped the sender side of the channel.
 					// There is nothing to do just terminate.
-					tracing::debug!("[backend]: Frontend receiver dropped");
+					tracing::debug!("[backend]: Client dropped");
 					break;
 				};
 
