@@ -4,7 +4,8 @@
 use crate::response;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
-use hyper::{Body, Method, Request, Response};
+use hyper::{Body, Method, Request, Response, Uri};
+use jsonrpsee_types::{Id, RequestSer};
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
@@ -89,15 +90,17 @@ where
 			// RPC methods are accessed with `POST`.
 			*req.method_mut() = Method::POST;
 			// Precautionary remove the URI.
-			*req.uri_mut() = "/".parse().unwrap();
+			*req.uri_mut() = Uri::from_static("/");
 
 			// Requests must have the following headers:
 			req.headers_mut().insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 			req.headers_mut().insert(ACCEPT, HeaderValue::from_static("application/json"));
 
 			// Adjust the body to reflect the method call.
-			let body =
-				Body::from(format!("{{\"jsonrpc\":\"2.0\",\"method\":\"{}\",\"params\":null,\"id\":1}}", self.method));
+			let body = Body::from(
+				serde_json::to_string(&RequestSer::new(&Id::Number(0), self.method.as_str(), None))
+					.expect("Valid request; qed"),
+			);
 			req = req.map(|_| body);
 		}
 
