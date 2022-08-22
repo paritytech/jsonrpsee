@@ -83,7 +83,7 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 	// Custom tower service to handle the RPC requests
 	let service_builder = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
-		.layer(ProxyGetRequestLayer::new("/health", "system_health"))
+		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
 		.timeout(Duration::from_secs(2));
 
 	let server =

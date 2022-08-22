@@ -226,7 +226,7 @@ pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
 pub async fn http_server_with_access_control(acl: AccessControl, cors: CorsLayer) -> (SocketAddr, HttpServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
-		.layer(ProxyGetRequestLayer::new("/health", "system_health"))
+		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
 		// Add `CORS` layer.
 		.layer(cors);
 

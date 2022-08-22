@@ -5,6 +5,7 @@ use crate::response;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Body, Method, Request, Response, Uri};
+use jsonrpsee_core::error::Error as RpcError;
 use jsonrpsee_types::{Id, RequestSer};
 use std::error::Error;
 use std::future::Future;
@@ -27,8 +28,13 @@ impl ProxyGetRequestLayer {
 	/// Creates a new [`ProxyGetRequestLayer`].
 	///
 	/// See [`ProxyGetRequest`] for more details.
-	pub fn new(path: impl Into<String>, method: impl Into<String>) -> Self {
-		Self { path: path.into(), method: method.into() }
+	pub fn new(path: impl Into<String>, method: impl Into<String>) -> Result<Self, RpcError> {
+		let path = path.into();
+		if !path.starts_with('/') {
+			return Err(RpcError::Custom("ProxyGetRequestLayer path must start with `/`".to_string()));
+		}
+
+		Ok(Self { path, method: method.into() })
 	}
 }
 impl<S> Layer<S> for ProxyGetRequestLayer {
@@ -36,6 +42,7 @@ impl<S> Layer<S> for ProxyGetRequestLayer {
 
 	fn layer(&self, inner: S) -> Self::Service {
 		ProxyGetRequest::new(inner, &self.path, &self.method)
+			.expect("Path already validated in ProxyGetRequestLayer; qed")
 	}
 }
 
@@ -62,8 +69,13 @@ impl<S> ProxyGetRequest<S> {
 	/// Creates a new [`ProxyGetRequest`].
 	///
 	/// The request `GET /path` is redirected to the provided method.
-	pub fn new(inner: S, path: &str, method: &str) -> Self {
-		Self { inner, path: Arc::from(path), method: Arc::from(method) }
+	/// Fails if the path does not start with `/`.
+	pub fn new(inner: S, path: &str, method: &str) -> Result<Self, RpcError> {
+		if !path.starts_with('/') {
+			return Err(RpcError::Custom(format!("ProxyGetRequest path must start with `/`, got: {}", path)));
+		}
+
+		Ok(Self { inner, path: Arc::from(path), method: Arc::from(method) })
 	}
 }
 
