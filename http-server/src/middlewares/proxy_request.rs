@@ -2,12 +2,10 @@
 //! RPC method calls.
 
 use crate::response;
-use futures_util::ready;
-use hyper::body::HttpBody;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Body, Method, Request, Response};
-use pin_project_lite::pin_project;
+use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -70,15 +68,17 @@ impl<S> ProxyRequest<S> {
 impl<S> Service<Request<Body>> for ProxyRequest<S>
 where
 	S: Service<Request<Body>, Response = Response<Body>>,
-	<S as Service<Request<Body>>>::Error: From<hyper::Error>,
+	S::Response: 'static,
+	S::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
+	S::Future: Send + 'static,
 {
 	type Response = S::Response;
-	type Error = S::Error;
-	type Future = ResponseFuture<S::Future>;
+	type Error = Box<dyn Error + Send + Sync + 'static>;
+	type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
 	#[inline]
 	fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-		self.inner.poll_ready(cx)
+		self.inner.poll_ready(cx).map_err(Into::into)
 	}
 
 	fn call(&mut self, mut req: Request<Body>) -> Self::Future {
@@ -101,74 +101,36 @@ where
 			req = req.map(|_| body);
 		}
 
-		// Depending on `modify` adjust the response.
-		ResponseFuture::PollFuture { future: self.inner.call(req), modify }
-	}
-}
+		// Call the inner service and get a future that resolves to the response.
+		let fut = self.inner.call(req);
 
-pin_project! {
-	/// Response future for [`ProxyRequest`].
-	#[project = ResponseFutureState]
-	#[allow(missing_docs)]
-	pub enum ResponseFuture<F> {
-		/// Poll the response out of the future.
-		PollFuture {
-			#[pin]
-			future: F,
-			modify: bool,
-		},
-		/// Poll the [`hyper::Body`] response and modify it.
-		PollBodyData {
-			body: Body,
-			body_bytes: Vec<u8>,
-		},
-	}
-}
+		// Adjust the response if needed.
+		let res_fut = async move {
+			let res = fut.await.map_err(|err| err.into())?;
 
-impl<F, E> Future for ResponseFuture<F>
-where
-	F: Future<Output = Result<Response<Body>, E>>,
-	E: From<hyper::Error>,
-{
-	type Output = F::Output;
-
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		// The purpose of this loop is to optimise the transition from
-		// `PollFuture` -> `PollBodyData` state, that would otherwise
-		// require a `cx.wake().wake_by_ref and return Poll::Pending`.
-		loop {
-			match self.as_mut().project() {
-				ResponseFutureState::PollFuture { future, modify } => {
-					let res: Response<Body> = ready!(future.poll(cx)?);
-
-					// Nothing to modify: return the response as is.
-					if !*modify {
-						return Poll::Ready(Ok(res));
-					}
-
-					let inner = ResponseFuture::PollBodyData { body: res.into_body(), body_bytes: Vec::new() };
-					self.set(inner);
-				}
-				ResponseFutureState::PollBodyData { body, body_bytes } => {
-					while let Some(chunk) = ready!(Pin::new(&mut *body).poll_data(cx)?) {
-						body_bytes.extend_from_slice(chunk.as_ref());
-					}
-
-					#[derive(serde::Deserialize, Debug)]
-					struct RpcPayload<'a> {
-						#[serde(borrow)]
-						result: &'a serde_json::value::RawValue,
-					}
-
-					let response = if let Ok(payload) = serde_json::from_slice::<RpcPayload>(body_bytes) {
-						response::ok_response(payload.result.to_string())
-					} else {
-						response::internal_error()
-					};
-
-					return Poll::Ready(Ok(response));
-				}
+			// Nothing to modify: return the response as is.
+			if !modify {
+				return Ok(res);
 			}
-		}
+
+			let body = res.into_body();
+			let bytes = hyper::body::to_bytes(body).await?;
+
+			#[derive(serde::Deserialize, Debug)]
+			struct RpcPayload<'a> {
+				#[serde(borrow)]
+				result: &'a serde_json::value::RawValue,
+			}
+
+			let response = if let Ok(payload) = serde_json::from_slice::<RpcPayload>(&bytes) {
+				response::ok_response(payload.result.to_string())
+			} else {
+				response::internal_error()
+			};
+
+			Ok(response)
+		};
+
+		Box::pin(res_fut)
 	}
 }
