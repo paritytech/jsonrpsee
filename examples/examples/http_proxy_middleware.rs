@@ -43,7 +43,7 @@ use std::time::Duration;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::middlewares::proxy_request::ProxyRequestLayer;
+use jsonrpsee::http_server::middleware::proxy_request::ProxyGetRequestLayer;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 
 #[tokio::main]
@@ -83,7 +83,7 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 	// Custom tower service to handle the RPC requests
 	let service_builder = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
-		.layer(ProxyRequestLayer::new("/health", "system_health"))
+		.layer(ProxyGetRequestLayer::new("/health", "system_health"))
 		.timeout(Duration::from_secs(2));
 
 	let server =

@@ -18,12 +18,12 @@ use tower::{Layer, Service};
 ///
 /// See [`ProxyRequest`] for more details.
 #[derive(Debug, Clone)]
-pub struct ProxyRequestLayer {
+pub struct ProxyGetRequestLayer {
 	path: String,
 	method: String,
 }
 
-impl ProxyRequestLayer {
+impl ProxyGetRequestLayer {
 	/// Creates a new [`ProxyRequestLayer`].
 	///
 	/// See [`ProxyRequest`] for more details.
@@ -31,15 +31,15 @@ impl ProxyRequestLayer {
 		Self { path: path.into(), method: method.into() }
 	}
 }
-impl<S> Layer<S> for ProxyRequestLayer {
-	type Service = ProxyRequest<S>;
+impl<S> Layer<S> for ProxyGetRequestLayer {
+	type Service = ProxyGetRequest<S>;
 
 	fn layer(&self, inner: S) -> Self::Service {
-		ProxyRequest::new(inner, &self.path, &self.method)
+		ProxyGetRequest::new(inner, &self.path, &self.method)
 	}
 }
 
-/// Proxy `GET/path` requests to the specified RPC method calls.
+/// Proxy `GET /path` requests to the specified RPC method calls.
 ///
 /// # Request
 ///
@@ -52,13 +52,13 @@ impl<S> Layer<S> for ProxyRequestLayer {
 /// The response of the RPC method is stripped down to contain only the method's
 /// response, removing any RPC 2.0 spec logic regarding the response' body.
 #[derive(Debug, Clone)]
-pub struct ProxyRequest<S> {
+pub struct ProxyGetRequest<S> {
 	inner: S,
 	path: Arc<str>,
 	method: Arc<str>,
 }
 
-impl<S> ProxyRequest<S> {
+impl<S> ProxyGetRequest<S> {
 	/// Creates a new [`ProxyRequest`].
 	///
 	/// The request `GET /path` is redirected to the provided method.
@@ -67,7 +67,7 @@ impl<S> ProxyRequest<S> {
 	}
 }
 
-impl<S> Service<Request<Body>> for ProxyRequest<S>
+impl<S> Service<Request<Body>> for ProxyGetRequest<S>
 where
 	S: Service<Request<Body>, Response = Response<Body>>,
 	S::Response: 'static,

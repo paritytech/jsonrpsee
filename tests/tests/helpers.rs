@@ -30,7 +30,7 @@ use std::time::Duration;
 use futures::{SinkExt, StreamExt};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::server::access_control::{AccessControl, AccessControlBuilder};
-use jsonrpsee::http_server::middlewares::proxy_request::ProxyRequestLayer;
+use jsonrpsee::http_server::middleware::proxy_request::ProxyGetRequestLayer;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
@@ -226,7 +226,7 @@ pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
 pub async fn http_server_with_access_control(acl: AccessControl, cors: CorsLayer) -> (SocketAddr, HttpServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
-		.layer(ProxyRequestLayer::new("/health", "system_health"))
+		.layer(ProxyGetRequestLayer::new("/health", "system_health"))
 		// Add `CORS` layer.
 		.layer(cors);
 
