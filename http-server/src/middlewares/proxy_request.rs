@@ -9,6 +9,7 @@ use jsonrpsee_types::{Id, RequestSer};
 use std::error::Error;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
@@ -34,7 +35,7 @@ impl<S> Layer<S> for ProxyRequestLayer {
 	type Service = ProxyRequest<S>;
 
 	fn layer(&self, inner: S) -> Self::Service {
-		ProxyRequest::new(inner, self.path.clone(), self.method.clone())
+		ProxyRequest::new(inner, &self.path, &self.method)
 	}
 }
 
@@ -53,16 +54,16 @@ impl<S> Layer<S> for ProxyRequestLayer {
 #[derive(Debug, Clone)]
 pub struct ProxyRequest<S> {
 	inner: S,
-	path: String,
-	method: String,
+	path: Arc<str>,
+	method: Arc<str>,
 }
 
 impl<S> ProxyRequest<S> {
 	/// Creates a new [`ProxyRequest`].
 	///
 	/// The request `GET /path` is redirected to the provided method.
-	pub fn new(inner: S, path: impl Into<String>, method: impl Into<String>) -> Self {
-		Self { inner, path: path.into(), method: method.into() }
+	pub fn new(inner: S, path: &str, method: &str) -> Self {
+		Self { inner, path: Arc::from(path), method: Arc::from(method) }
 	}
 }
 
@@ -83,7 +84,7 @@ where
 	}
 
 	fn call(&mut self, mut req: Request<Body>) -> Self::Future {
-		let modify = self.path.as_str() == req.uri() && req.method() == Method::GET;
+		let modify = self.path.as_ref() == req.uri() && req.method() == Method::GET;
 
 		// Proxy the request to the appropriate method call.
 		if modify {
@@ -98,7 +99,7 @@ where
 
 			// Adjust the body to reflect the method call.
 			let body = Body::from(
-				serde_json::to_string(&RequestSer::new(&Id::Number(0), self.method.as_str(), None))
+				serde_json::to_string(&RequestSer::new(&Id::Number(0), &self.method, None))
 					.expect("Valid request; qed"),
 			);
 			req = req.map(|_| body);
