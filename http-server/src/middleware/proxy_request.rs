@@ -13,10 +13,10 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 
-/// Layer that applies [`ProxyRequest`] which proxies the `GET /path` requests to
+/// Layer that applies [`ProxyGetRequest`] which proxies the `GET /path` requests to
 /// specific RPC method calls and that strips the response.
 ///
-/// See [`ProxyRequest`] for more details.
+/// See [`ProxyGetRequest`] for more details.
 #[derive(Debug, Clone)]
 pub struct ProxyGetRequestLayer {
 	path: String,
@@ -24,9 +24,9 @@ pub struct ProxyGetRequestLayer {
 }
 
 impl ProxyGetRequestLayer {
-	/// Creates a new [`ProxyRequestLayer`].
+	/// Creates a new [`ProxyGetRequestLayer`].
 	///
-	/// See [`ProxyRequest`] for more details.
+	/// See [`ProxyGetRequest`] for more details.
 	pub fn new(path: impl Into<String>, method: impl Into<String>) -> Self {
 		Self { path: path.into(), method: method.into() }
 	}
@@ -59,7 +59,7 @@ pub struct ProxyGetRequest<S> {
 }
 
 impl<S> ProxyGetRequest<S> {
-	/// Creates a new [`ProxyRequest`].
+	/// Creates a new [`ProxyGetRequest`].
 	///
 	/// The request `GET /path` is redirected to the provided method.
 	pub fn new(inner: S, path: &str, method: &str) -> Self {
