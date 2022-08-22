@@ -105,12 +105,8 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install cargo-nextest
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-          version: 0.9
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.0.0
@@ -132,12 +128,8 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install cargo-nextest
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-          version: 0.9
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.0.0
@@ -159,12 +151,8 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install cargo-nextest
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-nextest
-          locked: true
-          version: 0.9
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.0.0
