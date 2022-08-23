@@ -103,7 +103,9 @@ test:
   <<:                              *docker-env
   <<:                              *common-refs
   script:
-    - cargo test
+    - cargo install cargo-nextest --locked
+    - cargo nextest run --workspace
+    - cargo test --doc
 
 benchmarks:
   stage:                           benchmark

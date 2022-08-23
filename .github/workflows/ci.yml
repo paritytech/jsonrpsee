@@ -91,29 +91,6 @@ jobs:
       - name: Cargo check all targets and features
         run: cargo hack check --workspace --each-feature --all-targets
 
-  tests_ubuntu:
-    name: Run tests Ubuntu
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v3.0.2
-
-      - name: Install Rust stable toolchain
-        uses: actions-rs/toolchain@v1.0.7
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
-      - name: Install latest nextest release
-        uses: taiki-e/install-action@nextest
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2.0.0
-
-      - name: Cargo nextest
-        run: cargo nextest run --workspace
-
   tests_macos:
     name: Run tests macos
     runs-on: macos-latest
