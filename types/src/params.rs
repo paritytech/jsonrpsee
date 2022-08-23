@@ -39,7 +39,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 /// JSON-RPC v2 marker type.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TwoPointZero;
 
 struct TwoPointZeroVisitor;
@@ -168,7 +168,7 @@ impl<'a> ParamsSequence<'a> {
 	{
 		let mut json = self.0;
 		tracing::trace!("[next_inner] Params JSON: {:?}", json);
-		match json.as_bytes().get(0)? {
+		match json.as_bytes().first()? {
 			b']' => {
 				self.0 = "";
 

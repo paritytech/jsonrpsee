@@ -436,7 +436,7 @@ impl<T: Clone> RequestIdGuard<T> {
 }
 
 /// What certificate store to use
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CertificateStore {
 	/// Use the native system certificate store

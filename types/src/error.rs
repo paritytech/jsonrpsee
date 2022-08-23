@@ -264,7 +264,7 @@ pub const BATCHES_NOT_SUPPORTED_MSG: &str = "Batched requests are not supported 
 pub const TOO_MANY_SUBSCRIPTIONS_MSG: &str = "Too many subscriptions on the connection";
 
 /// JSONRPC error code
-#[derive(Error, Debug, PartialEq, Copy, Clone)]
+#[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum ErrorCode {
 	/// Invalid JSON was received by the server.
 	/// An error occurred on the server while parsing the JSON text.

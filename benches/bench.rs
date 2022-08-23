@@ -270,8 +270,8 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 								let fut = client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).then(
 									|sub| async move {
 										let mut s = sub.unwrap();
-										let res = s.next().await.unwrap().unwrap();
-										res
+
+										s.next().await.unwrap().unwrap()
 									},
 								);
 
