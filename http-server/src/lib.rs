@@ -35,6 +35,9 @@ mod server;
 /// Common builders for RPC responses.
 pub mod response;
 
+/// Common tower middleware exposed for RPC interaction.
+pub mod middleware;
+
 pub use jsonrpsee_core::server::access_control::{AccessControl, AccessControlBuilder};
 pub use jsonrpsee_core::server::rpc_module::RpcModule;
 pub use jsonrpsee_types as types;
