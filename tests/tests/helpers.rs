@@ -30,7 +30,7 @@ use std::time::Duration;
 use futures::{SinkExt, StreamExt};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::server::access_control::{AccessControl, AccessControlBuilder};
-use jsonrpsee::http_server::middleware::proxy_request::ProxyGetRequestLayer;
+use jsonrpsee::http_server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
