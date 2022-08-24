@@ -181,7 +181,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Inserts a handler for incoming notifications
+	/// Inserts a handler for incoming notifications.
 	pub(crate) fn insert_notification_handler(
 		&mut self,
 		method: &str,
@@ -195,7 +195,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Removes a notification handler
+	/// Removes a notification handler.
 	pub(crate) fn remove_notification_handler(&mut self, method: String) -> Result<(), Error> {
 		if self.notification_handlers.remove(&method).is_some() {
 			Ok(())
@@ -224,7 +224,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Tries to complete a pending batch request
+	/// Tries to complete a pending batch request.
 	///
 	/// Returns `Some` if the subscription was completed otherwise `None`.
 	pub(crate) fn complete_pending_batch(&mut self, batch: Vec<RequestId>) -> Option<BatchState> {
@@ -237,7 +237,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Tries to complete a pending call..
+	/// Tries to complete a pending call.
 	///
 	/// Returns `Some` if the call was completed otherwise `None`.
 	pub(crate) fn complete_pending_call(&mut self, request_id: RequestId) -> Option<PendingCallOneshot> {

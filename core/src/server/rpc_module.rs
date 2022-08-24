@@ -339,7 +339,7 @@ impl Methods {
 	///
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
-	/// Returns the decoded value of the `result field` in JSON-RPC response if succesful.
+	/// Returns the decoded value of the `result field` in JSON-RPC response if successful.
 	///
 	/// # Examples
 	///
