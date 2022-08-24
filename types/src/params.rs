@@ -36,6 +36,7 @@ use beef::Cow;
 use serde::de::{self, Deserializer, Unexpected, Visitor};
 use serde::ser::Serializer;
 use serde::{Deserialize, Serialize};
+use serde_json::value::RawValue;
 use serde_json::Value as JsonValue;
 
 /// JSON-RPC v2 marker type.
@@ -465,6 +466,156 @@ impl ParamsBuilder {
 		// Safety: This is safe because we do not emit invalid UTF-8.
 		unsafe { String::from_utf8_unchecked(self.bytes) }
 	}
+}
+
+/// Parameter builder that serializes named value parameters to a JSON compatible string.
+/// This is the equivalent of a JSON Map object `{ key: value }`.
+///
+/// # Examples
+///
+/// ```rust
+///
+/// use jsonrpsee_types::NamedParamsBuilder;
+///
+/// fn main() {
+///     let mut builder = NamedParamsBuilder::new();
+///     builder.insert("param1", 1);
+///     builder.insert("param2", "abc");
+///     let params = builder.build();
+///
+///     // Use RPC parameters...
+/// }
+/// ```
+#[derive(Debug)]
+pub struct NamedParamsBuilder(ParamsBuilder);
+
+impl NamedParamsBuilder {
+	/// Construct a new [`NamedParamsBuilder`].
+	pub fn new() -> Self {
+		Self(ParamsBuilder::new('{', '}'))
+	}
+
+	/// Insert a named value (key, value) pair into the builder.
+	/// The _name_ and _value_ are delimited by the `:` token.
+	pub fn insert<P: Serialize>(&mut self, name: &str, value: P) -> Result<(), serde_json::Error> {
+		self.0.insert_named(name, value)
+	}
+
+	/// Finish the building process and return a JSON compatible string.
+	pub fn build(self) -> NamedParams {
+		NamedParams(self.0.build())
+	}
+}
+
+/// Named RPC parameters stored as a JSON Map object `{ key: value }`.
+#[derive(Clone, Debug)]
+pub struct NamedParams(String);
+
+impl ToRpcParams for NamedParams {
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+		RawValue::from_string(self.0).map(|res| Some(res))
+	}
+}
+
+/// Parameter builder that serializes plain value parameters to a JSON compatible string.
+/// This is the equivalent of a JSON Array object `[ value0, value1, .., valueN ]`.
+///
+/// # Examples
+///
+/// ```rust
+///
+/// use jsonrpsee_types::UnnamedParamsBuilder;
+///
+/// fn main() {
+///     let mut builder = UnnamedParamsBuilder::new();
+///     builder.insert("param1");
+///     builder.insert(1);
+///     let params = builder.build();
+///
+///     // Use RPC parameters...
+/// }
+/// ```
+#[derive(Debug)]
+pub struct UnnamedParamsBuilder(ParamsBuilder);
+
+impl UnnamedParamsBuilder {
+	/// Construct a new [`UnnamedParamsBuilder`].
+	pub fn new() -> Self {
+		Self(ParamsBuilder::new('[', ']'))
+	}
+
+	/// Insert a plain value into the builder.
+	pub fn insert<P: Serialize>(&mut self, value: P) -> Result<(), serde_json::Error> {
+		self.0.insert(value)
+	}
+
+	/// Finish the building process and return a JSON compatible string.
+	pub fn build(self) -> UnnamedParams {
+		UnnamedParams(self.0.build())
+	}
+}
+
+/// Unnamed RPC parameters stored as a JSON Array object `[ value0, value1, .., valueN ]`.
+#[derive(Clone, Debug)]
+pub struct UnnamedParams(String);
+
+impl ToRpcParams for UnnamedParams {
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+		RawValue::from_string(self.0).map(|res| Some(res))
+	}
+}
+
+/// Marker trait for types that can be serialized as JSON compatible strings.
+///
+/// This trait ensures the correctness of the RPC parameters.
+///
+/// # Note
+///
+/// Please consider using the [`UnnamedParamsBuilder`] and [`NamedParamsBuilder`] than
+/// implementing this trait.
+///
+/// # Examples
+///
+/// - Implementation for hard-coded strings
+///
+/// ```rust
+///
+/// use jsonrpsee_types::ToRpcParams;
+/// use serde_json::value::RawValue;
+///
+/// struct ManualParam;
+///
+/// impl ToRpcParams for ManualParam {
+///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+///         // Manually define a valid JSONRPC parameter.
+///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(|res| Some(res))
+///     }
+/// }
+/// ```
+///
+/// - Implementation for JSON serializable structures
+///
+/// ```rust
+/// use jsonrpsee_types::ToRpcParams;
+/// use serde_json::value::RawValue;
+/// use serde::Serialize;
+///
+/// #[derive(Serialize)]
+/// struct SerParam {
+///     param_1: u8,
+///     param_2: String,
+/// };
+///
+/// impl ToRpcParams for SerParam {
+///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+/// 		let s = String::from_utf8(serde_json::to_vec(&self)?).expect("Valid UTF8 format");
+///         RawValue::from_string(s).map(|res| Some(res))
+///     }
+/// }
+/// ```
+pub trait ToRpcParams {
+	/// Consume and serialize the type as a JSON raw value.
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error>;
 }
 
 #[cfg(test)]
