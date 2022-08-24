@@ -463,7 +463,7 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 						methods,
 						bounded_subscriptions,
 						sink: &sink,
-						id_provider: &*id_provider,
+						id_provider,
 						logger,
 						request_start,
 					};

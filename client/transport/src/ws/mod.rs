@@ -120,7 +120,7 @@ impl WsTransportClientBuilder {
 }
 
 /// Stream mode, either plain TCP or TLS.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
 	/// Plain mode (`ws://` URL).
 	Plain,
