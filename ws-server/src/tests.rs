@@ -255,6 +255,8 @@ async fn can_set_the_max_response_size_to_batch() {
 
 #[tokio::test]
 async fn can_set_max_connections() {
+	init_logger();
+
 	let addr = "127.0.0.1:0";
 	// Server that accepts max 2 connections
 	let server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();

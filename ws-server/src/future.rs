@@ -160,7 +160,7 @@ struct MonitorInner {
 
 /// Monitor for checking whether the server has been flagged to shut down.
 #[derive(Debug, Clone)]
-pub(crate) struct StopMonitor(Arc<MonitorInner>);
+pub struct StopMonitor(Arc<MonitorInner>);
 
 impl Drop for StopMonitor {
 	fn drop(&mut self) {

@@ -24,6 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+use std::error::Error as StdError;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
@@ -38,9 +39,10 @@ use futures_channel::mpsc;
 use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use futures_util::TryStreamExt;
+use futures_util::{AsyncRead, TryStreamExt};
 use http::header::{HOST, ORIGIN};
 use http::{HeaderMap, HeaderValue};
+use hyper::upgrade::Upgraded;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::logger::{self, WsLogger as Logger};
 use jsonrpsee_core::server::access_control::AccessControl;
@@ -58,23 +60,33 @@ use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 use soketto::handshake::WebSocketKey;
 use soketto::handshake::{server::Response, Server as SokettoServer};
-use soketto::Sender;
+use tokio::io::AsyncWrite;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use tracing_futures::Instrument;
 
+// ...
+use crate::tmp::*;
+use hyper::body::HttpBody;
+use tower::layer::util::Identity;
+use tower::Layer;
+
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
 
+type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
+type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
+
 /// A WebSocket JSON RPC server.
-pub struct Server<L> {
+pub struct Server<B = Identity, L = ()> {
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
 	resources: Resources,
 	logger: L,
 	id_provider: Arc<dyn IdProvider>,
+	service_builder: tower::ServiceBuilder<B>,
 }
 
 impl<L> std::fmt::Debug for Server<L> {
@@ -89,7 +101,21 @@ impl<L> std::fmt::Debug for Server<L> {
 	}
 }
 
-impl<L: Logger> Server<L> {
+impl<B, U, L> Server<B, L>
+where
+	L: Logger,
+	B: Layer<TowerService> + Send + 'static,
+	<B as Layer<TowerService>>::Service: Send
+		+ tower::Service<
+			hyper::Request<hyper::Body>,
+			Response = hyper::Response<U>,
+			Error = Box<(dyn StdError + Send + Sync + 'static)>,
+		>,
+	<<B as Layer<TowerService>>::Service as tower::Service<hyper::Request<hyper::Body>>>::Future: Send,
+	U: HttpBody + Send + 'static,
+	<U as HttpBody>::Error: Send + Sync + StdError,
+	<U as HttpBody>::Data: Send,
+{
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
@@ -114,57 +140,49 @@ impl<L: Logger> Server<L> {
 	}
 
 	async fn start_inner(self, methods: Methods) {
-		let stop_monitor = self.stop_monitor;
+		let max_request_body_size = self.cfg.max_request_body_size;
+		let max_response_body_size = self.cfg.max_response_body_size;
+		let max_log_length = self.cfg.max_log_length;
+		let acl = self.cfg.access_control;
+		let listener = self.listener;
 		let resources = self.resources;
-		let logger = self.logger;
+		let _logger = self.logger;
+		let batch_requests_supported = self.cfg.batch_requests_supported;
+		let id_provider = self.id_provider;
+		let stop_server = self.stop_monitor;
+		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
+		let max_connections = self.cfg.max_connections;
 
-		let mut id = 0;
-		let mut connections = FutureDriver::default();
-		let mut incoming = Monitored::new(Incoming(self.listener), &stop_monitor);
+		let service = hyper::service::make_service_fn(move |conn: &hyper::server::conn::AddrStream| {
+			let service = TowerService {
+				inner: ServiceData {
+					remote_addr: conn.remote_addr(),
+					methods: methods.clone(),
+					acl: acl.clone(),
+					resources: resources.clone(),
+					max_request_body_size,
+					max_response_body_size,
+					max_log_length,
+					batch_requests_supported,
+					id_provider: id_provider.clone(),
+					ping_interval: self.cfg.ping_interval,
+					stop_server: stop_server.clone(),
+					max_subscriptions_per_connection,
+					max_connections,
+					next_conn_id: 0,
+					open_connections: Arc::new(()),
+				},
+			};
 
-		loop {
-			match connections.select_with(&mut incoming).await {
-				Ok((socket, _addr)) => {
-					if let Err(e) = socket.set_nodelay(true) {
-						tracing::warn!("Could not set NODELAY on socket: {:?}", e);
-						continue;
-					}
+			let server = self.service_builder.service(service);
 
-					if connections.count() >= self.cfg.max_connections as usize {
-						tracing::warn!("Too many connections. Please try again later.");
-						connections.add(Box::pin(handshake(socket, HandshakeResponse::Reject { status_code: 429 })));
-						continue;
-					}
+			// For every request the `TowerService` is calling into `ServiceData::handle_request`
+			// where the RPSee bare implementation resides.
+			async move { Ok::<_, hyper::Error>(server) }
+		});
 
-					let methods = &methods;
-					let cfg = &self.cfg;
-					let id_provider = self.id_provider.clone();
-
-					connections.add(Box::pin(handshake(
-						socket,
-						HandshakeResponse::Accept {
-							conn_id: id,
-							methods,
-							resources: &resources,
-							cfg,
-							stop_monitor: &stop_monitor,
-							logger: logger.clone(),
-							id_provider,
-						},
-					)));
-
-					tracing::info!("Accepting new connection {}/{}", connections.count(), self.cfg.max_connections);
-
-					id = id.wrapping_add(1);
-				}
-				Err(MonitoredError::Selector(err)) => {
-					tracing::error!("Error while awaiting a new connection: {:?}", err);
-				}
-				Err(MonitoredError::Shutdown) => break,
-			}
-		}
-
-		connections.await
+		let server = hyper::Server::from_tcp(listener.into_std().unwrap()).unwrap().serve(service);
+		let _ = server.await.unwrap();
 	}
 }
 
@@ -233,111 +251,30 @@ enum HandshakeResponse<'a, L> {
 	},
 }
 
-async fn handshake<L: Logger>(socket: tokio::net::TcpStream, mode: HandshakeResponse<'_, L>) -> Result<(), Error> {
-	let remote_addr = socket.peer_addr()?;
-
-	// For each incoming background_task we perform a handshake.
-	let mut server = SokettoServer::new(BufReader::new(BufWriter::new(socket.compat())));
-
-	match mode {
-		HandshakeResponse::Reject { status_code } => {
-			// Forced rejection, don't need to read anything from the socket
-			let reject = Response::Reject { status_code };
-			server.send_response(&reject).await?;
-
-			let (mut sender, _) = server.into_builder().finish();
-
-			// Gracefully shut down the connection
-			sender.close().await?;
-
-			Ok(())
-		}
-		HandshakeResponse::Accept { conn_id, methods, resources, cfg, stop_monitor, logger, id_provider } => {
-			tracing::debug!("Accepting new connection: {}", conn_id);
-
-			let key_and_headers = get_key_and_headers(&mut server, cfg).await;
-
-			match key_and_headers {
-				Ok((key, headers)) => {
-					logger.on_connect(remote_addr, &headers);
-					let accept = Response::Accept { key, protocol: None };
-					server.send_response(&accept).await?;
-				}
-				Err(err) => {
-					tracing::warn!("Rejected connection: {} error: {:?}", conn_id, err);
-					let reject = Response::Reject { status_code: 403 };
-					server.send_response(&reject).await?;
-
-					return Err(err);
-				}
-			};
-
-			let join_result = tokio::spawn(background_task(BackgroundTask {
-				server,
-				conn_id,
-				methods: methods.clone(),
-				resources: resources.clone(),
-				max_request_body_size: cfg.max_request_body_size,
-				max_response_body_size: cfg.max_response_body_size,
-				max_log_length: cfg.max_log_length,
-				batch_requests_supported: cfg.batch_requests_supported,
-				bounded_subscriptions: BoundedSubscriptions::new(cfg.max_subscriptions_per_connection),
-				stop_server: stop_monitor.clone(),
-				logger,
-				id_provider,
-				ping_interval: cfg.ping_interval,
-				remote_addr,
-			}))
-			.await;
-
-			match join_result {
-				Err(_) => Err(Error::Custom("Background task was aborted".into())),
-				Ok(result) => result,
-			}
-		}
-	}
-}
-
-struct BackgroundTask<'a, L> {
-	server: SokettoServer<'a, BufReader<BufWriter<Compat<tokio::net::TcpStream>>>>,
-	conn_id: ConnectionId,
-	methods: Methods,
-	resources: Resources,
-	max_request_body_size: u32,
-	max_response_body_size: u32,
-	max_log_length: u32,
-	batch_requests_supported: bool,
-	bounded_subscriptions: BoundedSubscriptions,
-	stop_server: StopMonitor,
-	logger: L,
-	id_provider: Arc<dyn IdProvider>,
-	ping_interval: Duration,
-	remote_addr: SocketAddr,
-}
-
-async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), Error> {
-	let BackgroundTask {
-		server,
-		conn_id,
+pub async fn background_task(
+	mut sender: Sender,
+	mut receiver: Receiver,
+	conn_id: usize,
+	svc: ServiceData,
+) -> Result<(), Error> {
+	let ServiceData {
 		methods,
 		resources,
 		max_request_body_size,
 		max_response_body_size,
 		max_log_length,
 		batch_requests_supported,
-		bounded_subscriptions,
 		stop_server,
-		logger,
 		id_provider,
 		ping_interval,
-		remote_addr,
-	} = input;
+		max_subscriptions_per_connection,
+		..
+	} = svc;
 
 	// And we can finally transition to a websocket background_task.
-	let mut builder = server.into_builder();
-	builder.set_max_message_size(max_request_body_size as usize);
-	let (mut sender, mut receiver) = builder.finish();
+
 	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 	let bounded_subscriptions2 = bounded_subscriptions.clone();
 
 	let stop_server2 = stop_server.clone();
@@ -391,7 +328,6 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
-	let logger = &logger;
 
 	let result = loop {
 		data.clear();
@@ -442,8 +378,6 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 			};
 		};
 
-		let request_start = logger.on_request();
-
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
 		match first_non_whitespace {
 			Some(b'{') => {
@@ -464,16 +398,11 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 						bounded_subscriptions,
 						sink: &sink,
 						id_provider: &*id_provider,
-						logger,
-						request_start,
 					};
 
 					match process_single_request(data, call).await {
-						MethodResult::JustLogger(r) => {
-							logger.on_response(&r.result, request_start);
-						}
+						MethodResult::JustLogger(r) => {}
 						MethodResult::SendAndLogger(r) => {
-							logger.on_response(&r.result, request_start);
 							let _ = sink.send_raw(r.result);
 						}
 					};
@@ -487,7 +416,6 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 					Id::Null,
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 				);
-				logger.on_response(&response.result, request_start);
 				let _ = sink.send_raw(response.result);
 			}
 			Some(b'[') => {
@@ -511,14 +439,11 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 							bounded_subscriptions,
 							sink: &sink,
 							id_provider: &*id_provider,
-							logger,
-							request_start,
 						},
 					})
 					.await;
 
 					tx_log_from_str(&response.result, max_log_length);
-					logger.on_response(&response.result, request_start);
 					let _ = sink.send_raw(response.result);
 				};
 
@@ -529,8 +454,6 @@ async fn background_task<L: Logger>(input: BackgroundTask<'_, L>) -> Result<(), 
 			}
 		}
 	};
-
-	logger.on_disconnect(remote_addr);
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
@@ -583,11 +506,12 @@ impl Default for Settings {
 
 /// Builder to configure and create a JSON-RPC Websocket server
 #[derive(Debug)]
-pub struct Builder<L = ()> {
+pub struct Builder<B = Identity, L = ()> {
 	settings: Settings,
 	resources: Resources,
 	logger: L,
 	id_provider: Arc<dyn IdProvider>,
+	service_builder: tower::ServiceBuilder<B>,
 }
 
 impl Default for Builder {
@@ -597,6 +521,7 @@ impl Default for Builder {
 			resources: Resources::default(),
 			logger: (),
 			id_provider: Arc::new(RandomIntegerIdProvider),
+			service_builder: tower::ServiceBuilder::new(),
 		}
 	}
 }
@@ -608,7 +533,7 @@ impl Builder {
 	}
 }
 
-impl<L> Builder<L> {
+impl<B, L> Builder<B, L> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -691,8 +616,14 @@ impl<L> Builder<L> {
 	///
 	/// let builder = WsServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<T> {
-		Builder { settings: self.settings, resources: self.resources, logger, id_provider: self.id_provider }
+	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<B, T> {
+		Builder {
+			settings: self.settings,
+			resources: self.resources,
+			logger,
+			id_provider: self.id_provider,
+			service_builder: self.service_builder,
+		}
 	}
 
 	/// Configure a custom [`tokio::runtime::Handle`] to run the server on.
@@ -771,7 +702,7 @@ impl<L> Builder<L> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<L>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
@@ -782,19 +713,17 @@ impl<L> Builder<L> {
 			resources,
 			logger: self.logger,
 			id_provider: self.id_provider,
+			service_builder: self.service_builder,
 		})
 	}
 }
 
-async fn send_ws_message(
-	sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>,
-	response: String,
-) -> Result<(), Error> {
+async fn send_ws_message(sender: &mut Sender, response: String) -> Result<(), Error> {
 	sender.send_text_owned(response).await?;
 	sender.flush().await.map_err(Into::into)
 }
 
-async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>>>) -> Result<(), Error> {
+async fn send_ws_ping(sender: &mut Sender) -> Result<(), Error> {
 	tracing::debug!("Send ping");
 	// Submit empty slice as "optional" parameter.
 	let slice: &[u8] = &[];
@@ -805,30 +734,28 @@ async fn send_ws_ping(sender: &mut Sender<BufReader<BufWriter<Compat<TcpStream>>
 }
 
 #[derive(Debug, Clone)]
-struct Batch<'a, L: Logger> {
+struct Batch<'a> {
 	data: Vec<u8>,
-	call: CallData<'a, L>,
+	call: CallData<'a>,
 }
 
 #[derive(Debug, Clone)]
-struct CallData<'a, L: Logger> {
+struct CallData<'a> {
 	conn_id: usize,
 	bounded_subscriptions: BoundedSubscriptions,
 	id_provider: &'a dyn IdProvider,
-	logger: &'a L,
 	methods: &'a Methods,
 	max_response_body_size: u32,
 	max_log_length: u32,
 	resources: &'a Resources,
 	sink: &'a MethodSink,
-	request_start: L::Instant,
 }
 
 #[derive(Debug, Clone)]
-struct Call<'a, L: Logger> {
+struct Call<'a> {
 	params: Params<'a>,
 	name: &'a str,
-	call: CallData<'a, L>,
+	call: CallData<'a>,
 	id: Id<'a>,
 }
 
@@ -849,10 +776,7 @@ impl MethodResult {
 // Batch responses must be sent back as a single message so we read the results from each
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
-async fn process_batch_request<L>(b: Batch<'_, L>) -> BatchResponse
-where
-	L: Logger,
-{
+async fn process_batch_request(b: Batch<'_>) -> BatchResponse {
 	let Batch { data, call } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
@@ -892,7 +816,7 @@ where
 	BatchResponse::error(id, ErrorObject::from(code))
 }
 
-async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
+async fn process_single_request(data: Vec<u8>, call: CallData<'_>) -> MethodResult {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
 
@@ -918,88 +842,70 @@ async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>)
 ///
 /// Returns `(MethodResponse, None)` on every call that isn't a subscription
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
-async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
+async fn execute_call(c: Call<'_>) -> MethodResult {
 	let Call { name, id, params, call } = c;
 	let CallData {
 		resources,
 		methods,
-		logger,
 		max_response_body_size,
 		max_log_length,
 		conn_id,
 		bounded_subscriptions,
 		id_provider,
 		sink,
-		request_start,
 	} = call;
 
 	let response = match methods.method_with_name(name) {
 		None => {
-			logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
 			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
 			MethodResult::SendAndLogger(response)
 		}
 		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
-
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let r = (callback)(id, params, max_response_body_size as usize);
-						drop(guard);
-						MethodResult::SendAndLogger(r)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
+			MethodKind::Sync(callback) => match method.claim(name, resources) {
+				Ok(guard) => {
+					let r = (callback)(id, params, max_response_body_size as usize);
+					drop(guard);
+					MethodResult::SendAndLogger(r)
 				}
-			}
-			MethodKind::Async(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
+				Err(err) => {
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
+					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+					MethodResult::SendAndLogger(response)
+				}
+			},
+			MethodKind::Async(callback) => match method.claim(name, resources) {
+				Ok(guard) => {
+					let id = id.into_owned();
+					let params = params.into_owned();
 
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let id = id.into_owned();
-						let params = params.into_owned();
-
+					let response = (callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
+					MethodResult::SendAndLogger(response)
+				}
+				Err(err) => {
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
+					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+					MethodResult::SendAndLogger(response)
+				}
+			},
+			MethodKind::Subscription(callback) => match method.claim(name, resources) {
+				Ok(guard) => {
+					if let Some(cn) = bounded_subscriptions.acquire() {
+						let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
+						let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
+						MethodResult::JustLogger(response)
+					} else {
 						let response =
-							(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
-						MethodResult::SendAndLogger(response)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+							MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
 						MethodResult::SendAndLogger(response)
 					}
 				}
-			}
-			MethodKind::Subscription(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::Subscription);
-
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						if let Some(cn) = bounded_subscriptions.acquire() {
-							let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
-							let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
-							MethodResult::JustLogger(response)
-						} else {
-							let response =
-								MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
-							MethodResult::SendAndLogger(response)
-						}
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
+				Err(err) => {
+					tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
+					let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
+					MethodResult::SendAndLogger(response)
 				}
-			}
+			},
 			MethodKind::Unsubscription(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription);
-
 				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
 				let result = callback(id, params, conn_id, max_response_body_size as usize);
 				MethodResult::SendAndLogger(result)
@@ -1010,45 +916,5 @@ async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 	let r = response.as_inner();
 
 	rx_log_from_str(&r.result, max_log_length);
-	logger.on_result(name, r.success, request_start);
 	response
-}
-
-/// Helper to fetch the `WebSocketKey` and `Headers` from the WebSocket handshake.
-async fn get_key_and_headers(
-	server: &mut SokettoServer<'_, BufReader<BufWriter<Compat<TcpStream>>>>,
-	cfg: &Settings,
-) -> Result<(WebSocketKey, HeaderMap), Error> {
-	let req = server.receive_request().await?;
-
-	tracing::trace!("Connection request: {:?}", req);
-
-	let host = std::str::from_utf8(req.headers().host).map_err(|e| Error::HttpHeaderRejected("Host", e.to_string()))?;
-
-	let origin = req.headers().origin.and_then(|h| {
-		let res = std::str::from_utf8(h).ok();
-		if res.is_none() {
-			tracing::warn!("Origin header invalid UTF-8; treated as no Origin header");
-		}
-		res
-	});
-
-	let host_check = cfg.access_control.verify_host(host);
-	let origin_check = cfg.access_control.verify_origin(origin, host);
-
-	let mut headers = HeaderMap::new();
-
-	host_check.and(origin_check).map(|()| {
-		let key = req.key();
-
-		if let Ok(val) = HeaderValue::from_str(host) {
-			headers.insert(HOST, val);
-		}
-
-		if let Some(Ok(val)) = origin.map(HeaderValue::from_str) {
-			headers.insert(ORIGIN, val);
-		}
-
-		(key, headers)
-	})
 }
