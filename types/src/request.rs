@@ -56,7 +56,7 @@ impl<'a> Request<'a> {
 }
 
 /// JSON-RPC Invalid request as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct InvalidRequest<'a> {
 	/// Request ID
 	#[serde(borrow)]
