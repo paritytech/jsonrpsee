@@ -900,14 +900,13 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 					data.ws_logger.on_connect(data.remote_addr, request.headers());
 
 					tokio::spawn(async move {
-						tracing::trace!("waiting on upgrade request");
-
 						let upgraded = match hyper::upgrade::on(request).await {
 							Ok(u) => u,
-							Err(e) => panic!("WebSocket upgrade request failed: {:?}", e),
+							Err(e) => {
+								tracing::warn!("Could not upgrade connection: {}", e);
+								return;
+							}
 						};
-
-						tracing::trace!("upgrade request ok");
 
 						let stream = BufReader::new(BufWriter::new(upgraded.compat()));
 						let mut ws_builder = server.into_builder(stream);
