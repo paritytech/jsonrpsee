@@ -36,12 +36,11 @@ use hyper::body::HttpBody;
 use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, Service};
-use hyper::{Body, Error as HyperError, Method};
+use hyper::{Body, Error as HyperError};
 use jsonrpsee_core::error::Error;
-use jsonrpsee_core::http_helpers::{self};
 use jsonrpsee_core::logger::HttpLogger as Logger;
 use jsonrpsee_core::server::access_control::AccessControl;
-use jsonrpsee_core::server::http_utils::{self, response, ProcessValidatedRequest};
+use jsonrpsee_core::server::http_utils::{handle_request, HandleRequest};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
@@ -424,56 +423,19 @@ struct ServiceData<L> {
 impl<L: Logger> ServiceData<L> {
 	/// Default behavior for handling the RPC requests.
 	async fn handle_request(self, request: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {
-		let ServiceData {
-			remote_addr,
-			methods,
-			acl,
-			resources,
-			logger,
-			max_request_body_size,
-			max_response_body_size,
-			max_log_length,
-			batch_requests_supported,
-		} = self;
-
-		let request_start = logger.on_request(remote_addr, &request);
-
-		let host = match http_helpers::read_header_value(request.headers(), "host") {
-			Some(origin) => origin,
-			None => return response::malformed(),
+		let data = HandleRequest {
+			remote_addr: self.remote_addr,
+			methods: self.methods,
+			acl: self.acl,
+			resources: self.resources,
+			max_request_body_size: self.max_request_body_size,
+			max_response_body_size: self.max_response_body_size,
+			max_log_length: self.max_log_length,
+			batch_requests_supported: self.batch_requests_supported,
+			logger: self.logger,
 		};
-		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
 
-		if let Err(e) = acl.verify_host(host) {
-			tracing::warn!("Denied request: {}", e);
-			return response::host_not_allowed();
-		}
-
-		if let Err(e) = acl.verify_origin(maybe_origin, host) {
-			tracing::warn!("Denied request: {}", e);
-			return response::origin_rejected(maybe_origin);
-		}
-
-		// Only the `POST` method is allowed.
-		match *request.method() {
-			Method::POST if http_utils::content_type_is_json(&request) => {
-				http_utils::process_validated_request(ProcessValidatedRequest {
-					request,
-					logger,
-					methods,
-					resources,
-					max_request_body_size,
-					max_response_body_size,
-					max_log_length,
-					batch_requests_supported,
-					request_start,
-				})
-				.await
-			}
-			// Error scenarios:
-			Method::POST => response::unsupported_content_type(),
-			_ => response::method_not_allowed(),
-		}
+		handle_request(request, data).await
 	}
 }
 

@@ -1,7 +1,9 @@
 pub mod response;
 
+use std::net::SocketAddr;
+
 use crate::error::GenericTransportError;
-use crate::http_helpers::read_body;
+use crate::http_helpers::{self, read_body};
 use crate::logger::{self, HttpLogger as Logger};
 use crate::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse};
 use crate::server::rpc_module::MethodKind;
@@ -9,9 +11,12 @@ use crate::server::{resource_limiting::Resources, rpc_module::Methods};
 use crate::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
 use crate::JsonRawValue;
 use futures_util::TryStreamExt;
+use http::Method;
 use jsonrpsee_types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{ErrorObject, Id, Notification, Params, Request};
 use tracing_futures::Instrument;
+
+use super::access_control::AccessControl;
 
 type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
 
@@ -270,4 +275,72 @@ pub async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 	tx_log_from_str(&response.result, max_log_length);
 	logger.on_result(name, response.success, request_start);
 	response
+}
+
+pub struct HandleRequest<L: Logger> {
+	pub remote_addr: SocketAddr,
+	pub methods: Methods,
+	pub acl: AccessControl,
+	pub resources: Resources,
+	pub max_request_body_size: u32,
+	pub max_response_body_size: u32,
+	pub max_log_length: u32,
+	pub batch_requests_supported: bool,
+	pub logger: L,
+}
+
+pub async fn handle_request<L: Logger>(
+	request: hyper::Request<hyper::Body>,
+	input: HandleRequest<L>,
+) -> hyper::Response<hyper::Body> {
+	let HandleRequest {
+		remote_addr,
+		methods,
+		acl,
+		resources,
+		max_request_body_size,
+		max_response_body_size,
+		max_log_length,
+		batch_requests_supported,
+		logger,
+	} = input;
+
+	let request_start = logger.on_request(remote_addr, &request);
+
+	let host = match http_helpers::read_header_value(request.headers(), "host") {
+		Some(origin) => origin,
+		None => return response::malformed(),
+	};
+	let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
+
+	if let Err(e) = acl.verify_host(host) {
+		tracing::warn!("Denied request: {}", e);
+		return response::host_not_allowed();
+	}
+
+	if let Err(e) = acl.verify_origin(maybe_origin, host) {
+		tracing::warn!("Denied request: {}", e);
+		return response::origin_rejected(maybe_origin);
+	}
+
+	// Only the `POST` method is allowed.
+	match *request.method() {
+		Method::POST if content_type_is_json(&request) => {
+			process_validated_request(ProcessValidatedRequest {
+				request,
+				methods,
+				resources,
+				max_request_body_size,
+				max_response_body_size,
+				max_log_length,
+				batch_requests_supported,
+				logger,
+				request_start,
+			})
+			.await
+		}
+		// Error scenarios:
+		Method::POST => response::unsupported_content_type(),
+		_ => response::method_not_allowed(),
+	}
 }

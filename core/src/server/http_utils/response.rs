@@ -108,3 +108,12 @@ pub fn unsupported_content_type() -> hyper::Response<hyper::Body> {
 		TEXT,
 	)
 }
+
+/// Create a response for when the server is busy and can't accept more requests.
+pub fn too_many_requests() -> hyper::Response<hyper::Body> {
+	from_template(
+		hyper::StatusCode::TOO_MANY_REQUESTS,
+		"Too many connections. Please try again later.".to_owned(),
+		TEXT,
+	)
+}
