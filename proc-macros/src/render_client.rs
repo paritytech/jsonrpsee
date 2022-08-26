@@ -54,7 +54,6 @@ impl RpcDescription {
 
 		// Doc-comment to be associated with the client.
 		let doc_comment = format!("Client implementation for the `{}` RPC API.", &self.trait_def.ident);
-
 		let trait_impl = quote! {
 			#[#async_trait]
 			#[doc = #doc_comment]
@@ -95,7 +94,7 @@ impl RpcDescription {
 		};
 
 		// Encoded parameters for the request.
-		let parameters = self.encode_params(&method.params, &method.param_kind, &method.signature);
+		let parameter_builder = self.encode_params(&method.params, &method.param_kind, &method.signature);
 		// Doc-comment to be associated with the method.
 		let docs = &method.docs;
 		// Mark the method as deprecated, if previously declared as so.
@@ -105,7 +104,8 @@ impl RpcDescription {
 			#docs
 			#deprecated
 			async fn #rust_method_name(#rust_method_params) -> #returns {
-				self.#called_method(#rpc_method_name, #parameters).await
+				let params = { #parameter_builder };
+				self.#called_method(#rpc_method_name, params).await
 			}
 		};
 		Ok(method)
@@ -130,14 +130,15 @@ impl RpcDescription {
 		let returns = quote! { Result<#sub_type<#item>, #jrps_error> };
 
 		// Encoded parameters for the request.
-		let parameters = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
+		let parameter_builder = self.encode_params(&sub.params, &sub.param_kind, &sub.signature);
 		// Doc-comment to be associated with the method.
 		let docs = &sub.docs;
 
 		let method = quote! {
 			#docs
 			async fn #rust_method_name(#rust_method_params) -> #returns {
-				self.subscribe(#rpc_sub_name, #parameters, #rpc_unsub_name).await
+				let params = { #parameter_builder };
+				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name).await
 			}
 		};
 		Ok(method)
@@ -149,39 +150,38 @@ impl RpcDescription {
 		param_kind: &ParamKind,
 		signature: &syn::TraitItemMethod,
 	) -> TokenStream2 {
-		if !params.is_empty() {
-			let serde_json = self.jrps_client_item(quote! { core::__reexports::serde_json });
-			let params = params.iter().map(|(param, _param_type)| {
-				quote! { #serde_json::to_value(&#param)? }
-			});
-			match param_kind {
-				ParamKind::Map => {
-					let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
-					// Extract parameter names.
-					let param_names = extract_param_names(&signature.sig);
-					// Combine parameter names and values into tuples.
-					let params = param_names.iter().zip(params).map(|pair| {
-						let param = pair.0;
-						let value = pair.1;
-						quote! { (#param, #value) }
-					});
-					quote! {
-						Some(#jsonrpsee::types::ParamsSer::Map(
-							std::collections::BTreeMap::<&str, #serde_json::Value>::from(
-								[#(#params),*]
-								)
-							)
-						)
-					}
-				}
-				ParamKind::Array => {
-					quote! {
-						Some(vec![ #(#params),* ].into())
-					}
+		if params.is_empty() {
+			return quote! { () };
+		}
+
+		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
+
+		match param_kind {
+			ParamKind::Map => {
+				// Extract parameter names.
+				let param_names = extract_param_names(&signature.sig);
+				// Combine parameter names and values to pass them as parameters.
+				let params_insert = param_names.iter().zip(params).map(|pair| {
+					let name = pair.0;
+					// Throw away the type.
+					let (value, _value_type) = pair.1;
+					quote! { #name, #value }
+				});
+				quote! {
+					let mut builder = #jsonrpsee::types::NamedParamsBuilder::new();
+					#( builder.insert( #params_insert ).expect(format!("Parameters {} must be valid", stringify!(#params_insert)).as_str()); )*
+					builder.build()
 				}
 			}
-		} else {
-			quote! { None }
+			ParamKind::Array => {
+				// Throw away the type.
+				let params = params.iter().map(|(param, _param_type)| param);
+				quote! {
+					let mut builder = #jsonrpsee::types::UnnamedParamsBuilder::new();
+					#( builder.insert( #params ).expect(format!("Parameters {} must be valid", stringify!(#params)).as_str()); )*
+					builder.build()
+				}
+			}
 		}
 	}
 }
