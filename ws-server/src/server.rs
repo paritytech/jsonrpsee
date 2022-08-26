@@ -42,6 +42,7 @@ use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
 use futures_util::TryStreamExt;
 
+use hyper::body::HttpBody;
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::logger::{self, HttpLogger, WsLogger};
@@ -64,7 +65,7 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use tower::layer::util::Identity;
-use tower::Layer;
+use tower::{Layer, Service};
 use tracing_futures::Instrument;
 
 /// Default maximum connections allowed.
@@ -109,18 +110,21 @@ impl<B, HL, WL> Server<B, HL, WL> {
 	}
 }
 
-impl<B, HL, WL> Server<B, HL, WL>
+impl<B, U, HL, WL> Server<B, HL, WL>
 where
 	HL: jsonrpsee_core::logger::HttpLogger,
 	WL: jsonrpsee_core::logger::WsLogger,
 	B: Layer<TowerService<HL, WL>> + Send + 'static,
 	<B as Layer<TowerService<HL, WL>>>::Service: Send
-		+ tower::Service<
+		+ Service<
 			hyper::Request<hyper::Body>,
-			Response = hyper::Response<hyper::Body>,
+			Response = hyper::Response<U>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<B as Layer<TowerService<HL, WL>>>::Service as tower::Service<hyper::Request<hyper::Body>>>::Future: Send,
+	<<B as Layer<TowerService<HL, WL>>>::Service as Service<hyper::Request<hyper::Body>>>::Future: Send,
+	U: HttpBody + Send + 'static,
+	<U as HttpBody>::Error: Send + Sync + StdError,
+	<U as HttpBody>::Data: Send,
 {
 	/// Start responding to connections requests. This will run on the tokio runtime until the server is stopped.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
@@ -717,6 +721,41 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
 		self.settings.access_control = acl;
 		self
+	}
+
+	/// Configure a custom [`tower::ServiceBuilder`] middleware for composing layers to be applied to the RPC service.
+	///
+	/// Default: No tower layers are applied to the RPC service.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	///
+	/// use std::time::Duration;
+	/// use std::net::SocketAddr;
+	/// use jsonrpsee_http_server::HttpServerBuilder;
+	///
+	/// #[tokio::main]
+	/// async fn main() {
+	///     let builder = tower::ServiceBuilder::new()
+	///         .timeout(Duration::from_secs(2));
+	///
+	///     let server = HttpServerBuilder::new()
+	///         .set_middleware(builder)
+	///         .build("127.0.0.1:0".parse::<SocketAddr>().unwrap())
+	///         .await
+	///         .unwrap();
+	/// }
+	/// ```
+	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> Builder<T, HL, WL> {
+		Builder {
+			settings: self.settings,
+			resources: self.resources,
+			http_logger: self.http_logger,
+			ws_logger: self.ws_logger,
+			id_provider: self.id_provider,
+			service_builder,
+		}
 	}
 
 	/// Finalize the configuration of the server. Consumes the [`Builder`].
