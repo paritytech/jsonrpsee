@@ -228,8 +228,6 @@ pub async fn http_server_with_access_control(acl: AccessControl, cors: CorsLayer
 	let server = HttpServerBuilder::default()
 		.set_access_control(acl)
 		.set_middleware(middleware)
-		.health_api("/health", "system_health")
-		.unwrap()
 		.build("127.0.0.1:0")
 		.await
 		.unwrap();

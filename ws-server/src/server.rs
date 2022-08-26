@@ -39,18 +39,16 @@ use futures_channel::mpsc;
 use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use futures_util::{AsyncRead, TryStreamExt};
-use http::header::{HOST, ORIGIN};
-use http::{HeaderMap, HeaderValue};
+use futures_util::TryStreamExt;
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::logger::{self, WsLogger as Logger};
+use jsonrpsee_core::logger::{HttpLogger, WsLogger};
 use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
 use jsonrpsee_core::server::resource_limiting::Resources;
-use jsonrpsee_core::server::rpc_module::{ConnState, ConnectionId, MethodKind, Methods};
+use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
 use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str, RpcTracing};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
@@ -58,17 +56,13 @@ use jsonrpsee_types::error::{reject_too_big_request, reject_too_many_subscriptio
 use jsonrpsee_types::Params;
 use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
-use soketto::handshake::WebSocketKey;
-use soketto::handshake::{server::Response, Server as SokettoServer};
-use tokio::io::AsyncWrite;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_stream::wrappers::IntervalStream;
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use tokio_util::compat::Compat;
 use tracing_futures::Instrument;
 
 // ...
 use crate::tmp::*;
-use hyper::body::HttpBody;
 use tower::layer::util::Identity;
 use tower::Layer;
 
@@ -79,12 +73,13 @@ type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
 
 /// A WebSocket JSON RPC server.
-pub struct Server<B = Identity, L = ()> {
+pub struct Server<B = Identity, HL = (), WSL = ()> {
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
 	resources: Resources,
-	logger: L,
+	http_logger: HL,
+	ws_logger: WSL,
 	id_provider: Arc<dyn IdProvider>,
 	service_builder: tower::ServiceBuilder<B>,
 }
@@ -101,17 +96,18 @@ impl<L> std::fmt::Debug for Server<L> {
 	}
 }
 
-impl<B, L> Server<B, L>
+impl<B, HL, WL> Server<B, HL, WL>
 where
-	L: Logger,
-	B: Layer<TowerService> + Send + 'static,
-	<B as Layer<TowerService>>::Service: Send
+	HL: jsonrpsee_core::logger::HttpLogger,
+	WL: jsonrpsee_core::logger::WsLogger,
+	B: Layer<TowerService<HL, WL>> + Send + 'static,
+	<B as Layer<TowerService<HL, WL>>>::Service: Send
 		+ tower::Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<hyper::Body>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<B as Layer<TowerService>>::Service as tower::Service<hyper::Request<hyper::Body>>>::Future: Send,
+	<<B as Layer<TowerService<HL, WL>>>::Service as tower::Service<hyper::Request<hyper::Body>>>::Future: Send,
 {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
@@ -143,12 +139,12 @@ where
 		let acl = self.cfg.access_control;
 		let resources = self.resources;
 		let listener = self.listener;
-		let _logger = self.logger;
+		let http_logger = self.http_logger;
+		let ws_logger = self.ws_logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
 		let id_provider = self.id_provider;
 		let stop_server = self.stop_monitor;
 		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
-		let max_connections = self.cfg.max_connections;
 
 		let mut id: u32 = 0;
 		let mut connections = FutureDriver::default();
@@ -183,6 +179,8 @@ where
 							stop_server: stop_server.clone(),
 							max_subscriptions_per_connection,
 							conn_id: id,
+							ws_logger: ws_logger.clone(),
+							http_logger: http_logger.clone(),
 						},
 					};
 
@@ -263,7 +261,11 @@ where
 	}
 }
 
-pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: ServiceData) -> Result<(), Error> {
+pub async fn background_task<HL: HttpLogger, WL: WsLogger>(
+	mut sender: Sender,
+	mut receiver: Receiver,
+	svc: ServiceData<HL, WL>,
+) -> Result<(), Error> {
 	let ServiceData {
 		methods,
 		resources,
@@ -276,6 +278,8 @@ pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: Se
 		ping_interval,
 		max_subscriptions_per_connection,
 		conn_id,
+		ws_logger,
+		remote_addr,
 		..
 	} = svc;
 
@@ -336,6 +340,7 @@ pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: Se
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
+	let logger = &ws_logger;
 
 	let result = loop {
 		data.clear();
@@ -386,6 +391,8 @@ pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: Se
 			};
 		};
 
+		let request_start = logger.on_request();
+
 		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
 		match first_non_whitespace {
 			Some(b'{') => {
@@ -409,8 +416,11 @@ pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: Se
 					};
 
 					match process_single_request(data, call).await {
-						MethodResult::JustLogger(r) => {}
+						MethodResult::JustLogger(r) => {
+							logger.on_response(&r.result, request_start);
+						}
 						MethodResult::SendAndLogger(r) => {
+							logger.on_response(&r.result, request_start);
 							let _ = sink.send_raw(r.result);
 						}
 					};
@@ -424,6 +434,7 @@ pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: Se
 					Id::Null,
 					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 				);
+				logger.on_response(&response.result, request_start);
 				let _ = sink.send_raw(response.result);
 			}
 			Some(b'[') => {
@@ -452,6 +463,7 @@ pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: Se
 					.await;
 
 					tx_log_from_str(&response.result, max_log_length);
+					logger.on_response(&response.result, request_start);
 					let _ = sink.send_raw(response.result);
 				};
 
@@ -462,6 +474,8 @@ pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: Se
 			}
 		}
 	};
+
+	logger.on_disconnect(remote_addr);
 
 	// Drive all running methods to completion.
 	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
@@ -514,10 +528,11 @@ impl Default for Settings {
 
 /// Builder to configure and create a JSON-RPC Websocket server
 #[derive(Debug)]
-pub struct Builder<B = Identity, L = ()> {
+pub struct Builder<B = Identity, HL = (), WL = ()> {
 	settings: Settings,
 	resources: Resources,
-	logger: L,
+	http_logger: HL,
+	ws_logger: WL,
 	id_provider: Arc<dyn IdProvider>,
 	service_builder: tower::ServiceBuilder<B>,
 }
@@ -527,7 +542,8 @@ impl Default for Builder {
 		Builder {
 			settings: Settings::default(),
 			resources: Resources::default(),
-			logger: (),
+			http_logger: (),
+			ws_logger: (),
 			id_provider: Arc::new(RandomIntegerIdProvider),
 			service_builder: tower::ServiceBuilder::new(),
 		}
@@ -541,7 +557,7 @@ impl Builder {
 	}
 }
 
-impl<B, L> Builder<B, L> {
+impl<B, HL, WL> Builder<B, HL, WL> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -624,11 +640,12 @@ impl<B, L> Builder<B, L> {
 	///
 	/// let builder = WsServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<B, T> {
+	pub fn set_ws_logger<T: WsLogger>(self, logger: T) -> Builder<B, HL, T> {
 		Builder {
 			settings: self.settings,
 			resources: self.resources,
-			logger,
+			ws_logger: logger,
+			http_logger: self.http_logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
 		}
@@ -710,7 +727,7 @@ impl<B, L> Builder<B, L> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, HL, WL>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
@@ -719,7 +736,8 @@ impl<B, L> Builder<B, L> {
 			cfg: self.settings,
 			stop_monitor,
 			resources,
-			logger: self.logger,
+			http_logger: self.http_logger,
+			ws_logger: self.ws_logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
 		})

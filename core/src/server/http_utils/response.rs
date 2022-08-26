@@ -27,9 +27,8 @@
 //! Contains common builders for hyper responses.
 
 use jsonrpsee_types::error::reject_too_big_request;
-
-use crate::types::error::{ErrorCode, ErrorResponse};
-use crate::types::Id;
+use jsonrpsee_types::error::{ErrorCode, ErrorResponse};
+use jsonrpsee_types::Id;
 
 const JSON: &str = "application/json; charset=utf-8";
 const TEXT: &str = "text/plain";

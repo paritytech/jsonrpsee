@@ -29,35 +29,26 @@ use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use crate::response;
 use futures_channel::mpsc;
 use futures_util::future::FutureExt;
-use futures_util::stream::{StreamExt, TryStreamExt};
+use futures_util::stream::StreamExt;
 use hyper::body::HttpBody;
 use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, Service};
 use hyper::{Body, Error as HyperError, Method};
-use jsonrpsee_core::error::{Error, GenericTransportError};
-use jsonrpsee_core::http_helpers::{self, read_body};
-use jsonrpsee_core::logger::{self, HttpLogger as Logger};
+use jsonrpsee_core::error::Error;
+use jsonrpsee_core::http_helpers::{self};
+use jsonrpsee_core::logger::HttpLogger as Logger;
 use jsonrpsee_core::server::access_control::AccessControl;
-use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
-use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
+use jsonrpsee_core::server::http_utils::{self, response, ProcessValidatedRequest};
 use jsonrpsee_core::server::resource_limiting::Resources;
-use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str, RpcTracing};
+use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
-use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
-use jsonrpsee_types::{Id, Notification, Params, Request};
-use serde_json::value::RawValue;
 use std::error::Error as StdError;
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tower::layer::util::Identity;
 use tower::Layer;
-use tracing_futures::Instrument;
-
-type Notif<'a> = Notification<'a, Option<&'a RawValue>>;
 
 /// Builder to create JSON-RPC HTTP server.
 #[derive(Debug)]
@@ -72,7 +63,6 @@ pub struct Builder<B = Identity, L = ()> {
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	logger: L,
 	max_log_length: u32,
-	health_api: Option<HealthApi>,
 	service_builder: tower::ServiceBuilder<B>,
 }
 
@@ -87,7 +77,6 @@ impl Default for Builder {
 			tokio_runtime: None,
 			logger: (),
 			max_log_length: 4096,
-			health_api: None,
 			service_builder: tower::ServiceBuilder::new(),
 		}
 	}
@@ -154,7 +143,6 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder: self.service_builder,
 		}
 	}
@@ -203,23 +191,6 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Enable health endpoint.
-	/// Allows you to expose one of the methods under GET /<path> The method will be invoked with no parameters.
-	/// Error returned from the method will be converted to status 500 response.
-	/// Expects a tuple with (</path>, <rpc-method-name>).
-	///
-	/// Fails if the path is missing `/`.
-	pub fn health_api(mut self, path: impl Into<String>, method: impl Into<String>) -> Result<Self, Error> {
-		let path = path.into();
-
-		if !path.starts_with('/') {
-			return Err(Error::Custom(format!("Health endpoint path must start with `/` to work, got: {}", path)));
-		}
-
-		self.health_api = Some(HealthApi { path, method: method.into() });
-		Ok(self)
-	}
-
 	/// Configure a custom [`tower::ServiceBuilder`] middleware for composing layers to be applied to the RPC service.
 	///
 	/// Default: No tower layers are applied to the RPC service.
@@ -254,7 +225,6 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger: self.logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder,
 		}
 	}
@@ -309,7 +279,6 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger: self.logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder: self.service_builder,
 		})
 	}
@@ -355,7 +324,6 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger: self.logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder: self.service_builder,
 		})
 	}
@@ -392,16 +360,9 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger: self.logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder: self.service_builder,
 		})
 	}
-}
-
-#[derive(Debug, Clone)]
-struct HealthApi {
-	path: String,
-	method: String,
 }
 
 /// Handle used to run or stop the server.
@@ -448,8 +409,6 @@ struct ServiceData<L> {
 	resources: Resources,
 	/// User provided logger.
 	logger: L,
-	/// Health API.
-	health_api: Option<HealthApi>,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Max response body size.
@@ -471,7 +430,6 @@ impl<L: Logger> ServiceData<L> {
 			acl,
 			resources,
 			logger,
-			health_api,
 			max_request_body_size,
 			max_response_body_size,
 			max_log_length,
@@ -498,8 +456,8 @@ impl<L: Logger> ServiceData<L> {
 
 		// Only the `POST` method is allowed.
 		match *request.method() {
-			Method::POST if content_type_is_json(&request) => {
-				process_validated_request(ProcessValidatedRequest {
+			Method::POST if http_utils::content_type_is_json(&request) => {
+				http_utils::process_validated_request(ProcessValidatedRequest {
 					request,
 					logger,
 					methods,
@@ -512,20 +470,6 @@ impl<L: Logger> ServiceData<L> {
 				})
 				.await
 			}
-			Method::GET => match health_api.as_ref() {
-				Some(health) if health.path.as_str() == request.uri().path() => {
-					process_health_request(
-						health,
-						logger,
-						methods,
-						max_response_body_size,
-						request_start,
-						max_log_length,
-					)
-					.await
-				}
-				_ => response::method_not_allowed(),
-			},
 			// Error scenarios:
 			Method::POST => response::unsupported_content_type(),
 			_ => response::method_not_allowed(),
@@ -587,7 +531,6 @@ pub struct Server<B = Identity, L = ()> {
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	logger: L,
-	health_api: Option<HealthApi>,
 	service_builder: tower::ServiceBuilder<B>,
 }
 
@@ -626,7 +569,6 @@ where
 		let logger = self.logger;
 		let batch_requests_supported = self.batch_requests_supported;
 		let methods = methods.into().initialize_resources(&resources)?;
-		let health_api = self.health_api;
 
 		let make_service = make_service_fn(move |conn: &AddrStream| {
 			let service = TowerService {
@@ -636,7 +578,6 @@ where
 					acl: acl.clone(),
 					resources: resources.clone(),
 					logger: logger.clone(),
-					health_api: health_api.clone(),
 					max_request_body_size,
 					max_response_body_size,
 					max_log_length,
@@ -663,308 +604,4 @@ where
 
 		Ok(ServerHandle { handle: Some(handle), stop_sender: tx })
 	}
-}
-
-/// Checks that content type of received request is valid for JSON-RPC.
-fn content_type_is_json(request: &hyper::Request<hyper::Body>) -> bool {
-	is_json(request.headers().get("content-type"))
-}
-
-/// Returns true if the `content_type` header indicates a valid JSON message.
-fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
-	match content_type.and_then(|val| val.to_str().ok()) {
-		Some(content)
-			if content.eq_ignore_ascii_case("application/json")
-				|| content.eq_ignore_ascii_case("application/json; charset=utf-8")
-				|| content.eq_ignore_ascii_case("application/json;charset=utf-8") =>
-		{
-			true
-		}
-		_ => false,
-	}
-}
-
-struct ProcessValidatedRequest<L: Logger> {
-	request: hyper::Request<hyper::Body>,
-	logger: L,
-	methods: Methods,
-	resources: Resources,
-	max_request_body_size: u32,
-	max_response_body_size: u32,
-	max_log_length: u32,
-	batch_requests_supported: bool,
-	request_start: L::Instant,
-}
-
-/// Process a verified request, it implies a POST request with content type JSON.
-async fn process_validated_request<L: Logger>(input: ProcessValidatedRequest<L>) -> hyper::Response<hyper::Body> {
-	let ProcessValidatedRequest {
-		request,
-		logger,
-		methods,
-		resources,
-		max_request_body_size,
-		max_response_body_size,
-		max_log_length,
-		batch_requests_supported,
-		request_start,
-	} = input;
-
-	let (parts, body) = request.into_parts();
-
-	let (body, is_single) = match read_body(&parts.headers, body, max_request_body_size).await {
-		Ok(r) => r,
-		Err(GenericTransportError::TooLarge) => return response::too_large(max_request_body_size),
-		Err(GenericTransportError::Malformed) => return response::malformed(),
-		Err(GenericTransportError::Inner(e)) => {
-			tracing::error!("Internal error reading request body: {}", e);
-			return response::internal_error();
-		}
-	};
-
-	// Single request or notification
-	if is_single {
-		let call = CallData {
-			conn_id: 0,
-			logger: &logger,
-			methods: &methods,
-			max_response_body_size,
-			max_log_length,
-			resources: &resources,
-			request_start,
-		};
-		let response = process_single_request(body, call).await;
-		logger.on_response(&response.result, request_start);
-		response::ok_response(response.result)
-	}
-	// Batch of requests or notifications
-	else if !batch_requests_supported {
-		let err = MethodResponse::error(
-			Id::Null,
-			ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
-		);
-		logger.on_response(&err.result, request_start);
-		response::ok_response(err.result)
-	}
-	// Batch of requests or notifications
-	else {
-		let response = process_batch_request(Batch {
-			data: body,
-			call: CallData {
-				conn_id: 0,
-				logger: &logger,
-				methods: &methods,
-				max_response_body_size,
-				max_log_length,
-				resources: &resources,
-				request_start,
-			},
-		})
-		.await;
-		logger.on_response(&response.result, request_start);
-		response::ok_response(response.result)
-	}
-}
-
-async fn process_health_request<L: Logger>(
-	health_api: &HealthApi,
-	logger: L,
-	methods: Methods,
-	max_response_body_size: u32,
-	request_start: L::Instant,
-	max_log_length: u32,
-) -> hyper::Response<hyper::Body> {
-	let trace = RpcTracing::method_call(&health_api.method);
-	async {
-		tx_log_from_str("HTTP health API", max_log_length);
-		let response = match methods.method_with_name(&health_api.method) {
-			None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
-			Some((_name, method_callback)) => match method_callback.inner() {
-				MethodKind::Sync(callback) => {
-					(callback)(Id::Number(0), Params::new(None), max_response_body_size as usize)
-				}
-				MethodKind::Async(callback) => {
-					(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None).await
-				}
-				MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-					MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
-				}
-			},
-		};
-
-		rx_log_from_str(&response.result, max_log_length);
-		logger.on_result(&health_api.method, response.success, request_start);
-		logger.on_response(&response.result, request_start);
-
-		if response.success {
-			#[derive(serde::Deserialize)]
-			struct RpcPayload<'a> {
-				#[serde(borrow)]
-				result: &'a serde_json::value::RawValue,
-			}
-
-			let payload: RpcPayload = serde_json::from_str(&response.result)
-				.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
-			response::ok_response(payload.result.to_string())
-		} else {
-			response::internal_error()
-		}
-	}
-	.instrument(trace.into_span())
-	.await
-}
-
-#[derive(Debug, Clone)]
-struct Batch<'a, L: Logger> {
-	data: Vec<u8>,
-	call: CallData<'a, L>,
-}
-
-#[derive(Debug, Clone)]
-struct CallData<'a, L: Logger> {
-	conn_id: usize,
-	logger: &'a L,
-	methods: &'a Methods,
-	max_response_body_size: u32,
-	max_log_length: u32,
-	resources: &'a Resources,
-	request_start: L::Instant,
-}
-
-#[derive(Debug, Clone)]
-struct Call<'a, L: Logger> {
-	params: Params<'a>,
-	name: &'a str,
-	call: CallData<'a, L>,
-	id: Id<'a>,
-}
-
-// Batch responses must be sent back as a single message so we read the results from each
-// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
-// complete batch response back to the client over `tx`.
-async fn process_batch_request<L>(b: Batch<'_, L>) -> BatchResponse
-where
-	L: Logger,
-{
-	let Batch { data, call } = b;
-
-	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
-		let max_response_size = call.max_response_body_size;
-		let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
-
-		let batch_stream = futures_util::stream::iter(batch);
-
-		let trace = RpcTracing::batch();
-		return async {
-			let batch_response = batch_stream
-				.try_fold(
-					BatchResponseBuilder::new_with_limit(max_response_size as usize),
-					|batch_response, (req, call)| async move {
-						let params = Params::new(req.params.map(|params| params.get()));
-						let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
-						batch_response.append(&response)
-					},
-				)
-				.await;
-
-			match batch_response {
-				Ok(batch) => batch.finish(),
-				Err(batch_err) => batch_err,
-			}
-		}
-		.instrument(trace.into_span())
-		.await;
-	}
-
-	if let Ok(batch) = serde_json::from_slice::<Vec<Notif>>(&data) {
-		return if !batch.is_empty() {
-			BatchResponse { result: "".to_string(), success: true }
-		} else {
-			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
-		};
-	}
-
-	// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
-	// Array with at least one value, the response from the Server MUST be a single
-	// Response object." – The Spec.
-	let (id, code) = prepare_error(&data);
-	BatchResponse::error(id, ErrorObject::from(code))
-}
-
-async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResponse {
-	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-		let trace = RpcTracing::method_call(&req.method);
-		async {
-			rx_log_from_json(&req, call.max_log_length);
-			let params = Params::new(req.params.map(|params| params.get()));
-			let name = &req.method;
-			let id = req.id;
-			execute_call(Call { name, params, id, call }).await
-		}
-		.instrument(trace.into_span())
-		.await
-	} else if let Ok(req) = serde_json::from_slice::<Notif>(&data) {
-		let trace = RpcTracing::notification(&req.method);
-		let span = trace.into_span();
-		let _enter = span.enter();
-		rx_log_from_json(&req, call.max_log_length);
-
-		MethodResponse { result: String::new(), success: true }
-	} else {
-		let (id, code) = prepare_error(&data);
-		MethodResponse::error(id, ErrorObject::from(code))
-	}
-}
-
-async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
-	let Call { name, id, params, call } = c;
-	let CallData { resources, methods, logger, max_response_body_size, max_log_length, conn_id, request_start } = call;
-
-	let response = match methods.method_with_name(name) {
-		None => {
-			logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
-			MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))
-		}
-		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
-
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let r = (callback)(id, params, max_response_body_size as usize);
-						drop(guard);
-						r
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
-					}
-				}
-			}
-			MethodKind::Async(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let id = id.into_owned();
-						let params = params.into_owned();
-
-						(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
-					}
-				}
-			}
-			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
-				tracing::error!("Subscriptions not supported on HTTP");
-				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
-			}
-		},
-	};
-
-	tx_log_from_str(&response.result, max_log_length);
-	logger.on_result(name, response.success, request_start);
-	response
 }
