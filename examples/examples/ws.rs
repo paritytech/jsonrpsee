@@ -27,6 +27,7 @@
 use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 use tracing_subscriber::util::SubscriberInitExt;
@@ -42,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", None).await?;
+	let response: String = client.request("say_hello", rpc_params![]).await?;
 	tracing::info!("response: {:?}", response);
 
 	Ok(())

@@ -26,16 +26,17 @@
 
 #![cfg(test)]
 use crate::types::error::{ErrorCode, ErrorObject};
-use crate::types::ParamsSer;
+
 use crate::WsClientBuilder;
 use jsonrpsee_core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee_core::client::{IdKind, Subscription};
-use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
+use jsonrpsee_types::{rpc_params, BatchParamsBuilder};
+use serde_json::value::RawValue;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]
@@ -62,7 +63,7 @@ async fn method_call_with_wrong_id_kind() {
 	let client =
 		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
 
-	let err = client.request::<String>("o", None).with_default_timeout().await.unwrap();
+	let err: Result<String, Error> = client.request("o", rpc_params![]).with_default_timeout().await.unwrap();
 	assert!(matches!(err, Err(Error::RestartNeeded(e)) if e == "Invalid request ID"));
 }
 
@@ -79,7 +80,7 @@ async fn method_call_with_id_str() {
 	let uri = format!("ws://{}", server.local_addr());
 	let client =
 		WsClientBuilder::default().id_format(IdKind::String).build(&uri).with_default_timeout().await.unwrap().unwrap();
-	let response: String = client.request::<String>("o", None).with_default_timeout().await.unwrap().unwrap();
+	let response: String = client.request("o", rpc_params![]).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(&response, exp);
 }
 
@@ -92,7 +93,7 @@ async fn notif_works() {
 		.unwrap();
 	let uri = to_ws_uri_string(server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
-	assert!(client.notification("notif", None).with_default_timeout().await.unwrap().is_ok());
+	assert!(client.notification("notif", rpc_params![]).with_default_timeout().await.unwrap().is_ok());
 }
 
 #[tokio::test]
@@ -153,7 +154,7 @@ async fn subscription_works() {
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	{
 		let mut sub: Subscription<String> = client
-			.subscribe("subscribe_hello", None, "unsubscribe_hello")
+			.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello")
 			.with_default_timeout()
 			.await
 			.unwrap()
@@ -226,7 +227,11 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 
 #[tokio::test]
 async fn batch_request_works() {
-	let batch_request = vec![("say_hello", None), ("say_goodbye", rpc_params![0_u64, 1, 2]), ("get_swag", None)];
+	let mut builder = BatchParamsBuilder::new();
+	builder.insert("say_hello", rpc_params![]).unwrap();
+	builder.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
+	builder.insert("get_swag", rpc_params![]).unwrap();
+	let batch_request = builder.build();
 	let server_response = r#"[{"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}, {"jsonrpc":"2.0","result":"here's your swag","id":2}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
@@ -235,7 +240,11 @@ async fn batch_request_works() {
 
 #[tokio::test]
 async fn batch_request_out_of_order_response() {
-	let batch_request = vec![("say_hello", None), ("say_goodbye", rpc_params![0_u64, 1, 2]), ("get_swag", None)];
+	let mut builder = BatchParamsBuilder::new();
+	builder.insert("say_hello", rpc_params![]).unwrap();
+	builder.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
+	builder.insert("get_swag", rpc_params![]).unwrap();
+	let batch_request = builder.build();
 	let server_response = r#"[{"jsonrpc":"2.0","result":"here's your swag","id":2}, {"jsonrpc":"2.0","result":"hello","id":0}, {"jsonrpc":"2.0","result":"goodbye","id":1}]"#.to_string();
 	let response =
 		run_batch_request_with_response(batch_request, server_response).with_default_timeout().await.unwrap().unwrap();
@@ -260,15 +269,16 @@ async fn is_connected_works() {
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
 	assert!(client.is_connected());
 
-	client.request::<String>("say_hello", None).with_default_timeout().await.unwrap().unwrap_err();
+	let res: Result<String, Error> = client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap();
+	res.unwrap_err();
 
 	// give the background thread some time to terminate.
 	tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 	assert!(!client.is_connected())
 }
 
-async fn run_batch_request_with_response<'a>(
-	batch: Vec<(&'a str, Option<ParamsSer<'a>>)>,
+async fn run_batch_request_with_response(
+	batch: Vec<(&str, Option<Box<RawValue>>)>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)
@@ -287,7 +297,7 @@ async fn run_request_with_response(response: String) -> Result<String, Error> {
 		.unwrap();
 	let uri = format!("ws://{}", server.local_addr());
 	let client = WsClientBuilder::default().build(&uri).with_default_timeout().await.unwrap().unwrap();
-	client.request("say_hello", None).with_default_timeout().await.unwrap()
+	client.request("say_hello", rpc_params![]).with_default_timeout().await.unwrap()
 }
 
 fn assert_error_response(err: Error, exp: ErrorObjectOwned) {
@@ -326,6 +336,6 @@ async fn redirections() {
 	// It's connected
 	assert!(client.is_connected());
 	// It works
-	let response = client.request::<String>("anything", None).with_default_timeout().await.unwrap();
-	assert_eq!(response.unwrap(), String::from(expected));
+	let response: String = client.request("anything", rpc_params![]).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response, String::from(expected));
 }
