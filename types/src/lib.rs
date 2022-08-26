@@ -52,10 +52,3 @@ pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
 
 /// Empty `RpcParams` type.
 pub type EmptyParams = Vec<()>;
-
-#[doc(hidden)]
-pub mod __reexports {
-	pub use crate::params::ToRpcParams;
-	pub use crate::params::UnnamedParams;
-	pub use crate::params::UnnamedParamsBuilder;
-}

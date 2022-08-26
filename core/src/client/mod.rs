@@ -44,9 +44,12 @@ use serde_json::Value as JsonValue;
 use serde_json::value::RawValue;
 use jsonrpsee_types::params::ToRpcParams;
 
+// Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
 pub mod __reexports {
-	pub use crate::to_json_value;
+	// Needs to be in scope for `UnnamedParams` to implement it.
+	pub use jsonrpsee_types::ToRpcParams;
+	// Main builder object for constructing the rpc parameters.
 	pub use jsonrpsee_types::UnnamedParamsBuilder;
 }
 
@@ -179,21 +182,21 @@ pub trait TransportReceiverT: 'static {
 }
 
 #[macro_export]
-/// Convert the given values to a [`jsonrpsee_types::ParamsSer`] as expected by a jsonrpsee Client (http or websocket).
+/// Convert the given values to a [`jsonrpsee_types::UnnamedParams`] as expected by a jsonrpsee Client (http or websocket).
 macro_rules! rpc_params {
+	() => {
+		// ToRpcParams is implemented for the empty tuple.
+		()
+	};
 	($($param:expr),*) => {
 		{
-			let mut __params = UnnamedParamsBuilder::new();
+			let mut __params = $crate::client::__reexports::UnnamedParamsBuilder::new();
 			$(
 				__params.insert($param).expect("json serialization is infallible; qed.");
 			)*
 			__params.build()
 		}
 	};
-	() => {
-		// ToRpcParams is implemented for the empty tuple.
-		()
-	}
 }
 
 /// Subscription kind

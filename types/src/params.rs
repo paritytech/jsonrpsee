@@ -658,24 +658,6 @@ impl ToRpcParams for () {
 	}
 }
 
-#[macro_export]
-/// Convert the given values to a [`jsonrpsee_types::UnnamedParams`] as expected by a jsonrpsee Client (http or websocket).
-macro_rules! rpc_params {
-	() => {
-		// ToRpcParams is implemented for the empty tuple.
-		()
-	};
-	($($param:expr),*) => {
-		{
-			let mut __params = $crate::__reexports::UnnamedParamsBuilder::new();
-			$(
-				__params.insert($param).expect("json serialization is infallible; qed.");
-			)*
-			__params.build()
-		}
-	};
-}
-
 #[cfg(test)]
 mod test {
 	use super::{Cow, Id, JsonValue, Params, ParamsSer, SubscriptionId, TwoPointZero};

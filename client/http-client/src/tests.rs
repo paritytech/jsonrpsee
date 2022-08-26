@@ -28,13 +28,14 @@ use crate::types::error::{ErrorCode, ErrorObject};
 
 use crate::HttpClientBuilder;
 use jsonrpsee_core::client::{ClientT, IdKind};
-use serde_json::value::RawValue;
+use jsonrpsee_core::rpc_params;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
-use jsonrpsee_types::{rpc_params, BatchParamsBuilder};
+use jsonrpsee_types::BatchParamsBuilder;
+use serde_json::value::RawValue;
 
 #[tokio::test]
 async fn method_call_works() {

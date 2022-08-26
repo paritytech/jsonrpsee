@@ -130,7 +130,7 @@ impl<'a> NotificationSer<'a> {
 #[cfg(test)]
 mod test {
 	use super::{Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, TwoPointZero};
-	use crate::{rpc_params, ToRpcParams};
+	use crate::{ToRpcParams, UnnamedParamsBuilder};
 	use serde_json::value::RawValue;
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
@@ -207,39 +207,22 @@ mod test {
 	fn serialize_call() {
 		let method = "subtract";
 		let id = Id::Number(1); // It's enough to check one variant, since the type itself also has tests.
-		let params = rpc_params![42, 23]; // Same as above.
+		let mut builder = UnnamedParamsBuilder::new();
+		builder.insert(42).unwrap();
+		builder.insert(23).unwrap();
+		let params = builder.build().to_rpc_params().unwrap(); // Same as above.
 
 		let test_vector: &[(&'static str, Option<_>, Option<_>, &'static str)] = &[
 			// With all fields set.
-			(
-				r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#,
-				Some(&id),
-				params.clone().to_rpc_params().unwrap(),
-				method,
-			),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#, Some(&id), params.clone(), method),
 			// Escaped method name.
-			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(&id), rpc_params![].to_rpc_params().unwrap(), "\"m"),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(&id), ().to_rpc_params().unwrap(), "\"m"),
 			// Without ID field.
-			(
-				r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#,
-				None,
-				params.to_rpc_params().unwrap(),
-				method,
-			),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, params, method),
 			// Without params field
-			(
-				r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#,
-				Some(&id),
-				rpc_params![].to_rpc_params().unwrap(),
-				method,
-			),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(&id), ().to_rpc_params().unwrap(), method),
 			// Without params and ID.
-			(
-				r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#,
-				None,
-				rpc_params![].to_rpc_params().unwrap(),
-				method,
-			),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, ().to_rpc_params().unwrap(), method),
 		];
 
 		for (ser, id, params, method) in test_vector.iter().cloned() {
@@ -258,7 +241,9 @@ mod test {
 	#[test]
 	fn serialize_notif() {
 		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","params":["hello"]}"#;
-		let params = rpc_params!["hello"].to_rpc_params().unwrap();
+		let mut builder = UnnamedParamsBuilder::new();
+		builder.insert("hello").unwrap();
+		let params = builder.build().to_rpc_params().unwrap();
 		let req = NotificationSer::new("say_hello", params);
 		let ser = serde_json::to_string(&req).unwrap();
 		assert_eq!(exp, ser);
