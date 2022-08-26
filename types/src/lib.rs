@@ -50,7 +50,7 @@ pub use params::{
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
 
-/// Empty `RpcParams` type;
+/// Empty `RpcParams` type.
 pub type EmptyParams = Vec<()>;
 
 #[doc(hidden)]

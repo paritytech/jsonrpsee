@@ -38,14 +38,16 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{Id, ParamsSer, SubscriptionId};
+use jsonrpsee_types::{Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
+use serde_json::value::RawValue;
+use jsonrpsee_types::params::ToRpcParams;
 
 #[doc(hidden)]
 pub mod __reexports {
 	pub use crate::to_json_value;
-	pub use jsonrpsee_types::ParamsSer;
+	pub use jsonrpsee_types::UnnamedParamsBuilder;
 }
 
 cfg_async_client! {
@@ -57,12 +59,15 @@ cfg_async_client! {
 #[async_trait]
 pub trait ClientT {
 	/// Send a [notification request](https://www.jsonrpc.org/specification#notification)
-	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error>;
+	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	where
+		Params: ToRpcParams + Send;
 
 	/// Send a [method call request](https://www.jsonrpc.org/specification#request_object).
-	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
+	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where
-		R: DeserializeOwned;
+		R: DeserializeOwned,
+		Params: ToRpcParams + Send;
 
 	/// Send a [batch request](https://www.jsonrpc.org/specification#batch).
 	///
@@ -70,7 +75,7 @@ pub trait ClientT {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<R>(&self, batch: Vec<(&str, Option<Box<RawValue>>)>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone;
 }
@@ -90,13 +95,14 @@ pub trait SubscriptionClientT: ClientT {
 	///
 	/// The `Notif` param is a generic type to receive generic subscriptions, see [`Subscription`] for further
 	/// documentation.
-	async fn subscribe<'a, Notif>(
+	async fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
-		params: Option<ParamsSer<'a>>,
+		params: Params,
 		unsubscribe_method: &'a str,
 	) -> Result<Subscription<Notif>, Error>
 	where
+		Params: ToRpcParams + Send,
 		Notif: DeserializeOwned;
 
 	/// Register a method subscription, this is used to filter only server notifications that a user is interested in.
@@ -177,15 +183,16 @@ pub trait TransportReceiverT: 'static {
 macro_rules! rpc_params {
 	($($param:expr),*) => {
 		{
-			let mut __params = vec![];
+			let mut __params = UnnamedParamsBuilder::new();
 			$(
-				__params.push($crate::client::__reexports::to_json_value($param).expect("json serialization is infallible; qed."));
+				__params.insert($param).expect("json serialization is infallible; qed.");
 			)*
-			Some($crate::client::__reexports::ParamsSer::Array(__params))
+			__params.build()
 		}
 	};
 	() => {
-		None
+		// ToRpcParams is implemented for the empty tuple.
+		()
 	}
 }
 
