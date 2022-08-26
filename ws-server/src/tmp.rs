@@ -56,9 +56,7 @@ pub struct ServiceData {
 	pub ping_interval: Duration,
 	pub stop_server: StopMonitor,
 	pub max_subscriptions_per_connection: u32,
-	pub max_connections: u64,
-	pub next_conn_id: u32,
-	pub open_connections: Arc<()>,
+	pub conn_id: u32,
 }
 
 impl ServiceData {
@@ -141,26 +139,12 @@ impl hyper::service::Service<hyper::Request<hyper::Body>> for TowerService {
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		tracing::trace!("{:?}", request);
 		if is_upgrade_request(&request) {
-			// busy.
-			if Arc::strong_count(&self.inner.open_connections) > self.inner.max_connections as usize {
-				return async { Ok(response::internal_error()) }.boxed();
-			}
-
 			let data = self.inner.clone();
-
-			tracing::trace!(
-				"Accepting new connection: {}/{}",
-				Arc::strong_count(&self.inner.open_connections),
-				self.inner.max_connections
-			);
 
 			let mut server = soketto::handshake::http::Server::new();
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					let conn_id = self.inner.next_conn_id;
-					self.inner.next_conn_id = conn_id.wrapping_add(1);
-
 					tokio::spawn(async move {
 						tracing::trace!("waiting on upgrade request");
 
@@ -176,7 +160,7 @@ impl hyper::service::Service<hyper::Request<hyper::Body>> for TowerService {
 						ws_builder.set_max_message_size(data.max_response_body_size as usize);
 						let (sender, receiver) = ws_builder.finish();
 
-						let _ = background_task(sender, receiver, conn_id as usize, data).await;
+						let _ = background_task(sender, receiver, data).await;
 					});
 
 					response.map(|()| hyper::Body::empty())

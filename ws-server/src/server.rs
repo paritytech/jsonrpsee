@@ -101,20 +101,17 @@ impl<L> std::fmt::Debug for Server<L> {
 	}
 }
 
-impl<B, U, L> Server<B, L>
+impl<B, L> Server<B, L>
 where
 	L: Logger,
 	B: Layer<TowerService> + Send + 'static,
 	<B as Layer<TowerService>>::Service: Send
 		+ tower::Service<
 			hyper::Request<hyper::Body>,
-			Response = hyper::Response<U>,
+			Response = hyper::Response<hyper::Body>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
 	<<B as Layer<TowerService>>::Service as tower::Service<hyper::Request<hyper::Body>>>::Future: Send,
-	U: HttpBody + Send + 'static,
-	<U as HttpBody>::Error: Send + Sync + StdError,
-	<U as HttpBody>::Data: Send,
 {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
@@ -144,8 +141,8 @@ where
 		let max_response_body_size = self.cfg.max_response_body_size;
 		let max_log_length = self.cfg.max_log_length;
 		let acl = self.cfg.access_control;
-		let listener = self.listener;
 		let resources = self.resources;
+		let listener = self.listener;
 		let _logger = self.logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
 		let id_provider = self.id_provider;
@@ -153,36 +150,66 @@ where
 		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 		let max_connections = self.cfg.max_connections;
 
-		let service = hyper::service::make_service_fn(move |conn: &hyper::server::conn::AddrStream| {
-			let service = TowerService {
-				inner: ServiceData {
-					remote_addr: conn.remote_addr(),
-					methods: methods.clone(),
-					acl: acl.clone(),
-					resources: resources.clone(),
-					max_request_body_size,
-					max_response_body_size,
-					max_log_length,
-					batch_requests_supported,
-					id_provider: id_provider.clone(),
-					ping_interval: self.cfg.ping_interval,
-					stop_server: stop_server.clone(),
-					max_subscriptions_per_connection,
-					max_connections,
-					next_conn_id: 0,
-					open_connections: Arc::new(()),
-				},
-			};
+		let mut id: u32 = 0;
+		let mut connections = FutureDriver::default();
+		let mut incoming = Monitored::new(Incoming(listener), &stop_server);
 
-			let server = self.service_builder.service(service);
+		loop {
+			match connections.select_with(&mut incoming).await {
+				Ok((socket, _addr)) => {
+					if let Err(e) = socket.set_nodelay(true) {
+						tracing::warn!("Could not set NODELAY on socket: {:?}", e);
+						continue;
+					}
 
-			// For every request the `TowerService` is calling into `ServiceData::handle_request`
-			// where the RPSee bare implementation resides.
-			async move { Ok::<_, hyper::Error>(server) }
-		});
+					if connections.count() >= self.cfg.max_connections as usize {
+						tracing::warn!("Too many connections. Please try again later.");
+						//connections.add(Box::pin(handshake(socket, HandshakeResponse::Reject { status_code: 429 })));
+						continue;
+					}
 
-		let server = hyper::Server::from_tcp(listener.into_std().unwrap()).unwrap().serve(service);
-		let _ = server.await.unwrap();
+					let service = TowerService {
+						inner: ServiceData {
+							remote_addr: socket.local_addr().unwrap(),
+							methods: methods.clone(),
+							acl: acl.clone(),
+							resources: resources.clone(),
+							max_request_body_size,
+							max_response_body_size,
+							max_log_length,
+							batch_requests_supported,
+							id_provider: id_provider.clone(),
+							ping_interval: self.cfg.ping_interval,
+							stop_server: stop_server.clone(),
+							max_subscriptions_per_connection,
+							conn_id: id,
+						},
+					};
+
+					let svc = self.service_builder.service(service);
+
+					connections.add(
+						async {
+							let conn = hyper::server::conn::Http::new().serve_connection(socket, svc);
+							let conn = conn.with_upgrades();
+
+							conn.await.unwrap();
+						}
+						.boxed(),
+					);
+
+					tracing::info!("Accepting new connection {}/{}", connections.count(), self.cfg.max_connections);
+
+					id = id.wrapping_add(1);
+				}
+				Err(MonitoredError::Selector(err)) => {
+					tracing::error!("Error while awaiting a new connection: {:?}", err);
+				}
+				Err(MonitoredError::Shutdown) => break,
+			}
+		}
+
+		connections.await
 	}
 }
 
@@ -236,27 +263,7 @@ where
 	}
 }
 
-enum HandshakeResponse<'a, L> {
-	Reject {
-		status_code: u16,
-	},
-	Accept {
-		conn_id: ConnectionId,
-		methods: &'a Methods,
-		resources: &'a Resources,
-		cfg: &'a Settings,
-		stop_monitor: &'a StopMonitor,
-		logger: L,
-		id_provider: Arc<dyn IdProvider>,
-	},
-}
-
-pub async fn background_task(
-	mut sender: Sender,
-	mut receiver: Receiver,
-	conn_id: usize,
-	svc: ServiceData,
-) -> Result<(), Error> {
+pub async fn background_task(mut sender: Sender, mut receiver: Receiver, svc: ServiceData) -> Result<(), Error> {
 	let ServiceData {
 		methods,
 		resources,
@@ -268,6 +275,7 @@ pub async fn background_task(
 		id_provider,
 		ping_interval,
 		max_subscriptions_per_connection,
+		conn_id,
 		..
 	} = svc;
 
@@ -390,7 +398,7 @@ pub async fn background_task(
 
 				let fut = async move {
 					let call = CallData {
-						conn_id,
+						conn_id: conn_id as usize,
 						resources,
 						max_response_body_size,
 						max_log_length,
@@ -431,7 +439,7 @@ pub async fn background_task(
 					let response = process_batch_request(Batch {
 						data,
 						call: CallData {
-							conn_id,
+							conn_id: conn_id as usize,
 							resources,
 							max_response_body_size,
 							max_log_length,
