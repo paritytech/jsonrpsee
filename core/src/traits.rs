@@ -28,25 +28,26 @@ use jsonrpsee_types::SubscriptionId;
 use serde::Serialize;
 use serde_json::value::RawValue;
 
-/// Marker trait for types that can be serialized as JSON array/sequence.
+/// Marker trait for types that can be serialized as JSON array/sequence,
+/// as part of the serialization done by the server.
 ///
 /// If your type isn't a sequence, for example `String`, `usize` or similar
 /// you must insert it in a tuple, slice, array or Vec for it to work.
-pub trait ToRpcParams: Serialize {
+pub trait ToRpcServerParams: Serialize {
 	/// Serialize the type as a JSON array.
 	fn to_rpc_params(&self) -> Result<Box<RawValue>, serde_json::Error> {
 		serde_json::to_string(&self).map(|json| RawValue::from_string(json).expect("JSON String; qed"))
 	}
 }
 
-impl<P: Serialize> ToRpcParams for &[P] {}
-impl<P: Serialize> ToRpcParams for Vec<P> {}
-impl<P, const N: usize> ToRpcParams for [P; N] where [P; N]: Serialize {}
+impl<P: Serialize> ToRpcServerParams for &[P] {}
+impl<P: Serialize> ToRpcServerParams for Vec<P> {}
+impl<P, const N: usize> ToRpcServerParams for [P; N] where [P; N]: Serialize {}
 
 macro_rules! tuple_impls {
     ($($len:expr => ($($n:tt $name:ident)+))+) => {
         $(
-            impl<$($name: Serialize),+> ToRpcParams for ($($name,)+) {}
+            impl<$($name: Serialize),+> ToRpcServerParams for ($($name,)+) {}
         )+
     }
 }

@@ -34,7 +34,7 @@ use crate::error::{Error, SubscriptionClosed};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::{BoundedSubscriptions, MethodSink, SubscriptionPermit};
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
-use crate::traits::{IdProvider, ToRpcParams};
+use crate::traits::{IdProvider, ToRpcServerParams};
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::Either;
 use futures_util::pin_mut;
@@ -357,7 +357,7 @@ impl Methods {
 	///     assert_eq!(echo, 1);
 	/// }
 	/// ```
-	pub async fn call<Params: ToRpcParams, T: DeserializeOwned>(
+	pub async fn call<Params: ToRpcServerParams, T: DeserializeOwned>(
 		&self,
 		method: &str,
 		params: Params,
@@ -473,7 +473,7 @@ impl Methods {
 	///     assert_eq!(&sub_resp, "one answer");
 	/// }
 	/// ```
-	pub async fn subscribe(&self, sub_method: &str, params: impl ToRpcParams) -> Result<Subscription, Error> {
+	pub async fn subscribe(&self, sub_method: &str, params: impl ToRpcServerParams) -> Result<Subscription, Error> {
 		let params = params.to_rpc_params()?;
 		let req = Request::new(sub_method.into(), Some(&params), Id::Number(0));
 
