@@ -33,9 +33,9 @@ use std::time::Instant;
 use jsonrpsee::core::logger::MethodKind;
 use jsonrpsee::core::{client::ClientT, logger, logger::Headers};
 use jsonrpsee::rpc_params;
+use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 /// Example logger to measure call execution time.
 #[derive(Clone)]
@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = WsServerBuilder::new().set_ws_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::new().set_ws_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	module.register_method("thready", |params, _| {

@@ -31,8 +31,8 @@ use futures::StreamExt;
 use jsonrpsee::core::client::SubscriptionClientT;
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::rpc_params;
+use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {

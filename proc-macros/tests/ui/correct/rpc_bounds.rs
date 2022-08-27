@@ -4,8 +4,8 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, RpcResult};
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::ws_server::WsServerBuilder;
 
 pub trait Config {
 	type Hash: Send + Sync + 'static;
@@ -59,12 +59,12 @@ impl MyRpcSCServer<ExampleHash> for ServerClientServerImpl {
 
 pub async fn websocket_servers() -> (SocketAddr, SocketAddr) {
 	// Start server from `MyRpcS` trait.
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr_server_only = server.local_addr().unwrap();
 	server.start(ServerOnlyImpl.into_rpc()).unwrap();
 
 	// Start server from `MyRpcSC` trait.
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr_server_client = server.local_addr().unwrap();
 	server.start(ServerClientServerImpl.into_rpc()).unwrap();
 

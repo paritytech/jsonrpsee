@@ -30,17 +30,16 @@ use std::time::Duration;
 use futures::{SinkExt, StreamExt};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::server::access_control::{AccessControl, AccessControlBuilder};
-use jsonrpsee::http_server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
-use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
-pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle) {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+pub(crate) async fn server_with_subscription() -> (SocketAddr, ServerHandle) {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -176,8 +175,8 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 	(addr, server_handle)
 }
 
-pub async fn websocket_server() -> SocketAddr {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+pub(crate) async fn server() -> (SocketAddr, ServerHandle) {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
@@ -190,14 +189,14 @@ pub async fn websocket_server() -> SocketAddr {
 
 	let addr = server.local_addr().unwrap();
 
-	server.start(module).unwrap();
+	let server_handle = server.start(module).unwrap();
 
-	addr
+	(addr, server_handle)
 }
 
 /// Yields one item then sleeps for an hour.
-pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+pub(crate) async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
 
 	let mut module = RpcModule::new(tx);
@@ -219,23 +218,19 @@ pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::m
 	addr
 }
 
-pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
-	http_server_with_access_control(AccessControlBuilder::default().build(), CorsLayer::default()).await
+pub(crate) async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
+	server_with_access_control(AccessControl::default(), CorsLayer::new()).await
 }
 
-pub async fn http_server_with_access_control(acl: AccessControl, cors: CorsLayer) -> (SocketAddr, HttpServerHandle) {
+pub(crate) async fn server_with_access_control(acl: AccessControl, cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
 		// Add `CORS` layer.
 		.layer(cors);
 
-	let server = HttpServerBuilder::default()
-		.set_access_control(acl)
-		.set_middleware(middleware)
-		.build("127.0.0.1:0")
-		.await
-		.unwrap();
+	let server =
+		ServerBuilder::default().set_access_control(acl).set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

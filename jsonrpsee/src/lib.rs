@@ -77,12 +77,8 @@ cfg_client_transport! {
 	pub use jsonrpsee_client_transport as client_transport;
 }
 
-cfg_http_server! {
-	pub use jsonrpsee_http_server as http_server;
-}
-
-cfg_ws_server! {
-	pub use jsonrpsee_ws_server as ws_server;
+cfg_server! {
+	pub use jsonrpsee_server as server;
 }
 
 cfg_proc_macros! {

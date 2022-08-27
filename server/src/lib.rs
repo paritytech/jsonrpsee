@@ -26,21 +26,23 @@
 
 #![warn(missing_debug_implementations, missing_docs, unreachable_pub)]
 
-//! # jsonrpsee-ws-server
+//! # jsonrpsee-server
 //!
-//! `jsonrpsee-ws-server` is a [JSON RPC](https://www.jsonrpc.org/specification) WebSocket server library that's is built for `async/await`.
+//! `jsonrpsee-server` is a [JSON RPC](https://www.jsonrpc.org/specification) server that supports both HTTP and WebSocket transport.
 
 extern crate alloc;
 
 mod future;
+pub mod middleware;
 mod server;
 
 #[cfg(test)]
 mod tests;
 
-pub use future::{ServerHandle as WsServerHandle, ShutdownWaiter as WsShutdownWaiter};
+pub use future::{ServerHandle, ShutdownWaiter as WsShutdownWaiter};
+pub use jsonrpsee_core::server::access_control::{AccessControl, AccessControlBuilder};
 pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;
-pub use server::{Builder as WsServerBuilder, Server as WsServer};
+pub use server::{Builder as ServerBuilder, Server};
 pub use tracing;

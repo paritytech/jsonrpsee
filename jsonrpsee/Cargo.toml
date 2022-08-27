@@ -16,8 +16,7 @@ jsonrpsee-http-client = { path = "../client/http-client", version = "0.15.1", op
 jsonrpsee-ws-client = { path = "../client/ws-client", version = "0.15.1", optional = true }
 jsonrpsee-wasm-client = { path = "../client/wasm-client", version = "0.15.1", optional = true }
 jsonrpsee-client-transport = { path = "../client/transport", version = "0.15.1", optional = true }
-jsonrpsee-http-server = { path = "../http-server", version = "0.15.1", optional = true }
-jsonrpsee-ws-server = { path = "../ws-server", version = "0.15.1", optional = true }
+jsonrpsee-server = { path = "../server", version = "0.15.1", optional = true }
 jsonrpsee-proc-macros = { path = "../proc-macros", version = "0.15.1", optional = true }
 jsonrpsee-core = { path = "../core", version = "0.15.1", optional = true }
 jsonrpsee-types = { path = "../types", version = "0.15.1", optional = true }
@@ -29,15 +28,13 @@ client-ws-transport-no-tls = ["jsonrpsee-client-transport/ws"]
 client-web-transport = ["jsonrpsee-client-transport/web"]
 async-client = ["jsonrpsee-core/async-client"]
 http-client = ["jsonrpsee-http-client", "jsonrpsee-types", "jsonrpsee-core/client"]
-http-server = ["jsonrpsee-http-server", "jsonrpsee-types", "jsonrpsee-core/server"]
 wasm-client = ["jsonrpsee-wasm-client", "jsonrpsee-types", "jsonrpsee-core/client"]
 ws-client = ["jsonrpsee-ws-client", "jsonrpsee-types", "jsonrpsee-core/client"]
-ws-server = ["jsonrpsee-ws-server", "jsonrpsee-types", "jsonrpsee-core/server"]
 macros = ["jsonrpsee-proc-macros", "jsonrpsee-types", "tracing"]
 
 client = ["http-client", "ws-client", "wasm-client", "client-ws-transport", "client-web-transport", "async-client", "client-core"]
 client-core = ["jsonrpsee-core/client"]
-server = ["http-server", "ws-server", "server-core"]
+server = ["jsonrpsee-server", "server-core"]
 server-core = ["jsonrpsee-core/server"]
 full = ["client", "server", "macros"]
 

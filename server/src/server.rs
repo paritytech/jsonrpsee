@@ -617,7 +617,7 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	/// use std::{time::Instant, net::SocketAddr};
 	///
 	/// use jsonrpsee_core::logger::{WsLogger, Headers, MethodKind, Params};
-	/// use jsonrpsee_ws_server::WsServerBuilder;
+	/// use jsonrpsee_ws_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyLogger;
@@ -650,14 +650,26 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///     }
 	/// }
 	///
-	/// let builder = WsServerBuilder::new().set_logger(MyLogger);
+	/// let builder = ServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_ws_logger<T: WsLogger>(self, logger: T) -> Builder<B, HL, T> {
+	pub fn set_ws_logger<T: WsLogger>(self, ws_logger: T) -> Builder<B, HL, T> {
 		Builder {
 			settings: self.settings,
 			resources: self.resources,
-			ws_logger: logger,
+			ws_logger,
 			http_logger: self.http_logger,
+			id_provider: self.id_provider,
+			service_builder: self.service_builder,
+		}
+	}
+
+	/// TODO unify logger.
+	pub fn set_http_logger<T: HttpLogger>(self, http_logger: T) -> Builder<B, T, WL> {
+		Builder {
+			settings: self.settings,
+			resources: self.resources,
+			ws_logger: self.ws_logger,
+			http_logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
 		}
@@ -682,10 +694,10 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///
 	/// ```rust
 	/// use std::time::Duration;
-	/// use jsonrpsee_ws_server::WsServerBuilder;
+	/// use jsonrpsee_ws_server::ServerBuilder;
 	///
 	/// // Set the ping interval to 10 seconds.
-	/// let builder = WsServerBuilder::default().ping_interval(Duration::from_secs(10));
+	/// let builder = ServerBuilder::default().ping_interval(Duration::from_secs(10));
 	/// ```
 	pub fn ping_interval(mut self, interval: Duration) -> Self {
 		self.settings.ping_interval = interval;
@@ -703,13 +715,13 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	/// # Examples
 	///
 	/// ```rust
-	/// use jsonrpsee_ws_server::{WsServerBuilder, RandomStringIdProvider, IdProvider};
+	/// use jsonrpsee_ws_server::{ServerBuilder, RandomStringIdProvider, IdProvider};
 	///
 	/// // static dispatch
-	/// let builder1 = WsServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
+	/// let builder1 = ServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
 	///
 	/// // or dynamic dispatch
-	/// let builder2 = WsServerBuilder::default().set_id_provider(Box::new(RandomStringIdProvider::new(16)));
+	/// let builder2 = ServerBuilder::default().set_id_provider(Box::new(RandomStringIdProvider::new(16)));
 	/// ```
 	///
 	pub fn set_id_provider<I: IdProvider + 'static>(mut self, id_provider: I) -> Self {
@@ -733,14 +745,14 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///
 	/// use std::time::Duration;
 	/// use std::net::SocketAddr;
-	/// use jsonrpsee_http_server::HttpServerBuilder;
+	/// use jsonrpsee_http_server::ServerBuilder;
 	///
 	/// #[tokio::main]
 	/// async fn main() {
 	///     let builder = tower::ServiceBuilder::new()
 	///         .timeout(Duration::from_secs(2));
 	///
-	///     let server = HttpServerBuilder::new()
+	///     let server = ServerBuilder::new()
 	///         .set_middleware(builder)
 	///         .build("127.0.0.1:0".parse::<SocketAddr>().unwrap())
 	///         .await
@@ -769,8 +781,8 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///       occupied_addr,
 	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   assert!(jsonrpsee_ws_server::WsServerBuilder::default().build(occupied_addr).await.is_err());
-	///   assert!(jsonrpsee_ws_server::WsServerBuilder::default().build(addrs).await.is_ok());
+	///   assert!(jsonrpsee_ws_server::ServerBuilder::default().build(occupied_addr).await.is_err());
+	///   assert!(jsonrpsee_ws_server::ServerBuilder::default().build(addrs).await.is_ok());
 	/// }
 	/// ```
 	///

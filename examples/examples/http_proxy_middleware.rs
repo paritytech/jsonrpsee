@@ -43,8 +43,8 @@ use std::time::Duration;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
+use jsonrpsee::server::{RpcModule, ServerBuilder, ServerHandle};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -79,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
+async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
 	// Custom tower service to handle the RPC requests
 	let service_builder = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
@@ -87,7 +87,7 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 		.timeout(Duration::from_secs(2));
 
 	let server =
-		HttpServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+		ServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
 	let addr = server.local_addr()?;
 

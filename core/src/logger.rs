@@ -62,7 +62,7 @@ impl std::fmt::Display for MethodKind {
 /// Defines a logger specifically for HTTP requests with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
-/// See [`HttpServerBuilder::set_logger`](../../jsonrpsee_http_server/struct.HttpServerBuilder.html#method.set_logger) method
+/// See [`ServerBuilder::set_logger`](../../jsonrpsee_http_server/struct.ServerBuilder.html#method.set_logger) method
 /// for examples.
 pub trait HttpLogger: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the trait
@@ -85,7 +85,7 @@ pub trait HttpLogger: Send + Sync + Clone + 'static {
 /// Defines a logger specifically for WebSocket connections with callbacks during the RPC request life-cycle.
 /// The primary use case for this is to collect timings for a larger metrics collection solution.
 ///
-/// See the [`WsServerBuilder::set_logger`](../../jsonrpsee_ws_server/struct.WsServerBuilder.html#method.set_logger)
+/// See the [`ServerBuilder::set_logger`](../../jsonrpsee_ws_server/struct.ServerBuilder.html#method.set_logger)
 /// for examples.
 pub trait WsLogger: Send + Sync + Clone + 'static {
 	/// Intended to carry timestamp of a request, for example `std::time::Instant`. How the trait

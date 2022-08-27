@@ -24,163 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![cfg(test)]
-use std::fmt;
-use std::net::SocketAddr;
-use std::time::Duration;
-
-use crate::types::error::CallError;
-use crate::types::{Response, SubscriptionId};
-use crate::{future::ServerHandle, RpcModule, WsServerBuilder};
-use anyhow::anyhow;
-use futures_util::future::join;
-use jsonrpsee_core::{traits::IdProvider, DeserializeOwned, Error};
+use crate::tests::helpers::{deser_call, init_logger, server_with_context};
+use crate::types::SubscriptionId;
+use crate::{RpcModule, ServerBuilder};
+use jsonrpsee_core::{traits::IdProvider, Error};
 use jsonrpsee_test_utils::helpers::*;
-use jsonrpsee_test_utils::mocks::{Id, TestContext, WebSocketTestClient, WebSocketTestError};
+use jsonrpsee_test_utils::mocks::{Id, WebSocketTestClient, WebSocketTestError};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use serde_json::Value as JsonValue;
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
-fn init_logger() {
-	let _ = FmtSubscriber::builder().with_env_filter(EnvFilter::from_default_env()).try_init();
-}
-
-fn deser_call<T: DeserializeOwned>(raw: String) -> T {
-	let out: Response<T> = serde_json::from_str(&raw).unwrap();
-	out.result
-}
-
-/// Applications can/should provide their own error.
-#[derive(Debug)]
-struct MyAppError;
-impl fmt::Display for MyAppError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "MyAppError")
-	}
-}
-impl std::error::Error for MyAppError {}
-
-/// Spawns a dummy `JSONRPC v2 WebSocket`
-async fn server() -> SocketAddr {
-	server_with_handles().await.0
-}
-
-/// Spawns a dummy `JSONRPC v2 WebSocket`
-/// It has the following methods:
-///     sync methods: `say_hello` and `add`
-///     async: `say_hello_async` and `add_sync`
-///     other: `invalid_params` (always returns `CallError::InvalidParams`),
-///            `call_fail` (always returns `CallError::Failed`),
-///            `sleep_for`
-///            `subscribe_hello` (starts a subscription that doesn't send anything)
-///
-/// Returns the address together with handle for the server.
-async fn server_with_handles() -> (SocketAddr, ServerHandle) {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-	let mut module = RpcModule::new(());
-	module
-		.register_method("say_hello", |_, _| {
-			tracing::debug!("server respond to hello");
-			Ok("hello")
-		})
-		.unwrap();
-	module
-		.register_method("add", |params, _| {
-			let params: Vec<u64> = params.parse()?;
-			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
-		})
-		.unwrap();
-	module
-		.register_async_method("say_hello_async", |_, _| {
-			async move {
-				tracing::debug!("server respond to hello");
-				// Call some async function inside.
-				futures_util::future::ready(()).await;
-				Ok("hello")
-			}
-		})
-		.unwrap();
-	module
-		.register_async_method("add_async", |params, _| async move {
-			let params: Vec<u64> = params.parse()?;
-			let sum: u64 = params.into_iter().sum();
-			Ok(sum)
-		})
-		.unwrap();
-	module
-		.register_method("invalid_params", |_params, _| Err::<(), _>(CallError::InvalidParams(anyhow!("buh!")).into()))
-		.unwrap();
-	module.register_method("call_fail", |_params, _| Err::<(), _>(Error::to_call_error(MyAppError))).unwrap();
-	module
-		.register_method("sleep_for", |params, _| {
-			let sleep: Vec<u64> = params.parse()?;
-			std::thread::sleep(std::time::Duration::from_millis(sleep[0]));
-			Ok("Yawn!")
-		})
-		.unwrap();
-	module
-		.register_subscription("subscribe_hello", "subscribe_hello", "unsubscribe_hello", |_, mut sink, _| {
-			sink.accept()?;
-
-			tokio::spawn(async move {
-				loop {
-					let _ = &sink;
-					tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-				}
-			});
-			Ok(())
-		})
-		.unwrap();
-
-	let addr = server.local_addr().unwrap();
-
-	let server_handle = server.start(module).unwrap();
-	(addr, server_handle)
-}
-
-/// Run server with user provided context.
-async fn server_with_context() -> SocketAddr {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").with_default_timeout().await.unwrap().unwrap();
-
-	let ctx = TestContext;
-	let mut rpc_module = RpcModule::new(ctx);
-
-	rpc_module
-		.register_method("should_err", |_p, ctx| {
-			ctx.err().map_err(CallError::Failed)?;
-			Ok("err")
-		})
-		.unwrap();
-
-	rpc_module
-		.register_method("should_ok", |_p, ctx| {
-			ctx.ok().map_err(CallError::Failed)?;
-			Ok("ok")
-		})
-		.unwrap();
-
-	rpc_module
-		.register_async_method("should_ok_async", |_p, ctx| async move {
-			ctx.ok().map_err(CallError::Failed)?;
-			// Call some async function inside.
-			Ok(futures_util::future::ready("ok!").await)
-		})
-		.unwrap();
-
-	rpc_module
-		.register_async_method("err_async", |_p, ctx| async move {
-			ctx.ok().map_err(CallError::Failed)?;
-			// Async work that returns an error
-			futures_util::future::err::<(), _>(anyhow!("nah").into()).await
-		})
-		.unwrap();
-
-	let addr = server.local_addr().unwrap();
-
-	server.start(rpc_module).unwrap();
-	addr
-}
+use super::helpers::server;
 
 #[tokio::test]
 async fn can_set_the_max_request_body_size() {
@@ -188,7 +41,7 @@ async fn can_set_the_max_request_body_size() {
 
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 100 bytes
-	let server = WsServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
+	let server = ServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -215,7 +68,7 @@ async fn can_set_the_max_response_body_size() {
 
 	let addr = "127.0.0.1:0";
 	// Set the max response body size to 100 bytes
-	let server = WsServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(101))).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -237,7 +90,7 @@ async fn can_set_the_max_response_size_to_batch() {
 
 	let addr = "127.0.0.1:0";
 	// Set the max response body size to 100 bytes
-	let server = WsServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(51))).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -259,7 +112,7 @@ async fn can_set_max_connections() {
 
 	let addr = "127.0.0.1:0";
 	// Server that accepts max 2 connections
-	let server = WsServerBuilder::default().max_connections(2).build(addr).await.unwrap();
+	let server = ServerBuilder::default().max_connections(2).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -636,34 +489,6 @@ async fn can_register_modules() {
 }
 
 #[tokio::test]
-async fn stop_works() {
-	init_logger();
-	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
-	server_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
-
-	// After that we should be able to wait for task handle to finish.
-	// First `unwrap` is timeout, second is `JoinHandle`'s one.
-
-	// After server was stopped, attempt to stop it again should result in an error.
-	assert!(matches!(server_handle.stop(), Err(Error::AlreadyStopped)));
-}
-
-#[tokio::test]
-async fn run_forever() {
-	const TIMEOUT: Duration = Duration::from_millis(200);
-
-	init_logger();
-	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
-
-	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
-
-	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
-
-	// Send the shutdown request from one handle and await the server on the second one.
-	join(server_handle.clone().stop().unwrap(), server_handle).with_timeout(TIMEOUT).await.unwrap();
-}
-
-#[tokio::test]
 async fn unsubscribe_twice_should_indicate_error() {
 	init_logger();
 	let addr = server().await;
@@ -705,7 +530,7 @@ async fn custom_subscription_id_works() {
 	}
 
 	init_logger();
-	let server = WsServerBuilder::default()
+	let server = ServerBuilder::default()
 		.set_id_provider(HardcodedSubscriptionId)
 		.build("127.0.0.1:0")
 		.with_default_timeout()
@@ -740,7 +565,7 @@ async fn custom_subscription_id_works() {
 #[tokio::test]
 async fn disabled_batches() {
 	// Disable batches support.
-	let server = WsServerBuilder::default()
+	let server = ServerBuilder::default()
 		.batch_requests_supported(false)
 		.build("127.0.0.1:0")
 		.with_default_timeout()

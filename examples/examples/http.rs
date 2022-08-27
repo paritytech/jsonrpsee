@@ -28,8 +28,8 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 use jsonrpsee::rpc_params;
+use jsonrpsee::server::{RpcModule, ServerBuilder, ServerHandle};
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
@@ -49,8 +49,8 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
+	let server = ServerBuilder::default().build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 

@@ -30,7 +30,7 @@ use std::time::Instant;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::logger::{self, Body, MethodKind, Params, Request};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::server::{RpcModule, ServerBuilder, ServerHandle};
 
 #[derive(Clone)]
 struct Timings;
@@ -75,8 +75,9 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let server = HttpServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
+async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
+	//let server = ServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::new().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;

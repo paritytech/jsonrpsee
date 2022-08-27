@@ -33,7 +33,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use jsonrpsee::{
 	core::server::access_control::AccessControlBuilder,
-	http_server::{HttpServerBuilder, HttpServerHandle, RpcModule},
+	server::{RpcModule, ServerBuilder, ServerHandle},
 };
 
 #[tokio::main]
@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
 	futures::future::pending().await
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
+async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
 	// RPC access control that allows all hosts and all origins.
 	// Note: the access control does not modify the response headers,
 	// it only acts as a filter.
@@ -96,7 +96,7 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 	// modifying requests / responses. These features are independent of one another
 	// and can also be used separately.
 	// In this example, we use both features.
-	let server = HttpServerBuilder::default()
+	let server = ServerBuilder::default()
 		.set_access_control(acl)
 		.set_middleware(middleware)
 		.build("127.0.0.1:0".parse::<SocketAddr>()?)

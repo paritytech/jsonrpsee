@@ -1,5 +1,5 @@
 [package]
-name = "jsonrpsee-ws-server"
+name = "jsonrpsee-server"
 version = "0.15.1"
 authors = ["Parity Technologies <admin@parity.io>", "Pierre Krieger <pierre.krieger1708@gmail.com>"]
 description = "WebSocket server for JSON-RPC"
@@ -15,6 +15,7 @@ futures-util = { version = "0.3.14", default-features = false, features = ["io",
 jsonrpsee-types = { path = "../types", version = "0.15.1" }
 jsonrpsee-core = { path = "../core", version = "0.15.1", features = ["server", "soketto"] }
 tracing = "0.1.34"
+serde = "1"
 serde_json = { version = "1", features = ["raw_value"] }
 soketto = { version = "0.7.1", features = ["http"] }
 tokio = { version = "1.16", features = ["net", "rt-multi-thread", "macros", "time"] }

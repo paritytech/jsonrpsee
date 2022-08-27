@@ -29,8 +29,8 @@ use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::logger::{self, Headers, MethodKind, Params};
+use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 #[derive(Clone)]
 struct Timings;
@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = WsServerBuilder::new().set_ws_logger(Timings).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::new().set_ws_logger(Timings).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;

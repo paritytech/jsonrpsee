@@ -28,8 +28,8 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, Error};
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 
 type ExampleHash = [u8; 32];
 
@@ -81,8 +81,8 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, WsServerHandle)> {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(RpcServerImpl.into_rpc())?;

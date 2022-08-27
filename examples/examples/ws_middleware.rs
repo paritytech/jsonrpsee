@@ -26,20 +26,19 @@
 
 //! This example sets a custom tower service middleware to the RPC implementation.
 
-use hyper::body::Bytes;
 use hyper::http::HeaderValue;
 use hyper::Method;
 use std::iter::once;
 use std::net::SocketAddr;
 use std::time::Duration;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
+use jsonrpsee::server::{RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder, WsServerHandle};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -57,14 +56,10 @@ async fn main() -> anyhow::Result<()> {
 	let _response: Result<String, _> = client.request("unknown_method", None).await;
 	let _ = client.request::<String>("say_hello", None).await?;
 
-	println!("{}", url);
-
-	loop {}
-
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, WsServerHandle)> {
+async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
 	let cors = CorsLayer::new()
 		// Allow `POST` when accessing the resource
 		.allow_methods([Method::POST])
@@ -89,7 +84,7 @@ async fn run_server() -> anyhow::Result<(SocketAddr, WsServerHandle)> {
 		.timeout(Duration::from_secs(2));
 
 	let server =
-		WsServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+		ServerBuilder::new().set_middleware(service_builder).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
 
 	let addr = server.local_addr()?;
 

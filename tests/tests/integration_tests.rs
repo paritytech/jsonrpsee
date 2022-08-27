@@ -31,13 +31,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
-use helpers::{http_server, http_server_with_access_control, websocket_server, websocket_server_with_subscription};
+use helpers::{server, server_with_access_control, server_with_health_api, server_with_subscription};
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::core::{Error, JsonValue};
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::AccessControlBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::ErrorObject;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -57,7 +56,7 @@ fn init_logger() {
 async fn ws_subscription_works() {
 	init_logger();
 
-	let (server_addr, _) = websocket_server_with_subscription().await;
+	let (server_addr, _) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut hello_sub: Subscription<String> =
@@ -76,7 +75,7 @@ async fn ws_subscription_works() {
 async fn ws_unsubscription_works() {
 	init_logger();
 
-	let (server_addr, _) = websocket_server_with_subscription().await;
+	let (server_addr, _) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
 
@@ -107,7 +106,7 @@ async fn ws_unsubscription_works() {
 async fn ws_subscription_with_input_works() {
 	init_logger();
 
-	let (server_addr, _) = websocket_server_with_subscription().await;
+	let (server_addr, _) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut add_one: Subscription<u64> =
@@ -123,7 +122,7 @@ async fn ws_subscription_with_input_works() {
 async fn ws_method_call_works() {
 	init_logger();
 
-	let server_addr = websocket_server().await;
+	let (server_addr, _) = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let response: String = client.request("say_hello", None).await.unwrap();
@@ -134,7 +133,7 @@ async fn ws_method_call_works() {
 async fn ws_method_call_str_id_works() {
 	init_logger();
 
-	let server_addr = websocket_server().await;
+	let (server_addr, _) = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().id_format(IdKind::String).build(&server_url).await.unwrap();
 	let response: String = client.request("say_hello", None).await.unwrap();
@@ -145,7 +144,7 @@ async fn ws_method_call_str_id_works() {
 async fn http_method_call_works() {
 	init_logger();
 
-	let (server_addr, _handle) = http_server().await;
+	let (server_addr, _) = server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&uri).unwrap();
 	let response: String = client.request("say_hello", None).await.unwrap();
@@ -156,7 +155,7 @@ async fn http_method_call_works() {
 async fn http_method_call_str_id_works() {
 	init_logger();
 
-	let (server_addr, _handle) = http_server().await;
+	let (server_addr, _) = server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().id_format(IdKind::String).build(&uri).unwrap();
 	let response: String = client.request("say_hello", None).await.unwrap();
@@ -167,7 +166,7 @@ async fn http_method_call_str_id_works() {
 async fn http_concurrent_method_call_limits_works() {
 	init_logger();
 
-	let (server_addr, _handle) = http_server().await;
+	let (server_addr, _) = server().await;
 	let uri = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().max_concurrent_requests(1).build(&uri).unwrap();
 
@@ -182,7 +181,7 @@ async fn http_concurrent_method_call_limits_works() {
 async fn ws_subscription_several_clients() {
 	init_logger();
 
-	let (server_addr, _) = websocket_server_with_subscription().await;
+	let (server_addr, _) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut clients = Vec::with_capacity(10);
@@ -200,7 +199,7 @@ async fn ws_subscription_several_clients() {
 async fn ws_subscription_several_clients_with_drop() {
 	init_logger();
 
-	let (server_addr, _) = websocket_server_with_subscription().await;
+	let (server_addr, _) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let mut clients = Vec::with_capacity(10);
@@ -248,7 +247,7 @@ async fn ws_subscription_several_clients_with_drop() {
 async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 	init_logger();
 
-	let (server_addr, _) = websocket_server_with_subscription().await;
+	let (server_addr, _) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().max_notifs_per_subscription(4).build(&server_url).await.unwrap();
@@ -280,7 +279,7 @@ async fn ws_subscription_without_polling_doesnt_make_client_unuseable() {
 async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 	init_logger();
 
-	let server_addr = websocket_server().await;
+	let (server_addr, _) = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = Arc::new(WsClientBuilder::default().max_concurrent_requests(2).build(&server_url).await.unwrap());
 
@@ -300,7 +299,7 @@ async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 	init_logger();
 
-	let (server_addr, _handle) = http_server().await;
+	let (server_addr, _handle) = server().await;
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().max_concurrent_requests(2).build(&server_url).unwrap();
 	let client = Arc::new(client);
@@ -355,7 +354,7 @@ async fn http_with_non_ascii_url_doesnt_hang_or_panic() {
 async fn ws_unsubscribe_releases_request_slots() {
 	init_logger();
 
-	let (server_addr, _) = websocket_server_with_subscription().await;
+	let (server_addr, _) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().max_concurrent_requests(1).build(&server_url).await.unwrap();
@@ -369,7 +368,7 @@ async fn ws_unsubscribe_releases_request_slots() {
 async fn server_should_be_able_to_close_subscriptions() {
 	init_logger();
 
-	let (server_addr, _) = websocket_server_with_subscription().await;
+	let (server_addr, _) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -383,7 +382,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 async fn ws_close_pending_subscription_when_server_terminated() {
 	init_logger();
 
-	let (server_addr, handle) = websocket_server_with_subscription().await;
+	let (server_addr, handle) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -415,11 +414,11 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 #[tokio::test]
 async fn ws_server_should_stop_subscription_after_client_drop() {
 	use futures::{channel::mpsc, SinkExt, StreamExt};
-	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+	use jsonrpsee::{server::ServerBuilder, RpcModule};
 
 	init_logger();
 
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let (tx, mut rx) = mpsc::channel(1);
@@ -464,7 +463,7 @@ async fn ws_server_notify_client_on_disconnect() {
 
 	init_logger();
 
-	let (server_addr, server_handle) = websocket_server_with_subscription().await;
+	let (server_addr, server_handle) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let (up_tx, up_rx) = oneshot::channel();
@@ -516,7 +515,7 @@ async fn ws_server_notify_client_on_disconnect() {
 async fn ws_server_notify_client_on_disconnect_with_closed_server() {
 	init_logger();
 
-	let (server_addr, server_handle) = websocket_server_with_subscription().await;
+	let (server_addr, server_handle) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -535,7 +534,7 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	init_logger();
 
 	let (tx, rx) = mpsc::channel(1);
-	let server_url = format!("ws://{}", helpers::websocket_server_with_sleeping_subscription(tx).await);
+	let server_url = format!("ws://{}", helpers::server_with_sleeping_subscription(tx).await);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut subs = Vec::new();
@@ -556,7 +555,7 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 async fn ws_server_cancels_sub_stream_after_err() {
 	init_logger();
 
-	let (addr, _handle) = websocket_server_with_subscription().await;
+	let (addr, _handle) = server_with_subscription().await;
 	let server_url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -572,7 +571,7 @@ async fn ws_server_cancels_sub_stream_after_err() {
 async fn ws_server_subscribe_with_stream() {
 	init_logger();
 
-	let (addr, _handle) = websocket_server_with_subscription().await;
+	let (addr, _handle) = server_with_subscription().await;
 	let server_url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -603,7 +602,7 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 	init_logger();
 
 	let (tx, rx) = mpsc::channel(1);
-	let server_url = format!("ws://{}", helpers::websocket_server_with_sleeping_subscription(tx).await);
+	let server_url = format!("ws://{}", helpers::server_with_sleeping_subscription(tx).await);
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	let mut subs = Vec::new();
@@ -624,7 +623,7 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 async fn ws_server_pipe_from_stream_can_be_reused() {
 	init_logger();
 
-	let (addr, _handle) = websocket_server_with_subscription().await;
+	let (addr, _handle) = server_with_subscription().await;
 	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
 	let sub = client.subscribe::<i32>("can_reuse_subscription", None, "u_can_reuse_subscription").await.unwrap();
 
@@ -637,7 +636,7 @@ async fn ws_server_pipe_from_stream_can_be_reused() {
 async fn ws_batch_works() {
 	init_logger();
 
-	let server_addr = websocket_server().await;
+	let (server_addr, _) = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -654,11 +653,11 @@ async fn ws_batch_works() {
 async fn ws_server_limit_subs_per_conn_works() {
 	use futures::StreamExt;
 	use jsonrpsee::types::error::{CallError, TOO_MANY_SUBSCRIPTIONS_CODE, TOO_MANY_SUBSCRIPTIONS_MSG};
-	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+	use jsonrpsee::{server::ServerBuilder, RpcModule};
 
 	init_logger();
 
-	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());
@@ -709,11 +708,11 @@ async fn ws_server_limit_subs_per_conn_works() {
 async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	use futures::StreamExt;
 	use jsonrpsee::core::client::SubscriptionKind;
-	use jsonrpsee::{ws_server::WsServerBuilder, RpcModule};
+	use jsonrpsee::{server::ServerBuilder, RpcModule};
 
 	init_logger();
 
-	let server = WsServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().max_subscriptions_per_connection(10).build("127.0.0.1:0").await.unwrap();
 	let server_url = format!("ws://{}", server.local_addr().unwrap());
 
 	let mut module = RpcModule::new(());
@@ -765,7 +764,7 @@ async fn http_unsupported_methods_dont_work() {
 
 	init_logger();
 
-	let (server_addr, _handle) = http_server().await;
+	let (server_addr, _handle) = server().await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
@@ -794,7 +793,7 @@ async fn http_correct_content_type_required() {
 
 	init_logger();
 
-	let (server_addr, _handle) = http_server().await;
+	let (server_addr, _handle) = server().await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
@@ -835,7 +834,7 @@ async fn http_correct_content_type_required() {
 #[tokio::test]
 async fn http_cors_preflight_works() {
 	use hyper::{Body, Client, Method, Request};
-	use jsonrpsee::http_server::AccessControlBuilder;
+	use jsonrpsee::server::AccessControlBuilder;
 
 	init_logger();
 
@@ -844,7 +843,7 @@ async fn http_cors_preflight_works() {
 		.allow_methods([Method::POST])
 		.allow_origin("https://foo.com".parse::<HeaderValue>().unwrap())
 		.allow_headers([hyper::header::CONTENT_TYPE]);
-	let (server_addr, _handle) = http_server_with_access_control(acl, cors).await;
+	let (server_addr, _handle) = server_with_access_control(acl, cors).await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
@@ -908,7 +907,7 @@ fn comma_separated_header_values(headers: &hyper::HeaderMap, header: &str) -> Ve
 async fn ws_subscribe_with_bad_params() {
 	init_logger();
 
-	let (server_addr, _handle) = websocket_server_with_subscription().await;
+	let (server_addr, _handle) = server_with_subscription().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -925,7 +924,7 @@ async fn http_health_api_works() {
 
 	init_logger();
 
-	let (server_addr, _handle) = http_server().await;
+	let (server_addr, _handle) = server_with_health_api().await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}/health", server_addr);
@@ -942,7 +941,7 @@ async fn http_health_api_works() {
 
 #[tokio::test]
 async fn ws_host_filtering_wildcard_works() {
-	use jsonrpsee::ws_server::*;
+	use jsonrpsee::server::*;
 
 	init_logger();
 
@@ -951,7 +950,7 @@ async fn ws_host_filtering_wildcard_works() {
 		.unwrap()
 		.build();
 
-	let server = WsServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -966,7 +965,7 @@ async fn ws_host_filtering_wildcard_works() {
 
 #[tokio::test]
 async fn http_host_filtering_wildcard_works() {
-	use jsonrpsee::http_server::*;
+	use jsonrpsee::server::*;
 
 	init_logger();
 
@@ -975,7 +974,7 @@ async fn http_host_filtering_wildcard_works() {
 		.unwrap()
 		.build();
 
-	let server = HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

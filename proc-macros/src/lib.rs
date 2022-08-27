@@ -215,7 +215,7 @@ pub(crate) mod visitor;
 /// use std::net::SocketAddr;
 ///
 /// use futures_channel::oneshot;
-/// use jsonrpsee::{ws_client::*, ws_server::WsServerBuilder};
+/// use jsonrpsee::{ws_client::*, ws_server::ServerBuilder};
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
@@ -314,8 +314,8 @@ pub(crate) mod visitor;
 /// // Use the generated implementations of server and client.
 /// use rpc_impl::{MyRpcClient, MyRpcServer, RpcServerImpl};
 ///
-/// pub async fn websocket_server() -> SocketAddr {
-///     let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+/// pub async fn server() -> SocketAddr {
+///     let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 ///     let addr = server.local_addr().unwrap();
 ///
 ///     // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
@@ -328,7 +328,7 @@ pub(crate) mod visitor;
 /// // and call the available methods.
 /// #[tokio::main]
 /// async fn main() {
-///     let server_addr = websocket_server().await;
+///     let server_addr = server().await;
 ///     let server_url = format!("ws://{}", server_addr);
 ///     // Note that we create the client as usual, but thanks to the `use rpc_impl::MyRpcClient`,
 ///     // the client object will have all the methods to interact with the server.
