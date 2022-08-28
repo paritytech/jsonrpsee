@@ -986,3 +986,39 @@ async fn http_host_filtering_wildcard_works() {
 
 	assert!(client.request::<String>("say_hello", None).await.is_ok());
 }
+
+#[tokio::test]
+async fn deny_invalid_cors() {
+	use jsonrpsee::server::*;
+
+	init_logger();
+
+	// TODO: get remove access control stuff and use `CorsLayer`?!.
+	let acl = AccessControlBuilder::default()
+		.set_allowed_hosts(vec!["http://example.com"])
+		.unwrap()
+		.set_allowed_origins(vec!["http://example.com"])
+		.unwrap()
+		.build();
+
+	let server = ServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let mut module = RpcModule::new(());
+	let addr = server.local_addr().unwrap();
+	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
+
+	let _handle = server.start(module).unwrap();
+
+	// HTTP
+	{
+		let server_url = format!("http://{}", addr);
+		let client = HttpClientBuilder::default().build(&server_url).unwrap();
+		assert!(client.request::<String>("say_hello", None).await.is_err());
+	}
+
+	// WebSocket
+	{
+		let server_url = format!("ws://{}", addr);
+		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
+		assert!(client.request::<String>("say_hello", None).await.is_err());
+	}
+}

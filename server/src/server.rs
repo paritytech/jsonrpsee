@@ -24,7 +24,6 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -34,47 +33,39 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
+use crate::transport::{http, ws};
 use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
-use crate::types::{Id, Request};
+use crate::types::Id;
+
 use futures_channel::mpsc;
 use futures_util::future::{Either, FutureExt};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::stream::StreamExt;
-use futures_util::TryStreamExt;
 
 use hyper::body::HttpBody;
-use hyper::upgrade::Upgraded;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::logger::{self, HttpLogger, WsLogger};
+use jsonrpsee_core::logger::{HttpLogger, WsLogger};
 use jsonrpsee_core::server::access_control::AccessControl;
-use jsonrpsee_core::server::helpers::{
-	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
-};
-use jsonrpsee_core::server::http_utils::{handle_request, response as http_response, HandleRequest};
+use jsonrpsee_core::server::helpers::{BoundedSubscriptions, MethodResponse, MethodSink};
 use jsonrpsee_core::server::resource_limiting::Resources;
-use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str, RpcTracing};
+use jsonrpsee_core::server::rpc_module::Methods;
+use jsonrpsee_core::tracing::tx_log_from_str;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::error::{reject_too_big_request, reject_too_many_subscriptions};
-use jsonrpsee_types::Params;
+use jsonrpsee_types::error::reject_too_big_request;
 use soketto::connection::Error as SokettoError;
-use soketto::data::ByteSlice125;
+
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio_stream::wrappers::IntervalStream;
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
-use tracing_futures::Instrument;
 
 /// Default maximum connections allowed.
 const MAX_CONNECTIONS: u64 = 100;
 
-type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
-type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
-
-/// A WebSocket JSON RPC server.
+/// JSON RPC server.
 pub struct Server<B = Identity, HL = (), WL = ()> {
 	listener: TcpListener,
 	cfg: Settings,
@@ -167,7 +158,7 @@ where
 
 					if connections.count() >= self.cfg.max_connections as usize {
 						tracing::warn!("Too many connections. Please try again later.");
-						connections.add(reject_connection(socket).boxed());
+						connections.add(http::reject_connection(socket).boxed());
 						continue;
 					}
 
@@ -270,8 +261,8 @@ where
 }
 
 async fn background_task<HL: HttpLogger, WL: WsLogger>(
-	mut sender: Sender,
-	mut receiver: Receiver,
+	mut sender: ws::Sender,
+	mut receiver: ws::Receiver,
 	svc: ServiceData<HL, WL>,
 ) -> Result<(), Error> {
 	let ServiceData {
@@ -316,7 +307,7 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 			match futures_util::future::select(rx_item, next_ping).await {
 				Either::Left((Some(response), ping)) => {
 					// If websocket message send fail then terminate the connection.
-					if let Err(err) = send_ws_message(&mut sender, response).await {
+					if let Err(err) = ws::send_message(&mut sender, response).await {
 						tracing::error!("Terminate connection: WS send error: {}", err);
 						break;
 					}
@@ -328,7 +319,7 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 
 				// Handle timer intervals.
 				Either::Right((_, next_rx)) => {
-					if let Err(err) = send_ws_ping(&mut sender).await {
+					if let Err(err) = ws::send_ping(&mut sender).await {
 						tracing::error!("Terminate connection: WS send ping error: {}", err);
 						break;
 					}
@@ -412,7 +403,7 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 				let id_provider = &*id_provider;
 
 				let fut = async move {
-					let call = CallData {
+					let call = ws::CallData {
 						conn_id: conn_id as usize,
 						resources,
 						max_response_body_size,
@@ -425,7 +416,7 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 						request_start,
 					};
 
-					match process_single_request(data, call).await {
+					match ws::process_single_request(data, call).await {
 						MethodResult::JustLogger(r) => {
 							logger.on_response(&r.result, request_start);
 						}
@@ -457,9 +448,9 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 				let data = std::mem::take(&mut data);
 
 				let fut = async move {
-					let response = process_batch_request(Batch {
+					let response = ws::process_batch_request(ws::Batch {
 						data,
-						call: CallData {
+						call: ws::CallData {
 							conn_id: conn_id as usize,
 							resources,
 							max_response_body_size,
@@ -803,56 +794,13 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	}
 }
 
-async fn send_ws_message(sender: &mut Sender, response: String) -> Result<(), Error> {
-	sender.send_text_owned(response).await?;
-	sender.flush().await.map_err(Into::into)
-}
-
-async fn send_ws_ping(sender: &mut Sender) -> Result<(), Error> {
-	tracing::debug!("Send ping");
-	// Submit empty slice as "optional" parameter.
-	let slice: &[u8] = &[];
-	// Byte slice fails if the provided slice is larger than 125 bytes.
-	let byte_slice = ByteSlice125::try_from(slice).expect("Empty slice should fit into ByteSlice125");
-	sender.send_ping(byte_slice).await?;
-	sender.flush().await.map_err(Into::into)
-}
-
-#[derive(Debug, Clone)]
-struct Batch<'a, L: WsLogger> {
-	data: Vec<u8>,
-	call: CallData<'a, L>,
-}
-
-#[derive(Debug, Clone)]
-struct CallData<'a, L: WsLogger> {
-	conn_id: usize,
-	bounded_subscriptions: BoundedSubscriptions,
-	id_provider: &'a dyn IdProvider,
-	methods: &'a Methods,
-	max_response_body_size: u32,
-	max_log_length: u32,
-	resources: &'a Resources,
-	sink: &'a MethodSink,
-	logger: &'a L,
-	request_start: L::Instant,
-}
-
-#[derive(Debug, Clone)]
-struct Call<'a, L: WsLogger> {
-	params: Params<'a>,
-	name: &'a str,
-	call: CallData<'a, L>,
-	id: Id<'a>,
-}
-
-enum MethodResult {
+pub(crate) enum MethodResult {
 	JustLogger(MethodResponse),
 	SendAndLogger(MethodResponse),
 }
 
 impl MethodResult {
-	fn as_inner(&self) -> &MethodResponse {
+	pub(crate) fn as_inner(&self) -> &MethodResponse {
 		match &self {
 			Self::JustLogger(r) => r,
 			Self::SendAndLogger(r) => r,
@@ -900,7 +848,7 @@ struct ServiceData<HL: HttpLogger, WL: WsLogger> {
 impl<HL: HttpLogger, WL: WsLogger> ServiceData<HL, WL> {
 	/// Default behavior for handling the RPC requests.
 	async fn handle_request(self, request: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {
-		let data = HandleRequest {
+		let data = http::HandleRequest {
 			remote_addr: self.remote_addr,
 			methods: self.methods,
 			acl: self.acl,
@@ -912,7 +860,7 @@ impl<HL: HttpLogger, WL: WsLogger> ServiceData<HL, WL> {
 			logger: self.http_logger,
 		};
 
-		handle_request(request, data).await
+		http::handle_request(request, data).await
 	}
 }
 
@@ -980,178 +928,5 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 			// The request wasn't an upgrade request; let's treat it as a standard HTTP request:
 			Box::pin(data.handle_request(request).map(Ok))
 		}
-	}
-}
-
-// Batch responses must be sent back as a single message so we read the results from each
-// request in the batch and read the results off of a new channel, `rx_batch`, and then send the
-// complete batch response back to the client over `tx`.
-async fn process_batch_request<L: WsLogger>(b: Batch<'_, L>) -> BatchResponse {
-	let Batch { data, call } = b;
-
-	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
-		return if !batch.is_empty() {
-			let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
-			let batch_stream = futures_util::stream::iter(batch);
-
-			let trace = RpcTracing::batch();
-
-			return async {
-				let max_response_size = call.max_response_body_size;
-
-				let batch_response = batch_stream
-					.try_fold(
-						BatchResponseBuilder::new_with_limit(max_response_size as usize),
-						|batch_response, (req, call)| async move {
-							let params = Params::new(req.params.map(|params| params.get()));
-							let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
-							batch_response.append(response.as_inner())
-						},
-					)
-					.await;
-
-				match batch_response {
-					Ok(batch) => batch.finish(),
-					Err(batch_err) => batch_err,
-				}
-			}
-			.instrument(trace.into_span())
-			.await;
-		} else {
-			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
-		};
-	}
-
-	let (id, code) = prepare_error(&data);
-	BatchResponse::error(id, ErrorObject::from(code))
-}
-
-async fn process_single_request<L: WsLogger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
-	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-		let trace = RpcTracing::method_call(&req.method);
-
-		async {
-			rx_log_from_json(&req, call.max_log_length);
-
-			let params = Params::new(req.params.map(|params| params.get()));
-			let name = &req.method;
-			let id = req.id;
-
-			execute_call(Call { name, params, id, call }).await
-		}
-		.instrument(trace.into_span())
-		.await
-	} else {
-		let (id, code) = prepare_error(&data);
-		MethodResult::SendAndLogger(MethodResponse::error(id, ErrorObject::from(code)))
-	}
-}
-
-/// Execute a call which returns result of the call with a additional sink
-/// to fire a signal once the subscription call has been answered.
-///
-/// Returns `(MethodResponse, None)` on every call that isn't a subscription
-/// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
-async fn execute_call<L: WsLogger>(c: Call<'_, L>) -> MethodResult {
-	let Call { name, id, params, call } = c;
-	let CallData {
-		resources,
-		methods,
-		max_response_body_size,
-		max_log_length,
-		conn_id,
-		bounded_subscriptions,
-		id_provider,
-		sink,
-		logger,
-		request_start,
-	} = call;
-
-	let response = match methods.method_with_name(name) {
-		None => {
-			logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
-			let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound));
-			MethodResult::SendAndLogger(response)
-		}
-		Some((name, method)) => match &method.inner() {
-			MethodKind::Sync(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let r = (callback)(id, params, max_response_body_size as usize);
-						drop(guard);
-						MethodResult::SendAndLogger(r)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
-				}
-			}
-			MethodKind::Async(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						let id = id.into_owned();
-						let params = params.into_owned();
-
-						let response =
-							(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await;
-						MethodResult::SendAndLogger(response)
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
-				}
-			}
-			MethodKind::Subscription(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::Subscription);
-				match method.claim(name, resources) {
-					Ok(guard) => {
-						if let Some(cn) = bounded_subscriptions.acquire() {
-							let conn_state = ConnState { conn_id, close_notify: cn, id_provider };
-							let response = callback(id.clone(), params, sink.clone(), conn_state, Some(guard)).await;
-							MethodResult::JustLogger(response)
-						} else {
-							let response =
-								MethodResponse::error(id, reject_too_many_subscriptions(bounded_subscriptions.max()));
-							MethodResult::SendAndLogger(response)
-						}
-					}
-					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
-						let response = MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy));
-						MethodResult::SendAndLogger(response)
-					}
-				}
-			}
-			MethodKind::Unsubscription(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::Unsubscription);
-
-				// Don't adhere to any resource or subscription limits; always let unsubscribing happen!
-				let result = callback(id, params, conn_id, max_response_body_size as usize);
-				MethodResult::SendAndLogger(result)
-			}
-		},
-	};
-
-	let r = response.as_inner();
-
-	rx_log_from_str(&r.result, max_log_length);
-	logger.on_result(name, r.success, request_start);
-	response
-}
-
-async fn reject_connection(socket: TcpStream) {
-	async fn reject(_req: hyper::Request<hyper::Body>) -> Result<hyper::Response<hyper::Body>, Infallible> {
-		Ok(http_response::too_many_requests())
-	}
-
-	if let Err(e) = hyper::server::conn::Http::new().serve_connection(socket, hyper::service::service_fn(reject)).await
-	{
-		tracing::warn!("Error when trying to deny connection: {:?}", e);
 	}
 }

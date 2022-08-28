@@ -1,11 +1,11 @@
 //! Middleware that proxies requests at a specified URI to internal
 //! RPC method calls.
 
+use crate::transport::http;
 use hyper::header::{ACCEPT, CONTENT_TYPE};
 use hyper::http::HeaderValue;
 use hyper::{Body, Method, Request, Response, Uri};
 use jsonrpsee_core::error::Error as RpcError;
-use jsonrpsee_core::server::http_utils::response;
 use jsonrpsee_types::{Id, RequestSer};
 use std::error::Error;
 use std::future::Future;
@@ -139,9 +139,9 @@ where
 			}
 
 			let response = if let Ok(payload) = serde_json::from_slice::<RpcPayload>(&bytes) {
-				response::ok_response(payload.result.to_string())
+				http::response::ok_response(payload.result.to_string())
 			} else {
-				response::internal_error()
+				http::response::internal_error()
 			};
 
 			Ok(response)

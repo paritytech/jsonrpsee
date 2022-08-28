@@ -30,8 +30,6 @@
 pub mod access_control;
 /// Helpers.
 pub mod helpers;
-/// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
-pub mod http_utils;
 /// Resource limiting. Create generic "resources" and configure their limits to ensure servers are not overloaded.
 pub mod resource_limiting;
 /// JSON-RPC "modules" group sets of methods that belong together and handles method/subscription registration.
