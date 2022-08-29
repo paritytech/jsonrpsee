@@ -181,8 +181,13 @@ pub trait TransportReceiverT: 'static {
 	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error>;
 }
 
+/// Convert the given values to a [`jsonrpsee_types::UnnamedParams`], or empty tuple as expected by a
+/// jsonrpsee Client (http or websocket).
+///
+/// # Panics
+///
+/// Panics if the serialization of parameters fails.
 #[macro_export]
-/// Convert the given values to a [`jsonrpsee_types::UnnamedParams`] as expected by a jsonrpsee Client (http or websocket).
 macro_rules! rpc_params {
 	() => {
 		// ToRpcParams is implemented for the empty tuple.

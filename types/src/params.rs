@@ -642,7 +642,7 @@ const BATCH_PARAMS_NUM_CAPACITY: usize = 4;
 pub struct BatchRequestBuilder<'a>(Vec<(&'a str, Option<Box<RawValue>>)>);
 
 impl<'a> BatchRequestBuilder<'a> {
-	/// Construct a new [`BatchParamsBuilder`].
+	/// Construct a new [`BatchRequestBuilder`].
 	pub fn new() -> Self {
 		Self(Vec::with_capacity(BATCH_PARAMS_NUM_CAPACITY))
 	}
