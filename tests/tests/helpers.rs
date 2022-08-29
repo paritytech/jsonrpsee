@@ -241,3 +241,9 @@ pub async fn server_with_access_control(acl: AccessControl, cors: CorsLayer) -> 
 	let handle = server.start(module).unwrap();
 	(addr, handle)
 }
+
+pub fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
+}

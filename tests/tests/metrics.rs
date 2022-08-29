@@ -24,11 +24,14 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+mod helpers;
+
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use helpers::init_logger;
 use hyper::HeaderMap;
 use jsonrpsee::core::logger::{Body, HttpLogger, MethodKind, Request, WsLogger};
 use jsonrpsee::core::{client::ClientT, Error};
@@ -170,6 +173,8 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 
 #[tokio::test]
 async fn ws_server_logger() {
+	init_logger();
+
 	let counter = Counter::default();
 	let (server_addr, server_handle) = websocket_server(test_module(), counter.clone()).await.unwrap();
 
@@ -200,8 +205,9 @@ async fn ws_server_logger() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn http_server_logger() {
+	init_logger();
+
 	let counter = Counter::default();
 	let (server_addr, server_handle) = http_server(test_module(), counter.clone()).await.unwrap();
 

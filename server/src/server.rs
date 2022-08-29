@@ -141,12 +141,12 @@ where
 		let ws_logger = self.ws_logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
 		let id_provider = self.id_provider;
-		let stop_server = self.stop_monitor;
+		let stop_monitor = self.stop_monitor;
 		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 
 		let mut id: u32 = 0;
 		let mut connections = FutureDriver::default();
-		let mut incoming = Monitored::new(Incoming(listener), &stop_server);
+		let mut incoming = Monitored::new(Incoming(listener), &stop_monitor);
 
 		loop {
 			match connections.select_with(&mut incoming).await {
@@ -162,6 +162,8 @@ where
 						continue;
 					}
 
+					let stop_requested = stop_monitor.stopped();
+
 					let tower_service = TowerService {
 						inner: ServiceData {
 							remote_addr: socket.local_addr().unwrap(),
@@ -174,7 +176,7 @@ where
 							batch_requests_supported,
 							id_provider: id_provider.clone(),
 							ping_interval: self.cfg.ping_interval,
-							stop_server: stop_server.clone(),
+							stop_monitor: stop_monitor.clone(),
 							max_subscriptions_per_connection,
 							conn_id: id,
 							ws_logger: ws_logger.clone(),
@@ -186,10 +188,20 @@ where
 
 					connections.add(
 						async {
-							let conn = hyper::server::conn::Http::new().serve_connection(socket, service);
+							let mut conn =
+								hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
 
-							if let Err(e) = conn.with_upgrades().await {
-								tracing::warn!("Error when accepting new connection: {:?}", e);
+							let mut conn = Pin::new(&mut conn);
+
+							tokio::select! {
+								res = &mut conn => {
+									if let Err(e) = res {
+										tracing::error!("Error when processing connection: {:?}", e);
+									}
+								},
+								_ = stop_requested => {
+									conn.graceful_shutdown();
+								}
 							}
 						}
 						.boxed(),
@@ -272,7 +284,7 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 		max_response_body_size,
 		max_log_length,
 		batch_requests_supported,
-		stop_server,
+		stop_monitor,
 		id_provider,
 		ping_interval,
 		max_subscriptions_per_connection,
@@ -288,7 +300,7 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 	let bounded_subscriptions2 = bounded_subscriptions.clone();
 
-	let stop_server2 = stop_server.clone();
+	let stop_monitor2 = stop_monitor.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	// Send results back to the client.
@@ -301,7 +313,7 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 		tokio::pin!(ping_interval);
 		let mut next_ping = ping_interval.next();
 
-		while !stop_server2.shutdown_requested() {
+		while !stop_monitor2.shutdown_requested() {
 			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
 			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
 			match futures_util::future::select(rx_item, next_ping).await {
@@ -363,7 +375,7 @@ async fn background_task<HL: HttpLogger, WL: WsLogger>(
 
 			tokio::pin!(receive);
 
-			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_server)).await {
+			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_monitor)).await {
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
 						tracing::debug!("WS transport: Remote peer terminated the connection: {}", conn_id);
@@ -834,7 +846,7 @@ struct ServiceData<HL: HttpLogger, WL: WsLogger> {
 	/// Ping interval
 	ping_interval: Duration,
 	/// Stop handle.
-	stop_server: StopMonitor,
+	stop_monitor: StopMonitor,
 	/// Max subscriptions per connection.
 	max_subscriptions_per_connection: u32,
 	/// Connection ID

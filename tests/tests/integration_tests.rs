@@ -27,10 +27,13 @@
 #![cfg(test)]
 #![allow(clippy::blacklisted_name)]
 
+mod helpers;
+
 use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
+use helpers::init_logger;
 use helpers::{server, server_with_access_control, server_with_health_api, server_with_subscription};
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
@@ -43,14 +46,6 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
-
-mod helpers;
-
-fn init_logger() {
-	let _ = tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init();
-}
 
 #[tokio::test]
 async fn ws_subscription_works() {

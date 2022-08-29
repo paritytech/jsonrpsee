@@ -184,6 +184,10 @@ impl StopMonitor {
 	pub(crate) fn handle(&self) -> ServerHandle {
 		ServerHandle(Arc::downgrade(&self.0))
 	}
+
+	pub(crate) fn stopped(&self) -> ServerStopped {
+		ServerStopped(Arc::downgrade(&self.0))
+	}
 }
 
 /// Handle that is able to stop the running server or wait for it to finish
@@ -239,5 +243,24 @@ impl Future for ShutdownWaiter {
 			0 => Poll::Ready(()),
 			_ => Poll::Pending,
 		}
+	}
+}
+
+/// A `Future` that resolves once the server has been requested to be stopped.
+#[derive(Debug)]
+pub(crate) struct ServerStopped(Weak<MonitorInner>);
+
+impl Future for ServerStopped {
+	type Output = ();
+
+	fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
+		if let Some(arc) = Weak::upgrade(&self.0) {
+			// We expect this method to be polled frequently, skipping an iteration isn't problematic, so relaxed
+			// ordering is optimal.
+			if !arc.shutdown_requested.load(Ordering::Relaxed) {
+				return Poll::Pending;
+			}
+		}
+		Poll::Ready(())
 	}
 }
