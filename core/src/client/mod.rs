@@ -192,7 +192,7 @@ macro_rules! rpc_params {
 		{
 			let mut __params = $crate::client::__reexports::UnnamedParamsBuilder::new();
 			$(
-				__params.insert($param).expect("json serialization is infallible; qed.");
+				__params.insert($param).expect(format!("Parameter `{}` cannot be serialized", stringify!($param)).as_str());
 			)*
 			__params.build()
 		}

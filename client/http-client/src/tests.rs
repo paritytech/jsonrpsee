@@ -34,7 +34,7 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
-use jsonrpsee_types::BatchParamsBuilder;
+use jsonrpsee_types::BatchRequestBuilder;
 use serde_json::value::RawValue;
 
 #[tokio::test]
@@ -137,7 +137,7 @@ async fn subscription_response_to_request() {
 
 #[tokio::test]
 async fn batch_request_works() {
-	let mut builder = BatchParamsBuilder::new();
+	let mut builder = BatchRequestBuilder::new();
 	builder.insert("say_hello", rpc_params![]).unwrap();
 	builder.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
 	builder.insert("get_swag", rpc_params![]).unwrap();
@@ -150,7 +150,7 @@ async fn batch_request_works() {
 
 #[tokio::test]
 async fn batch_request_out_of_order_response() {
-	let mut builder = BatchParamsBuilder::new();
+	let mut builder = BatchRequestBuilder::new();
 	builder.insert("say_hello", rpc_params![]).unwrap();
 	builder.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
 	builder.insert("get_swag", rpc_params![]).unwrap();

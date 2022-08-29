@@ -639,9 +639,9 @@ const BATCH_PARAMS_NUM_CAPACITY: usize = 4;
 /// Parameter builder that serializes RPC parameters to construct a valid batch parameter.
 /// This is the equivalent of chaining multiple RPC requests.
 #[derive(Debug, Default)]
-pub struct BatchParamsBuilder<'a>(Vec<(&'a str, Option<Box<RawValue>>)>);
+pub struct BatchRequestBuilder<'a>(Vec<(&'a str, Option<Box<RawValue>>)>);
 
-impl<'a> BatchParamsBuilder<'a> {
+impl<'a> BatchRequestBuilder<'a> {
 	/// Construct a new [`BatchParamsBuilder`].
 	pub fn new() -> Self {
 		Self(Vec::with_capacity(BATCH_PARAMS_NUM_CAPACITY))

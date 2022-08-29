@@ -35,7 +35,7 @@ use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
-use jsonrpsee_types::BatchParamsBuilder;
+use jsonrpsee_types::BatchRequestBuilder;
 use serde_json::value::RawValue;
 use serde_json::Value as JsonValue;
 
@@ -227,7 +227,7 @@ async fn notification_without_polling_doesnt_make_client_unuseable() {
 
 #[tokio::test]
 async fn batch_request_works() {
-	let mut builder = BatchParamsBuilder::new();
+	let mut builder = BatchRequestBuilder::new();
 	builder.insert("say_hello", rpc_params![]).unwrap();
 	builder.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
 	builder.insert("get_swag", rpc_params![]).unwrap();
@@ -240,7 +240,7 @@ async fn batch_request_works() {
 
 #[tokio::test]
 async fn batch_request_out_of_order_response() {
-	let mut builder = BatchParamsBuilder::new();
+	let mut builder = BatchRequestBuilder::new();
 	builder.insert("say_hello", rpc_params![]).unwrap();
 	builder.insert("say_goodbye", rpc_params![0_u64, 1, 2]).unwrap();
 	builder.insert("get_swag", rpc_params![]).unwrap();

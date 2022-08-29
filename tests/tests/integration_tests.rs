@@ -40,7 +40,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::AccessControlBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::ErrorObject;
-use jsonrpsee::types::{BatchParamsBuilder, UnnamedParams};
+use jsonrpsee::types::{BatchRequestBuilder, UnnamedParams};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -659,7 +659,7 @@ async fn ws_batch_works() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	let mut batch = BatchParamsBuilder::new();
+	let mut batch = BatchRequestBuilder::new();
 	batch.insert("say_hello", rpc_params![]).unwrap();
 	batch.insert("slow_hello", rpc_params![]).unwrap();
 
