@@ -137,7 +137,7 @@ impl RpcDescription {
 		let method = quote! {
 			#docs
 			async fn #rust_method_name(#rust_method_params) -> #returns {
-				let params = { #parameter_builder };
+				let params = #parameter_builder;
 				self.subscribe(#rpc_sub_name, params, #rpc_unsub_name).await
 			}
 		};
@@ -151,7 +151,7 @@ impl RpcDescription {
 		signature: &syn::TraitItemMethod,
 	) -> TokenStream2 {
 		if params.is_empty() {
-			return quote! { () };
+			return quote!({});
 		}
 
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
@@ -165,22 +165,22 @@ impl RpcDescription {
 					let name = pair.0;
 					// Throw away the type.
 					let (value, _value_type) = pair.1;
-					quote! { #name, #value }
+					quote!(#name, #value)
 				});
-				quote! {
+				quote!({
 					let mut builder = #jsonrpsee::types::NamedParamsBuilder::new();
 					#( builder.insert( #params_insert ).expect(format!("Parameters {} must be valid", stringify!(#params_insert)).as_str()); )*
 					builder.build()
-				}
+				})
 			}
 			ParamKind::Array => {
 				// Throw away the type.
 				let params = params.iter().map(|(param, _param_type)| param);
-				quote! {
+				quote!({
 					let mut builder = #jsonrpsee::types::UnnamedParamsBuilder::new();
 					#( builder.insert( #params ).expect(format!("Parameters {} must be valid", stringify!(#params)).as_str()); )*
 					builder.build()
-				}
+				})
 			}
 		}
 	}

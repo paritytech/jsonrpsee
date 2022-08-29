@@ -446,9 +446,9 @@ impl ParamsBuilder {
 	/// The _name_ and _value_ are delimited by the `:` token.
 	pub fn insert_named<P: Serialize>(&mut self, name: &str, value: P) -> Result<(), serde_json::Error> {
 		serde_json::to_writer(&mut self.bytes, name)?;
-		self.bytes.push(':' as u8);
+		self.bytes.push(b':');
 		serde_json::to_writer(&mut self.bytes, &value)?;
-		self.bytes.push(',' as u8);
+		self.bytes.push(b',');
 
 		Ok(())
 	}
@@ -456,7 +456,7 @@ impl ParamsBuilder {
 	/// Insert a plain value into the builder.
 	pub fn insert<P: Serialize>(&mut self, value: P) -> Result<(), serde_json::Error> {
 		serde_json::to_writer(&mut self.bytes, &value)?;
-		self.bytes.push(',' as u8);
+		self.bytes.push(b',');
 
 		Ok(())
 	}
@@ -464,7 +464,7 @@ impl ParamsBuilder {
 	/// Finish the building process and return a JSON compatible string.
 	pub fn build(mut self) -> String {
 		let idx = self.bytes.len() - 1;
-		if self.bytes[idx] == ',' as u8 {
+		if self.bytes[idx] == b',' {
 			self.bytes[idx] = self.end as u8;
 		} else {
 			self.bytes.push(self.end as u8);
@@ -484,14 +484,12 @@ impl ParamsBuilder {
 ///
 /// use jsonrpsee_types::NamedParamsBuilder;
 ///
-/// fn main() {
-///     let mut builder = NamedParamsBuilder::new();
-///     builder.insert("param1", 1);
-///     builder.insert("param2", "abc");
-///     let params = builder.build();
+/// let mut builder = NamedParamsBuilder::new();
+/// builder.insert("param1", 1);
+/// builder.insert("param2", "abc");
+/// let params = builder.build();
 ///
-///     // Use RPC parameters...
-/// }
+/// // Use RPC parameters...
 /// ```
 #[derive(Debug)]
 pub struct NamedParamsBuilder(ParamsBuilder);
@@ -499,7 +497,7 @@ pub struct NamedParamsBuilder(ParamsBuilder);
 impl NamedParamsBuilder {
 	/// Construct a new [`NamedParamsBuilder`].
 	pub fn new() -> Self {
-		Self(ParamsBuilder::new('{', '}'))
+		Self::default()
 	}
 
 	/// Insert a named value (key, value) pair into the builder.
@@ -514,13 +512,19 @@ impl NamedParamsBuilder {
 	}
 }
 
+impl Default for NamedParamsBuilder {
+	fn default() -> Self {
+		Self(ParamsBuilder::new('{', '}'))
+	}
+}
+
 /// Named RPC parameters stored as a JSON Map object `{ key: value }`.
 #[derive(Clone, Debug)]
 pub struct NamedParams(String);
 
 impl ToRpcParams for NamedParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		RawValue::from_string(self.0).map(|res| Some(res))
+		RawValue::from_string(self.0).map(Some)
 	}
 }
 
@@ -533,14 +537,12 @@ impl ToRpcParams for NamedParams {
 ///
 /// use jsonrpsee_types::UnnamedParamsBuilder;
 ///
-/// fn main() {
-///     let mut builder = UnnamedParamsBuilder::new();
-///     builder.insert("param1");
-///     builder.insert(1);
-///     let params = builder.build();
+/// let mut builder = UnnamedParamsBuilder::new();
+/// builder.insert("param1");
+/// builder.insert(1);
+/// let params = builder.build();
 ///
-///     // Use RPC parameters...
-/// }
+/// // Use RPC parameters...
 /// ```
 #[derive(Debug)]
 pub struct UnnamedParamsBuilder(ParamsBuilder);
@@ -548,7 +550,7 @@ pub struct UnnamedParamsBuilder(ParamsBuilder);
 impl UnnamedParamsBuilder {
 	/// Construct a new [`UnnamedParamsBuilder`].
 	pub fn new() -> Self {
-		Self(ParamsBuilder::new('[', ']'))
+		Self::default()
 	}
 
 	/// Insert a plain value into the builder.
@@ -562,13 +564,19 @@ impl UnnamedParamsBuilder {
 	}
 }
 
+impl Default for UnnamedParamsBuilder {
+	fn default() -> Self {
+		Self(ParamsBuilder::new('[', ']'))
+	}
+}
+
 /// Unnamed RPC parameters stored as a JSON Array object `[ value0, value1, .., valueN ]`.
 #[derive(Clone, Debug)]
 pub struct UnnamedParams(String);
 
 impl ToRpcParams for UnnamedParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		RawValue::from_string(self.0).map(|res| Some(res))
+		RawValue::from_string(self.0).map(Some)
 	}
 }
 
@@ -595,7 +603,7 @@ impl ToRpcParams for UnnamedParams {
 /// impl ToRpcParams for ManualParam {
 ///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 ///         // Manually define a valid JSONRPC parameter.
-///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(|res| Some(res))
+///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(Some)
 ///     }
 /// }
 /// ```
@@ -615,8 +623,8 @@ impl ToRpcParams for UnnamedParams {
 ///
 /// impl ToRpcParams for SerParam {
 ///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-/// 		let s = String::from_utf8(serde_json::to_vec(&self)?).expect("Valid UTF8 format");
-///         RawValue::from_string(s).map(|res| Some(res))
+///         let s = String::from_utf8(serde_json::to_vec(&self)?).expect("Valid UTF8 format");
+///         RawValue::from_string(s).map(Some)
 ///     }
 /// }
 /// ```
@@ -630,7 +638,7 @@ const BATCH_PARAMS_NUM_CAPACITY: usize = 4;
 
 /// Parameter builder that serializes RPC parameters to construct a valid batch parameter.
 /// This is the equivalent of chaining multiple RPC requests.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BatchParamsBuilder<'a>(Vec<(&'a str, Option<Box<RawValue>>)>);
 
 impl<'a> BatchParamsBuilder<'a> {
