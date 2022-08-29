@@ -215,11 +215,11 @@ pub(crate) mod visitor;
 /// use std::net::SocketAddr;
 ///
 /// use futures_channel::oneshot;
-/// use jsonrpsee::{ws_client::*, ws_server::ServerBuilder};
+/// use jsonrpsee::{ws_client::*, server::ServerBuilder};
 ///
 /// // RPC is put into a separate module to clearly show names of generated entities.
 /// mod rpc_impl {
-///     use jsonrpsee::{proc_macros::rpc, core::async_trait, core::RpcResult, ws_server::SubscriptionSink};
+///     use jsonrpsee::{proc_macros::rpc, core::async_trait, core::RpcResult, server::SubscriptionSink};
 ///     use jsonrpsee::types::SubscriptionResult;
 ///
 ///     // Generate both server and client implementations, prepend all the methods with `foo_` prefix.

@@ -51,7 +51,7 @@ use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::tracing::tx_log_from_str;
 use jsonrpsee_core::traits::IdProvider;
-use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
+use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::reject_too_big_request;
 use soketto::connection::Error as SokettoError;
 
@@ -608,7 +608,7 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	/// use std::{time::Instant, net::SocketAddr};
 	///
 	/// use jsonrpsee_core::logger::{WsLogger, Headers, MethodKind, Params};
-	/// use jsonrpsee_ws_server::ServerBuilder;
+	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyLogger;
@@ -685,7 +685,7 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///
 	/// ```rust
 	/// use std::time::Duration;
-	/// use jsonrpsee_ws_server::ServerBuilder;
+	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// // Set the ping interval to 10 seconds.
 	/// let builder = ServerBuilder::default().ping_interval(Duration::from_secs(10));
@@ -772,8 +772,8 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///       occupied_addr,
 	///       "127.0.0.1:0".parse().unwrap(),
 	///   ];
-	///   assert!(jsonrpsee_ws_server::ServerBuilder::default().build(occupied_addr).await.is_err());
-	///   assert!(jsonrpsee_ws_server::ServerBuilder::default().build(addrs).await.is_ok());
+	///   assert!(jsonrpsee_server::ServerBuilder::default().build(occupied_addr).await.is_err());
+	///   assert!(jsonrpsee_server::ServerBuilder::default().build(addrs).await.is_ok());
 	/// }
 	/// ```
 	///
@@ -851,7 +851,6 @@ impl<HL: HttpLogger, WL: WsLogger> ServiceData<HL, WL> {
 		let data = http::HandleRequest {
 			remote_addr: self.remote_addr,
 			methods: self.methods,
-			acl: self.acl,
 			resources: self.resources,
 			max_request_body_size: self.max_request_body_size,
 			max_response_body_size: self.max_response_body_size,
@@ -890,6 +889,23 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		tracing::trace!("{:?}", request);
 		let data = self.inner.clone();
+
+		let host = match http_helpers::read_header_value(request.headers(), "host") {
+			Some(origin) => origin,
+			None => return async { Ok(http::response::malformed()) }.boxed(),
+		};
+		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
+
+		if let Err(e) = data.acl.verify_host(host) {
+			tracing::warn!("Denied request: {}", e);
+			return async { Ok(http::response::host_not_allowed()) }.boxed();
+		}
+
+		if let Err(e) = data.acl.verify_origin(maybe_origin, host) {
+			let maybe_origin = maybe_origin.map(|o| o.to_owned());
+			tracing::warn!("Denied request: {}", e);
+			return async { Ok(http::response::origin_rejected(maybe_origin)) }.boxed();
+		}
 
 		if is_upgrade_request(&request) {
 			let mut server = soketto::handshake::http::Server::new();

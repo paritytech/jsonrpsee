@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use futures_util::TryStreamExt;
 use http::Method;
 use jsonrpsee_core::error::GenericTransportError;
-use jsonrpsee_core::http_helpers::{self, read_body};
+use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::logger::{self, HttpLogger as Logger};
 use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse};
 use jsonrpsee_core::server::rpc_module::MethodKind;
@@ -14,8 +14,6 @@ use jsonrpsee_core::JsonRawValue;
 use jsonrpsee_types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{ErrorObject, Id, Notification, Params, Request};
 use tracing_futures::Instrument;
-
-use jsonrpsee_core::server::access_control::AccessControl;
 
 type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
 
@@ -292,7 +290,6 @@ pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 pub(crate) struct HandleRequest<L: Logger> {
 	pub(crate) remote_addr: SocketAddr,
 	pub(crate) methods: Methods,
-	pub(crate) acl: AccessControl,
 	pub(crate) resources: Resources,
 	pub(crate) max_request_body_size: u32,
 	pub(crate) max_response_body_size: u32,
@@ -308,7 +305,6 @@ pub(crate) async fn handle_request<L: Logger>(
 	let HandleRequest {
 		remote_addr,
 		methods,
-		acl,
 		resources,
 		max_request_body_size,
 		max_response_body_size,
@@ -318,22 +314,6 @@ pub(crate) async fn handle_request<L: Logger>(
 	} = input;
 
 	let request_start = logger.on_request(remote_addr, &request);
-
-	let host = match http_helpers::read_header_value(request.headers(), "host") {
-		Some(origin) => origin,
-		None => return response::malformed(),
-	};
-	let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
-
-	if let Err(e) = acl.verify_host(host) {
-		tracing::warn!("Denied request: {}", e);
-		return response::host_not_allowed();
-	}
-
-	if let Err(e) = acl.verify_origin(maybe_origin, host) {
-		tracing::warn!("Denied request: {}", e);
-		return response::origin_rejected(maybe_origin);
-	}
 
 	// Only the `POST` method is allowed.
 	match *request.method() {
@@ -388,10 +368,10 @@ pub(crate) mod response {
 	}
 
 	/// Create a text/plain response for rejected "Origin" headers.
-	pub(crate) fn origin_rejected(origin: Option<&str>) -> hyper::Response<hyper::Body> {
+	pub(crate) fn origin_rejected(origin: Option<impl AsRef<str>>) -> hyper::Response<hyper::Body> {
 		from_template(
 			hyper::StatusCode::FORBIDDEN,
-			format!("Origin: `{}` is not whitelisted.\n", origin.unwrap_or("")),
+			format!("Origin: `{}` is not whitelisted.\n", origin.as_ref().map_or("", |o| o.as_ref())),
 			TEXT,
 		)
 	}

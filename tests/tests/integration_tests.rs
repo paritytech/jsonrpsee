@@ -988,18 +988,14 @@ async fn http_host_filtering_wildcard_works() {
 }
 
 #[tokio::test]
-async fn deny_invalid_cors() {
+async fn deny_invalid_host() {
 	use jsonrpsee::server::*;
 
 	init_logger();
 
-	// TODO: get remove access control stuff and use `CorsLayer`?!.
-	let acl = AccessControlBuilder::default()
-		.set_allowed_hosts(vec!["http://example.com"])
-		.unwrap()
-		.set_allowed_origins(vec!["http://example.com"])
-		.unwrap()
-		.build();
+	// TODO(niklasad1): remove access control stuff and use `CorsLayer`?!.
+	// I think CORS should support everything except "host filtering", do we need it?
+	let acl = AccessControlBuilder::default().set_allowed_hosts(vec!["http://example.com"]).unwrap().build();
 
 	let server = ServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -1018,7 +1014,9 @@ async fn deny_invalid_cors() {
 	// WebSocket
 	{
 		let server_url = format!("ws://{}", addr);
-		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
-		assert!(client.request::<String>("say_hello", None).await.is_err());
+		let err = WsClientBuilder::default().build(&server_url).await.unwrap_err();
+		assert!(
+			matches!(err, Error::Transport(e) if e.to_string().contains("Connection rejected with status code: 403"))
+		)
 	}
 }
