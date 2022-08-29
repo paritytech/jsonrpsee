@@ -449,6 +449,10 @@ impl<L: Logger> ServiceData<L> {
 
 		let host = match http_helpers::read_header_value(request.headers(), "host") {
 			Some(origin) => origin,
+			None if request.version() == hyper::Version::HTTP_2 => match request.uri().host() {
+				Some(origin) => origin,
+				None => return response::malformed(),
+			},
 			None => return response::malformed(),
 		};
 		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
