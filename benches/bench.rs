@@ -7,7 +7,7 @@ use futures_util::stream::FuturesUnordered;
 use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::http_client::HeaderMap;
-use jsonrpsee::types::{Id, ParamsSer, RequestSer};
+use jsonrpsee::types::{Id, ParamsSer, RequestSer, ToRpcParams, UnnamedParamsBuilder};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -67,6 +67,9 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 		b.iter(|| {
 			let params = &[1_u64.into(), 2_u32.into()];
 			let params = ParamsSer::ArrayRef(params);
+			let params = serde_json::to_string(&params).unwrap();
+			let params = serde_json::value::RawValue::from_string(params).unwrap();
+
 			let request = RequestSer::new(&Id::Number(0), "say_hello", Some(params));
 			v2_serialize(request);
 		})
@@ -74,8 +77,11 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 
 	crit.bench_function("jsonrpsee_types_v2_vec", |b| {
 		b.iter(|| {
-			let params = ParamsSer::Array(vec![1_u64.into(), 2_u32.into()]);
-			let request = RequestSer::new(&Id::Number(0), "say_hello", Some(params));
+			let mut builder = UnnamedParamsBuilder::new();
+			builder.insert(1u64).unwrap();
+			builder.insert(2u32).unwrap();
+			let params = builder.build().to_rpc_params().expect("Valid params");
+			let request = RequestSer::new(&Id::Number(0), "say_hello", params);
 			v2_serialize(request);
 		})
 	});
@@ -129,7 +135,7 @@ fn round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl ClientT>
 		let bench_name = format!("{}/{}", name, method);
 		crit.bench_function(&request.group_name(&bench_name), |b| {
 			b.to_async(rt).iter(|| async {
-				black_box(client.request::<String>(method, None).await.unwrap());
+				black_box(client.request::<String, ()>(method, ()).await.unwrap());
 			})
 		});
 	}
@@ -139,7 +145,7 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 	let mut group = crit.benchmark_group(name);
 	group.bench_function("subscribe", |b| {
 		b.to_async(rt).iter_with_large_drop(|| async {
-			black_box(client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).await.unwrap());
+			black_box(client.subscribe::<String, ()>(SUB_METHOD_NAME, (), UNSUB_METHOD_NAME).await.unwrap());
 		})
 	});
 	group.bench_function("subscribe_response", |b| {
@@ -149,7 +155,7 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 				// runtime context and simply calling `block_on` here will cause the code to panic.
 				tokio::task::block_in_place(|| {
 					tokio::runtime::Handle::current().block_on(async {
-						client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).await.unwrap()
+						client.subscribe::<String, ()>(SUB_METHOD_NAME, (), UNSUB_METHOD_NAME).await.unwrap()
 					})
 				})
 			},
@@ -166,7 +172,7 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 		b.iter_with_setup(
 			|| {
 				rt.block_on(async {
-					client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).await.unwrap()
+					client.subscribe::<String, ()>(SUB_METHOD_NAME, (), UNSUB_METHOD_NAME).await.unwrap()
 				})
 			},
 			|sub| {
@@ -227,7 +233,7 @@ fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, 
 							let futs = FuturesUnordered::new();
 
 							for _ in 0..10 {
-								futs.push(client.request::<String>(methods[0], None));
+								futs.push(client.request::<String, ()>(methods[0], ()));
 							}
 
 							join_all(futs).await;
@@ -267,7 +273,7 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 							let futs = FuturesUnordered::new();
 
 							for _ in 0..10 {
-								let fut = client.subscribe::<String>(SUB_METHOD_NAME, None, UNSUB_METHOD_NAME).then(
+								let fut = client.subscribe::<String, ()>(SUB_METHOD_NAME, (), UNSUB_METHOD_NAME).then(
 									|sub| async move {
 										let mut s = sub.unwrap();
 
@@ -301,7 +307,7 @@ fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
-							client.request::<String>(method, None).await.unwrap();
+							client.request::<String, ()>(method, ()).await.unwrap();
 						})
 					});
 					join_all(tasks).await;
@@ -333,7 +339,7 @@ fn http_custom_headers_round_trip(
 
 		crit.bench_function(&request.group_name(&bench_name), |b| {
 			b.to_async(rt).iter(|| async {
-				black_box(client.request::<String>(method_name, None).await.unwrap());
+				black_box(client.request::<String, ()>(method_name, ()).await.unwrap());
 			})
 		});
 	}

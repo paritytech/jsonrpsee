@@ -156,9 +156,9 @@ impl ClientBuilder {
 	#[cfg(feature = "async-client")]
 	#[cfg_attr(docsrs, doc(cfg(feature = "async-client")))]
 	pub fn build_with_tokio<S, R>(self, sender: S, receiver: R) -> Client
-		where
-			S: TransportSenderT + Send,
-			R: TransportReceiverT + Send,
+	where
+		S: TransportSenderT + Send,
+		R: TransportReceiverT + Send,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
