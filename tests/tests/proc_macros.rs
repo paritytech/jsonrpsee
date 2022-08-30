@@ -26,9 +26,12 @@
 
 //! Example of using proc macro to generate working client and server.
 
+mod helpers;
+
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
+use helpers::init_logger;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::{client::SubscriptionClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
@@ -209,10 +212,7 @@ pub async fn server() -> SocketAddr {
 
 #[tokio::test]
 async fn proc_macros_generic_ws_client_api() {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+	init_logger();
 
 	let server_addr = server().await;
 	let server_url = format!("ws://{}", server_addr);

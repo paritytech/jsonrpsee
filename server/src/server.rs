@@ -34,36 +34,29 @@ use std::time::Duration;
 
 use crate::future::{FutureDriver, ServerHandle, StopMonitor};
 use crate::transport::{http, ws};
-use crate::types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
-use crate::types::Id;
 
-use futures_channel::mpsc;
-use futures_util::future::{Either, FutureExt};
+use futures_util::future::FutureExt;
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::stream::StreamExt;
 
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::logger::{HttpLogger, WsLogger};
 use jsonrpsee_core::server::access_control::AccessControl;
-use jsonrpsee_core::server::helpers::{BoundedSubscriptions, MethodResponse, MethodSink};
+use jsonrpsee_core::server::helpers::MethodResponse;
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::Methods;
-use jsonrpsee_core::tracing::tx_log_from_str;
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
-use jsonrpsee_types::error::reject_too_big_request;
-use soketto::connection::Error as SokettoError;
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio_stream::wrappers::IntervalStream;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
 
 /// Default maximum connections allowed.
-const MAX_CONNECTIONS: u64 = 100;
+const MAX_CONNECTIONS: u32 = 100;
 
 /// JSON RPC server.
 pub struct Server<B = Identity, HL = (), WL = ()> {
@@ -147,6 +140,7 @@ where
 		let mut id: u32 = 0;
 		let mut connections = FutureDriver::default();
 		let mut incoming = Monitored::new(Incoming(listener), &stop_monitor);
+		let conns = Arc::new(Semaphore::new(self.cfg.max_connections as usize));
 
 		loop {
 			match connections.select_with(&mut incoming).await {
@@ -156,11 +150,15 @@ where
 						continue;
 					}
 
-					if connections.count() >= self.cfg.max_connections as usize {
-						tracing::warn!("Too many connections. Please try again later.");
-						connections.add(http::reject_connection(socket).boxed());
-						continue;
-					}
+					let conn = match conns.clone().try_acquire_owned() {
+						Ok(conn) => conn,
+						Err(TryAcquireError::Closed) => unreachable!("semaphore never closed; qed"),
+						Err(TryAcquireError::NoPermits) => {
+							tracing::warn!("Too many connections. Please try again later.");
+							connections.add(http::reject_connection(socket).boxed());
+							continue;
+						}
+					};
 
 					let stop_requested = stop_monitor.stopped();
 
@@ -181,13 +179,14 @@ where
 							conn_id: id,
 							ws_logger: ws_logger.clone(),
 							http_logger: http_logger.clone(),
+							conn: Arc::new(conn),
 						},
 					};
 
 					let service = self.service_builder.service(tower_service);
 
 					connections.add(
-						async {
+						async move {
 							let mut conn =
 								hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
 
@@ -207,7 +206,11 @@ where
 						.boxed(),
 					);
 
-					tracing::info!("Accepting new connection {}/{}", connections.count(), self.cfg.max_connections);
+					tracing::info!(
+						"Accepting new connection {}/{}",
+						self.cfg.max_connections as usize - conns.available_permits(),
+						self.cfg.max_connections
+					);
 
 					id = id.wrapping_add(1);
 				}
@@ -223,18 +226,18 @@ where
 }
 
 /// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
-struct Monitored<'a, F> {
+pub(crate) struct Monitored<'a, F> {
 	future: F,
 	stop_monitor: &'a StopMonitor,
 }
 
 impl<'a, F> Monitored<'a, F> {
-	fn new(future: F, stop_monitor: &'a StopMonitor) -> Self {
+	pub(crate) fn new(future: F, stop_monitor: &'a StopMonitor) -> Self {
 		Monitored { future, stop_monitor }
 	}
 }
 
-enum MonitoredError<E> {
+pub(crate) enum MonitoredError<E> {
 	Shutdown,
 	Selector(E),
 }
@@ -272,234 +275,6 @@ where
 	}
 }
 
-async fn background_task<HL: HttpLogger, WL: WsLogger>(
-	mut sender: ws::Sender,
-	mut receiver: ws::Receiver,
-	svc: ServiceData<HL, WL>,
-) -> Result<(), Error> {
-	let ServiceData {
-		methods,
-		resources,
-		max_request_body_size,
-		max_response_body_size,
-		max_log_length,
-		batch_requests_supported,
-		stop_monitor,
-		id_provider,
-		ping_interval,
-		max_subscriptions_per_connection,
-		conn_id,
-		ws_logger,
-		remote_addr,
-		..
-	} = svc;
-
-	// And we can finally transition to a websocket background_task.
-
-	let (tx, mut rx) = mpsc::unbounded::<String>();
-	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let bounded_subscriptions2 = bounded_subscriptions.clone();
-
-	let stop_monitor2 = stop_monitor.clone();
-	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
-
-	// Send results back to the client.
-	tokio::spawn(async move {
-		// Received messages from the WebSocket.
-		let mut rx_item = rx.next();
-
-		// Interval to send out continuously `pings`.
-		let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
-		tokio::pin!(ping_interval);
-		let mut next_ping = ping_interval.next();
-
-		while !stop_monitor2.shutdown_requested() {
-			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
-			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
-			match futures_util::future::select(rx_item, next_ping).await {
-				Either::Left((Some(response), ping)) => {
-					// If websocket message send fail then terminate the connection.
-					if let Err(err) = ws::send_message(&mut sender, response).await {
-						tracing::error!("Terminate connection: WS send error: {}", err);
-						break;
-					}
-					rx_item = rx.next();
-					next_ping = ping;
-				}
-				// Nothing else to receive.
-				Either::Left((None, _)) => break,
-
-				// Handle timer intervals.
-				Either::Right((_, next_rx)) => {
-					if let Err(err) = ws::send_ping(&mut sender).await {
-						tracing::error!("Terminate connection: WS send ping error: {}", err);
-						break;
-					}
-					rx_item = next_rx;
-					next_ping = ping_interval.next();
-				}
-			}
-		}
-
-		// Terminate connection and send close message.
-		let _ = sender.close().await;
-
-		// Notify all listeners and close down associated tasks.
-		bounded_subscriptions2.close();
-	});
-
-	// Buffer for incoming data.
-	let mut data = Vec::with_capacity(100);
-	let mut method_executors = FutureDriver::default();
-	let logger = &ws_logger;
-
-	let result = loop {
-		data.clear();
-
-		{
-			// Need the extra scope to drop this pinned future and reclaim access to `data`
-			let receive = async {
-				// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
-				loop {
-					match receiver.receive(&mut data).await? {
-						soketto::Incoming::Data(d) => break Ok(d),
-						soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
-						soketto::Incoming::Closed(_) => {
-							// The closing reason is already logged by `soketto` trace log level.
-							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
-							break Err(SokettoError::Closed);
-						}
-					}
-				}
-			};
-
-			tokio::pin!(receive);
-
-			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_monitor)).await {
-				match err {
-					MonitoredError::Selector(SokettoError::Closed) => {
-						tracing::debug!("WS transport: Remote peer terminated the connection: {}", conn_id);
-						sink.close();
-						break Ok(());
-					}
-					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
-						tracing::warn!(
-							"WS transport error: Request length: {} exceeded max limit: {} bytes",
-							current,
-							maximum
-						);
-						sink.send_error(Id::Null, reject_too_big_request(max_request_body_size));
-						continue;
-					}
-					// These errors can not be gracefully handled, so just log them and terminate the connection.
-					MonitoredError::Selector(err) => {
-						tracing::error!("Terminate connection {}: WS error: {}", conn_id, err);
-						sink.close();
-						break Err(err.into());
-					}
-					MonitoredError::Shutdown => break Ok(()),
-				};
-			};
-		};
-
-		let request_start = logger.on_request();
-
-		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
-		match first_non_whitespace {
-			Some(b'{') => {
-				let data = std::mem::take(&mut data);
-				let sink = sink.clone();
-				let resources = &resources;
-				let methods = &methods;
-				let bounded_subscriptions = bounded_subscriptions.clone();
-				let id_provider = &*id_provider;
-
-				let fut = async move {
-					let call = ws::CallData {
-						conn_id: conn_id as usize,
-						resources,
-						max_response_body_size,
-						max_log_length,
-						methods,
-						bounded_subscriptions,
-						sink: &sink,
-						id_provider,
-						logger,
-						request_start,
-					};
-
-					match ws::process_single_request(data, call).await {
-						MethodResult::JustLogger(r) => {
-							logger.on_response(&r.result, request_start);
-						}
-						MethodResult::SendAndLogger(r) => {
-							logger.on_response(&r.result, request_start);
-							let _ = sink.send_raw(r.result);
-						}
-					};
-				}
-				.boxed();
-
-				method_executors.add(fut);
-			}
-			Some(b'[') if !batch_requests_supported => {
-				let response = MethodResponse::error(
-					Id::Null,
-					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
-				);
-				logger.on_response(&response.result, request_start);
-				let _ = sink.send_raw(response.result);
-			}
-			Some(b'[') => {
-				// Make sure the following variables are not moved into async closure below.
-				let resources = &resources;
-				let methods = &methods;
-				let bounded_subscriptions = bounded_subscriptions.clone();
-				let sink = sink.clone();
-				let id_provider = id_provider.clone();
-				let data = std::mem::take(&mut data);
-
-				let fut = async move {
-					let response = ws::process_batch_request(ws::Batch {
-						data,
-						call: ws::CallData {
-							conn_id: conn_id as usize,
-							resources,
-							max_response_body_size,
-							max_log_length,
-							methods,
-							bounded_subscriptions,
-							sink: &sink,
-							id_provider: &*id_provider,
-							logger,
-							request_start,
-						},
-					})
-					.await;
-
-					tx_log_from_str(&response.result, max_log_length);
-					logger.on_response(&response.result, request_start);
-					let _ = sink.send_raw(response.result);
-				};
-
-				method_executors.add(Box::pin(fut));
-			}
-			_ => {
-				sink.send_error(Id::Null, ErrorCode::ParseError.into());
-			}
-		}
-	};
-
-	logger.on_disconnect(remote_addr);
-
-	// Drive all running methods to completion.
-	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
-	// proper drop behaviour.
-	method_executors.await;
-
-	result
-}
-
 /// JSON-RPC Websocket server settings.
 #[derive(Debug, Clone)]
 struct Settings {
@@ -508,7 +283,7 @@ struct Settings {
 	/// Maximum size in bytes of a response.
 	max_response_body_size: u32,
 	/// Maximum number of incoming connections allowed.
-	max_connections: u64,
+	max_connections: u32,
 	/// Maximum number of subscriptions per connection.
 	max_subscriptions_per_connection: u32,
 	/// Max length for logging for requests and responses
@@ -541,7 +316,7 @@ impl Default for Settings {
 	}
 }
 
-/// Builder to configure and create a JSON-RPC Websocket server
+/// Builder to configure and create a JSON-RPC server
 #[derive(Debug)]
 pub struct Builder<B = Identity, HL = (), WL = ()> {
 	settings: Settings,
@@ -586,7 +361,7 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	}
 
 	/// Set the maximum number of connections allowed. Default is 100.
-	pub fn max_connections(mut self, max: u64) -> Self {
+	pub fn max_connections(mut self, max: u32) -> Self {
 		self.settings.max_connections = max;
 		self
 	}
@@ -653,7 +428,7 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///     }
 	/// }
 	///
-	/// let builder = ServerBuilder::new().set_logger(MyLogger);
+	/// let builder = ServerBuilder::new().set_ws_logger(MyLogger);
 	/// ```
 	pub fn set_ws_logger<T: WsLogger>(self, ws_logger: T) -> Builder<B, HL, T> {
 		Builder {
@@ -718,7 +493,7 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	/// # Examples
 	///
 	/// ```rust
-	/// use jsonrpsee_ws_server::{ServerBuilder, RandomStringIdProvider, IdProvider};
+	/// use jsonrpsee_server::{ServerBuilder, RandomStringIdProvider, IdProvider};
 	///
 	/// // static dispatch
 	/// let builder1 = ServerBuilder::default().set_id_provider(RandomStringIdProvider::new(16));
@@ -748,14 +523,12 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///
 	/// use std::time::Duration;
 	/// use std::net::SocketAddr;
-	/// use jsonrpsee_http_server::ServerBuilder;
 	///
 	/// #[tokio::main]
 	/// async fn main() {
-	///     let builder = tower::ServiceBuilder::new()
-	///         .timeout(Duration::from_secs(2));
+	///     let builder = tower::ServiceBuilder::new().timeout(Duration::from_secs(2));
 	///
-	///     let server = ServerBuilder::new()
+	///     let server = jsonrpsee_server::ServerBuilder::new()
 	///         .set_middleware(builder)
 	///         .build("127.0.0.1:0".parse::<SocketAddr>().unwrap())
 	///         .await
@@ -822,57 +595,41 @@ impl MethodResult {
 
 /// Data required by the server to handle requests.
 #[derive(Debug, Clone)]
-struct ServiceData<HL: HttpLogger, WL: WsLogger> {
+pub(crate) struct ServiceData<HL: HttpLogger, WL: WsLogger> {
 	/// Remote server address.
-	remote_addr: SocketAddr,
+	pub(crate) remote_addr: SocketAddr,
 	/// Registered server methods.
-	methods: Methods,
+	pub(crate) methods: Methods,
 	/// Access control.
-	acl: AccessControl,
+	pub(crate) acl: AccessControl,
 	/// Tracker for currently used resources on the server.
-	resources: Resources,
+	pub(crate) resources: Resources,
 	/// Max request body size.
-	max_request_body_size: u32,
+	pub(crate) max_request_body_size: u32,
 	/// Max response body size.
-	max_response_body_size: u32,
+	pub(crate) max_response_body_size: u32,
 	/// Max length for logging for request and response
 	///
 	/// Logs bigger than this limit will be truncated.
-	max_log_length: u32,
+	pub(crate) max_log_length: u32,
 	/// Whether batch requests are supported by this server or not.
-	batch_requests_supported: bool,
+	pub(crate) batch_requests_supported: bool,
 	/// Subscription ID provider.
-	id_provider: Arc<dyn IdProvider>,
+	pub(crate) id_provider: Arc<dyn IdProvider>,
 	/// Ping interval
-	ping_interval: Duration,
+	pub(crate) ping_interval: Duration,
 	/// Stop handle.
-	stop_monitor: StopMonitor,
+	pub(crate) stop_monitor: StopMonitor,
 	/// Max subscriptions per connection.
-	max_subscriptions_per_connection: u32,
+	pub(crate) max_subscriptions_per_connection: u32,
 	/// Connection ID
-	conn_id: u32,
+	pub(crate) conn_id: u32,
 	/// WebSocket logger.
-	ws_logger: WL,
+	pub(crate) ws_logger: WL,
 	/// HTTP logger.
-	http_logger: HL,
-}
-
-impl<HL: HttpLogger, WL: WsLogger> ServiceData<HL, WL> {
-	/// Default behavior for handling the RPC requests.
-	async fn handle_request(self, request: hyper::Request<hyper::Body>) -> hyper::Response<hyper::Body> {
-		let data = http::HandleRequest {
-			remote_addr: self.remote_addr,
-			methods: self.methods,
-			resources: self.resources,
-			max_request_body_size: self.max_request_body_size,
-			max_response_body_size: self.max_response_body_size,
-			max_log_length: self.max_log_length,
-			batch_requests_supported: self.batch_requests_supported,
-			logger: self.http_logger,
-		};
-
-		http::handle_request(request, data).await
-	}
+	pub(crate) http_logger: HL,
+	/// Handle to hold a `connection permit`.
+	pub(crate) conn: Arc<OwnedSemaphorePermit>,
 }
 
 /// JsonRPSee service compatible with `tower`.
@@ -900,20 +657,19 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		tracing::trace!("{:?}", request);
-		let data = self.inner.clone();
 
 		let host = match http_helpers::read_header_value(request.headers(), "host") {
-			Some(origin) => origin,
+			Some(host) => host,
 			None => return async { Ok(http::response::malformed()) }.boxed(),
 		};
 		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
 
-		if let Err(e) = data.acl.verify_host(host) {
+		if let Err(e) = self.inner.acl.verify_host(host) {
 			tracing::warn!("Denied request: {}", e);
 			return async { Ok(http::response::host_not_allowed()) }.boxed();
 		}
 
-		if let Err(e) = data.acl.verify_origin(maybe_origin, host) {
+		if let Err(e) = self.inner.acl.verify_origin(maybe_origin, host) {
 			let maybe_origin = maybe_origin.map(|o| o.to_owned());
 			tracing::warn!("Denied request: {}", e);
 			return async { Ok(http::response::origin_rejected(maybe_origin)) }.boxed();
@@ -924,8 +680,9 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					data.ws_logger.on_connect(data.remote_addr, request.headers());
+					self.inner.ws_logger.on_connect(self.inner.remote_addr, request.headers());
 
+					let data = self.inner.clone();
 					tokio::spawn(async move {
 						let upgraded = match hyper::upgrade::on(request).await {
 							Ok(u) => u,
@@ -937,10 +694,10 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 
 						let stream = BufReader::new(BufWriter::new(upgraded.compat()));
 						let mut ws_builder = server.into_builder(stream);
-						ws_builder.set_max_message_size(data.max_response_body_size as usize);
+						ws_builder.set_max_message_size(data.max_request_body_size as usize);
 						let (sender, receiver) = ws_builder.finish();
 
-						let _ = background_task(sender, receiver, data).await;
+						let _ = ws::background_task::<HL, WL>(sender, receiver, data).await;
 					});
 
 					response.map(|()| hyper::Body::empty())
@@ -954,7 +711,19 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 			async { Ok(response) }.boxed()
 		} else {
 			// The request wasn't an upgrade request; let's treat it as a standard HTTP request:
-			Box::pin(data.handle_request(request).map(Ok))
+			let data = http::HandleRequest {
+				remote_addr: self.inner.remote_addr,
+				methods: self.inner.methods.clone(),
+				resources: self.inner.resources.clone(),
+				max_request_body_size: self.inner.max_request_body_size,
+				max_response_body_size: self.inner.max_response_body_size,
+				max_log_length: self.inner.max_log_length,
+				batch_requests_supported: self.inner.batch_requests_supported,
+				logger: self.inner.http_logger.clone(),
+				conn: self.inner.conn.clone(),
+			};
+
+			Box::pin(http::handle_request(request, data).map(Ok))
 		}
 	}
 }

@@ -38,7 +38,7 @@
 //! and then defining your units such that the limits (`capacity`) can be adjusted for different hardware configurations.
 //!
 //! Up to 8 resources can be defined using the [`ServerBuilder::register_resource`](../../../jsonrpsee_server/struct.ServerBuilder.html#method.register_resource)
-//! or [`ServerBuilder::register_resource`]
+//!
 //!
 //! Each method will claim the specified number of units (or the default) for the duration of its execution.
 //! Any method execution that would cause the total sum of claimed resource units to exceed

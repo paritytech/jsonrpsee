@@ -1,5 +1,6 @@
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use futures_util::TryStreamExt;
 use http::Method;
@@ -13,6 +14,7 @@ use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
 use jsonrpsee_core::JsonRawValue;
 use jsonrpsee_types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{ErrorObject, Id, Notification, Params, Request};
+use tokio::sync::OwnedSemaphorePermit;
 use tracing_futures::Instrument;
 
 type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
@@ -296,6 +298,7 @@ pub(crate) struct HandleRequest<L: Logger> {
 	pub(crate) max_log_length: u32,
 	pub(crate) batch_requests_supported: bool,
 	pub(crate) logger: L,
+	pub(crate) conn: Arc<OwnedSemaphorePermit>,
 }
 
 pub(crate) async fn handle_request<L: Logger>(
@@ -311,12 +314,13 @@ pub(crate) async fn handle_request<L: Logger>(
 		max_log_length,
 		batch_requests_supported,
 		logger,
+		conn,
 	} = input;
 
 	let request_start = logger.on_request(remote_addr, &request);
 
 	// Only the `POST` method is allowed.
-	match *request.method() {
+	let res = match *request.method() {
 		Method::POST if content_type_is_json(&request) => {
 			process_validated_request(ProcessValidatedRequest {
 				request,
@@ -334,7 +338,11 @@ pub(crate) async fn handle_request<L: Logger>(
 		// Error scenarios:
 		Method::POST => response::unsupported_content_type(),
 		_ => response::method_not_allowed(),
-	}
+	};
+
+	drop(conn);
+
+	res
 }
 
 pub(crate) mod response {

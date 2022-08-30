@@ -24,10 +24,13 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+mod helpers;
+
 use std::collections::HashMap;
 use std::time::Duration;
 
 use futures::StreamExt;
+use helpers::init_logger;
 use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
@@ -42,12 +45,6 @@ macro_rules! assert_type {
 		fn assert_type<Expected>(_expected: &Expected) {}
 		assert_type::<$ty>($expected)
 	}};
-}
-
-fn init_logger() {
-	let _ = tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init();
 }
 
 #[test]

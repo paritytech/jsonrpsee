@@ -33,8 +33,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::{channel::mpsc, StreamExt, TryStreamExt};
-use helpers::init_logger;
-use helpers::{server, server_with_access_control, server_with_health_api, server_with_subscription};
+use helpers::{init_logger, server, server_with_access_control, server_with_health_api, server_with_subscription};
 use hyper::http::HeaderValue;
 use jsonrpsee::core::client::{ClientT, IdKind, Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;

@@ -1,20 +1,28 @@
-use crate::server::MethodResult;
+use crate::future::FutureDriver;
+use crate::server::{MethodResult, Monitored, MonitoredError, ServiceData};
 
+use futures_channel::mpsc;
+use futures_util::future::Either;
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::TryStreamExt;
+use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::logger::{self, WsLogger};
+use jsonrpsee_core::logger::{self, HttpLogger, WsLogger};
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, RpcTracing};
+use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str, RpcTracing};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::Error;
-use jsonrpsee_types::error::{reject_too_many_subscriptions, ErrorCode};
+use jsonrpsee_types::error::{
+	reject_too_big_request, reject_too_many_subscriptions, ErrorCode, BATCHES_NOT_SUPPORTED_CODE,
+	BATCHES_NOT_SUPPORTED_MSG,
+};
 use jsonrpsee_types::{ErrorObject, Id, Params, Request};
+use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
+use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::Compat;
 use tracing_futures::Instrument;
 
@@ -224,4 +232,233 @@ pub(crate) async fn execute_call<L: WsLogger>(c: Call<'_, L>) -> MethodResult {
 	rx_log_from_str(&r.result, max_log_length);
 	logger.on_result(name, r.success, request_start);
 	response
+}
+
+pub(crate) async fn background_task<HL: HttpLogger, WL: WsLogger>(
+	mut sender: Sender,
+	mut receiver: Receiver,
+	svc: ServiceData<HL, WL>,
+) -> Result<(), Error> {
+	let ServiceData {
+		methods,
+		resources,
+		max_request_body_size,
+		max_response_body_size,
+		max_log_length,
+		batch_requests_supported,
+		stop_monitor,
+		id_provider,
+		ping_interval,
+		max_subscriptions_per_connection,
+		conn_id,
+		ws_logger,
+		remote_addr,
+		conn,
+		..
+	} = svc;
+
+	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
+	let bounded_subscriptions2 = bounded_subscriptions.clone();
+
+	let stop_monitor2 = stop_monitor.clone();
+	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
+
+	// Send results back to the client.
+	tokio::spawn(async move {
+		// Received messages from the WebSocket.
+		let mut rx_item = rx.next();
+
+		// Interval to send out continuously `pings`.
+		let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
+		tokio::pin!(ping_interval);
+		let mut next_ping = ping_interval.next();
+
+		while !stop_monitor2.shutdown_requested() {
+			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
+			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
+			match futures_util::future::select(rx_item, next_ping).await {
+				Either::Left((Some(response), ping)) => {
+					// If websocket message send fail then terminate the connection.
+					if let Err(err) = send_message(&mut sender, response).await {
+						tracing::error!("Terminate connection: WS send error: {}", err);
+						break;
+					}
+					rx_item = rx.next();
+					next_ping = ping;
+				}
+				// Nothing else to receive.
+				Either::Left((None, _)) => break,
+
+				// Handle timer intervals.
+				Either::Right((_, next_rx)) => {
+					if let Err(err) = send_ping(&mut sender).await {
+						tracing::error!("Terminate connection: WS send ping error: {}", err);
+						break;
+					}
+					rx_item = next_rx;
+					next_ping = ping_interval.next();
+				}
+			}
+		}
+
+		// Terminate connection and send close message.
+		let _ = sender.close().await;
+
+		// Notify all listeners and close down associated tasks.
+		bounded_subscriptions2.close();
+	});
+
+	// Buffer for incoming data.
+	let mut data = Vec::with_capacity(100);
+	let mut method_executors = FutureDriver::default();
+	let logger = &ws_logger;
+
+	let result = loop {
+		data.clear();
+
+		{
+			// Need the extra scope to drop this pinned future and reclaim access to `data`
+			let receive = async {
+				// Identical loop to `soketto::receive_data` with debug logs for `Pong` frames.
+				loop {
+					match receiver.receive(&mut data).await? {
+						soketto::Incoming::Data(d) => break Ok(d),
+						soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
+						soketto::Incoming::Closed(_) => {
+							// The closing reason is already logged by `soketto` trace log level.
+							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
+							break Err(SokettoError::Closed);
+						}
+					}
+				}
+			};
+
+			tokio::pin!(receive);
+
+			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_monitor)).await {
+				match err {
+					MonitoredError::Selector(SokettoError::Closed) => {
+						tracing::debug!("WS transport: Remote peer terminated the connection: {}", conn_id);
+						sink.close();
+						break Ok(());
+					}
+					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
+						tracing::warn!(
+							"WS transport error: Request length: {} exceeded max limit: {} bytes",
+							current,
+							maximum
+						);
+						sink.send_error(Id::Null, reject_too_big_request(max_request_body_size));
+						continue;
+					}
+					// These errors can not be gracefully handled, so just log them and terminate the connection.
+					MonitoredError::Selector(err) => {
+						tracing::error!("Terminate connection {}: WS error: {}", conn_id, err);
+						sink.close();
+						break Err(err.into());
+					}
+					MonitoredError::Shutdown => break Ok(()),
+				};
+			};
+		};
+
+		let request_start = logger.on_request();
+
+		let first_non_whitespace = data.iter().find(|byte| !byte.is_ascii_whitespace());
+		match first_non_whitespace {
+			Some(b'{') => {
+				let data = std::mem::take(&mut data);
+				let sink = sink.clone();
+				let resources = &resources;
+				let methods = &methods;
+				let bounded_subscriptions = bounded_subscriptions.clone();
+				let id_provider = &*id_provider;
+
+				let fut = async move {
+					let call = CallData {
+						conn_id: conn_id as usize,
+						resources,
+						max_response_body_size,
+						max_log_length,
+						methods,
+						bounded_subscriptions,
+						sink: &sink,
+						id_provider,
+						logger,
+						request_start,
+					};
+
+					match process_single_request(data, call).await {
+						MethodResult::JustLogger(r) => {
+							logger.on_response(&r.result, request_start);
+						}
+						MethodResult::SendAndLogger(r) => {
+							logger.on_response(&r.result, request_start);
+							let _ = sink.send_raw(r.result);
+						}
+					};
+				}
+				.boxed();
+
+				method_executors.add(fut);
+			}
+			Some(b'[') if !batch_requests_supported => {
+				let response = MethodResponse::error(
+					Id::Null,
+					ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
+				);
+				logger.on_response(&response.result, request_start);
+				let _ = sink.send_raw(response.result);
+			}
+			Some(b'[') => {
+				// Make sure the following variables are not moved into async closure below.
+				let resources = &resources;
+				let methods = &methods;
+				let bounded_subscriptions = bounded_subscriptions.clone();
+				let sink = sink.clone();
+				let id_provider = id_provider.clone();
+				let data = std::mem::take(&mut data);
+
+				let fut = async move {
+					let response = process_batch_request(Batch {
+						data,
+						call: CallData {
+							conn_id: conn_id as usize,
+							resources,
+							max_response_body_size,
+							max_log_length,
+							methods,
+							bounded_subscriptions,
+							sink: &sink,
+							id_provider: &*id_provider,
+							logger,
+							request_start,
+						},
+					})
+					.await;
+
+					tx_log_from_str(&response.result, max_log_length);
+					logger.on_response(&response.result, request_start);
+					let _ = sink.send_raw(response.result);
+				};
+
+				method_executors.add(Box::pin(fut));
+			}
+			_ => {
+				sink.send_error(Id::Null, ErrorCode::ParseError.into());
+			}
+		}
+	};
+
+	logger.on_disconnect(remote_addr);
+
+	// Drive all running methods to completion.
+	// **NOTE** Do not return early in this function. This `await` needs to run to guarantee
+	// proper drop behaviour.
+	method_executors.await;
+
+	drop(conn);
+
+	result
 }
