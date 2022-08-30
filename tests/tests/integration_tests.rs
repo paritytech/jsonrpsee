@@ -663,7 +663,7 @@ async fn ws_batch_works() {
 	batch.insert("say_hello", rpc_params![]).unwrap();
 	batch.insert("slow_hello", rpc_params![]).unwrap();
 
-	let responses: Vec<String> = client.batch_request(batch.build()).await.unwrap();
+	let responses: Vec<String> = client.batch_request(batch).await.unwrap();
 	assert_eq!(responses, vec!["hello".to_string(), "hello".to_string()]);
 }
 

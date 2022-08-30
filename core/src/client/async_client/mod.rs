@@ -28,10 +28,9 @@ use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, RequestSer, Response,
-	SubscriptionResponse,
+	SubscriptionResponse, BatchRequestBuilder
 };
 use serde::de::DeserializeOwned;
-use serde_json::value::RawValue;
 use tracing_futures::Instrument;
 use jsonrpsee_types::params::ToRpcParams;
 
@@ -342,12 +341,13 @@ impl ClientT for Client
 			.await
 	}
 
-	async fn batch_request<R>(&self, batch: Vec<(&str, Option<Box<RawValue>>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone
 	{
 		let trace = RpcTracing::batch();
 		async {
+			let batch = batch.build();
 			let guard = self.id_manager.next_request_ids(batch.len())?;
 			let batch_ids: Vec<Id> = guard.inner();
 			let mut batches = Vec::with_capacity(batch.len());

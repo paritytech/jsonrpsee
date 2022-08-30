@@ -38,10 +38,9 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{Id, SubscriptionId};
+use jsonrpsee_types::{BatchRequestBuilder, Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
-use serde_json::value::RawValue;
 use jsonrpsee_types::params::ToRpcParams;
 
 // Re-exports for the `rpc_params` macro.
@@ -78,7 +77,7 @@ pub trait ClientT {
 	///
 	/// Returns `Ok` if all requests in the batch were answered successfully.
 	/// Returns `Error` if any of the requests in batch fails.
-	async fn batch_request<R>(&self, batch: Vec<(&str, Option<Box<RawValue>>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone;
 }

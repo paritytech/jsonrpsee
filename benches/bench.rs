@@ -7,7 +7,7 @@ use futures_util::stream::FuturesUnordered;
 use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::http_client::HeaderMap;
-use jsonrpsee::types::{Id, ParamsSer, RequestSer, ToRpcParams, UnnamedParamsBuilder};
+use jsonrpsee::types::{BatchRequestBuilder, Id, ParamsSer, RequestSer, ToRpcParams, UnnamedParamsBuilder};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -197,7 +197,10 @@ fn batch_round_trip(
 		let bench_name = format!("{}/{}", name, method);
 		let mut group = crit.benchmark_group(request.group_name(&bench_name));
 		for batch_size in [2, 5, 10, 50, 100usize].iter() {
-			let batch = vec![(method, None); *batch_size];
+			let mut batch = BatchRequestBuilder::new();
+			for _ in 0..*batch_size {
+				batch.insert(method, ()).unwrap();
+			}
 			group.throughput(Throughput::Elements(*batch_size as u64));
 			group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
 				b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })

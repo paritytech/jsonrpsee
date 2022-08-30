@@ -636,9 +636,9 @@ pub trait ToRpcParams {
 /// Initial number of parameters in a batch request.
 const BATCH_PARAMS_NUM_CAPACITY: usize = 4;
 
-/// Parameter builder that serializes RPC parameters to construct a valid batch parameter.
+/// Request builder that serializes RPC parameters to construct a valid batch parameter.
 /// This is the equivalent of chaining multiple RPC requests.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct BatchRequestBuilder<'a>(Vec<(&'a str, Option<Box<RawValue>>)>);
 
 impl<'a> BatchRequestBuilder<'a> {

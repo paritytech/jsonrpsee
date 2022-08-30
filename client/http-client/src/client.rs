@@ -36,9 +36,9 @@ use jsonrpsee_core::tracing::RpcTracing;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::params::ToRpcParams;
+use jsonrpsee_types::BatchRequestBuilder;
 use rustc_hash::FxHashMap;
 use serde::de::DeserializeOwned;
-use serde_json::value::RawValue;
 use tracing_futures::Instrument;
 
 /// Http Client Builder.
@@ -234,10 +234,11 @@ impl ClientT for HttpClient {
 		.await
 	}
 
-	async fn batch_request<R>(&self, batch: Vec<(&str, Option<Box<RawValue>>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
+		let batch = batch.build();
 		let guard = self.id_manager.next_request_ids(batch.len())?;
 		let ids: Vec<Id> = guard.inner();
 		let trace = RpcTracing::batch();
