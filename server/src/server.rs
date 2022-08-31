@@ -41,8 +41,8 @@ use futures_util::io::{BufReader, BufWriter};
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
 use jsonrpsee_core::logger::{HttpLogger, WsLogger};
-use jsonrpsee_core::server::access_control::AccessControl;
 use jsonrpsee_core::server::helpers::MethodResponse;
+use jsonrpsee_core::server::host_filtering::AllowHosts;
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::Methods;
 use jsonrpsee_core::traits::IdProvider;
@@ -127,7 +127,7 @@ where
 		let max_request_body_size = self.cfg.max_request_body_size;
 		let max_response_body_size = self.cfg.max_response_body_size;
 		let max_log_length = self.cfg.max_log_length;
-		let acl = self.cfg.access_control;
+		let allow_hosts = self.cfg.allow_hosts;
 		let resources = self.resources;
 		let listener = self.listener;
 		let http_logger = self.http_logger;
@@ -166,7 +166,7 @@ where
 						inner: ServiceData {
 							remote_addr: socket.local_addr().unwrap(),
 							methods: methods.clone(),
-							acl: acl.clone(),
+							allow_hosts: allow_hosts.clone(),
 							resources: resources.clone(),
 							max_request_body_size,
 							max_response_body_size,
@@ -290,8 +290,8 @@ struct Settings {
 	///
 	/// Logs bigger than this limit will be truncated.
 	max_log_length: u32,
-	/// Access control based on HTTP headers
-	access_control: AccessControl,
+	/// Host filtering.
+	allow_hosts: AllowHosts,
 	/// Whether batch requests are supported by this server or not.
 	batch_requests_supported: bool,
 	/// Custom tokio runtime to run the server on.
@@ -309,7 +309,7 @@ impl Default for Settings {
 			max_subscriptions_per_connection: 1024,
 			max_connections: MAX_CONNECTIONS,
 			batch_requests_supported: true,
-			access_control: AccessControl::default(),
+			allow_hosts: AllowHosts::Any,
 			tokio_runtime: None,
 			ping_interval: Duration::from_secs(60),
 		}
@@ -507,9 +507,9 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 		self
 	}
 
-	/// Sets access control settings.
-	pub fn set_access_control(mut self, acl: AccessControl) -> Self {
-		self.settings.access_control = acl;
+	/// Sets host filtering.
+	pub fn set_host_filtering(mut self, allow: AllowHosts) -> Self {
+		self.settings.allow_hosts = allow;
 		self
 	}
 
@@ -601,7 +601,7 @@ pub(crate) struct ServiceData<HL: HttpLogger, WL: WsLogger> {
 	/// Registered server methods.
 	pub(crate) methods: Methods,
 	/// Access control.
-	pub(crate) acl: AccessControl,
+	pub(crate) allow_hosts: AllowHosts,
 	/// Tracker for currently used resources on the server.
 	pub(crate) resources: Resources,
 	/// Max request body size.
@@ -662,17 +662,10 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 			Some(host) => host,
 			None => return async { Ok(http::response::malformed()) }.boxed(),
 		};
-		let maybe_origin = http_helpers::read_header_value(request.headers(), hyper::header::ORIGIN);
 
-		if let Err(e) = self.inner.acl.verify_host(host) {
+		if let Err(e) = self.inner.allow_hosts.verify(host) {
 			tracing::warn!("Denied request: {}", e);
 			return async { Ok(http::response::host_not_allowed()) }.boxed();
-		}
-
-		if let Err(e) = self.inner.acl.verify_origin(maybe_origin, host) {
-			let maybe_origin = maybe_origin.map(|o| o.to_owned());
-			tracing::warn!("Denied request: {}", e);
-			return async { Ok(http::response::origin_rejected(maybe_origin)) }.boxed();
 		}
 
 		if is_upgrade_request(&request) {

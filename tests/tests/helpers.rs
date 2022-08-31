@@ -29,7 +29,7 @@ use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
 use jsonrpsee::core::error::SubscriptionClosed;
-use jsonrpsee::core::server::access_control::AccessControl;
+use jsonrpsee::core::server::host_filtering::AllowHosts;
 use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
@@ -219,18 +219,22 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 }
 
 pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
-	server_with_access_control(AccessControl::default(), CorsLayer::new()).await
+	server_with_access_control(AllowHosts::Any, CorsLayer::new()).await
 }
 
-pub async fn server_with_access_control(acl: AccessControl, cors: CorsLayer) -> (SocketAddr, ServerHandle) {
+pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
 		// Add `CORS` layer.
 		.layer(cors);
 
-	let server =
-		ServerBuilder::default().set_access_control(acl).set_middleware(middleware).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default()
+		.set_host_filtering(allowed_hosts)
+		.set_middleware(middleware)
+		.build("127.0.0.1:0")
+		.await
+		.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

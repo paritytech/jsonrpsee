@@ -41,7 +41,7 @@ mod transport;
 mod tests;
 
 pub use future::{ServerHandle, ShutdownWaiter as WsShutdownWaiter};
-pub use jsonrpsee_core::server::access_control::{AccessControl, AccessControlBuilder};
+pub use jsonrpsee_core::server::host_filtering::AllowHosts;
 pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};
 pub use jsonrpsee_types as types;

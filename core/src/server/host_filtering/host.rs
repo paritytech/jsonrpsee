@@ -26,7 +26,7 @@
 
 //! Host header validation.
 
-use crate::server::access_control::matcher::{Matcher, Pattern};
+use crate::server::host_filtering::matcher::{Matcher, Pattern};
 use crate::Error;
 
 const SPLIT_PROOF: &str = "split always returns non-empty iterator.";

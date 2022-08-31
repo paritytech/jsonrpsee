@@ -375,15 +375,6 @@ pub(crate) mod response {
 		)
 	}
 
-	/// Create a text/plain response for rejected "Origin" headers.
-	pub(crate) fn origin_rejected(origin: Option<impl AsRef<str>>) -> hyper::Response<hyper::Body> {
-		from_template(
-			hyper::StatusCode::FORBIDDEN,
-			format!("Origin: `{}` is not whitelisted.\n", origin.as_ref().map_or("", |o| o.as_ref())),
-			TEXT,
-		)
-	}
-
 	/// Create a json response for oversized requests (413)
 	pub(crate) fn too_large(limit: u32) -> hyper::Response<hyper::Body> {
 		let error = serde_json::to_string(&ErrorResponse::borrowed(reject_too_big_request(limit), Id::Null))

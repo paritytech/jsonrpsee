@@ -828,16 +828,15 @@ async fn http_correct_content_type_required() {
 #[tokio::test]
 async fn http_cors_preflight_works() {
 	use hyper::{Body, Client, Method, Request};
-	use jsonrpsee::server::AccessControlBuilder;
+	use jsonrpsee::server::AllowHosts;
 
 	init_logger();
 
-	let acl = AccessControlBuilder::new().set_allowed_origins(vec!["https://foo.com"]).unwrap().build();
 	let cors = CorsLayer::new()
 		.allow_methods([Method::POST])
 		.allow_origin("https://foo.com".parse::<HeaderValue>().unwrap())
 		.allow_headers([hyper::header::CONTENT_TYPE]);
-	let (server_addr, _handle) = server_with_access_control(acl, cors).await;
+	let (server_addr, _handle) = server_with_access_control(AllowHosts::Any, cors).await;
 
 	let http_client = Client::new();
 	let uri = format!("http://{}", server_addr);
@@ -939,12 +938,9 @@ async fn ws_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let acl = AccessControlBuilder::default()
-		.set_allowed_hosts(vec!["http://localhost:*", "http://127.0.0.1:*"])
-		.unwrap()
-		.build();
+	let acl = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
 
-	let server = ServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_host_filtering(acl).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -963,12 +959,9 @@ async fn http_host_filtering_wildcard_works() {
 
 	init_logger();
 
-	let acl = AccessControlBuilder::default()
-		.set_allowed_hosts(vec!["http://localhost:*", "http://127.0.0.1:*"])
-		.unwrap()
-		.build();
+	let allowed_hosts = AllowHosts::Only(vec!["http://localhost:*".into(), "http://127.0.0.1:*".into()]);
 
-	let server = ServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -987,11 +980,9 @@ async fn deny_invalid_host() {
 
 	init_logger();
 
-	// TODO(niklasad1): remove access control stuff and use `CorsLayer`?!.
-	// I think CORS should support everything except "host filtering", do we need it?
-	let acl = AccessControlBuilder::default().set_allowed_hosts(vec!["http://example.com"]).unwrap().build();
+	let allowed_hosts = AllowHosts::Only(vec!["http://example.com".into()]);
 
-	let server = ServerBuilder::default().set_access_control(acl).build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().set_host_filtering(allowed_hosts).build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	let addr = server.local_addr().unwrap();
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();

@@ -32,7 +32,7 @@ use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 
 use jsonrpsee::{
-	core::server::access_control::AccessControlBuilder,
+	core::server::host_filtering::AllowHosts,
 	server::{RpcModule, ServerBuilder, ServerHandle},
 };
 
@@ -73,13 +73,6 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
-	// RPC access control that allows all hosts and all origins.
-	// Note: the access control does not modify the response headers,
-	// it only acts as a filter.
-	// If you need the ORIGIN header to be mirrored back in the response,
-	// please use the CORS layer.
-	let acl = AccessControlBuilder::new().allow_all_hosts().allow_all_origins().build();
-
 	// Add a CORS middleware for handling HTTP requests.
 	// This middleware does affect the response, including appropriate
 	// headers to satisfy CORS. Because any origins are allowed, the
@@ -97,7 +90,7 @@ async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
 	// and can also be used separately.
 	// In this example, we use both features.
 	let server = ServerBuilder::default()
-		.set_access_control(acl)
+		.set_host_filtering(AllowHosts::Any)
 		.set_middleware(middleware)
 		.build("127.0.0.1:0".parse::<SocketAddr>()?)
 		.await?;
