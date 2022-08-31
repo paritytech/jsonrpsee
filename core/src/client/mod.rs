@@ -38,20 +38,20 @@ use futures_channel::{mpsc, oneshot};
 use futures_util::future::FutureExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::{Stream, StreamExt};
-use jsonrpsee_types::{BatchRequestBuilder, Id, SubscriptionId};
+use jsonrpsee_types::{Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
-use jsonrpsee_types::params::ToRpcParams;
+use crate::params::{BatchRequestBuilder, ToRpcParams};
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
 pub mod __reexports {
 	// Needs to be in scope for `ArrayParams` to implement it.
-	pub use jsonrpsee_types::ToRpcParams;
+	pub use crate::params::ToRpcParams;
 	// Main builder object for constructing the rpc parameters.
-	pub use jsonrpsee_types::ArrayParamsBuilder;
+	pub use crate::params::ArrayParamsBuilder;
 	// Empty rpc parameters for empty macro.
-	pub use jsonrpsee_types::EmptyParams;
+	pub use crate::params::EmptyParams;
 }
 
 cfg_async_client! {

@@ -29,12 +29,13 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee::core::params::EmptyParams;
 use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::types::error::CallError;
-use jsonrpsee::types::{EmptyParams, SubscriptionResult};
+use jsonrpsee::types::SubscriptionResult;
 
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};

@@ -34,8 +34,9 @@ use futures_util::future::{self, Either};
 
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
-use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse, ToRpcParams, ArrayParamsBuilder};
+use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
 use serde_json::Value as JsonValue;
+use crate::params::{ArrayParamsBuilder, ToRpcParams};
 
 /// Attempts to process a batch response.
 ///

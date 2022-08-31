@@ -6,9 +6,9 @@ use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
 use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee::core::params::{ArrayParamsBuilder, BatchRequestBuilder, EmptyParams, ToRpcParams};
 use jsonrpsee::http_client::HeaderMap;
-use jsonrpsee::types::params::EmptyParams;
-use jsonrpsee::types::{ArrayParamsBuilder, BatchRequestBuilder, Id, ParamsSer, RequestSer, ToRpcParams};
+use jsonrpsee::types::{Id, ParamsSer, RequestSer};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 

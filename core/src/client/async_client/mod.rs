@@ -28,11 +28,11 @@ use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::{
 	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, RequestSer, Response,
-	SubscriptionResponse, BatchRequestBuilder
+	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
 use tracing_futures::Instrument;
-use jsonrpsee_types::params::ToRpcParams;
+use crate::params::{BatchRequestBuilder, ToRpcParams};
 
 use super::{FrontToBack, IdKind, RequestIdManager};
 

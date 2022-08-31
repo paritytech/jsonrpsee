@@ -30,12 +30,12 @@ use crate::types::error::{ErrorCode, ErrorObject};
 use crate::WsClientBuilder;
 use jsonrpsee_core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee_core::client::{IdKind, Subscription};
+use jsonrpsee_core::params::BatchRequestBuilder;
 use jsonrpsee_core::{rpc_params, Error};
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
-use jsonrpsee_types::BatchRequestBuilder;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]

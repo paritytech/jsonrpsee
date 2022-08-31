@@ -196,7 +196,7 @@ mod rpc_impl {
 }
 
 // Use generated implementations of server and client.
-use crate::types::{ArrayParams, ObjectParams, ObjectParamsBuilder};
+use jsonrpsee::core::params::{ArrayParams, ObjectParams, ObjectParamsBuilder};
 use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
 
 pub async fn websocket_server() -> SocketAddr {
