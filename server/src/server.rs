@@ -658,11 +658,11 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
 		tracing::trace!("{:?}", request);
 
-		let host = match http_helpers::read_header_value(request.headers(), "host") {
+		let host = match http_helpers::read_header_value(request.headers(), hyper::header::HOST) {
 			Some(host) => host,
 			None => return async { Ok(http::response::malformed()) }.boxed(),
 		};
-		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
+		let maybe_origin = http_helpers::read_header_value(request.headers(), hyper::header::ORIGIN);
 
 		if let Err(e) = self.inner.acl.verify_host(host) {
 			tracing::warn!("Denied request: {}", e);

@@ -81,13 +81,13 @@ pub async fn read_body(
 /// NOTE: There's no specific hard limit on `Content_length` in HTTP specification.
 /// Thus this method might reject valid `content_length`
 fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u32> {
-	let length = read_header_value(headers, "content-length")?;
+	let length = read_header_value(headers, hyper::header::CONTENT_LENGTH)?;
 	// HTTP Content-Length indicates number of bytes in decimal.
 	length.parse::<u32>().ok()
 }
 
 /// Returns a string value when there is exactly one value for the given header.
-pub fn read_header_value<'a>(headers: &'a hyper::header::HeaderMap, header_name: &str) -> Option<&'a str> {
+pub fn read_header_value<'a>(headers: &'a hyper::header::HeaderMap, header_name: hyper::header::HeaderName) -> Option<&'a str> {
 	let mut values = headers.get_all(header_name).iter();
 	let val = values.next()?;
 	if values.next().is_none() {
