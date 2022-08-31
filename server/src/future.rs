@@ -35,6 +35,7 @@ use std::task::{Context, Poll};
 use futures_util::future::FutureExt;
 use futures_util::task::AtomicWaker;
 use jsonrpsee_core::Error;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::{self, Duration, Interval};
 
 /// Polling for server stop monitor interval in milliseconds.
@@ -62,11 +63,6 @@ impl<F> Default for FutureDriver<F> {
 }
 
 impl<F> FutureDriver<F> {
-	/// Get the count of remaining futures on this driver
-	pub(crate) fn count(&self) -> usize {
-		self.futures.len()
-	}
-
 	/// Add a new future to this driver
 	pub(crate) fn add(&mut self, future: F) {
 		self.futures.push(future);
@@ -262,5 +258,26 @@ impl Future for ServerStopped {
 			}
 		}
 		Poll::Ready(())
+	}
+}
+
+/// Limits the number of connections.
+pub(crate) struct ConnectionGuard(Arc<Semaphore>);
+
+impl ConnectionGuard {
+	pub(crate) fn new(limit: usize) -> Self {
+		Self(Arc::new(Semaphore::new(limit)))
+	}
+
+	pub(crate) fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
+		match self.0.clone().try_acquire_owned() {
+			Ok(guard) => Some(guard),
+			Err(TryAcquireError::Closed) => unreachable!("close is never called and can't be closed; qed"),
+			Err(TryAcquireError::NoPermits) => None,
+		}
+	}
+
+	pub(crate) fn available_connections(&self) -> usize {
+		self.0.available_permits()
 	}
 }

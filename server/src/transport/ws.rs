@@ -1,4 +1,5 @@
 use crate::future::FutureDriver;
+use crate::logger::{self, Logger};
 use crate::server::{MethodResult, Monitored, MonitoredError, ServiceData};
 
 use futures_channel::mpsc;
@@ -6,7 +7,6 @@ use futures_util::future::Either;
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
-use jsonrpsee_core::logger::{self, HttpLogger, WsLogger};
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
 };
@@ -45,13 +45,13 @@ pub(crate) async fn send_ping(sender: &mut Sender) -> Result<(), Error> {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Batch<'a, L: WsLogger> {
+pub(crate) struct Batch<'a, L: Logger> {
 	pub(crate) data: Vec<u8>,
 	pub(crate) call: CallData<'a, L>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct CallData<'a, L: WsLogger> {
+pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) conn_id: usize,
 	pub(crate) bounded_subscriptions: BoundedSubscriptions,
 	pub(crate) id_provider: &'a dyn IdProvider,
@@ -65,7 +65,7 @@ pub(crate) struct CallData<'a, L: WsLogger> {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Call<'a, L: WsLogger> {
+pub(crate) struct Call<'a, L: Logger> {
 	pub(crate) params: Params<'a>,
 	pub(crate) name: &'a str,
 	pub(crate) call: CallData<'a, L>,
@@ -75,7 +75,7 @@ pub(crate) struct Call<'a, L: WsLogger> {
 // Batch responses must be sent back as a single message so we read the results from each
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
-pub(crate) async fn process_batch_request<L: WsLogger>(b: Batch<'_, L>) -> BatchResponse {
+pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> BatchResponse {
 	let Batch { data, call } = b;
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Request>>(&data) {
@@ -115,7 +115,7 @@ pub(crate) async fn process_batch_request<L: WsLogger>(b: Batch<'_, L>) -> Batch
 	BatchResponse::error(id, ErrorObject::from(code))
 }
 
-pub(crate) async fn process_single_request<L: WsLogger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
+pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
 		let trace = RpcTracing::method_call(&req.method);
 
@@ -141,7 +141,7 @@ pub(crate) async fn process_single_request<L: WsLogger>(data: Vec<u8>, call: Cal
 ///
 /// Returns `(MethodResponse, None)` on every call that isn't a subscription
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
-pub(crate) async fn execute_call<L: WsLogger>(c: Call<'_, L>) -> MethodResult {
+pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 	let Call { name, id, params, call } = c;
 	let CallData {
 		resources,
@@ -234,10 +234,10 @@ pub(crate) async fn execute_call<L: WsLogger>(c: Call<'_, L>) -> MethodResult {
 	response
 }
 
-pub(crate) async fn background_task<HL: HttpLogger, WL: WsLogger>(
+pub(crate) async fn background_task<L: Logger>(
 	mut sender: Sender,
 	mut receiver: Receiver,
-	svc: ServiceData<HL, WL>,
+	svc: ServiceData<L>,
 ) -> Result<(), Error> {
 	let ServiceData {
 		methods,
@@ -251,7 +251,7 @@ pub(crate) async fn background_task<HL: HttpLogger, WL: WsLogger>(
 		ping_interval,
 		max_subscriptions_per_connection,
 		conn_id,
-		ws_logger,
+		logger,
 		remote_addr,
 		conn,
 		..
@@ -312,7 +312,7 @@ pub(crate) async fn background_task<HL: HttpLogger, WL: WsLogger>(
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
 	let mut method_executors = FutureDriver::default();
-	let logger = &ws_logger;
+	let logger = &logger;
 
 	let result = loop {
 		data.clear();

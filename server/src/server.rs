@@ -32,7 +32,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use crate::future::{FutureDriver, ServerHandle, StopMonitor};
+use crate::future::{ConnectionGuard, FutureDriver, ServerHandle, StopMonitor};
+use crate::logger::Logger;
 use crate::transport::{http, ws};
 
 use futures_util::future::FutureExt;
@@ -40,7 +41,7 @@ use futures_util::io::{BufReader, BufWriter};
 
 use hyper::body::HttpBody;
 use jsonrpsee_core::id_providers::RandomIntegerIdProvider;
-use jsonrpsee_core::logger::{HttpLogger, WsLogger};
+
 use jsonrpsee_core::server::helpers::MethodResponse;
 use jsonrpsee_core::server::host_filtering::AllowHosts;
 use jsonrpsee_core::server::resource_limiting::Resources;
@@ -50,7 +51,7 @@ use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
+use tokio::sync::OwnedSemaphorePermit;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -59,13 +60,12 @@ use tower::{Layer, Service};
 const MAX_CONNECTIONS: u32 = 100;
 
 /// JSON RPC server.
-pub struct Server<B = Identity, HL = (), WL = ()> {
+pub struct Server<B = Identity, L = ()> {
 	listener: TcpListener,
 	cfg: Settings,
 	stop_monitor: StopMonitor,
 	resources: Resources,
-	http_logger: HL,
-	ws_logger: WL,
+	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 	service_builder: tower::ServiceBuilder<B>,
 }
@@ -82,7 +82,7 @@ impl<L> std::fmt::Debug for Server<L> {
 	}
 }
 
-impl<B, HL, WL> Server<B, HL, WL> {
+impl<B, L> Server<B, L> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
@@ -94,18 +94,17 @@ impl<B, HL, WL> Server<B, HL, WL> {
 	}
 }
 
-impl<B, U, HL, WL> Server<B, HL, WL>
+impl<B, U, L> Server<B, L>
 where
-	HL: jsonrpsee_core::logger::HttpLogger,
-	WL: jsonrpsee_core::logger::WsLogger,
-	B: Layer<TowerService<HL, WL>> + Send + 'static,
-	<B as Layer<TowerService<HL, WL>>>::Service: Send
+	L: Logger,
+	B: Layer<TowerService<L>> + Send + 'static,
+	<B as Layer<TowerService<L>>>::Service: Send
 		+ Service<
 			hyper::Request<hyper::Body>,
 			Response = hyper::Response<U>,
 			Error = Box<(dyn StdError + Send + Sync + 'static)>,
 		>,
-	<<B as Layer<TowerService<HL, WL>>>::Service as Service<hyper::Request<hyper::Body>>>::Future: Send,
+	<<B as Layer<TowerService<L>>>::Service as Service<hyper::Request<hyper::Body>>>::Future: Send,
 	U: HttpBody + Send + 'static,
 	<U as HttpBody>::Error: Send + Sync + StdError,
 	<U as HttpBody>::Data: Send,
@@ -130,8 +129,7 @@ where
 		let allow_hosts = self.cfg.allow_hosts;
 		let resources = self.resources;
 		let listener = self.listener;
-		let http_logger = self.http_logger;
-		let ws_logger = self.ws_logger;
+		let logger = self.logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
 		let id_provider = self.id_provider;
 		let stop_monitor = self.stop_monitor;
@@ -140,7 +138,7 @@ where
 		let mut id: u32 = 0;
 		let mut connections = FutureDriver::default();
 		let mut incoming = Monitored::new(Incoming(listener), &stop_monitor);
-		let conns = Arc::new(Semaphore::new(self.cfg.max_connections as usize));
+		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
 
 		loop {
 			match connections.select_with(&mut incoming).await {
@@ -150,10 +148,9 @@ where
 						continue;
 					}
 
-					let conn = match conns.clone().try_acquire_owned() {
-						Ok(conn) => conn,
-						Err(TryAcquireError::Closed) => unreachable!("semaphore never closed; qed"),
-						Err(TryAcquireError::NoPermits) => {
+					let conn = match connection_guard.try_acquire() {
+						Some(conn) => conn,
+						None => {
 							tracing::warn!("Too many connections. Please try again later.");
 							connections.add(http::reject_connection(socket).boxed());
 							continue;
@@ -177,8 +174,7 @@ where
 							stop_monitor: stop_monitor.clone(),
 							max_subscriptions_per_connection,
 							conn_id: id,
-							ws_logger: ws_logger.clone(),
-							http_logger: http_logger.clone(),
+							logger: logger.clone(),
 							conn: Arc::new(conn),
 						},
 					};
@@ -208,7 +204,7 @@ where
 
 					tracing::info!(
 						"Accepting new connection {}/{}",
-						self.cfg.max_connections as usize - conns.available_permits(),
+						self.cfg.max_connections as usize - connection_guard.available_connections(),
 						self.cfg.max_connections
 					);
 
@@ -318,11 +314,10 @@ impl Default for Settings {
 
 /// Builder to configure and create a JSON-RPC server
 #[derive(Debug)]
-pub struct Builder<B = Identity, HL = (), WL = ()> {
+pub struct Builder<B = Identity, L = ()> {
 	settings: Settings,
 	resources: Resources,
-	http_logger: HL,
-	ws_logger: WL,
+	logger: L,
 	id_provider: Arc<dyn IdProvider>,
 	service_builder: tower::ServiceBuilder<B>,
 }
@@ -332,8 +327,7 @@ impl Default for Builder {
 		Builder {
 			settings: Settings::default(),
 			resources: Resources::default(),
-			http_logger: (),
-			ws_logger: (),
+			logger: (),
 			id_provider: Arc::new(RandomIntegerIdProvider),
 			service_builder: tower::ServiceBuilder::new(),
 		}
@@ -347,7 +341,7 @@ impl Builder {
 	}
 }
 
-impl<B, HL, WL> Builder<B, HL, WL> {
+impl<B, L> Builder<B, L> {
 	/// Set the maximum size of a request body in bytes. Default is 10 MiB.
 	pub fn max_request_body_size(mut self, size: u32) -> Self {
 		self.settings.max_request_body_size = size;
@@ -394,17 +388,17 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	/// ```
 	/// use std::{time::Instant, net::SocketAddr};
 	///
-	/// use jsonrpsee_core::logger::{WsLogger, Headers, MethodKind, Params};
+	/// use jsonrpsee_server::logger::{Logger, HttpRequest, MethodKind, Params};
 	/// use jsonrpsee_server::ServerBuilder;
 	///
 	/// #[derive(Clone)]
 	/// struct MyLogger;
 	///
-	/// impl WsLogger for MyLogger {
+	/// impl Logger for MyLogger {
 	///     type Instant = Instant;
 	///
-	///     fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-	///          println!("[MyLogger::on_call] remote_addr: {}, headers: {:?}", remote_addr, headers);
+	///     fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest) {
+	///          println!("[MyLogger::on_call] remote_addr: {}, headers: {:?}", remote_addr, request);
 	///     }
 	///
 	///     fn on_request(&self) -> Self::Instant {
@@ -428,26 +422,13 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///     }
 	/// }
 	///
-	/// let builder = ServerBuilder::new().set_ws_logger(MyLogger);
+	/// let builder = ServerBuilder::new().set_logger(MyLogger);
 	/// ```
-	pub fn set_ws_logger<T: WsLogger>(self, ws_logger: T) -> Builder<B, HL, T> {
+	pub fn set_logger<T: Logger>(self, logger: T) -> Builder<B, T> {
 		Builder {
 			settings: self.settings,
 			resources: self.resources,
-			ws_logger,
-			http_logger: self.http_logger,
-			id_provider: self.id_provider,
-			service_builder: self.service_builder,
-		}
-	}
-
-	/// TODO unify logger.
-	pub fn set_http_logger<T: HttpLogger>(self, http_logger: T) -> Builder<B, T, WL> {
-		Builder {
-			settings: self.settings,
-			resources: self.resources,
-			ws_logger: self.ws_logger,
-			http_logger,
+			logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
 		}
@@ -535,12 +516,11 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	///         .unwrap();
 	/// }
 	/// ```
-	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> Builder<T, HL, WL> {
+	pub fn set_middleware<T>(self, service_builder: tower::ServiceBuilder<T>) -> Builder<T, L> {
 		Builder {
 			settings: self.settings,
 			resources: self.resources,
-			http_logger: self.http_logger,
-			ws_logger: self.ws_logger,
+			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder,
 		}
@@ -562,7 +542,7 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 	/// }
 	/// ```
 	///
-	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, HL, WL>, Error> {
+	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
 		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
@@ -571,8 +551,7 @@ impl<B, HL, WL> Builder<B, HL, WL> {
 			cfg: self.settings,
 			stop_monitor,
 			resources,
-			http_logger: self.http_logger,
-			ws_logger: self.ws_logger,
+			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
 		})
@@ -595,7 +574,7 @@ impl MethodResult {
 
 /// Data required by the server to handle requests.
 #[derive(Debug, Clone)]
-pub(crate) struct ServiceData<HL: HttpLogger, WL: WsLogger> {
+pub(crate) struct ServiceData<L: Logger> {
 	/// Remote server address.
 	pub(crate) remote_addr: SocketAddr,
 	/// Registered server methods.
@@ -624,10 +603,8 @@ pub(crate) struct ServiceData<HL: HttpLogger, WL: WsLogger> {
 	pub(crate) max_subscriptions_per_connection: u32,
 	/// Connection ID
 	pub(crate) conn_id: u32,
-	/// WebSocket logger.
-	pub(crate) ws_logger: WL,
-	/// HTTP logger.
-	pub(crate) http_logger: HL,
+	/// Logger.
+	pub(crate) logger: L,
 	/// Handle to hold a `connection permit`.
 	pub(crate) conn: Arc<OwnedSemaphorePermit>,
 }
@@ -637,11 +614,11 @@ pub(crate) struct ServiceData<HL: HttpLogger, WL: WsLogger> {
 /// # Note
 /// This is similar to [`hyper::service::service_fn`].
 #[derive(Debug)]
-pub struct TowerService<HL: HttpLogger, WL: WsLogger> {
-	inner: ServiceData<HL, WL>,
+pub struct TowerService<L: Logger> {
+	inner: ServiceData<L>,
 }
 
-impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<HL, WL> {
+impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerService<L> {
 	type Response = hyper::Response<hyper::Body>;
 
 	// The following associated type is required by the `impl<B, U, L: Logger> Server<B, L>` bounds.
@@ -673,7 +650,7 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					self.inner.ws_logger.on_connect(self.inner.remote_addr, request.headers());
+					self.inner.logger.on_connect(self.inner.remote_addr, &request);
 
 					let data = self.inner.clone();
 					tokio::spawn(async move {
@@ -690,7 +667,7 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 						ws_builder.set_max_message_size(data.max_request_body_size as usize);
 						let (sender, receiver) = ws_builder.finish();
 
-						let _ = ws::background_task::<HL, WL>(sender, receiver, data).await;
+						let _ = ws::background_task::<L>(sender, receiver, data).await;
 					});
 
 					response.map(|()| hyper::Body::empty())
@@ -705,14 +682,13 @@ impl<HL: HttpLogger, WL: WsLogger> hyper::service::Service<hyper::Request<hyper:
 		} else {
 			// The request wasn't an upgrade request; let's treat it as a standard HTTP request:
 			let data = http::HandleRequest {
-				remote_addr: self.inner.remote_addr,
 				methods: self.inner.methods.clone(),
 				resources: self.inner.resources.clone(),
 				max_request_body_size: self.inner.max_request_body_size,
 				max_response_body_size: self.inner.max_response_body_size,
 				max_log_length: self.inner.max_log_length,
 				batch_requests_supported: self.inner.batch_requests_supported,
-				logger: self.inner.http_logger.clone(),
+				logger: self.inner.logger.clone(),
 				conn: self.inner.conn.clone(),
 			};
 

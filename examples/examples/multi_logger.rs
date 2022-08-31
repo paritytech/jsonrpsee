@@ -30,10 +30,10 @@ use std::net::SocketAddr;
 use std::process::Command;
 use std::time::Instant;
 
-use jsonrpsee::core::logger::MethodKind;
-use jsonrpsee::core::{client::ClientT, logger, logger::Headers};
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::logger::{HttpRequest, MethodKind};
+use jsonrpsee::server::{logger, RpcModule, ServerBuilder};
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
 
@@ -41,11 +41,11 @@ use jsonrpsee::ws_client::WsClientBuilder;
 #[derive(Clone)]
 struct Timings;
 
-impl logger::WsLogger for Timings {
+impl logger::Logger for Timings {
 	type Instant = Instant;
 
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-		println!("[Timings::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+	fn on_connect(&self, remote_addr: SocketAddr, req: &HttpRequest) {
+		println!("[Timings::on_connect] remote_addr {}, req: {:?}", remote_addr, req);
 	}
 
 	fn on_request(&self) -> Self::Instant {
@@ -88,10 +88,10 @@ impl ThreadWatcher {
 	}
 }
 
-impl logger::WsLogger for ThreadWatcher {
+impl logger::Logger for ThreadWatcher {
 	type Instant = isize;
 
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
+	fn on_connect(&self, remote_addr: SocketAddr, headers: &HttpRequest) {
 		println!("[ThreadWatcher::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
 	}
 
@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::new().set_ws_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::new().set_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	module.register_method("thready", |params, _| {

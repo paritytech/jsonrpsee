@@ -1,12 +1,12 @@
 use std::convert::Infallible;
-use std::net::SocketAddr;
 use std::sync::Arc;
+
+use crate::logger::{self, Logger};
 
 use futures_util::TryStreamExt;
 use http::Method;
 use jsonrpsee_core::error::GenericTransportError;
 use jsonrpsee_core::http_helpers::read_body;
-use jsonrpsee_core::logger::{self, HttpLogger as Logger};
 use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse};
 use jsonrpsee_core::server::rpc_module::MethodKind;
 use jsonrpsee_core::server::{resource_limiting::Resources, rpc_module::Methods};
@@ -290,7 +290,6 @@ pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 }
 
 pub(crate) struct HandleRequest<L: Logger> {
-	pub(crate) remote_addr: SocketAddr,
 	pub(crate) methods: Methods,
 	pub(crate) resources: Resources,
 	pub(crate) max_request_body_size: u32,
@@ -306,7 +305,6 @@ pub(crate) async fn handle_request<L: Logger>(
 	input: HandleRequest<L>,
 ) -> hyper::Response<hyper::Body> {
 	let HandleRequest {
-		remote_addr,
 		methods,
 		resources,
 		max_request_body_size,
@@ -317,7 +315,7 @@ pub(crate) async fn handle_request<L: Logger>(
 		conn,
 	} = input;
 
-	let request_start = logger.on_request(remote_addr, &request);
+	let request_start = logger.on_request();
 
 	// Only the `POST` method is allowed.
 	let res = match *request.method() {

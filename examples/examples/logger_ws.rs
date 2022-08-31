@@ -28,18 +28,18 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::logger::{self, Headers, MethodKind, Params};
+use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
 
 #[derive(Clone)]
 struct Timings;
 
-impl logger::WsLogger for Timings {
+impl logger::Logger for Timings {
 	type Instant = Instant;
 
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-		println!("[Logger::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+	fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest) {
+		println!("[Logger::on_connect] remote_addr {}, headers: {:?}", remote_addr, request);
 	}
 
 	fn on_request(&self) -> Self::Instant {
@@ -84,7 +84,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = ServerBuilder::new().set_ws_logger(Timings).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;

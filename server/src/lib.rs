@@ -30,12 +30,12 @@
 //!
 //! `jsonrpsee-server` is a [JSON RPC](https://www.jsonrpc.org/specification) server that supports both HTTP and WebSocket transport.
 
-extern crate alloc;
-
 mod future;
-pub mod middleware;
 mod server;
 mod transport;
+
+pub mod logger;
+pub mod middleware;
 
 #[cfg(test)]
 mod tests;

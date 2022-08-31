@@ -32,11 +32,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use helpers::init_logger;
-use hyper::HeaderMap;
-use jsonrpsee::core::logger::{Body, HttpLogger, MethodKind, Request, WsLogger};
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -58,11 +57,11 @@ struct CounterInner {
 	calls: HashMap<String, (u32, Vec<u32>)>,
 }
 
-impl WsLogger for Counter {
+impl Logger for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 
-	fn on_connect(&self, _remote_addr: SocketAddr, _headers: &HeaderMap) {
+	fn on_connect(&self, _remote_addr: SocketAddr, _req: &HttpRequest) {
 		self.inner.lock().unwrap().connections.0 += 1;
 	}
 
@@ -97,37 +96,6 @@ impl WsLogger for Counter {
 	}
 }
 
-impl HttpLogger for Counter {
-	/// Auto-incremented id of the call
-	type Instant = u32;
-
-	fn on_request(&self, _remote_addr: SocketAddr, _request: &Request<Body>) -> u32 {
-		let mut inner = self.inner.lock().unwrap();
-		let n = inner.requests.0;
-
-		inner.requests.0 += 1;
-
-		n
-	}
-
-	fn on_call(&self, name: &str, _params: Params, _kind: MethodKind) {
-		let mut inner = self.inner.lock().unwrap();
-		let entry = inner.calls.entry(name.into()).or_insert((0, Vec::new()));
-
-		entry.0 += 1;
-	}
-
-	fn on_result(&self, name: &str, success: bool, n: u32) {
-		if success {
-			self.inner.lock().unwrap().calls.get_mut(name).unwrap().1.push(n);
-		}
-	}
-
-	fn on_response(&self, _result: &str, _: u32) {
-		self.inner.lock().unwrap().requests.1 += 1;
-	}
-}
-
 fn test_module() -> RpcModule<()> {
 	#[rpc(server)]
 	pub trait Rpc {
@@ -147,7 +115,7 @@ async fn websocket_server(module: RpcModule<()>, counter: Counter) -> Result<(So
 	let server = ServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
-		.set_ws_logger(counter)
+		.set_logger(counter)
 		.build("127.0.0.1:0")
 		.await?;
 
@@ -161,7 +129,7 @@ async fn http_server(module: RpcModule<()>, counter: Counter) -> Result<(SocketA
 	let server = ServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
-		.set_http_logger(counter)
+		.set_logger(counter)
 		.build("127.0.0.1:0")
 		.await?;
 

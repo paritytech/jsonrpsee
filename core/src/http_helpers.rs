@@ -87,7 +87,7 @@ fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u32>
 }
 
 /// Returns a string value when there is exactly one value for the given header.
-pub fn read_header_value<'a>(headers: &'a hyper::header::HeaderMap, header_name: hyper::header::HeaderName) -> Option<&'a str> {
+pub fn read_header_value(headers: &hyper::header::HeaderMap, header_name: hyper::header::HeaderName) -> Option<&str> {
 	let mut values = headers.get_all(header_name).iter();
 	let val = values.next()?;
 	if values.next().is_none() {
