@@ -274,8 +274,8 @@ async fn is_connected_works() {
 	assert!(!client.is_connected())
 }
 
-async fn run_batch_request_with_response<'a>(
-	batch: BatchRequestBuilder<'a>,
+async fn run_batch_request_with_response(
+	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
 	let server = WebSocketTestServer::with_hardcoded_response("127.0.0.1:0".parse().unwrap(), response)

@@ -158,8 +158,8 @@ async fn batch_request_out_of_order_response() {
 	assert_eq!(response, vec!["hello".to_string(), "goodbye".to_string(), "here's your swag".to_string()]);
 }
 
-async fn run_batch_request_with_response<'a>(
-	batch: BatchRequestBuilder<'a>,
+async fn run_batch_request_with_response(
+	batch: BatchRequestBuilder<'_>,
 	response: String,
 ) -> Result<Vec<String>, Error> {
 	let server_addr = http_server_with_hardcoded_response(response).with_default_timeout().await.unwrap();

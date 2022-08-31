@@ -26,6 +26,7 @@
 
 //! RPC parameters.
 
+use crate::Error;
 use serde::Serialize;
 use serde_json::value::RawValue;
 
@@ -151,8 +152,8 @@ impl Default for ObjectParamsBuilder {
 pub struct ObjectParams(String);
 
 impl ToRpcParams for ObjectParams {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		RawValue::from_string(self.0).map(Some)
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+		RawValue::from_string(self.0).map(Some).map_err(Error::ParseError)
 	}
 }
 
@@ -203,8 +204,8 @@ impl Default for ArrayParamsBuilder {
 pub struct ArrayParams(String);
 
 impl ToRpcParams for ArrayParams {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
-		RawValue::from_string(self.0).map(Some)
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
+		RawValue::from_string(self.0).map(Some).map_err(Error::ParseError)
 	}
 }
 
@@ -225,13 +226,14 @@ impl ToRpcParams for ArrayParams {
 ///
 /// use jsonrpsee_core::params::ToRpcParams;
 /// use serde_json::value::RawValue;
+/// use jsonrpsee_core::Error;
 ///
 /// struct ManualParam;
 ///
 /// impl ToRpcParams for ManualParam {
-///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
 ///         // Manually define a valid JSONRPC parameter.
-///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(Some)
+///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(Some).map_err(Error::ParseError)
 ///     }
 /// }
 /// ```
@@ -242,6 +244,7 @@ impl ToRpcParams for ArrayParams {
 /// use jsonrpsee_core::params::ToRpcParams;
 /// use serde_json::value::RawValue;
 /// use serde::Serialize;
+/// use jsonrpsee_core::Error;
 ///
 /// #[derive(Serialize)]
 /// struct SerParam {
@@ -250,15 +253,15 @@ impl ToRpcParams for ArrayParams {
 /// };
 ///
 /// impl ToRpcParams for SerParam {
-///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
 ///         let s = String::from_utf8(serde_json::to_vec(&self)?).expect("Valid UTF8 format");
-///         RawValue::from_string(s).map(Some)
+///         RawValue::from_string(s).map(Some).map_err(Error::ParseError)
 ///     }
 /// }
 /// ```
 pub trait ToRpcParams {
 	/// Consume and serialize the type as a JSON raw value.
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error>;
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error>;
 }
 
 /// Initial number of parameters in a batch request.
@@ -276,7 +279,7 @@ impl<'a> BatchRequestBuilder<'a> {
 	}
 
 	/// Inserts the RPC method with provided parameters into the builder.
-	pub fn insert<Params: ToRpcParams>(&mut self, method: &'a str, value: Params) -> Result<(), serde_json::Error> {
+	pub fn insert<Params: ToRpcParams>(&mut self, method: &'a str, value: Params) -> Result<(), Error> {
 		self.0.push((method, value.to_rpc_params()?));
 		Ok(())
 	}
@@ -293,7 +296,7 @@ pub struct EmptyParams;
 
 /// Custom implementation for empty RPC parameters.
 impl ToRpcParams for EmptyParams {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
+	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
 		Ok(None)
 	}
 }
