@@ -64,7 +64,8 @@ fn v2_serialize(req: RequestSer<'_>) -> String {
 }
 
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
-	crit.bench_function("jsonrpsee_types_v2_array_ref", |b| {
+	// Construct the serialized request using the `ParamsSer` directly.
+	crit.bench_function("jsonrpsee_types_baseline_params", |b| {
 		b.iter(|| {
 			let params = &[1_u64.into(), 2_u32.into()];
 			let params = ParamsSer::ArrayRef(params);
@@ -76,7 +77,8 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 		})
 	});
 
-	crit.bench_function("jsonrpsee_types_v2_vec", |b| {
+	// Construct the serialized request using the `UnnamedParamsBuilder`.
+	crit.bench_function("jsonrpsee_types_unnamed_params", |b| {
 		b.iter(|| {
 			let mut builder = UnnamedParamsBuilder::new();
 			builder.insert(1u64).unwrap();
