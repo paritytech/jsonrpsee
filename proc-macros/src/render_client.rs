@@ -150,11 +150,13 @@ impl RpcDescription {
 		param_kind: &ParamKind,
 		signature: &syn::TraitItemMethod,
 	) -> TokenStream2 {
-		if params.is_empty() {
-			return quote!({});
-		}
-
 		let jsonrpsee = self.jsonrpsee_client_path.as_ref().unwrap();
+
+		if params.is_empty() {
+			return quote!({
+				#jsonrpsee::types::EmptyParams
+			});
+		}
 
 		match param_kind {
 			ParamKind::Map => {

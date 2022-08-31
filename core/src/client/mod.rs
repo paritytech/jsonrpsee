@@ -50,6 +50,8 @@ pub mod __reexports {
 	pub use jsonrpsee_types::ToRpcParams;
 	// Main builder object for constructing the rpc parameters.
 	pub use jsonrpsee_types::UnnamedParamsBuilder;
+	// Empty rpc parameters for empty macro.
+	pub use jsonrpsee_types::EmptyParams;
 }
 
 cfg_async_client! {
@@ -189,8 +191,7 @@ pub trait TransportReceiverT: 'static {
 #[macro_export]
 macro_rules! rpc_params {
 	() => {
-		// ToRpcParams is implemented for the empty tuple.
-		()
+		$crate::client::__reexports::EmptyParams
 	};
 	($($param:expr),*) => {
 		{

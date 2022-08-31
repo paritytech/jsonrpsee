@@ -130,7 +130,7 @@ impl<'a> NotificationSer<'a> {
 #[cfg(test)]
 mod test {
 	use super::{Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, TwoPointZero};
-	use crate::{ToRpcParams, UnnamedParamsBuilder};
+	use crate::{EmptyParams, ToRpcParams, UnnamedParamsBuilder};
 	use serde_json::value::RawValue;
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
@@ -216,13 +216,18 @@ mod test {
 			// With all fields set.
 			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#, Some(&id), params.clone(), method),
 			// Escaped method name.
-			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(&id), ().to_rpc_params().unwrap(), "\"m"),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(&id), EmptyParams.to_rpc_params().unwrap(), "\"m"),
 			// Without ID field.
 			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, params, method),
 			// Without params field
-			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(&id), ().to_rpc_params().unwrap(), method),
+			(
+				r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#,
+				Some(&id),
+				EmptyParams.to_rpc_params().unwrap(),
+				method,
+			),
 			// Without params and ID.
-			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, ().to_rpc_params().unwrap(), method),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract"}"#, None, EmptyParams.to_rpc_params().unwrap(), method),
 		];
 
 		for (ser, id, params, method) in test_vector.iter().cloned() {

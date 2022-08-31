@@ -40,7 +40,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::AccessControlBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::ErrorObject;
-use jsonrpsee::types::{BatchRequestBuilder, UnnamedParams};
+use jsonrpsee::types::{BatchRequestBuilder, EmptyParams, UnnamedParams};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -176,8 +176,8 @@ async fn http_concurrent_method_call_limits_works() {
 	let client = HttpClientBuilder::default().max_concurrent_requests(1).build(&uri).unwrap();
 
 	let (first, second) = tokio::join!(
-		client.request::<String, ()>("say_hello", rpc_params!()),
-		client.request::<String, ()>("say_hello", rpc_params![]),
+		client.request::<String, EmptyParams>("say_hello", rpc_params!()),
+		client.request::<String, EmptyParams>("say_hello", rpc_params![]),
 	);
 
 	assert!(first.is_ok());
@@ -295,7 +295,7 @@ async fn ws_making_more_requests_than_allowed_should_not_deadlock() {
 
 	for _ in 0..6 {
 		let c = client.clone();
-		requests.push(tokio::spawn(async move { c.request::<String, ()>("say_hello", rpc_params![]).await }));
+		requests.push(tokio::spawn(async move { c.request::<String, EmptyParams>("say_hello", rpc_params![]).await }));
 	}
 
 	for req in requests {
@@ -316,7 +316,7 @@ async fn http_making_more_requests_than_allowed_should_not_deadlock() {
 
 	for _ in 0..6 {
 		let c = client.clone();
-		requests.push(tokio::spawn(async move { c.request::<String, ()>("say_hello", rpc_params![]).await }));
+		requests.push(tokio::spawn(async move { c.request::<String, EmptyParams>("say_hello", rpc_params![]).await }));
 	}
 
 	for req in requests {
@@ -487,7 +487,7 @@ async fn ws_server_notify_client_on_disconnect() {
 	tokio::spawn(async move {
 		let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 		// Validate server is up.
-		client.request::<String, ()>("say_hello", rpc_params![]).await.unwrap();
+		client.request::<String, EmptyParams>("say_hello", rpc_params![]).await.unwrap();
 
 		// Signal client is waiting for the server to disconnect.
 		up_tx.send(()).unwrap();
@@ -534,7 +534,7 @@ async fn ws_server_notify_client_on_disconnect_with_closed_server() {
 
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 	// Validate server is up.
-	client.request::<String, ()>("say_hello", rpc_params![]).await.unwrap();
+	client.request::<String, EmptyParams>("say_hello", rpc_params![]).await.unwrap();
 
 	// Stop the server.
 	server_handle.stop().unwrap().await;
@@ -554,7 +554,12 @@ async fn ws_server_cancels_subscriptions_on_reset_conn() {
 	let mut subs = Vec::new();
 
 	for _ in 0..10 {
-		subs.push(client.subscribe::<usize, ()>("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap());
+		subs.push(
+			client
+				.subscribe::<usize, EmptyParams>("subscribe_sleep", rpc_params![], "unsubscribe_sleep")
+				.await
+				.unwrap(),
+		);
 	}
 
 	// terminate connection.
@@ -626,7 +631,9 @@ async fn ws_server_pipe_from_stream_should_cancel_tasks_immediately() {
 	let mut subs = Vec::new();
 
 	for _ in 0..10 {
-		subs.push(client.subscribe::<i32, ()>("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap())
+		subs.push(
+			client.subscribe::<i32, EmptyParams>("subscribe_sleep", rpc_params![], "unsubscribe_sleep").await.unwrap(),
+		)
 	}
 
 	// This will call the `unsubscribe method`.
@@ -643,8 +650,10 @@ async fn ws_server_pipe_from_stream_can_be_reused() {
 
 	let (addr, _handle) = websocket_server_with_subscription().await;
 	let client = WsClientBuilder::default().build(&format!("ws://{}", addr)).await.unwrap();
-	let sub =
-		client.subscribe::<i32, ()>("can_reuse_subscription", rpc_params![], "u_can_reuse_subscription").await.unwrap();
+	let sub = client
+		.subscribe::<i32, EmptyParams>("can_reuse_subscription", rpc_params![], "u_can_reuse_subscription")
+		.await
+		.unwrap();
 
 	let items = sub.fold(0, |acc, _| async move { acc + 1 }).await;
 
@@ -705,12 +714,20 @@ async fn ws_server_limit_subs_per_conn_works() {
 	let mut subs2 = Vec::new();
 
 	for _ in 0..10 {
-		subs1.push(c1.subscribe::<usize, ()>("subscribe_forever", rpc_params![], "unsubscribe_forever").await.unwrap());
-		subs2.push(c2.subscribe::<usize, ()>("subscribe_forever", rpc_params![], "unsubscribe_forever").await.unwrap());
+		subs1.push(
+			c1.subscribe::<usize, EmptyParams>("subscribe_forever", rpc_params![], "unsubscribe_forever")
+				.await
+				.unwrap(),
+		);
+		subs2.push(
+			c2.subscribe::<usize, EmptyParams>("subscribe_forever", rpc_params![], "unsubscribe_forever")
+				.await
+				.unwrap(),
+		);
 	}
 
-	let err1 = c1.subscribe::<usize, ()>("subscribe_forever", rpc_params![], "unsubscribe_forever").await;
-	let err2 = c1.subscribe::<usize, ()>("subscribe_forever", rpc_params![], "unsubscribe_forever").await;
+	let err1 = c1.subscribe::<usize, EmptyParams>("subscribe_forever", rpc_params![], "unsubscribe_forever").await;
+	let err2 = c1.subscribe::<usize, EmptyParams>("subscribe_forever", rpc_params![], "unsubscribe_forever").await;
 
 	let data = "\"Exceeded max limit of 10\"";
 
@@ -759,7 +776,10 @@ async fn ws_server_unsub_methods_should_ignore_sub_limit() {
 	let mut subs = Vec::new();
 	for _ in 0..10 {
 		subs.push(
-			client.subscribe::<usize, ()>("subscribe_forever", rpc_params![], "unsubscribe_forever").await.unwrap(),
+			client
+				.subscribe::<usize, EmptyParams>("subscribe_forever", rpc_params![], "unsubscribe_forever")
+				.await
+				.unwrap(),
 		);
 	}
 
@@ -980,7 +1000,7 @@ async fn ws_host_filtering_wildcard_works() {
 	let server_url = format!("ws://{}", addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	assert!(client.request::<String, ()>("say_hello", rpc_params![]).await.is_ok());
+	assert!(client.request::<String, EmptyParams>("say_hello", rpc_params![]).await.is_ok());
 }
 
 #[tokio::test]
@@ -1004,5 +1024,5 @@ async fn http_host_filtering_wildcard_works() {
 	let server_url = format!("http://{}", addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
-	assert!(client.request::<String, ()>("say_hello", rpc_params![]).await.is_ok());
+	assert!(client.request::<String, EmptyParams>("say_hello", rpc_params![]).await.is_ok());
 }

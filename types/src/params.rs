@@ -674,8 +674,12 @@ impl<'a> BatchRequestBuilder<'a> {
 	}
 }
 
-/// Custom implementation to provide a type which contains to RPC parameters.
-impl ToRpcParams for () {
+/// Empty RPC parameters that perform no allocation.
+#[derive(Clone, Debug)]
+pub struct EmptyParams;
+
+/// Custom implementation for empty RPC parameters.
+impl ToRpcParams for EmptyParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 		Ok(None)
 	}

@@ -459,7 +459,7 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::{RpcModule, types::EmptyParams};
+	///     use jsonrpsee::{RpcModule, types::EmptyServerParams};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
@@ -467,7 +467,7 @@ impl Methods {
 	///         Ok(())
 	///     }).unwrap();
 	///
-	///     let mut sub = module.subscribe("hi", EmptyParams::new()).await.unwrap();
+	///     let mut sub = module.subscribe("hi", EmptyServerParams::new()).await.unwrap();
 	///     // In this case we ignore the subscription ID,
 	///     let (sub_resp, _sub_id) = sub.next::<String>().await.unwrap().unwrap();
 	///     assert_eq!(&sub_resp, "one answer");

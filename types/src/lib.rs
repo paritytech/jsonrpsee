@@ -44,11 +44,11 @@ pub mod error;
 
 pub use error::{ErrorObject, ErrorObjectOwned, ErrorResponse, SubscriptionEmptyError, SubscriptionResult};
 pub use params::{
-	BatchRequestBuilder, Id, NamedParams, NamedParamsBuilder, Params, ParamsSequence, ParamsSer, SubscriptionId,
-	ToRpcParams, TwoPointZero, UnnamedParams, UnnamedParamsBuilder,
+	BatchRequestBuilder, EmptyParams, Id, NamedParams, NamedParamsBuilder, Params, ParamsSequence, ParamsSer,
+	SubscriptionId, ToRpcParams, TwoPointZero, UnnamedParams, UnnamedParamsBuilder,
 };
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
 
-/// Empty `RpcParams` type.
-pub type EmptyParams = Vec<()>;
+/// Empty server `RpcParams` type to use while registering modules.
+pub type EmptyServerParams = Vec<()>;

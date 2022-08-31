@@ -36,7 +36,6 @@ use jsonrpsee_test_utils::mocks::{Id, WebSocketTestServer};
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
 use jsonrpsee_types::BatchRequestBuilder;
-use serde_json::value::RawValue;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]

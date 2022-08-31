@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
-use jsonrpsee::types::{SubscriptionResult, UnnamedParams};
+use jsonrpsee::types::{SubscriptionResult, UnnamedParams, EmptyParams};
 use jsonrpsee::ws_client::*;
 use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
 
@@ -105,7 +105,7 @@ async fn main() {
 	assert_eq!(client.array_params(vec![1]).await.unwrap(), 1);
 	assert_eq!(client.request::<u64, UnnamedParams>("foo_array_params", rpc_params![Vec::<u64>::new()]).await.unwrap(), 0);
 
-	assert_eq!(client.request::<bool, ()>("foo_optional_param", rpc_params![]).await.unwrap(), false);
+	assert_eq!(client.request::<bool, EmptyParams>("foo_optional_param", rpc_params![]).await.unwrap(), false);
 	assert_eq!(client.request::<bool, UnnamedParams>("foo_optional_param", rpc_params![1]).await.unwrap(), true);
 
 	let mut sub = client.sub().await.unwrap();

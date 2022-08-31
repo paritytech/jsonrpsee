@@ -35,7 +35,6 @@ use jsonrpsee_test_utils::mocks::Id;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use jsonrpsee_types::error::{CallError, ErrorObjectOwned};
 use jsonrpsee_types::BatchRequestBuilder;
-use serde_json::value::RawValue;
 
 #[tokio::test]
 async fn method_call_works() {
