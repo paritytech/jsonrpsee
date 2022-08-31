@@ -305,7 +305,8 @@ async fn multiple_blocking_calls_overlap() {
 
 	let module = RpcServerImpl.into_rpc();
 
-	let futures = std::iter::repeat_with(|| module.call::<_, u64>("foo_blocking_call", EmptyServerParams::new())).take(4);
+	let futures =
+		std::iter::repeat_with(|| module.call::<_, u64>("foo_blocking_call", EmptyServerParams::new())).take(4);
 	let now = Instant::now();
 	let results = futures::future::join_all(futures).await;
 	let elapsed = now.elapsed();
