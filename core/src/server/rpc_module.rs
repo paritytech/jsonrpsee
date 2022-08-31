@@ -450,7 +450,7 @@ impl Methods {
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
 	///
-	/// The params must be serializable as JSON array, see [`jsonrpsee_types::ToRpcParams`] for further documentation.
+	/// The params must be serializable as JSON array, see [`ToRpcServerParams`] for further documentation.
 	///
 	/// Returns [`Subscription`] on success which can used to get results from the subscriptions.
 	///
