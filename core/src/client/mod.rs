@@ -182,7 +182,7 @@ pub trait TransportReceiverT: 'static {
 	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error>;
 }
 
-/// Convert the given values to a [`jsonrpsee_types::ArrayParamsBuilder`], or empty tuple as expected by a
+/// Convert the given values to a [`jsonrpsee::core::params::ArrayParamsBuilder`], or empty tuple as expected by a
 /// jsonrpsee Client (http or websocket).
 ///
 /// # Panics
