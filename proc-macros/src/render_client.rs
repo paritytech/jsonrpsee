@@ -170,7 +170,7 @@ impl RpcDescription {
 					quote!(#name, #value)
 				});
 				quote!({
-					let mut builder = #jsonrpsee::types::NamedParamsBuilder::new();
+					let mut builder = #jsonrpsee::types::ObjectParamsBuilder::new();
 					#( builder.insert( #params_insert ).expect(format!("Parameters {} must be valid", stringify!(#params_insert)).as_str()); )*
 					builder.build()
 				})
@@ -179,7 +179,7 @@ impl RpcDescription {
 				// Throw away the type.
 				let params = params.iter().map(|(param, _param_type)| param);
 				quote!({
-					let mut builder = #jsonrpsee::types::UnnamedParamsBuilder::new();
+					let mut builder = #jsonrpsee::types::ArrayParamsBuilder::new();
 					#( builder.insert( #params ).expect(format!("Parameters {} must be valid", stringify!(#params)).as_str()); )*
 					builder.build()
 				})

@@ -196,7 +196,7 @@ mod rpc_impl {
 }
 
 // Use generated implementations of server and client.
-use crate::types::{NamedParams, NamedParamsBuilder, UnnamedParams};
+use crate::types::{ArrayParams, ObjectParams, ObjectParamsBuilder};
 use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
 
 pub async fn websocket_server() -> SocketAddr {
@@ -342,7 +342,7 @@ async fn calls_with_bad_params() {
 
 	// Sub with faulty params as array.
 	let err: Error = client
-		.subscribe::<String, UnnamedParams>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
+		.subscribe::<String, ArrayParams>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
 		.await
 		.unwrap_err();
 	assert!(
@@ -350,29 +350,29 @@ async fn calls_with_bad_params() {
 	);
 
 	// Call with faulty params as array.
-	let err: Error = client.request::<String, UnnamedParams>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
+	let err: Error = client.request::<String, ArrayParams>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"faulty\", expected u8") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Sub with faulty params as map.
-	let mut params = NamedParamsBuilder::new();
+	let mut params = ObjectParamsBuilder::new();
 	params.insert("val", "0x0").unwrap();
 	let params = params.build();
 
 	let err: Error =
-		client.subscribe::<String, NamedParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
+		client.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Call with faulty params as map.
-	let mut params = NamedParamsBuilder::new();
+	let mut params = ObjectParamsBuilder::new();
 	params.insert("param_a", 1).unwrap();
 	params.insert("param_b", 2).unwrap();
 	let params = params.build();
 
-	let err: Error = client.request::<String, NamedParams>("foo_foo", params).await.unwrap_err();
+	let err: Error = client.request::<String, ObjectParams>("foo_foo", params).await.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: integer `2`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
 	);

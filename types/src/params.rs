@@ -41,9 +41,9 @@ use serde_json::Value as JsonValue;
 
 #[doc(hidden)]
 pub mod __reexports {
+	pub use crate::params::ArrayParams;
+	pub use crate::params::ArrayParamsBuilder;
 	pub use crate::params::ToRpcParams;
-	pub use crate::params::UnnamedParams;
-	pub use crate::params::UnnamedParamsBuilder;
 }
 
 /// JSON-RPC v2 marker type.
@@ -497,9 +497,9 @@ mod params_builder {
 ///
 /// ```rust
 ///
-/// use jsonrpsee_types::NamedParamsBuilder;
+/// use jsonrpsee_types::ObjectParamsBuilder;
 ///
-/// let mut builder = NamedParamsBuilder::new();
+/// let mut builder = ObjectParamsBuilder::new();
 /// builder.insert("param1", 1);
 /// builder.insert("param2", "abc");
 /// let params = builder.build();
@@ -507,10 +507,10 @@ mod params_builder {
 /// // Use RPC parameters...
 /// ```
 #[derive(Debug)]
-pub struct NamedParamsBuilder(params_builder::ParamsBuilder);
+pub struct ObjectParamsBuilder(params_builder::ParamsBuilder);
 
-impl NamedParamsBuilder {
-	/// Construct a new [`NamedParamsBuilder`].
+impl ObjectParamsBuilder {
+	/// Construct a new [`ObjectParamsBuilder`].
 	pub fn new() -> Self {
 		Self::default()
 	}
@@ -522,22 +522,22 @@ impl NamedParamsBuilder {
 	}
 
 	/// Finish the building process and return a JSON compatible string.
-	pub fn build(self) -> NamedParams {
-		NamedParams(self.0.build())
+	pub fn build(self) -> ObjectParams {
+		ObjectParams(self.0.build())
 	}
 }
 
-impl Default for NamedParamsBuilder {
+impl Default for ObjectParamsBuilder {
 	fn default() -> Self {
 		Self(params_builder::ParamsBuilder::named())
 	}
 }
 
-/// Named RPC parameters stored as a JSON Map object `{ key: value }`.
+/// Object RPC parameters stored as a JSON Map object `{ key: value }`.
 #[derive(Clone, Debug)]
-pub struct NamedParams(String);
+pub struct ObjectParams(String);
 
-impl ToRpcParams for NamedParams {
+impl ToRpcParams for ObjectParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 		RawValue::from_string(self.0).map(Some)
 	}
@@ -550,9 +550,9 @@ impl ToRpcParams for NamedParams {
 ///
 /// ```rust
 ///
-/// use jsonrpsee_types::UnnamedParamsBuilder;
+/// use jsonrpsee_types::ArrayParamsBuilder;
 ///
-/// let mut builder = UnnamedParamsBuilder::new();
+/// let mut builder = ArrayParamsBuilder::new();
 /// builder.insert("param1");
 /// builder.insert(1);
 /// let params = builder.build();
@@ -560,10 +560,10 @@ impl ToRpcParams for NamedParams {
 /// // Use RPC parameters...
 /// ```
 #[derive(Debug)]
-pub struct UnnamedParamsBuilder(params_builder::ParamsBuilder);
+pub struct ArrayParamsBuilder(params_builder::ParamsBuilder);
 
-impl UnnamedParamsBuilder {
-	/// Construct a new [`UnnamedParamsBuilder`].
+impl ArrayParamsBuilder {
+	/// Construct a new [`ArrayParamsBuilder`].
 	pub fn new() -> Self {
 		Self::default()
 	}
@@ -574,22 +574,22 @@ impl UnnamedParamsBuilder {
 	}
 
 	/// Finish the building process and return a JSON compatible string.
-	pub fn build(self) -> UnnamedParams {
-		UnnamedParams(self.0.build())
+	pub fn build(self) -> ArrayParams {
+		ArrayParams(self.0.build())
 	}
 }
 
-impl Default for UnnamedParamsBuilder {
+impl Default for ArrayParamsBuilder {
 	fn default() -> Self {
 		Self(params_builder::ParamsBuilder::positional())
 	}
 }
 
-/// Unnamed RPC parameters stored as a JSON Array object `[ value0, value1, .., valueN ]`.
+/// Array RPC parameters stored as a JSON Array object `[ value0, value1, .., valueN ]`.
 #[derive(Clone, Debug)]
-pub struct UnnamedParams(String);
+pub struct ArrayParams(String);
 
-impl ToRpcParams for UnnamedParams {
+impl ToRpcParams for ArrayParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, serde_json::Error> {
 		RawValue::from_string(self.0).map(Some)
 	}
@@ -601,7 +601,7 @@ impl ToRpcParams for UnnamedParams {
 ///
 /// # Note
 ///
-/// Please consider using the [`UnnamedParamsBuilder`] and [`NamedParamsBuilder`] than
+/// Please consider using the [`ArrayParamsBuilder`] and [`ObjectParamsBuilder`] than
 /// implementing this trait.
 ///
 /// # Examples

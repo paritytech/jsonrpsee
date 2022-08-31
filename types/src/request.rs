@@ -130,7 +130,7 @@ impl<'a> NotificationSer<'a> {
 #[cfg(test)]
 mod test {
 	use super::{Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, TwoPointZero};
-	use crate::{EmptyParams, ToRpcParams, UnnamedParamsBuilder};
+	use crate::{ArrayParamsBuilder, EmptyParams, ToRpcParams};
 	use serde_json::value::RawValue;
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
@@ -207,7 +207,7 @@ mod test {
 	fn serialize_call() {
 		let method = "subtract";
 		let id = Id::Number(1); // It's enough to check one variant, since the type itself also has tests.
-		let mut builder = UnnamedParamsBuilder::new();
+		let mut builder = ArrayParamsBuilder::new();
 		builder.insert(42).unwrap();
 		builder.insert(23).unwrap();
 		let params = builder.build().to_rpc_params().unwrap(); // Same as above.
@@ -246,7 +246,7 @@ mod test {
 	#[test]
 	fn serialize_notif() {
 		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","params":["hello"]}"#;
-		let mut builder = UnnamedParamsBuilder::new();
+		let mut builder = ArrayParamsBuilder::new();
 		builder.insert("hello").unwrap();
 		let params = builder.build().to_rpc_params().unwrap();
 		let req = NotificationSer::new("say_hello", params);

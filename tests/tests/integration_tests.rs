@@ -40,7 +40,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::AccessControlBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::types::error::ErrorObject;
-use jsonrpsee::types::{BatchRequestBuilder, EmptyParams, UnnamedParams};
+use jsonrpsee::types::{ArrayParams, BatchRequestBuilder, EmptyParams};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -952,7 +952,7 @@ async fn ws_subscribe_with_bad_params() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	let err = client
-		.subscribe::<serde_json::Value, UnnamedParams>("subscribe_add_one", rpc_params!["0x0"], "unsubscribe_add_one")
+		.subscribe::<serde_json::Value, ArrayParams>("subscribe_add_one", rpc_params!["0x0"], "unsubscribe_add_one")
 		.await
 		.unwrap_err();
 	assert!(matches!(err, Error::Call(_)));

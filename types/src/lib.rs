@@ -44,8 +44,8 @@ pub mod error;
 
 pub use error::{ErrorObject, ErrorObjectOwned, ErrorResponse, SubscriptionEmptyError, SubscriptionResult};
 pub use params::{
-	BatchRequestBuilder, EmptyParams, Id, NamedParams, NamedParamsBuilder, Params, ParamsSequence, ParamsSer,
-	SubscriptionId, ToRpcParams, TwoPointZero, UnnamedParams, UnnamedParamsBuilder,
+	ArrayParams, ArrayParamsBuilder, BatchRequestBuilder, EmptyParams, Id, ObjectParams, ObjectParamsBuilder, Params,
+	ParamsSequence, ParamsSer, SubscriptionId, ToRpcParams, TwoPointZero,
 };
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, SubscriptionPayload, SubscriptionResponse};

@@ -46,10 +46,10 @@ use jsonrpsee_types::params::ToRpcParams;
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
 pub mod __reexports {
-	// Needs to be in scope for `UnnamedParams` to implement it.
+	// Needs to be in scope for `ArrayParams` to implement it.
 	pub use jsonrpsee_types::ToRpcParams;
 	// Main builder object for constructing the rpc parameters.
-	pub use jsonrpsee_types::UnnamedParamsBuilder;
+	pub use jsonrpsee_types::ArrayParamsBuilder;
 	// Empty rpc parameters for empty macro.
 	pub use jsonrpsee_types::EmptyParams;
 }
@@ -182,7 +182,7 @@ pub trait TransportReceiverT: 'static {
 	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error>;
 }
 
-/// Convert the given values to a [`jsonrpsee_types::UnnamedParams`], or empty tuple as expected by a
+/// Convert the given values to a [`jsonrpsee_types::ArrayParamsBuilder`], or empty tuple as expected by a
 /// jsonrpsee Client (http or websocket).
 ///
 /// # Panics
@@ -195,7 +195,7 @@ macro_rules! rpc_params {
 	};
 	($($param:expr),*) => {
 		{
-			let mut __params = $crate::client::__reexports::UnnamedParamsBuilder::new();
+			let mut __params = $crate::client::__reexports::ArrayParamsBuilder::new();
 			$(
 				__params.insert($param).expect(format!("Parameter `{}` cannot be serialized", stringify!($param)).as_str());
 			)*

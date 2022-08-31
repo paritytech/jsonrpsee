@@ -8,7 +8,7 @@ use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::http_client::HeaderMap;
 use jsonrpsee::types::params::EmptyParams;
-use jsonrpsee::types::{BatchRequestBuilder, Id, ParamsSer, RequestSer, ToRpcParams, UnnamedParamsBuilder};
+use jsonrpsee::types::{ArrayParamsBuilder, BatchRequestBuilder, Id, ParamsSer, RequestSer, ToRpcParams};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -77,10 +77,10 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 		})
 	});
 
-	// Construct the serialized request using the `UnnamedParamsBuilder`.
+	// Construct the serialized request using the `ArrayParamsBuilder`.
 	crit.bench_function("jsonrpsee_types_unnamed_params", |b| {
 		b.iter(|| {
-			let mut builder = UnnamedParamsBuilder::new();
+			let mut builder = ArrayParamsBuilder::new();
 			builder.insert(1u64).unwrap();
 			builder.insert(2u32).unwrap();
 			let params = builder.build().to_rpc_params().expect("Valid params");
