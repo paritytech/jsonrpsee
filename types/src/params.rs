@@ -484,7 +484,7 @@ mod params_builder {
 				self.bytes.push(self.end as u8);
 			}
 
-			// Safety: This is safe because we do not emit invalid UTF-8.
+			// Safety: This is safe because JSON does not emit invalid UTF-8.
 			unsafe { String::from_utf8_unchecked(self.bytes) }
 		}
 	}
