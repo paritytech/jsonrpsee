@@ -24,6 +24,8 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#![cfg(test)]
+
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -38,6 +40,7 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
+#[allow(dead_code)]
 pub async fn server_with_subscription() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
@@ -175,6 +178,7 @@ pub async fn server_with_subscription() -> (SocketAddr, ServerHandle) {
 	(addr, server_handle)
 }
 
+#[allow(dead_code)]
 pub async fn server() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
@@ -195,6 +199,7 @@ pub async fn server() -> (SocketAddr, ServerHandle) {
 }
 
 /// Yields one item then sleeps for an hour.
+#[allow(dead_code)]
 pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
@@ -218,6 +223,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 	addr
 }
 
+#[allow(dead_code)]
 pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
 	server_with_access_control(AllowHosts::Any, CorsLayer::new()).await
 }
