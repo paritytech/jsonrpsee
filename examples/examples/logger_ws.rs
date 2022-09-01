@@ -38,8 +38,8 @@ struct Timings;
 impl logger::Logger for Timings {
 	type Instant = Instant;
 
-	fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest) {
-		println!("[Logger::on_connect] remote_addr {}, headers: {:?}", remote_addr, request);
+	fn on_connect(&self, remote_addr: Option<SocketAddr>, request: &HttpRequest) {
+		println!("[Logger::on_connect] remote_addr {:?}, headers: {:?}", remote_addr, request);
 	}
 
 	fn on_request(&self) -> Self::Instant {
@@ -59,8 +59,8 @@ impl logger::Logger for Timings {
 		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	}
 
-	fn on_disconnect(&self, remote_addr: SocketAddr) {
-		println!("[Logger::on_disconnect] remote_addr: {}", remote_addr);
+	fn on_disconnect(&self, remote_addr: Option<SocketAddr>) {
+		println!("[Logger::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }
 

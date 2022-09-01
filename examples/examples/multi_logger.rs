@@ -44,8 +44,8 @@ struct Timings;
 impl logger::Logger for Timings {
 	type Instant = Instant;
 
-	fn on_connect(&self, remote_addr: SocketAddr, req: &HttpRequest) {
-		println!("[Timings::on_connect] remote_addr {}, req: {:?}", remote_addr, req);
+	fn on_connect(&self, remote_addr: Option<SocketAddr>, req: &HttpRequest) {
+		println!("[Timings::on_connect] remote_addr {:?}, req: {:?}", remote_addr, req);
 	}
 
 	fn on_request(&self) -> Self::Instant {
@@ -64,8 +64,8 @@ impl logger::Logger for Timings {
 		println!("[Timings] Response duration {:?}", started_at.elapsed());
 	}
 
-	fn on_disconnect(&self, remote_addr: SocketAddr) {
-		println!("[Timings::on_disconnect] remote_addr: {}", remote_addr);
+	fn on_disconnect(&self, remote_addr: Option<SocketAddr>) {
+		println!("[Timings::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }
 
@@ -91,8 +91,8 @@ impl ThreadWatcher {
 impl logger::Logger for ThreadWatcher {
 	type Instant = isize;
 
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &HttpRequest) {
-		println!("[ThreadWatcher::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+	fn on_connect(&self, remote_addr: Option<SocketAddr>, headers: &HttpRequest) {
+		println!("[ThreadWatcher::on_connect] remote_addr {:?}, headers: {:?}", remote_addr, headers);
 	}
 
 	fn on_call(&self, _method: &str, _params: Params, _kind: MethodKind) {
@@ -116,8 +116,8 @@ impl logger::Logger for ThreadWatcher {
 		println!("[ThreadWatcher::on_response] {} threads", current_nr_threads - started_at);
 	}
 
-	fn on_disconnect(&self, remote_addr: SocketAddr) {
-		println!("[ThreadWatcher::on_disconnect] remote_addr: {}", remote_addr);
+	fn on_disconnect(&self, remote_addr: Option<SocketAddr>) {
+		println!("[ThreadWatcher::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }
 

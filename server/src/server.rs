@@ -161,7 +161,7 @@ where
 
 					let tower_service = TowerService {
 						inner: ServiceData {
-							remote_addr: socket.local_addr().unwrap(),
+							remote_addr: socket.peer_addr().ok(),
 							methods: methods.clone(),
 							allow_hosts: allow_hosts.clone(),
 							resources: resources.clone(),
@@ -183,10 +183,10 @@ where
 
 					connections.add(
 						async move {
-							let mut conn =
+							let conn =
 								hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
 
-							let mut conn = Pin::new(&mut conn);
+							tokio::pin!(conn);
 
 							tokio::select! {
 								res = &mut conn => {
@@ -576,7 +576,7 @@ impl MethodResult {
 #[derive(Debug, Clone)]
 pub(crate) struct ServiceData<L: Logger> {
 	/// Remote server address.
-	pub(crate) remote_addr: SocketAddr,
+	pub(crate) remote_addr: Option<SocketAddr>,
 	/// Registered server methods.
 	pub(crate) methods: Methods,
 	/// Access control.

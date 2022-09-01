@@ -71,7 +71,7 @@ pub trait Logger: Send + Sync + Clone + 'static {
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
 
 	/// Called when a new client connects
-	fn on_connect(&self, _remote_addr: SocketAddr, _request: &HttpRequest) {}
+	fn on_connect(&self, _remote_addr: Option<SocketAddr>, _request: &HttpRequest) {}
 
 	/// Called when a new JSON-RPC request comes to the server.
 	fn on_request(&self) -> Self::Instant;
@@ -86,13 +86,13 @@ pub trait Logger: Send + Sync + Clone + 'static {
 	fn on_response(&self, result: &str, started_at: Self::Instant);
 
 	/// Called when a client disconnects
-	fn on_disconnect(&self, _remote_addr: std::net::SocketAddr) {}
+	fn on_disconnect(&self, _remote_addr: Option<SocketAddr>) {}
 }
 
 impl Logger for () {
 	type Instant = ();
 
-	fn on_connect(&self, _: std::net::SocketAddr, _: &HttpRequest) -> Self::Instant {}
+	fn on_connect(&self, _: Option<SocketAddr>, _: &HttpRequest) -> Self::Instant {}
 
 	fn on_request(&self) -> Self::Instant {}
 
@@ -102,7 +102,7 @@ impl Logger for () {
 
 	fn on_response(&self, _: &str, _: Self::Instant) {}
 
-	fn on_disconnect(&self, _: std::net::SocketAddr) {}
+	fn on_disconnect(&self, _: Option<SocketAddr>) {}
 }
 
 impl<A, B> Logger for (A, B)
@@ -112,7 +112,7 @@ where
 {
 	type Instant = (A::Instant, B::Instant);
 
-	fn on_connect(&self, remote_addr: std::net::SocketAddr, request: &HttpRequest) {
+	fn on_connect(&self, remote_addr: Option<std::net::SocketAddr>, request: &HttpRequest) {
 		self.0.on_connect(remote_addr, request);
 		self.1.on_connect(remote_addr, request);
 	}
@@ -136,7 +136,7 @@ where
 		self.1.on_response(result, started_at.1);
 	}
 
-	fn on_disconnect(&self, remote_addr: std::net::SocketAddr) {
+	fn on_disconnect(&self, remote_addr: Option<SocketAddr>) {
 		self.0.on_disconnect(remote_addr);
 		self.1.on_disconnect(remote_addr);
 	}
