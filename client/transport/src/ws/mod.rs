@@ -298,7 +298,7 @@ impl WsTransportClientBuilder {
 				// Perform the initial handshake.
 				match client.handshake().await {
 					Ok(ServerResponse::Accepted { .. }) => {
-						tracing::info!("Connection established to target: {:?}", target);
+						tracing::debug!("Connection established to target: {:?}", target);
 						let mut builder = client.into_builder();
 						builder.set_max_message_size(self.max_request_body_size as usize);
 						let (sender, receiver) = builder.finish();
