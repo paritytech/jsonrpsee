@@ -637,7 +637,11 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 		let host = match http_helpers::read_header_value(request.headers(), hyper::header::HOST) {
 			Some(host) => host,
-			None => return async { Ok(http::response::malformed()) }.boxed(),
+			None if request.version() == hyper::Version::HTTP_2 => match request.uri().host() {
+				Some(host) => host,
+				None => return async move { Ok(http::response::malformed()) }.boxed(),
+			},
+			None => return async move { Ok(http::response::malformed()) }.boxed(),
 		};
 
 		if let Err(e) = self.inner.allow_hosts.verify(host) {
