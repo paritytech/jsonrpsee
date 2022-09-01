@@ -71,7 +71,7 @@ pub trait Logger: Send + Sync + Clone + 'static {
 	type Instant: std::fmt::Debug + Send + Sync + Copy;
 
 	/// Called when a new client connects
-	fn on_connect(&self, _remote_addr: Option<SocketAddr>, _request: &HttpRequest) {}
+	fn on_connect(&self, _remote_addr: Option<SocketAddr>, _request: &HttpRequest);
 
 	/// Called when a new JSON-RPC request comes to the server.
 	fn on_request(&self) -> Self::Instant;
@@ -86,7 +86,7 @@ pub trait Logger: Send + Sync + Clone + 'static {
 	fn on_response(&self, result: &str, started_at: Self::Instant);
 
 	/// Called when a client disconnects
-	fn on_disconnect(&self, _remote_addr: Option<SocketAddr>) {}
+	fn on_disconnect(&self, _remote_addr: Option<SocketAddr>);
 }
 
 impl Logger for () {

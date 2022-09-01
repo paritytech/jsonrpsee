@@ -171,7 +171,7 @@ impl StopMonitor {
 		StopMonitor(Arc::new(MonitorInner { shutdown_requested: AtomicBool::new(false), waker: AtomicWaker::new() }))
 	}
 
-	pub(crate) fn shutdown_requested(&self) -> bool {
+	pub(crate) fn is_shutdown_requested(&self) -> bool {
 		// We expect this method to be polled frequently, skipping an iteration isn't problematic, so relaxed
 		// ordering is optimal.
 		self.0.shutdown_requested.load(Ordering::Relaxed)
@@ -181,8 +181,8 @@ impl StopMonitor {
 		ServerHandle(Arc::downgrade(&self.0))
 	}
 
-	pub(crate) fn stopped(&self) -> ServerStopped {
-		ServerStopped(Arc::downgrade(&self.0))
+	pub(crate) fn shutdown_requested(&self) -> ShutdownRequestedWaiter {
+		ShutdownRequestedWaiter(Arc::downgrade(&self.0))
 	}
 }
 
@@ -237,27 +237,33 @@ impl Future for ShutdownWaiter {
 		// might never resolve.
 		match Weak::strong_count(&self.0) {
 			0 => Poll::Ready(()),
-			_ => Poll::Pending,
+			n => {
+				tracing::trace!("Shutdown count: {}", n);
+				Poll::Pending
+			}
 		}
 	}
 }
 
 /// A `Future` that resolves once the server has been requested to be stopped.
 #[derive(Debug)]
-pub(crate) struct ServerStopped(Weak<MonitorInner>);
+pub(crate) struct ShutdownRequestedWaiter(Weak<MonitorInner>);
 
-impl Future for ServerStopped {
+impl Future for ShutdownRequestedWaiter {
 	type Output = ();
 
-	fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		if let Some(arc) = Weak::upgrade(&self.0) {
+			// TODO(niklasad1): this doesn't work.
+			//arc.waker.register(cx.waker());
+
 			// We expect this method to be polled frequently, skipping an iteration isn't problematic, so relaxed
 			// ordering is optimal.
-			if !arc.shutdown_requested.load(Ordering::Relaxed) {
-				return Poll::Pending;
+			if arc.shutdown_requested.load(Ordering::Relaxed) {
+				return Poll::Ready(());
 			}
 		}
-		Poll::Ready(())
+		Poll::Pending
 	}
 }
 

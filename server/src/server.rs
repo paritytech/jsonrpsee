@@ -157,7 +157,7 @@ where
 						}
 					};
 
-					let stop_requested = stop_monitor.stopped();
+					let shutdown_requested = stop_monitor.shutdown_requested();
 
 					let tower_service = TowerService {
 						inner: ServiceData {
@@ -190,11 +190,13 @@ where
 
 							tokio::select! {
 								res = &mut conn => {
+									tracing::info!("conn: {} finished res: {:?}", id, res);
 									if let Err(e) = res {
 										tracing::error!("Error when processing connection: {:?}", e);
 									}
 								},
-								_ = stop_requested => {
+								_ = shutdown_requested => {
+									tracing::info!("starting graceful conn");
 									conn.graceful_shutdown();
 								}
 							}
@@ -213,7 +215,10 @@ where
 				Err(MonitoredError::Selector(err)) => {
 					tracing::error!("Error while awaiting a new connection: {:?}", err);
 				}
-				Err(MonitoredError::Shutdown) => break,
+				Err(MonitoredError::Shutdown) => {
+					tracing::info!("stopping server");
+					break;
+				}
 			}
 		}
 
@@ -246,7 +251,7 @@ impl<'a> Future for Monitored<'a, Incoming> {
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		if this.stop_monitor.shutdown_requested() {
+		if this.stop_monitor.is_shutdown_requested() {
 			return Poll::Ready(Err(MonitoredError::Shutdown));
 		}
 
@@ -263,7 +268,7 @@ where
 	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
 		let this = Pin::into_inner(self);
 
-		if this.stop_monitor.shutdown_requested() {
+		if this.stop_monitor.is_shutdown_requested() {
 			return Poll::Ready(Err(MonitoredError::Shutdown));
 		}
 
@@ -397,8 +402,8 @@ impl<B, L> Builder<B, L> {
 	/// impl Logger for MyLogger {
 	///     type Instant = Instant;
 	///
-	///     fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest) {
-	///          println!("[MyLogger::on_call] remote_addr: {}, headers: {:?}", remote_addr, request);
+	///     fn on_connect(&self, remote_addr: Option<SocketAddr>, request: &HttpRequest) {
+	///          println!("[MyLogger::on_call] remote_addr: {:?}, headers: {:?}", remote_addr, request);
 	///     }
 	///
 	///     fn on_request(&self) -> Self::Instant {
@@ -417,8 +422,8 @@ impl<B, L> Builder<B, L> {
 	///          println!("[MyLogger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	///     }
 	///
-	///     fn on_disconnect(&self, remote_addr: SocketAddr) {
-	///          println!("[MyLogger::on_disconnect] remote_addr: {}", remote_addr);
+	///     fn on_disconnect(&self, remote_addr: Option<SocketAddr>) {
+	///          println!("[MyLogger::on_disconnect] remote_addr: {:?}", remote_addr);
 	///     }
 	/// }
 	///

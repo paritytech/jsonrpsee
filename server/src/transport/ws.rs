@@ -274,7 +274,7 @@ pub(crate) async fn background_task<L: Logger>(
 		tokio::pin!(ping_interval);
 		let mut next_ping = ping_interval.next();
 
-		while !stop_monitor2.shutdown_requested() {
+		while !stop_monitor2.is_shutdown_requested() {
 			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
 			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
 			match futures_util::future::select(rx_item, next_ping).await {

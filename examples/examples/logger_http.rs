@@ -38,6 +38,10 @@ struct Timings;
 impl logger::Logger for Timings {
 	type Instant = Instant;
 
+	fn on_connect(&self, remote_addr: Option<SocketAddr>, request: &logger::HttpRequest) {
+		println!("[Logger::on_connect] remote_addr: {:?}, request: {:?}", remote_addr, request);
+	}
+
 	fn on_request(&self) -> Self::Instant {
 		Instant::now()
 	}
@@ -52,6 +56,10 @@ impl logger::Logger for Timings {
 
 	fn on_response(&self, result: &str, started_at: Self::Instant) {
 		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
+	}
+
+	fn on_disconnect(&self, remote_addr: Option<SocketAddr>) {
+		println!("[Logger::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }
 
@@ -75,8 +83,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
-	//let server = ServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
-	let server = ServerBuilder::new().build("127.0.0.1:0").await?;
+	let server = ServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
