@@ -41,13 +41,14 @@ use futures_util::stream::{Stream, StreamExt};
 use jsonrpsee_types::{Id, SubscriptionId};
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
-use crate::params::{BatchRequestBuilder, ToRpcParams};
+use crate::params::BatchRequestBuilder;
+use crate::traits::ToRpcParams;
 
 // Re-exports for the `rpc_params` macro.
 #[doc(hidden)]
 pub mod __reexports {
 	// Needs to be in scope for `ArrayParams` to implement it.
-	pub use crate::params::ToRpcParams;
+	pub use crate::traits::ToRpcParams;
 	// Main builder object for constructing the rpc parameters.
 	pub use crate::params::ArrayParamsBuilder;
 	// Empty rpc parameters for empty macro.

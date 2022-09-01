@@ -36,7 +36,8 @@ use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
 use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
 use serde_json::Value as JsonValue;
-use crate::params::{ArrayParamsBuilder, ToRpcParams};
+use crate::params::ArrayParamsBuilder;
+use crate::traits::ToRpcParams;
 
 /// Attempts to process a batch response.
 ///

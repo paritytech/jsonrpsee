@@ -26,6 +26,7 @@
 
 //! RPC parameters.
 
+use crate::traits::ToRpcParams;
 use crate::Error;
 use serde::Serialize;
 use serde_json::value::RawValue;
@@ -207,61 +208,6 @@ impl ToRpcParams for ArrayParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
 		RawValue::from_string(self.0).map(Some).map_err(Error::ParseError)
 	}
-}
-
-/// Marker trait for types that can be serialized as JSON compatible strings.
-///
-/// This trait ensures the correctness of the RPC parameters.
-///
-/// # Note
-///
-/// Please consider using the [`ArrayParamsBuilder`] and [`ObjectParamsBuilder`] than
-/// implementing this trait.
-///
-/// # Examples
-///
-/// - Implementation for hard-coded strings
-///
-/// ```rust
-///
-/// use jsonrpsee_core::params::ToRpcParams;
-/// use serde_json::value::RawValue;
-/// use jsonrpsee_core::Error;
-///
-/// struct ManualParam;
-///
-/// impl ToRpcParams for ManualParam {
-///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
-///         // Manually define a valid JSONRPC parameter.
-///         RawValue::from_string("[1, \"2\", 3]".to_string()).map(Some).map_err(Error::ParseError)
-///     }
-/// }
-/// ```
-///
-/// - Implementation for JSON serializable structures
-///
-/// ```rust
-/// use jsonrpsee_core::params::ToRpcParams;
-/// use serde_json::value::RawValue;
-/// use serde::Serialize;
-/// use jsonrpsee_core::Error;
-///
-/// #[derive(Serialize)]
-/// struct SerParam {
-///     param_1: u8,
-///     param_2: String,
-/// };
-///
-/// impl ToRpcParams for SerParam {
-///     fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
-///         let s = String::from_utf8(serde_json::to_vec(&self)?).expect("Valid UTF8 format");
-///         RawValue::from_string(s).map(Some).map_err(Error::ParseError)
-///     }
-/// }
-/// ```
-pub trait ToRpcParams {
-	/// Consume and serialize the type as a JSON raw value.
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error>;
 }
 
 /// Initial number of parameters in a batch request.

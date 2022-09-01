@@ -34,7 +34,7 @@ use crate::error::{Error, SubscriptionClosed};
 use crate::id_providers::RandomIntegerIdProvider;
 use crate::server::helpers::{BoundedSubscriptions, MethodSink, SubscriptionPermit};
 use crate::server::resource_limiting::{ResourceGuard, ResourceTable, ResourceVec, Resources};
-use crate::traits::{IdProvider, ToRpcServerParams};
+use crate::traits::{IdProvider, ToRpcParams};
 use futures_channel::{mpsc, oneshot};
 use futures_util::future::Either;
 use futures_util::pin_mut;
@@ -337,7 +337,7 @@ impl Methods {
 
 	/// Helper to call a method on the `RPC module` without having to spin up a server.
 	///
-	/// The params must be serializable as JSON array, see [`ToRpcServerParams`] for further documentation.
+	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
 	/// Returns the decoded value of the `result field` in JSON-RPC response if successful.
 	///
@@ -357,13 +357,13 @@ impl Methods {
 	///     assert_eq!(echo, 1);
 	/// }
 	/// ```
-	pub async fn call<Params: ToRpcServerParams, T: DeserializeOwned>(
+	pub async fn call<Params: ToRpcParams, T: DeserializeOwned>(
 		&self,
 		method: &str,
 		params: Params,
 	) -> Result<T, Error> {
 		let params = params.to_rpc_params()?;
-		let req = Request::new(method.into(), Some(&params), Id::Number(0));
+		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _, _) = self.inner_call(req).await;
 
@@ -450,7 +450,7 @@ impl Methods {
 
 	/// Helper to create a subscription on the `RPC module` without having to spin up a server.
 	///
-	/// The params must be serializable as JSON array, see [`ToRpcServerParams`] for further documentation.
+	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
 	/// Returns [`Subscription`] on success which can used to get results from the subscriptions.
 	///
@@ -473,9 +473,9 @@ impl Methods {
 	///     assert_eq!(&sub_resp, "one answer");
 	/// }
 	/// ```
-	pub async fn subscribe(&self, sub_method: &str, params: impl ToRpcServerParams) -> Result<Subscription, Error> {
+	pub async fn subscribe(&self, sub_method: &str, params: impl ToRpcParams) -> Result<Subscription, Error> {
 		let params = params.to_rpc_params()?;
-		let req = Request::new(sub_method.into(), Some(&params), Id::Number(0));
+		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 
 		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 

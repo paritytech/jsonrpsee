@@ -32,7 +32,8 @@ use jsonrpsee_types::{
 };
 use serde::de::DeserializeOwned;
 use tracing_futures::Instrument;
-use crate::params::{BatchRequestBuilder, ToRpcParams};
+use crate::params::BatchRequestBuilder;
+use crate::traits::ToRpcParams;
 
 use super::{FrontToBack, IdKind, RequestIdManager};
 
