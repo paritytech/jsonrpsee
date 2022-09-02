@@ -43,7 +43,6 @@ use serde_json::value::RawValue;
 /// - Implementation for hard-coded strings
 ///
 /// ```rust
-///
 /// use jsonrpsee_core::traits::ToRpcParams;
 /// use serde_json::value::RawValue;
 /// use jsonrpsee_core::Error;
