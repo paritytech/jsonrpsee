@@ -57,7 +57,7 @@ use serde_json::value::RawValue;
 /// }
 /// ```
 ///
-/// - Implementation for JSON serializable structures
+/// ## Implementation for JSON serializable structures
 ///
 /// ```rust
 /// use jsonrpsee_core::traits::ToRpcParams;
