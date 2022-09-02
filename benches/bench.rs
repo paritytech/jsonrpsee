@@ -6,10 +6,10 @@ use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
 use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
-use jsonrpsee::core::params::{ArrayParamsBuilder, BatchRequestBuilder, EmptyParams};
+use jsonrpsee::core::params::{ArrayParamsBuilder, BatchRequestBuilder, EmptyParams, ObjectParamsBuilder};
 use jsonrpsee::core::traits::ToRpcParams;
 use jsonrpsee::http_client::HeaderMap;
-use jsonrpsee::types::{Id, ParamsSer, RequestSer};
+use jsonrpsee::types::{Id, RequestSer};
 use pprof::criterion::{Output, PProfProfiler};
 use tokio::runtime::Runtime as TokioRuntime;
 
@@ -65,25 +65,41 @@ fn v2_serialize(req: RequestSer<'_>) -> String {
 }
 
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
-	// Construct the serialized request using the `ParamsSer` directly.
-	crit.bench_function("jsonrpsee_types_baseline_params", |b| {
+	// Construct the serialized array request using the `RawValue` directly.
+	crit.bench_function("jsonrpsee_types_array_params_baseline", |b| {
 		b.iter(|| {
-			let params = &[1_u64.into(), 2_u32.into()];
-			let params = ParamsSer::ArrayRef(params);
-			let params = serde_json::to_string(&params).unwrap();
-			let params = serde_json::value::RawValue::from_string(params).unwrap();
+			let params = serde_json::value::RawValue::from_string("[1, 2]".to_string()).unwrap();
 
 			let request = RequestSer::new(&Id::Number(0), "say_hello", Some(params));
 			v2_serialize(request);
 		})
 	});
-
 	// Construct the serialized request using the `ArrayParamsBuilder`.
-	crit.bench_function("jsonrpsee_types_unnamed_params", |b| {
+	crit.bench_function("jsonrpsee_types_array_params", |b| {
 		b.iter(|| {
 			let mut builder = ArrayParamsBuilder::new();
 			builder.insert(1u64).unwrap();
 			builder.insert(2u32).unwrap();
+			let params = builder.build().to_rpc_params().expect("Valid params");
+			let request = RequestSer::new(&Id::Number(0), "say_hello", params);
+			v2_serialize(request);
+		})
+	});
+
+	// Construct the serialized object request using the `RawValue` directly.
+	crit.bench_function("jsonrpsee_types_object_params_baseline", |b| {
+		b.iter(|| {
+			let params = serde_json::value::RawValue::from_string(r#"{"key": 1}"#.to_string()).unwrap();
+
+			let request = RequestSer::new(&Id::Number(0), "say_hello", Some(params));
+			v2_serialize(request);
+		})
+	});
+	// Construct the serialized request using the `ObjectParamsBuilder`.
+	crit.bench_function("jsonrpsee_types_object_params", |b| {
+		b.iter(|| {
+			let mut builder = ObjectParamsBuilder::new();
+			builder.insert("key", 1u32).unwrap();
 			let params = builder.build().to_rpc_params().expect("Valid params");
 			let request = RequestSer::new(&Id::Number(0), "say_hello", params);
 			v2_serialize(request);
