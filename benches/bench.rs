@@ -6,7 +6,7 @@ use futures_util::future::{join_all, FutureExt};
 use futures_util::stream::FuturesUnordered;
 use helpers::{http_client, ws_client, SUB_METHOD_NAME, UNSUB_METHOD_NAME};
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
-use jsonrpsee::core::params::{ArrayParamsBuilder, BatchRequestBuilder, EmptyParams, ObjectParamsBuilder};
+use jsonrpsee::core::params::{ArrayParams, BatchRequestBuilder, ObjectParams};
 use jsonrpsee::core::traits::ToRpcParams;
 use jsonrpsee::http_client::HeaderMap;
 use jsonrpsee::types::{Id, RequestSer};
@@ -74,13 +74,13 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 			v2_serialize(request);
 		})
 	});
-	// Construct the serialized request using the `ArrayParamsBuilder`.
+	// Construct the serialized request using the `ArrayParams`.
 	crit.bench_function("jsonrpsee_types_array_params", |b| {
 		b.iter(|| {
-			let mut builder = ArrayParamsBuilder::new();
+			let mut builder = ArrayParams::new();
 			builder.insert(1u64).unwrap();
 			builder.insert(2u32).unwrap();
-			let params = builder.build().to_rpc_params().expect("Valid params");
+			let params = builder.to_rpc_params().expect("Valid params");
 			let request = RequestSer::new(&Id::Number(0), "say_hello", params);
 			v2_serialize(request);
 		})
@@ -95,12 +95,12 @@ pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
 			v2_serialize(request);
 		})
 	});
-	// Construct the serialized request using the `ObjectParamsBuilder`.
+	// Construct the serialized request using the `ObjectParams`.
 	crit.bench_function("jsonrpsee_types_object_params", |b| {
 		b.iter(|| {
-			let mut builder = ObjectParamsBuilder::new();
+			let mut builder = ObjectParams::new();
 			builder.insert("key", 1u32).unwrap();
-			let params = builder.build().to_rpc_params().expect("Valid params");
+			let params = builder.to_rpc_params().expect("Valid params");
 			let request = RequestSer::new(&Id::Number(0), "say_hello", params);
 			v2_serialize(request);
 		})
@@ -155,7 +155,7 @@ fn round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl ClientT>
 		let bench_name = format!("{}/{}", name, method);
 		crit.bench_function(&request.group_name(&bench_name), |b| {
 			b.to_async(rt).iter(|| async {
-				black_box(client.request::<String, EmptyParams>(method, EmptyParams).await.unwrap());
+				black_box(client.request::<String, ArrayParams>(method, ArrayParams::new()).await.unwrap());
 			})
 		});
 	}
@@ -166,7 +166,10 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 	group.bench_function("subscribe", |b| {
 		b.to_async(rt).iter_with_large_drop(|| async {
 			black_box(
-				client.subscribe::<String, EmptyParams>(SUB_METHOD_NAME, EmptyParams, UNSUB_METHOD_NAME).await.unwrap(),
+				client
+					.subscribe::<String, ArrayParams>(SUB_METHOD_NAME, ArrayParams::new(), UNSUB_METHOD_NAME)
+					.await
+					.unwrap(),
 			);
 		})
 	});
@@ -178,7 +181,7 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 				tokio::task::block_in_place(|| {
 					tokio::runtime::Handle::current().block_on(async {
 						client
-							.subscribe::<String, EmptyParams>(SUB_METHOD_NAME, EmptyParams, UNSUB_METHOD_NAME)
+							.subscribe::<String, ArrayParams>(SUB_METHOD_NAME, ArrayParams::new(), UNSUB_METHOD_NAME)
 							.await
 							.unwrap()
 					})
@@ -198,7 +201,7 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 			|| {
 				rt.block_on(async {
 					client
-						.subscribe::<String, EmptyParams>(SUB_METHOD_NAME, EmptyParams, UNSUB_METHOD_NAME)
+						.subscribe::<String, ArrayParams>(SUB_METHOD_NAME, ArrayParams::new(), UNSUB_METHOD_NAME)
 						.await
 						.unwrap()
 				})
@@ -227,7 +230,7 @@ fn batch_round_trip(
 		for batch_size in [2, 5, 10, 50, 100usize].iter() {
 			let mut batch = BatchRequestBuilder::new();
 			for _ in 0..*batch_size {
-				batch.insert(method, EmptyParams).unwrap();
+				batch.insert(method, ArrayParams::new()).unwrap();
 			}
 			group.throughput(Throughput::Elements(*batch_size as u64));
 			group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
@@ -264,7 +267,7 @@ fn ws_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str, 
 							let futs = FuturesUnordered::new();
 
 							for _ in 0..10 {
-								futs.push(client.request::<String, EmptyParams>(methods[0], EmptyParams));
+								futs.push(client.request::<String, ArrayParams>(methods[0], ArrayParams::new()));
 							}
 
 							join_all(futs).await;
@@ -305,7 +308,11 @@ fn ws_concurrent_conn_subs(rt: &TokioRuntime, crit: &mut Criterion, url: &str, n
 
 							for _ in 0..10 {
 								let fut = client
-									.subscribe::<String, EmptyParams>(SUB_METHOD_NAME, EmptyParams, UNSUB_METHOD_NAME)
+									.subscribe::<String, ArrayParams>(
+										SUB_METHOD_NAME,
+										ArrayParams::new(),
+										UNSUB_METHOD_NAME,
+									)
 									.then(|sub| async move {
 										let mut s = sub.unwrap();
 
@@ -338,7 +345,7 @@ fn http_concurrent_conn_calls(rt: &TokioRuntime, crit: &mut Criterion, url: &str
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
-							client.request::<String, EmptyParams>(method, EmptyParams).await.unwrap();
+							client.request::<String, ArrayParams>(method, ArrayParams::new()).await.unwrap();
 						})
 					});
 					join_all(tasks).await;
@@ -370,7 +377,7 @@ fn http_custom_headers_round_trip(
 
 		crit.bench_function(&request.group_name(&bench_name), |b| {
 			b.to_async(rt).iter(|| async {
-				black_box(client.request::<String, EmptyParams>(method_name, EmptyParams).await.unwrap());
+				black_box(client.request::<String, ArrayParams>(method_name, ArrayParams::new()).await.unwrap());
 			})
 		});
 	}

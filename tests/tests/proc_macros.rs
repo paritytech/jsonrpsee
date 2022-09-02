@@ -196,7 +196,7 @@ mod rpc_impl {
 }
 
 // Use generated implementations of server and client.
-use jsonrpsee::core::params::{ArrayParams, ObjectParams, ObjectParamsBuilder};
+use jsonrpsee::core::params::{ArrayParams, ObjectParams};
 use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
 
 pub async fn websocket_server() -> SocketAddr {
@@ -356,9 +356,8 @@ async fn calls_with_bad_params() {
 	);
 
 	// Sub with faulty params as map.
-	let mut params = ObjectParamsBuilder::new();
+	let mut params = ObjectParams::new();
 	params.insert("val", "0x0").unwrap();
-	let params = params.build();
 
 	let err: Error =
 		client.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
@@ -367,10 +366,9 @@ async fn calls_with_bad_params() {
 	);
 
 	// Call with faulty params as map.
-	let mut params = ObjectParamsBuilder::new();
+	let mut params = ObjectParams::new();
 	params.insert("param_a", 1).unwrap();
 	params.insert("param_b", 2).unwrap();
-	let params = params.build();
 
 	let err: Error = client.request::<String, ObjectParams>("foo_foo", params).await.unwrap_err();
 	assert!(

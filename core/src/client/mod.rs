@@ -50,9 +50,7 @@ pub mod __reexports {
 	// Needs to be in scope for `ArrayParams` to implement it.
 	pub use crate::traits::ToRpcParams;
 	// Main builder object for constructing the rpc parameters.
-	pub use crate::params::ArrayParamsBuilder;
-	// Empty rpc parameters for empty macro.
-	pub use crate::params::EmptyParams;
+	pub use crate::params::ArrayParams;
 }
 
 cfg_async_client! {
@@ -183,7 +181,7 @@ pub trait TransportReceiverT: 'static {
 	async fn receive(&mut self) -> Result<ReceivedMessage, Self::Error>;
 }
 
-/// Convert the given values to a [`crate::params::ArrayParamsBuilder`], or empty tuple as expected by a
+/// Convert the given values to a [`crate::params::ArrayParams`] as expected by a
 /// jsonrpsee Client (http or websocket).
 ///
 /// # Panics
@@ -192,17 +190,17 @@ pub trait TransportReceiverT: 'static {
 #[macro_export]
 macro_rules! rpc_params {
 	() => {
-		$crate::client::__reexports::EmptyParams
+		$crate::client::__reexports::ArrayParams::new()
 	};
 	($($param:expr),*) => {
 		{
-			let mut __params = $crate::client::__reexports::ArrayParamsBuilder::new();
+			let mut params = $crate::client::__reexports::ArrayParams::new();
 			$(
-				if let Err(err) = __params.insert($param) {
+				if let Err(err) = params.insert($param) {
 					panic!("Parameter `{}` cannot be serialized: {:?}", stringify!($param), err);
 				}
 			)*
-			__params.build()
+			params
 		}
 	};
 }

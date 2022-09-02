@@ -49,6 +49,7 @@ mod params_builder {
 	#[derive(Debug)]
 	pub(crate) struct ParamsBuilder {
 		bytes: Vec<u8>,
+		start: char,
 		end: char,
 	}
 
@@ -56,9 +57,7 @@ mod params_builder {
 		/// Construct a new [`ParamsBuilder`] with custom start and end tokens.
 		/// The inserted values are wrapped by the _start_ and _end_ tokens.
 		fn new(start: char, end: char) -> Self {
-			let mut bytes = Vec::with_capacity(PARAM_BYTES_CAPACITY);
-			bytes.push(start as u8);
-			ParamsBuilder { bytes, end }
+			ParamsBuilder { bytes: Vec::new(), start, end }
 		}
 
 		/// Construct a new [`ParamsBuilder`] for positional parameters equivalent to a JSON array object.
@@ -71,9 +70,25 @@ mod params_builder {
 			Self::new('{', '}')
 		}
 
+		/// Initialize the internal vector if it is empty:
+		///  - allocate [`PARAM_BYTES_CAPACITY`] to avoid resizing
+		///  - add the `start` character.
+		///
+		/// # Note
+		///
+		/// Initialization is needed prior to inserting elements.
+		fn maybe_initialize(&mut self) {
+			if self.bytes.is_empty() {
+				self.bytes.reserve(PARAM_BYTES_CAPACITY);
+				self.bytes.push(self.start as u8);
+			}
+		}
+
 		/// Insert a named value (key, value) pair into the builder.
 		/// The _name_ and _value_ are delimited by the `:` token.
 		pub(crate) fn insert_named<P: Serialize>(&mut self, name: &str, value: P) -> Result<(), serde_json::Error> {
+			self.maybe_initialize();
+
 			serde_json::to_writer(&mut self.bytes, name)?;
 			self.bytes.push(b':');
 			serde_json::to_writer(&mut self.bytes, &value)?;
@@ -84,6 +99,8 @@ mod params_builder {
 
 		/// Insert a plain value into the builder.
 		pub(crate) fn insert<P: Serialize>(&mut self, value: P) -> Result<(), serde_json::Error> {
+			self.maybe_initialize();
+
 			serde_json::to_writer(&mut self.bytes, &value)?;
 			self.bytes.push(b',');
 
@@ -91,7 +108,11 @@ mod params_builder {
 		}
 
 		/// Finish the building process and return a JSON compatible string.
-		pub(crate) fn build(mut self) -> String {
+		pub(crate) fn build(mut self) -> Option<String> {
+			if self.bytes.is_empty() {
+				return None;
+			}
+
 			let idx = self.bytes.len() - 1;
 			if self.bytes[idx] == b',' {
 				self.bytes[idx] = self.end as u8;
@@ -100,7 +121,7 @@ mod params_builder {
 			}
 
 			// Safety: This is safe because JSON does not emit invalid UTF-8.
-			unsafe { String::from_utf8_unchecked(self.bytes) }
+			Some(unsafe { String::from_utf8_unchecked(self.bytes) })
 		}
 	}
 }
@@ -112,20 +133,19 @@ mod params_builder {
 ///
 /// ```rust
 ///
-/// use jsonrpsee_core::params::ObjectParamsBuilder;
+/// use jsonrpsee_core::params::ObjectParams;
 ///
-/// let mut builder = ObjectParamsBuilder::new();
+/// let mut builder = ObjectParams::new();
 /// builder.insert("param1", 1);
 /// builder.insert("param2", "abc");
-/// let params = builder.build();
 ///
 /// // Use RPC parameters...
 /// ```
 #[derive(Debug)]
-pub struct ObjectParamsBuilder(params_builder::ParamsBuilder);
+pub struct ObjectParams(params_builder::ParamsBuilder);
 
-impl ObjectParamsBuilder {
-	/// Construct a new [`ObjectParamsBuilder`].
+impl ObjectParams {
+	/// Construct a new [`ObjectParams`].
 	pub fn new() -> Self {
 		Self::default()
 	}
@@ -135,26 +155,21 @@ impl ObjectParamsBuilder {
 	pub fn insert<P: Serialize>(&mut self, name: &str, value: P) -> Result<(), serde_json::Error> {
 		self.0.insert_named(name, value)
 	}
-
-	/// Finish the building process and return a JSON compatible string.
-	pub fn build(self) -> ObjectParams {
-		ObjectParams(self.0.build())
-	}
 }
 
-impl Default for ObjectParamsBuilder {
+impl Default for ObjectParams {
 	fn default() -> Self {
 		Self(params_builder::ParamsBuilder::named())
 	}
 }
 
-/// Object RPC parameters stored as a JSON Map object `{ key: value }`.
-#[derive(Clone, Debug)]
-pub struct ObjectParams(String);
-
 impl ToRpcParams for ObjectParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
-		RawValue::from_string(self.0).map(Some).map_err(Error::ParseError)
+		if let Some(json) = self.0.build() {
+			RawValue::from_string(json).map(Some).map_err(Error::ParseError)
+		} else {
+			Ok(None)
+		}
 	}
 }
 
@@ -165,20 +180,19 @@ impl ToRpcParams for ObjectParams {
 ///
 /// ```rust
 ///
-/// use jsonrpsee_core::params::ArrayParamsBuilder;
+/// use jsonrpsee_core::params::ArrayParams;
 ///
-/// let mut builder = ArrayParamsBuilder::new();
+/// let mut builder = ArrayParams::new();
 /// builder.insert("param1");
 /// builder.insert(1);
-/// let params = builder.build();
 ///
 /// // Use RPC parameters...
 /// ```
 #[derive(Debug)]
-pub struct ArrayParamsBuilder(params_builder::ParamsBuilder);
+pub struct ArrayParams(params_builder::ParamsBuilder);
 
-impl ArrayParamsBuilder {
-	/// Construct a new [`ArrayParamsBuilder`].
+impl ArrayParams {
+	/// Construct a new [`ArrayParams`].
 	pub fn new() -> Self {
 		Self::default()
 	}
@@ -187,26 +201,21 @@ impl ArrayParamsBuilder {
 	pub fn insert<P: Serialize>(&mut self, value: P) -> Result<(), serde_json::Error> {
 		self.0.insert(value)
 	}
-
-	/// Finish the building process and return a JSON compatible string.
-	pub fn build(self) -> ArrayParams {
-		ArrayParams(self.0.build())
-	}
 }
 
-impl Default for ArrayParamsBuilder {
+impl Default for ArrayParams {
 	fn default() -> Self {
 		Self(params_builder::ParamsBuilder::positional())
 	}
 }
 
-/// Array RPC parameters stored as a JSON Array object `[ value0, value1, .., valueN ]`.
-#[derive(Clone, Debug)]
-pub struct ArrayParams(String);
-
 impl ToRpcParams for ArrayParams {
 	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
-		RawValue::from_string(self.0).map(Some).map_err(Error::ParseError)
+		if let Some(json) = self.0.build() {
+			RawValue::from_string(json).map(Some).map_err(Error::ParseError)
+		} else {
+			Ok(None)
+		}
 	}
 }
 
@@ -233,16 +242,5 @@ impl<'a> BatchRequestBuilder<'a> {
 	/// Finish the building process and return a valid batch parameter.
 	pub fn build(self) -> Vec<(&'a str, Option<Box<RawValue>>)> {
 		self.0
-	}
-}
-
-/// Empty RPC parameters that perform no allocation.
-#[derive(Clone, Debug)]
-pub struct EmptyParams;
-
-/// Custom implementation for empty RPC parameters.
-impl ToRpcParams for EmptyParams {
-	fn to_rpc_params(self) -> Result<Option<Box<RawValue>>, Error> {
-		Ok(None)
 	}
 }

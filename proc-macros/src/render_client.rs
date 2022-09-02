@@ -154,7 +154,7 @@ impl RpcDescription {
 
 		if params.is_empty() {
 			return quote!({
-				#jsonrpsee::core::params::EmptyParams
+				#jsonrpsee::core::params::ArrayParams::new()
 			});
 		}
 
@@ -170,18 +170,26 @@ impl RpcDescription {
 					quote!(#name, #value)
 				});
 				quote!({
-					let mut builder = #jsonrpsee::core::params::ObjectParamsBuilder::new();
-					#( builder.insert( #params_insert ).expect(format!("Parameters {} must be valid", stringify!(#params_insert)).as_str()); )*
-					builder.build()
+					let mut params = #jsonrpsee::core::params::ObjectParams::new();
+					#(
+						if let Err(err) = params.insert( #params_insert ) {
+							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params_insert ), err);
+						}
+					)*
+					params
 				})
 			}
 			ParamKind::Array => {
 				// Throw away the type.
 				let params = params.iter().map(|(param, _param_type)| param);
 				quote!({
-					let mut builder = #jsonrpsee::core::params::ArrayParamsBuilder::new();
-					#( builder.insert( #params ).expect(format!("Parameters {} must be valid", stringify!(#params)).as_str()); )*
-					builder.build()
+					let mut params = #jsonrpsee::core::params::ArrayParams::new();
+					#(
+						if let Err(err) = params.insert( #params ) {
+							panic!("Parameter `{}` cannot be serialized: {:?}", stringify!( #params ), err);
+						}
+					)*
+					params
 				})
 			}
 		}
