@@ -198,7 +198,9 @@ macro_rules! rpc_params {
 		{
 			let mut __params = $crate::client::__reexports::ArrayParamsBuilder::new();
 			$(
-				__params.insert($param).expect(format!("Parameter `{}` cannot be serialized", stringify!($param)).as_str());
+				if let Err(err) = __params.insert($param) {
+					panic!("Parameter `{}` cannot be serialized: {:?}", stringify!($param), err);
+				}
 			)*
 			__params.build()
 		}
