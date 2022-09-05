@@ -189,9 +189,6 @@ pub trait TransportReceiverT: 'static {
 /// Panics if the serialization of parameters fails.
 #[macro_export]
 macro_rules! rpc_params {
-	() => {
-		$crate::client::__reexports::ArrayParams::new()
-	};
 	($($param:expr),*) => {
 		{
 			let mut params = $crate::client::__reexports::ArrayParams::new();
