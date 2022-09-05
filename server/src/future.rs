@@ -160,7 +160,7 @@ impl StopHandle {
 	}
 
 	pub(crate) async fn shutdown(&mut self) {
-		// error implies that the server has stopped
+		// Err(_) implies that the `sender` has been dropped; Ok(_) implies that `stop` has been called,
 		let _ = self.0.changed().await;
 	}
 }
