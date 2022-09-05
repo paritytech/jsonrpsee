@@ -8,7 +8,11 @@ use std::time::Duration;
 async fn stop_works() {
 	init_logger();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
-	server_handle.clone().stop().unwrap().with_default_timeout().await.unwrap();
+
+	let handle = server_handle.clone();
+
+	handle.stop().unwrap();
+	handle.stopped().with_default_timeout().await.unwrap();
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
@@ -28,6 +32,9 @@ async fn run_forever() {
 
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 
+	let handle = server_handle.clone();
+	handle.stop().unwrap();
+
 	// Send the shutdown request from one handle and await the server on the second one.
-	join(server_handle.clone().stop().unwrap(), server_handle).with_timeout(TIMEOUT).await.unwrap();
+	join(handle.stopped(), server_handle).with_timeout(TIMEOUT).await.unwrap();
 }

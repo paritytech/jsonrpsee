@@ -40,7 +40,7 @@ pub mod middleware;
 #[cfg(test)]
 mod tests;
 
-pub use future::{ServerHandle, ShutdownWaiter as WsShutdownWaiter};
+pub use future::ServerHandle;
 pub use jsonrpsee_core::server::host_filtering::AllowHosts;
 pub use jsonrpsee_core::server::rpc_module::{RpcModule, SubscriptionSink};
 pub use jsonrpsee_core::{id_providers::*, traits::IdProvider};

@@ -28,7 +28,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::server::{RpcModule, ServerBuilder};
+use jsonrpsee::server::{RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee::ws_client::WsClientBuilder;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
 	tracing_subscriber::FmtSubscriber::builder().with_env_filter(filter).finish().try_init()?;
 
-	let addr = run_server().await?;
+	let (addr, _handle) = run_server().await?;
 	let ws_url = format!("ws://{}", addr);
 
 	let http_url = format!("http://{}", addr);
@@ -55,11 +55,11 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<SocketAddr> {
+async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
-	server.start(module)?;
-	Ok(addr)
+	let handle = server.start(module)?;
+	Ok((addr, handle))
 }

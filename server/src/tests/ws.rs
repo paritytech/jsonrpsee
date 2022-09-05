@@ -60,6 +60,7 @@ async fn can_set_the_max_request_body_size() {
 	assert_eq!(response, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
 	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
@@ -555,7 +556,7 @@ async fn custom_subscription_id_works() {
 			Ok(())
 		})
 		.unwrap();
-	server.start(module).unwrap();
+	let _handle = server.start(module).unwrap();
 
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
 

@@ -32,7 +32,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use crate::future::{ConnectionGuard, FutureDriver, ServerHandle, StopMonitor};
+use crate::future::{ConnectionGuard, FutureDriver, ServerHandle, StopHandle};
 use crate::logger::Logger;
 use crate::transport::{http, ws};
 
@@ -51,7 +51,7 @@ use jsonrpsee_core::{http_helpers, Error, TEN_MB_SIZE_BYTES};
 
 use soketto::handshake::http::is_upgrade_request;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::{watch, OwnedSemaphorePermit};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 use tower::layer::util::Identity;
 use tower::{Layer, Service};
@@ -63,7 +63,6 @@ const MAX_CONNECTIONS: u32 = 100;
 pub struct Server<B = Identity, L = ()> {
 	listener: TcpListener,
 	cfg: Settings,
-	stop_monitor: StopMonitor,
 	resources: Resources,
 	logger: L,
 	id_provider: Arc<dyn IdProvider>,
@@ -75,7 +74,6 @@ impl<L> std::fmt::Debug for Server<L> {
 		f.debug_struct("Server")
 			.field("listener", &self.listener)
 			.field("cfg", &self.cfg)
-			.field("stop_monitor", &self.stop_monitor)
 			.field("id_provider", &self.id_provider)
 			.field("resources", &self.resources)
 			.finish()
@@ -86,11 +84,6 @@ impl<B, L> Server<B, L> {
 	/// Returns socket address to which the server is bound.
 	pub fn local_addr(&self) -> Result<SocketAddr, Error> {
 		self.listener.local_addr().map_err(Into::into)
-	}
-
-	/// Returns the handle to stop the running server.
-	pub fn server_handle(&self) -> ServerHandle {
-		self.stop_monitor.handle()
 	}
 }
 
@@ -112,33 +105,33 @@ where
 	/// Start responding to connections requests. This will run on the tokio runtime until the server is stopped.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let methods = methods.into().initialize_resources(&self.resources)?;
-		let handle = self.server_handle();
+		let (stop_tx, stop_rx) = watch::channel(());
+
+		let stop_handle = StopHandle::new(stop_rx);
 
 		match self.cfg.tokio_runtime.take() {
-			Some(rt) => rt.spawn(self.start_inner(methods)),
-			None => tokio::spawn(self.start_inner(methods)),
+			Some(rt) => rt.spawn(self.start_inner(methods, stop_handle)),
+			None => tokio::spawn(self.start_inner(methods, stop_handle)),
 		};
 
-		Ok(handle)
+		Ok(ServerHandle::new(stop_tx))
 	}
 
-	async fn start_inner(self, methods: Methods) {
+	async fn start_inner(self, methods: Methods, stop_handle: StopHandle) {
 		let max_request_body_size = self.cfg.max_request_body_size;
 		let max_response_body_size = self.cfg.max_response_body_size;
 		let max_log_length = self.cfg.max_log_length;
 		let allow_hosts = self.cfg.allow_hosts;
 		let resources = self.resources;
-		let listener = self.listener;
 		let logger = self.logger;
 		let batch_requests_supported = self.cfg.batch_requests_supported;
 		let id_provider = self.id_provider;
-		let stop_monitor = self.stop_monitor;
 		let max_subscriptions_per_connection = self.cfg.max_subscriptions_per_connection;
 
 		let mut id: u32 = 0;
-		let mut connections = FutureDriver::default();
-		let mut incoming = Monitored::new(Incoming(listener), &stop_monitor);
 		let connection_guard = ConnectionGuard::new(self.cfg.max_connections as usize);
+		let mut connections = FutureDriver::default();
+		let mut incoming = Monitored::new(Incoming(self.listener), &stop_handle);
 
 		loop {
 			match connections.select_with(&mut incoming).await {
@@ -157,8 +150,6 @@ where
 						}
 					};
 
-					let shutdown_requested = stop_monitor.shutdown_requested();
-
 					let tower_service = TowerService {
 						inner: ServiceData {
 							remote_addr: socket.peer_addr().ok(),
@@ -171,7 +162,7 @@ where
 							batch_requests_supported,
 							id_provider: id_provider.clone(),
 							ping_interval: self.cfg.ping_interval,
-							stop_monitor: stop_monitor.clone(),
+							stop_handle: stop_handle.clone(),
 							max_subscriptions_per_connection,
 							conn_id: id,
 							logger: logger.clone(),
@@ -181,6 +172,10 @@ where
 
 					let service = self.service_builder.service(tower_service);
 
+					// NOTE: this task will finish after the HTTP request have been finished.
+					//
+					// Thus, if it was a Websocket Upgrade request the background task will be spawned separately.
+					let mut stop_handle2 = stop_handle.clone();
 					connections.add(
 						async move {
 							let conn =
@@ -190,13 +185,13 @@ where
 
 							tokio::select! {
 								res = &mut conn => {
-									tracing::info!("conn: {} finished res: {:?}", id, res);
+									tracing::info!("Closing conn task: {:?}", res);
 									if let Err(e) = res {
 										tracing::error!("Error when processing connection: {:?}", e);
 									}
 								},
-								_ = shutdown_requested => {
-									tracing::info!("starting graceful conn");
+								_ = stop_handle2.shutdown() => {
+									tracing::info!("Closing conn task");
 									conn.graceful_shutdown();
 								}
 							}
@@ -215,64 +210,9 @@ where
 				Err(MonitoredError::Selector(err)) => {
 					tracing::error!("Error while awaiting a new connection: {:?}", err);
 				}
-				Err(MonitoredError::Shutdown) => {
-					tracing::info!("stopping server");
-					break;
-				}
+				Err(MonitoredError::Shutdown) => break,
 			}
 		}
-
-		connections.await
-	}
-}
-
-/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
-pub(crate) struct Monitored<'a, F> {
-	future: F,
-	stop_monitor: &'a StopMonitor,
-}
-
-impl<'a, F> Monitored<'a, F> {
-	pub(crate) fn new(future: F, stop_monitor: &'a StopMonitor) -> Self {
-		Monitored { future, stop_monitor }
-	}
-}
-
-pub(crate) enum MonitoredError<E> {
-	Shutdown,
-	Selector(E),
-}
-
-struct Incoming(TcpListener);
-
-impl<'a> Future for Monitored<'a, Incoming> {
-	type Output = Result<(TcpStream, SocketAddr), MonitoredError<std::io::Error>>;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		if this.stop_monitor.is_shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
-		}
-
-		this.future.0.poll_accept(cx).map_err(MonitoredError::Selector)
-	}
-}
-
-impl<'a, 'f, F, T, E> Future for Monitored<'a, Pin<&'f mut F>>
-where
-	F: Future<Output = Result<T, E>>,
-{
-	type Output = Result<T, MonitoredError<E>>;
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		let this = Pin::into_inner(self);
-
-		if this.stop_monitor.is_shutdown_requested() {
-			return Poll::Ready(Err(MonitoredError::Shutdown));
-		}
-
-		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
 	}
 }
 
@@ -549,12 +489,10 @@ impl<B, L> Builder<B, L> {
 	///
 	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
-		let stop_monitor = StopMonitor::new();
 		let resources = self.resources;
 		Ok(Server {
 			listener,
 			cfg: self.settings,
-			stop_monitor,
 			resources,
 			logger: self.logger,
 			id_provider: self.id_provider,
@@ -603,7 +541,7 @@ pub(crate) struct ServiceData<L: Logger> {
 	/// Ping interval
 	pub(crate) ping_interval: Duration,
 	/// Stop handle.
-	pub(crate) stop_monitor: StopMonitor,
+	pub(crate) stop_handle: StopHandle,
 	/// Max subscriptions per connection.
 	pub(crate) max_subscriptions_per_connection: u32,
 	/// Connection ID
@@ -660,8 +598,8 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
 					self.inner.logger.on_connect(self.inner.remote_addr, &request);
-
 					let data = self.inner.clone();
+
 					tokio::spawn(async move {
 						let upgraded = match hyper::upgrade::on(request).await {
 							Ok(u) => u,
@@ -703,5 +641,55 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 			Box::pin(http::handle_request(request, data).map(Ok))
 		}
+	}
+}
+
+/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
+struct Monitored<'a, F> {
+	future: F,
+	stop_monitor: &'a StopHandle,
+}
+
+impl<'a, F> Monitored<'a, F> {
+	fn new(future: F, stop_monitor: &'a StopHandle) -> Self {
+		Monitored { future, stop_monitor }
+	}
+}
+
+enum MonitoredError<E> {
+	Shutdown,
+	Selector(E),
+}
+
+struct Incoming(TcpListener);
+
+impl<'a> Future for Monitored<'a, Incoming> {
+	type Output = Result<(TcpStream, SocketAddr), MonitoredError<std::io::Error>>;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		if this.stop_monitor.shutdown_requested() {
+			return Poll::Ready(Err(MonitoredError::Shutdown));
+		}
+
+		this.future.0.poll_accept(cx).map_err(MonitoredError::Selector)
+	}
+}
+
+impl<'a, 'f, F, T, E> Future for Monitored<'a, Pin<&'f mut F>>
+where
+	F: Future<Output = Result<T, E>>,
+{
+	type Output = Result<T, MonitoredError<E>>;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		if this.stop_monitor.shutdown_requested() {
+			return Poll::Ready(Err(MonitoredError::Shutdown));
+		}
+
+		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
 	}
 }

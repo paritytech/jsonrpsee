@@ -28,14 +28,12 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures_util::future::FutureExt;
-use futures_util::task::AtomicWaker;
 use jsonrpsee_core::Error;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, TryAcquireError};
+use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::{self, Duration, Interval};
 
 /// Polling for server stop monitor interval in milliseconds.
@@ -148,61 +146,53 @@ where
 	}
 }
 
-#[derive(Debug)]
-struct MonitorInner {
-	shutdown_requested: AtomicBool,
-	waker: AtomicWaker,
-}
-
-/// Monitor for checking whether the server has been flagged to shut down.
 #[derive(Debug, Clone)]
-pub(crate) struct StopMonitor(Arc<MonitorInner>);
+pub(crate) struct StopHandle(watch::Receiver<()>);
 
-impl Drop for StopMonitor {
-	fn drop(&mut self) {
-		if Arc::strong_count(&self.0) == 1 {
-			self.0.waker.wake();
-		}
+impl StopHandle {
+	pub(crate) fn new(rx: watch::Receiver<()>) -> Self {
+		Self(rx)
+	}
+
+	pub(crate) fn shutdown_requested(&self) -> bool {
+		// if a message has been seen, it means that `stop` has been called.
+		self.0.has_changed().unwrap_or(true)
+	}
+
+	pub(crate) async fn shutdown(&mut self) {
+		// error implies that the server has stopped
+		let _ = self.0.changed().await;
 	}
 }
 
-impl StopMonitor {
-	pub(crate) fn new() -> Self {
-		StopMonitor(Arc::new(MonitorInner { shutdown_requested: AtomicBool::new(false), waker: AtomicWaker::new() }))
-	}
-
-	pub(crate) fn is_shutdown_requested(&self) -> bool {
-		// We expect this method to be polled frequently, skipping an iteration isn't problematic, so relaxed
-		// ordering is optimal.
-		self.0.shutdown_requested.load(Ordering::Relaxed)
-	}
-
-	pub(crate) fn handle(&self) -> ServerHandle {
-		ServerHandle(Arc::downgrade(&self.0))
-	}
-
-	pub(crate) fn shutdown_requested(&self) -> ShutdownRequestedWaiter {
-		ShutdownRequestedWaiter(Arc::downgrade(&self.0))
-	}
-}
-
-/// Handle that is able to stop the running server or wait for it to finish
-/// its execution.
+/// Server handle.
+///
+/// When all server handles has been `dropped` or `stop` has been called
+/// the server will be stopped.
 #[derive(Debug, Clone)]
-pub struct ServerHandle(Weak<MonitorInner>);
+pub struct ServerHandle(pub Arc<watch::Sender<()>>);
 
 impl ServerHandle {
-	/// Requests server to stop. Returns an error if server was already stopped.
+	/// Create a new server handle.
+	pub fn new(tx: watch::Sender<()>) -> Self {
+		Self(Arc::new(tx))
+	}
+
+	/// Stop the server
 	///
-	/// Returns a future that can be awaited for when the server shuts down.
-	pub fn stop(self) -> Result<ShutdownWaiter, Error> {
-		if let Some(arc) = Weak::upgrade(&self.0) {
-			// We proceed only if the previous value of the flag was `false`
-			if !arc.shutdown_requested.swap(true, Ordering::Relaxed) {
-				return Ok(ShutdownWaiter(self.0));
-			}
-		}
-		Err(Error::AlreadyStopped)
+	/// This may be called several times but has no effect.
+	pub fn stop(&self) -> Result<(), Error> {
+		self.0.send(()).map_err(|_| Error::AlreadyStopped)
+	}
+
+	/// Waits until the server has been stopped.
+	pub async fn stopped(&self) {
+		self.0.closed().await
+	}
+
+	/// Check if the server has been stopped.
+	pub fn is_stopped(&self) -> bool {
+		self.0.is_closed()
 	}
 }
 
@@ -210,60 +200,9 @@ impl Future for ServerHandle {
 	type Output = ();
 
 	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		let mut shutdown_waiter = ShutdownWaiter(self.0.clone());
+		let mut stopped = Box::pin(self.0.closed());
 
-		shutdown_waiter.poll_unpin(cx)
-	}
-}
-
-/// A `Future` that resolves once the server has stopped.
-#[derive(Debug)]
-pub struct ShutdownWaiter(Weak<MonitorInner>);
-
-impl Future for ShutdownWaiter {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		match Weak::upgrade(&self.0) {
-			None => return Poll::Ready(()),
-			Some(arc) => {
-				arc.waker.register(cx.waker());
-				drop(arc);
-			}
-		}
-
-		// Re-check the count after dropping the `Arc` above in case another
-		// thread has dropped final `Arc` in the mean time, else the future
-		// might never resolve.
-		match Weak::strong_count(&self.0) {
-			0 => Poll::Ready(()),
-			n => {
-				tracing::trace!("Shutdown count: {}", n);
-				Poll::Pending
-			}
-		}
-	}
-}
-
-/// A `Future` that resolves once the server has been requested to be stopped.
-#[derive(Debug)]
-pub(crate) struct ShutdownRequestedWaiter(Weak<MonitorInner>);
-
-impl Future for ShutdownRequestedWaiter {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-		if let Some(arc) = Weak::upgrade(&self.0) {
-			// TODO(niklasad1): this doesn't work.
-			//arc.waker.register(cx.waker());
-
-			// We expect this method to be polled frequently, skipping an iteration isn't problematic, so relaxed
-			// ordering is optimal.
-			if arc.shutdown_requested.load(Ordering::Relaxed) {
-				return Poll::Ready(());
-			}
-		}
-		Poll::Pending
+		stopped.poll_unpin(cx)
 	}
 }
 

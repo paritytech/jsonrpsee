@@ -41,7 +41,7 @@ use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
 #[allow(dead_code)]
-pub async fn server_with_subscription() -> (SocketAddr, ServerHandle) {
+pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
 	let mut module = RpcModule::new(());
@@ -179,7 +179,18 @@ pub async fn server_with_subscription() -> (SocketAddr, ServerHandle) {
 }
 
 #[allow(dead_code)]
-pub async fn server() -> (SocketAddr, ServerHandle) {
+pub async fn server_with_subscription() -> SocketAddr {
+	let (addr, handle) = server_with_subscription_and_handle().await;
+
+	tokio::spawn(async move {
+		handle.await;
+	});
+
+	addr
+}
+
+#[allow(dead_code)]
+pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -195,7 +206,11 @@ pub async fn server() -> (SocketAddr, ServerHandle) {
 
 	let server_handle = server.start(module).unwrap();
 
-	(addr, server_handle)
+	tokio::spawn(async move {
+		server_handle.await;
+	});
+
+	addr
 }
 
 /// Yields one item then sleeps for an hour.
@@ -219,7 +234,12 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 			Ok(())
 		})
 		.unwrap();
-	server.start(module).unwrap();
+	let handle = server.start(module).unwrap();
+
+	tokio::spawn(async move {
+		handle.await;
+	});
+
 	addr
 }
 

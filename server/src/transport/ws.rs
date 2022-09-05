@@ -1,11 +1,14 @@
-use crate::future::FutureDriver;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+use crate::future::{FutureDriver, StopHandle};
 use crate::logger::{self, Logger};
-use crate::server::{MethodResult, Monitored, MonitoredError, ServiceData};
+use crate::server::{MethodResult, ServiceData};
 
 use futures_channel::mpsc;
 use futures_util::future::Either;
 use futures_util::io::{BufReader, BufWriter};
-use futures_util::{FutureExt, StreamExt, TryStreamExt};
+use futures_util::{Future, FutureExt, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
 use jsonrpsee_core::server::helpers::{
 	prepare_error, BatchResponse, BatchResponseBuilder, BoundedSubscriptions, MethodResponse, MethodSink,
@@ -70,6 +73,40 @@ pub(crate) struct Call<'a, L: Logger> {
 	pub(crate) name: &'a str,
 	pub(crate) call: CallData<'a, L>,
 	pub(crate) id: Id<'a>,
+}
+
+/// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
+struct Monitored<'a, F> {
+	future: F,
+	stop_monitor: &'a StopHandle,
+}
+
+impl<'a, F> Monitored<'a, F> {
+	fn new(future: F, stop_monitor: &'a StopHandle) -> Self {
+		Monitored { future, stop_monitor }
+	}
+}
+
+enum MonitoredError<E> {
+	Shutdown,
+	Selector(E),
+}
+
+impl<'a, 'f, F, T, E> Future for Monitored<'a, Pin<&'f mut F>>
+where
+	F: Future<Output = Result<T, E>>,
+{
+	type Output = Result<T, MonitoredError<E>>;
+
+	fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+		let this = Pin::into_inner(self);
+
+		if this.stop_monitor.shutdown_requested() {
+			return Poll::Ready(Err(MonitoredError::Shutdown));
+		}
+
+		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
+	}
 }
 
 // Batch responses must be sent back as a single message so we read the results from each
@@ -246,7 +283,7 @@ pub(crate) async fn background_task<L: Logger>(
 		max_response_body_size,
 		max_log_length,
 		batch_requests_supported,
-		stop_monitor,
+		stop_handle,
 		id_provider,
 		ping_interval,
 		max_subscriptions_per_connection,
@@ -261,7 +298,7 @@ pub(crate) async fn background_task<L: Logger>(
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
 	let bounded_subscriptions2 = bounded_subscriptions.clone();
 
-	let stop_monitor2 = stop_monitor.clone();
+	let stop_handle2 = stop_handle.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
 	// Send results back to the client.
@@ -274,7 +311,7 @@ pub(crate) async fn background_task<L: Logger>(
 		tokio::pin!(ping_interval);
 		let mut next_ping = ping_interval.next();
 
-		while !stop_monitor2.is_shutdown_requested() {
+		while !stop_handle2.shutdown_requested() {
 			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
 			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
 			match futures_util::future::select(rx_item, next_ping).await {
@@ -301,6 +338,8 @@ pub(crate) async fn background_task<L: Logger>(
 				}
 			}
 		}
+
+		tracing::info!("stopping ws send task");
 
 		// Terminate connection and send close message.
 		let _ = sender.close().await;
@@ -336,11 +375,12 @@ pub(crate) async fn background_task<L: Logger>(
 
 			tokio::pin!(receive);
 
-			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_monitor)).await {
+			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_handle)).await {
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
 						tracing::debug!("WS transport: Remote peer terminated the connection: {}", conn_id);
 						sink.close();
+						drop(stop_handle);
 						break Ok(());
 					}
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
@@ -358,7 +398,10 @@ pub(crate) async fn background_task<L: Logger>(
 						sink.close();
 						break Err(err.into());
 					}
-					MonitoredError::Shutdown => break Ok(()),
+					MonitoredError::Shutdown => {
+						tracing::info!("ws main task; server stopped");
+						break Ok(());
+					}
 				};
 			};
 		};

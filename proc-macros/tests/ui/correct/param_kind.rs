@@ -44,7 +44,7 @@ pub async fn server() -> SocketAddr {
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
 
-	server.start(RpcServerImpl.into_rpc()).unwrap();
+	tokio::spawn(async move { server.start(RpcServerImpl.into_rpc()).unwrap().await });
 
 	addr
 }

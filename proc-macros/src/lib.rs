@@ -319,7 +319,7 @@ pub(crate) mod visitor;
 ///     let addr = server.local_addr().unwrap();
 ///
 ///     // `into_rpc()` method was generated inside of the `RpcServer` trait under the hood.
-///     server.start(RpcServerImpl.into_rpc()).unwrap();
+///     tokio::spawn(async move { server.start(RpcServerImpl.into_rpc()).unwrap().await });
 ///
 ///     addr
 /// }

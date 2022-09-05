@@ -424,6 +424,7 @@ async fn can_set_the_max_request_body_size() {
 	assert_eq!(response.body, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
 	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
@@ -443,6 +444,7 @@ async fn can_set_the_max_response_size() {
 	assert_eq!(response.body, oversized_response(Id::Num(1), 100));
 
 	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
@@ -462,6 +464,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	assert_eq!(response.body, invalid_request(Id::Null));
 
 	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
@@ -484,4 +487,5 @@ async fn disabled_batches() {
 	assert_eq!(response.body, batches_not_supported());
 
 	handle.stop().unwrap();
+	handle.stopped().await;
 }
