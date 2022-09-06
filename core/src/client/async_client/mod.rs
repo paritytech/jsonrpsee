@@ -27,11 +27,13 @@ use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::{
-	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response,
+	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, RequestSer, Response,
 	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
 use tracing_futures::Instrument;
+use crate::params::BatchRequestBuilder;
+use crate::traits::ToRpcParams;
 
 use super::{FrontToBack, IdKind, RequestIdManager};
 
@@ -174,7 +176,7 @@ impl ClientBuilder {
 				ping_interval,
 				on_close_tx,
 			)
-			.await;
+				.await;
 		});
 		Client {
 			to_back,
@@ -190,9 +192,9 @@ impl ClientBuilder {
 	#[cfg(all(feature = "async-wasm-client", target_arch = "wasm32"))]
 	#[cfg_attr(docsrs, doc(cfg(feature = "async-wasm-client")))]
 	pub fn build_with_wasm<S, R>(self, sender: S, receiver: R) -> Client
-	where
-		S: TransportSenderT,
-		R: TransportReceiverT,
+		where
+			S: TransportSenderT,
+			R: TransportReceiverT,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
@@ -272,10 +274,14 @@ impl Drop for Client {
 }
 
 #[async_trait]
-impl ClientT for Client {
-	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
+impl ClientT for Client
+{
+	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	where
+		Params: ToRpcParams + Send {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_manager.next_request_id()?;
+		let params = params.to_rpc_params()?;
 		let notif = NotificationSer::new(method, params);
 		let trace = RpcTracing::batch();
 
@@ -292,13 +298,14 @@ impl ClientT for Client {
 				Either::Right((_, _)) => Err(Error::RequestTimeout),
 			}
 		}
-		.instrument(trace.into_span())
-		.await
+			.instrument(trace.into_span())
+			.await
 	}
 
-	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
+	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
+		Params: ToRpcParams + Send
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let guard = self.id_manager.next_request_id()?;
@@ -306,6 +313,7 @@ impl ClientT for Client {
 		let trace = RpcTracing::method_call(method);
 
 		async {
+			let params = params.to_rpc_params()?;
 			let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
 			tx_log_from_str(&raw, self.max_log_length);
 
@@ -330,16 +338,17 @@ impl ClientT for Client {
 
 			serde_json::from_value(json_value).map_err(Error::ParseError)
 		}
-		.instrument(trace.into_span())
-		.await
+			.instrument(trace.into_span())
+			.await
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
-		R: DeserializeOwned + Default + Clone,
+		R: DeserializeOwned + Default + Clone
 	{
 		let trace = RpcTracing::batch();
 		async {
+			let batch = batch.build();
 			let guard = self.id_manager.next_request_ids(batch.len())?;
 			let batch_ids: Vec<Id> = guard.inner();
 			let mut batches = Vec::with_capacity(batch.len());
@@ -374,8 +383,8 @@ impl ClientT for Client {
 
 			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect()
 		}
-		.instrument(trace.into_span())
-		.await
+			.instrument(trace.into_span())
+			.await
 	}
 }
 
@@ -385,14 +394,15 @@ impl SubscriptionClientT for Client {
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	async fn subscribe<'a, N>(
+	async fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
-		params: Option<ParamsSer<'a>>,
+		params: Params,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<N>, Error>
+	) -> Result<Subscription<Notif>, Error>
 	where
-		N: DeserializeOwned,
+		Params: ToRpcParams + Send,
+		Notif: DeserializeOwned
 	{
 		if subscribe_method == unsubscribe_method {
 			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
@@ -401,6 +411,7 @@ impl SubscriptionClientT for Client {
 		let guard = self.id_manager.next_request_ids(2)?;
 		let mut ids: Vec<Id> = guard.inner();
 		let trace = RpcTracing::method_call(subscribe_method);
+		let params = params.to_rpc_params()?;
 
 		async {
 			let id = ids[0].clone();
@@ -439,8 +450,8 @@ impl SubscriptionClientT for Client {
 
 			Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 		}
-		.instrument(trace.into_span())
-		.await
+			.instrument(trace.into_span())
+			.await
 	}
 
 	/// Subscribe to a specific method.

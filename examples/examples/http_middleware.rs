@@ -37,6 +37,7 @@ use tower_http::LatencyUnit;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::rpc_params;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -49,10 +50,10 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("http://{}", addr);
 
 	let client = HttpClientBuilder::default().build(&url)?;
-	let response: String = client.request("say_hello", None).await?;
+	let response: String = client.request("say_hello", rpc_params![]).await?;
 	println!("[main]: response: {:?}", response);
-	let _response: Result<String, _> = client.request("unknown_method", None).await;
-	let _ = client.request::<String>("say_hello", None).await?;
+	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
+	let _: String = client.request("say_hello", rpc_params![]).await?;
 
 	Ok(())
 }

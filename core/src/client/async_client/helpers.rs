@@ -34,10 +34,10 @@ use futures_util::future::{self, Either};
 
 use jsonrpsee_types::error::CallError;
 use jsonrpsee_types::response::SubscriptionError;
-use jsonrpsee_types::{
-	ErrorResponse, Id, Notification, ParamsSer, RequestSer, Response, SubscriptionId, SubscriptionResponse,
-};
+use jsonrpsee_types::{ErrorResponse, Id, Notification, RequestSer, Response, SubscriptionId, SubscriptionResponse};
 use serde_json::Value as JsonValue;
+use crate::params::ArrayParams;
+use crate::traits::ToRpcParams;
 
 /// Attempts to process a batch response.
 ///
@@ -222,10 +222,12 @@ pub(crate) fn build_unsubscribe_message(
 	sub_id: SubscriptionId<'static>,
 ) -> Option<RequestMessage> {
 	let (unsub_req_id, _, unsub, sub_id) = manager.remove_subscription(sub_req_id, sub_id)?;
-	let sub_id_slice: &[JsonValue] = &[sub_id.into()];
-	// TODO: https://github.com/paritytech/jsonrpsee/issues/275
-	let params = ParamsSer::ArrayRef(sub_id_slice);
-	let raw = serde_json::to_string(&RequestSer::new(&unsub_req_id, &unsub, Some(params))).ok()?;
+
+	let mut params = ArrayParams::new();
+	params.insert(sub_id).ok()?;
+	let params = params.to_rpc_params().ok()?;
+
+	let raw = serde_json::to_string(&RequestSer::new(&unsub_req_id, &unsub, params)).ok()?;
 	Some(RequestMessage { raw, id: unsub_req_id, send_back: None })
 }
 

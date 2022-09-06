@@ -45,6 +45,7 @@ use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::http_server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
+use jsonrpsee::rpc_params;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -58,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
 	// Use RPC client to get the response of `say_hello` method.
 	let client = HttpClientBuilder::default().build(&url)?;
-	let response: String = client.request("say_hello", None).await?;
+	let response: String = client.request("say_hello", rpc_params![]).await?;
 	println!("[main]: response: {:?}", response);
 
 	// Use hyper client to manually submit a `GET /health` request.

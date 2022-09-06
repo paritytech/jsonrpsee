@@ -29,6 +29,7 @@ use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::core::logger::{self, Headers, MethodKind, Params};
+use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
@@ -75,10 +76,10 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", None).await?;
+	let response: String = client.request("say_hello", rpc_params![]).await?;
 	println!("response: {:?}", response);
-	let _response: Result<String, _> = client.request("unknown_method", None).await;
-	let _ = client.request::<String>("say_hello", None).await?;
+	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
+	let _: String = client.request("say_hello", rpc_params![]).await?;
 
 	Ok(())
 }
