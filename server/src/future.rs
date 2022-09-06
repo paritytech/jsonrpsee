@@ -168,7 +168,7 @@ impl StopHandle {
 
 /// Server handle.
 ///
-/// When all server handles has been `dropped` or `stop` has been called
+/// When all server handles have been `dropped` or `stop` has been called
 /// the server will be stopped.
 #[derive(Debug)]
 pub struct ServerHandle {
