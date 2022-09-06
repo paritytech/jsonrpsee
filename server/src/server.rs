@@ -185,13 +185,11 @@ where
 
 							tokio::select! {
 								res = &mut conn => {
-									tracing::info!("Closing conn task: {:?}", res);
 									if let Err(e) = res {
-										tracing::error!("Error when processing connection: {:?}", e);
+										tracing::warn!("Error when processing connection: {:?}", e);
 									}
 								},
 								_ = stop_handle2.shutdown() => {
-									tracing::info!("Closing conn task");
 									conn.graceful_shutdown();
 								}
 							}

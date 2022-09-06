@@ -2,16 +2,13 @@
 
 use std::net::SocketAddr;
 
+use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::rpc_params;
-<<<<<<< HEAD
-use jsonrpsee::server::{ServerBuilder, SubscriptionSink};
-=======
-use jsonrpsee::core::params::ArrayParams;
->>>>>>> origin/master
+use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::*;
+use jsonrpsee::{rpc_params, SubscriptionSink};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -109,7 +106,10 @@ async fn main() {
 	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
 
 	assert_eq!(client.array_params(vec![1]).await.unwrap(), 1);
-	assert_eq!(client.request::<u64, ArrayParams>("foo_array_params", rpc_params![Vec::<u64>::new()]).await.unwrap(), 0);
+	assert_eq!(
+		client.request::<u64, ArrayParams>("foo_array_params", rpc_params![Vec::<u64>::new()]).await.unwrap(),
+		0
+	);
 
 	assert_eq!(client.request::<bool, ArrayParams>("foo_optional_param", rpc_params![]).await.unwrap(), false);
 	assert_eq!(client.request::<bool, ArrayParams>("foo_optional_param", rpc_params![1]).await.unwrap(), true);

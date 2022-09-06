@@ -353,7 +353,6 @@ pub(crate) async fn background_task<L: Logger>(
 						break Err(err.into());
 					}
 					MonitoredError::Shutdown => {
-						tracing::info!("ws main task; server stopped");
 						break Ok(());
 					}
 				};
