@@ -39,6 +39,9 @@ pub mod error;
 /// Traits
 pub mod traits;
 
+/// RPC Parameters.
+pub mod params;
+
 cfg_http_helpers! {
 	pub mod http_helpers;
 }

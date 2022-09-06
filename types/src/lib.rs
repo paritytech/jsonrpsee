@@ -26,7 +26,6 @@
 
 //! Shared types in `jsonrpsee` for clients, servers and utilities.
 
-#![deny(unsafe_code)]
 #![warn(missing_docs, missing_debug_implementations)]
 
 extern crate alloc;
@@ -44,9 +43,9 @@ pub mod response;
 pub mod error;
 
 pub use error::{ErrorObject, ErrorObjectOwned, ErrorResponse, SubscriptionEmptyError, SubscriptionResult};
-pub use params::{Id, Params, ParamsSequence, ParamsSer, SubscriptionId, TwoPointZero};
+pub use params::{Id, Params, ParamsSequence, SubscriptionId, TwoPointZero};
 pub use request::{InvalidRequest, Notification, NotificationSer, Request, RequestSer};
 pub use response::{Response, SubscriptionPayload, SubscriptionResponse};
 
-/// Empty `RpcParams` type;
-pub type EmptyParams = Vec<()>;
+/// Empty server `RpcParams` type to use while registering modules.
+pub type EmptyServerParams = Vec<()>;

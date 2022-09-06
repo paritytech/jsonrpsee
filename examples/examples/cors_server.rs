@@ -33,7 +33,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use jsonrpsee::{
 	core::server::host_filtering::AllowHosts,
-	server::{RpcModule, ServerBuilder, ServerHandle},
+	server::{RpcModule, ServerBuilder},
 };
 
 #[tokio::main]
@@ -43,8 +43,8 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	// Start up a JSONPRC server that allows cross origin requests.
-	let (server_addr, _handle) = run_server().await?;
+	// Start up a JSON-RPC server that allows cross origin requests.
+	let server_addr = run_server().await?;
 
 	// Print instructions for testing CORS from a browser.
 	println!("Run the following snippet in the developer console in any Website.");
@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
 	futures::future::pending().await
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
+async fn run_server() -> anyhow::Result<SocketAddr> {
 	// Add a CORS middleware for handling HTTP requests.
 	// This middleware does affect the response, including appropriate
 	// headers to satisfy CORS. Because any origins are allowed, the
@@ -102,7 +102,11 @@ async fn run_server() -> anyhow::Result<(SocketAddr, ServerHandle)> {
 	})?;
 
 	let addr = server.local_addr()?;
-	let server_handle = server.start(module)?;
+	let handle = server.start(module)?;
 
-	Ok((addr, server_handle))
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(async move { handle.await });
+
+	Ok(addr)
 }

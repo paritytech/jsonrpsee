@@ -28,7 +28,6 @@
 
 mod helpers;
 
-use std::collections::BTreeMap;
 use std::net::SocketAddr;
 
 use helpers::init_logger;
@@ -38,7 +37,7 @@ use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
 use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::types::error::{CallError, ErrorCode};
-use jsonrpsee::types::ParamsSer;
+
 use jsonrpsee::ws_client::*;
 use serde_json::json;
 
@@ -199,6 +198,7 @@ mod rpc_impl {
 }
 
 // Use generated implementations of server and client.
+use jsonrpsee::core::params::{ArrayParams, ObjectParams};
 use rpc_impl::{RpcClient, RpcServer, RpcServerImpl};
 
 pub async fn server() -> SocketAddr {
@@ -301,12 +301,13 @@ async fn macro_zero_copy_cow() {
 #[cfg(not(target_os = "macos"))]
 #[tokio::test]
 async fn multiple_blocking_calls_overlap() {
-	use jsonrpsee::types::EmptyParams;
+	use jsonrpsee::types::EmptyServerParams;
 	use std::time::{Duration, Instant};
 
 	let module = RpcServerImpl.into_rpc();
 
-	let futures = std::iter::repeat_with(|| module.call::<_, u64>("foo_blocking_call", EmptyParams::new())).take(4);
+	let futures =
+		std::iter::repeat_with(|| module.call::<_, u64>("foo_blocking_call", EmptyServerParams::new())).take(4);
 	let now = Instant::now();
 	let results = futures::future::join_all(futures).await;
 	let elapsed = now.elapsed();
@@ -341,8 +342,8 @@ async fn calls_with_bad_params() {
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	// Sub with faulty params as array.
-	let err = client
-		.subscribe::<serde_json::Value>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
+	let err: Error = client
+		.subscribe::<String, ArrayParams>("foo_echo", rpc_params!["0x0"], "foo_unsubscribe_echo")
 		.await
 		.unwrap_err();
 	assert!(
@@ -350,28 +351,28 @@ async fn calls_with_bad_params() {
 	);
 
 	// Call with faulty params as array.
-	let err = client.request::<serde_json::Value>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
+	let err: Error = client.request::<String, ArrayParams>("foo_foo", rpc_params!["faulty", "ok"]).await.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"faulty\", expected u8") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Sub with faulty params as map.
-	let mut map = BTreeMap::new();
-	map.insert("val", "0x0".into());
-	let params = ParamsSer::Map(map);
-	let err =
-		client.subscribe::<serde_json::Value>("foo_echo", Some(params), "foo_unsubscribe_echo").await.unwrap_err();
+	let mut params = ObjectParams::new();
+	params.insert("val", "0x0").unwrap();
+
+	let err: Error =
+		client.subscribe::<String, ObjectParams>("foo_echo", params, "foo_unsubscribe_echo").await.unwrap_err();
 	assert!(
 		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: string \"0x0\", expected u32") && err.code() == ErrorCode::InvalidParams.code())
 	);
 
 	// Call with faulty params as map.
-	let mut map = BTreeMap::new();
-	map.insert("param_a", 1.into());
-	map.insert("param_b", 99.into());
-	let params = ParamsSer::Map(map);
-	let err = client.request::<serde_json::Value>("foo_foo", Some(params)).await.unwrap_err();
+	let mut params = ObjectParams::new();
+	params.insert("param_a", 1).unwrap();
+	params.insert("param_b", 2).unwrap();
+
+	let err: Error = client.request::<String, ObjectParams>("foo_foo", params).await.unwrap_err();
 	assert!(
-		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: integer `99`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
+		matches!(err, Error::Call(CallError::Custom (err)) if err.message().contains("invalid type: integer `2`, expected a string") && err.code() == ErrorCode::InvalidParams.code())
 	);
 }

@@ -132,11 +132,11 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("ws://{}", addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", None).await?;
+	let response: String = client.request("say_hello", rpc_params![]).await?;
 	println!("response: {:?}", response);
-	let _response: Result<String, _> = client.request("unknown_method", None).await;
-	let _ = client.request::<String>("say_hello", None).await?;
-	client.request::<()>("thready", rpc_params![4]).await?;
+	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
+	let _: String = client.request("say_hello", rpc_params![]).await?;
+	client.request("thready", rpc_params![4]).await?;
 
 	Ok(())
 }
@@ -153,6 +153,11 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		Ok(())
 	})?;
 	let addr = server.local_addr()?;
-	server.start(module)?;
+	let handle = server.start(module)?;
+
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(async move { handle.await });
+
 	Ok(addr)
 }

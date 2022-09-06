@@ -28,6 +28,7 @@ use std::net::SocketAddr;
 
 use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
 use jsonrpsee::core::client::{Client, ClientBuilder, ClientT};
+use jsonrpsee::rpc_params;
 use jsonrpsee::server::{RpcModule, ServerBuilder};
 
 #[tokio::main]
@@ -42,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
 
 	let (tx, rx) = WsTransportClientBuilder::default().build(uri).await?;
 	let client: Client = ClientBuilder::default().build_with_tokio(tx, rx);
-	let response: String = client.request("say_hello", None).await?;
+	let response: String = client.request("say_hello", rpc_params![]).await?;
 	tracing::info!("response: {:?}", response);
 
 	Ok(())
@@ -53,6 +54,12 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
-	server.start(module)?;
+
+	let handle = server.start(module)?;
+
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(async move { handle.await });
+
 	Ok(addr)
 }

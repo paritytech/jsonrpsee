@@ -339,7 +339,7 @@ impl Methods {
 	///
 	/// The params must be serializable as JSON array, see [`ToRpcParams`] for further documentation.
 	///
-	/// Returns the decoded value of the `result field` in JSON-RPC response if succesful.
+	/// Returns the decoded value of the `result field` in JSON-RPC response if successful.
 	///
 	/// # Examples
 	///
@@ -363,7 +363,7 @@ impl Methods {
 		params: Params,
 	) -> Result<T, Error> {
 		let params = params.to_rpc_params()?;
-		let req = Request::new(method.into(), Some(&params), Id::Number(0));
+		let req = Request::new(method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 		tracing::trace!("[Methods::call] Method: {:?}, params: {:?}", method, params);
 		let (resp, _, _) = self.inner_call(req).await;
 
@@ -459,7 +459,7 @@ impl Methods {
 	/// ```
 	/// #[tokio::main]
 	/// async fn main() {
-	///     use jsonrpsee::{RpcModule, types::EmptyParams};
+	///     use jsonrpsee::{RpcModule, types::EmptyServerParams};
 	///
 	///     let mut module = RpcModule::new(());
 	///     module.register_subscription("hi", "hi", "goodbye", |_, mut sink, _| {
@@ -467,7 +467,7 @@ impl Methods {
 	///         Ok(())
 	///     }).unwrap();
 	///
-	///     let mut sub = module.subscribe("hi", EmptyParams::new()).await.unwrap();
+	///     let mut sub = module.subscribe("hi", EmptyServerParams::new()).await.unwrap();
 	///     // In this case we ignore the subscription ID,
 	///     let (sub_resp, _sub_id) = sub.next::<String>().await.unwrap().unwrap();
 	///     assert_eq!(&sub_resp, "one answer");
@@ -475,7 +475,7 @@ impl Methods {
 	/// ```
 	pub async fn subscribe(&self, sub_method: &str, params: impl ToRpcParams) -> Result<Subscription, Error> {
 		let params = params.to_rpc_params()?;
-		let req = Request::new(sub_method.into(), Some(&params), Id::Number(0));
+		let req = Request::new(sub_method.into(), params.as_ref().map(|p| p.as_ref()), Id::Number(0));
 
 		tracing::trace!("[Methods::subscribe] Method: {}, params: {:?}", sub_method, params);
 

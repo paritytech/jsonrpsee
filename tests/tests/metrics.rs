@@ -35,6 +35,7 @@ use helpers::init_logger;
 use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::rpc_params;
 use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::Params;
@@ -149,14 +150,19 @@ async fn ws_server_logger() {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
-	assert_eq!(client.request::<String>("say_hello", None).await.unwrap(), "hello");
+	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
+	assert_eq!(res, "hello");
 
-	assert!(client.request::<String>("unknown_method", None).await.is_err());
+	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	assert!(res.is_err());
 
-	assert_eq!(client.request::<String>("say_hello", None).await.unwrap(), "hello");
-	assert_eq!(client.request::<String>("say_hello", None).await.unwrap(), "hello");
+	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
+	assert_eq!(res, "hello");
+	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
+	assert_eq!(res, "hello");
 
-	assert!(client.request::<String>("unknown_method", None).await.is_err());
+	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	assert!(res.is_err());
 
 	{
 		let inner = counter.inner.lock().unwrap();
@@ -182,14 +188,19 @@ async fn http_server_logger() {
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
-	assert_eq!(client.request::<String>("say_hello", None).await.unwrap(), "hello");
+	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
+	assert_eq!(res, "hello");
 
-	assert!(client.request::<String>("unknown_method", None).await.is_err());
+	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	assert!(res.is_err());
 
-	assert_eq!(client.request::<String>("say_hello", None).await.unwrap(), "hello");
-	assert_eq!(client.request::<String>("say_hello", None).await.unwrap(), "hello");
+	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
+	assert_eq!(res, "hello");
+	let res: String = client.request("say_hello", rpc_params![]).await.unwrap();
+	assert_eq!(res, "hello");
 
-	assert!(client.request::<String>("unknown_method", None).await.is_err());
+	let res: Result<String, Error> = client.request("unknown_method", rpc_params![]).await;
+	assert!(res.is_err());
 
 	{
 		let inner = counter.inner.lock().unwrap();

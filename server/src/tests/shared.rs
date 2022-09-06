@@ -1,10 +1,10 @@
-use crate::tests::helpers::{init_logger, server_with_handles};
+/*use crate::tests::helpers::{init_logger, server_with_handles};
 use futures_util::future::join;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use std::time::Duration;
 
-/*#[tokio::test]
+#[tokio::test]
 async fn stop_works() {
 	init_logger();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
