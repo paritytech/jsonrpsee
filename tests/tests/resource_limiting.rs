@@ -233,8 +233,7 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: ServerHa
 	assert!(pass2.is_ok());
 	assert_server_busy(fail);
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server_handle.stop().unwrap().await;
 }
 
 async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: ServerHandle) {
@@ -262,8 +261,7 @@ async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: Server
 
 	assert_eq!(passes, 3);
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server_handle.stop().unwrap().await;
 }
 
 #[tokio::test]

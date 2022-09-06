@@ -59,8 +59,7 @@ async fn can_set_the_max_request_body_size() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
-	handle.stop().unwrap();
-	handle.stopped().await;
+	handle.stop().unwrap().await;
 }
 
 #[tokio::test]
@@ -82,7 +81,7 @@ async fn can_set_the_max_response_body_size() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, oversized_response(Id::Num(1), 100));
 
-	handle.stop().unwrap();
+	handle.stop().unwrap().await;
 }
 
 #[tokio::test]
@@ -104,7 +103,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, invalid_request(Id::Null));
 
-	handle.stop().unwrap();
+	handle.stop().unwrap().await;
 }
 
 #[tokio::test]
@@ -140,7 +139,7 @@ async fn can_set_max_connections() {
 	let conn4 = WebSocketTestClient::new(addr).await;
 	assert!(conn4.is_ok());
 
-	handle.stop().unwrap();
+	handle.stop().unwrap().await;
 }
 
 #[tokio::test]
@@ -592,5 +591,5 @@ async fn disabled_batches() {
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, batches_not_supported());
 
-	handle.stop().unwrap();
+	handle.stop().unwrap().await;
 }

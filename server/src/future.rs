@@ -37,7 +37,7 @@ use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::{self, Duration, Interval};
 
 /// Polling for server stop monitor interval in milliseconds.
-const STOP_MONITOR_POLLING_INTERVAL: u64 = 1000;
+const STOP_MONITOR_POLLING_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// This is a flexible collection of futures that need to be driven to completion
 /// alongside some other future, such as connection handlers that need to be
@@ -52,7 +52,7 @@ pub(crate) struct FutureDriver<F> {
 
 impl<F> Default for FutureDriver<F> {
 	fn default() -> Self {
-		let mut heartbeat = time::interval(Duration::from_millis(STOP_MONITOR_POLLING_INTERVAL));
+		let mut heartbeat = time::interval(STOP_MONITOR_POLLING_INTERVAL);
 
 		heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
 
@@ -160,7 +160,8 @@ impl StopHandle {
 	}
 
 	pub(crate) async fn shutdown(&mut self) {
-		// Err(_) implies that the `sender` has been dropped; Ok(_) implies that `stop` has been called,
+		// Err(_) implies that the `sender` has been dropped;
+		// Ok(_) implies that `stop` has been called,
 		let _ = self.0.changed().await;
 	}
 }
@@ -169,40 +170,45 @@ impl StopHandle {
 ///
 /// When all server handles has been `dropped` or `stop` has been called
 /// the server will be stopped.
-#[derive(Debug, Clone)]
-pub struct ServerHandle(pub Arc<watch::Sender<()>>);
+#[derive(Debug)]
+pub struct ServerHandle {
+	inner: watch::Sender<()>,
+	heartbeat: Interval,
+}
 
 impl ServerHandle {
 	/// Create a new server handle.
 	pub fn new(tx: watch::Sender<()>) -> Self {
-		Self(Arc::new(tx))
+		let mut heartbeat = time::interval(STOP_MONITOR_POLLING_INTERVAL);
+		heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+
+		Self { inner: tx, heartbeat }
 	}
 
 	/// Stop the server
 	///
 	/// This may be called several times but has no effect.
-	pub fn stop(&self) -> Result<(), Error> {
-		self.0.send(()).map_err(|_| Error::AlreadyStopped)
+	pub fn stop(self) -> Result<impl Future<Output = ()>, Error> {
+		self.inner.send(()).map_err(|_| Error::AlreadyStopped)?;
+		Ok(self)
 	}
 
-	/// Waits until the server has been stopped.
-	pub async fn stopped(&self) {
-		self.0.closed().await
-	}
-
-	/// Check if the server has been stopped.
+	/// Check if the server has been stopped.>
 	pub fn is_stopped(&self) -> bool {
-		self.0.is_closed()
+		self.inner.is_closed()
 	}
 }
 
 impl Future for ServerHandle {
 	type Output = ();
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		let mut stopped = Box::pin(self.0.closed());
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		// We don't care about the ticks of the heartbeat, it's here only
+		// to periodically wake the `Waker` on `cx`.
+		let _ = self.heartbeat.poll_tick(cx);
 
-		stopped.poll_unpin(cx)
+		let mut closed = Box::pin(self.inner.closed());
+		closed.poll_unpin(cx)
 	}
 }
 
@@ -217,7 +223,7 @@ impl ConnectionGuard {
 	pub(crate) fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
 		match self.0.clone().try_acquire_owned() {
 			Ok(guard) => Some(guard),
-			Err(TryAcquireError::Closed) => unreachable!("close is never called and can't be closed; qed"),
+			Err(TryAcquireError::Closed) => unreachable!("Semphore::Close is never called and can't be closed; qed"),
 			Err(TryAcquireError::NoPermits) => None,
 		}
 	}

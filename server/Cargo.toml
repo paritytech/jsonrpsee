@@ -26,6 +26,7 @@ http = "0.2.7"
 hyper = { version = "0.14", features = ["server", "http1", "http2"] }
 tower = "0.4.13"
 
+
 [dev-dependencies]
 anyhow = "1"
 jsonrpsee-test-utils = { path = "../test-utils" }

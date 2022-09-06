@@ -167,8 +167,7 @@ async fn ws_server_logger() {
 		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
 	}
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server_handle.stop().unwrap().await;
 
 	assert_eq!(counter.inner.lock().unwrap().connections, (1, 1));
 }
@@ -199,8 +198,7 @@ async fn http_server_logger() {
 		assert_eq!(inner.calls["unknown_method"], (2, vec![]));
 	}
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server_handle.stop().unwrap().await;
 
 	// HTTP server doesn't track connections
 	let inner = counter.inner.lock().unwrap();

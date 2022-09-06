@@ -388,8 +388,7 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	assert!(matches!(sub.next().await, Some(Ok(_))));
 
-	handle.stop().unwrap();
-	handle.stopped().await;
+	handle.stop().unwrap().await;
 
 	let sub2: Result<Subscription<String>, _> = c1.subscribe("subscribe_hello", None, "unsubscribe_hello").await;
 
@@ -500,8 +499,7 @@ async fn ws_server_notify_client_on_disconnect() {
 	// Make sure the `on_disconnect` method did not return before stopping the server.
 	assert_eq!(dis_rx.try_recv().unwrap(), None);
 
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server_handle.stop().unwrap().await;
 
 	// The `on_disconnect()` method returned.
 	dis_rx.await.unwrap();
@@ -522,8 +520,7 @@ async fn ws_server_notify_client_on_disconnect_with_closed_server() {
 	client.request::<String>("say_hello", None).await.unwrap();
 
 	// Stop the server.
-	server_handle.stop().unwrap();
-	server_handle.stopped().await;
+	server_handle.stop().unwrap().await;
 
 	// Ensure `on_disconnect` returns when the call is made after the server is closed.
 	client.on_disconnect().await;

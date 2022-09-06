@@ -1,12 +1,13 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use crate::future::{FutureDriver, StopHandle};
 use crate::logger::{self, Logger};
 use crate::server::{MethodResult, ServiceData};
 
 use futures_channel::mpsc;
-use futures_util::future::Either;
+use futures_util::future::{self, Either};
 use futures_util::io::{BufReader, BufWriter};
 use futures_util::{Future, FutureExt, StreamExt, TryStreamExt};
 use hyper::upgrade::Upgraded;
@@ -272,7 +273,7 @@ pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 }
 
 pub(crate) async fn background_task<L: Logger>(
-	mut sender: Sender,
+	sender: Sender,
 	mut receiver: Receiver,
 	svc: ServiceData<L>,
 ) -> Result<(), Error> {
@@ -294,59 +295,12 @@ pub(crate) async fn background_task<L: Logger>(
 		..
 	} = svc;
 
-	let (tx, mut rx) = mpsc::unbounded::<String>();
+	let (tx, rx) = mpsc::unbounded::<String>();
 	let bounded_subscriptions = BoundedSubscriptions::new(max_subscriptions_per_connection);
-	let bounded_subscriptions2 = bounded_subscriptions.clone();
-
-	let stop_handle2 = stop_handle.clone();
 	let sink = MethodSink::new_with_limit(tx, max_response_body_size, max_log_length);
 
-	// Send results back to the client.
-	tokio::spawn(async move {
-		// Received messages from the WebSocket.
-		let mut rx_item = rx.next();
-
-		// Interval to send out continuously `pings`.
-		let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
-		tokio::pin!(ping_interval);
-		let mut next_ping = ping_interval.next();
-
-		while !stop_handle2.shutdown_requested() {
-			// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
-			// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
-			match futures_util::future::select(rx_item, next_ping).await {
-				Either::Left((Some(response), ping)) => {
-					// If websocket message send fail then terminate the connection.
-					if let Err(err) = send_message(&mut sender, response).await {
-						tracing::error!("Terminate connection: WS send error: {}", err);
-						break;
-					}
-					rx_item = rx.next();
-					next_ping = ping;
-				}
-				// Nothing else to receive.
-				Either::Left((None, _)) => break,
-
-				// Handle timer intervals.
-				Either::Right((_, next_rx)) => {
-					if let Err(err) = send_ping(&mut sender).await {
-						tracing::error!("Terminate connection: WS send ping error: {}", err);
-						break;
-					}
-					rx_item = next_rx;
-					next_ping = ping_interval.next();
-				}
-			}
-		}
-
-		tracing::info!("stopping ws send task");
-
-		// Terminate connection and send close message.
-		let _ = sender.close().await;
-
-		// Notify all listeners and close down associated tasks.
-		bounded_subscriptions2.close();
-	});
+	// Spawn another task that sends out the responses on the Websocket.
+	tokio::spawn(send_task(rx, sender, stop_handle.clone(), ping_interval));
 
 	// Buffer for incoming data.
 	let mut data = Vec::with_capacity(100);
@@ -501,7 +455,68 @@ pub(crate) async fn background_task<L: Logger>(
 	// proper drop behaviour.
 	method_executors.await;
 
+	// Notify all listeners and close down associated tasks.
+	bounded_subscriptions.close();
+
 	drop(conn);
 
 	result
+}
+
+/// A task that waits for new messages via the `rx channel` and sends them out on the `WebSocket`.
+async fn send_task(
+	mut rx: mpsc::UnboundedReceiver<String>,
+	mut ws_sender: Sender,
+	mut stop_handle: StopHandle,
+	ping_interval: Duration,
+) {
+	// Received messages from the WebSocket.
+	let mut rx_item = rx.next();
+
+	// Interval to send out continuously `pings`.
+	let ping_interval = IntervalStream::new(tokio::time::interval(ping_interval));
+	let stopped = stop_handle.shutdown();
+
+	tokio::pin!(ping_interval, stopped);
+
+	let next_ping = ping_interval.next();
+	let mut futs = future::select(next_ping, stopped);
+
+	loop {
+		// Ensure select is cancel-safe by fetching and storing the `rx_item` that did not finish yet.
+		// Note: Although, this is cancel-safe already, avoid using `select!` macro for future proofing.
+		match future::select(rx_item, futs).await {
+			// Received message.
+			Either::Left((Some(response), not_ready)) => {
+				// If websocket message send fail then terminate the connection.
+				if let Err(err) = send_message(&mut ws_sender, response).await {
+					tracing::error!("Terminate connection: WS send error: {}", err);
+					break;
+				}
+				rx_item = rx.next();
+				futs = not_ready;
+			}
+
+			// Nothing else to receive.
+			Either::Left((None, _)) => break,
+
+			// Handle timer intervals.
+			Either::Right((Either::Left((_, stop)), next_rx)) => {
+				if let Err(err) = send_ping(&mut ws_sender).await {
+					tracing::error!("Terminate connection: WS send ping error: {}", err);
+					break;
+				}
+				rx_item = next_rx;
+				futs = future::select(ping_interval.next(), stop);
+			}
+
+			// Server is closed
+			Either::Right((Either::Right((_, _)), _)) => {
+				break;
+			}
+		}
+	}
+
+	// Terminate connection and send close message.
+	let _ = ws_sender.close().await;
 }
