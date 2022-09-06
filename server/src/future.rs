@@ -160,7 +160,7 @@ impl StopHandle {
 	}
 
 	pub(crate) async fn shutdown(&mut self) {
-		// Err(_) implies that the `sender` has been dropped;
+		// Err(_) implies that the `sender` has been dropped.
 		// Ok(_) implies that `stop` has been called.
 		let _ = self.0.changed().await;
 	}
@@ -168,47 +168,39 @@ impl StopHandle {
 
 /// Server handle.
 ///
-/// When all server handles have been `dropped` or `stop` has been called
+/// When all [`StopHandle`]'s have been `dropped` or `stop` has been called
 /// the server will be stopped.
-#[derive(Debug)]
-pub struct ServerHandle {
-	inner: watch::Sender<()>,
-	heartbeat: Interval,
-}
+#[derive(Debug, Clone)]
+pub struct ServerHandle(Arc<watch::Sender<()>>);
 
 impl ServerHandle {
 	/// Create a new server handle.
 	pub fn new(tx: watch::Sender<()>) -> Self {
-		let mut heartbeat = time::interval(STOP_MONITOR_POLLING_INTERVAL);
-		heartbeat.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
-
-		Self { inner: tx, heartbeat }
+		Self(Arc::new(tx))
 	}
 
 	/// Stop the server
-	///
-	/// This may be called several times but has no effect.
 	pub fn stop(self) -> Result<impl Future<Output = ()>, Error> {
-		self.inner.send(()).map_err(|_| Error::AlreadyStopped)?;
+		self.0.send(()).map_err(|_| Error::AlreadyStopped)?;
 		Ok(self)
 	}
 
-	/// Check if the server has been stopped.>
+	/// Check if the server has been stopped.
 	pub fn is_stopped(&self) -> bool {
-		self.inner.is_closed()
+		self.0.is_closed()
 	}
 }
 
 impl Future for ServerHandle {
 	type Output = ();
 
-	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		// We don't care about the ticks of the heartbeat, it's here only
-		// to periodically wake the `Waker` on `cx`.
-		let _ = self.heartbeat.poll_tick(cx);
-
-		let mut closed = Box::pin(self.inner.closed());
-		closed.poll_unpin(cx)
+	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		if self.is_stopped() {
+			Poll::Ready(())
+		} else {
+			cx.waker().wake_by_ref();
+			Poll::Pending
+		}
 	}
 }
 
@@ -223,7 +215,7 @@ impl ConnectionGuard {
 	pub(crate) fn try_acquire(&self) -> Option<OwnedSemaphorePermit> {
 		match self.0.clone().try_acquire_owned() {
 			Ok(guard) => Some(guard),
-			Err(TryAcquireError::Closed) => unreachable!("Semphore::Close is never called and can't be closed; qed"),
+			Err(TryAcquireError::Closed) => unreachable!("Semaphore::Close is never called and can't be closed; qed"),
 			Err(TryAcquireError::NoPermits) => None,
 		}
 	}

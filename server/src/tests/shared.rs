@@ -1,4 +1,4 @@
-/*use crate::tests::helpers::{init_logger, server_with_handles};
+use crate::tests::helpers::{init_logger, server_with_handles};
 use futures_util::future::join;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::TimeoutFutureExt;
@@ -16,9 +16,9 @@ async fn stop_works() {
 
 	// After server was stopped, attempt to stop it again should result in an error.
 	assert!(matches!(server_handle.stop(), Err(Error::AlreadyStopped)));
-}*/
+}
 
-/*#[tokio::test]
+#[tokio::test]
 async fn run_forever() {
 	const TIMEOUT: Duration = Duration::from_millis(200);
 
@@ -31,4 +31,4 @@ async fn run_forever() {
 
 	// Send the shutdown request from one handle and await the server on the second one.
 	join(server_handle.clone().stop().unwrap(), server_handle).with_timeout(TIMEOUT).await.unwrap();
-}*/
+}
