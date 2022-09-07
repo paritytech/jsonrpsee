@@ -63,6 +63,8 @@ async fn main() -> anyhow::Result<()> {
 		let _ = client.request::<String, _>("say_hello", rpc_params![]).await?;
 	}
 
+	tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
 	// HTTP.
 	{
 		let client = HttpClientBuilder::default().build(format!("http://{}", addr))?;

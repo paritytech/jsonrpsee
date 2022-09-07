@@ -348,8 +348,9 @@ pub(crate) async fn background_task<L: Logger>(
 
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
 					//
-					// NOTE: soketto polls the socket before checking that `close` has been sent so
-					// it's possible that we emit error's here which in fact are gracefully shutdown.
+					// NOTE: somehow in soketto it possible to have a race between when the `CLOSE` has been received and the socket is polled.
+					// In that case an `I/O error` is emitted instead of `CLOSE`.
+					// Thus, we may emit errors which are in fact gracefully closed.
 					MonitoredError::Selector(err) => {
 						tracing::error!("WS transport error: {}; terminate connection: {}", err, conn_id);
 						break Err(err.into());
@@ -500,7 +501,9 @@ async fn send_task(
 			}
 
 			// Nothing else to receive.
-			Either::Left((None, _)) => break,
+			Either::Left((None, _)) => {
+				break;
+			}
 
 			// Handle timer intervals.
 			Either::Right((Either::Left((_, stop)), next_rx)) => {
