@@ -318,10 +318,9 @@ pub(crate) async fn background_task<L: Logger>(
 					match receiver.receive(&mut data).await? {
 						soketto::Incoming::Data(d) => break Ok(d),
 						soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
-						soketto::Incoming::Closed(reason) => {
+						soketto::Incoming::Closed(_) => {
 							// The closing reason is already logged by `soketto` trace log level.
 							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
-							tracing::debug!("WS transport closed: {:?}", reason);
 							break Err(SokettoError::Closed);
 						}
 					}
@@ -347,10 +346,6 @@ pub(crate) async fn background_task<L: Logger>(
 					}
 
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
-					//
-					// NOTE: somehow in soketto it possible to have a race between when the `CLOSE` has been received and the socket is polled.
-					// In that case an `I/O error` is emitted instead of `CLOSE`.
-					// Thus, we may emit errors which are in fact gracefully closed.
 					MonitoredError::Selector(err) => {
 						tracing::error!("WS transport error: {}; terminate connection: {}", err, conn_id);
 						break Err(err.into());
