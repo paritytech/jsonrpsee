@@ -318,9 +318,10 @@ pub(crate) async fn background_task<L: Logger>(
 					match receiver.receive(&mut data).await? {
 						soketto::Incoming::Data(d) => break Ok(d),
 						soketto::Incoming::Pong(_) => tracing::debug!("Received pong"),
-						soketto::Incoming::Closed(_) => {
+						soketto::Incoming::Closed(reason) => {
 							// The closing reason is already logged by `soketto` trace log level.
 							// Return the `Closed` error to avoid logging unnecessary warnings on clean shutdown.
+							tracing::debug!("WS transport closed: {:?}", reason);
 							break Err(SokettoError::Closed);
 						}
 					}
@@ -332,24 +333,25 @@ pub(crate) async fn background_task<L: Logger>(
 			if let Err(err) = method_executors.select_with(Monitored::new(receive, &stop_handle)).await {
 				match err {
 					MonitoredError::Selector(SokettoError::Closed) => {
-						tracing::debug!("WS transport: Remote peer terminated the connection: {}", conn_id);
-						sink.close();
-						drop(stop_handle);
+						tracing::debug!("WS transport: remote peer terminated the connection: {}", conn_id);
 						break Ok(());
 					}
 					MonitoredError::Selector(SokettoError::MessageTooLarge { current, maximum }) => {
 						tracing::warn!(
-							"WS transport error: Request length: {} exceeded max limit: {} bytes",
+							"WS transport error: request length: {} exceeded max limit: {} bytes",
 							current,
 							maximum
 						);
 						sink.send_error(Id::Null, reject_too_big_request(max_request_body_size));
 						continue;
 					}
+
 					// These errors can not be gracefully handled, so just log them and terminate the connection.
+					//
+					// NOTE: soketto polls the socket before checking that `close` has been sent so
+					// it's possible that we emit error's here which in fact are gracefully shutdown.
 					MonitoredError::Selector(err) => {
-						tracing::error!("Terminate connection {}: WS error: {}", conn_id, err);
-						sink.close();
+						tracing::error!("WS transport error: {}; terminate connection: {}", err, conn_id);
 						break Err(err.into());
 					}
 					MonitoredError::Shutdown => {
@@ -455,6 +457,7 @@ pub(crate) async fn background_task<L: Logger>(
 	method_executors.await;
 
 	// Notify all listeners and close down associated tasks.
+	sink.close();
 	bounded_subscriptions.close();
 
 	drop(conn);
@@ -489,7 +492,7 @@ async fn send_task(
 			Either::Left((Some(response), not_ready)) => {
 				// If websocket message send fail then terminate the connection.
 				if let Err(err) = send_message(&mut ws_sender, response).await {
-					tracing::error!("Terminate connection: WS send error: {}", err);
+					tracing::error!("WS transport error: send failed: {}", err);
 					break;
 				}
 				rx_item = rx.next();
@@ -502,7 +505,7 @@ async fn send_task(
 			// Handle timer intervals.
 			Either::Right((Either::Left((_, stop)), next_rx)) => {
 				if let Err(err) = send_ping(&mut ws_sender).await {
-					tracing::error!("Terminate connection: WS send ping error: {}", err);
+					tracing::error!("WS transport error: send ping failed: {}", err);
 					break;
 				}
 				rx_item = next_rx;
