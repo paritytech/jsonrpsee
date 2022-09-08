@@ -204,7 +204,7 @@ impl ServerHandle {
 		//
 		// This wouldn't be necessary if the future we are waiting for was independent of `self`.
 		let tx = Box::new(tx);
-		let inner = Box::leak(Box::new(tx));
+		let inner = Box::leak(tx);
 
 		// We need to poll on the same future to wake up when it is completed.
 		// Therefore, we can't simply create the `Box::pin` inside the Future's `poll` method.
