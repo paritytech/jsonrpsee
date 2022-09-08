@@ -26,12 +26,14 @@
 
 //! Utilities for handling async code.
 
+use std::fmt::Formatter;
 use std::future::Future;
 use std::pin::Pin;
+use std::ptr::NonNull;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures_util::future::FutureExt;
+use futures_util::future::{BoxFuture, FutureExt};
 use jsonrpsee_core::Error;
 use tokio::sync::{watch, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 use tokio::time::{self, Duration, Interval};
@@ -170,40 +172,89 @@ impl StopHandle {
 ///
 /// When all [`StopHandle`]'s have been `dropped` or `stop` has been called
 /// the server will be stopped.
-#[derive(Debug, Clone)]
-pub struct ServerHandle(Arc<watch::Sender<()>>);
+pub struct ServerHandle {
+	inner: &'static watch::Sender<()>,
+	future: BoxFuture<'static, ()>,
+}
+
+impl std::fmt::Debug for ServerHandle {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?}", self.inner)
+	}
+}
 
 impl ServerHandle {
 	/// Create a new server handle.
 	pub fn new(tx: watch::Sender<()>) -> Self {
-		Self(Arc::new(tx))
+		// This is a case of self-referencing structs, that are completely
+		// sane for this scenario. However, we need to circumvent the
+		// compiler's restrictions.
+		//
+		// The boxed future needs to live for long enough to ensure the
+		// compiler's compliance. This means that the sender must be
+		// 'static, as the future relies upon `self.inner.closed()` to live
+		// long enough.
+		//
+		// Obtain a static reference by leaking the box on the heap,
+		// then reconstruct and clean-up the memory manually.
+		//
+		// Using `Box::leak` as opposed to `Box::into_raw` has two main advantages:
+		//  - It provides `&'a mut T` that can be shared `Send` bounded for the tokio's task
+		//  - Allows us to safely use the reference, while still being able to convert it to a pointer.
+		//
+		// This wouldn't be necessary if the future we are waiting for was independent of `self`.
+		let tx = Box::new(tx);
+		let inner = Box::leak(Box::new(tx));
+
+		// We need to poll on the same future to wake up when it is completed.
+		// Therefore, we can't simply create the `Box::pin` inside the Future's `poll` method.
+		// This is the self-referencing part.
+		let future = Box::pin(inner.closed());
+		Self { inner, future }
 	}
 
 	/// Stop the server
 	pub fn stop(self) -> Result<impl Future<Output = ()>, Error> {
-		self.0.send(()).map_err(|_| Error::AlreadyStopped)?;
+		self.inner.send(()).map_err(|_| Error::AlreadyStopped)?;
 		Ok(self)
 	}
 
 	/// Check if the server has been stopped.
 	pub fn is_stopped(&self) -> bool {
-		self.0.is_closed()
+		self.inner.is_closed()
 	}
 }
 
 impl Future for ServerHandle {
 	type Output = ();
 
-	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		if self.is_stopped() {
-			Poll::Ready(())
-		} else {
-			cx.waker().wake_by_ref();
-			Poll::Pending
-		}
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		self.future.as_mut().poll(cx)
 	}
 }
 
+impl Drop for ServerHandle {
+	fn drop(&mut self) {
+		// We leaked the `watch::Sender<()>` in the `new` constructor.
+		// It's time to free up the heap allocation.
+		//
+		// To go from `&'a [mut] T` to `*[mut] T` we normally would have to go through
+		// `Box::leak` first.
+		//
+		// This is because `Box` is recognized as a "unique pointer" by the compiler's
+		// borrow checker, but internally its nothing more than a raw pointer.
+		// Directly turning the reference into a raw pointer would not permit aliased raw accesses,
+		// and is rejected by the compiler.
+		//
+		// However, we used exactly `Box::leak` to get the `&'static watch::Sender<()>` reference.
+		// Therefore, it is safe to turn that into a pointer, but not by casting.
+		let ptr = NonNull::from(self.inner).as_ptr();
+
+		// Reconstruct the `Box` created by `Box::new(tx)` in the `new` constructor
+		// to automatically clean up the memory.
+		let _free_ptr = unsafe { Box::from_raw(ptr) };
+	}
+}
 /// Limits the number of connections.
 pub(crate) struct ConnectionGuard(Arc<Semaphore>);
 
