@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 pprof = { version = "0.10", features = ["flamegraph", "criterion"] }
-criterion = { version = "0.3", features = ["async_tokio", "html_reports"] }
+criterion = { version = "0.4", features = ["async_tokio", "html_reports"] }
 futures-channel = "0.3.15"
 futures-util = "0.3.15"
 jsonrpsee = { path = "../jsonrpsee", features = ["full"] }
