@@ -21,6 +21,6 @@ error[E0277]: the trait bound `for<'de> <Conf as Config>::Hash: Deserialize<'de>
 note: required by a bound in `request`
   --> $WORKSPACE/core/src/client/mod.rs
    |
-   |         R: DeserializeOwned;
+   |         R: DeserializeOwned,
    |            ^^^^^^^^^^^^^^^^ required by this bound in `request`
    = note: this error originates in the attribute macro `rpc` (in Nightly builds, run with -Z macro-backtrace for more info)

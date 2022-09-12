@@ -30,12 +30,10 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use crate::response;
-use crate::response::{internal_error, malformed};
 use futures_channel::mpsc;
 use futures_util::future::FutureExt;
 use futures_util::stream::{StreamExt, TryStreamExt};
 use hyper::body::HttpBody;
-use hyper::header::{HeaderMap, HeaderValue};
 use hyper::server::conn::AddrStream;
 use hyper::server::{conn::AddrIncoming, Builder as HyperBuilder};
 use hyper::service::{make_service_fn, Service};
@@ -48,7 +46,7 @@ use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
 use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str, RpcTracing};
+use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
 use jsonrpsee_core::TEN_MB_SIZE_BYTES;
 use jsonrpsee_types::error::{ErrorCode, ErrorObject, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{Id, Notification, Params, Request};
@@ -75,7 +73,6 @@ pub struct Builder<B = Identity, L = ()> {
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	logger: L,
 	max_log_length: u32,
-	health_api: Option<HealthApi>,
 	service_builder: tower::ServiceBuilder<B>,
 }
 
@@ -90,7 +87,6 @@ impl Default for Builder {
 			tokio_runtime: None,
 			logger: (),
 			max_log_length: 4096,
-			health_api: None,
 			service_builder: tower::ServiceBuilder::new(),
 		}
 	}
@@ -157,7 +153,6 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder: self.service_builder,
 		}
 	}
@@ -206,23 +201,6 @@ impl<B, L> Builder<B, L> {
 		self
 	}
 
-	/// Enable health endpoint.
-	/// Allows you to expose one of the methods under GET /<path> The method will be invoked with no parameters.
-	/// Error returned from the method will be converted to status 500 response.
-	/// Expects a tuple with (</path>, <rpc-method-name>).
-	///
-	/// Fails if the path is missing `/`.
-	pub fn health_api(mut self, path: impl Into<String>, method: impl Into<String>) -> Result<Self, Error> {
-		let path = path.into();
-
-		if !path.starts_with('/') {
-			return Err(Error::Custom(format!("Health endpoint path must start with `/` to work, got: {}", path)));
-		}
-
-		self.health_api = Some(HealthApi { path, method: method.into() });
-		Ok(self)
-	}
-
 	/// Configure a custom [`tower::ServiceBuilder`] middleware for composing layers to be applied to the RPC service.
 	///
 	/// Default: No tower layers are applied to the RPC service.
@@ -257,7 +235,6 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger: self.logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder,
 		}
 	}
@@ -312,7 +289,6 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger: self.logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder: self.service_builder,
 		})
 	}
@@ -358,7 +334,6 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger: self.logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder: self.service_builder,
 		})
 	}
@@ -395,16 +370,9 @@ impl<B, L> Builder<B, L> {
 			tokio_runtime: self.tokio_runtime,
 			logger: self.logger,
 			max_log_length: self.max_log_length,
-			health_api: self.health_api,
 			service_builder: self.service_builder,
 		})
 	}
-}
-
-#[derive(Debug, Clone)]
-struct HealthApi {
-	path: String,
-	method: String,
 }
 
 /// Handle used to run or stop the server.
@@ -451,8 +419,6 @@ struct ServiceData<L> {
 	resources: Resources,
 	/// User provided logger.
 	logger: L,
-	/// Health API.
-	health_api: Option<HealthApi>,
 	/// Max request body size.
 	max_request_body_size: u32,
 	/// Max response body size.
@@ -474,7 +440,6 @@ impl<L: Logger> ServiceData<L> {
 			acl,
 			resources,
 			logger,
-			health_api,
 			max_request_body_size,
 			max_response_body_size,
 			max_log_length,
@@ -483,59 +448,30 @@ impl<L: Logger> ServiceData<L> {
 
 		let request_start = logger.on_request(remote_addr, &request);
 
-		let keys = request.headers().keys().map(|k| k.as_str());
-		let cors_request_headers = http_helpers::get_cors_request_headers(request.headers());
-
 		let host = match http_helpers::read_header_value(request.headers(), "host") {
 			Some(origin) => origin,
-			None => return malformed(),
+			None if request.version() == hyper::Version::HTTP_2 => match request.uri().host() {
+				Some(origin) => origin,
+				None => return response::malformed(),
+			},
+			None => return response::malformed(),
 		};
 		let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
 
 		if let Err(e) = acl.verify_host(host) {
-			tracing::warn!("Denied request: {:?}", e);
+			tracing::warn!("Denied request: {}", e);
 			return response::host_not_allowed();
 		}
 
 		if let Err(e) = acl.verify_origin(maybe_origin, host) {
-			tracing::warn!("Denied request: {:?}", e);
-			return response::invalid_allow_origin();
+			tracing::warn!("Denied request: {}", e);
+			return response::origin_rejected(maybe_origin);
 		}
 
-		if let Err(e) = acl.verify_headers(keys, cors_request_headers) {
-			tracing::warn!("Denied request: {:?}", e);
-			return response::invalid_allow_headers();
-		}
-
-		// Only `POST` and `OPTIONS` methods are allowed.
+		// Only the `POST` method is allowed.
 		match *request.method() {
-			// An OPTIONS request is a CORS preflight request. We've done our access check
-			// above so we just need to tell the browser that the request is OK.
-			Method::OPTIONS => {
-				let origin = match maybe_origin {
-					Some(origin) => origin,
-					None => return malformed(),
-				};
-
-				let allowed_headers = acl.allowed_headers().to_cors_header_value();
-				let allowed_header_bytes = allowed_headers.as_bytes();
-
-				hyper::Response::builder()
-					.header("access-control-allow-origin", origin)
-					.header("access-control-allow-methods", "POST")
-					.header("access-control-allow-headers", allowed_header_bytes)
-					.body(hyper::Body::empty())
-					.unwrap_or_else(|e| {
-						tracing::error!("Error forming preflight response: {}", e);
-						internal_error()
-					})
-			}
-			// The actual request. If it's a CORS request we need to remember to add
-			// the access-control-allow-origin header (despite preflight) to allow it
-			// to be read in a browser.
 			Method::POST if content_type_is_json(&request) => {
-				let origin = return_origin_if_different_from_host(request.headers()).cloned();
-				let mut res = process_validated_request(ProcessValidatedRequest {
+				process_validated_request(ProcessValidatedRequest {
 					request,
 					logger,
 					methods,
@@ -546,27 +482,8 @@ impl<L: Logger> ServiceData<L> {
 					batch_requests_supported,
 					request_start,
 				})
-				.await;
-
-				if let Some(origin) = origin {
-					res.headers_mut().insert("access-control-allow-origin", origin);
-				}
-				res
+				.await
 			}
-			Method::GET => match health_api.as_ref() {
-				Some(health) if health.path.as_str() == request.uri().path() => {
-					process_health_request(
-						health,
-						logger,
-						methods,
-						max_response_body_size,
-						request_start,
-						max_log_length,
-					)
-					.await
-				}
-				_ => response::method_not_allowed(),
-			},
 			// Error scenarios:
 			Method::POST => response::unsupported_content_type(),
 			_ => response::method_not_allowed(),
@@ -598,6 +515,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 	}
 
 	fn call(&mut self, request: hyper::Request<hyper::Body>) -> Self::Future {
+		tracing::trace!("{:?}", request);
 		let data = self.inner.clone();
 		Box::pin(data.handle_request(request).map(Ok))
 	}
@@ -627,7 +545,6 @@ pub struct Server<B = Identity, L = ()> {
 	/// Custom tokio runtime to run the server on.
 	tokio_runtime: Option<tokio::runtime::Handle>,
 	logger: L,
-	health_api: Option<HealthApi>,
 	service_builder: tower::ServiceBuilder<B>,
 }
 
@@ -666,7 +583,6 @@ where
 		let logger = self.logger;
 		let batch_requests_supported = self.batch_requests_supported;
 		let methods = methods.into().initialize_resources(&resources)?;
-		let health_api = self.health_api;
 
 		let make_service = make_service_fn(move |conn: &AddrStream| {
 			let service = TowerService {
@@ -676,7 +592,6 @@ where
 					acl: acl.clone(),
 					resources: resources.clone(),
 					logger: logger.clone(),
-					health_api: health_api.clone(),
 					max_request_body_size,
 					max_response_body_size,
 					max_log_length,
@@ -702,20 +617,6 @@ where
 		});
 
 		Ok(ServerHandle { handle: Some(handle), stop_sender: tx })
-	}
-}
-
-// Checks the origin and host headers. If they both exist, return the origin if it does not match the host.
-// If one of them doesn't exist (origin most probably), or they are identical, return None.
-fn return_origin_if_different_from_host(headers: &HeaderMap) -> Option<&HeaderValue> {
-	if let (Some(origin), Some(host)) = (headers.get("origin"), headers.get("host")) {
-		if origin != host {
-			Some(origin)
-		} else {
-			None
-		}
-	} else {
-		None
 	}
 }
 
@@ -817,48 +718,6 @@ async fn process_validated_request<L: Logger>(input: ProcessValidatedRequest<L>)
 		.await;
 		logger.on_response(&response.result, request_start);
 		response::ok_response(response.result)
-	}
-}
-
-#[instrument(name = "health_api", skip(logger, methods, max_response_body_size, request_start, max_log_length))]
-async fn process_health_request<L: Logger>(
-	health_api: &HealthApi,
-	logger: L,
-	methods: Methods,
-	max_response_body_size: u32,
-	request_start: L::Instant,
-	max_log_length: u32,
-) -> hyper::Response<hyper::Body> {
-	tx_log_from_str("HTTP health API", max_log_length);
-	let response = match methods.method_with_name(&health_api.method) {
-		None => MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::MethodNotFound)),
-		Some((_name, method_callback)) => match method_callback.inner() {
-			MethodKind::Sync(callback) => (callback)(Id::Number(0), Params::new(None), max_response_body_size as usize),
-			MethodKind::Async(callback) => {
-				(callback)(Id::Number(0), Params::new(None), 0, max_response_body_size as usize, None).await
-			}
-			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				MethodResponse::error(Id::Null, ErrorObject::from(ErrorCode::InternalError))
-			}
-		},
-	};
-
-	rx_log_from_str(&response.result, max_log_length);
-	logger.on_result(&health_api.method, response.success, request_start);
-	logger.on_response(&response.result, request_start);
-
-	if response.success {
-		#[derive(serde::Deserialize)]
-		struct RpcPayload<'a> {
-			#[serde(borrow)]
-			result: &'a serde_json::value::RawValue,
-		}
-
-		let payload: RpcPayload = serde_json::from_str(&response.result)
-			.expect("valid JSON-RPC response must have a result field and be valid JSON; qed");
-		response::ok_response(payload.result.to_string())
-	} else {
-		response::internal_error()
 	}
 }
 
@@ -977,7 +836,7 @@ async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 						r
 					}
 					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
 						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
 					}
 				}
@@ -992,7 +851,7 @@ async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 						(callback)(id, params, conn_id, max_response_body_size as usize, Some(guard)).await
 					}
 					Err(err) => {
-						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {:?}", err);
+						tracing::error!("[Methods::execute_with_resources] failed to lock resources: {}", err);
 						MethodResponse::error(id, ErrorObject::from(ErrorCode::ServerIsBusy))
 					}
 				}

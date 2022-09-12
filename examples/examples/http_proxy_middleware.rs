@@ -1,4 +1,4 @@
-// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright 2019-2022 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -24,18 +24,26 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-//! This example sets a custom tower service middleware to the RPC implementation.
+//! This example utilizes the `ProxyRequest` layer for redirecting
+//! `GET /path` requests to internal RPC methods.
+//!
+//! The RPC server registers a method named `system_health` which
+//! returns `serde_json::Value`. Redirect any `GET /health`
+//! requests to the internal method, and return only the method's
+//! response in the body (ie, without any jsonRPC 2.0 overhead).
+//!
+//! # Note
+//!
+//! This functionality is useful for services which would
+//! like to query a certain `URI` path for statistics.
 
-use hyper::body::Bytes;
-use std::iter::once;
+use hyper::{Body, Client, Request};
 use std::net::SocketAddr;
 use std::time::Duration;
-use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tower_http::LatencyUnit;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
+use jsonrpsee::http_server::middleware::proxy_get_request::ProxyGetRequestLayer;
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 use jsonrpsee::rpc_params;
 
@@ -49,11 +57,25 @@ async fn main() -> anyhow::Result<()> {
 	let (addr, _handler) = run_server().await?;
 	let url = format!("http://{}", addr);
 
+	// Use RPC client to get the response of `say_hello` method.
 	let client = HttpClientBuilder::default().build(&url)?;
 	let response: String = client.request("say_hello", rpc_params![]).await?;
 	println!("[main]: response: {:?}", response);
-	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
-	let _: String = client.request("say_hello", rpc_params![]).await?;
+
+	// Use hyper client to manually submit a `GET /health` request.
+	let http_client = Client::new();
+	let uri = format!("http://{}/health", addr);
+
+	let req = Request::builder().method("GET").uri(&uri).body(Body::empty())?;
+	println!("[main]: Submit proxy request: {:?}", req);
+	let res = http_client.request(req).await?;
+	println!("[main]: Received proxy response: {:?}", res);
+
+	// Interpret the response as String.
+	let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
+	let out = String::from_utf8(bytes.to_vec()).unwrap();
+	println!("[main]: Interpret proxy response: {:?}", out);
+	assert_eq!(out.as_str(), "{\"health\":true}");
 
 	Ok(())
 }
@@ -61,17 +83,8 @@ async fn main() -> anyhow::Result<()> {
 async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 	// Custom tower service to handle the RPC requests
 	let service_builder = tower::ServiceBuilder::new()
-		// Add high level tracing/logging to all requests
-		.layer(
-			TraceLayer::new_for_http()
-				.on_body_chunk(|chunk: &Bytes, latency: Duration, _: &tracing::Span| {
-					tracing::trace!(size_bytes = chunk.len(), latency = ?latency, "sending body chunk")
-				})
-				.make_span_with(DefaultMakeSpan::new().include_headers(true))
-				.on_response(DefaultOnResponse::new().include_headers(true).latency_unit(LatencyUnit::Micros)),
-		)
-		// Mark the `Authorization` request header as sensitive so it doesn't show in logs
-		.layer(SetSensitiveRequestHeadersLayer::new(once(hyper::header::AUTHORIZATION)))
+		// Proxy `GET /health` requests to internal `system_health` method.
+		.layer(ProxyGetRequestLayer::new("/health", "system_health")?)
 		.timeout(Duration::from_secs(2));
 
 	let server =
@@ -81,6 +94,7 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo")).unwrap();
+	module.register_method("system_health", |_, _| Ok(serde_json::json!({ "health": true }))).unwrap();
 
 	let handler = server.start(module)?;
 

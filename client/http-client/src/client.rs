@@ -28,10 +28,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::transport::HttpTransportClient;
-use crate::types::{ErrorResponse, Id, NotificationSer, ParamsSer, RequestSer, Response};
+use crate::types::{ErrorResponse, Id, NotificationSer, RequestSer, Response};
 use async_trait::async_trait;
 use hyper::http::HeaderMap;
 use jsonrpsee_core::client::{CertificateStore, ClientT, IdKind, RequestIdManager, Subscription, SubscriptionClientT};
+use jsonrpsee_core::params::BatchRequestBuilder;
+use jsonrpsee_core::traits::ToRpcParams;
 use jsonrpsee_core::{Error, TEN_MB_SIZE_BYTES};
 use jsonrpsee_types::error::CallError;
 use rustc_hash::FxHashMap;
@@ -166,7 +168,11 @@ pub struct HttpClient {
 #[async_trait]
 impl ClientT for HttpClient {
 	#[instrument(name = "notification", skip(self, params))]
-	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
+	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	where
+		Params: ToRpcParams + Send,
+	{
+		let params = params.to_rpc_params()?;
 		let notif = serde_json::to_string(&NotificationSer::new(method, params)).map_err(Error::ParseError)?;
 
 		let fut = self.transport.send(notif);
@@ -179,13 +185,17 @@ impl ClientT for HttpClient {
 	}
 
 	/// Perform a request towards the server.
+
 	#[instrument(name = "method_call", skip(self, params))]
-	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
+	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
+		Params: ToRpcParams + Send,
 	{
 		let guard = self.id_manager.next_request_id()?;
 		let id = guard.inner();
+		let params = params.to_rpc_params()?;
+
 		let request = RequestSer::new(&id, method, params);
 		let raw = serde_json::to_string(&request).map_err(Error::ParseError)?;
 
@@ -216,10 +226,11 @@ impl ClientT for HttpClient {
 	}
 
 	#[instrument(name = "batch", skip(self, batch))]
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
 	{
+		let batch = batch.build();
 		let guard = self.id_manager.next_request_ids(batch.len())?;
 		let ids: Vec<Id> = guard.inner();
 
@@ -265,13 +276,14 @@ impl ClientT for HttpClient {
 impl SubscriptionClientT for HttpClient {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
 	#[instrument(name = "subscription", skip(self, _params))]
-	async fn subscribe<'a, N>(
+	async fn subscribe<'a, N, Params>(
 		&self,
 		_subscribe_method: &'a str,
-		_params: Option<ParamsSer<'a>>,
+		_params: Params,
 		_unsubscribe_method: &'a str,
 	) -> Result<Subscription<N>, Error>
 	where
+		Params: ToRpcParams + Send,
 		N: DeserializeOwned,
 	{
 		Err(Error::HttpNotImplemented)

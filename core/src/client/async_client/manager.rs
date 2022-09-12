@@ -86,9 +86,9 @@ pub(crate) struct RequestManager {
 	/// Reverse lookup, to find a request ID in constant time by `subscription ID` instead of looking through all
 	/// requests.
 	subscriptions: HashMap<SubscriptionId<'static>, RequestId>,
-	/// Pending batch requests
+	/// Pending batch requests.
 	batches: FxHashMap<Vec<RequestId>, BatchState>,
-	/// Registered Methods for incoming notifications
+	/// Registered Methods for incoming notifications.
 	notification_handlers: HashMap<String, SubscriptionSink>,
 }
 
@@ -98,7 +98,7 @@ impl RequestManager {
 		Self::default()
 	}
 
-	/// Tries to insert a new pending call.
+	/// Tries to insert a new pending request.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
 	pub(crate) fn insert_pending_call(
@@ -114,7 +114,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Tries to insert a new batch request
+	/// Tries to insert a new batch request.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
 	pub(crate) fn insert_pending_batch(
@@ -134,6 +134,7 @@ impl RequestManager {
 			Err(send_back)
 		}
 	}
+
 	/// Tries to insert a new pending subscription and reserves a slot for a "potential" unsubscription request.
 	///
 	/// Returns `Ok` if the pending request was successfully inserted otherwise `Err`.
@@ -180,7 +181,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Inserts a handler for incoming notifications
+	/// Inserts a handler for incoming notifications.
 	pub(crate) fn insert_notification_handler(
 		&mut self,
 		method: &str,
@@ -194,7 +195,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Removes a notification handler
+	/// Removes a notification handler.
 	pub(crate) fn remove_notification_handler(&mut self, method: String) -> Result<(), Error> {
 		if self.notification_handlers.remove(&method).is_some() {
 			Ok(())
@@ -223,7 +224,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Tries to complete a pending batch request
+	/// Tries to complete a pending batch request.
 	///
 	/// Returns `Some` if the subscription was completed otherwise `None`.
 	pub(crate) fn complete_pending_batch(&mut self, batch: Vec<RequestId>) -> Option<BatchState> {
@@ -236,7 +237,7 @@ impl RequestManager {
 		}
 	}
 
-	/// Tries to complete a pending call..
+	/// Tries to complete a pending call.
 	///
 	/// Returns `Some` if the call was completed otherwise `None`.
 	pub(crate) fn complete_pending_call(&mut self, request_id: RequestId) -> Option<PendingCallOneshot> {

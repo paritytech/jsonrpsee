@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
 	let url = format!("http://{}", server_addr);
 
 	let client = HttpClientBuilder::default().build(url)?;
-	let params = rpc_params!(1_u64, 2, 3);
+	let params = rpc_params![1_u64, 2, 3];
 	let response: Result<String, _> = client.request("say_hello", params).await;
 	tracing::info!("r: {:?}", response);
 

@@ -24,7 +24,12 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! This example adds upstream CORS layers to the RPC service,
+//! with access control allowing requests from all hosts.
+
+use hyper::Method;
 use std::net::SocketAddr;
+use tower_http::cors::{Any, CorsLayer};
 
 use jsonrpsee::{
 	core::server::access_control::AccessControlBuilder,
@@ -68,10 +73,34 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let acl = AccessControlBuilder::new().allow_all_headers().allow_all_origins().allow_all_hosts().build();
+	// RPC access control that allows all hosts and all origins.
+	// Note: the access control does not modify the response headers,
+	// it only acts as a filter.
+	// If you need the ORIGIN header to be mirrored back in the response,
+	// please use the CORS layer.
+	let acl = AccessControlBuilder::new().allow_all_hosts().allow_all_origins().build();
 
-	let server =
-		HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	// Add a CORS middleware for handling HTTP requests.
+	// This middleware does affect the response, including appropriate
+	// headers to satisfy CORS. Because any origins are allowed, the
+	// "Access-Control-Allow-Origin: *" header is appended to the response.
+	let cors = CorsLayer::new()
+		// Allow `POST` when accessing the resource
+		.allow_methods([Method::POST])
+		// Allow requests from any origin
+		.allow_origin(Any)
+		.allow_headers([hyper::header::CONTENT_TYPE]);
+	let middleware = tower::ServiceBuilder::new().layer(cors);
+
+	// The RPC exposes the access control for filtering and the middleware for
+	// modifying requests / responses. These features are independent of one another
+	// and can also be used separately.
+	// In this example, we use both features.
+	let server = HttpServerBuilder::default()
+		.set_access_control(acl)
+		.set_middleware(middleware)
+		.build("127.0.0.1:0".parse::<SocketAddr>()?)
+		.await?;
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| {

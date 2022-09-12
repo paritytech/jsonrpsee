@@ -27,7 +27,7 @@
 //! Types to handle JSON-RPC requests according to the [spec](https://www.jsonrpc.org/specification#request-object).
 //! Some types come with a "*Ser" variant that implements [`serde::Serialize`]; these are used in the client.
 
-use crate::params::{Id, ParamsSer, TwoPointZero};
+use crate::params::{Id, TwoPointZero};
 use beef::Cow;
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
@@ -56,7 +56,7 @@ impl<'a> Request<'a> {
 }
 
 /// JSON-RPC Invalid request as defined in the [spec](https://www.jsonrpc.org/specification#request-object).
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct InvalidRequest<'a> {
 	/// Request ID
 	#[serde(borrow)]
@@ -96,12 +96,12 @@ pub struct RequestSer<'a> {
 	pub method: &'a str,
 	/// Parameter values of the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub params: Option<ParamsSer<'a>>,
+	pub params: Option<Box<RawValue>>,
 }
 
 impl<'a> RequestSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(id: &'a Id<'a>, method: &'a str, params: Option<ParamsSer<'a>>) -> Self {
+	pub fn new(id: &'a Id<'a>, method: &'a str, params: Option<Box<RawValue>>) -> Self {
 		Self { jsonrpc: TwoPointZero, id, method, params }
 	}
 }
@@ -117,20 +117,20 @@ pub struct NotificationSer<'a> {
 	pub method: &'a str,
 	/// Parameter values of the request.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub params: Option<ParamsSer<'a>>,
+	pub params: Option<Box<RawValue>>,
 }
 
 impl<'a> NotificationSer<'a> {
 	/// Create a new serializable JSON-RPC request.
-	pub fn new(method: &'a str, params: Option<ParamsSer<'a>>) -> Self {
+	pub fn new(method: &'a str, params: Option<Box<RawValue>>) -> Self {
 		Self { jsonrpc: TwoPointZero, method, params }
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use super::{Id, InvalidRequest, Notification, NotificationSer, ParamsSer, Request, RequestSer, TwoPointZero};
-	use serde_json::{value::RawValue, Value};
+	use super::{Id, InvalidRequest, Notification, NotificationSer, Request, RequestSer, TwoPointZero};
+	use serde_json::value::RawValue;
 
 	fn assert_request<'a>(request: Request<'a>, id: Id<'a>, method: &str, params: Option<&str>) {
 		assert_eq!(request.jsonrpc, TwoPointZero);
@@ -206,19 +206,15 @@ mod test {
 	fn serialize_call() {
 		let method = "subtract";
 		let id = Id::Number(1); // It's enough to check one variant, since the type itself also has tests.
-		let params: ParamsSer = vec![Value::Number(42.into()), Value::Number(23.into())].into(); // Same as above.
-		let test_vector = &[
+		let params = Some(RawValue::from_string("[42,23]".into()).unwrap());
+
+		let test_vector: &[(&'static str, Option<_>, Option<_>, &'static str)] = &[
 			// With all fields set.
-			(
-				r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#,
-				Some(&id),
-				Some(params.clone()),
-				method,
-			),
+			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract","params":[42,23]}"#, Some(&id), params.clone(), method),
 			// Escaped method name.
 			(r#"{"jsonrpc":"2.0","id":1,"method":"\"m"}"#, Some(&id), None, "\"m"),
 			// Without ID field.
-			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, Some(params), method),
+			(r#"{"jsonrpc":"2.0","id":null,"method":"subtract","params":[42,23]}"#, None, params, method),
 			// Without params field
 			(r#"{"jsonrpc":"2.0","id":1,"method":"subtract"}"#, Some(&id), None, method),
 			// Without params and ID.
@@ -241,7 +237,8 @@ mod test {
 	#[test]
 	fn serialize_notif() {
 		let exp = r#"{"jsonrpc":"2.0","method":"say_hello","params":["hello"]}"#;
-		let req = NotificationSer::new("say_hello", Some(vec!["hello".into()].into()));
+		let params = Some(RawValue::from_string(r#"["hello"]"#.into()).unwrap());
+		let req = NotificationSer::new("say_hello", params);
 		let ser = serde_json::to_string(&req).unwrap();
 		assert_eq!(exp, ser);
 	}
