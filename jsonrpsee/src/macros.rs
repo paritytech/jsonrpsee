@@ -49,23 +49,8 @@ macro_rules! cfg_client_transport {
 
 macro_rules! cfg_server {
     ($($item:item)*) => {
-        $(
-            #[cfg(any(feature = "server", feature = "server-core", feature = "ws-server", feature = "http-server"))]
-            $item
-        )*
+		cfg_feature!("server", $($item)*);
     }
-}
-
-macro_rules! cfg_http_server {
-    ($($item:item)*) => {
-		cfg_feature!("jsonrpsee-http-server", $($item)*);
-	};
-}
-
-macro_rules! cfg_ws_server {
-     ($($item:item)*) => {
-		cfg_feature!("jsonrpsee-ws-server", $($item)*);
-	};
 }
 
 macro_rules! cfg_proc_macros {
@@ -83,7 +68,7 @@ macro_rules! cfg_types {
 macro_rules! cfg_client_or_server {
     ($($item:item)*) => {
         $(
-            #[cfg(any(feature = "jsonrpsee-http-client", feature = "jsonrpsee-wasm-client", feature = "jsonrpsee-ws-client", feature = "client", feature = "async-client", feature = "client-core", feature = "server", feature = "server-core", feature = "ws-server", feature = "http-server"))]
+            #[cfg(any(feature = "jsonrpsee-http-client", feature = "jsonrpsee-wasm-client", feature = "jsonrpsee-ws-client", feature = "client", feature = "async-client", feature = "client-core", feature = "server", feature = "server-core"))]
             $item
         )*
     }

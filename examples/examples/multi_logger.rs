@@ -30,22 +30,22 @@ use std::net::SocketAddr;
 use std::process::Command;
 use std::time::Instant;
 
-use jsonrpsee::core::logger::MethodKind;
-use jsonrpsee::core::{client::ClientT, logger, logger::Headers};
+use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
+use jsonrpsee::server::logger::{HttpRequest, MethodKind};
+use jsonrpsee::server::{logger, RpcModule, ServerBuilder};
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 
 /// Example logger to measure call execution time.
 #[derive(Clone)]
 struct Timings;
 
-impl logger::WsLogger for Timings {
+impl logger::Logger for Timings {
 	type Instant = Instant;
 
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-		println!("[Timings::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+	fn on_connect(&self, remote_addr: SocketAddr, req: &HttpRequest) {
+		println!("[Timings::on_connect] remote_addr {:?}, req: {:?}", remote_addr, req);
 	}
 
 	fn on_request(&self) -> Self::Instant {
@@ -65,7 +65,7 @@ impl logger::WsLogger for Timings {
 	}
 
 	fn on_disconnect(&self, remote_addr: SocketAddr) {
-		println!("[Timings::on_disconnect] remote_addr: {}", remote_addr);
+		println!("[Timings::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }
 
@@ -88,11 +88,11 @@ impl ThreadWatcher {
 	}
 }
 
-impl logger::WsLogger for ThreadWatcher {
+impl logger::Logger for ThreadWatcher {
 	type Instant = isize;
 
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &Headers) {
-		println!("[ThreadWatcher::on_connect] remote_addr {}, headers: {:?}", remote_addr, headers);
+	fn on_connect(&self, remote_addr: SocketAddr, headers: &HttpRequest) {
+		println!("[ThreadWatcher::on_connect] remote_addr {:?}, headers: {:?}", remote_addr, headers);
 	}
 
 	fn on_call(&self, _method: &str, _params: Params, _kind: MethodKind) {
@@ -117,7 +117,7 @@ impl logger::WsLogger for ThreadWatcher {
 	}
 
 	fn on_disconnect(&self, remote_addr: SocketAddr) {
-		println!("[ThreadWatcher::on_disconnect] remote_addr: {}", remote_addr);
+		println!("[ThreadWatcher::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }
 
@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = WsServerBuilder::new().set_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
+	let server = ServerBuilder::new().set_logger((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	module.register_method("thready", |params, _| {
@@ -153,6 +153,11 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		Ok(())
 	})?;
 	let addr = server.local_addr()?;
-	server.start(module)?;
+	let handle = server.start(module)?;
+
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(handle.stopped());
+
 	Ok(addr)
 }

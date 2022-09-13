@@ -28,8 +28,8 @@ use std::net::SocketAddr;
 
 use jsonrpsee::core::{async_trait, Error};
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 
 type ExampleHash = [u8; 32];
 
@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let (server_addr, _handle) = run_server().await?;
+	let server_addr = run_server().await?;
 	let url = format!("ws://{}", server_addr);
 
 	let client = WsClientBuilder::default().build(&url).await?;
@@ -81,10 +81,15 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, WsServerHandle)> {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
 
 	let addr = server.local_addr()?;
 	let handle = server.start(RpcServerImpl.into_rpc())?;
-	Ok((addr, handle))
+
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(handle.stopped());
+
+	Ok(addr)
 }

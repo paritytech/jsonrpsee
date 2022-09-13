@@ -32,13 +32,11 @@ use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::SubscriptionResult;
-
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::{rpc_params, RpcModule, SubscriptionSink};
 use tokio::time::{interval, sleep};
 use tokio_stream::wrappers::IntervalStream;
@@ -143,8 +141,8 @@ fn module_macro() -> RpcModule<()> {
 	().into_rpc()
 }
 
-async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsServerHandle), Error> {
-	let server = WsServerBuilder::default()
+async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, ServerHandle), Error> {
+	let server = ServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
 		.register_resource("SUB", 6, 1)?
@@ -157,8 +155,8 @@ async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsServer
 	Ok((addr, handle))
 }
 
-async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpServerHandle), Error> {
-	let server = HttpServerBuilder::default()
+async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, ServerHandle), Error> {
+	let server = ServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
 		.register_resource("SUB", 6, 1)?
@@ -181,7 +179,7 @@ fn assert_server_busy<T: std::fmt::Debug>(fail: Result<T, Error>) {
 	}
 }
 
-async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServerHandle) {
+async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: ServerHandle) {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -236,10 +234,11 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 	assert!(pass2.is_ok());
 	assert_server_busy(fail);
 
-	server_handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 }
 
-async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: HttpServerHandle) {
+async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: ServerHandle) {
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
@@ -264,7 +263,8 @@ async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: HttpSe
 
 	assert_eq!(passes, 3);
 
-	server_handle.stop().unwrap().await.unwrap();
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 }
 
 #[tokio::test]

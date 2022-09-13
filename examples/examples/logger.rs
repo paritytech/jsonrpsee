@@ -28,19 +28,23 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
-use jsonrpsee::core::logger::{self, Body, MethodKind, Params, Request};
-use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
-use jsonrpsee::rpc_params;
+use jsonrpsee::server::logger::{self, HttpRequest, MethodKind, Params};
+use jsonrpsee::server::ServerBuilder;
+use jsonrpsee::ws_client::WsClientBuilder;
+use jsonrpsee::{rpc_params, RpcModule};
 
 #[derive(Clone)]
 struct Timings;
 
-impl logger::HttpLogger for Timings {
+impl logger::Logger for Timings {
 	type Instant = Instant;
 
-	fn on_request(&self, remote_addr: SocketAddr, request: &Request<Body>) -> Self::Instant {
-		println!("[Logger::on_request] remote_addr {}, request: {:?}", remote_addr, request);
+	fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest) {
+		println!("[Logger::on_connect] remote_addr {:?}, headers: {:?}", remote_addr, request);
+	}
+
+	fn on_request(&self) -> Self::Instant {
+		println!("[Logger::on_request]");
 		Instant::now()
 	}
 
@@ -55,6 +59,10 @@ impl logger::HttpLogger for Timings {
 	fn on_response(&self, result: &str, started_at: Self::Instant) {
 		println!("[Logger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	}
+
+	fn on_disconnect(&self, remote_addr: SocketAddr) {
+		println!("[Logger::on_disconnect] remote_addr: {:?}", remote_addr);
+	}
 }
 
 #[tokio::main]
@@ -64,10 +72,10 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	let (addr, _handle) = run_server().await?;
-	let url = format!("http://{}", addr);
+	let addr = run_server().await?;
+	let url = format!("ws://{}", addr);
 
-	let client = HttpClientBuilder::default().build(&url)?;
+	let client = WsClientBuilder::default().build(&url).await?;
 	let response: String = client.request("say_hello", rpc_params![]).await?;
 	println!("response: {:?}", response);
 	let _response: Result<String, _> = client.request("unknown_method", rpc_params![]).await;
@@ -76,11 +84,17 @@ async fn main() -> anyhow::Result<()> {
 	Ok(())
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let server = HttpServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	let server = ServerBuilder::new().set_logger(Timings).build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("lo"))?;
 	let addr = server.local_addr()?;
-	let server_handle = server.start(module)?;
-	Ok((addr, server_handle))
+
+	let handle = server.start(module)?;
+
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(handle.stopped());
+
+	Ok(addr)
 }

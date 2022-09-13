@@ -24,23 +24,25 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#![cfg(test)]
+
 use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
 use jsonrpsee::core::error::SubscriptionClosed;
-use jsonrpsee::core::server::access_control::{AccessControl, AccessControlBuilder};
-use jsonrpsee::http_server::middleware::proxy_get_request::ProxyGetRequestLayer;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::core::server::host_filtering::AllowHosts;
+use jsonrpsee::server::middleware::proxy_get_request::ProxyGetRequestLayer;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::{ErrorObject, SUBSCRIPTION_CLOSED_WITH_ERROR};
-use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
 use jsonrpsee::RpcModule;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tower_http::cors::CorsLayer;
 
-pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle) {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+#[allow(dead_code)]
+pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle) {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
@@ -176,8 +178,18 @@ pub async fn websocket_server_with_subscription() -> (SocketAddr, WsServerHandle
 	(addr, server_handle)
 }
 
-pub async fn websocket_server() -> SocketAddr {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+#[allow(dead_code)]
+pub async fn server_with_subscription() -> SocketAddr {
+	let (addr, handle) = server_with_subscription_and_handle().await;
+
+	tokio::spawn(handle.stopped());
+
+	addr
+}
+
+#[allow(dead_code)]
+pub async fn server() -> SocketAddr {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| Ok("hello")).unwrap();
 
@@ -190,14 +202,17 @@ pub async fn websocket_server() -> SocketAddr {
 
 	let addr = server.local_addr().unwrap();
 
-	server.start(module).unwrap();
+	let server_handle = server.start(module).unwrap();
+
+	tokio::spawn(server_handle.stopped());
 
 	addr
 }
 
 /// Yields one item then sleeps for an hour.
-pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+#[allow(dead_code)]
+pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sender<()>) -> SocketAddr {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
 
 	let mut module = RpcModule::new(tx);
@@ -215,23 +230,27 @@ pub async fn websocket_server_with_sleeping_subscription(tx: futures::channel::m
 			Ok(())
 		})
 		.unwrap();
-	server.start(module).unwrap();
+	let handle = server.start(module).unwrap();
+
+	tokio::spawn(handle.stopped());
+
 	addr
 }
 
-pub async fn http_server() -> (SocketAddr, HttpServerHandle) {
-	http_server_with_access_control(AccessControlBuilder::default().build(), CorsLayer::default()).await
+#[allow(dead_code)]
+pub async fn server_with_health_api() -> (SocketAddr, ServerHandle) {
+	server_with_access_control(AllowHosts::Any, CorsLayer::new()).await
 }
 
-pub async fn http_server_with_access_control(acl: AccessControl, cors: CorsLayer) -> (SocketAddr, HttpServerHandle) {
+pub async fn server_with_access_control(allowed_hosts: AllowHosts, cors: CorsLayer) -> (SocketAddr, ServerHandle) {
 	let middleware = tower::ServiceBuilder::new()
 		// Proxy `GET /health` requests to internal `system_health` method.
 		.layer(ProxyGetRequestLayer::new("/health", "system_health").unwrap())
 		// Add `CORS` layer.
 		.layer(cors);
 
-	let server = HttpServerBuilder::default()
-		.set_access_control(acl)
+	let server = ServerBuilder::default()
+		.set_host_filtering(allowed_hosts)
 		.set_middleware(middleware)
 		.build("127.0.0.1:0")
 		.await
@@ -245,4 +264,10 @@ pub async fn http_server_with_access_control(acl: AccessControl, cors: CorsLayer
 
 	let handle = server.start(module).unwrap();
 	(addr, handle)
+}
+
+pub fn init_logger() {
+	let _ = tracing_subscriber::FmtSubscriber::builder()
+		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+		.try_init();
 }

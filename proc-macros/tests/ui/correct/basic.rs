@@ -2,13 +2,13 @@
 
 use std::net::SocketAddr;
 
+use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::core::{async_trait, client::ClientT, RpcResult};
 use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::rpc_params;
-use jsonrpsee::core::params::ArrayParams;
+use jsonrpsee::server::ServerBuilder;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::*;
-use jsonrpsee::ws_server::{SubscriptionSink, WsServerBuilder};
+use jsonrpsee::{rpc_params, SubscriptionSink};
 
 #[rpc(client, server, namespace = "foo")]
 pub trait Rpc {
@@ -83,18 +83,19 @@ impl RpcServer for RpcServerImpl {
 	}
 }
 
-pub async fn websocket_server() -> SocketAddr {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+pub async fn server() -> SocketAddr {
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr = server.local_addr().unwrap();
+	let server_handle = server.start(RpcServerImpl.into_rpc()).unwrap();
 
-	server.start(RpcServerImpl.into_rpc()).unwrap();
+	tokio::spawn(server_handle.stopped());
 
 	addr
 }
 
 #[tokio::main]
 async fn main() {
-	let server_addr = websocket_server().await;
+	let server_addr = server().await;
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
@@ -104,7 +105,10 @@ async fn main() {
 	assert_eq!(client.optional_params(Some(1), "a".into()).await.unwrap(), true);
 
 	assert_eq!(client.array_params(vec![1]).await.unwrap(), 1);
-	assert_eq!(client.request::<u64, ArrayParams>("foo_array_params", rpc_params![Vec::<u64>::new()]).await.unwrap(), 0);
+	assert_eq!(
+		client.request::<u64, ArrayParams>("foo_array_params", rpc_params![Vec::<u64>::new()]).await.unwrap(),
+		0
+	);
 
 	assert_eq!(client.request::<bool, ArrayParams>("foo_optional_param", rpc_params![]).await.unwrap(), false);
 	assert_eq!(client.request::<bool, ArrayParams>("foo_optional_param", rpc_params![1]).await.unwrap(), true);

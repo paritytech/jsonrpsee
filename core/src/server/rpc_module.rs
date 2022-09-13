@@ -436,7 +436,7 @@ impl Methods {
 				// not read once this is used for subscriptions.
 				//
 				// The same information is part of `res` above.
-				let _ = rx_sink.next().await.expect("Every call must at least produce one reponse; qed");
+				let _ = rx_sink.next().await.expect("Every call must at least produce one response; qed");
 
 				res
 			}
