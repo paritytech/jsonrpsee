@@ -26,7 +26,7 @@
 
 use std::error::Error as StdError;
 use std::future::Future;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpListener as StdTcpListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -471,11 +471,47 @@ impl<B, L> Builder<B, L> {
 	///
 	pub async fn build(self, addrs: impl ToSocketAddrs) -> Result<Server<B, L>, Error> {
 		let listener = TcpListener::bind(addrs).await?;
-		let resources = self.resources;
+
 		Ok(Server {
 			listener,
 			cfg: self.settings,
-			resources,
+			resources: self.resources,
+			logger: self.logger,
+			id_provider: self.id_provider,
+			service_builder: self.service_builder,
+		})
+	}
+
+	/// Finalizes the configuration of the server with customized TCP settings on the socket.
+	///
+	///
+	/// ```rust
+	/// use jsonrpsee_server::ServerBuilder;
+	/// use socket2::{Domain, Socket, Type};
+	/// use std::time::Duration;
+	///
+	/// #[tokio::main]
+	/// async fn main() {
+	///   let addr = "127.0.0.1:0".parse().unwrap();
+	///   let domain = Domain::for_address(addr);
+	///   let socket = Socket::new(domain, Type::STREAM, None).unwrap();
+	///   socket.set_nonblocking(true).unwrap();
+	///
+	///   let address = addr.into();
+	///   socket.bind(&address).unwrap();
+	///
+	///   socket.listen(4096).unwrap();
+	///
+	///   let server = ServerBuilder::new().build_from_tcp(socket).unwrap();
+	/// }
+	/// ```
+	pub fn build_from_tcp(self, listener: impl Into<StdTcpListener>) -> Result<Server<B, L>, Error> {
+		let listener = TcpListener::from_std(listener.into())?;
+
+		Ok(Server {
+			listener,
+			cfg: self.settings,
+			resources: self.resources,
 			logger: self.logger,
 			id_provider: self.id_provider,
 			service_builder: self.service_builder,
