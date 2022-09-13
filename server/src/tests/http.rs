@@ -489,3 +489,16 @@ async fn disabled_batches() {
 	handle.stop().unwrap();
 	handle.stopped().await;
 }
+
+#[tokio::test]
+async fn http2_method_call_works() {
+	init_logger();
+
+	let (addr, _handle) = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http2_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
+}
