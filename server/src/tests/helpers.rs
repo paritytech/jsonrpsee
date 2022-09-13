@@ -14,7 +14,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 /// Spawns a dummy JSON-RPC server.
 pub(crate) async fn server() -> SocketAddr {
 	let (addr, handle) = server_with_handles().await;
-	tokio::spawn(async move { handle.stopped().await });
+	tokio::spawn(handle.stopped());
 	addr
 }
 
@@ -161,7 +161,7 @@ pub(crate) async fn server_with_context() -> SocketAddr {
 	let addr = server.local_addr().unwrap();
 	let handle = server.start(rpc_module).unwrap();
 
-	tokio::spawn(async move { handle.stopped().await });
+	tokio::spawn(handle.stopped());
 	addr
 }
 

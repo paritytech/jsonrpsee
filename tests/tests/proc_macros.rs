@@ -206,7 +206,7 @@ pub async fn server() -> SocketAddr {
 	let addr = server.local_addr().unwrap();
 	let handle = server.start(RpcServerImpl.into_rpc()).unwrap();
 
-	tokio::spawn(async move { handle.stopped().await });
+	tokio::spawn(handle.stopped());
 
 	addr
 }
