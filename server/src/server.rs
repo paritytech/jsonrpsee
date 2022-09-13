@@ -324,7 +324,7 @@ impl<B, L> Builder<B, L> {
 	/// impl Logger for MyLogger {
 	///     type Instant = Instant;
 	///
-	///     fn on_connect(&self, remote_addr: Option<SocketAddr>, request: &HttpRequest) {
+	///     fn on_connect(&self, remote_addr: SocketAddr, request: &HttpRequest) {
 	///          println!("[MyLogger::on_call] remote_addr: {:?}, headers: {:?}", remote_addr, request);
 	///     }
 	///
@@ -344,7 +344,7 @@ impl<B, L> Builder<B, L> {
 	///          println!("[MyLogger::on_response] result: {}, time elapsed {:?}", result, started_at.elapsed());
 	///     }
 	///
-	///     fn on_disconnect(&self, remote_addr: Option<SocketAddr>) {
+	///     fn on_disconnect(&self, remote_addr: SocketAddr) {
 	///          println!("[MyLogger::on_disconnect] remote_addr: {:?}", remote_addr);
 	///     }
 	/// }
