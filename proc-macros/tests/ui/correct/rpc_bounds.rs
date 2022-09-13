@@ -61,16 +61,16 @@ pub async fn websocket_servers() -> (SocketAddr, SocketAddr) {
 	// Start server from `MyRpcS` trait.
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr_server_only = server.local_addr().unwrap();
-	tokio::spawn(async move {
-		server.start(ServerOnlyImpl.into_rpc()).unwrap().await;
-	});
+	let server_handle = server.start(ServerOnlyImpl.into_rpc()).unwrap();
+
+	tokio::spawn(async move { server_handle.stopped().await });
 
 	// Start server from `MyRpcSC` trait.
 	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let addr_server_client = server.local_addr().unwrap();
-	tokio::spawn(async move {
-		server.start(ServerClientServerImpl.into_rpc()).unwrap().await;
-	});
+	let server_handle = server.start(ServerClientServerImpl.into_rpc()).unwrap();
+
+	tokio::spawn(async move { server_handle.stopped().await });
 
 	(addr_server_only, addr_server_client)
 }

@@ -179,28 +179,19 @@ impl ServerHandle {
 		Self(Arc::new(tx))
 	}
 
-	/// Stop the server
-	pub fn stop(self) -> Result<impl Future<Output = ()>, Error> {
-		self.0.send(()).map_err(|_| Error::AlreadyStopped)?;
-		Ok(self)
+	/// Stop the server without waiting for server to stopped.
+	pub fn stop(&self) -> Result<(), Error> {
+		self.0.send(()).map_err(|_| Error::AlreadyStopped)
+	}
+
+	/// Wait for the server to stopped..
+	pub async fn stopped(self) {
+		self.0.closed().await
 	}
 
 	/// Check if the server has been stopped.
 	pub fn is_stopped(&self) -> bool {
 		self.0.is_closed()
-	}
-}
-
-impl Future for ServerHandle {
-	type Output = ();
-
-	fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-		if self.is_stopped() {
-			Poll::Ready(())
-		} else {
-			cx.waker().wake_by_ref();
-			Poll::Pending
-		}
 	}
 }
 

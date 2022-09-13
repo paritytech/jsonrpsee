@@ -182,9 +182,7 @@ pub async fn server_with_subscription_and_handle() -> (SocketAddr, ServerHandle)
 pub async fn server_with_subscription() -> SocketAddr {
 	let (addr, handle) = server_with_subscription_and_handle().await;
 
-	tokio::spawn(async move {
-		handle.await;
-	});
+	tokio::spawn(async move { handle.stopped().await });
 
 	addr
 }
@@ -206,9 +204,7 @@ pub async fn server() -> SocketAddr {
 
 	let server_handle = server.start(module).unwrap();
 
-	tokio::spawn(async move {
-		server_handle.await;
-	});
+	tokio::spawn(async move { server_handle.stopped().await });
 
 	addr
 }
@@ -236,9 +232,7 @@ pub async fn server_with_sleeping_subscription(tx: futures::channel::mpsc::Sende
 		.unwrap();
 	let handle = server.start(module).unwrap();
 
-	tokio::spawn(async move {
-		handle.await;
-	});
+	tokio::spawn(async move { handle.stopped().await });
 
 	addr
 }

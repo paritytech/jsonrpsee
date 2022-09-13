@@ -102,7 +102,9 @@ where
 	<U as HttpBody>::Error: Send + Sync + StdError,
 	<U as HttpBody>::Data: Send,
 {
-	/// Start responding to connections requests. This will run on the tokio runtime until the server is stopped.
+	/// Start responding to connections requests.
+	///
+	/// This will run on the tokio runtime until the server is stopped or the `ServerHandle` is dropped.
 	pub fn start(mut self, methods: impl Into<Methods>) -> Result<ServerHandle, Error> {
 		let methods = methods.into().initialize_resources(&self.resources)?;
 		let (stop_tx, stop_rx) = watch::channel(());
@@ -172,36 +174,16 @@ where
 
 					let service = self.service_builder.service(tower_service);
 
-					// NOTE: this task will finish after the HTTP request have been finished.
-					//
-					// Thus, if it was a Websocket Upgrade request the background task will be spawned separately.
-					let mut stop_handle2 = stop_handle.clone();
-					connections.add(
-						async move {
-							let conn =
-								hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
+					let max_conns = self.cfg.max_connections as usize;
+					let curr_conns = max_conns - connection_guard.available_connections();
 
-							tokio::pin!(conn);
-
-							tokio::select! {
-								res = &mut conn => {
-									if let Err(e) = res {
-										tracing::warn!("Error when processing connection: {:?}", e);
-									}
-								},
-								_ = stop_handle2.shutdown() => {
-									conn.graceful_shutdown();
-								}
-							}
-						}
-						.boxed(),
-					);
-
-					tracing::info!(
-						"Accepting new connection {}/{}",
-						self.cfg.max_connections as usize - connection_guard.available_connections(),
-						self.cfg.max_connections
-					);
+					connections.add(Box::pin(try_accept_connection(
+						socket,
+						service,
+						stop_handle.clone(),
+						curr_conns,
+						max_conns,
+					)));
 
 					id = id.wrapping_add(1);
 				}
@@ -211,6 +193,8 @@ where
 				Err(MonitoredError::Shutdown) => break,
 			}
 		}
+
+		connections.await;
 	}
 }
 
@@ -689,5 +673,37 @@ where
 		}
 
 		this.future.poll_unpin(cx).map_err(MonitoredError::Selector)
+	}
+}
+
+// Attempts to accept a new connection
+async fn try_accept_connection<S, Bd>(
+	socket: TcpStream,
+	service: S,
+	mut stop_handle: StopHandle,
+	curr_conns: usize,
+	max_conns: usize,
+) where
+	S: Service<hyper::Request<hyper::Body>, Response = hyper::Response<Bd>> + Send + 'static,
+	S::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+	S::Future: Send,
+	Bd: HttpBody + Send + 'static,
+	<Bd as HttpBody>::Error: Send + Sync + StdError,
+	<Bd as HttpBody>::Data: Send,
+{
+	let conn = hyper::server::conn::Http::new().serve_connection(socket, service).with_upgrades();
+
+	tokio::pin!(conn);
+
+	tokio::select! {
+		res = &mut conn => {
+			match res {
+				Ok(_) => tracing::info!("Accepting new connection {}/{}", curr_conns, max_conns),
+				Err(e) => tracing::warn!("Connection failed: {:?}", e),
+			}
+		}
+		_ = stop_handle.shutdown() => {
+			conn.graceful_shutdown();
+		}
 	}
 }

@@ -389,7 +389,7 @@ async fn server_should_be_able_to_close_subscriptions() {
 async fn ws_close_pending_subscription_when_server_terminated() {
 	init_logger();
 
-	let (server_addr, handle) = server_with_subscription_and_handle().await;
+	let (server_addr, server_handle) = server_with_subscription_and_handle().await;
 	let server_url = format!("ws://{}", server_addr);
 
 	let c1 = WsClientBuilder::default().build(&server_url).await.unwrap();
@@ -399,7 +399,8 @@ async fn ws_close_pending_subscription_when_server_terminated() {
 
 	assert!(matches!(sub.next().await, Some(Ok(_))));
 
-	handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 
 	let sub2: Result<Subscription<String>, _> =
 		c1.subscribe("subscribe_hello", rpc_params![], "unsubscribe_hello").await;
@@ -512,7 +513,8 @@ async fn ws_server_notify_client_on_disconnect() {
 	// Make sure the `on_disconnect` method did not return before stopping the server.
 	assert_eq!(dis_rx.try_recv().unwrap(), None);
 
-	server_handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 
 	// The `on_disconnect()` method returned.
 	dis_rx.await.unwrap();
@@ -533,7 +535,8 @@ async fn ws_server_notify_client_on_disconnect_with_closed_server() {
 	client.request::<String, ArrayParams>("say_hello", rpc_params![]).await.unwrap();
 
 	// Stop the server.
-	server_handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 
 	// Ensure `on_disconnect` returns when the call is made after the server is closed.
 	client.on_disconnect().await;

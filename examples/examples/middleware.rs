@@ -116,7 +116,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 
 	// In this example we don't care about doing shutdown so let's it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.
-	tokio::spawn(async move { handle.await });
+	tokio::spawn(async move { handle.stopped().await });
 
 	Ok(addr)
 }

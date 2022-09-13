@@ -59,7 +59,8 @@ async fn can_set_the_max_request_body_size() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
-	handle.stop().unwrap().await;
+	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
@@ -72,7 +73,7 @@ async fn can_set_the_max_response_body_size() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(101))).unwrap();
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(module).unwrap();
+	let server_handle = server.start(module).unwrap();
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -81,7 +82,8 @@ async fn can_set_the_max_response_body_size() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, oversized_response(Id::Num(1), 100));
 
-	handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 }
 
 #[tokio::test]
@@ -94,7 +96,7 @@ async fn can_set_the_max_response_size_to_batch() {
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(51))).unwrap();
 	let addr = server.local_addr().unwrap();
-	let handle = server.start(module).unwrap();
+	let server_handle = server.start(module).unwrap();
 
 	let mut client = WebSocketTestClient::new(addr).await.unwrap();
 
@@ -103,7 +105,8 @@ async fn can_set_the_max_response_size_to_batch() {
 	let response = client.send_request_text(req).await.unwrap();
 	assert_eq!(response, invalid_request(Id::Null));
 
-	handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 }
 
 #[tokio::test]
@@ -117,7 +120,7 @@ async fn can_set_max_connections() {
 	module.register_method("anything", |_p, _cx| Ok(())).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let handle = server.start(module).unwrap();
+	let server_handle = server.start(module).unwrap();
 
 	let conn1 = WebSocketTestClient::new(addr).await;
 	let conn2 = WebSocketTestClient::new(addr).await;
@@ -139,7 +142,8 @@ async fn can_set_max_connections() {
 	let conn4 = WebSocketTestClient::new(addr).await;
 	assert!(conn4.is_ok());
 
-	handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 }
 
 #[tokio::test]
@@ -580,7 +584,7 @@ async fn disabled_batches() {
 	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
 	let addr = server.local_addr().unwrap();
 
-	let handle = server.start(module).unwrap();
+	let server_handle = server.start(module).unwrap();
 
 	// Send a valid batch.
 	let mut client = WebSocketTestClient::new(addr).with_default_timeout().await.unwrap().unwrap();
@@ -591,5 +595,6 @@ async fn disabled_batches() {
 	let response = client.send_request_text(req).with_default_timeout().await.unwrap().unwrap();
 	assert_eq!(response, batches_not_supported());
 
-	handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 }

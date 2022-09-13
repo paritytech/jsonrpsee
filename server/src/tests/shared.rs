@@ -1,5 +1,4 @@
 use crate::tests::helpers::{init_logger, server_with_handles};
-use futures_util::future::join;
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::TimeoutFutureExt;
 use std::time::Duration;
@@ -9,7 +8,9 @@ async fn stop_works() {
 	init_logger();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 
-	server_handle.clone().stop().unwrap().await;
+	let handle = server_handle.clone();
+	handle.stop().unwrap();
+	handle.stopped().await;
 
 	// After that we should be able to wait for task handle to finish.
 	// First `unwrap` is timeout, second is `JoinHandle`'s one.
@@ -25,10 +26,12 @@ async fn run_forever() {
 	init_logger();
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 
-	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
+	assert!(matches!(server_handle.stopped().with_timeout(TIMEOUT).await, Err(_timeout_err)));
 
 	let (_addr, server_handle) = server_with_handles().with_default_timeout().await.unwrap();
 
+	server_handle.stop().unwrap();
+
 	// Send the shutdown request from one handle and await the server on the second one.
-	join(server_handle.clone().stop().unwrap(), server_handle).with_timeout(TIMEOUT).await.unwrap();
+	server_handle.stopped().with_timeout(TIMEOUT).await.unwrap();
 }
