@@ -184,7 +184,7 @@ impl ServerHandle {
 		self.0.send(()).map_err(|_| Error::AlreadyStopped)
 	}
 
-	/// Wait for the server to stopped..
+	/// Wait for the server to stop.
 	pub async fn stopped(self) {
 		self.0.closed().await
 	}
