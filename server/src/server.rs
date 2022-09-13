@@ -137,7 +137,7 @@ where
 
 		loop {
 			match connections.select_with(&mut incoming).await {
-				Ok((socket, _addr)) => {
+				Ok((socket, remote_addr)) => {
 					if let Err(e) = socket.set_nodelay(true) {
 						tracing::warn!("Could not set NODELAY on socket: {:?}", e);
 						continue;
@@ -154,7 +154,7 @@ where
 
 					let tower_service = TowerService {
 						inner: ServiceData {
-							remote_addr: socket.peer_addr().ok(),
+							remote_addr,
 							methods: methods.clone(),
 							allow_hosts: allow_hosts.clone(),
 							resources: resources.clone(),
@@ -537,7 +537,7 @@ impl MethodResult {
 #[derive(Debug, Clone)]
 pub(crate) struct ServiceData<L: Logger> {
 	/// Remote server address.
-	pub(crate) remote_addr: Option<SocketAddr>,
+	pub(crate) remote_addr: SocketAddr,
 	/// Registered server methods.
 	pub(crate) methods: Methods,
 	/// Access control.

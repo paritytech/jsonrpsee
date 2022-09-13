@@ -62,7 +62,7 @@ impl Logger for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 
-	fn on_connect(&self, _remote_addr: Option<SocketAddr>, _req: &HttpRequest) {
+	fn on_connect(&self, _remote_addr: SocketAddr, _req: &HttpRequest) {
 		self.inner.lock().unwrap().connections.0 += 1;
 	}
 
@@ -92,7 +92,7 @@ impl Logger for Counter {
 		self.inner.lock().unwrap().requests.1 += 1;
 	}
 
-	fn on_disconnect(&self, _remote_addr: Option<SocketAddr>) {
+	fn on_disconnect(&self, _remote_addr: SocketAddr) {
 		self.inner.lock().unwrap().connections.1 += 1;
 	}
 }
