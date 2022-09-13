@@ -179,7 +179,7 @@ impl ServerHandle {
 		Self(Arc::new(tx))
 	}
 
-	/// Stop the server without waiting for server to stopped.
+	/// Tell the server to stop without waiting for the server to stop.
 	pub fn stop(&self) -> Result<(), Error> {
 		self.0.send(()).map_err(|_| Error::AlreadyStopped)
 	}
