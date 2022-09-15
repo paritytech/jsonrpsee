@@ -16,7 +16,7 @@ use jsonrpsee_core::server::helpers::{
 };
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{ConnState, MethodKind, Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, rx_log_from_str, tx_log_from_str, RpcTracing};
+use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::traits::IdProvider;
 use jsonrpsee_core::Error;
 use jsonrpsee_types::error::{
@@ -28,7 +28,7 @@ use soketto::connection::Error as SokettoError;
 use soketto::data::ByteSlice125;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_util::compat::Compat;
-use tracing_futures::Instrument;
+use tracing::instrument;
 
 pub(crate) type Sender = soketto::Sender<BufReader<BufWriter<Compat<Upgraded>>>>;
 pub(crate) type Receiver = soketto::Receiver<BufReader<BufWriter<Compat<Upgraded>>>>;
@@ -68,14 +68,6 @@ pub(crate) struct CallData<'a, L: Logger> {
 	pub(crate) request_start: L::Instant,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct Call<'a, L: Logger> {
-	pub(crate) params: Params<'a>,
-	pub(crate) name: &'a str,
-	pub(crate) call: CallData<'a, L>,
-	pub(crate) id: Id<'a>,
-}
-
 /// This is a glorified select listening for new messages, while also checking the `stop_receiver` signal.
 struct Monitored<'a, F> {
 	future: F,
@@ -113,6 +105,7 @@ where
 // Batch responses must be sent back as a single message so we read the results from each
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
+#[instrument(name = "batch", skip(b), level = "TRACE")]
 pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> BatchResponse {
 	let Batch { data, call } = b;
 
@@ -121,29 +114,22 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> BatchRe
 			let batch = batch.into_iter().map(|req| Ok((req, call.clone())));
 			let batch_stream = futures_util::stream::iter(batch);
 
-			let trace = RpcTracing::batch();
+			let max_response_size = call.max_response_body_size;
 
-			return async {
-				let max_response_size = call.max_response_body_size;
+			let batch_response = batch_stream
+				.try_fold(
+					BatchResponseBuilder::new_with_limit(max_response_size as usize),
+					|batch_response, (req, call)| async move {
+						let response = execute_call(req, call).await;
+						batch_response.append(response.as_inner())
+					},
+				)
+				.await;
 
-				let batch_response = batch_stream
-					.try_fold(
-						BatchResponseBuilder::new_with_limit(max_response_size as usize),
-						|batch_response, (req, call)| async move {
-							let params = Params::new(req.params.map(|params| params.get()));
-							let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
-							batch_response.append(response.as_inner())
-						},
-					)
-					.await;
-
-				match batch_response {
-					Ok(batch) => batch.finish(),
-					Err(batch_err) => batch_err,
-				}
+			match batch_response {
+				Ok(batch) => batch.finish(),
+				Err(batch_err) => batch_err,
 			}
-			.instrument(trace.into_span())
-			.await;
 		} else {
 			BatchResponse::error(Id::Null, ErrorObject::from(ErrorCode::InvalidRequest))
 		};
@@ -155,23 +141,16 @@ pub(crate) async fn process_batch_request<L: Logger>(b: Batch<'_, L>) -> BatchRe
 
 pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResult {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-		let trace = RpcTracing::method_call(&req.method);
-
-		async {
-			rx_log_from_json(&req, call.max_log_length);
-
-			let params = Params::new(req.params.map(|params| params.get()));
-			let name = &req.method;
-			let id = req.id;
-
-			execute_call(Call { name, params, id, call }).await
-		}
-		.instrument(trace.into_span())
-		.await
+		execute_call_with_tracing(req, call).await
 	} else {
 		let (id, code) = prepare_error(&data);
 		MethodResult::SendAndLogger(MethodResponse::error(id, ErrorObject::from(code)))
 	}
+}
+
+#[instrument(name = "method_call", fields(method = req.method.as_ref()), skip(call, req), level = "TRACE")]
+pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> MethodResult {
+	execute_call(req, call).await
 }
 
 /// Execute a call which returns result of the call with a additional sink
@@ -179,8 +158,7 @@ pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallD
 ///
 /// Returns `(MethodResponse, None)` on every call that isn't a subscription
 /// Otherwise `(MethodResponse, Some(PendingSubscriptionCallTx)`.
-pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
-	let Call { name, id, params, call } = c;
+pub(crate) async fn execute_call<'a, L: Logger>(req: Request<'a>, call: CallData<'_, L>) -> MethodResult {
 	let CallData {
 		resources,
 		methods,
@@ -193,6 +171,12 @@ pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 		logger,
 		request_start,
 	} = call;
+
+	rx_log_from_json(&req, call.max_log_length);
+
+	let params = Params::new(req.params.map(|params| params.get()));
+	let name = &req.method;
+	let id = req.id;
 
 	let response = match methods.method_with_name(name) {
 		None => {
@@ -267,7 +251,7 @@ pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResult {
 
 	let r = response.as_inner();
 
-	rx_log_from_str(&r.result, max_log_length);
+	tx_log_from_str(&r.result, max_log_length);
 	logger.on_result(name, r.success, request_start);
 	response
 }
