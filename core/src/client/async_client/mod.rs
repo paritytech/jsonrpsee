@@ -334,7 +334,6 @@ impl ClientT for Client {
 	}
 
 	#[instrument(name = "batch", skip(self, batch), level = "trace")]
-
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
