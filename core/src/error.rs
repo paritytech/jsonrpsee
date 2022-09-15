@@ -32,7 +32,7 @@ use jsonrpsee_types::error::{
 };
 
 /// Convenience type for displaying errors.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Mismatch<T> {
 	/// Expected value.
 	pub expected: T,

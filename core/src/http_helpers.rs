@@ -81,13 +81,13 @@ pub async fn read_body(
 /// NOTE: There's no specific hard limit on `Content_length` in HTTP specification.
 /// Thus this method might reject valid `content_length`
 fn read_header_content_length(headers: &hyper::header::HeaderMap) -> Option<u32> {
-	let length = read_header_value(headers, "content-length")?;
+	let length = read_header_value(headers, hyper::header::CONTENT_LENGTH)?;
 	// HTTP Content-Length indicates number of bytes in decimal.
 	length.parse::<u32>().ok()
 }
 
 /// Returns a string value when there is exactly one value for the given header.
-pub fn read_header_value<'a>(headers: &'a hyper::header::HeaderMap, header_name: &str) -> Option<&'a str> {
+pub fn read_header_value(headers: &hyper::header::HeaderMap, header_name: hyper::header::HeaderName) -> Option<&str> {
 	let mut values = headers.get_all(header_name).iter();
 	let val = values.next()?;
 	if values.next().is_none() {
@@ -105,21 +105,9 @@ pub fn read_header_values<'a>(
 	headers.get_all(header_name)
 }
 
-/// Get the header values from the `access-control-request-headers` header.
-pub fn get_cors_request_headers<'a>(headers: &'a hyper::header::HeaderMap) -> impl Iterator<Item = &str> {
-	const ACCESS_CONTROL_REQUEST_HEADERS: &str = "access-control-request-headers";
-
-	read_header_values(headers, ACCESS_CONTROL_REQUEST_HEADERS)
-		.iter()
-		.filter_map(|val| val.to_str().ok())
-		.flat_map(|val| val.split(','))
-		// The strings themselves might contain leading and trailing whitespaces
-		.map(|s| s.trim())
-}
-
 #[cfg(test)]
 mod tests {
-	use super::{get_cors_request_headers, read_body, read_header_content_length};
+	use super::{read_body, read_header_content_length};
 
 	#[tokio::test]
 	async fn body_to_bytes_size_limit_works() {
@@ -143,24 +131,5 @@ mod tests {
 		let mut headers = hyper::header::HeaderMap::new();
 		headers.insert(hyper::header::CONTENT_LENGTH, "18446744073709551616".parse().unwrap());
 		assert_eq!(read_header_content_length(&headers), None);
-	}
-
-	#[test]
-	fn get_cors_headers_works() {
-		let mut headers = hyper::header::HeaderMap::new();
-
-		// access-control-request-headers
-		headers.insert(hyper::header::ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type,x-requested-with".parse().unwrap());
-
-		let values: Vec<&str> = get_cors_request_headers(&headers).collect();
-		assert_eq!(values, vec!["Content-Type", "x-requested-with"]);
-
-		headers.insert(
-			hyper::header::ACCESS_CONTROL_REQUEST_HEADERS,
-			"Content-Type,               x-requested-with                  ".parse().unwrap(),
-		);
-
-		let values: Vec<&str> = get_cors_request_headers(&headers).collect();
-		assert_eq!(values, vec!["Content-Type", "x-requested-with"]);
 	}
 }

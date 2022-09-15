@@ -29,15 +29,15 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::core::Error;
 use jsonrpsee::http_client::HttpClientBuilder;
-use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::proc_macros::rpc;
+use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::error::CallError;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
-use jsonrpsee::{RpcModule, SubscriptionSink};
+use jsonrpsee::{rpc_params, RpcModule, SubscriptionSink};
 use tokio::time::{interval, sleep};
 use tokio_stream::wrappers::IntervalStream;
 
@@ -141,8 +141,8 @@ fn module_macro() -> RpcModule<()> {
 	().into_rpc()
 }
 
-async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsServerHandle), Error> {
-	let server = WsServerBuilder::default()
+async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, ServerHandle), Error> {
+	let server = ServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
 		.register_resource("SUB", 6, 1)?
@@ -155,8 +155,8 @@ async fn websocket_server(module: RpcModule<()>) -> Result<(SocketAddr, WsServer
 	Ok((addr, handle))
 }
 
-async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, HttpServerHandle), Error> {
-	let server = HttpServerBuilder::default()
+async fn http_server(module: RpcModule<()>) -> Result<(SocketAddr, ServerHandle), Error> {
+	let server = ServerBuilder::default()
 		.register_resource("CPU", 6, 2)?
 		.register_resource("MEM", 10, 1)?
 		.register_resource("SUB", 6, 1)?
@@ -179,16 +179,16 @@ fn assert_server_busy<T: std::fmt::Debug>(fail: Result<T, Error>) {
 	}
 }
 
-async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServerHandle) {
+async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: ServerHandle) {
 	let server_url = format!("ws://{}", server_addr);
 	let client = WsClientBuilder::default().build(&server_url).await.unwrap();
 
 	// 2 CPU units (default) per call, so 4th call exceeds cap
 	let (pass1, pass2, pass3, fail) = tokio::join!(
-		client.request::<String>("say_hello", None),
-		client.request::<String>("say_hello", None),
-		client.request::<String>("say_hello", None),
-		client.request::<String>("say_hello", None),
+		client.request::<String, ArrayParams>("say_hello", rpc_params!()),
+		client.request::<String, ArrayParams>("say_hello", rpc_params![]),
+		client.request::<String, ArrayParams>("say_hello", rpc_params![]),
+		client.request::<String, ArrayParams>("say_hello", rpc_params![]),
 	);
 
 	assert!(pass1.is_ok());
@@ -198,11 +198,11 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 
 	// 3 CPU units per call, so 3rd call exceeds CPU cap, but we can still get on MEM
 	let (pass_cpu1, pass_cpu2, fail_cpu, pass_mem, fail_mem) = tokio::join!(
-		client.request::<String>("expensive_call", None),
-		client.request::<String>("expensive_call", None),
-		client.request::<String>("expensive_call", None),
-		client.request::<String>("memory_hog", None),
-		client.request::<String>("memory_hog", None),
+		client.request::<String, ArrayParams>("expensive_call", rpc_params![]),
+		client.request::<String, ArrayParams>("expensive_call", rpc_params![]),
+		client.request::<String, ArrayParams>("expensive_call", rpc_params![]),
+		client.request::<String, ArrayParams>("memory_hog", rpc_params![]),
+		client.request::<String, ArrayParams>("memory_hog", rpc_params![]),
 	);
 
 	assert!(pass_cpu1.is_ok());
@@ -216,8 +216,8 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 	//
 	// Thus, we can't assume that all subscriptions drop their resources instantly anymore.
 	let (pass1, pass2) = tokio::join!(
-		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
-		client.subscribe::<i32>("subscribe_hello", None, "unsubscribe_hello"),
+		client.subscribe::<i32, ArrayParams>("subscribe_hello", rpc_params![], "unsubscribe_hello"),
+		client.subscribe::<i32, ArrayParams>("subscribe_hello", rpc_params![], "unsubscribe_hello"),
 	);
 
 	assert!(pass1.is_ok());
@@ -225,28 +225,29 @@ async fn run_tests_on_ws_server(server_addr: SocketAddr, server_handle: WsServer
 
 	// 3 CPU units (manually set for subscriptions) per call, so 3th call exceeds cap
 	let (pass1, pass2, fail) = tokio::join!(
-		client.subscribe::<i32>("subscribe_hello_limit", None, "unsubscribe_hello_limit"),
-		client.subscribe::<i32>("subscribe_hello_limit", None, "unsubscribe_hello_limit"),
-		client.subscribe::<i32>("subscribe_hello_limit", None, "unsubscribe_hello_limit"),
+		client.subscribe::<i32, ArrayParams>("subscribe_hello_limit", rpc_params![], "unsubscribe_hello_limit"),
+		client.subscribe::<i32, ArrayParams>("subscribe_hello_limit", rpc_params![], "unsubscribe_hello_limit"),
+		client.subscribe::<i32, ArrayParams>("subscribe_hello_limit", rpc_params![], "unsubscribe_hello_limit"),
 	);
 
 	assert!(pass1.is_ok());
 	assert!(pass2.is_ok());
 	assert_server_busy(fail);
 
-	server_handle.stop().unwrap().await;
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 }
 
-async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: HttpServerHandle) {
+async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: ServerHandle) {
 	let server_url = format!("http://{}", server_addr);
 	let client = HttpClientBuilder::default().build(&server_url).unwrap();
 
 	// 2 CPU units (default) per call, so 4th call exceeds cap
 	let (a, b, c, d) = tokio::join!(
-		client.request::<String>("say_hello", None),
-		client.request::<String>("say_hello", None),
-		client.request::<String>("say_hello", None),
-		client.request::<String>("say_hello", None),
+		client.request::<String, ArrayParams>("say_hello", rpc_params![]),
+		client.request::<String, ArrayParams>("say_hello", rpc_params![]),
+		client.request::<String, ArrayParams>("say_hello", rpc_params![]),
+		client.request::<String, ArrayParams>("say_hello", rpc_params![]),
 	);
 
 	// HTTP does not guarantee ordering
@@ -262,7 +263,8 @@ async fn run_tests_on_http_server(server_addr: SocketAddr, server_handle: HttpSe
 
 	assert_eq!(passes, 3);
 
-	server_handle.stop().unwrap().await.unwrap();
+	server_handle.stop().unwrap();
+	server_handle.stopped().await;
 }
 
 #[tokio::test]

@@ -28,11 +28,11 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::StreamExt;
-use jsonrpsee::core::client::SubscriptionClientT;
+use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::error::SubscriptionClosed;
 use jsonrpsee::rpc_params;
+use jsonrpsee::server::{RpcModule, ServerBuilder};
 use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 
@@ -49,13 +49,13 @@ async fn main() -> anyhow::Result<()> {
 	let client = WsClientBuilder::default().build(&url).await?;
 
 	// Subscription with a single parameter
-	let mut sub_params_one =
-		client.subscribe::<Option<char>>("sub_one_param", rpc_params![3], "unsub_one_param").await?;
+	let mut sub_params_one: Subscription<Option<char>> =
+		client.subscribe("sub_one_param", rpc_params![3], "unsub_one_param").await?;
 	tracing::info!("subscription with one param: {:?}", sub_params_one.next().await);
 
 	// Subscription with multiple parameters
-	let mut sub_params_two =
-		client.subscribe::<String>("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
+	let mut sub_params_two: Subscription<String> =
+		client.subscribe("sub_params_two", rpc_params![2, 5], "unsub_params_two").await?;
 	tracing::info!("subscription with two params: {:?}", sub_params_two.next().await);
 
 	Ok(())
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
 	const LETTERS: &str = "abcdefghijklmnopqrstuvxyz";
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+	let server = ServerBuilder::default().build("127.0.0.1:0").await?;
 	let mut module = RpcModule::new(());
 	module
 		.register_subscription("sub_one_param", "sub_one_param", "unsub_one_param", |params, mut sink, _| {
@@ -101,6 +101,11 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 		.unwrap();
 
 	let addr = server.local_addr()?;
-	server.start(module)?;
+	let handle = server.start(module)?;
+
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(handle.stopped());
+
 	Ok(addr)
 }

@@ -24,14 +24,17 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+mod helpers;
+
 use std::collections::HashMap;
 use std::time::Duration;
 
 use futures::StreamExt;
+use helpers::init_logger;
 use jsonrpsee::core::error::{Error, SubscriptionClosed};
 use jsonrpsee::core::server::rpc_module::*;
 use jsonrpsee::types::error::{CallError, ErrorCode, ErrorObject, PARSE_ERROR_CODE};
-use jsonrpsee::types::{EmptyParams, Params};
+use jsonrpsee::types::{EmptyServerParams, Params};
 use serde::{Deserialize, Serialize};
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -42,12 +45,6 @@ macro_rules! assert_type {
 		fn assert_type<Expected>(_expected: &Expected) {}
 		assert_type::<$ty>($expected)
 	}};
-}
-
-fn init_logger() {
-	let _ = tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init();
 }
 
 #[test]
@@ -98,7 +95,7 @@ async fn calling_method_without_server() {
 	let mut module = RpcModule::new(());
 	module.register_method("boo", |_: Params, _| Ok(String::from("boo!"))).unwrap();
 
-	let res: String = module.call("boo", EmptyParams::new()).await.unwrap();
+	let res: String = module.call("boo", EmptyServerParams::new()).await.unwrap();
 	assert_eq!(&res, "boo!");
 
 	// Call sync method with params
@@ -112,7 +109,7 @@ async fn calling_method_without_server() {
 	assert_eq!(res, 6);
 
 	// Call sync method with bad param
-	let err = module.call::<_, ()>("foo", (false,)).await.unwrap_err();
+	let err = module.call::<_, EmptyServerParams>("foo", (false,)).await.unwrap_err();
 	assert!(matches!(
 		err,
 		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected u16 at line 1 column 6"
@@ -198,7 +195,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	let module = CoolServerImpl.into_rpc();
 
 	// Call sync method with no params
-	let res: bool = module.call("rebel_without_cause", EmptyParams::new()).await.unwrap();
+	let res: bool = module.call("rebel_without_cause", EmptyServerParams::new()).await.unwrap();
 	assert!(!res);
 
 	// Call sync method with params
@@ -206,7 +203,7 @@ async fn calling_method_without_server_using_proc_macro() {
 	assert_eq!(&res, "0 Gun { shoots: true }");
 
 	// Call sync method with bad params
-	let err = module.call::<_, ()>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
+	let err = module.call::<_, EmptyServerParams>("rebel", (Gun { shoots: true }, false)).await.unwrap_err();
 	assert!(matches!(err,
 		Error::Call(CallError::Custom(err)) if err.code() == -32602 && err.message() == "invalid type: boolean `false`, expected a map at line 1 column 5"
 	));
@@ -253,7 +250,7 @@ async fn subscribing_without_server() {
 		})
 		.unwrap();
 
-	let mut my_sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap();
+	let mut my_sub = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap();
 	for i in (0..=2).rev() {
 		let (val, id) = my_sub.next::<char>().await.unwrap().unwrap();
 		assert_eq!(val, std::char::from_digit(i, 10).unwrap());
@@ -288,11 +285,11 @@ async fn close_test_subscribing_without_server() {
 		})
 		.unwrap();
 
-	let mut my_sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap();
+	let mut my_sub = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap();
 	let (val, id) = my_sub.next::<String>().await.unwrap().unwrap();
 	assert_eq!(&val, "lo");
 	assert_eq!(&id, my_sub.subscription_id());
-	let mut my_sub2 = std::mem::ManuallyDrop::new(module.subscribe("my_sub", EmptyParams::new()).await.unwrap());
+	let mut my_sub2 = std::mem::ManuallyDrop::new(module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap());
 
 	// Close the subscription to ensure it doesn't return any items.
 	my_sub.close();
@@ -332,7 +329,7 @@ async fn subscribing_without_server_bad_params() {
 		})
 		.unwrap();
 
-	let sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+	let sub = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap_err();
 
 	assert!(
 		matches!(sub, Error::Call(CallError::Custom(e)) if e.message().contains("invalid length 0, expected an array of length 1 at line 1 column 2") && e.code() == ErrorCode::InvalidParams.code())
@@ -355,7 +352,7 @@ async fn subscribe_unsubscribe_without_server() {
 		.unwrap();
 
 	async fn subscribe_and_assert(module: &RpcModule<()>) {
-		let sub = module.subscribe("my_sub", EmptyParams::new()).await.unwrap();
+		let sub = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap();
 
 		let ser_id = serde_json::to_string(sub.subscription_id()).unwrap();
 
@@ -390,7 +387,7 @@ async fn empty_subscription_without_server() {
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+	let sub_err = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap_err();
 	assert!(
 		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("Invalid params") && e.code() == ErrorCode::InvalidParams.code())
 	);
@@ -407,7 +404,7 @@ async fn rejected_subscription_without_server() {
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+	let sub_err = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap_err();
 	assert!(
 		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
 	);
@@ -432,7 +429,7 @@ async fn accepted_twice_subscription_without_server() {
 		})
 		.unwrap();
 
-	let _ = module.subscribe("my_sub", EmptyParams::new()).await.expect("Subscription should not fail");
+	let _ = module.subscribe("my_sub", EmptyServerParams::new()).await.expect("Subscription should not fail");
 }
 
 #[tokio::test]
@@ -455,7 +452,7 @@ async fn reject_twice_subscription_without_server() {
 		})
 		.unwrap();
 
-	let sub_err = module.subscribe("my_sub", EmptyParams::new()).await.unwrap_err();
+	let sub_err = module.subscribe("my_sub", EmptyServerParams::new()).await.unwrap_err();
 	assert!(
 		matches!(sub_err, Error::Call(CallError::Custom(e)) if e.message().contains("rejected") && e.code() == PARSE_ERROR_CODE)
 	);

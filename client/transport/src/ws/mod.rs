@@ -120,7 +120,7 @@ impl WsTransportClientBuilder {
 }
 
 /// Stream mode, either plain TCP or TLS.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
 	/// Plain mode (`ws://` URL).
 	Plain,
@@ -199,7 +199,7 @@ impl TransportSenderT for Sender {
 	/// Sends out a ping request. Returns a `Future` that finishes when the request has been
 	/// successfully sent.
 	async fn send_ping(&mut self) -> Result<(), Self::Error> {
-		tracing::debug!("send ping");
+		tracing::debug!("Send ping");
 		// Submit empty slice as "optional" parameter.
 		let slice: &[u8] = &[];
 		// Byte slice fails if the provided slice is larger than 125 bytes.
@@ -298,7 +298,7 @@ impl WsTransportClientBuilder {
 				// Perform the initial handshake.
 				match client.handshake().await {
 					Ok(ServerResponse::Accepted { .. }) => {
-						tracing::info!("Connection established to target: {:?}", target);
+						tracing::debug!("Connection established to target: {:?}", target);
 						let mut builder = client.into_builder();
 						builder.set_max_message_size(self.max_request_body_size as usize);
 						let (sender, receiver) = builder.finish();

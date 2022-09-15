@@ -27,11 +27,13 @@ use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
 use futures_util::FutureExt;
 use jsonrpsee_types::{
-	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, ParamsSer, RequestSer, Response,
+	response::SubscriptionError, ErrorResponse, Id, Notification, NotificationSer, RequestSer, Response,
 	SubscriptionResponse,
 };
 use serde::de::DeserializeOwned;
 use tracing_futures::Instrument;
+use crate::params::BatchRequestBuilder;
+use crate::traits::ToRpcParams;
 
 use super::{FrontToBack, IdKind, RequestIdManager};
 
@@ -162,9 +164,19 @@ impl ClientBuilder {
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
 		let ping_interval = self.ping_interval;
+		let (on_close_tx, on_close_rx) = oneshot::channel();
 
 		tokio::spawn(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, ping_interval).await;
+			background_task(
+				sender,
+				receiver,
+				from_front,
+				err_tx,
+				max_notifs_per_subscription,
+				ping_interval,
+				on_close_tx,
+			)
+				.await;
 		});
 		Client {
 			to_back,
@@ -172,6 +184,7 @@ impl ClientBuilder {
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
+			notify: Mutex::new(Some(on_close_rx)),
 		}
 	}
 
@@ -179,16 +192,17 @@ impl ClientBuilder {
 	#[cfg(all(feature = "async-wasm-client", target_arch = "wasm32"))]
 	#[cfg_attr(docsrs, doc(cfg(feature = "async-wasm-client")))]
 	pub fn build_with_wasm<S, R>(self, sender: S, receiver: R) -> Client
-	where
-		S: TransportSenderT,
-		R: TransportReceiverT,
+		where
+			S: TransportSenderT,
+			R: TransportReceiverT,
 	{
 		let (to_back, from_front) = mpsc::channel(self.max_concurrent_requests);
 		let (err_tx, err_rx) = oneshot::channel();
 		let max_notifs_per_subscription = self.max_notifs_per_subscription;
+		let (on_close_tx, on_close_rx) = oneshot::channel();
 
 		wasm_bindgen_futures::spawn_local(async move {
-			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None).await;
+			background_task(sender, receiver, from_front, err_tx, max_notifs_per_subscription, None, on_close_tx).await;
 		});
 		Client {
 			to_back,
@@ -196,6 +210,7 @@ impl ClientBuilder {
 			error: Mutex::new(ErrorFromBack::Unread(err_rx)),
 			id_manager: RequestIdManager::new(self.max_concurrent_requests, self.id_kind),
 			max_log_length: self.max_log_length,
+			notify: Mutex::new(Some(on_close_rx)),
 		}
 	}
 }
@@ -216,6 +231,10 @@ pub struct Client {
 	///
 	/// Entries bigger than this limit will be truncated.
 	max_log_length: u32,
+	/// Notify when the client is disconnected or encountered an error.
+	// NOTE: Similar to error, the async fns use immutable references. The `Receiver` is wrapped
+	// into `Option` to ensure the `on_disconnect` awaits only once.
+	notify: Mutex<Option<oneshot::Receiver<()>>>,
 }
 
 impl Client {
@@ -232,6 +251,20 @@ impl Client {
 		*err_lock = next_state;
 		err
 	}
+
+	/// Completes when the client is disconnected or the client's background task encountered an error.
+	/// If the client is already disconnected, the future produced by this method will complete immediately.
+	///
+	/// # Cancel safety
+	///
+	/// This method is cancel safe.
+	pub async fn on_disconnect(&self) {
+		// Wait until the `background_task` exits.
+		let mut notify_lock = self.notify.lock().await;
+		if let Some(notify) = notify_lock.take() {
+			let _ = notify.await;
+		}
+	}
 }
 
 impl Drop for Client {
@@ -241,10 +274,14 @@ impl Drop for Client {
 }
 
 #[async_trait]
-impl ClientT for Client {
-	async fn notification<'a>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<(), Error> {
+impl ClientT for Client
+{
+	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
+	where
+		Params: ToRpcParams + Send {
 		// NOTE: we use this to guard against max number of concurrent requests.
 		let _req_id = self.id_manager.next_request_id()?;
+		let params = params.to_rpc_params()?;
 		let notif = NotificationSer::new(method, params);
 		let trace = RpcTracing::batch();
 
@@ -261,13 +298,14 @@ impl ClientT for Client {
 				Either::Right((_, _)) => Err(Error::RequestTimeout),
 			}
 		}
-		.instrument(trace.into_span())
-		.await
+			.instrument(trace.into_span())
+			.await
 	}
 
-	async fn request<'a, R>(&self, method: &'a str, params: Option<ParamsSer<'a>>) -> Result<R, Error>
+	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
+		Params: ToRpcParams + Send
 	{
 		let (send_back_tx, send_back_rx) = oneshot::channel();
 		let guard = self.id_manager.next_request_id()?;
@@ -275,6 +313,7 @@ impl ClientT for Client {
 		let trace = RpcTracing::method_call(method);
 
 		async {
+			let params = params.to_rpc_params()?;
 			let raw = serde_json::to_string(&RequestSer::new(&id, method, params)).map_err(Error::ParseError)?;
 			tx_log_from_str(&raw, self.max_log_length);
 
@@ -299,16 +338,17 @@ impl ClientT for Client {
 
 			serde_json::from_value(json_value).map_err(Error::ParseError)
 		}
-		.instrument(trace.into_span())
-		.await
+			.instrument(trace.into_span())
+			.await
 	}
 
-	async fn batch_request<'a, R>(&self, batch: Vec<(&'a str, Option<ParamsSer<'a>>)>) -> Result<Vec<R>, Error>
+	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
-		R: DeserializeOwned + Default + Clone,
+		R: DeserializeOwned + Default + Clone
 	{
 		let trace = RpcTracing::batch();
 		async {
+			let batch = batch.build();
 			let guard = self.id_manager.next_request_ids(batch.len())?;
 			let batch_ids: Vec<Id> = guard.inner();
 			let mut batches = Vec::with_capacity(batch.len());
@@ -343,8 +383,8 @@ impl ClientT for Client {
 
 			json_values.into_iter().map(|val| serde_json::from_value(val).map_err(Error::ParseError)).collect()
 		}
-		.instrument(trace.into_span())
-		.await
+			.instrument(trace.into_span())
+			.await
 	}
 }
 
@@ -354,14 +394,15 @@ impl SubscriptionClientT for Client {
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	async fn subscribe<'a, N>(
+	async fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
-		params: Option<ParamsSer<'a>>,
+		params: Params,
 		unsubscribe_method: &'a str,
-	) -> Result<Subscription<N>, Error>
+	) -> Result<Subscription<Notif>, Error>
 	where
-		N: DeserializeOwned,
+		Params: ToRpcParams + Send,
+		Notif: DeserializeOwned
 	{
 		if subscribe_method == unsubscribe_method {
 			return Err(Error::SubscriptionNameConflict(unsubscribe_method.to_owned()));
@@ -370,6 +411,7 @@ impl SubscriptionClientT for Client {
 		let guard = self.id_manager.next_request_ids(2)?;
 		let mut ids: Vec<Id> = guard.inner();
 		let trace = RpcTracing::method_call(subscribe_method);
+		let params = params.to_rpc_params()?;
 
 		async {
 			let id = ids[0].clone();
@@ -408,8 +450,8 @@ impl SubscriptionClientT for Client {
 
 			Ok(Subscription::new(self.to_back.clone(), notifs_rx, SubscriptionKind::Subscription(sub_id)))
 		}
-		.instrument(trace.into_span())
-		.await
+			.instrument(trace.into_span())
+			.await
 	}
 
 	/// Subscribe to a specific method.
@@ -511,7 +553,7 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 
 	match message {
 		Some(Ok(ReceivedMessage::Pong)) => {
-			tracing::debug!("recv pong");
+			tracing::debug!("Received pong");
 		}
 		Some(Ok(ReceivedMessage::Bytes(raw))) => {
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
@@ -520,12 +562,10 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 			handle_recv_message(raw.as_ref(), manager, sender, max_notifs_per_subscription).await?;
 		}
 		Some(Err(e)) => {
-			tracing::error!("Error: {:?} terminating client", e);
 			return Err(Error::Transport(e.into()));
 		}
 		None => {
-			tracing::error!("[backend]: WebSocket receiver dropped; terminate client");
-			return Err(Error::Custom("WebSocket receiver dropped".into()));
+			return Err(Error::Custom("TransportReceiver dropped".into()));
 		}
 	}
 
@@ -533,49 +573,41 @@ async fn handle_backend_messages<S: TransportSenderT, R: TransportReceiverT>(
 }
 
 /// Handle frontend messages.
-///
-/// Returns an error if the main background loop should be terminated.
 async fn handle_frontend_messages<S: TransportSenderT>(
-	message: Option<FrontToBack>,
+	message: FrontToBack,
 	manager: &mut RequestManager,
 	sender: &mut S,
 	max_notifs_per_subscription: usize,
-) -> Result<(), Error> {
+) {
 	match message {
-		// User dropped the sender side of the channel.
-		// There is nothing to do just terminate.
-		None => {
-			return Err(Error::Custom("[backend]: frontend dropped; terminate client".into()));
-		}
-
-		Some(FrontToBack::Batch(batch)) => {
+		FrontToBack::Batch(batch) => {
 			if let Err(send_back) = manager.insert_pending_batch(batch.ids.clone(), batch.send_back) {
-				tracing::warn!("[backend]: batch request: {:?} already pending", batch.ids);
+				tracing::warn!("[backend]: Batch request already pending: {:?}", batch.ids);
 				let _ = send_back.send(Err(Error::InvalidRequestId));
-				return Ok(());
+				return;
 			}
 
 			if let Err(e) = sender.send(batch.raw).await {
-				tracing::warn!("[backend]: client batch request failed: {:?}", e);
+				tracing::warn!("[backend]: Batch request failed: {:?}", e);
 				manager.complete_pending_batch(batch.ids);
 			}
 		}
 		// User called `notification` on the front-end
-		Some(FrontToBack::Notification(notif)) => {
+		FrontToBack::Notification(notif) => {
 			if let Err(e) = sender.send(notif).await {
-				tracing::warn!("[backend]: client notif failed: {:?}", e);
+				tracing::warn!("[backend]: Notification failed: {:?}", e);
 			}
 		}
 		// User called `request` on the front-end
-		Some(FrontToBack::Request(request)) => match sender.send(request.raw).await {
+		FrontToBack::Request(request) => match sender.send(request.raw).await {
 			Ok(_) => manager.insert_pending_call(request.id, request.send_back).expect("ID unused checked above; qed"),
 			Err(e) => {
-				tracing::warn!("[backend]: client request failed: {:?}", e);
+				tracing::warn!("[backend]: Request failed: {:?}", e);
 				let _ = request.send_back.map(|s| s.send(Err(Error::Transport(e.into()))));
 			}
 		},
 		// User called `subscribe` on the front-end.
-		Some(FrontToBack::Subscribe(sub)) => match sender.send(sub.raw).await {
+		FrontToBack::Subscribe(sub) => match sender.send(sub.raw).await {
 			Ok(_) => manager
 				.insert_pending_subscription(
 					sub.subscribe_id,
@@ -585,13 +617,13 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				)
 				.expect("Request ID unused checked above; qed"),
 			Err(e) => {
-				tracing::warn!("[backend]: client subscription failed: {:?}", e);
+				tracing::warn!("[backend]: Subscription failed: {:?}", e);
 				let _ = sub.send_back.send(Err(Error::Transport(e.into())));
 			}
 		},
 		// User dropped a subscription.
-		Some(FrontToBack::SubscriptionClosed(sub_id)) => {
-			tracing::trace!("Closing subscription: {:?}", sub_id);
+		FrontToBack::SubscriptionClosed(sub_id) => {
+			tracing::trace!("[backend]: Closing subscription: {:?}", sub_id);
 			// NOTE: The subscription may have been closed earlier if
 			// the channel was full or disconnected.
 			if let Some(unsub) = manager
@@ -602,7 +634,7 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 			}
 		}
 		// User called `register_notification` on the front-end.
-		Some(FrontToBack::RegisterNotification(reg)) => {
+		FrontToBack::RegisterNotification(reg) => {
 			let (subscribe_tx, subscribe_rx) = mpsc::channel(max_notifs_per_subscription);
 
 			if manager.insert_notification_handler(&reg.method, subscribe_tx).is_ok() {
@@ -611,13 +643,11 @@ async fn handle_frontend_messages<S: TransportSenderT>(
 				let _ = reg.send_back.send(Err(Error::MethodAlreadyRegistered(reg.method)));
 			}
 		}
-		// User dropped the notificationHandler for this method
-		Some(FrontToBack::UnregisterNotification(method)) => {
+		// User dropped the NotificationHandler for this method
+		FrontToBack::UnregisterNotification(method) => {
 			let _ = manager.remove_notification_handler(method);
 		}
 	}
-
-	Ok(())
 }
 
 /// Function being run in the background that processes messages from the frontend.
@@ -628,6 +658,7 @@ async fn background_task<S, R>(
 	front_error: oneshot::Sender<Error>,
 	max_notifs_per_subscription: usize,
 	ping_interval: Option<Duration>,
+	on_close: oneshot::Sender<()>,
 ) where
 	S: TransportSenderT,
 	R: TransportReceiverT,
@@ -660,14 +691,18 @@ async fn background_task<S, R>(
 		match future::select(message_fut, submit_ping).await {
 			// Message received from the frontend.
 			Either::Left((Either::Left((frontend_value, backend)), _)) => {
-				if let Err(err) =
-					handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription)
-						.await
-				{
-					tracing::warn!("{:?}", err);
-					let _ = front_error.send(err);
+				let frontend_value = if let Some(value) = frontend_value {
+					value
+				} else {
+					// User dropped the sender side of the channel.
+					// There is nothing to do just terminate.
+					tracing::debug!("[backend]: Client dropped");
 					break;
-				}
+				};
+
+				handle_frontend_messages(frontend_value, &mut manager, &mut sender, max_notifs_per_subscription)
+					.await;
+
 				// Advance frontend, save backend.
 				message_fut = future::select(frontend.next(), backend);
 			}
@@ -681,7 +716,7 @@ async fn background_task<S, R>(
 				)
 				.await
 				{
-					tracing::warn!("{:?}", err);
+					tracing::error!("[backend]: {}", err);
 					let _ = front_error.send(err);
 					break;
 				}
@@ -690,8 +725,8 @@ async fn background_task<S, R>(
 			}
 			// Submit ping interval was triggered if enabled.
 			Either::Right((_, next_message_fut)) => {
-				if let Err(e) = sender.send_ping().await {
-					tracing::warn!("[backend]: client send ping failed: {:?}", e);
+				if let Err(err) = sender.send_ping().await {
+					tracing::error!("[backend]: Could not send ping frame: {}", err);
 					let _ = front_error.send(Error::Custom("Could not send ping frame".into()));
 					break;
 				}
@@ -699,6 +734,9 @@ async fn background_task<S, R>(
 			}
 		};
 	}
+
+	// Wake the `on_disconnect` method.
+	let _ = on_close.send(());
 	// Send close message to the server.
 	let _ = sender.close().await;
 }

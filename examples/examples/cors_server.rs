@@ -24,11 +24,16 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+//! This example adds upstream CORS layers to the RPC service,
+//! with access control allowing requests from all hosts.
+
+use hyper::Method;
 use std::net::SocketAddr;
+use tower_http::cors::{Any, CorsLayer};
 
 use jsonrpsee::{
-	core::server::access_control::AccessControlBuilder,
-	http_server::{HttpServerBuilder, HttpServerHandle, RpcModule},
+	core::server::host_filtering::AllowHosts,
+	server::{RpcModule, ServerBuilder},
 };
 
 #[tokio::main]
@@ -38,8 +43,8 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	// Start up a JSONPRC server that allows cross origin requests.
-	let (server_addr, _handle) = run_server().await?;
+	// Start up a JSON-RPC server that allows cross origin requests.
+	let server_addr = run_server().await?;
 
 	// Print instructions for testing CORS from a browser.
 	println!("Run the following snippet in the developer console in any Website.");
@@ -67,11 +72,28 @@ async fn main() -> anyhow::Result<()> {
 	futures::future::pending().await
 }
 
-async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
-	let acl = AccessControlBuilder::new().allow_all_headers().allow_all_origins().allow_all_hosts().build();
+async fn run_server() -> anyhow::Result<SocketAddr> {
+	// Add a CORS middleware for handling HTTP requests.
+	// This middleware does affect the response, including appropriate
+	// headers to satisfy CORS. Because any origins are allowed, the
+	// "Access-Control-Allow-Origin: *" header is appended to the response.
+	let cors = CorsLayer::new()
+		// Allow `POST` when accessing the resource
+		.allow_methods([Method::POST])
+		// Allow requests from any origin
+		.allow_origin(Any)
+		.allow_headers([hyper::header::CONTENT_TYPE]);
+	let middleware = tower::ServiceBuilder::new().layer(cors);
 
-	let server =
-		HttpServerBuilder::default().set_access_control(acl).build("127.0.0.1:0".parse::<SocketAddr>()?).await?;
+	// The RPC exposes the access control for filtering and the middleware for
+	// modifying requests / responses. These features are independent of one another
+	// and can also be used separately.
+	// In this example, we use both features.
+	let server = ServerBuilder::default()
+		.set_host_filtering(AllowHosts::Any)
+		.set_middleware(middleware)
+		.build("127.0.0.1:0".parse::<SocketAddr>()?)
+		.await?;
 
 	let mut module = RpcModule::new(());
 	module.register_method("say_hello", |_, _| {
@@ -80,7 +102,11 @@ async fn run_server() -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
 	})?;
 
 	let addr = server.local_addr()?;
-	let server_handle = server.start(module)?;
+	let handle = server.start(module)?;
 
-	Ok((addr, server_handle))
+	// In this example we don't care about doing shutdown so let's it run forever.
+	// You may use the `ServerHandle` to shut it down or manage it yourself.
+	tokio::spawn(handle.stopped());
+
+	Ok(addr)
 }

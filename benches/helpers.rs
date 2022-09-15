@@ -110,12 +110,13 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 
 /// Run jsonrpsee HTTP server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
-pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::http_server::HttpServerHandle) {
-	use jsonrpsee::http_server::HttpServerBuilder;
+pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::server::ServerHandle) {
+	use jsonrpsee::server::ServerBuilder;
 
-	let server = HttpServerBuilder::default()
+	let server = ServerBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.max_response_body_size(u32::MAX)
+		.max_connections(10 * 1024)
 		.custom_tokio_runtime(handle)
 		.build("127.0.0.1:0")
 		.await
@@ -130,10 +131,10 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::
 
 /// Run jsonrpsee WebSocket server for benchmarks.
 #[cfg(not(feature = "jsonrpc-crate"))]
-pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::ws_server::WsServerHandle) {
-	use jsonrpsee::ws_server::WsServerBuilder;
+pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpsee::server::ServerHandle) {
+	use jsonrpsee::server::ServerBuilder;
 
-	let server = WsServerBuilder::default()
+	let server = ServerBuilder::default()
 		.max_request_body_size(u32::MAX)
 		.max_response_body_size(u32::MAX)
 		.max_connections(10 * 1024)
