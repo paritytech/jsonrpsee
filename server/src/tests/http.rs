@@ -24,13 +24,10 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-#![cfg(test)]
-
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use crate::types::error::CallError;
-use crate::{server::ServerHandle, HttpServerBuilder, RpcModule};
+use crate::{RpcModule, ServerBuilder, ServerHandle};
 use jsonrpsee_core::Error;
 use jsonrpsee_test_utils::helpers::*;
 use jsonrpsee_test_utils::mocks::{Id, StatusCode, TestContext};
@@ -44,7 +41,7 @@ fn init_logger() {
 }
 
 async fn server() -> (SocketAddr, ServerHandle) {
-	let server = HttpServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+	let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
 	let ctx = TestContext;
 	let mut module = RpcModule::new(ctx);
 	let addr = server.local_addr().unwrap();
@@ -406,38 +403,10 @@ async fn can_register_modules() {
 }
 
 #[tokio::test]
-async fn stop_works() {
-	init_logger();
-	let (_addr, server_handle) = server().with_default_timeout().await.unwrap();
-	assert!(matches!(server_handle.stop().unwrap().await, Ok(_)));
-}
-
-#[tokio::test]
-async fn run_forever() {
-	const TIMEOUT: Duration = Duration::from_millis(200);
-
-	init_logger();
-	let (_addr, server_handle) = server().with_default_timeout().await.unwrap();
-
-	assert!(matches!(server_handle.with_timeout(TIMEOUT).await, Err(_timeout_err)));
-
-	let (_addr, server_handle) = server().await;
-	server_handle.handle.as_ref().unwrap().abort();
-
-	// Cancelled task is still considered to be finished without errors.
-	// A subject to change.
-	server_handle.with_timeout(TIMEOUT).await.unwrap();
-
-	let (_addr, mut server_handle) = server().with_default_timeout().await.unwrap();
-	server_handle.handle.take();
-	server_handle.with_timeout(TIMEOUT).await.unwrap();
-}
-
-#[tokio::test]
 async fn can_set_the_max_request_body_size() {
 	let addr = "127.0.0.1:0";
 	// Rejects all requests larger than 100 bytes
-	let server = HttpServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
+	let server = ServerBuilder::default().max_request_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(100))).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -455,13 +424,14 @@ async fn can_set_the_max_request_body_size() {
 	assert_eq!(response.body, ok_response(JsonValue::String("a".repeat(100)), Id::Num(1)));
 
 	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
 async fn can_set_the_max_response_size() {
 	let addr = "127.0.0.1:0";
 	// Set the max response size to 100 bytes
-	let server = HttpServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(101))).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -474,13 +444,14 @@ async fn can_set_the_max_response_size() {
 	assert_eq!(response.body, oversized_response(Id::Num(1), 100));
 
 	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
 async fn can_set_the_max_response_size_to_batch() {
 	let addr = "127.0.0.1:0";
 	// Set the max response size to 100 bytes
-	let server = HttpServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
+	let server = ServerBuilder::default().max_response_body_size(100).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("anything", |_p, _cx| Ok("a".repeat(51))).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -493,13 +464,14 @@ async fn can_set_the_max_response_size_to_batch() {
 	assert_eq!(response.body, invalid_request(Id::Null));
 
 	handle.stop().unwrap();
+	handle.stopped().await;
 }
 
 #[tokio::test]
 async fn disabled_batches() {
 	let addr = "127.0.0.1:0";
 	// Disable batches support.
-	let server = HttpServerBuilder::default().batch_requests_supported(false).build(addr).await.unwrap();
+	let server = ServerBuilder::default().batch_requests_supported(false).build(addr).await.unwrap();
 	let mut module = RpcModule::new(());
 	module.register_method("should_ok", |_, _ctx| Ok("ok")).unwrap();
 	let addr = server.local_addr().unwrap();
@@ -515,4 +487,18 @@ async fn disabled_batches() {
 	assert_eq!(response.body, batches_not_supported());
 
 	handle.stop().unwrap();
+	handle.stopped().await;
+}
+
+#[tokio::test]
+async fn http2_method_call_works() {
+	init_logger();
+
+	let (addr, _handle) = server().with_default_timeout().await.unwrap();
+	let uri = to_http_uri(addr);
+
+	let req = r#"{"jsonrpc":"2.0","method":"add", "params":[1, 2],"id":1}"#;
+	let response = http2_request(req.into(), uri).with_default_timeout().await.unwrap().unwrap();
+	assert_eq!(response.status, StatusCode::OK);
+	assert_eq!(response.body, ok_response(JsonValue::Number(3.into()), Id::Num(1)));
 }
