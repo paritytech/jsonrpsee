@@ -275,7 +275,7 @@ impl Drop for Client {
 
 #[async_trait]
 impl ClientT for Client {
-	#[instrument(name = "notification", skip(self, params))]
+	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
 	where
 		Params: ToRpcParams + Send,
@@ -298,7 +298,7 @@ impl ClientT for Client {
 		}
 	}
 
-	#[instrument(name = "method_call", skip(self, params))]
+	#[instrument(name = "method_call", skip(self, params), level = "trace")]
 	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
@@ -333,7 +333,7 @@ impl ClientT for Client {
 		serde_json::from_value(json_value).map_err(Error::ParseError)
 	}
 
-	#[instrument(name = "batch", skip(self, batch))]
+	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
@@ -382,7 +382,7 @@ impl SubscriptionClientT for Client {
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	#[instrument(name = "subscription", skip(self, params))]
+	#[instrument(name = "subscription", skip(self, params), level = "trace")]
 	async fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,
@@ -435,7 +435,7 @@ impl SubscriptionClientT for Client {
 	}
 
 	/// Subscribe to a specific method.
-	#[instrument(name = "subscribe_method", skip(self))]
+	#[instrument(name = "subscribe_method", skip(self), level = "trace")]
 	async fn subscribe_to_method<'a, N>(&self, method: &'a str) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,

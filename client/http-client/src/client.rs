@@ -167,7 +167,7 @@ pub struct HttpClient {
 
 #[async_trait]
 impl ClientT for HttpClient {
-	#[instrument(name = "notification", skip(self, params))]
+	#[instrument(name = "notification", skip(self, params), level = "trace")]
 	async fn notification<Params>(&self, method: &str, params: Params) -> Result<(), Error>
 	where
 		Params: ToRpcParams + Send,
@@ -186,7 +186,7 @@ impl ClientT for HttpClient {
 
 	/// Perform a request towards the server.
 
-	#[instrument(name = "method_call", skip(self, params))]
+	#[instrument(name = "method_call", skip(self, params), level = "trace")]
 	async fn request<R, Params>(&self, method: &str, params: Params) -> Result<R, Error>
 	where
 		R: DeserializeOwned,
@@ -225,7 +225,7 @@ impl ClientT for HttpClient {
 		}
 	}
 
-	#[instrument(name = "batch", skip(self, batch))]
+	#[instrument(name = "batch", skip(self, batch), level = "trace")]
 	async fn batch_request<'a, R>(&self, batch: BatchRequestBuilder<'a>) -> Result<Vec<R>, Error>
 	where
 		R: DeserializeOwned + Default + Clone,
@@ -275,7 +275,7 @@ impl ClientT for HttpClient {
 #[async_trait]
 impl SubscriptionClientT for HttpClient {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
-	#[instrument(name = "subscription", skip(self, _params))]
+	#[instrument(name = "subscription", skip(self, _params), level = "trace")]
 	async fn subscribe<'a, N, Params>(
 		&self,
 		_subscribe_method: &'a str,
@@ -290,7 +290,7 @@ impl SubscriptionClientT for HttpClient {
 	}
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
-	#[instrument(name = "subscribe_method", skip(self))]
+	#[instrument(name = "subscribe_method", skip(self), level = "trace")]
 	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,

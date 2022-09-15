@@ -10,21 +10,21 @@ impl RpcTracing {
 	///
 	/// To enable this you need to call `RpcTracing::method_call("some_method").span().enable()`.
 	pub fn method_call(method: &str) -> Self {
-		Self(tracing::span!(tracing::Level::DEBUG, "method_call", %method))
+		Self(tracing::span!(tracing::Level::TRACE, "method_call", %method))
 	}
 
 	/// Create a `notification` tracing target.
 	///
 	/// To enable this you need to call `RpcTracing::notification("some_method").span().enable()`.
 	pub fn notification(method: &str) -> Self {
-		Self(tracing::span!(tracing::Level::DEBUG, "notification", %method))
+		Self(tracing::span!(tracing::Level::TRACE, "notification", %method))
 	}
 
 	/// Create a `batch` tracing target.
 	///
 	/// To enable this you need to call `RpcTracing::batch().span().enable()`.
 	pub fn batch() -> Self {
-		Self(tracing::span!(tracing::Level::DEBUG, "batch"))
+		Self(tracing::span!(tracing::Level::TRACE, "batch"))
 	}
 
 	/// Get the inner span.
