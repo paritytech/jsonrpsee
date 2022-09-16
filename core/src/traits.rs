@@ -109,13 +109,13 @@ where
 }
 
 macro_rules! tuple_impls {
-    ($($len:expr => ($($n:tt $name:ident)+))+) => {
-        $(
-            impl<$($name: Serialize),+> ToRpcParams for ($($name,)+) {
+	($($len:expr => ($($n:tt $name:ident)+))+) => {
+		$(
+			impl<$($name: Serialize),+> ToRpcParams for ($($name,)+) {
 				to_rpc_params_impl!();
 			}
-        )+
-    }
+		)+
+	}
 }
 
 tuple_impls! {
