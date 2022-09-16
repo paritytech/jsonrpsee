@@ -10,12 +10,12 @@ use jsonrpsee_core::http_helpers::read_body;
 use jsonrpsee_core::server::helpers::{prepare_error, BatchResponse, BatchResponseBuilder, MethodResponse};
 use jsonrpsee_core::server::rpc_module::MethodKind;
 use jsonrpsee_core::server::{resource_limiting::Resources, rpc_module::Methods};
-use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str, RpcTracing};
+use jsonrpsee_core::tracing::{rx_log_from_json, tx_log_from_str};
 use jsonrpsee_core::JsonRawValue;
 use jsonrpsee_types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee_types::{ErrorObject, Id, Notification, Params, Request};
 use tokio::sync::OwnedSemaphorePermit;
-use tracing_futures::Instrument;
+use tracing::instrument;
 
 type Notif<'a> = Notification<'a, Option<&'a JsonRawValue>>;
 
@@ -151,17 +151,10 @@ pub(crate) struct CallData<'a, L: Logger> {
 	request_start: L::Instant,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct Call<'a, L: Logger> {
-	params: Params<'a>,
-	name: &'a str,
-	call: CallData<'a, L>,
-	id: Id<'a>,
-}
-
 // Batch responses must be sent back as a single message so we read the results from each
 // request in the batch and read the results off of a new channel, `rx_batch`, and then send the
 // complete batch response back to the client over `tx`.
+#[instrument(name = "batch", skip(b), level = "TRACE")]
 pub(crate) async fn process_batch_request<L>(b: Batch<'_, L>) -> BatchResponse
 where
 	L: Logger,
@@ -174,26 +167,20 @@ where
 
 		let batch_stream = futures_util::stream::iter(batch);
 
-		let trace = RpcTracing::batch();
-		return async {
-			let batch_response = batch_stream
-				.try_fold(
-					BatchResponseBuilder::new_with_limit(max_response_size as usize),
-					|batch_response, (req, call)| async move {
-						let params = Params::new(req.params.map(|params| params.get()));
-						let response = execute_call(Call { name: &req.method, params, id: req.id, call }).await;
-						batch_response.append(&response)
-					},
-				)
-				.await;
+		let batch_response = batch_stream
+			.try_fold(
+				BatchResponseBuilder::new_with_limit(max_response_size as usize),
+				|batch_response, (req, call)| async move {
+					let response = execute_call(req, call).await;
+					batch_response.append(&response)
+				},
+			)
+			.await;
 
-			match batch_response {
-				Ok(batch) => batch.finish(),
-				Err(batch_err) => batch_err,
-			}
-		}
-		.instrument(trace.into_span())
-		.await;
+		return match batch_response {
+			Ok(batch) => batch.finish(),
+			Err(batch_err) => batch_err,
+		};
 	}
 
 	if let Ok(batch) = serde_json::from_slice::<Vec<Notif>>(&data) {
@@ -213,32 +200,31 @@ where
 
 pub(crate) async fn process_single_request<L: Logger>(data: Vec<u8>, call: CallData<'_, L>) -> MethodResponse {
 	if let Ok(req) = serde_json::from_slice::<Request>(&data) {
-		let trace = RpcTracing::method_call(&req.method);
-		async {
-			rx_log_from_json(&req, call.max_log_length);
-			let params = Params::new(req.params.map(|params| params.get()));
-			let name = &req.method;
-			let id = req.id;
-			execute_call(Call { name, params, id, call }).await
-		}
-		.instrument(trace.into_span())
-		.await
-	} else if let Ok(req) = serde_json::from_slice::<Notif>(&data) {
-		let trace = RpcTracing::notification(&req.method);
-		let span = trace.into_span();
-		let _enter = span.enter();
-		rx_log_from_json(&req, call.max_log_length);
-
-		MethodResponse { result: String::new(), success: true }
+		execute_call_with_tracing(req, call).await
+	} else if let Ok(notif) = serde_json::from_slice::<Notif>(&data) {
+		execute_notification(notif, call.max_log_length)
 	} else {
 		let (id, code) = prepare_error(&data);
 		MethodResponse::error(id, ErrorObject::from(code))
 	}
 }
 
-pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
-	let Call { name, id, params, call } = c;
+#[instrument(name = "method_call", fields(method = req.method.as_ref()), skip(call, req), level = "TRACE")]
+pub(crate) async fn execute_call_with_tracing<'a, L: Logger>(
+	req: Request<'a>,
+	call: CallData<'_, L>,
+) -> MethodResponse {
+	execute_call(req, call).await
+}
+
+pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_, L>) -> MethodResponse {
 	let CallData { resources, methods, logger, max_response_body_size, max_log_length, conn_id, request_start } = call;
+
+	rx_log_from_json(&req, call.max_log_length);
+
+	let params = Params::new(req.params.map(|params| params.get()));
+	let name = &req.method;
+	let id = req.id;
 
 	let response = match methods.method_with_name(name) {
 		None => {
@@ -286,6 +272,14 @@ pub(crate) async fn execute_call<L: Logger>(c: Call<'_, L>) -> MethodResponse {
 
 	tx_log_from_str(&response.result, max_log_length);
 	logger.on_result(name, response.success, request_start);
+	response
+}
+
+#[instrument(name = "notification", fields(method = notif.method.as_ref()), skip(notif, max_log_length), level = "TRACE")]
+fn execute_notification(notif: Notif, max_log_length: u32) -> MethodResponse {
+	rx_log_from_json(&notif, max_log_length);
+	let response = MethodResponse { result: String::new(), success: true };
+	tx_log_from_str(&response.result, max_log_length);
 	response
 }
 
