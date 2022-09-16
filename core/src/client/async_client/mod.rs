@@ -381,7 +381,7 @@ impl SubscriptionClientT for Client {
 	///
 	/// The `subscribe_method` and `params` are used to ask for the subscription towards the
 	/// server. The `unsubscribe_method` is used to close the subscription.
-	#[instrument(name = "subscription", skip(self, params), level = "trace")]
+	#[instrument(name = "subscription", fields(method = subscribe_method), skip(self, params, subscribe_method, unsubscribe_method), level = "trace")]
 	async fn subscribe<'a, Notif, Params>(
 		&self,
 		subscribe_method: &'a str,

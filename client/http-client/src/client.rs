@@ -283,7 +283,7 @@ impl ClientT for HttpClient {
 #[async_trait]
 impl SubscriptionClientT for HttpClient {
 	/// Send a subscription request to the server. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
-	#[instrument(name = "subscription", skip(self, _params), level = "trace")]
+	#[instrument(name = "subscription", fields(method = _subscribe_method), skip(self, _params, _subscribe_method, _unsubscribe_method), level = "trace")]
 	async fn subscribe<'a, N, Params>(
 		&self,
 		_subscribe_method: &'a str,
@@ -298,7 +298,7 @@ impl SubscriptionClientT for HttpClient {
 	}
 
 	/// Subscribe to a specific method. Not implemented for HTTP; will always return [`Error::HttpNotImplemented`].
-	#[instrument(name = "subscribe_method", skip(self), level = "trace")]
+	#[instrument(name = "subscribe_method", fields(method = _method), skip(self, _method), level = "trace")]
 	async fn subscribe_to_method<'a, N>(&self, _method: &'a str) -> Result<Subscription<N>, Error>
 	where
 		N: DeserializeOwned,
