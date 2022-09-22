@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::helpers::{ws_handshake, KIB};
 use criterion::*;
@@ -22,17 +23,17 @@ criterion_group!(
 );
 criterion_group!(
 	name = sync_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(Duration::from_secs(60));
 	targets = SyncBencher::http_benches, SyncBencher::websocket_benches
 );
 criterion_group!(
 	name = async_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(Duration::from_secs(60));
 	targets = AsyncBencher::http_benches, AsyncBencher::websocket_benches
 );
 criterion_group!(
 	name = subscriptions;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(Duration::from_secs(60));
 	targets = AsyncBencher::subscriptions
 );
 criterion_main!(types_benches, sync_benches, async_benches, subscriptions);
