@@ -38,3 +38,11 @@ This will generate a flamegraph for the specific benchmark in `./target/criterio
 It's also possible to run profiling on individual benchmarks by:
 
 `$ cargo bench --bench bench -- --profile-time=60 sync/http_concurrent_conn_calls/1024`
+
+## Measurement time of benchmarks
+
+Some of the benchmarks are quite expensive to run and doesn't run with enough samples with the default values
+provided by criterion. Currently the default values are very conversative which can be modified by the following environment variables:
+
+    - "SLOW_SAMPLE_TIME" - sets the measurement time for slow benchmarks (default is 250 seconds)
+    - "SAMPLE_TIME" - sets the measurement time for fast benchmarks (default is 10 seconds)
