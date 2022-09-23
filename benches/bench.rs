@@ -23,7 +23,7 @@ fn slow_sample_time() -> Duration {
 }
 
 fn sample_time() -> Duration {
-	std::env::var("SAMPLE_TIME").map_or(Duration::from_secs(10), |val| {
+	std::env::var("SAMPLE_TIME").map_or(Duration::from_secs(50), |val| {
 		Duration::from_secs(val.parse().expect("SAMPLE_TIME must be an integer"))
 	})
 }
