@@ -1,4 +1,4 @@
-// Copyright 2019-2021 Parity Technologies (UK) Ltd.
+// Copyright 2022 Parity Technologies (UK) Ltd.
 //
 // Permission is hereby granted, free of charge, to any
 // person obtaining a copy of this software and associated
@@ -61,7 +61,7 @@ async fn run_server() -> anyhow::Result<SocketAddr> {
 	let addr = server.local_addr()?;
 	let handle = server.start(module)?;
 
-	// In this example we don't care about doing shutdown so let's it run forever.
+	// In this example we don't care about doing a stopping the server so let it run forever.
 	// You may use the `ServerHandle` to shut it down or manage it yourself.
 	tokio::spawn(handle.stopped());
 
