@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::helpers::{ws_handshake, KIB};
 use criterion::*;
@@ -15,27 +16,49 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
+fn measurement_time_slow() -> Duration {
+	std::env::var("SLOW_MEASUREMENT_TIME").map_or(Duration::from_secs(250), |val| {
+		Duration::from_secs(val.parse().expect("SLOW_SAMPLE_TIME must be an integer"))
+	})
+}
+
+fn measurement_time() -> Duration {
+	std::env::var("MEASUREMENT_TIME").map_or(Duration::from_secs(50), |val| {
+		Duration::from_secs(val.parse().expect("SAMPLE_TIME must be an integer"))
+	})
+}
+
 criterion_group!(
 	name = types_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time());
 	targets = jsonrpsee_types_v2
 );
 criterion_group!(
 	name = sync_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time());
 	targets = SyncBencher::http_benches, SyncBencher::websocket_benches
 );
 criterion_group!(
+	name = sync_slow_benches;
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time_slow());
+	targets = SyncBencher::http_benches_slow, SyncBencher::websocket_benches_slow
+);
+criterion_group!(
 	name = async_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time());
 	targets = AsyncBencher::http_benches, AsyncBencher::websocket_benches
 );
 criterion_group!(
+	name = async_slow_benches;
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time_slow());
+	targets = AsyncBencher::http_benches_slow, AsyncBencher::websocket_benches_slow
+);
+criterion_group!(
 	name = subscriptions;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time_slow());
 	targets = AsyncBencher::subscriptions
 );
-criterion_main!(types_benches, sync_benches, async_benches, subscriptions);
+criterion_main!(types_benches, sync_benches, sync_slow_benches, async_benches, async_slow_benches, subscriptions);
 
 #[derive(Debug, Clone, Copy)]
 enum RequestType {
@@ -115,9 +138,15 @@ trait RequestBencher {
 		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
 		let client = Arc::new(http_client(&url, HeaderMap::new()));
 		round_trip(&rt, crit, client.clone(), "http_round_trip", Self::REQUEST_TYPE);
+		http_custom_headers_round_trip(&rt, crit, &url, "http_custom_headers_round_trip", Self::REQUEST_TYPE);
+	}
+
+	fn http_benches_slow(crit: &mut Criterion) {
+		let rt = TokioRuntime::new().unwrap();
+		let (url, _server) = rt.block_on(helpers::http_server(rt.handle().clone()));
+		let client = Arc::new(http_client(&url, HeaderMap::new()));
 		http_concurrent_conn_calls(&rt, crit, &url, "http_concurrent_conn_calls", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "http_batch_requests", Self::REQUEST_TYPE);
-		http_custom_headers_round_trip(&rt, crit, &url, "http_custom_headers_round_trip", Self::REQUEST_TYPE);
 	}
 
 	fn websocket_benches(crit: &mut Criterion) {
@@ -125,10 +154,16 @@ trait RequestBencher {
 		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
 		let client = Arc::new(rt.block_on(ws_client(&url)));
 		round_trip(&rt, crit, client.clone(), "ws_round_trip", Self::REQUEST_TYPE);
+		ws_custom_headers_handshake(&rt, crit, &url, "ws_custom_headers_handshake", Self::REQUEST_TYPE);
+	}
+
+	fn websocket_benches_slow(crit: &mut Criterion) {
+		let rt = TokioRuntime::new().unwrap();
+		let (url, _server) = rt.block_on(helpers::ws_server(rt.handle().clone()));
+		let client = Arc::new(rt.block_on(ws_client(&url)));
 		ws_concurrent_conn_calls(&rt, crit, &url, "ws_concurrent_conn_calls", Self::REQUEST_TYPE);
 		ws_concurrent_conn_subs(&rt, crit, &url, "ws_concurrent_conn_subs", Self::REQUEST_TYPE);
 		batch_round_trip(&rt, crit, client, "ws_batch_requests", Self::REQUEST_TYPE);
-		ws_custom_headers_handshake(&rt, crit, &url, "ws_custom_headers_handshake", Self::REQUEST_TYPE);
 	}
 
 	fn subscriptions(crit: &mut Criterion) {
