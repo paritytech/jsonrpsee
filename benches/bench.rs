@@ -16,46 +16,46 @@ use tokio::runtime::Runtime as TokioRuntime;
 
 mod helpers;
 
-fn slow_sample_time() -> Duration {
-	std::env::var("SLOW_SAMPLE_TIME").map_or(Duration::from_secs(250), |val| {
+fn measurement_time_slow() -> Duration {
+	std::env::var("SLOW_MEASUREMENT_TIME").map_or(Duration::from_secs(250), |val| {
 		Duration::from_secs(val.parse().expect("SLOW_SAMPLE_TIME must be an integer"))
 	})
 }
 
-fn sample_time() -> Duration {
-	std::env::var("SAMPLE_TIME").map_or(Duration::from_secs(50), |val| {
+fn measurement_time() -> Duration {
+	std::env::var("MEASUREMENT_TIME").map_or(Duration::from_secs(50), |val| {
 		Duration::from_secs(val.parse().expect("SAMPLE_TIME must be an integer"))
 	})
 }
 
 criterion_group!(
 	name = types_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(sample_time());
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time());
 	targets = jsonrpsee_types_v2
 );
 criterion_group!(
 	name = sync_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(sample_time());
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time());
 	targets = SyncBencher::http_benches, SyncBencher::websocket_benches
 );
 criterion_group!(
 	name = sync_slow_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(slow_sample_time());
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time_slow());
 	targets = SyncBencher::http_benches_slow, SyncBencher::websocket_benches_slow
 );
 criterion_group!(
 	name = async_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(sample_time());
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time());
 	targets = AsyncBencher::http_benches, AsyncBencher::websocket_benches
 );
 criterion_group!(
 	name = async_slow_benches;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(slow_sample_time());
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time_slow());
 	targets = AsyncBencher::http_benches_slow, AsyncBencher::websocket_benches_slow
 );
 criterion_group!(
 	name = subscriptions;
-	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(slow_sample_time());
+	config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None))).measurement_time(measurement_time_slow());
 	targets = AsyncBencher::subscriptions
 );
 criterion_main!(types_benches, sync_benches, sync_slow_benches, async_benches, async_slow_benches, subscriptions);
