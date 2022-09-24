@@ -88,6 +88,9 @@ fn v2_serialize(req: RequestSer<'_>) -> String {
 }
 
 pub fn jsonrpsee_types_v2(crit: &mut Criterion) {
+	#[cfg(feature = "tokio_unstable")]
+	console_subscriber::init();
+
 	// Construct the serialized array request using the `RawValue` directly.
 	crit.bench_function("jsonrpsee_types_array_params_baseline", |b| {
 		b.iter(|| {

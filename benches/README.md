@@ -39,6 +39,16 @@ It's also possible to run profiling on individual benchmarks by:
 
 `$ cargo bench --bench bench -- --profile-time=60 sync/http_concurrent_conn_calls/1024`
 
+## Run tokio console on the benchmarks
+
+Install and run `tokio-console`.
+
+`$ cargo install --locked tokio-console && tokio-console`
+
+Run benchmarks with tokio-console support.
+
+`$ RUSTFLAGS="--cfg tokio_unstable" cargo bench`
+
 ## Measurement time of benchmarks
 
 Some of the benchmarks are quite expensive to run and doesn't run with enough samples with the default values
