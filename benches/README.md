@@ -54,5 +54,5 @@ Run benchmarks with tokio-console support.
 Some of the benchmarks are quite expensive to run and doesn't run with enough samples with the default values
 provided by criterion. Currently the default values are very conversative which can be modified by the following environment variables:
 
-    - "SLOW_MEASUREMENT_TIME" - sets the measurement time for slow benchmarks (default is 250 seconds)
-    - "MEASUREMENT_TIME" - sets the measurement time for fast benchmarks (default is 50 seconds)
+    - "SLOW_MEASUREMENT_TIME" - sets the measurement time for slow benchmarks (default is 60 seconds)
+    - "MEASUREMENT_TIME" - sets the measurement time for fast benchmarks (default is 10 seconds)
