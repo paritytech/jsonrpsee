@@ -300,7 +300,7 @@ fn sub_round_trip(rt: &TokioRuntime, crit: &mut Criterion, client: Arc<impl Subs
 	});
 }
 
-/// Benchmark http_batch_requests over batch sizes of 2, 5, 10, 50 and 100 RPCs in each batch.
+/// Benchmark batch_requests over batch sizes of 2, 5, 10, 50 and 100 RPCs in each batch.
 fn batch_round_trip(
 	rt: &TokioRuntime,
 	crit: &mut Criterion,
@@ -308,21 +308,21 @@ fn batch_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	for method in request.methods() {
-		let bench_name = format!("{}/{}", name, method);
-		let mut group = crit.benchmark_group(request.group_name(&bench_name));
-		for batch_size in [2, 5, 10, 50, 100usize].iter() {
-			let mut batch = BatchRequestBuilder::new();
-			for _ in 0..*batch_size {
-				batch.insert(method, ArrayParams::new()).unwrap();
-			}
-			group.throughput(Throughput::Elements(*batch_size as u64));
-			group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
-				b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
-			});
+	let method = request.methods()[0];
+
+	let bench_name = format!("{}/{}", name, method);
+	let mut group = crit.benchmark_group(request.group_name(&bench_name));
+	for batch_size in [2, 5, 10, 50, 100usize].iter() {
+		let mut batch = BatchRequestBuilder::new();
+		for _ in 0..*batch_size {
+			batch.insert(method, ArrayParams::new()).unwrap();
 		}
-		group.finish();
+		group.throughput(Throughput::Elements(*batch_size as u64));
+		group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
+			b.to_async(rt).iter(|| async { client.batch_request::<String>(batch.clone()).await.unwrap() })
+		});
 	}
+	group.finish();
 }
 
 fn ws_concurrent_conn_calls(

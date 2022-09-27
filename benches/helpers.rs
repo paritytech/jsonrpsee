@@ -18,7 +18,8 @@ pub(crate) const ASYNC_METHODS: [&str; 3] = [SYNC_FAST_CALL, SYNC_MEM_CALL, SYNC
 
 // 1 KiB = 1024 bytes
 pub(crate) const KIB: usize = 1024;
-pub(crate) const SLOW_CALL: Duration = Duration::from_micros(50);
+pub(crate) const MIB: usize = KIB * KIB;
+pub(crate) const SLOW_CALL: Duration = Duration::from_millis(1);
 
 /// Run jsonrpc HTTP server for benchmarks.
 #[cfg(feature = "jsonrpc-crate")]
@@ -29,8 +30,8 @@ pub async fn http_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_htt
 	let mut io = IoHandler::new();
 	io.add_sync_method(SYNC_FAST_CALL, |_| Ok(Value::String("lo".to_string())));
 	io.add_method(ASYNC_FAST_CALL, |_| async { Ok(Value::String("lo".to_string())) });
-	io.add_sync_method(SYNC_MEM_CALL, |_| Ok(Value::String("A".repeat(KIB))));
-	io.add_method(ASYNC_MEM_CALL, |_| async { Ok(Value::String("A".repeat(KIB))) });
+	io.add_sync_method(SYNC_MEM_CALL, |_| Ok(Value::String("A".repeat(MIB))));
+	io.add_method(ASYNC_MEM_CALL, |_| async { Ok(Value::String("A".repeat(MIB))) });
 	io.add_sync_method(SYNC_SLOW_CALL, |_| {
 		std::thread::sleep(SLOW_CALL);
 		Ok(Value::String("slow call".to_string()))
@@ -66,8 +67,8 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 	let mut io = PubSubHandler::new(MetaIoHandler::default());
 	io.add_sync_method(SYNC_FAST_CALL, |_| Ok(Value::String("lo".to_string())));
 	io.add_method(ASYNC_FAST_CALL, |_| async { Ok(Value::String("lo".to_string())) });
-	io.add_sync_method(SYNC_MEM_CALL, |_| Ok(Value::String("A".repeat(KIB))));
-	io.add_method(ASYNC_MEM_CALL, |_| async { Ok(Value::String("A".repeat(KIB))) });
+	io.add_sync_method(SYNC_MEM_CALL, |_| Ok(Value::String("A".repeat(MIB))));
+	io.add_method(ASYNC_MEM_CALL, |_| async { Ok(Value::String("A".repeat(MIB))) });
 	io.add_sync_method(SYNC_SLOW_CALL, |_| {
 		std::thread::sleep(SLOW_CALL);
 		Ok(Value::String("slow call".to_string()))
@@ -101,9 +102,9 @@ pub async fn ws_server(handle: tokio::runtime::Handle) -> (String, jsonrpc_ws_se
 	})
 	.event_loop_executor(handle)
 	.max_connections(10 * 1024)
-	.max_payload(100 * 1024 * 1024)
-	.max_in_buffer_capacity(100 * 1024 * 1024)
-	.max_out_buffer_capacity(100 * 1024 * 1024)
+	.max_payload(100 * MIB)
+	.max_in_buffer_capacity(100 * MIB)
+	.max_out_buffer_capacity(100 * MIB)
 	.start(&"127.0.0.1:0".parse().unwrap())
 	.expect("Server must start with no issues");
 
@@ -168,9 +169,9 @@ fn gen_rpc_module() -> jsonrpsee::RpcModule<()> {
 	module.register_method(SYNC_FAST_CALL, |_, _| Ok("lo")).unwrap();
 	module.register_async_method(ASYNC_FAST_CALL, |_, _| async { Ok("lo") }).unwrap();
 
-	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(KIB))).unwrap();
+	module.register_method(SYNC_MEM_CALL, |_, _| Ok("A".repeat(MIB))).unwrap();
 
-	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(KIB)) }).unwrap();
+	module.register_async_method(ASYNC_MEM_CALL, |_, _| async move { Ok("A".repeat(MIB)) }).unwrap();
 
 	module
 		.register_method(SYNC_SLOW_CALL, |_, _| {
