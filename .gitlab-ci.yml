@@ -110,7 +110,7 @@ benchmarks:
   <<:                              *docker-env
   <<:                              *collect-artifacts
   <<:                              *schedule-refs
-  timeout:                         12h
+  timeout:                         3h
   variables:
     MEASUREMENT_TIME:              3
     SLOW_MEASUREMENT_TIME:         40
