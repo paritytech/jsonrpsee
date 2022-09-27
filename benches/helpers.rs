@@ -18,7 +18,7 @@ pub(crate) const ASYNC_METHODS: [&str; 3] = [SYNC_FAST_CALL, SYNC_MEM_CALL, SYNC
 
 // 1 KiB = 1024 bytes
 pub(crate) const KIB: usize = 1024;
-pub(crate) const MIB: usize = KIB * KIB;
+pub(crate) const MIB: usize = 1024 * KIB;
 pub(crate) const SLOW_CALL: Duration = Duration::from_millis(1);
 
 /// Run jsonrpc HTTP server for benchmarks.
