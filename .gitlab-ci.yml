@@ -113,7 +113,7 @@ benchmarks:
   timeout:                         3h
   variables:
     MEASUREMENT_TIME:              3
-    SLOW_MEASUREMENT_TIME:         40
+    SLOW_MEASUREMENT_TIME:         60
   script:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
     - mkdir artifacts
