@@ -308,14 +308,15 @@ fn batch_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	let method = request.methods()[0];
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
 
-	let bench_name = format!("{}/{}", name, method);
+	let bench_name = format!("{}/{}", name, fast_call);
 	let mut group = crit.benchmark_group(request.group_name(&bench_name));
 	for batch_size in [2, 5, 10, 50, 100usize].iter() {
 		let mut batch = BatchRequestBuilder::new();
 		for _ in 0..*batch_size {
-			batch.insert(method, ArrayParams::new()).unwrap();
+			batch.insert(fast_call, ArrayParams::new()).unwrap();
 		}
 		group.throughput(Throughput::Elements(*batch_size as u64));
 		group.bench_with_input(BenchmarkId::from_parameter(batch_size), batch_size, |b, _| {
@@ -333,8 +334,10 @@ fn ws_concurrent_conn_calls(
 	request: RequestType,
 	concurrent_conns: &[usize],
 ) {
-	let method = request.methods()[0];
-	let bench_name = format!("{}/{}", name, method);
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
+
+	let bench_name = format!("{}/{}", name, fast_call);
 	let mut group = crit.benchmark_group(request.group_name(&bench_name));
 	for conns in concurrent_conns.iter() {
 		group.bench_function(format!("{}", conns), |b| {
@@ -359,7 +362,7 @@ fn ws_concurrent_conn_calls(
 							let futs = FuturesUnordered::new();
 
 							for _ in 0..10 {
-								futs.push(client.request::<String, ArrayParams>(method, ArrayParams::new()));
+								futs.push(client.request::<String, ArrayParams>(fast_call, ArrayParams::new()));
 							}
 
 							join_all(futs).await;
@@ -441,8 +444,10 @@ fn http_concurrent_conn_calls(
 	request: RequestType,
 	concurrent_conns: &[usize],
 ) {
-	let method = request.methods()[0];
-	let bench_name = format!("{}/{}", name, method);
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
+
+	let bench_name = format!("{}/{}", name, fast_call);
 	let mut group = crit.benchmark_group(request.group_name(&bench_name));
 	for conns in concurrent_conns.iter() {
 		group.bench_function(format!("{}", conns), |b| {
@@ -451,7 +456,7 @@ fn http_concurrent_conn_calls(
 				|clients| async {
 					let tasks = clients.map(|client| {
 						rt.spawn(async move {
-							client.request::<String, ArrayParams>(method, ArrayParams::new()).await.unwrap();
+							client.request::<String, ArrayParams>(fast_call, ArrayParams::new()).await.unwrap();
 						})
 					});
 					join_all(tasks).await;
@@ -470,7 +475,8 @@ fn http_custom_headers_round_trip(
 	name: &str,
 	request: RequestType,
 ) {
-	let method_name = request.methods()[0];
+	let fast_call = request.methods()[0];
+	assert!(fast_call.starts_with("fast_call"));
 
 	for header_size in [0, KIB, 5 * KIB, 25 * KIB, 100 * KIB] {
 		let mut headers = HeaderMap::new();
@@ -483,7 +489,7 @@ fn http_custom_headers_round_trip(
 
 		crit.bench_function(&request.group_name(&bench_name), |b| {
 			b.to_async(rt).iter(|| async {
-				black_box(client.request::<String, ArrayParams>(method_name, ArrayParams::new()).await.unwrap());
+				black_box(client.request::<String, ArrayParams>(fast_call, ArrayParams::new()).await.unwrap());
 			})
 		});
 	}

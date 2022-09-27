@@ -5,7 +5,7 @@ use jsonrpsee::http_client::{HeaderMap, HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 pub(crate) const SYNC_FAST_CALL: &str = "fast_call";
-pub(crate) const ASYNC_FAST_CALL: &str = "fast_async";
+pub(crate) const ASYNC_FAST_CALL: &str = "fast_call_async";
 pub(crate) const SYNC_MEM_CALL: &str = "memory_intense";
 pub(crate) const ASYNC_MEM_CALL: &str = "memory_intense_async";
 pub(crate) const SYNC_SLOW_CALL: &str = "slow_call";
