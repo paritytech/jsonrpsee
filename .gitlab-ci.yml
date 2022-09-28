@@ -110,6 +110,10 @@ benchmarks:
   <<:                              *docker-env
   <<:                              *collect-artifacts
   <<:                              *schedule-refs
+  timeout:                         3h
+  variables:
+    MEASUREMENT_TIME:              10
+    SLOW_MEASUREMENT_TIME:         60
   script:
     - cargo bench -p jsonrpsee-benchmarks -- --output-format bencher | tee output.txt
     - mkdir artifacts
