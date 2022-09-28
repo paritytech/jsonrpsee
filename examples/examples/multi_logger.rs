@@ -32,7 +32,7 @@ use std::time::Instant;
 
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::logger::{HttpRequest, MethodKind};
+use jsonrpsee::server::logger::{HttpRequest, MethodKind, TransportProtocol};
 use jsonrpsee::server::{logger, RpcModule, ServerBuilder};
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -44,27 +44,27 @@ struct Timings;
 impl logger::Logger for Timings {
 	type Instant = Instant;
 
-	fn on_connect(&self, remote_addr: SocketAddr, req: &HttpRequest) {
+	fn on_connect(&self, remote_addr: SocketAddr, req: &HttpRequest, _t: TransportProtocol) {
 		println!("[Timings::on_connect] remote_addr {:?}, req: {:?}", remote_addr, req);
 	}
 
-	fn on_request(&self) -> Self::Instant {
+	fn on_request(&self, _t: TransportProtocol) -> Self::Instant {
 		Instant::now()
 	}
 
-	fn on_call(&self, name: &str, params: Params, kind: MethodKind) {
+	fn on_call(&self, name: &str, params: Params, kind: MethodKind, _t: TransportProtocol) {
 		println!("[Timings:on_call] method: '{}', params: {:?}, kind: {}", name, params, kind);
 	}
 
-	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant) {
+	fn on_result(&self, name: &str, success: bool, started_at: Self::Instant, _t: TransportProtocol) {
 		println!("[Timings] call={}, worked? {}, duration {:?}", name, success, started_at.elapsed());
 	}
 
-	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+	fn on_response(&self, _result: &str, started_at: Self::Instant, _t: TransportProtocol) {
 		println!("[Timings] Response duration {:?}", started_at.elapsed());
 	}
 
-	fn on_disconnect(&self, remote_addr: SocketAddr) {
+	fn on_disconnect(&self, remote_addr: SocketAddr, _t: TransportProtocol) {
 		println!("[Timings::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }
@@ -91,32 +91,32 @@ impl ThreadWatcher {
 impl logger::Logger for ThreadWatcher {
 	type Instant = isize;
 
-	fn on_connect(&self, remote_addr: SocketAddr, headers: &HttpRequest) {
+	fn on_connect(&self, remote_addr: SocketAddr, headers: &HttpRequest, _t: TransportProtocol) {
 		println!("[ThreadWatcher::on_connect] remote_addr {:?}, headers: {:?}", remote_addr, headers);
 	}
 
-	fn on_call(&self, _method: &str, _params: Params, _kind: MethodKind) {
+	fn on_call(&self, _method: &str, _params: Params, _kind: MethodKind, _t: TransportProtocol) {
 		let threads = Self::count_threads();
 		println!("[ThreadWatcher::on_call] Threads running on the machine at the start of a call: {}", threads);
 	}
 
-	fn on_request(&self) -> Self::Instant {
+	fn on_request(&self, _t: TransportProtocol) -> Self::Instant {
 		let threads = Self::count_threads();
 		println!("[ThreadWatcher::on_request] Threads running on the machine at the start of a call: {}", threads);
 		threads as isize
 	}
 
-	fn on_result(&self, _name: &str, _succees: bool, started_at: Self::Instant) {
+	fn on_result(&self, _name: &str, _succees: bool, started_at: Self::Instant, _t: TransportProtocol) {
 		let current_nr_threads = Self::count_threads() as isize;
 		println!("[ThreadWatcher::on_result] {} threads", current_nr_threads - started_at);
 	}
 
-	fn on_response(&self, _result: &str, started_at: Self::Instant) {
+	fn on_response(&self, _result: &str, started_at: Self::Instant, _t: TransportProtocol) {
 		let current_nr_threads = Self::count_threads() as isize;
 		println!("[ThreadWatcher::on_response] {} threads", current_nr_threads - started_at);
 	}
 
-	fn on_disconnect(&self, remote_addr: SocketAddr) {
+	fn on_disconnect(&self, remote_addr: SocketAddr, _t: TransportProtocol) {
 		println!("[ThreadWatcher::on_disconnect] remote_addr: {:?}", remote_addr);
 	}
 }

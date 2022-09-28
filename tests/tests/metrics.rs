@@ -36,7 +36,7 @@ use jsonrpsee::core::{client::ClientT, Error};
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::proc_macros::rpc;
 use jsonrpsee::rpc_params;
-use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind};
+use jsonrpsee::server::logger::{HttpRequest, Logger, MethodKind, TransportProtocol};
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use jsonrpsee::types::Params;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -62,11 +62,11 @@ impl Logger for Counter {
 	/// Auto-incremented id of the call
 	type Instant = u32;
 
-	fn on_connect(&self, _remote_addr: SocketAddr, _req: &HttpRequest) {
+	fn on_connect(&self, _remote_addr: SocketAddr, _req: &HttpRequest, _t: TransportProtocol) {
 		self.inner.lock().unwrap().connections.0 += 1;
 	}
 
-	fn on_request(&self) -> u32 {
+	fn on_request(&self, _t: TransportProtocol) -> u32 {
 		let mut inner = self.inner.lock().unwrap();
 		let n = inner.requests.0;
 
@@ -75,24 +75,24 @@ impl Logger for Counter {
 		n
 	}
 
-	fn on_call(&self, name: &str, _params: Params, _kind: MethodKind) {
+	fn on_call(&self, name: &str, _params: Params, _kind: MethodKind, _t: TransportProtocol) {
 		let mut inner = self.inner.lock().unwrap();
 		let entry = inner.calls.entry(name.into()).or_insert((0, Vec::new()));
 
 		entry.0 += 1;
 	}
 
-	fn on_result(&self, name: &str, success: bool, n: u32) {
+	fn on_result(&self, name: &str, success: bool, n: u32, _t: TransportProtocol) {
 		if success {
 			self.inner.lock().unwrap().calls.get_mut(name).unwrap().1.push(n);
 		}
 	}
 
-	fn on_response(&self, _result: &str, _: u32) {
+	fn on_response(&self, _result: &str, _: u32, _t: TransportProtocol) {
 		self.inner.lock().unwrap().requests.1 += 1;
 	}
 
-	fn on_disconnect(&self, _remote_addr: SocketAddr) {
+	fn on_disconnect(&self, _remote_addr: SocketAddr, _t: TransportProtocol) {
 		self.inner.lock().unwrap().connections.1 += 1;
 	}
 }
@@ -215,5 +215,5 @@ async fn http_server_logger() {
 
 	// HTTP server doesn't track connections
 	let inner = counter.inner.lock().unwrap();
-	assert_eq!(inner.connections, (0, 0));
+	assert_eq!(inner.connections, (5, 5));
 }

@@ -1,7 +1,8 @@
 use std::convert::Infallible;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
-use crate::logger::{self, Logger};
+use crate::logger::{self, Logger, TransportProtocol};
 
 use futures_util::TryStreamExt;
 use http::Method;
@@ -50,9 +51,9 @@ pub(crate) async fn reject_connection(socket: tokio::net::TcpStream) {
 }
 
 #[derive(Debug)]
-pub(crate) struct ProcessValidatedRequest<L: Logger> {
+pub(crate) struct ProcessValidatedRequest<'a, L: Logger> {
 	pub(crate) request: hyper::Request<hyper::Body>,
-	pub(crate) logger: L,
+	pub(crate) logger: &'a L,
 	pub(crate) methods: Methods,
 	pub(crate) resources: Resources,
 	pub(crate) max_request_body_size: u32,
@@ -64,7 +65,7 @@ pub(crate) struct ProcessValidatedRequest<L: Logger> {
 
 /// Process a verified request, it implies a POST request with content type JSON.
 pub(crate) async fn process_validated_request<L: Logger>(
-	input: ProcessValidatedRequest<L>,
+	input: ProcessValidatedRequest<'_, L>,
 ) -> hyper::Response<hyper::Body> {
 	let ProcessValidatedRequest {
 		request,
@@ -94,7 +95,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 	if is_single {
 		let call = CallData {
 			conn_id: 0,
-			logger: &logger,
+			logger,
 			methods: &methods,
 			max_response_body_size,
 			max_log_length,
@@ -102,7 +103,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 			request_start,
 		};
 		let response = process_single_request(body, call).await;
-		logger.on_response(&response.result, request_start);
+		logger.on_response(&response.result, request_start, TransportProtocol::Http);
 		response::ok_response(response.result)
 	}
 	// Batch of requests or notifications
@@ -111,7 +112,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 			Id::Null,
 			ErrorObject::borrowed(BATCHES_NOT_SUPPORTED_CODE, &BATCHES_NOT_SUPPORTED_MSG, None),
 		);
-		logger.on_response(&err.result, request_start);
+		logger.on_response(&err.result, request_start, TransportProtocol::Http);
 		response::ok_response(err.result)
 	}
 	// Batch of requests or notifications
@@ -120,7 +121,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 			data: body,
 			call: CallData {
 				conn_id: 0,
-				logger: &logger,
+				logger,
 				methods: &methods,
 				max_response_body_size,
 				max_log_length,
@@ -129,7 +130,7 @@ pub(crate) async fn process_validated_request<L: Logger>(
 			},
 		})
 		.await;
-		logger.on_response(&response.result, request_start);
+		logger.on_response(&response.result, request_start, TransportProtocol::Http);
 		response::ok_response(response.result)
 	}
 }
@@ -228,12 +229,12 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 
 	let response = match methods.method_with_name(name) {
 		None => {
-			logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
+			logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::Http);
 			MethodResponse::error(id, ErrorObject::from(ErrorCode::MethodNotFound))
 		}
 		Some((name, method)) => match &method.inner() {
 			MethodKind::Sync(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::Http);
 
 				match method.claim(name, resources) {
 					Ok(guard) => {
@@ -248,7 +249,7 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 				}
 			}
 			MethodKind::Async(callback) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall);
+				logger.on_call(name, params.clone(), logger::MethodKind::MethodCall, TransportProtocol::Http);
 				match method.claim(name, resources) {
 					Ok(guard) => {
 						let id = id.into_owned();
@@ -263,7 +264,7 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 				}
 			}
 			MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
-				logger.on_call(name, params.clone(), logger::MethodKind::Unknown);
+				logger.on_call(name, params.clone(), logger::MethodKind::Unknown, TransportProtocol::Http);
 				tracing::error!("Subscriptions not supported on HTTP");
 				MethodResponse::error(id, ErrorObject::from(ErrorCode::InternalError))
 			}
@@ -271,7 +272,7 @@ pub(crate) async fn execute_call<L: Logger>(req: Request<'_>, call: CallData<'_,
 	};
 
 	tx_log_from_str(&response.result, max_log_length);
-	logger.on_result(name, response.success, request_start);
+	logger.on_result(name, response.success, request_start, TransportProtocol::Http);
 	response
 }
 
@@ -292,6 +293,7 @@ pub(crate) struct HandleRequest<L: Logger> {
 	pub(crate) batch_requests_supported: bool,
 	pub(crate) logger: L,
 	pub(crate) conn: Arc<OwnedSemaphorePermit>,
+	pub(crate) remote_addr: SocketAddr,
 }
 
 pub(crate) async fn handle_request<L: Logger>(
@@ -307,9 +309,10 @@ pub(crate) async fn handle_request<L: Logger>(
 		batch_requests_supported,
 		logger,
 		conn,
+		remote_addr,
 	} = input;
 
-	let request_start = logger.on_request();
+	let request_start = logger.on_request(TransportProtocol::Http);
 
 	// Only the `POST` method is allowed.
 	let res = match *request.method() {
@@ -322,7 +325,7 @@ pub(crate) async fn handle_request<L: Logger>(
 				max_response_body_size,
 				max_log_length,
 				batch_requests_supported,
-				logger,
+				logger: &logger,
 				request_start,
 			})
 			.await
@@ -333,6 +336,7 @@ pub(crate) async fn handle_request<L: Logger>(
 	};
 
 	drop(conn);
+	logger.on_disconnect(remote_addr, TransportProtocol::Http);
 
 	res
 }

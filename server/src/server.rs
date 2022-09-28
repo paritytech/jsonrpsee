@@ -33,7 +33,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use crate::future::{ConnectionGuard, FutureDriver, ServerHandle, StopHandle};
-use crate::logger::Logger;
+use crate::logger::{Logger, TransportProtocol};
 use crate::transport::{http, ws};
 
 use futures_util::future::FutureExt;
@@ -615,7 +615,7 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 
 			let response = match server.receive_request(&request) {
 				Ok(response) => {
-					self.inner.logger.on_connect(self.inner.remote_addr, &request);
+					self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::WebSocket);
 					let data = self.inner.clone();
 
 					tokio::spawn(async move {
@@ -655,7 +655,10 @@ impl<L: Logger> hyper::service::Service<hyper::Request<hyper::Body>> for TowerSe
 				batch_requests_supported: self.inner.batch_requests_supported,
 				logger: self.inner.logger.clone(),
 				conn: self.inner.conn.clone(),
+				remote_addr: self.inner.remote_addr,
 			};
+
+			self.inner.logger.on_connect(self.inner.remote_addr, &request, TransportProtocol::Http);
 
 			Box::pin(http::handle_request(request, data).map(Ok))
 		}
