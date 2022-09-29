@@ -26,16 +26,11 @@ pub(crate) fn content_type_is_json(request: &hyper::Request<hyper::Body>) -> boo
 
 /// Returns true if the `content_type` header indicates a valid JSON message.
 pub(crate) fn is_json(content_type: Option<&hyper::header::HeaderValue>) -> bool {
-	match content_type.and_then(|val| val.to_str().ok()) {
-		Some(content)
-			if content.eq_ignore_ascii_case("application/json")
-				|| content.eq_ignore_ascii_case("application/json; charset=utf-8")
-				|| content.eq_ignore_ascii_case("application/json;charset=utf-8") =>
-		{
-			true
-		}
-		_ => false,
-	}
+	content_type.and_then(|val| val.to_str().ok()).map_or(false, |content| {
+		content.eq_ignore_ascii_case("application/json")
+			|| content.eq_ignore_ascii_case("application/json; charset=utf-8")
+			|| content.eq_ignore_ascii_case("application/json;charset=utf-8")
+	})
 }
 
 pub(crate) async fn reject_connection(socket: tokio::net::TcpStream) {
