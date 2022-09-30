@@ -290,20 +290,20 @@ impl RpcDescription {
 					is_sub = true;
 					if is_method {
 						return Err(syn::Error::new_spanned(
-							&method,
+							method,
 							"Element cannot be both subscription and method at the same time",
 						));
 					}
 
 					if !matches!(method.sig.output, syn::ReturnType::Default) {
 						return Err(syn::Error::new_spanned(
-							&method,
+							method,
 							"Subscription methods must not return anything; the error must send via subscription via either `SubscriptionSink::reject` or `SubscriptionSink::close`",
 						));
 					}
 
 					if method.sig.asyncness.is_some() {
-						return Err(syn::Error::new_spanned(&method, "Subscription methods must not be `async`"));
+						return Err(syn::Error::new_spanned(method, "Subscription methods must not be `async`"));
 					}
 
 					let sub_data = RpcSubscription::from_item(attr.clone(), method.clone())?;
@@ -312,12 +312,12 @@ impl RpcDescription {
 
 				if !is_method && !is_sub {
 					return Err(syn::Error::new_spanned(
-						&method,
+						method,
 						"Methods must have either 'method' or 'subscription' attribute",
 					));
 				}
 			} else {
-				return Err(syn::Error::new_spanned(&entry, "Only methods allowed in RPC traits"));
+				return Err(syn::Error::new_spanned(entry, "Only methods allowed in RPC traits"));
 			}
 		}
 
