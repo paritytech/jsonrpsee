@@ -24,18 +24,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 197,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 229,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 140092,
             "range": "± 10863",
@@ -75,18 +63,6 @@ window.BENCHMARK_DATA = {
         "date": 1634170892793,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 148,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 166,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 81005,
@@ -128,18 +104,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 148,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 170,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 83338,
             "range": "± 4217",
@@ -179,18 +143,6 @@ window.BENCHMARK_DATA = {
         "date": 1634603035735,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 191,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 212,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 131382,
@@ -232,18 +184,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 200,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 218,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 150480,
             "range": "± 16218",
@@ -283,18 +223,6 @@ window.BENCHMARK_DATA = {
         "date": 1634775724828,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 148,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 83421,
@@ -336,18 +264,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 198,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 236,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 143740,
             "range": "± 9541",
@@ -387,18 +303,6 @@ window.BENCHMARK_DATA = {
         "date": 1634948505795,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 143,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 126666,
@@ -440,18 +344,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 170,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 195,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 94023,
             "range": "± 2471",
@@ -491,18 +383,6 @@ window.BENCHMARK_DATA = {
         "date": 1635121307947,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 147,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 163,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 82018,
@@ -544,18 +424,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 188,
-            "range": "± 13",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 217,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 130926,
             "range": "± 7617",
@@ -595,18 +463,6 @@ window.BENCHMARK_DATA = {
         "date": 1635294174791,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 187,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 202,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 95930,
@@ -648,18 +504,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 180,
-            "range": "± 18",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 208,
-            "range": "± 15",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 137542,
             "range": "± 45003",
@@ -699,18 +543,6 @@ window.BENCHMARK_DATA = {
         "date": 1635466905682,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 167,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 80809,
@@ -752,18 +584,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 173,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 197,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 109270,
             "range": "± 15416",
@@ -803,18 +623,6 @@ window.BENCHMARK_DATA = {
         "date": 1635639754078,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 147,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 178,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 80102,
@@ -856,18 +664,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 173,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 193,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 89082,
             "range": "± 3138",
@@ -907,18 +703,6 @@ window.BENCHMARK_DATA = {
         "date": 1635812733628,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 182,
-            "range": "± 12",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 205,
-            "range": "± 13",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 94838,
@@ -960,18 +744,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 170,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 83147,
             "range": "± 1984",
@@ -1011,18 +783,6 @@ window.BENCHMARK_DATA = {
         "date": 1635985594878,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 184,
-            "range": "± 16",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 219,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 125493,
@@ -1064,18 +824,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 165,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 200,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 132109,
             "range": "± 11435",
@@ -1115,18 +863,6 @@ window.BENCHMARK_DATA = {
         "date": 1636158300235,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 171,
-            "range": "± 18",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 186,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 91433,
@@ -1168,18 +904,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 179,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 212,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 133908,
             "range": "± 28561",
@@ -1219,18 +943,6 @@ window.BENCHMARK_DATA = {
         "date": 1636331075215,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 167,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 86333,
@@ -1272,18 +984,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 194,
-            "range": "± 12",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 216,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 135372,
             "range": "± 40025",
@@ -1323,18 +1023,6 @@ window.BENCHMARK_DATA = {
         "date": 1636504012299,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 202,
-            "range": "± 13",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 238,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 141836,
@@ -1376,18 +1064,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 202,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 234,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 142797,
             "range": "± 20497",
@@ -1427,18 +1103,6 @@ window.BENCHMARK_DATA = {
         "date": 1636676781639,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 197,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 220,
-            "range": "± 13",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 136930,
@@ -1480,18 +1144,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 190,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 217,
-            "range": "± 13",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 137520,
             "range": "± 9100",
@@ -1531,18 +1183,6 @@ window.BENCHMARK_DATA = {
         "date": 1636849566881,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 180,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 212,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 140010,
@@ -1584,18 +1224,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 204,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 233,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 148233,
             "range": "± 13570",
@@ -1635,18 +1263,6 @@ window.BENCHMARK_DATA = {
         "date": 1637022395535,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 198,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 228,
-            "range": "± 13",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 146746,
@@ -1688,18 +1304,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 181,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 204,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 138388,
             "range": "± 13154",
@@ -1739,18 +1343,6 @@ window.BENCHMARK_DATA = {
         "date": 1637195251129,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 195,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 220,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 154283,
@@ -1792,18 +1384,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 191,
-            "range": "± 38",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 218,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 156573,
             "range": "± 30390",
@@ -1843,18 +1423,6 @@ window.BENCHMARK_DATA = {
         "date": 1637367817828,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 134,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 159,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 92908,
@@ -1896,18 +1464,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 157,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 181,
-            "range": "± 15",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 136350,
             "range": "± 6171",
@@ -1947,18 +1503,6 @@ window.BENCHMARK_DATA = {
         "date": 1637540662689,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 167,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 95350,
@@ -2000,18 +1544,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 201,
-            "range": "± 41",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 227,
-            "range": "± 20",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 161104,
             "range": "± 119924",
@@ -2051,18 +1583,6 @@ window.BENCHMARK_DATA = {
         "date": 1637713624593,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 176,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 202,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 140135,
@@ -2104,18 +1624,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 148,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 91643,
             "range": "± 1986",
@@ -2155,18 +1663,6 @@ window.BENCHMARK_DATA = {
         "date": 1637886313413,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 154,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 171,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 101201,
@@ -2208,18 +1704,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 154,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 168,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 91558,
             "range": "± 1786",
@@ -2259,18 +1743,6 @@ window.BENCHMARK_DATA = {
         "date": 1638059215580,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 176,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 199,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 98034,
@@ -2312,18 +1784,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 137,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 177,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 88537,
             "range": "± 2770",
@@ -2363,18 +1823,6 @@ window.BENCHMARK_DATA = {
         "date": 1638231992742,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 191,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 213,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 112596,
@@ -2416,18 +1864,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 183,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 209,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 95857,
             "range": "± 2608",
@@ -2467,18 +1903,6 @@ window.BENCHMARK_DATA = {
         "date": 1638404764930,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 189,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 211,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 101587,
@@ -2520,18 +1944,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 192,
-            "range": "± 12",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 219,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 148637,
             "range": "± 10904",
@@ -2571,18 +1983,6 @@ window.BENCHMARK_DATA = {
         "date": 1638577622153,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 175,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 204,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 143014,
@@ -2624,18 +2024,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 154,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 176,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 93639,
             "range": "± 3038",
@@ -2675,18 +2063,6 @@ window.BENCHMARK_DATA = {
         "date": 1638750367972,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 189,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 212,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 101983,
@@ -2728,18 +2104,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 160,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 176,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 89886,
             "range": "± 4790",
@@ -2779,18 +2143,6 @@ window.BENCHMARK_DATA = {
         "date": 1638923215353,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 168,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 201,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
           {
             "name": "subscriptions/subscribe",
             "value": 139952,
@@ -2832,18 +2184,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 166,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 175,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 149110,
             "range": "± 12588",
@@ -2884,18 +2224,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 151,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 175,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "subscriptions/subscribe",
             "value": 90263,
             "range": "± 2044",
@@ -2935,18 +2263,6 @@ window.BENCHMARK_DATA = {
         "date": 1653094186849,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 191,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 207,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 158838,
@@ -3780,18 +3096,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 160,
-            "range": "± 12",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 216,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 162500,
             "range": "± 15498",
@@ -4623,18 +3927,6 @@ window.BENCHMARK_DATA = {
         "date": 1653266916557,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 179,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 209,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 120853,
@@ -5468,18 +4760,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 180,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 96469,
             "range": "± 3810",
@@ -6311,18 +5591,6 @@ window.BENCHMARK_DATA = {
         "date": 1653439485421,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 141,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 160,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 98116,
@@ -7156,18 +6424,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 146,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 168,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 96386,
             "range": "± 2977",
@@ -7999,18 +7255,6 @@ window.BENCHMARK_DATA = {
         "date": 1653612318291,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 147,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 170,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 104171,
@@ -8844,18 +8088,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 128,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 151,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 94908,
             "range": "± 4263",
@@ -9687,18 +8919,6 @@ window.BENCHMARK_DATA = {
         "date": 1653785464112,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 189,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 224,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 149292,
@@ -10532,18 +9752,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 193,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 210,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 124742,
             "range": "± 13223",
@@ -11375,18 +10583,6 @@ window.BENCHMARK_DATA = {
         "date": 1653957863027,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 141,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 159,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 97229,
@@ -12220,18 +11416,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 194,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 222,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 160147,
             "range": "± 38911",
@@ -13063,18 +12247,6 @@ window.BENCHMARK_DATA = {
         "date": 1654130679638,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 141,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 165,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 96006,
@@ -13908,18 +13080,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 188,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 212,
-            "range": "± 26",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 155316,
             "range": "± 14331",
@@ -14751,18 +13911,6 @@ window.BENCHMARK_DATA = {
         "date": 1654303455092,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 141,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 157,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 96105,
@@ -15596,18 +14744,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 145,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 164,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 93686,
             "range": "± 5934",
@@ -16439,18 +15575,6 @@ window.BENCHMARK_DATA = {
         "date": 1654476687094,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 189,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 218,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 156918,
@@ -17284,18 +16408,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 151,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 95955,
             "range": "± 3974",
@@ -18127,18 +17239,6 @@ window.BENCHMARK_DATA = {
         "date": 1654649383352,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 174,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 205,
-            "range": "± 13",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 141945,
@@ -18972,18 +18072,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 200,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 228,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 162663,
             "range": "± 17196",
@@ -19815,18 +18903,6 @@ window.BENCHMARK_DATA = {
         "date": 1654822127469,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 175,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 199,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 129626,
@@ -20660,18 +19736,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 157,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 174,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 99423,
             "range": "± 3685",
@@ -21503,18 +20567,6 @@ window.BENCHMARK_DATA = {
         "date": 1654994743837,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 163,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 184,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 99362,
@@ -22348,18 +21400,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 168,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 94986,
             "range": "± 1665",
@@ -23191,18 +22231,6 @@ window.BENCHMARK_DATA = {
         "date": 1655167646848,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 183,
-            "range": "± 15",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 197,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 112641,
@@ -24036,18 +23064,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 144,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 162,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 95575,
             "range": "± 3443",
@@ -24879,18 +23895,6 @@ window.BENCHMARK_DATA = {
         "date": 1655426665306,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 170,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 101654,
@@ -25724,18 +24728,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 190,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 213,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 118715,
             "range": "± 5467",
@@ -26567,18 +25559,6 @@ window.BENCHMARK_DATA = {
         "date": 1655599494891,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 160,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 161,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 100052,
@@ -27412,18 +26392,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 138,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 179,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 95166,
             "range": "± 7026",
@@ -28255,18 +27223,6 @@ window.BENCHMARK_DATA = {
         "date": 1655772282119,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 97738,
@@ -29100,18 +28056,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 157,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 179,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 98057,
             "range": "± 9324",
@@ -29943,18 +28887,6 @@ window.BENCHMARK_DATA = {
         "date": 1655945348977,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 177,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 207,
-            "range": "± 17",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 147001,
@@ -30788,18 +29720,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 196,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 229,
-            "range": "± 18",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 161756,
             "range": "± 15091",
@@ -31631,18 +30551,6 @@ window.BENCHMARK_DATA = {
         "date": 1656118029919,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 171,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 197,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 110032,
@@ -32476,18 +31384,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 157,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 175,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 96221,
             "range": "± 4970",
@@ -33319,18 +32215,6 @@ window.BENCHMARK_DATA = {
         "date": 1656290720391,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 156,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 180,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 97147,
@@ -34164,18 +33048,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 162,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 174,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 104084,
             "range": "± 4676",
@@ -35007,18 +33879,6 @@ window.BENCHMARK_DATA = {
         "date": 1656463734501,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 191,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 215,
-            "range": "± 4",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 120034,
@@ -35852,18 +34712,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 192,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 213,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 144140,
             "range": "± 15349",
@@ -36695,18 +35543,6 @@ window.BENCHMARK_DATA = {
         "date": 1656636846592,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 208,
-            "range": "± 26",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 242,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 181109,
@@ -37540,18 +36376,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 179,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 101334,
             "range": "± 2449",
@@ -38383,18 +37207,6 @@ window.BENCHMARK_DATA = {
         "date": 1656809379080,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 156,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 182,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 97207,
@@ -39228,18 +38040,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 152,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 173,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 96564,
             "range": "± 3376",
@@ -40071,18 +38871,6 @@ window.BENCHMARK_DATA = {
         "date": 1656981860012,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 146,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 170,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 96893,
@@ -40916,18 +39704,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 186,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 211,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 115081,
             "range": "± 6871",
@@ -41759,18 +40535,6 @@ window.BENCHMARK_DATA = {
         "date": 1657154554490,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 152,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 167,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 99557,
@@ -42604,18 +41368,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 153,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 173,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 94607,
             "range": "± 4320",
@@ -43447,18 +42199,6 @@ window.BENCHMARK_DATA = {
         "date": 1657327724525,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 195,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 223,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 150847,
@@ -44292,18 +43032,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 154,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 168,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 96046,
             "range": "± 3556",
@@ -45135,18 +43863,6 @@ window.BENCHMARK_DATA = {
         "date": 1657500556249,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 171,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 191,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 113580,
@@ -45980,18 +44696,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 146,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 163,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 92918,
             "range": "± 5185",
@@ -46823,18 +45527,6 @@ window.BENCHMARK_DATA = {
         "date": 1657672957827,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 141,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 165,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 97300,
@@ -47668,18 +46360,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 152,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 174,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 98103,
             "range": "± 4050",
@@ -48511,18 +47191,6 @@ window.BENCHMARK_DATA = {
         "date": 1657845794465,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 148,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 95150,
@@ -49356,18 +48024,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 144,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 166,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 94295,
             "range": "± 2767",
@@ -50199,18 +48855,6 @@ window.BENCHMARK_DATA = {
         "date": 1658018584113,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 151,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 164,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 97334,
@@ -51044,18 +49688,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 178,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 194,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 143232,
             "range": "± 23165",
@@ -51887,18 +50519,6 @@ window.BENCHMARK_DATA = {
         "date": 1658191372897,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 168,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 101171,
@@ -52732,18 +51352,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 183,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 192,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 177770,
             "range": "± 26105",
@@ -53575,18 +52183,6 @@ window.BENCHMARK_DATA = {
         "date": 1658364251552,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 131,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 157,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 99538,
@@ -54420,18 +53016,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 154,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 165,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 102409,
             "range": "± 6228",
@@ -55263,18 +53847,6 @@ window.BENCHMARK_DATA = {
         "date": 1658537075016,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 153,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 168,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 103039,
@@ -56108,18 +54680,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 165,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 112785,
             "range": "± 8939",
@@ -56951,18 +55511,6 @@ window.BENCHMARK_DATA = {
         "date": 1658709934582,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 159,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 103545,
@@ -57796,18 +56344,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 155,
-            "range": "± 40",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 21",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 123618,
             "range": "± 14456",
@@ -58639,18 +57175,6 @@ window.BENCHMARK_DATA = {
         "date": 1658882884278,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 184,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 197,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 129853,
@@ -59484,18 +58008,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 206,
-            "range": "± 12",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 229,
-            "range": "± 12",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 149276,
             "range": "± 30181",
@@ -60327,18 +58839,6 @@ window.BENCHMARK_DATA = {
         "date": 1659055385679,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 166,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 98440,
@@ -61172,18 +59672,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 171,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 191,
-            "range": "± 10",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 148357,
             "range": "± 9300",
@@ -62015,18 +60503,6 @@ window.BENCHMARK_DATA = {
         "date": 1659228244430,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 151,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 162,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 97658,
@@ -62860,18 +61336,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 163,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 176,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 100334,
             "range": "± 4305",
@@ -63703,18 +62167,6 @@ window.BENCHMARK_DATA = {
         "date": 1659400952786,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 159,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 170,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 96865,
@@ -64548,18 +63000,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 162,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 181,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 104931,
             "range": "± 5888",
@@ -65391,18 +63831,6 @@ window.BENCHMARK_DATA = {
         "date": 1659573850719,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 161,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 177,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 107303,
@@ -66236,18 +64664,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 148,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 161,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 101353,
             "range": "± 8149",
@@ -67079,18 +65495,6 @@ window.BENCHMARK_DATA = {
         "date": 1659746601502,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 151,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 164,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 102167,
@@ -67924,18 +66328,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 160,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 98293,
             "range": "± 7461",
@@ -68767,18 +67159,6 @@ window.BENCHMARK_DATA = {
         "date": 1659919423002,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 165,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 100230,
@@ -69612,18 +67992,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 192,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 210,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 154482,
             "range": "± 36256",
@@ -70455,18 +68823,6 @@ window.BENCHMARK_DATA = {
         "date": 1660092462626,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 180,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 181,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 125721,
@@ -71300,18 +69656,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 163,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 177,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 111203,
             "range": "± 6124",
@@ -72143,18 +70487,6 @@ window.BENCHMARK_DATA = {
         "date": 1660265537238,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 167,
-            "range": "± 9",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 184,
-            "range": "± 11",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 147357,
@@ -73096,18 +71428,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 100821,
             "range": "± 8940",
@@ -74047,18 +72367,6 @@ window.BENCHMARK_DATA = {
         "date": 1660438267708,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 174,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 191,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 122859,
@@ -75000,18 +73308,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 151,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 171,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 99555,
             "range": "± 5415",
@@ -75951,18 +74247,6 @@ window.BENCHMARK_DATA = {
         "date": 1660611107492,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 179,
-            "range": "± 5",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 203,
-            "range": "± 3",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 125017,
@@ -76904,18 +75188,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 103750,
             "range": "± 4696",
@@ -77855,18 +76127,6 @@ window.BENCHMARK_DATA = {
         "date": 1660783691753,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 152,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 174,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 100754,
@@ -78808,18 +77068,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 148,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 171,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 101753,
             "range": "± 13386",
@@ -79759,18 +78007,6 @@ window.BENCHMARK_DATA = {
         "date": 1660956460745,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 156,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 100019,
@@ -80712,18 +78948,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 148,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 168,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 101723,
             "range": "± 4000",
@@ -81663,18 +79887,6 @@ window.BENCHMARK_DATA = {
         "date": 1661129206572,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 148,
-            "range": "± 2",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 167,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 100155,
@@ -82616,18 +80828,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 188,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 209,
-            "range": "± 14",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 122055,
             "range": "± 14212",
@@ -83567,18 +81767,6 @@ window.BENCHMARK_DATA = {
         "date": 1661302330162,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 176,
-            "range": "± 7",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 192,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 120556,
@@ -84520,18 +82708,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 142,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 169,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 106499,
             "range": "± 16832",
@@ -85471,18 +83647,6 @@ window.BENCHMARK_DATA = {
         "date": 1661474917924,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 147,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 166,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 99906,
@@ -86424,18 +84588,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 202,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 230,
-            "range": "± 12",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 167771,
             "range": "± 15289",
@@ -87375,18 +85527,6 @@ window.BENCHMARK_DATA = {
         "date": 1661647725396,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 154,
-            "range": "± 1",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 170,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 102258,
@@ -88328,18 +86468,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 150,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 164,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 98680,
             "range": "± 4289",
@@ -89279,18 +87407,6 @@ window.BENCHMARK_DATA = {
         "date": 1661820543469,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 152,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 174,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 103560,
@@ -90232,18 +88348,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 133,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 152,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 89630,
             "range": "± 5045",
@@ -91183,18 +89287,6 @@ window.BENCHMARK_DATA = {
         "date": 1661993159215,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 147,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 163,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 96517,
@@ -92136,18 +90228,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 153,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 171,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 101842,
             "range": "± 4260",
@@ -93087,18 +91167,6 @@ window.BENCHMARK_DATA = {
         "date": 1662252884301,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 171,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 189,
-            "range": "± 8",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 115973,
@@ -94040,18 +92108,6 @@ window.BENCHMARK_DATA = {
         "tool": "cargo",
         "benches": [
           {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 176,
-            "range": "± 6",
-            "unit": "ns/iter"
-          },
-          {
             "name": "sync/http_round_trip/fast_call",
             "value": 98847,
             "range": "± 6910",
@@ -94991,18 +93047,6 @@ window.BENCHMARK_DATA = {
         "date": 1662425265575,
         "tool": "cargo",
         "benches": [
-          {
-            "name": "jsonrpsee_types_v2_array_ref",
-            "value": 149,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
-          {
-            "name": "jsonrpsee_types_v2_vec",
-            "value": 166,
-            "range": "± 0",
-            "unit": "ns/iter"
-          },
           {
             "name": "sync/http_round_trip/fast_call",
             "value": 99506,
