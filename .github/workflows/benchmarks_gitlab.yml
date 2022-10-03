@@ -1,0 +1,39 @@
+name: Benchmarks gitlab
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+
+jobs:
+  bench:
+    name: Benchmarks gitlab
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout Sources
+        uses: actions/checkout@v3.0.2
+
+      - name: Install Rust nightly toolchain
+        uses: actions-rs/toolchain@v1.0.7
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Set bench file
+        id: step_one
+        run: |
+          echo "bench_file=$(date "+%d-%m-%Y")/output.txt" >> $GITHUB_ENV
+
+      - name: Store benchmark result
+        uses: rhysd/github-action-benchmark@v1
+        with:
+          tool: 'cargo'
+          output-file-path: "${{ env.bench_file }}"
+          benchmark-data-dir-path: "bench/dev2"
+          fail-on-alert: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-alert: true
+          alert-comment-cc-users: '@niklasad1'
+          auto-push: true
+
